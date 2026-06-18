@@ -25,11 +25,14 @@ def session_id() -> str:
 def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str:
     if agent == "jules":
         return _call_jules(task, dry_run)
+    dispatch_cmd = os.environ.get("LIMEN_DISPATCH_CMD")
+    if dispatch_cmd:
+        prompt = _build_prompt(task)
+        return _run_cmd([dispatch_cmd, agent, prompt], task, dry_run)
     if agent in _LOCAL_AGENTS:
         return _call_local_agent(agent, task, dry_run)
-    dispatch_cmd = os.environ.get("LIMEN_DISPATCH_CMD", "agent-dispatch")
     prompt = _build_prompt(task)
-    cmd = [dispatch_cmd, agent, prompt]
+    cmd = ["agent-dispatch", agent, prompt]
     return _run_cmd(cmd, task, dry_run)
 
 
