@@ -16,6 +16,7 @@ from limen.dispatch import dispatch_tasks, release_stale_tasks
 from limen.harvest import harvest_results
 from limen.io import load_limen_file
 from limen.status import print_status
+from limen.watch import run_watch
 
 
 def resolve_root() -> Path:
@@ -198,6 +199,25 @@ def harvest(agent):
     tasks_path = resolve_tasks_path(root)
     limen = load_limen_file(tasks_path)
     harvest_results(limen, tasks_path, agent=agent)
+
+
+@main.command()
+@click.option("--once", is_flag=True, help="Render one frame and exit")
+@click.option("-n", "--interval", default=2.0, type=float, help="Refresh interval")
+@click.option("--compact", is_flag=True, help="Render one compact line per frame")
+@click.option("--no-color", is_flag=True, help="Disable ANSI color")
+def watch(once, interval, compact, no_color):
+    """Render a live limen fleet dashboard."""
+    root = resolve_root()
+    tasks_path = resolve_tasks_path(root)
+    run_watch(
+        root,
+        tasks_path,
+        once=once,
+        interval=interval,
+        compact=compact,
+        color=not no_color,
+    )
 
 
 if __name__ == "__main__":
