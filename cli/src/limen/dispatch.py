@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import shlex
 import subprocess
 from datetime import datetime, timezone
@@ -188,10 +189,29 @@ def _call_configured_paid_service(agent: str, task: Task, dry_run: bool) -> bool
         except ValueError as exc:
             print(f"  SKIP {task.id}: invalid LIMEN_{agent.upper()}_DISPATCH_CMD: {exc}")
             return False
-    else:
-        dispatch_cmd = os.environ.get("LIMEN_DISPATCH_CMD", "agent-dispatch")
+        return _run_cmd(cmd, task, dry_run)
+
+    dispatch_cmd = os.environ.get("LIMEN_DISPATCH_CMD", "agent-dispatch")
+    if shutil.which(dispatch_cmd):
         cmd = [dispatch_cmd, agent, prompt]
-    return _run_cmd(cmd, task, dry_run)
+        return _run_cmd(cmd, task, dry_run)
+
+    if agent == "oz":
+        binary = os.environ.get("LIMEN_OZ_BIN", "oz")
+        if shutil.which(binary):
+            cmd = [binary, "agent", "run", "--prompt", prompt]
+            repo_dir = _resolve_repo_dir(task)
+            if repo_dir is not None:
+                cmd.extend(["--cwd", str(repo_dir)])
+            return _run_cmd(cmd, task, dry_run)
+
+    print(
+        f"  SKIP {task.id}: {agent} lane needs "
+        f"LIMEN_{agent.upper()}_DISPATCH_CMD or LIMEN_DISPATCH_CMD"
+    )
+    if agent == "oz":
+        print("    oz fallback also requires an oz binary on PATH")
+    return False
 
 
 def _resolve_repo_dir(task: Task) -> Path | None:

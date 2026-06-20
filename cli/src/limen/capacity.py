@@ -175,6 +175,34 @@ def agent_status(agent: str) -> dict[str, Any]:
                 "detail": f"generic dispatch adapter: {detail}",
                 "command": [dispatch_cmd, agent],
             }
+        if agent == "oz":
+            binary = _binary_for(agent)
+            ok, detail = _binary_status(binary)
+            return {
+                "agent": agent,
+                "kind": _KINDS[agent],
+                "reachable": ok,
+                "detail": (
+                    f"{detail}; direct command: {binary} agent run --prompt"
+                    if ok
+                    else detail
+                ),
+                "command": [binary, "agent", "run", "--prompt"],
+            }
+        binary = _binary_for(agent)
+        ok, detail = _binary_status(binary)
+        if ok:
+            detail = (
+                f"{detail}; direct Warp CLI dispatch is not wired "
+                "(set LIMEN_WARP_DISPATCH_CMD or LIMEN_DISPATCH_CMD)"
+            )
+        return {
+            "agent": agent,
+            "kind": _KINDS[agent],
+            "reachable": False,
+            "detail": detail,
+            "command": None,
+        }
 
     binary = _binary_for(agent)
     ok, detail = _binary_status(binary)

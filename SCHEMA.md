@@ -17,7 +17,7 @@ All paths and configuration come from environment variables. No hardcoded paths.
 |---|---|---|---|
 | `LIMEN_ROOT` | yes | — | Path to the directory containing `tasks.yaml` |
 | `LIMEN_BUDGET` | no | `100` | Daily run budget cap |
-| `LIMEN_AGENT` | no | *(auto-detect)* | Which agent this session is (`claude`, `gemini`, `jules`, `opencode`, `codex`, `copilot`, `goose`) |
+| `LIMEN_AGENT` | no | *(auto-detect)* | Which agent this session is (`codex`, `claude`, `opencode`, `agy`, `gemini`, `jules`, `copilot`, `warp`, `oz`, `github_actions`, `goose`) |
 | `LIMEN_API_KEY` | no | — | API key for SaaS sync (optional) |
 | `LIMEN_API_TOKEN` | no | — | Bearer token required by the FastAPI backend when set |
 | `LIMEN_OWNER_TOKEN` | no | — | Additional owner persona bearer token for all sanctioned endpoints |
@@ -62,7 +62,7 @@ tasks:
   description: string           # Detailed description (optional)
   repo: string                  # Target repo "owner/name" (optional)
   type: string                  # Task type: code | audit | docs | review | research | config | chore
-  target_agent: string          # "jules" | "gemini" | "claude" | "any" | "opencode" | "codex" | "copilot" | "goose"
+  target_agent: string          # "any" | "codex" | "claude" | "opencode" | "agy" | "gemini" | "jules" | "copilot" | "warp" | "oz" | "github_actions" | "goose"
   priority: string              # critical | high | medium | low | backlog
   budget_cost: integer          # How many runs this consumes (default 1)
   status: string                # See 2.3 State Machine
@@ -181,12 +181,16 @@ containing the following protocol. Agents read this on session start.
 
 | Agent | Flag | Notes |
 |---|---|---|
-| **Claude** | `claude` | Reads `$LIMEN_ROOT/AGENTS.md` on session start. Supports `claude tasks.yaml` for file access. |
-| **Gemini** | `gemini` | Reads via `gemini -p "read $LIMEN_ROOT/tasks.yaml..."`. Supports `--sandbox` for repo context. |
-| **Jules** | `jules` | Async/background. Reads tasks.yaml but dispatches independently. Harvest phase checks results. |
-| **OpenCode** | `opencode` | Reads `$LIMEN_ROOT/tasks.yaml` directly. Supports `opencode --task <id>` for targeted dispatch. |
-| **Codex** | `codex` | Via CLI. Supports `codex -p "process tasks.yaml..."`. |
-| **Copilot** | `copilot` | Via `gh copilot`. Limited CLI integration. |
+| **Codex** | `codex` | Local CLI lane, dispatched in an isolated worktree and opened as a PR. |
+| **Claude** | `claude` | Local CLI lane, dispatched in an isolated worktree and opened as a PR. |
+| **OpenCode** | `opencode` | Local CLI lane, dispatched in an isolated worktree and opened as a PR. |
+| **Agy** | `agy` | Local CLI lane, dispatched in an isolated worktree and opened as a PR. |
+| **Gemini** | `gemini` | Local CLI lane, dispatched in an isolated worktree when auth is configured. |
+| **Jules** | `jules` | Async/background cloud lane. Dispatches with `jules new --repo`; harvest checks results. |
+| **Copilot** | `copilot` | GitHub Copilot coding-agent lane. Assigns an existing issue to `copilot-swe-agent`. |
+| **Warp** | `warp` | Paid-service lane through `LIMEN_WARP_DISPATCH_CMD` or generic `LIMEN_DISPATCH_CMD`. |
+| **Oz** | `oz` | Paid-service lane through `LIMEN_OZ_DISPATCH_CMD`, generic `LIMEN_DISPATCH_CMD`, or `oz agent run --prompt`. |
+| **GitHub Actions** | `github_actions` | Runner lane via `gh workflow run` and `LIMEN_GITHUB_ACTIONS_WORKFLOW`. |
 | **Goose** | `goose` | Via `goose run`. Supports `--instruction` flag for task prompt. |
 
 ---
@@ -200,15 +204,16 @@ limen dispatch [--agent <name>] [--budget <n>] [--dry-run] [--live]
 ```
 
 1. Read `tasks.yaml`
-2. Filter open tasks matching `--agent` (or all if omitted)
-3. Apply budget cap (`--budget` or `$LIMEN_BUDGET` or portal daily budget)
-4. Sort by priority
-5. For each task:
+2. Print a capacity census for every paid lane
+3. Filter open tasks matching `--agent` (or all if omitted)
+4. Apply budget cap (`--budget` or `$LIMEN_BUDGET` or portal daily budget)
+5. Sort by priority
+6. For each task:
    a. Mark `dispatched` with agent + timestamp
-   b. Call `agent-dispatch <agent> "do: <task.title> in <task.repo>"` (or equivalent)
+   b. Call the lane adapter: isolated local CLI, `jules new`, Copilot issue assignment, Warp/Oz service adapter, or `gh workflow run`
    c. Log in `dispatch_log`
    d. Spend from budget
-6. Write updated `tasks.yaml`
+7. Write updated `tasks.yaml`
 
 ### 4.2 Remote Dispatch (Jules Async)
 

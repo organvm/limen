@@ -8,12 +8,14 @@
 # idle multi-vendor capacity producing. Idempotent + bounded.
 #
 # SAFE BY DEFAULT: without LIMEN_DISPATCH=1 it only drains/mines/routes/reports —
-# all reversible local writes, nothing outward. With LIMEN_DISPATCH=1 it also:
-#   - dispatches local lanes (codex/opencode/agy/claude) which, via worktree
-#     isolation, only ever produce reviewable PRs — never touch a live tree;
-#   - dispatches jules within its daily budget.
+# all reversible local writes, nothing outward. With LIMEN_DISPATCH=1 it also
+# walks every paid lane in the router census. Local lanes use worktree
+# isolation and produce reviewable PRs; cloud/service lanes use their explicit
+# dispatch adapters and each lane remains budget-gated.
 #
 # Knobs: LIMEN_MINE_LIMIT (15)  LIMEN_LOCAL_LIMIT (3)  LIMEN_JULES_LIMIT (10)
+#        LIMEN_SERVICE_LIMIT (3)  LIMEN_ACTIONS_LIMIT (3)
+#        LIMEN_PAID_AGENTS (defaults to the full paid-lane catalog)
 set -uo pipefail
 export LIMEN_ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
 export LIMEN_TASKS="${LIMEN_TASKS:-$LIMEN_ROOT/tasks.yaml}"
@@ -34,12 +36,16 @@ echo "── 3. route (assign cheapest-capable vendor) ──"
 python3 "$LIMEN_ROOT/scripts/route.py" --apply || echo "  (route skipped)"
 
 if [ "${LIMEN_DISPATCH:-0}" = "1" ]; then
-  echo "── 4a. dispatch local lanes → PRs (worktree-isolated, live tree untouched) ──"
-  for v in codex opencode agy claude; do
-    python3 -m limen dispatch --agent "$v" --live --limit "${LIMEN_LOCAL_LIMIT:-3}" || true
+  echo "── 4. dispatch paid lanes (full census order, budget-gated) ──"
+  for v in ${LIMEN_PAID_AGENTS:-codex claude opencode agy gemini jules copilot warp oz github_actions}; do
+    case "$v" in
+      codex|claude|opencode|agy|gemini) limit="${LIMEN_LOCAL_LIMIT:-3}" ;;
+      jules) limit="${LIMEN_JULES_LIMIT:-10}" ;;
+      github_actions) limit="${LIMEN_ACTIONS_LIMIT:-3}" ;;
+      *) limit="${LIMEN_SERVICE_LIMIT:-3}" ;;
+    esac
+    python3 -m limen dispatch --agent "$v" --live --limit "$limit" || true
   done
-  echo "── 4b. dispatch jules (within daily budget) ──"
-  python3 -m limen dispatch --agent jules --live --limit "${LIMEN_JULES_LIMIT:-10}" || true
 else
   echo "── 4. dispatch SKIPPED (set LIMEN_DISPATCH=1 to enable outward dispatch) ──"
 fi

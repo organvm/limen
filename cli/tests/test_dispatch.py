@@ -125,6 +125,41 @@ def test_dispatch_dry_run_prints_capacity_census_and_copilot_command(
     assert "would: gh issue edit 12 --repo organvm/limen --add-assignee copilot-swe-agent" in output
 
 
+def test_dispatch_dry_run_uses_direct_oz_command_when_no_adapter(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    oz = tmp_path / "oz"
+    oz.write_text("#!/bin/sh\nexit 0\n")
+    oz.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.delenv("LIMEN_DISPATCH_CMD", raising=False)
+    monkeypatch.delenv("LIMEN_OZ_DISPATCH_CMD", raising=False)
+
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "LIMEN-OZ",
+                "title": "Use Oz lane",
+                "repo": "organvm/limen",
+                "target_agent": "oz",
+                "priority": "high",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            }
+        ],
+    )
+
+    dispatch_tasks(load_limen_file(tasks_path), tasks_path, agent="oz", dry_run=True)
+
+    output = capsys.readouterr().out
+    assert "up   oz" in output
+    assert "would: oz agent run --prompt Complete task LIMEN-OZ: Use Oz lane in repository organvm/limen" in output
+
+
 def test_release_stale_dry_run_does_not_mutate(tmp_path: Path) -> None:
     tasks_path = tmp_path / "tasks.yaml"
     write_board(
