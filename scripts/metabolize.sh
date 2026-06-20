@@ -46,4 +46,13 @@ fi
 
 echo "── 5. board ──"
 python3 -m limen doctor 2>&1 | head -12
+
+if [ "${LIMEN_CONVERGE:-0}" = "1" ]; then
+  echo "── 6. converge (distil completed shots → better version) ──"
+  python3 -m limen.converge --dry-run --idea "conductor cycle" --shot "heartbeat" || \
+    echo "  (converge failed — continuing; non-fatal)"
+else
+  echo "── 6. converge: skipped (set LIMEN_CONVERGE=1 to enable)"
+fi
+
 echo "═══ metabolize done $(date '+%F %T') ═══"
