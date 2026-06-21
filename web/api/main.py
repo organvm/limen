@@ -459,7 +459,7 @@ def task_lifecycle(task: dict[str, Any], stale_ids: set[str]) -> dict[str, Any]:
     has_pr = any("/pull/" in url for url in urls)
     has_issue = any("/issues/" in url for url in urls)
     status = task.get("status", "unknown")
-    if status in ("archived", "cancelled"):
+    if status == "archived":
         phase = "archived"
     elif status == "done":
         phase = "archive"
@@ -573,7 +573,7 @@ def qa_status(data: dict[str, Any], agent: str = "jules") -> dict[str, Any]:
 def surface_manifest(data: dict[str, Any], persona: str = "owner") -> dict[str, Any]:
     raw = summary(data)
     stale_count = len(release_stale_candidates(data, 24))
-    manifest = {
+    manifest: dict[str, Any] = {
         "status": "ok",
         "persona": persona,
         "generated_at": now_iso(),

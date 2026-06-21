@@ -36,10 +36,13 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r web/api/requirements.txt -e "cli[test]"
+          python -m pip install -r web/api/requirements.txt -e "cli[test]" mypy types-PyYAML
 
       - name: Compile Python modules
         run: python -m py_compile web/api/main.py cli/src/limen/*.py
+
+      - name: Typecheck Python modules
+        run: python -m mypy cli/src/limen web/api
 
       - name: Check shell scripts
         run: bash -n scripts/preflight-cloud-run.sh
