@@ -17,7 +17,7 @@ All paths and configuration come from environment variables. No hardcoded paths.
 |---|---|---|---|
 | `LIMEN_ROOT` | yes | — | Path to the directory containing `tasks.yaml` |
 | `LIMEN_BUDGET` | no | `100` | Daily run budget cap |
-| `LIMEN_AGENT` | no | *(auto-detect)* | Which agent this session is (`claude`, `gemini`, `jules`, `opencode`, `codex`, `copilot`, `goose`) |
+| `LIMEN_AGENT` | no | *(auto-detect)* | Which agent this session is (`claude`, `gemini`, `jules`, `opencode`, `codex`, `agy`, `copilot`, `warp`, `oz`, `github_actions`, `goose`) |
 | `LIMEN_API_KEY` | no | — | API key for SaaS sync (optional) |
 | `LIMEN_API_TOKEN` | no | — | Bearer token required by the FastAPI backend when set |
 | `LIMEN_OWNER_TOKEN` | no | — | Additional owner persona bearer token for all sanctioned endpoints |
@@ -62,7 +62,7 @@ tasks:
   description: string           # Detailed description (optional)
   repo: string                  # Target repo "owner/name" (optional)
   type: string                  # Task type: code | audit | docs | review | research | config | chore
-  target_agent: string          # "jules" | "gemini" | "claude" | "any" | "opencode" | "codex" | "copilot" | "goose"
+  target_agent: string          # "jules" | "gemini" | "claude" | "any" | "opencode" | "codex" | "agy" | "copilot" | "warp" | "oz" | "github_actions" | "goose"
   priority: string              # critical | high | medium | low | backlog
   budget_cost: integer          # How many runs this consumes (default 1)
   status: string                # See 2.3 State Machine

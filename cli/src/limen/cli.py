@@ -79,7 +79,7 @@ tasks: []
 
 
 @main.command()
-@click.option("--agent", default=None, help="Filter by target agent")
+@click.option("--agent", default=None, help="Filter by target agent; use fleet/all/paid for every reachable paid lane")
 @click.option("--budget", default=None, type=int, help="Max runs to spend")
 @click.option(
     "--dry-run/--live", default=True, help="Default: dry-run (no actual dispatch)"

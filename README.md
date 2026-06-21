@@ -11,6 +11,7 @@ curl -sSL https://raw.githubusercontent.com/4444J99/limen/main/install.sh | bash
 limen init
 limen add --title 'Refactor auth' --repo my-org/my-repo --agent jules
 limen dispatch --agent jules --live
+limen dispatch --agent fleet --live --limit 3
 limen status
 ```
 
@@ -103,19 +104,19 @@ GCP_PROJECT_ID=device-streaming-067d747a bash scripts/preflight-cloud-run.sh
 The preflight checks billing, required APIs, and the Secret Manager entries
 `limen-github-token`, `limen-api-token`, and `limen-client-token`. It does not
 enable services or create secrets. When billing is unavailable, use the local CLI
-path from the machine that has the Jules CLI:
+path from a machine with the configured agent CLIs:
 
 ```bash
 limen doctor --agent jules
 limen release-stale --agent jules --hours 24
 limen release-stale --agent jules --hours 24 --apply
-limen dispatch --agent jules --limit 100
-limen dispatch --agent jules --limit 100 --live
+limen dispatch --agent fleet --limit 3
+limen dispatch --agent fleet --limit 3 --live
 ```
 
 There is also a manual GitHub Actions workflow named `Operate` for no-billing
 operations. It supports `doctor`, `qa`, `release-stale-preview`, and
-`release-stale-apply`. It does not run live Jules dispatch.
+`release-stale-apply`. It does not run live fleet dispatch.
 
 The API exposes the same lifecycle contract at `GET /api/qa-status` when a
 backend runtime is attached. Live mutation still requires explicit
@@ -162,6 +163,7 @@ probe inputs are missing.
 ## How It Works
 
 Every AI agent reads `tasks.yaml` at session start, finds open tasks matching their name, claims one, executes, and writes results back. Budget is tracked per agent and per day — no agent exceeds its allocation.
+`limen dispatch --agent fleet` runs a capacity census and then fans out across every reachable paid lane with the requested per-lane limit.
 
 ## Agents
 

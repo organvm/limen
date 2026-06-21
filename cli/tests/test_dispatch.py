@@ -70,6 +70,33 @@ def test_capacity_census_lists_every_paid_lane(tmp_path: Path, monkeypatch) -> N
     assert "github_actions" in text
 
 
+def test_load_limen_file_tolerates_legacy_malformed_dispatch_log(tmp_path: Path) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "LIMEN-LEGACY",
+                "title": "Legacy malformed log",
+                "repo": "organvm/limen",
+                "target_agent": "jules",
+                "priority": "high",
+                "budget_cost": 1,
+                "status": "done",
+                "created": "2026-06-20",
+                "dispatch_log": [{"status": "done", "output": "older board omitted log metadata"}],
+            }
+        ],
+    )
+
+    task = load_limen_file(tasks_path).tasks[0]
+
+    assert task.dispatch_log[0].timestamp is None
+    assert task.dispatch_log[0].agent == "unknown"
+    assert task.dispatch_log[0].session_id == "unknown"
+    assert task.dispatch_log[0].status == "done"
+
+
 def test_route_round_robins_across_all_reachable_paid_lanes(tmp_path: Path) -> None:
     route = load_route_module()
     workdir = tmp_path / "work"
@@ -123,6 +150,90 @@ def test_dispatch_dry_run_prints_capacity_census_and_copilot_command(
     assert "-- capacity census" in output
     assert "copilot" in output
     assert "would: gh api graphql (fetch node IDs + replaceActorsForAssignable for copilot-swe-agent on organvm/limen#12)" in output
+
+
+def test_fleet_dispatch_dry_run_fans_out_all_reachable_paid_lanes(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    for binary in ("codex", "claude", "opencode", "agy", "gemini", "jules", "gh", "agent-dispatch"):
+        path = tmp_path / binary
+        path.write_text("#!/bin/sh\nexit 0\n")
+        path.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("LIMEN_COPILOT_ENABLED", "1")
+    monkeypatch.setenv("LIMEN_WORKDIR", str(tmp_path / "work"))
+
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": f"LIMEN-FLEET-{i:03}",
+                "title": f"Fleet task {agent}",
+                "repo": "organvm/limen",
+                "target_agent": agent,
+                "priority": "high",
+                "budget_cost": 1,
+                "status": "open",
+                "urls": [f"https://github.com/organvm/limen/issues/{i}"],
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            }
+            for i, agent in enumerate(PAID_AGENT_ORDER, start=1)
+        ],
+    )
+
+    dispatched = dispatch_tasks(
+        load_limen_file(tasks_path),
+        tasks_path,
+        agent="fleet",
+        dry_run=True,
+        limit=1,
+    )
+
+    output = capsys.readouterr().out
+    assert dispatched == len(PAID_AGENT_ORDER)
+    assert "── limen fleet dispatch (DRY-RUN)" in output
+    for agent in PAID_AGENT_ORDER:
+        assert f"agent={agent}" in output or f" {agent:<14}" in output
+
+
+def test_live_paid_lane_dispatch_skips_when_capacity_census_marks_down(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    monkeypatch.setenv("PATH", str(tmp_path))
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "LIMEN-DOWN",
+                "title": "Do not fail task when paid lane is unavailable",
+                "repo": "organvm/limen",
+                "target_agent": "codex",
+                "priority": "high",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            }
+        ],
+    )
+
+    dispatched = dispatch_tasks(
+        load_limen_file(tasks_path),
+        tasks_path,
+        agent="codex",
+        dry_run=False,
+        limit=1,
+    )
+
+    task = read_board(tasks_path)["tasks"][0]
+    assert dispatched == 0
+    assert task["status"] == "open"
+    assert task["dispatch_log"] == []
+    assert "Agent codex is down" in capsys.readouterr().out
 
 
 def test_release_stale_dry_run_does_not_mutate(tmp_path: Path) -> None:

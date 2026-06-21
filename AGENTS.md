@@ -24,7 +24,7 @@ Execute in order:
 ```bash
 # Limen needs to know which agent you are. Set if not already:
 export LIMEN_AGENT="${LIMEN_AGENT:-$(basename $0)}"
-# Expected values: claude | gemini | jules | opencode | codex | copilot | goose
+# Expected values: claude | gemini | jules | opencode | codex | agy | copilot | warp | oz | github_actions | goose
 ```
 
 ### 2. Read the Task File

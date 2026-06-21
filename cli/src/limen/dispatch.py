@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from limen.capacity import (
+    PAID_AGENT_ORDER,
     canonical_agent,
     capacity_census,
     format_capacity_census,
@@ -24,6 +25,13 @@ def session_id() -> str:
     return os.environ.get(
         "CLAUDE_SESSION_ID", os.environ.get("GEMINI_SESSION_ID", "cli")
     )
+
+
+_FLEET_AGENT_ALIASES = {"all", "fleet", "paid"}
+
+
+def _is_fleet_agent(agent: str) -> bool:
+    return canonical_agent(agent) in _FLEET_AGENT_ALIASES
 
 
 def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str:
@@ -319,18 +327,19 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
         print(f"  SKIP {task.id}: {msg} — clone it under $LIMEN_WORKDIR first")
         return False
 
-    base = _default_branch(repo_dir)
     branch = "limen/" + re.sub(r"[^a-zA-Z0-9._/-]+", "-", task.id.lower())
     wt = _ISOLATION_ROOT / re.sub(r"[^a-zA-Z0-9._-]+", "-", task.id.lower())
     agent_cmd = [binary, *_LOCAL_AGENTS[agent], _build_prompt(task)]
 
     if dry_run:
         print(
-            f"  would isolate {task.id}: worktree {wt} off origin/{base} "
+            f"  would isolate {task.id}: worktree {wt} off origin/<default> "
             f"→ branch {branch} → {binary} {' '.join(_LOCAL_AGENTS[agent])} "
             f"→ commit → push → PR  (live checkout untouched)"
         )
         return True
+
+    base = _default_branch(repo_dir)
 
     # 1) fresh base from origin — never the user's possibly-dirty working tree
     _git(["fetch", "origin", base], repo_dir, timeout=300)
@@ -442,7 +451,8 @@ def dispatch_tasks(
     dry_run: bool = True,
     task_id: str | None = None,
     limit: int | None = None,
-) -> None:
+    print_census: bool = True,
+) -> int:
     now = datetime.now(timezone.utc)
     budget = budget or limen.portal.budget.daily
 
@@ -450,13 +460,30 @@ def dispatch_tasks(
     track = limen.portal.budget.track
 
     agent_filter = canonical_agent(agent or resolve_agent())
+    if _is_fleet_agent(agent_filter):
+        return dispatch_paid_fleet(
+            limen,
+            tasks_path,
+            budget=budget,
+            dry_run=dry_run,
+            task_id=task_id,
+            limit=limit,
+        )
+
     remaining = _remaining_budget(limen, agent_filter, budget)
-    print(format_capacity_census(capacity_census(limen, budget_limit=budget)))
+    census = capacity_census(limen, budget_limit=budget)
+    if print_census:
+        print(format_capacity_census(census))
     if remaining <= 0:
         print(
             f"Budget exhausted for {agent_filter} ({track.spent}/{budget} total spent)"
         )
-        return
+        return 0
+    if not dry_run and agent_filter in PAID_AGENT_ORDER:
+        row = next((item for item in census if item["agent"] == agent_filter), None)
+        if row and not row["reachable"]:
+            print(f"Agent {agent_filter} is down: {row['detail']}")
+            return 0
 
     tasks = limen.tasks
 
@@ -464,7 +491,7 @@ def dispatch_tasks(
         tasks = [t for t in tasks if t.id == task_id]
         if not tasks:
             print(f"Task {task_id} not found")
-            return
+            return 0
 
     candidates = [
         t
@@ -483,7 +510,7 @@ def dispatch_tasks(
         print(
             f"No open tasks for agent '{agent_filter}' within remaining budget ({remaining})"
         )
-        return
+        return 0
 
     mode = "DRY-RUN" if dry_run else "LIVE"
     print(
@@ -526,6 +553,61 @@ def dispatch_tasks(
         save_limen_file(tasks_path, limen)
 
     print(f"── {mode}: {dispatched} task(s)")
+    return dispatched
+
+
+def dispatch_paid_fleet(
+    limen: LimenFile,
+    tasks_path: Path,
+    budget: int | None = None,
+    dry_run: bool = True,
+    task_id: str | None = None,
+    limit: int | None = None,
+) -> int:
+    """Dispatch one cycle across every reachable paid lane.
+
+    `limit` is intentionally interpreted per lane. The fleet scheduler's goal is
+    to keep every paid service busy, not to let the first healthy lane consume a
+    global batch before later lanes get a chance.
+    """
+    now = datetime.now(timezone.utc)
+    budget = budget or limen.portal.budget.daily
+    _reset_budget_if_needed(limen, now)
+    census = capacity_census(limen, budget_limit=budget)
+    print(format_capacity_census(census))
+
+    reachable = [row["agent"] for row in census if row["reachable"]]
+    mode = "DRY-RUN" if dry_run else "LIVE"
+    print(
+        f"── limen fleet dispatch ({mode}) — "
+        f"reachable={', '.join(reachable) or 'none'} "
+        f"per_agent_limit={limit if limit is not None else 'budget'}"
+    )
+    if not reachable:
+        print("No reachable paid agents in capacity census")
+        return 0
+
+    rows = {row["agent"]: row for row in census}
+    total = 0
+    for paid_agent in PAID_AGENT_ORDER:
+        row = rows.get(paid_agent)
+        if not row or not row["reachable"]:
+            detail = row["detail"] if row else "missing from capacity census"
+            print(f"  skip {paid_agent}: {detail}")
+            continue
+        total += dispatch_tasks(
+            limen,
+            tasks_path,
+            agent=paid_agent,
+            budget=budget,
+            dry_run=dry_run,
+            task_id=task_id,
+            limit=limit,
+            print_census=False,
+        )
+
+    print(f"── {mode} fleet: {total} task(s)")
+    return total
 
 
 def release_stale_tasks(

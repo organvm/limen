@@ -4,10 +4,10 @@ from pydantic import BaseModel, Field
 
 
 class DispatchLogEntry(BaseModel):
-    timestamp: datetime
-    agent: str
-    session_id: str
-    status: str
+    timestamp: Optional[datetime] = None
+    agent: str = "unknown"
+    session_id: str = "unknown"
+    status: str = "unknown"
     output: Optional[str] = None
 
 
