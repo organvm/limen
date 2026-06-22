@@ -38,7 +38,7 @@ tasks:
   target_agent: codex
   priority: high
   budget_cost: 2
-  status: dispatched
+  status: done
   labels:
   - full-agent-force
   - infra
@@ -50,13 +50,18 @@ tasks:
     agent each cycle.'
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-21T16:28:31.134770Z'
+  updated: '2026-06-22T04:51:45Z'
   dispatch_log:
   - timestamp: '2026-06-20T19:51:18.339621Z'
     agent: limen
     session_id: cli
     status: open
     output: Released stale claim after 3h
+  - timestamp: '2026-06-22T04:51:45Z'
+    agent: codex
+    session_id: cli
+    status: done
+    output: Routed and dispatched across the complete paid lane catalog (codex, claude, opencode, agy, gemini, jules, copilot, warp, oz, github_actions), added cycle capacity census coverage, and verified with 172 passing CLI tests.
 - id: FORCE-warp-oz-lane
   title: Enlist the installed oz-by-warp GitHub App as a dispatch lane
   repo: organvm/limen

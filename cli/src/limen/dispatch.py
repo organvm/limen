@@ -12,6 +12,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 from limen.capacity import (
+    PAID_AGENT_ORDER,
     canonical_agent,
     capacity_census,
     format_capacity_census,
@@ -441,14 +442,11 @@ def _agent_argv(agent: str) -> list[str]:
             flags += ["-m", model]
     return flags
 
-# Per-task lane failover cascade (best-efficiency-first → cloud last). On a genuine
-# lane FAILURE (down/error/timeout) a task re-routes to the next lane and stays open;
-# the heartbeat dispatches lanes in THIS SAME ORDER, so a failed task walks down the
-# spectrum within one tick. A no-op (empty diff) is task-intrinsic and never cascades.
-# Exhausting the list marks the task failed. Keep this order == heartbeat.sh LANES order.
-# agy/antigravity KEPT and HEALED: it writes to a scratch dir, so _bridge_agy_scratch carries
-# that work into the worktree after the run (see _isolated_local_run) — productive lane again.
-_LANE_CASCADE = ["codex", "opencode", "agy", "claude", "gemini", "jules"]
+# Per-task lane failover cascade across the whole paid fleet. On a genuine lane
+# FAILURE (down/error/timeout) a task re-routes to the next paid service and stays
+# open; a no-op (empty diff) is task-intrinsic and never cascades. Exhausting the
+# list marks the task failed.
+_LANE_CASCADE = list(PAID_AGENT_ORDER)
 _NOOP = "__noop__"  # agent ran but produced no diff — do NOT cascade lanes
 
 
@@ -458,7 +456,11 @@ def _next_lane(current: str) -> str | None:
         i = _LANE_CASCADE.index(current)
     except ValueError:
         return None
-    return _LANE_CASCADE[i + 1] if i + 1 < len(_LANE_CASCADE) else None
+    down = _down_lanes()
+    for lane in _LANE_CASCADE[i + 1:]:
+        if lane not in down:
+            return lane
+    return None
 
 
 # A lane's REAL limit is usually token-usage / rate, NOT the fixed per-day count. Every
@@ -806,7 +808,8 @@ def _reset_budget_if_needed(limen: LimenFile, now: datetime) -> None:
     """Reset each vendor's spend on ITS OWN cadence (5h rolling for codex/claude, daily for
     the rest) so no reset window goes unused — replaces the single crude calendar-day reset."""
     track = limen.portal.budget.track
-    for agent in list(limen.portal.budget.per_agent):
+    agents = set(PAID_AGENT_ORDER) | set(limen.portal.budget.per_agent) | set(track.per_agent)
+    for agent in sorted(agents):
         last_iso = track.per_agent_reset.get(agent)
         last = None
         if last_iso:
@@ -850,6 +853,16 @@ def dispatch_tasks(
     track = limen.portal.budget.track
 
     agent_filter = canonical_agent(agent or resolve_agent())
+    if agent_filter in {"all", "paid", "fleet"}:
+        dispatch_parallel(
+            limen,
+            tasks_path,
+            list(PAID_AGENT_ORDER),
+            per_agent_limit=limit or int(os.environ.get("LIMEN_LOCAL_LIMIT", "3")),
+            max_workers=int(os.environ.get("LIMEN_WORKERS", "8")),
+            dry_run=dry_run,
+        )
+        return
     down = _down_lanes()
     if agent_filter in down:
         print(f"Lane '{agent_filter}' is down by live usage/health gate; skipping dispatch")
@@ -1032,6 +1045,16 @@ def dispatch_parallel(
     _reset_budget_if_needed(limen, now)
     track = limen.portal.budget.track
     daily = limen.portal.budget.daily
+    down = _down_lanes()
+    normalized_agents: list[str] = []
+    for agent in agents:
+        canonical = canonical_agent(agent)
+        if canonical not in normalized_agents and canonical not in down:
+            normalized_agents.append(canonical)
+    if down:
+        print(f"── skipping down lanes: {sorted(down)}")
+    agents = normalized_agents
+    print(format_capacity_census(capacity_census(limen, budget_limit=daily)))
 
     # ── RESERVE: pick balanced candidates per lane within budget; mark dispatched, save once
     picked: list[tuple[str, str]] = []  # (agent, task_id)

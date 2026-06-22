@@ -22,6 +22,8 @@ PAID_AGENT_ORDER: tuple[str, ...] = (
     "github_actions",
 )
 
+PAID_AGENT_CSV = ",".join(PAID_AGENT_ORDER)
+
 AGENT_ALIASES: dict[str, str] = {
     "actions": "github_actions",
     "gha": "github_actions",

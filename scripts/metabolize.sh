@@ -9,9 +9,8 @@
 #
 # SAFE BY DEFAULT: without LIMEN_DISPATCH=1 it only drains/mines/routes/reports —
 # all reversible local writes, nothing outward. With LIMEN_DISPATCH=1 it also:
-#   - dispatches local lanes (codex/opencode/agy/claude) which, via worktree
-#     isolation, only ever produce reviewable PRs — never touch a live tree;
-#   - dispatches jules within its daily budget.
+#   - dispatches every paid lane routed by capacity census; local lanes use
+#     worktree isolation and never touch a live tree.
 #
 # Knobs: LIMEN_MINE_LIMIT (15)  LIMEN_LOCAL_LIMIT (3)  LIMEN_JULES_LIMIT (10)
 set -uo pipefail
@@ -43,12 +42,14 @@ echo "── 3. route (assign cheapest-capable vendor) ──"
 python3 "$LIMEN_ROOT/scripts/route.py" --apply || echo "  (route skipped)"
 
 if [ "${LIMEN_DISPATCH:-0}" = "1" ]; then
-  echo "── 4a. dispatch local lanes → PRs (worktree-isolated, live tree untouched) ──"
-  for v in codex opencode agy claude; do
-    python3 -m limen dispatch --agent "$v" --live --limit "${LIMEN_LOCAL_LIMIT:-3}" || true
+  LANES="${LIMEN_LANES:-codex,claude,opencode,agy,gemini,jules,copilot,warp,oz,github_actions}"
+  echo "── 4. dispatch paid lanes (worktree-isolated where local) ──"
+  IFS=',' read -ra LANE_ARR <<< "$LANES"
+  for v in "${LANE_ARR[@]}"; do
+    LIMIT="${LIMEN_LOCAL_LIMIT:-3}"
+    [ "$v" = "jules" ] && LIMIT="${LIMEN_JULES_LIMIT:-10}"
+    python3 -m limen dispatch --agent "$v" --live --limit "$LIMIT" || true
   done
-  echo "── 4b. dispatch jules (within daily budget) ──"
-  python3 -m limen dispatch --agent jules --live --limit "${LIMEN_JULES_LIMIT:-10}" || true
 else
   echo "── 4. dispatch SKIPPED (set LIMEN_DISPATCH=1 to enable outward dispatch) ──"
 fi

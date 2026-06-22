@@ -71,23 +71,20 @@ def test_capacity_census_lists_every_paid_lane(tmp_path: Path, monkeypatch) -> N
     assert "github_actions" in text
 
 
-def test_route_distributes_local_work_and_reaches_extended_fleet(tmp_path: Path) -> None:
-    """Ideal-form router (origin's local-first split + the extended-fleet graft): local-checkout
-    work spreads across LOCAL lanes by budget+refresh-runway (no single-lane serialization), and a
-    repo with NO local checkout but a GitHub issue still reaches the extended fleet (copilot/jules)
-    instead of being stranded. Supersedes the old fan-everything-round-robin assertion — which routed
-    local work to copilot/warp/oz the daemon can't dispatch (the 'don't strand' lesson origin learned)."""
+def test_route_distributes_work_across_every_capable_paid_lane(tmp_path: Path) -> None:
+    """The router must fan ordinary repo+issue work across the whole paid fleet, not stop at
+    the six original vendor lanes. Capability still gates each lane, but when all lanes are healthy
+    every paid service gets work before any one lane receives a second task."""
     route = load_route_module()
     workdir = tmp_path / "work"
     checkout = workdir / "organvm" / "limen"
     (checkout / ".git").mkdir(parents=True)
     health = {agent: True for agent in PAID_AGENT_ORDER}
-    budget = {a: 10 for a in ("codex", "claude", "agy", "opencode")}
+    budget = {a: 10 for a in PAID_AGENT_ORDER}
 
-    # Many local-checkout tasks must SPREAD across local lanes, never serialize onto one.
     tally: dict[str, int] = {}
     picks = []
-    for i in range(8):
+    for i in range(len(PAID_AGENT_ORDER)):
         task = {
             "id": f"LIMEN-{i:03}", "title": f"Task {i}", "repo": "organvm/limen",
             "status": "open", "budget_cost": 1,
@@ -96,17 +93,17 @@ def test_route_distributes_local_work_and_reaches_extended_fleet(tmp_path: Path)
         vendor, _ = route.route_task(task, health, workdir, assigned=tally, budget=budget)
         tally[vendor] = tally.get(vendor, 0) + 1
         picks.append(vendor)
-    assert set(picks) <= {"codex", "claude", "agy", "opencode"}, f"local work leaked to {set(picks)}"
-    assert len(set(picks)) >= 2, f"work serialized onto {set(picks)}"
+    assert set(picks) == set(PAID_AGENT_ORDER), f"work did not fan across all paid lanes: {picks}"
 
-    # A repo with NO local checkout but a GitHub issue reaches the extended fleet, not 'unroutable'.
+    # A repo with NO local checkout can still use local clone-on-demand plus remote lanes.
     remote = {
         "id": "REMOTE-1", "title": "Remote-only repo", "repo": "someorg/no-local-here",
         "status": "open", "budget_cost": 1,
         "urls": ["https://github.com/someorg/no-local-here/issues/9"],
     }
     vendor, reason = route.route_task(remote, health, workdir, assigned={}, budget=budget)
-    assert vendor in ("copilot", "github_actions", "jules"), (vendor, reason)
+    assert vendor in PAID_AGENT_ORDER, (vendor, reason)
+    assert vendor != "unroutable", (vendor, reason)
 
 
 def test_self_improve_weight_nudge_steers_local_split(monkeypatch) -> None:
@@ -157,6 +154,35 @@ def test_dispatch_dry_run_prints_capacity_census_and_copilot_command(
     assert "-- capacity census" in output
     assert "copilot" in output
     assert "would: gh api graphql (fetch node IDs + replaceActorsForAssignable for copilot-swe-agent on organvm/limen#12)" in output
+
+
+def test_dispatch_all_uses_paid_lane_catalog(tmp_path: Path, capsys) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": f"LIMEN-{agent}",
+                "title": f"Use {agent}",
+                "repo": "organvm/limen",
+                "target_agent": agent,
+                "priority": "high",
+                "budget_cost": 1,
+                "status": "open",
+                "urls": ["https://github.com/organvm/limen/issues/12"],
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            }
+            for agent in PAID_AGENT_ORDER
+        ],
+    )
+
+    dispatch_tasks(load_limen_file(tasks_path), tasks_path, agent="all", dry_run=True, limit=1)
+
+    output = capsys.readouterr().out
+    assert "-- capacity census" in output
+    for agent in PAID_AGENT_ORDER:
+        assert f"  {agent}: LIMEN-{agent}" in output
 
 
 def test_release_stale_dry_run_does_not_mutate(tmp_path: Path) -> None:

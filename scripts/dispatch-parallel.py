@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
+from limen.capacity import PAID_AGENT_CSV  # noqa: E402
 from limen.io import load_limen_file  # noqa: E402
 from limen.dispatch import dispatch_parallel, _down_lanes  # noqa: E402
 
@@ -20,7 +21,7 @@ from limen.dispatch import dispatch_parallel, _down_lanes  # noqa: E402
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", default=os.environ.get("LIMEN_TASKS"))
-    ap.add_argument("--lanes", default="codex,opencode,agy,claude,gemini,jules")
+    ap.add_argument("--lanes", default=os.environ.get("LIMEN_LANES", PAID_AGENT_CSV))
     ap.add_argument("--per-lane", type=int, default=int(os.environ.get("LIMEN_LOCAL_LIMIT", "3")))
     ap.add_argument("--workers", type=int, default=int(os.environ.get("LIMEN_WORKERS", "8")))
     ap.add_argument("--dry-run", action="store_true")
@@ -39,7 +40,8 @@ def main() -> int:
             )
             return 0
     down = _down_lanes()   # skip lanes that can't produce (e.g. gemini ratelimited) — no wasted slots
-    lanes = [x.strip() for x in args.lanes.split(",") if x.strip() and x.strip() not in down]
+    raw_lanes = PAID_AGENT_CSV if args.lanes in {"all", "paid", "fleet"} else args.lanes
+    lanes = [x.strip() for x in raw_lanes.split(",") if x.strip() and x.strip() not in down]
     if down:
         print(f"── skipping down lanes: {sorted(down)}")
     path = Path(args.tasks)

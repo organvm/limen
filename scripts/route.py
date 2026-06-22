@@ -92,6 +92,8 @@ def _fleet_health(data) -> dict[str, bool]:
                 health[a] = bool(row["reachable"])
     except Exception:
         pass
+    for agent in PAID_AGENT_ORDER:
+        health.setdefault(agent, False)
     return health
 
 
@@ -136,6 +138,16 @@ def _task_cost(task: dict) -> int:
         return int(task.get("budget_cost", 1))
     except (TypeError, ValueError):
         return 1
+
+
+def _budget_cap(agent: str, budget: dict[str, int]) -> int:
+    try:
+        value = int(budget.get(agent, 0))
+    except (TypeError, ValueError):
+        value = 0
+    if value > 0:
+        return value
+    return max([int(v) for v in budget.values() if isinstance(v, int) and v > 0] or [1])
 
 
 # General local lanes that compete for non-deploy work, distributed by budget headroom + runway.
@@ -223,9 +235,12 @@ def _capable_agents(
     planned_remaining: dict[str, int],
     workdir: Path,
 ) -> tuple[list[str], dict[str, str]]:
-    """The full paid-fleet capability map for one task — kept so the conductor can reach the
-    EXTENDED lanes (copilot/github_actions/warp/oz) when no local lane can serve a repo, instead of
-    stranding it. Local lanes here are still subject to the budget+runway split via _pick_local."""
+    """The full paid-fleet capability map for one task.
+
+    Local lanes can work an existing checkout or clone a repo on demand; Copilot
+    needs a GitHub issue URL; workflow-backed lanes need a repo. The caller then
+    fans across all capable entries by load and remaining budget.
+    """
     repo = task.get("repo")
     checkout = _local_checkout(repo, workdir)
     has_repo = bool(repo)
@@ -240,10 +255,14 @@ def _capable_agents(
         if planned_remaining.get(agent, 0) < cost:
             continue
         if agent in LOCAL_CHECKOUT_AGENTS:
-            if checkout is None:
+            if checkout is None and not has_repo:
                 continue
             agents.append(agent)
-            reasons[agent] = f"local checkout at {checkout}"
+            reasons[agent] = (
+                f"local checkout at {checkout}"
+                if checkout is not None
+                else "repo available -> local clone-on-demand"
+            )
         elif agent in ISSUE_ASSIGNMENT_AGENTS:
             if not has_issue:
                 continue
@@ -268,6 +287,54 @@ def _capable_agents(
     return agents, reasons
 
 
+def _pick_paid_agent(
+    task: dict,
+    agents: list[str],
+    assigned: dict[str, int],
+    budget: dict[str, int],
+    runway: dict[str, float] | None = None,
+) -> str:
+    """Pick among ALL capable paid lanes by least assigned/budget load.
+
+    This is the fleet-wide version of the local split: every reachable capable paid
+    lane should get a turn before another lane receives a second task, subject to
+    capability and remaining budget. Runway still breaks ties for local token-window
+    lanes, and learned self-improve weights still nudge local lanes when enabled.
+    """
+    runway = runway or {}
+    weights = _learned_weights()
+    text = f"{task.get('type','')} {task.get('title','')} {task.get('context','')}".lower()
+    min_assigned = min(assigned.get(a, 0) for a in agents)
+    if (
+        any(h in text for h in _DEPLOY_HINTS)
+        and "opencode" in agents
+        and assigned.get("opencode", 0) == min_assigned
+    ):
+        return "opencode"
+
+    def load(agent: str) -> float:
+        base = assigned.get(agent, 0) / _budget_cap(agent, budget)
+        if agent in LOCAL_CHECKOUT_AGENTS:
+            base = base / weights.get(agent, 1.0)
+        return round(base, 3)
+
+    def runway_of(agent: str) -> float:
+        if agent in LOCAL_CHECKOUT_AGENTS:
+            return runway.get(agent, float("inf"))
+        return float("inf")
+
+    return min(
+        agents,
+        key=lambda a: (
+            load(a),
+            assigned.get(a, 0),
+            -runway_of(a),
+            -_budget_cap(a, budget),
+            PAID_AGENT_ORDER.index(a),
+        ),
+    )
+
+
 def route_task(
     task: dict,
     health: dict[str, bool],
@@ -275,33 +342,33 @@ def route_task(
     assigned: dict[str, int] | None = None,
     budget: dict[str, int] | None = None,
     runway: dict[str, float] | None = None,
+    planned_remaining: dict[str, int] | None = None,
 ) -> tuple[str, str]:
     """Return (vendor, reason) for one open task.
 
-    Local-first: if a local checkout exists, split across the healthy local lanes by budget + refresh
-    runway. Otherwise extend to the full paid fleet (copilot for issues, github_actions, warp/oz),
-    and fall back to Jules' remote clone — so a repo with no local copy is never stranded."""
+    Fan-out first: split every task across every reachable capable paid lane, not
+    only the local six. Capability still matters: Copilot needs an issue URL,
+    local lanes need a repo/checkout, and remote workflow lanes need a repo."""
     assigned = assigned if assigned is not None else {}
     budget = budget if budget is not None else {}
-    repo = task.get("repo")
-    checkout = _local_checkout(repo, workdir)
-    if checkout is not None:
-        local = _pick_local(task, health, assigned, budget, runway)
-        if local:
-            return local, f"local checkout at {checkout} -> {local} (split by budget+refresh runway)"
-        # local exists but no healthy local lane -> fall through to the extended fleet / jules
-
-    # No (healthy) local lane: reach the extended paid fleet (jules/copilot/github_actions/warp/oz)
-    # for whatever it can serve — DISTRIBUTING across the capable extended lanes by least-assigned-
-    # so-far so we never dump the whole remote backlog on one lane (origin's 'don't strand / don't
-    # pile on one vendor' lesson, applied to the fan-out). Jules competes here too when it's up.
-    planned_remaining = {agent: _task_cost(task) for agent in PAID_AGENT_ORDER}
+    planned_remaining = planned_remaining or {agent: _task_cost(task) for agent in PAID_AGENT_ORDER}
     agents, reasons = _capable_agents(task, health, planned_remaining, workdir)
-    extended = [a for a in agents if a not in LOCAL_CHECKOUT_AGENTS]
-    if extended:
-        pick = min(extended, key=lambda a: (assigned.get(a, 0), PAID_AGENT_ORDER.index(a)))
+    if agents:
+        pick = _pick_paid_agent(task, agents, assigned, budget, runway)
         return pick, reasons[pick]
     return "unroutable", "no reachable capable paid lane"
+
+
+def _effective_census(census: list[dict], health: dict[str, bool]) -> list[dict]:
+    rows = []
+    for row in census:
+        agent = row["agent"]
+        reachable = bool(health.get(agent, False))
+        detail = row["detail"]
+        if row["reachable"] and not reachable:
+            detail = f"{detail}; gated off this cycle"
+        rows.append({**row, "reachable": reachable, "detail": detail})
+    return rows
 
 
 def main() -> int:
@@ -347,8 +414,9 @@ def main() -> int:
     # The refresh-vs-remaining split signal: hours of runway per lane (live, derived).
     runway = _vendor_runway()
 
-    up = [k for k, v in health.items() if v]
-    down = [k for k, v in health.items() if not v]
+    census = _effective_census(census, health)
+    up = [a for a in PAID_AGENT_ORDER if health.get(a)]
+    down = [a for a in PAID_AGENT_ORDER if not health.get(a)]
     print(format_capacity_census(census))
     print(
         f"\n# Router plan  (agents up: {', '.join(up) or 'none'}; "
@@ -365,16 +433,29 @@ def main() -> int:
     from collections import Counter
     # per-agent daily budget drives the distribution (derived from tasks.yaml, never pinned).
     budget = (data.get("portal", {}).get("budget", {}) or {}).get("per_agent", {}) or {}
+    planned_remaining = {
+        row["agent"]: (sys.maxsize if row["remaining"] is None else int(row["remaining"]))
+        for row in census
+    }
     tally: Counter = Counter()
     assignments: dict[str, str] = {}  # task id -> chosen vendor (decisions only; applied under lock)
     for t in opens:
         # pass the running tally as the assigned-so-far counts so load spreads across lanes,
         # and the live runway so the split steers toward the freshest refresh window.
-        vendor, reason = route_task(t, health, workdir, assigned=tally, budget=budget, runway=runway)
+        vendor, reason = route_task(
+            t,
+            health,
+            workdir,
+            assigned=tally,
+            budget=budget,
+            runway=runway,
+            planned_remaining=planned_remaining,
+        )
         tally[vendor] += 1
         print(f"| {t['id']} | {t.get('repo','-')} | {vendor} | {reason} |")
         if vendor not in ("unroutable",):
             assignments[t["id"]] = vendor
+            planned_remaining[vendor] = max(0, planned_remaining.get(vendor, 0) - _task_cost(t))
 
     print(f"\nrouted: {dict(tally)}")
     if not args.apply:

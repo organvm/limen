@@ -15,7 +15,7 @@ LIMEN_DISPATCH_ASYNC=1. The synchronous dispatch-parallel.py is left completely 
 Concurrency: at most LIMEN_ASYNC_MAX (default 12) background runs at once; per-agent in-flight count
 is tracked via <task-id>__<agent>.running markers so budgets aren't blown between reserve & harvest.
 
-Usage: dispatch-async.py --lanes codex,claude,opencode,jules --per-lane 8 --max 12 [--dry-run]
+Usage: dispatch-async.py --lanes all --per-lane 8 --max 12 [--dry-run]
 """
 import argparse
 import datetime
@@ -26,6 +26,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
+from limen.capacity import PAID_AGENT_CSV, capacity_census, format_capacity_census  # noqa: E402
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.dispatch import _queue_lock, _apply_result, _down_lanes, _PRIORITY_ORDER, _deps_met  # noqa: E402
 
@@ -159,13 +160,15 @@ def reserve_and_launch(agents, per_agent, cap, dry):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--lanes", default="codex,opencode,agy,claude,gemini,jules")
+    ap.add_argument("--lanes", default=os.environ.get("LIMEN_LANES", PAID_AGENT_CSV))
     ap.add_argument("--per-lane", type=int, default=int(os.environ.get("LIMEN_LOCAL_LIMIT", "8")))
     ap.add_argument("--max", type=int, default=int(os.environ.get("LIMEN_ASYNC_MAX", "12")))
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
+    print(format_capacity_census(capacity_census(load_limen_file(TASKS))))
     down = _down_lanes()
-    lanes = [x.strip() for x in a.lanes.split(",") if x.strip() and x.strip() not in down]
+    raw_lanes = PAID_AGENT_CSV if a.lanes in {"all", "paid", "fleet"} else a.lanes
+    lanes = [x.strip() for x in raw_lanes.split(",") if x.strip() and x.strip() not in down]
     if down:
         print(f"── skipping down lanes: {sorted(down)}")
     reaped = reap_stale(int(os.environ.get("LIMEN_ASYNC_MAX_AGE", "1200")))

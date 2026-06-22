@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # heartbeat.sh — the autonomic cycle (rung 1: self-sustaining + self-feeding).
 #
-#   drain -> mine -> route -> rebalance -> release-stale -> dispatch(jules + all live
-#   local lanes) -> board.
+#   drain -> mine -> route -> release-stale -> dispatch(all reachable paid lanes) -> board.
 #
 # Designed to be fired by launchd/cron on a timer with NO human present. Every local
 # dispatch is worktree-isolated -> reviewable PR, never touches a live checkout.
-# Outward volume is bounded by the per-day budgets in tasks.yaml (jules 100, locals 50
-# each); firing more often cannot exceed them. Shares the saturate lock so ticks never
+# Outward volume is bounded by the per-day budgets in tasks.yaml; firing more often cannot exceed them.
+# Shares the saturate lock so ticks never
 # overlap each other or a manual saturate run.
 set -uo pipefail
 export HOME="${HOME:-/Users/4jp}"
@@ -29,8 +28,7 @@ fi
 # load local secrets (gemini key, etc.) from the single un-committed secrets file
 [ -f "$HOME/.limen.env" ] && { set -a; . "$HOME/.limen.env"; set +a; }
 
-LANES="${LIMEN_LANES:-codex,opencode,agy,claude}"   # gemini auto-joins below iff its key is present
-[ -n "${GEMINI_API_KEY:-}" ] && LANES="$LANES,gemini"
+LANES="${LIMEN_LANES:-codex,claude,opencode,agy,gemini,jules,copilot,warp,oz,github_actions}"
 LOCAL_LIMIT="${LIMEN_LOCAL_LIMIT:-50}"
 JULES_LIMIT="${LIMEN_JULES_LIMIT:-100}"
 MINE_LIMIT="${LIMEN_MINE_LIMIT:-25}"
@@ -57,14 +55,14 @@ fi
 
 bash   "$LIMEN_ROOT/scripts/drain.sh"                              2>&1 | tail -3 || true
 python3 "$LIMEN_ROOT/scripts/mine-backlog.py" --limit "$MINE_LIMIT" --apply 2>&1 | tail -3 || true
-python3 "$LIMEN_ROOT/scripts/route.py" --apply                    2>&1 | tail -3 || true
-python3 "$LIMEN_ROOT/scripts/rebalance.py" --lanes "$LANES" --apply 2>&1 | tail -2 || true
-python3 -m limen release-stale --agent jules --hours 24 --apply   2>&1 | tail -2 || true
-python3 -m limen dispatch --agent jules --live --limit "$JULES_LIMIT" 2>&1 | tail -4 || true
+python3 "$LIMEN_ROOT/scripts/route.py" --apply                    2>&1 || true
+python3 -m limen release-stale --hours 24 --apply                 2>&1 | tail -2 || true
 IFS=',' read -ra A <<< "$LANES"
 for v in "${A[@]}"; do
   echo "── lane $v ──"
-  python3 -m limen dispatch --agent "$v" --live --limit "$LOCAL_LIMIT" 2>&1 | tail -4 || true
+  LIMIT="$LOCAL_LIMIT"
+  [ "$v" = "jules" ] && LIMIT="$JULES_LIMIT"
+  python3 -m limen dispatch --agent "$v" --live --limit "$LIMIT" 2>&1 | tail -12 || true
 done
 echo "── clone lifecycle hygiene (worktree prune + gc --auto + reap-report) ──"
 bash "$LIMEN_ROOT/scripts/clone-maintenance.sh" 2>&1 | tail -6 || true
