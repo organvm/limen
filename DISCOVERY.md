@@ -36,3 +36,39 @@ The concrete value to the organvm estate:
 — a TCP/Unix-socket listener that accepts task claims from any compatible agent, validating the SaaS thesis with a
 single-tenant daemon before building the multi-tenant dashboard. This surfaces a concrete `limen serve` endpoint
 that other teams could point their agents at, turning the protocol from convention into product.
+
+---
+
+# organvm/media-ark — Value Thesis
+
+**Discovered 2026-06-22** · [auto-discovery] · status: **promoted to ranked tier**
+
+## What It Is
+
+Media Ark is a local-first, zero-dependency media archive pipeline that discovers, deduplicates (SHA-256 content
+hash), processes, enriches (OCR, PDF text extraction, thumbnails, keyword extraction), and indexes images, video,
+PDFs, and documents into a persistent canonical store with JSON sidecars, event logs, and a queryable manifest.
+It ships as a Python CLI, an HTTP API + web dashboard, and an MCP stdio bridge (5 tools), with a brand domain
+(media-ark.org), documented Pro tier ($7/mo), and wired Stripe billing integration.
+
+## The Value
+
+Media Ark is the organvm estate's **first standalone revenue-capable SaaS product**. Its highest latent value is a
+concrete, shippable Pro tier: encrypted cloud sync at $7/mo, with the auth, billing, dashboard, and API scaffolding
+already built and tested. The repo also delivers reusable assets for the estate: (1) a zero-dependency file-processing
+pipeline engine (`process_captures.py`) that any organvm repo could use for content ingestion; (2) a self-contained
+auth module (SQLite + PBKDF2, stdlib-only) usable as a shared library; (3) a production-quality Stripe checkout +
+webhook integration ready to be extracted as a shared payment microservice for other organvm SaaS products; (4) the
+`conductor/` directory defining agent routing tables and dispatch instructions consumed directly by the limen fleet.
+The product addresses a validated market (CleanShot X, Snagit, ShareX users) with a differentiated angle: local-first,
+open-core, agent-friendly (MCP-native). The main gap before shipping is not code quality but operational — the CI
+runner-pickup infrastructure issue on this repo and the placeholder (keystream XOR) cloud sync cipher that must be
+replaced with AES-GCM before the Pro tier can go live.
+
+## First Build-Out Task
+
+**Swap the placeholder cloud-sync cipher (SHA-256 keystream XOR) with production AEAD (AES-256-GCM via
+`cryptography` or stdlib `hashlib` + `os.urandom`), write the integration test against the sync module, and deploy
+a self-hosted GitHub Actions runner so CI goes green.** This unblocks both the Pro tier revenue path (encrypted sync
+is the paid feature) and the release pipeline (CI must pass to ship 1.0), making it the single highest-leverage task
+in the repo.

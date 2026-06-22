@@ -15,13 +15,13 @@ portal:
       claude: 100
     track:
       date: '2026-06-22'
-      spent: 21
+      spent: 24
       per_agent:
         jules: 13
         gemini: 0
         codex: 0
-        opencode: 1
-        agy: 6
+        opencode: 2
+        agy: 8
         claude: 1
       per_agent_reset:
         jules: '2026-06-22T16:29:16.568799+00:00'
@@ -43176,11 +43176,12 @@ tasks:
   target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: cancelled
   labels:
   - discover
   - value-discovery
   - tried:claude
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/a-i--skills. This repo currently\
     \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
@@ -43211,6 +43212,10 @@ tasks:
     agent: claude
     session_id: cli
     status: failed->gemini
+  - timestamp: '2026-06-22T19:23:53.407512Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-gamified-coach-interface
   title: Discover the latent value of organvm/gamified-coach-interface
   repo: organvm/gamified-coach-interface
@@ -44052,7 +44057,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - schedule
   - automation
@@ -44067,7 +44072,7 @@ tasks:
     Staggered Scheduling? Staggered scheduling prev'
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-22T18:52:23.835828Z'
+  updated: '2026-06-22T19:33:20.455319Z'
   dispatch_log:
   - timestamp: '2026-06-22T18:44:42.714436Z'
     agent: gemini
@@ -44077,6 +44082,11 @@ tasks:
     agent: jules
     session_id: '17519424778738308744'
     status: dispatched
+  - timestamp: '2026-06-22T19:33:20.455319Z'
+    agent: jules
+    session_id: https://github.com/organvm/dot-github--theoria/pull/477
+    status: done
+    output: 'jules-land: landed session 17519424778738308744 as PR'
 - id: GH-organvm-organvm-corpvs-testamentvm-489
   title: "IRF P0 surface \u2014 rolling"
   repo: organvm/organvm-corpvs-testamentvm
@@ -44113,10 +44123,11 @@ tasks:
   target_agent: agy
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/scale-threshold-emergence. This repo\
     \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -44133,7 +44144,11 @@ tasks:
   depends_on: []
   created: '2026-06-22'
   updated: '2026-06-22T19:23:53.407512Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-22T19:23:53.407512Z'
+    agent: agy
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-carrier-wave--zeitgeist-thesis
   title: Discover the latent value of organvm/carrier-wave--zeitgeist-thesis
   repo: organvm/carrier-wave--zeitgeist-thesis
@@ -44174,11 +44189,12 @@ tasks:
   target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: done
+  status: cancelled
   labels:
   - discover
   - value-discovery
   - tried:claude
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/vigiles-aeternae--corpus-mythicum.\
     \ This repo currently has NO ranked value \u2014 your job is to find it (value\
@@ -44205,7 +44221,14 @@ tasks:
     agent: opencode
     session_id: default
     status: done
-    output: "Promoted organvm/vigiles-aeternae--corpus-mythicum to ranked tier. Value thesis: governance-through-mythology framework as IP foundation for 7-organ Vigiles franchise. DISCOVERY.md written. value-repos.json updated. Best first task: B2 Marvel Cosmic synthesis."
+    output: 'Promoted organvm/vigiles-aeternae--corpus-mythicum to ranked tier. Value
+      thesis: governance-through-mythology framework as IP foundation for 7-organ
+      Vigiles franchise. DISCOVERY.md written. value-repos.json updated. Best first
+      task: B2 Marvel Cosmic synthesis.'
+  - timestamp: '2026-06-22T19:23:53.407512Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-hierarchia-mundi
   title: Discover the latent value of organvm/hierarchia-mundi
   repo: organvm/hierarchia-mundi
@@ -44213,7 +44236,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - discover
   - value-discovery
@@ -44232,7 +44255,7 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-22T18:52:23.835828Z'
+  updated: '2026-06-22T19:33:20.455319Z'
   dispatch_log:
   - timestamp: '2026-06-22T18:44:42.714436Z'
     agent: gemini
@@ -44242,6 +44265,11 @@ tasks:
     agent: jules
     session_id: '3712546864444405389'
     status: dispatched
+  - timestamp: '2026-06-22T19:33:20.455319Z'
+    agent: jules
+    session_id: https://github.com/organvm/hierarchia-mundi/pull/10
+    status: done
+    output: 'jules-land: landed session 3712546864444405389 as PR'
 - id: DISCOVER-organvm-styx-behavioral-economics-theory
   title: Discover the latent value of organvm/styx-behavioral-economics-theory
   repo: organvm/styx-behavioral-economics-theory
@@ -44270,7 +44298,11 @@ tasks:
   depends_on: []
   created: '2026-06-22'
   updated: '2026-06-22T19:23:53.407512Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-22T19:23:53.407512Z'
+    agent: agy
+    session_id: https://github.com/organvm/styx-behavioral-economics-theory/pull/11
+    status: dispatched
 - id: DISCOVER-organvm-mesh
   title: Discover the latent value of organvm/mesh
   repo: organvm/mesh
@@ -44311,11 +44343,12 @@ tasks:
   target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: cancelled
   labels:
   - discover
   - value-discovery
   - tried:claude
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/rules-system-bound. This repo currently\
     \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
@@ -44337,6 +44370,10 @@ tasks:
     agent: claude
     session_id: cli
     status: failed->gemini
+  - timestamp: '2026-06-22T19:23:53.407512Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-growth-auditor
   title: Discover the latent value of organvm/growth-auditor
   repo: organvm/growth-auditor
@@ -44364,4 +44401,311 @@ tasks:
   depends_on: []
   created: '2026-06-22'
   updated: '2026-06-22T19:23:53.407512Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T19:23:53.407512Z'
+    agent: agy
+    session_id: https://github.com/organvm/growth-auditor/pull/13
+    status: dispatched
+- id: GH-organvm-domus-genoma-96
+  title: "Memory index audit \u2014 rolling"
+  repo: organvm/domus-genoma
+  type: code
+  target_agent: jules
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - audit
+  - slow
+  urls:
+  - https://github.com/organvm/domus-genoma/issues/96
+  context: "GitHub issue organvm/domus-genoma#96. Rolling audit issue for `private_dot_claude/projects/*/memory/`\
+    \ scopes in this repo. Scheduled agent: **memory-index-audit** \xB7 daily 22:08\
+    \ UTC \xB7 read-only except this issue. > **NOTE:** Designed to post to `4444J99/session-meta`\
+    \ but that repo is not in this session's allowed scope. Posting here as fallback.\
+    \ To fix: add `session-meta` to this session's allowed repos in Claude Code on\
+    \ the web. **Las"
+  depends_on: []
+  created: '2026-06-22'
+  updated: '2026-06-22T20:10:34.606049Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T19:36:02.328218Z'
+    agent: opencode
+    session_id: cli
+    status: timeout->jules
+- id: DISCOVER-organvm-orchestration-start-here
+  title: Discover the latent value of organvm/orchestration-start-here
+  repo: organvm/orchestration-start-here
+  type: research
+  target_agent: opencode
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/orchestration-start-here. This repo\
+    \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
+    \ never assumed absent). Steps: (1) Read the repo \u2014 what it is, its real\
+    \ entrypoints/exports, what it already does. (2) Identify its highest latent value:\
+    \ a concrete product, revenue path, reusable asset, or capability the rest of\
+    \ the estate could use \u2014 be specific and honest. (3) DECIDE: if there is\
+    \ real value, write a one-paragraph value thesis to DISCOVERY.md AND open a PR\
+    \ that ALSO appends \"organvm/orchestration-start-here\" to value-repos.json (promote\
+    \ it into the ranked tier so build-out can follow) AND name the single best concrete\
+    \ first task; if it is genuinely archival, write the thesis saying so (so it is\
+    \ never re-discovered) \u2014 do NOT promote it. Keep any build green. Output\
+    \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
+  depends_on: []
+  created: '2026-06-22'
+  updated: '2026-06-22T20:10:34.606049Z'
+  dispatch_log: []
+- id: DISCOVER-organvm-relationship-pipeline
+  title: Discover the latent value of organvm/relationship-pipeline
+  repo: organvm/relationship-pipeline
+  type: research
+  target_agent: jules
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - discover
+  - value-discovery
+  - slow
+  urls: []
+  context: "DISCOVER the latent value of organvm/relationship-pipeline. This repo\
+    \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
+    \ never assumed absent). Steps: (1) Read the repo \u2014 what it is, its real\
+    \ entrypoints/exports, what it already does. (2) Identify its highest latent value:\
+    \ a concrete product, revenue path, reusable asset, or capability the rest of\
+    \ the estate could use \u2014 be specific and honest. (3) DECIDE: if there is\
+    \ real value, write a one-paragraph value thesis to DISCOVERY.md AND open a PR\
+    \ that ALSO appends \"organvm/relationship-pipeline\" to value-repos.json (promote\
+    \ it into the ranked tier so build-out can follow) AND name the single best concrete\
+    \ first task; if it is genuinely archival, write the thesis saying so (so it is\
+    \ never re-discovered) \u2014 do NOT promote it. Keep any build green. Output\
+    \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
+  depends_on: []
+  created: '2026-06-22'
+  updated: '2026-06-22T20:10:34.606049Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T19:36:02.328218Z'
+    agent: opencode
+    session_id: cli
+    status: timeout->jules
+- id: DISCOVER-organvm-petasum-super-petasum
+  title: Discover the latent value of organvm/petasum-super-petasum
+  repo: organvm/petasum-super-petasum
+  type: research
+  target_agent: claude
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/petasum-super-petasum. This repo\
+    \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
+    \ never assumed absent). Steps: (1) Read the repo \u2014 what it is, its real\
+    \ entrypoints/exports, what it already does. (2) Identify its highest latent value:\
+    \ a concrete product, revenue path, reusable asset, or capability the rest of\
+    \ the estate could use \u2014 be specific and honest. (3) DECIDE: if there is\
+    \ real value, write a one-paragraph value thesis to DISCOVERY.md AND open a PR\
+    \ that ALSO appends \"organvm/petasum-super-petasum\" to value-repos.json (promote\
+    \ it into the ranked tier so build-out can follow) AND name the single best concrete\
+    \ first task; if it is genuinely archival, write the thesis saying so (so it is\
+    \ never re-discovered) \u2014 do NOT promote it. Keep any build green. Output\
+    \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
+  depends_on: []
+  created: '2026-06-22'
+  updated: '2026-06-22T20:10:34.606049Z'
+  dispatch_log: []
+- id: DISCOVER-organvm-limen
+  title: Discover the latent value of organvm/limen
+  repo: organvm/limen
+  type: research
+  target_agent: opencode
+  priority: medium
+  budget_cost: 1
+  status: cancelled
+  labels:
+  - discover
+  - value-discovery
+  - noop
+  urls: []
+  context: "DISCOVER the latent value of organvm/limen. This repo currently has NO\
+    \ ranked value \u2014 your job is to find it (value is discovered, never assumed\
+    \ absent). Steps: (1) Read the repo \u2014 what it is, its real entrypoints/exports,\
+    \ what it already does. (2) Identify its highest latent value: a concrete product,\
+    \ revenue path, reusable asset, or capability the rest of the estate could use\
+    \ \u2014 be specific and honest. (3) DECIDE: if there is real value, write a one-paragraph\
+    \ value thesis to DISCOVERY.md AND open a PR that ALSO appends \"organvm/limen\"\
+    \ to value-repos.json (promote it into the ranked tier so build-out can follow)\
+    \ AND name the single best concrete first task; if it is genuinely archival, write\
+    \ the thesis saying so (so it is never re-discovered) \u2014 do NOT promote it.\
+    \ Keep any build green. Output the thesis. [auto-discovery 2026-06-22; no repo\
+    \ stays dark]"
+  depends_on: []
+  created: '2026-06-22'
+  updated: '2026-06-22T19:36:02.328218Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T19:36:02.328218Z'
+    agent: opencode
+    session_id: cli
+    status: noop
+- id: DISCOVER-organvm-specvla-ergon--avditor-mvndi
+  title: Discover the latent value of organvm/specvla-ergon--avditor-mvndi
+  repo: organvm/specvla-ergon--avditor-mvndi
+  type: research
+  target_agent: agy
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/specvla-ergon--avditor-mvndi. This\
+    \ repo currently has NO ranked value \u2014 your job is to find it (value is discovered,\
+    \ never assumed absent). Steps: (1) Read the repo \u2014 what it is, its real\
+    \ entrypoints/exports, what it already does. (2) Identify its highest latent value:\
+    \ a concrete product, revenue path, reusable asset, or capability the rest of\
+    \ the estate could use \u2014 be specific and honest. (3) DECIDE: if there is\
+    \ real value, write a one-paragraph value thesis to DISCOVERY.md AND open a PR\
+    \ that ALSO appends \"organvm/specvla-ergon--avditor-mvndi\" to value-repos.json\
+    \ (promote it into the ranked tier so build-out can follow) AND name the single\
+    \ best concrete first task; if it is genuinely archival, write the thesis saying\
+    \ so (so it is never re-discovered) \u2014 do NOT promote it. Keep any build green.\
+    \ Output the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
+  depends_on: []
+  created: '2026-06-22'
+  updated: '2026-06-22T20:10:34.606049Z'
+  dispatch_log: []
+- id: DISCOVER-organvm-conversation-corpus-engine
+  title: Discover the latent value of organvm/conversation-corpus-engine
+  repo: organvm/conversation-corpus-engine
+  type: research
+  target_agent: claude
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/conversation-corpus-engine. This\
+    \ repo currently has NO ranked value \u2014 your job is to find it (value is discovered,\
+    \ never assumed absent). Steps: (1) Read the repo \u2014 what it is, its real\
+    \ entrypoints/exports, what it already does. (2) Identify its highest latent value:\
+    \ a concrete product, revenue path, reusable asset, or capability the rest of\
+    \ the estate could use \u2014 be specific and honest. (3) DECIDE: if there is\
+    \ real value, write a one-paragraph value thesis to DISCOVERY.md AND open a PR\
+    \ that ALSO appends \"organvm/conversation-corpus-engine\" to value-repos.json\
+    \ (promote it into the ranked tier so build-out can follow) AND name the single\
+    \ best concrete first task; if it is genuinely archival, write the thesis saying\
+    \ so (so it is never re-discovered) \u2014 do NOT promote it. Keep any build green.\
+    \ Output the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
+  depends_on: []
+  created: '2026-06-22'
+  updated: '2026-06-22T20:10:34.606049Z'
+  dispatch_log: []
+- id: DISCOVER-organvm-media-ark
+  title: Discover the latent value of organvm/media-ark
+  repo: organvm/media-ark
+  type: research
+  target_agent: opencode
+  priority: medium
+  budget_cost: 1
+  status: done
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/media-ark. This repo currently has\
+    \ NO ranked value \u2014 your job is to find it (value is discovered, never assumed\
+    \ absent). Steps: (1) Read the repo \u2014 what it is, its real entrypoints/exports,\
+    \ what it already does. (2) Identify its highest latent value: a concrete product,\
+    \ revenue path, reusable asset, or capability the rest of the estate could use\
+    \ \u2014 be specific and honest. (3) DECIDE: if there is real value, write a one-paragraph\
+    \ value thesis to DISCOVERY.md AND open a PR that ALSO appends \"organvm/media-ark\"\
+    \ to value-repos.json (promote it into the ranked tier so build-out can follow)\
+    \ AND name the single best concrete first task; if it is genuinely archival, write\
+    \ the thesis saying so (so it is never re-discovered) \u2014 do NOT promote it.\
+    \ Keep any build green. Output the thesis. [auto-discovery 2026-06-22; no repo\
+    \ stays dark]"
+  depends_on: []
+  created: '2026-06-22'
+  updated: '2026-06-22T20:10:34.606049Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T20:10:34.606049Z'
+    agent: opencode
+    session_id: ses_10f097047ffe7Vez1iXk3Kdr6C
+    status: dispatched
+  - timestamp: '2026-06-22T22:00:00Z'
+    agent: opencode
+    session_id: discover-media-ark
+    status: done
+    output: "Discovered organvm/media-ark: promoted to ranked tier. Highest latent\
+      \ value: standalone SaaS product with Pro tier ($7/mo) revenue path via encrypted\
+      \ cloud sync, plus reusable auth/billing/pipeline modules for the estate. First\
+      \ task: swap placeholder sync cipher to AES-GCM + deploy self-hosted CI runner.\
+      \ Thesis appended to DISCOVERY.md, value-repos.json updated."
+- id: DISCOVER-organvm-my--father-mother
+  title: Discover the latent value of organvm/my--father-mother
+  repo: organvm/my--father-mother
+  type: research
+  target_agent: agy
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/my--father-mother. This repo currently\
+    \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
+    \ assumed absent). Steps: (1) Read the repo \u2014 what it is, its real entrypoints/exports,\
+    \ what it already does. (2) Identify its highest latent value: a concrete product,\
+    \ revenue path, reusable asset, or capability the rest of the estate could use\
+    \ \u2014 be specific and honest. (3) DECIDE: if there is real value, write a one-paragraph\
+    \ value thesis to DISCOVERY.md AND open a PR that ALSO appends \"organvm/my--father-mother\"\
+    \ to value-repos.json (promote it into the ranked tier so build-out can follow)\
+    \ AND name the single best concrete first task; if it is genuinely archival, write\
+    \ the thesis saying so (so it is never re-discovered) \u2014 do NOT promote it.\
+    \ Keep any build green. Output the thesis. [auto-discovery 2026-06-22; no repo\
+    \ stays dark]"
+  depends_on: []
+  created: '2026-06-22'
+  updated: '2026-06-22T20:10:34.606049Z'
+  dispatch_log: []
+- id: DISCOVER-organvm-sovereign-systems--elevate-align
+  title: Discover the latent value of organvm/sovereign-systems--elevate-align
+  repo: organvm/sovereign-systems--elevate-align
+  type: research
+  target_agent: claude
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/sovereign-systems--elevate-align.\
+    \ This repo currently has NO ranked value \u2014 your job is to find it (value\
+    \ is discovered, never assumed absent). Steps: (1) Read the repo \u2014 what it\
+    \ is, its real entrypoints/exports, what it already does. (2) Identify its highest\
+    \ latent value: a concrete product, revenue path, reusable asset, or capability\
+    \ the rest of the estate could use \u2014 be specific and honest. (3) DECIDE:\
+    \ if there is real value, write a one-paragraph value thesis to DISCOVERY.md AND\
+    \ open a PR that ALSO appends \"organvm/sovereign-systems--elevate-align\" to\
+    \ value-repos.json (promote it into the ranked tier so build-out can follow) AND\
+    \ name the single best concrete first task; if it is genuinely archival, write\
+    \ the thesis saying so (so it is never re-discovered) \u2014 do NOT promote it.\
+    \ Keep any build green. Output the thesis. [auto-discovery 2026-06-22; no repo\
+    \ stays dark]"
+  depends_on: []
+  created: '2026-06-22'
+  updated: '2026-06-22T20:10:34.606049Z'
   dispatch_log: []
