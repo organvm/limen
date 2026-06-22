@@ -24,20 +24,11 @@ cd "$LIMEN_ROOT" || exit 1
 
 echo "═══ metabolize $(date '+%F %T') — dispatch=${LIMEN_DISPATCH:-0} isolation=$LIMEN_ISOLATION ═══"
 
-echo "── 0. refresh usage telemetry / lane health ──"
-python3 "$LIMEN_ROOT/scripts/usage-telemetry.py" || echo "  (usage telemetry skipped)"
-
 echo "── 1. drain (close completed Jules) ──"
 bash "$LIMEN_ROOT/scripts/drain.sh" || echo "  (drain skipped/failed — continuing)"
 
 echo "── 2. mine (refill queue from GitHub backlog) ──"
 python3 "$LIMEN_ROOT/scripts/mine-backlog.py" --limit "${LIMEN_MINE_LIMIT:-15}" --apply || echo "  (mine skipped)"
-
-echo "── 2b. generate (self-feed build-out tasks if mining left the queue below floor) ──"
-# the SELF-FEEDING guarantee: when the GitHub backlog is exhausted and mining returns nothing,
-# this tops the queue to LIMEN_BACKLOG_FLOOR with useful per-product work so `open` never hits 0
-# and the loop never idles. No-ops when the queue is already healthy.
-python3 "$LIMEN_ROOT/scripts/generate-backlog.py" --apply || echo "  (generate skipped)"
 
 echo "── 3. route (assign cheapest-capable vendor) ──"
 python3 "$LIMEN_ROOT/scripts/route.py" --apply || echo "  (route skipped)"
@@ -55,16 +46,4 @@ fi
 
 echo "── 5. board ──"
 python3 -m limen doctor 2>&1 | head -12
-
-# ── 6. self-improve (LOW cadence) — the last rung of the self-* ladder ──
-# Reads the loop's own dispatch_log track record and emits a re-plan PROPOSAL to
-# logs/self-improve-proposal.json (down-weight 0%-lanes, retire chronic-fail
-# patterns, boost what ships). Proposal-only + read-only — never writes tasks.yaml.
-# It's a slow-moving signal, so run it only every Nth beat, not per-beat.
-# NOT wired live yet — uncomment to activate as a low-cadence voice:
-#   N="${LIMEN_SI_CADENCE:-10}"
-#   if [ "$(( $(date +%s) / 3600 % N ))" = "0" ]; then
-#     python3 "$LIMEN_ROOT/scripts/self-improve.py" || echo "  (self-improve skipped)"
-#   fi
-
 echo "═══ metabolize done $(date '+%F %T') ═══"

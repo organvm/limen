@@ -13,17 +13,14 @@
     "fetch-prs": "node scripts/fetch-pr-status.mjs"
   },
   "dependencies": {
-    "next": "^16.2",
-    "react": "^19.2",
-    "react-dom": "^19.2",
+    "next": "^15.0",
+    "react": "^19.0",
+    "react-dom": "^19.0",
     "yaml": "2.9.0"
   },
   "devDependencies": {
-    "@types/node": "^26",
+    "@types/node": "^22",
     "@types/react": "^19",
-    "typescript": "^6"
-  },
-  "overrides": {
-    "postcss": ">=8.5.10"
+    "typescript": "^5"
   }
 }

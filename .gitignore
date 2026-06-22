@@ -27,16 +27,3 @@ web/app/public/
 
 # Next.js route source — protect from machine-global 'public/' ignore rules
 !web/app/app/public/
-env/
-container/backup/
-container/state/
-*.premigrate
-.limen.env
-MASTER-PLAN.md
-# git worktree dirs (isolation checkouts — never tracked)
-.worktrees/
-.claude/worktrees/
-# nested vendored clones (their own repos — archived independently)
-domus-genoma/
-# build artifacts
-*.tsbuildinfo

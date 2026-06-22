@@ -16,11 +16,7 @@ from typing import Any
 import yaml
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, field_validator
-
-VALID_STATUSES = {"open", "dispatched", "in_progress", "done", "failed", "failed_blocked", "needs_human", "archived"}
-VALID_PRIORITIES = {"critical", "high", "medium", "low", "backlog"}
-VALID_AGENTS = {"jules", "claude", "gemini", "opencode", "codex", "copilot", "agy", "warp", "oz", "github_actions", "any"}
+from pydantic import BaseModel, Field
 
 app = FastAPI(
     title="Limen API",
@@ -46,38 +42,17 @@ GITHUB_TOKEN = os.environ.get("LIMEN_GITHUB_TOKEN", "")
 
 
 class TaskCreate(BaseModel):
-    id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
-    title: str = Field(min_length=1, max_length=512)
-    repo: str = Field(default="", max_length=256)
+    id: str
+    title: str
+    repo: str = ""
     type: str = "code"
-    target_agent: str = Field(default="jules", pattern=r"^[a-z][a-z_]*$")
+    target_agent: str = "jules"
     priority: str = "medium"
-    budget_cost: int = Field(default=1, ge=1, le=100)
+    budget_cost: int = 1
     status: str = "open"
-    labels: list[str] = Field(default_factory=list, max_length=20)
-    urls: list[str] = Field(default_factory=list, max_length=20)
-    context: str = Field(default="", max_length=10000)
-
-    @field_validator("priority")
-    @classmethod
-    def validate_priority(cls, v: str) -> str:
-        if v not in VALID_PRIORITIES:
-            raise ValueError(f"priority must be one of {', '.join(sorted(VALID_PRIORITIES))}")
-        return v
-
-    @field_validator("status")
-    @classmethod
-    def validate_status(cls, v: str) -> str:
-        if v not in VALID_STATUSES:
-            raise ValueError(f"status must be one of {', '.join(sorted(VALID_STATUSES))}")
-        return v
-
-    @field_validator("target_agent")
-    @classmethod
-    def validate_target_agent(cls, v: str) -> str:
-        if v not in VALID_AGENTS:
-            raise ValueError(f"target_agent must be one of {', '.join(sorted(VALID_AGENTS))}")
-        return v
+    labels: list[str] = Field(default_factory=list)
+    urls: list[str] = Field(default_factory=list)
+    context: str = ""
 
 
 class TaskUpdate(BaseModel):
@@ -85,46 +60,18 @@ class TaskUpdate(BaseModel):
     output: str | None = None
     agent: str | None = None
     session_id: str | None = None
-    context: str | None = Field(default=None, max_length=10000)
+    context: str | None = None
     urls: list[str] | None = None
     labels: list[str] | None = None
-
-    @field_validator("status")
-    @classmethod
-    def validate_status(cls, v: str | None) -> str | None:
-        if v is not None and v not in VALID_STATUSES:
-            raise ValueError(f"status must be one of {', '.join(sorted(VALID_STATUSES))}")
-        return v
 
 
 class AssignmentRequest(BaseModel):
     target_agent: str | None = None
     priority: str | None = None
-    budget_cost: int | None = Field(default=None, ge=1, le=100)
+    budget_cost: int | None = Field(default=None, ge=1)
     status: str | None = "open"
-    note: str = Field(default="", max_length=2000)
-    session_id: str = Field(default="assignment", max_length=128)
-
-    @field_validator("priority")
-    @classmethod
-    def validate_priority(cls, v: str | None) -> str | None:
-        if v is not None and v not in VALID_PRIORITIES:
-            raise ValueError(f"priority must be one of {', '.join(sorted(VALID_PRIORITIES))}")
-        return v
-
-    @field_validator("status")
-    @classmethod
-    def validate_status(cls, v: str | None) -> str | None:
-        if v is not None and v not in VALID_STATUSES:
-            raise ValueError(f"status must be one of {', '.join(sorted(VALID_STATUSES))}")
-        return v
-
-    @field_validator("target_agent")
-    @classmethod
-    def validate_target_agent(cls, v: str | None) -> str | None:
-        if v is not None and v not in VALID_AGENTS:
-            raise ValueError(f"target_agent must be one of {', '.join(sorted(VALID_AGENTS))}")
-        return v
+    note: str = ""
+    session_id: str = "assignment"
 
 
 class ArchiveRequest(BaseModel):
@@ -512,7 +459,7 @@ def task_lifecycle(task: dict[str, Any], stale_ids: set[str]) -> dict[str, Any]:
     has_pr = any("/pull/" in url for url in urls)
     has_issue = any("/issues/" in url for url in urls)
     status = task.get("status", "unknown")
-    if status in ("archived", "cancelled"):
+    if status == "archived":
         phase = "archived"
     elif status == "done":
         phase = "archive"
@@ -626,7 +573,7 @@ def qa_status(data: dict[str, Any], agent: str = "jules") -> dict[str, Any]:
 def surface_manifest(data: dict[str, Any], persona: str = "owner") -> dict[str, Any]:
     raw = summary(data)
     stale_count = len(release_stale_candidates(data, 24))
-    manifest = {
+    manifest: dict[str, Any] = {
         "status": "ok",
         "persona": persona,
         "generated_at": now_iso(),
@@ -752,7 +699,7 @@ def readiness(data: dict[str, Any], agent: str = "jules") -> dict[str, Any]:
         status = "ready"
     next_actions: list[str] = []
     if stale:
-        next_actions.append("POST /api/release-stale?hours=24&dry_run=false")
+        next_actions.append(f"POST /api/release-stale?hours=24&dry_run=false")
     if open_tasks and remaining > 0 and agent_path:
         next_actions.append(f"POST /api/dispatch live=true limit={min(len(open_tasks), remaining)}")
     if not agent_path:

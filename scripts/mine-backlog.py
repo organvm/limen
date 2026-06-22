@@ -30,32 +30,15 @@ import sys
 from datetime import date
 from pathlib import Path
 
-# Post-move: the per-aspect orgs (a-organvm, organvm-i..vii, meta-organvm) were
-# consolidated into the single `organvm` org. Personal account stays separate
-# (uses the user: qualifier). Override with --owners or $LIMEN_OWNERS.
-DEFAULT_OWNERS = [o.strip() for o in os.environ.get(
-    "LIMEN_OWNERS", "4444J99,organvm").split(",") if o.strip()]
+DEFAULT_OWNERS = [
+    "4444J99",  # personal account -> user: qualifier
+    "a-organvm", "meta-organvm",
+    "organvm-i-theoria", "organvm-ii-poiesis", "organvm-iii-ergon",
+    "organvm-iv-taxis", "organvm-v-logos", "organvm-vi-koinonia",
+    "organvm-vii-kerygma",
+]
 DEFAULT_EXCLUDE = ["park", "blocked", "wip", "duplicate", "invalid", "wontfix"]
 _PERSONAL = {"4444J99"}
-
-
-def _allowed_repos() -> set[str]:
-    """Value tier (revenue/conductor repos) — the ONLY repos worth mining a token for. Sourced from
-    value-repos.json at LIMEN_ROOT (or LIMEN_VALUE_REPOS_FILE) + the LIMEN_VALUE_REPOS env. The
-    single source of truth is the value-repos.json file (same as generate-backlog). Empty = unset."""
-    repos: set[str] = {r.strip() for r in os.environ.get("LIMEN_VALUE_REPOS", "").split(",") if r.strip()}
-    fpath = os.environ.get(
-        "LIMEN_VALUE_REPOS_FILE",
-        str(Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parent.parent)) / "value-repos.json"),
-    )
-    try:
-        data = json.loads(Path(fpath).read_text())
-        for r in data.get("repos", []):
-            repos.add(r if isinstance(r, str) else (r.get("repo") or ""))
-    except Exception:
-        pass
-    repos.discard("")
-    return repos
 
 
 def _gh_issues(owner: str, per_owner: int, label: str | None) -> list[dict]:
@@ -160,13 +143,6 @@ def main() -> int:
             seen_ids.add(t["id"])
             mined.append(t)
 
-    # VALUE-TIER GATE: only mine issues for revenue/conductor repos (never the dead/zero-user estate).
-    allowed = _allowed_repos()
-    if allowed:
-        before = len(mined)
-        mined = [t for t in mined if t.get("repo") in allowed]
-        print(f"  value-tier gate: {before} mined → {len(mined)} in tier")
-
     # prioritize, then cap
     mined.sort(key=lambda t: _PRIO_RANK.get(t["priority"], 9))
     capped = mined[: args.limit]
@@ -198,16 +174,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    rc = main()
-    # SELF-FEED (live without a daemon restart): the heartbeat calls THIS script as a fresh
-    # subprocess every FEED beat, so chaining the generator here activates the "queue never hits 0"
-    # guarantee in the RUNNING daemon — no heartbeat-loop.sh restart, no in-flight dispatch lost.
-    # Only on --apply (the daemon's mode); generate-backlog no-ops when the queue is above floor.
-    if "--apply" in sys.argv:
-        try:
-            import subprocess
-            gen = Path(__file__).resolve().parent / "generate-backlog.py"
-            subprocess.run([sys.executable, str(gen), "--apply"], timeout=120)
-        except Exception as e:  # never let self-feed break the feed beat
-            print(f"(generate-backlog skipped: {e})")
-    sys.exit(rc)
+    sys.exit(main())

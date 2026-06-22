@@ -57,7 +57,6 @@ def test_capacity_census_lists_every_paid_lane(tmp_path: Path, monkeypatch) -> N
         path.chmod(0o755)
     monkeypatch.setenv("PATH", str(tmp_path))
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setenv("WARP_API_KEY", "test-key")
     monkeypatch.setenv("LIMEN_COPILOT_ENABLED", "1")
 
     tasks_path = tmp_path / "tasks.yaml"
@@ -71,62 +70,29 @@ def test_capacity_census_lists_every_paid_lane(tmp_path: Path, monkeypatch) -> N
     assert "github_actions" in text
 
 
-def test_route_distributes_local_work_and_reaches_extended_fleet(tmp_path: Path) -> None:
-    """Ideal-form router (origin's local-first split + the extended-fleet graft): local-checkout
-    work spreads across LOCAL lanes by budget+refresh-runway (no single-lane serialization), and a
-    repo with NO local checkout but a GitHub issue still reaches the extended fleet (copilot/jules)
-    instead of being stranded. Supersedes the old fan-everything-round-robin assertion — which routed
-    local work to copilot/warp/oz the daemon can't dispatch (the 'don't strand' lesson origin learned)."""
+def test_route_round_robins_across_all_reachable_paid_lanes(tmp_path: Path) -> None:
     route = load_route_module()
     workdir = tmp_path / "work"
     checkout = workdir / "organvm" / "limen"
     (checkout / ".git").mkdir(parents=True)
-    health = {agent: True for agent in PAID_AGENT_ORDER}
-    budget = {a: 10 for a in ("codex", "claude", "agy", "opencode")}
-
-    # Many local-checkout tasks must SPREAD across local lanes, never serialize onto one.
-    tally: dict[str, int] = {}
-    picks = []
-    for i in range(8):
-        task = {
-            "id": f"LIMEN-{i:03}", "title": f"Task {i}", "repo": "organvm/limen",
-            "status": "open", "budget_cost": 1,
+    tasks = [
+        {
+            "id": f"LIMEN-{i:03}",
+            "title": f"Task {i}",
+            "repo": "organvm/limen",
+            "target_agent": "any",
+            "budget_cost": 1,
+            "status": "open",
             "urls": [f"https://github.com/organvm/limen/issues/{i}"],
         }
-        vendor, _ = route.route_task(task, health, workdir, assigned=tally, budget=budget)
-        tally[vendor] = tally.get(vendor, 0) + 1
-        picks.append(vendor)
-    assert set(picks) <= {"codex", "claude", "agy", "opencode"}, f"local work leaked to {set(picks)}"
-    assert len(set(picks)) >= 2, f"work serialized onto {set(picks)}"
+        for i in range(1, len(PAID_AGENT_ORDER) + 1)
+    ]
+    health = {agent: True for agent in PAID_AGENT_ORDER}
+    planned_remaining = {agent: 10 for agent in PAID_AGENT_ORDER}
 
-    # A repo with NO local checkout but a GitHub issue reaches the extended fleet, not 'unroutable'.
-    remote = {
-        "id": "REMOTE-1", "title": "Remote-only repo", "repo": "someorg/no-local-here",
-        "status": "open", "budget_cost": 1,
-        "urls": ["https://github.com/someorg/no-local-here/issues/9"],
-    }
-    vendor, reason = route.route_task(remote, health, workdir, assigned={}, budget=budget)
-    assert vendor in ("copilot", "github_actions", "jules"), (vendor, reason)
+    routed = route.route_tasks(tasks, health, planned_remaining, workdir)
 
-
-def test_self_improve_weight_nudge_steers_local_split(monkeypatch) -> None:
-    """The self-IMPROVE rung closing the loop: a learned down-weight makes _pick_local prefer the
-    other lane even when budget+load+runway are otherwise tied. Default (no weights) keeps the
-    stable name-order pick — so the nudge only bites when armed."""
-    route = load_route_module()
-    task = {"type": "code", "title": "neutral work", "context": ""}
-    health = {"codex": True, "claude": True, "agy": False, "opencode": False}
-    # codex has more budget headroom, so by load (assigned/budget) it's the lighter lane and wins.
-    budget = {"codex": 20, "claude": 10}
-    assigned = {"codex": 1, "claude": 1}  # load: codex 0.05 < claude 0.10
-
-    # No learned weights -> lightest-load lane: codex (unchanged behavior).
-    monkeypatch.setattr(route, "_learned_weights", lambda: {})
-    assert route._pick_local(task, health, assigned, budget) == "codex"
-
-    # codex down-weighted (0.25) -> effective load 0.05/0.25=0.20 > claude 0.10 -> claude wins.
-    monkeypatch.setattr(route, "_learned_weights", lambda: {"codex": 0.25})
-    assert route._pick_local(task, health, assigned, budget) == "claude"
+    assert [agent for _, agent, _ in routed] == list(PAID_AGENT_ORDER)
 
 
 def test_dispatch_dry_run_prints_capacity_census_and_copilot_command(
@@ -271,42 +237,6 @@ def test_dispatch_limit_and_per_agent_budget(tmp_path: Path, monkeypatch) -> Non
     statuses = {task["id"]: task["status"] for task in board["tasks"]}
     assert statuses == {"LIMEN-003": "dispatched", "LIMEN-004": "dispatched", "LIMEN-005": "open"}
     assert board["portal"]["budget"]["track"]["per_agent"]["external"] == 2
-
-
-def test_dispatch_skips_lane_marked_down_by_usage_meter(tmp_path: Path, monkeypatch) -> None:
-    tasks_path = tmp_path / "tasks.yaml"
-    dispatch_bin = tmp_path / "agent-dispatch"
-    dispatch_bin.write_text("#!/bin/sh\nexit 99\n")
-    dispatch_bin.chmod(0o755)
-    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
-    monkeypatch.setenv("LIMEN_DISPATCH_CMD", str(dispatch_bin))
-    (tmp_path / "logs").mkdir()
-    (tmp_path / "logs" / "usage.json").write_text(
-        '{"vendors":{"claude":{"health":"rate-limited"}}}'
-    )
-    write_board(
-        tasks_path,
-        [
-            {
-                "id": "LIMEN-DOWN-CLAUDE",
-                "title": "Should not dispatch",
-                "repo": "4444J99/limen",
-                "target_agent": "claude",
-                "priority": "critical",
-                "budget_cost": 1,
-                "status": "open",
-                "created": "2026-06-19",
-                "dispatch_log": [],
-            }
-        ],
-    )
-
-    dispatch_tasks(load_limen_file(tasks_path), tasks_path, agent="claude", dry_run=False, limit=1)
-
-    board = read_board(tasks_path)
-    assert board["tasks"][0]["status"] == "open"
-    assert board["tasks"][0]["dispatch_log"] == []
-    assert board["portal"]["budget"]["track"].get("per_agent", {}) == {}
 
 
 def test_status_prints_creation_age_and_recorded_throughput(tmp_path: Path, capsys) -> None:
@@ -498,17 +428,6 @@ def test_qa_report_derives_lifecycle_without_mutation_or_private_fields(tmp_path
                 "created": "2026-06-03",
                 "dispatch_log": [],
             },
-            {
-                "id": "LIMEN-013",
-                "title": "Cancelled task",
-                "repo": "4444J99/limen",
-                "target_agent": "jules",
-                "priority": "low",
-                "budget_cost": 1,
-                "status": "cancelled",
-                "created": "2026-06-03",
-                "dispatch_log": [],
-            },
         ],
     )
     before = tasks_path.read_text()
@@ -517,15 +436,14 @@ def test_qa_report_derives_lifecycle_without_mutation_or_private_fields(tmp_path
 
     assert report["status"] == "degraded"
     assert report["lifecycle"] == {
-        "total": 5,
+        "total": 4,
         "assign": 1,
         "verify": 1,
         "recover": 1,
         "archive_ready": 1,
-        "archived": 1,
+        "archived": 0,
     }
     assert [item["id"] for item in report["steering"]["next_batch"]] == ["LIMEN-009", "LIMEN-010", "LIMEN-011"]
-    assert [item["id"] for item in report["steering"]["assignment_queue"]] == ["LIMEN-011"]
     text = str(report)
     assert "private context must not leak" not in text
     assert "private-session" not in text

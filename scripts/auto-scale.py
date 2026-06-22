@@ -13,7 +13,6 @@ decisions/2026-06-05-charter-restoration.md).
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import sys
@@ -23,35 +22,9 @@ from pathlib import Path
 import requests
 import yaml
 
-# route every tasks.yaml write through the ONE atomic primitive (see limen/io.py) so a
-# concurrent heartbeat read can never observe a truncated/empty queue.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.io import atomic_write_text
-
 TASKS_FILE = Path(__file__).resolve().parent.parent / "tasks.yaml"
-# Post-move: all repos were consolidated into the single `organvm` org (was
-# a-organvm + organvm-i..vii + meta-organvm, now emptied). Derive from env so a
-# future re-home is a config change, not a code edit.
-ORGS = [o.strip() for o in os.environ.get("LIMEN_ORGS", "organvm").split(",") if o.strip()]
+ORGS = ["a-organvm", "organvm-i-theoria"]
 DEFAULT_DEPTH = 100
-
-
-def _allowed_repos() -> set[str]:
-    """Value tier — the ONLY repos worth auto-scaling work for (revenue/conductor). Source of truth
-    is value-repos.json at LIMEN_ROOT (or LIMEN_VALUE_REPOS_FILE) + LIMEN_VALUE_REPOS env. Empty=unset."""
-    repos: set[str] = {r.strip() for r in os.environ.get("LIMEN_VALUE_REPOS", "").split(",") if r.strip()}
-    fpath = os.environ.get(
-        "LIMEN_VALUE_REPOS_FILE",
-        str(Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parent.parent)) / "value-repos.json"),
-    )
-    try:
-        data = json.loads(Path(fpath).read_text())
-        for r in data.get("repos", []):
-            repos.add(r if isinstance(r, str) else (r.get("repo") or ""))
-    except Exception:
-        pass
-    repos.discard("")
-    return repos
 
 
 def main() -> int:
@@ -137,16 +110,9 @@ def main() -> int:
                 needed -= 1
             page += 1
 
-    # VALUE-TIER GATE: only auto-scale work for revenue/conductor repos (never the dead estate).
-    allowed = _allowed_repos()
-    if allowed:
-        before = len(new_tasks)
-        new_tasks = [t for t in new_tasks if t.get("repo") in allowed]
-        print(f"  value-tier gate: {before} mined → {len(new_tasks)} in tier")
-
     tasks.extend(new_tasks)
     data["tasks"] = tasks
-    atomic_write_text(TASKS_FILE, yaml.dump(data, sort_keys=False, allow_unicode=True))
+    TASKS_FILE.write_text(yaml.dump(data, sort_keys=False, allow_unicode=True))
     print(f"Added {len(new_tasks)} new tasks. Total: {len(tasks)}")
     return 0
 

@@ -137,9 +137,6 @@ def test_auto_scale_adds_schema_shaped_tasks_and_skips_existing_urls(
 
     monkeypatch.setenv("GITHUB_TOKEN", "test-token")
     monkeypatch.setattr(auto_scale, "TASKS_FILE", tasks_path)
-    # Control the org list explicitly (the module default consolidated to `organvm` post-move);
-    # this test's fixtures use a-organvm, so pin the input here rather than asserting a default.
-    monkeypatch.setattr(auto_scale, "ORGS", ["a-organvm"])
     monkeypatch.setattr(auto_scale, "date", FrozenDate)
     monkeypatch.setattr(auto_scale.requests, "get", fake_get)
 
@@ -215,9 +212,6 @@ def test_auto_scale_continues_after_search_failures(
 
     monkeypatch.setenv("GITHUB_TOKEN", "test-token")
     monkeypatch.setattr(auto_scale, "TASKS_FILE", tasks_path)
-    # Pin the searched org so the failure-path assertion matches the configured input, not the
-    # post-move default (`organvm`).
-    monkeypatch.setattr(auto_scale, "ORGS", ["a-organvm"])
     monkeypatch.setattr(auto_scale.requests, "get", fake_get)
 
     assert auto_scale.main() == 0
