@@ -82,12 +82,12 @@ class TaskCreate(BaseModel):
 
 class TaskUpdate(BaseModel):
     status: str | None = None
-    output: str | None = None
-    agent: str | None = None
-    session_id: str | None = None
+    output: str | None = Field(default=None, max_length=100000)
+    agent: str | None = Field(default=None, pattern=r"^[a-z][a-z_]*$")
+    session_id: str | None = Field(default=None, max_length=128)
     context: str | None = Field(default=None, max_length=10000)
-    urls: list[str] | None = None
-    labels: list[str] | None = None
+    urls: list[str] | None = Field(default=None, max_length=20)
+    labels: list[str] | None = Field(default=None, max_length=20)
 
     @field_validator("status")
     @classmethod
@@ -128,22 +128,29 @@ class AssignmentRequest(BaseModel):
 
 
 class ArchiveRequest(BaseModel):
-    note: str = ""
-    session_id: str = "archive"
+    note: str = Field(default="", max_length=2000)
+    session_id: str = Field(default="archive", max_length=128)
 
 
 class VerifyRequest(BaseModel):
     status: str = Field(default="done", pattern="^(done|needs_human|failed|failed_blocked)$")
-    note: str = ""
-    session_id: str = "qa-verify"
+    note: str = Field(default="", max_length=2000)
+    session_id: str = Field(default="qa-verify", max_length=128)
 
 
 class DispatchRequest(BaseModel):
-    agent: str = "jules"
-    limit: int = 1
+    agent: str = Field(default="jules", pattern=r"^[a-z][a-z_]*$")
+    limit: int = Field(default=1, ge=1, le=1000)
     live: bool = False
-    task_id: str | None = None
-    session_id: str = "api"
+    task_id: str | None = Field(default=None, max_length=128)
+    session_id: str = Field(default="api", max_length=128)
+
+    @field_validator("agent")
+    @classmethod
+    def validate_agent(cls, v: str) -> str:
+        if v not in VALID_AGENTS:
+            raise ValueError(f"agent must be one of {', '.join(sorted(VALID_AGENTS))}")
+        return v
 
 
 @dataclass
@@ -906,7 +913,7 @@ def get_public_status() -> dict[str, Any]:
 
 
 @app.get("/api/qa-status")
-def get_qa_status(authorization: str | None = Header(None), agent: str = Query("jules")) -> dict[str, Any]:
+def get_qa_status(authorization: str | None = Header(None), agent: str = Query("jules", max_length=128, pattern=r"^[a-z][a-z_]*$")) -> dict[str, Any]:
     require_persona(authorization, {"owner"})
     return qa_status(load_board(), agent=agent)
 
@@ -917,7 +924,7 @@ def get_surface_manifest(authorization: str | None = Header(None)) -> dict[str, 
 
 
 @app.get("/api/readiness")
-def get_readiness(authorization: str | None = Header(None), agent: str = Query("jules")) -> dict[str, Any]:
+def get_readiness(authorization: str | None = Header(None), agent: str = Query("jules", max_length=128, pattern=r"^[a-z][a-z_]*$")) -> dict[str, Any]:
     require_persona(authorization, {"owner"})
     return readiness(load_board(), agent=agent)
 
@@ -925,9 +932,9 @@ def get_readiness(authorization: str | None = Header(None), agent: str = Query("
 @app.get("/api/tasks")
 def list_tasks(
     authorization: str | None = Header(None),
-    status: str | None = Query(None),
-    agent: str | None = Query(None),
-    repo: str | None = Query(None),
+    status: str | None = Query(None, max_length=64, pattern=r"^[a-z_]+$"),
+    agent: str | None = Query(None, max_length=128, pattern=r"^[a-z][a-z_]*$"),
+    repo: str | None = Query(None, max_length=256),
 ) -> dict[str, Any]:
     require_persona(authorization, {"owner"})
     tasks = load_board().get("tasks", [])
@@ -1125,8 +1132,8 @@ def dispatch(req: DispatchRequest, authorization: str | None = Header(None)) -> 
 @app.post("/api/release-stale")
 def release_stale(
     authorization: str | None = Header(None),
-    hours: int = 24,
-    dry_run: bool = True,
+    hours: int = Query(24, ge=1, le=720),
+    dry_run: bool = Query(True),
 ) -> dict[str, Any]:
     require_persona(authorization, {"owner"})
     doc = load_board_doc()
