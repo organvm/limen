@@ -18,7 +18,18 @@ from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
-VALID_STATUSES = {"open", "dispatched", "in_progress", "done", "failed", "failed_blocked", "needs_human", "archived"}
+VALID_STATUSES = {
+    "open",
+    "dispatched",
+    "in_progress",
+    "done",
+    "failed",
+    "failed_blocked",
+    "needs_human",
+    "archived",
+    "cancelled",
+    "superseded",
+}
 VALID_PRIORITIES = {"critical", "high", "medium", "low", "backlog"}
 VALID_AGENTS = {"jules", "claude", "gemini", "opencode", "codex", "copilot", "agy", "warp", "oz", "github_actions", "any"}
 
@@ -512,7 +523,7 @@ def task_lifecycle(task: dict[str, Any], stale_ids: set[str]) -> dict[str, Any]:
     has_pr = any("/pull/" in url for url in urls)
     has_issue = any("/issues/" in url for url in urls)
     status = task.get("status", "unknown")
-    if status in ("archived", "cancelled"):
+    if status in ("archived", "cancelled", "superseded"):
         phase = "archived"
     elif status == "done":
         phase = "archive"

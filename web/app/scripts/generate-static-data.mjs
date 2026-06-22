@@ -295,7 +295,7 @@ function taskLifecycle(task, summary) {
   const hasPR = (task.urls || []).some((url) => url.includes("/pull/"));
   const hasIssue = (task.urls || []).some((url) => url.includes("/issues/"));
   const isDone = task.status === "done";
-  const phase = ["archived", "cancelled"].includes(task.status)
+  const phase = ["archived", "cancelled", "superseded"].includes(task.status)
     ? "archived"
     : isDone
       ? "archive"
