@@ -42,7 +42,7 @@ jobs:
         run: python -m ruff check cli/src cli/tests web/api mcp
 
       - name: Compile Python modules
-        run: python -m py_compile web/api/main.py cli/src/limen/*.py
+        run: find cli/src cli/tests web/api scripts mcp/src -name '*.py' -print0 | xargs -0 python -m py_compile
 
       - name: Check shell scripts
         run: bash -n scripts/preflight-cloud-run.sh
