@@ -46516,7 +46516,7 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - studium
   - content
@@ -46529,8 +46529,13 @@ tasks:
     green PR.'
   depends_on: []
   created: '2026-06-23'
-  updated: '2026-06-23T19:07:01.660776Z'
-  dispatch_log: []
+  updated: '2026-06-23T23:00:00Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T23:00:00Z'
+    agent: opencode
+    session_id: current
+    status: done
+    output: "Created studium/film/odyssey.yaml — 12 force-matched films (return/exile/revelation/comedy/metamorphosis/desire/memory/divine-intervention/wrath/grief/fate/law) + set-aside adaptation overlay (The Odyssey 1997). Forces validated against dominant-force.yaml; objects validated against object-taxonomy.yaml. studium-validate.py passes."
 - id: studium-film-aeneid
   title: Aeneid film companion (empire/fate/sacrifice)
   repo: organvm/limen
