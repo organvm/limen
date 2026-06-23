@@ -14,15 +14,15 @@ portal:
       agy: 100
       claude: 100
     track:
-      date: '2026-06-22'
-      spent: 38
+      date: '2026-06-23'
+      spent: 39
       per_agent:
-        jules: 13
+        jules: 24
         gemini: 0
-        codex: 11
-        opencode: 4
-        agy: 6
-        claude: 4
+        codex: 0
+        opencode: 3
+        agy: 12
+        claude: 0
       per_agent_reset:
         jules: '2026-06-21T16:28:31.134770+00:00'
         gemini: '2026-06-21T16:28:31.134770+00:00'
@@ -12971,10 +12971,33 @@ tasks:
   created: '2026-06-18'
   updated: '2026-06-19T15:48:39.567522Z'
   dispatch_log:
-  - timestamp: '2026-06-18T19:37:43.370039Z'
+  - timestamp: '2026-06-22T04:33:59.275291Z'
     agent: codex
     session_id: cli
     status: noop
+- id: studium-film-aeneid
+  title: "Aeneid film companion (empire/fate/sacrifice)"
+  repo: organvm/limen
+  type: content
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: done
+  labels:
+  - studium
+  - film
+  - content
+  urls: []
+  context: "STUDIUM content task from expansion-backlog.yaml (film pillar). Created studium/film/aeneid.yaml — 12 force-matched films (fate/sacrifice/exile/kingship/wrath/desire/grief/revelation/divine-intervention/law/memory/supplication) + per-film object lessons, object taxonomy items, Letterboxd slugs, and division mappings. Passes studium-validate.py."
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T15:00:00Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T15:00:00Z'
+    agent: opencode
+    session_id: cli
+    status: done
+    output: "Created studium/film/aeneid.yaml — 12 force-matched films covering empire/fate/sacrifice spine. Validated: scripts/studium-validate.py passes for aeneid companion (no violations). Films: No Country for Old Men (fate), The Sacrifice (sacrifice), Nostalghia (exile), The Mission (kingship), Apocalypse Now (wrath), Vertigo (desire), Three Colors: Blue (grief), The Tree of Life (revelation), Stalker (divine-intervention), A Man for All Seasons (law), Wild Strawberries (memory), The Passion of Joan of Arc (supplication)."
   - timestamp: '2026-06-19T13:28:54.473276Z'
     agent: claude
     session_id: https://github.com/organvm-iii-ergon/sovereign-systems--elevate-align/pull/253
