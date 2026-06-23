@@ -15,12 +15,12 @@ portal:
       claude: 100
     track:
       date: '2026-06-23'
-      spent: 33
+      spent: 35
       per_agent:
         jules: 19
         gemini: 0
         codex: 0
-        opencode: 2
+        opencode: 4
         agy: 12
         claude: 0
       per_agent_reset:
@@ -43864,7 +43864,7 @@ tasks:
     \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-23T08:47:00.012499Z'
+  updated: '2026-06-23T12:18:48.290359Z'
   dispatch_log:
   - timestamp: '2026-06-23T03:29:17.742172Z'
     agent: codex
@@ -44151,6 +44151,186 @@ tasks:
     session_id: cli
     status: failed->agy
   - timestamp: '2026-06-23T08:47:00.012499Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T09:04:00.408571Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T09:08:21.689990Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T09:11:35.221441Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T09:15:56.207656Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T09:18:41.693974Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T09:23:50.586070Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T09:26:39.578657Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T09:31:00.155203Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T09:35:13.522855Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T09:39:35.000793Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T09:41:58.535669Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T09:48:19.959507Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T09:51:25.360946Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T09:55:45.001886Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T09:59:59.534662Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T10:04:18.807781Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T10:08:50.036112Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T10:15:34.065589Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T10:18:14.894699Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T10:22:31.607703Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T10:26:57.457164Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T10:31:12.131697Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T10:33:29.361122Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T10:39:29.514844Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T10:47:41.547963Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T10:52:05.288062Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T10:56:19.680095Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T11:00:44.051546Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T11:03:26.042649Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T11:09:45.392232Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T11:12:31.002534Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T11:16:52.907368Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T11:23:40.734292Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T11:28:03.454188Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T11:30:29.847847Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T11:36:52.268728Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T11:40:05.416816Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T11:44:28.086064Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T11:48:33.943230Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T11:52:45.624174Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T11:58:03.235580Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T12:04:21.981331Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T12:08:32.063120Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T12:14:33.798477Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T12:18:48.290359Z'
     agent: codex
     session_id: cli
     status: failed->opencode
@@ -45451,3 +45631,308 @@ tasks:
     agent: opencode
     session_id: cli
     status: noop
+- id: REV-organvm-styx-revenue-ship-0623
+  title: Drive Styx to deploy-ready
+  repo: organvm/styx
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-ship
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/styx, clear the concrete blockers between the current state\
+    \ and a DEPLOYABLE product: get open PRs green + merged, fix the critical path,\
+    \ confirm the app runs end-to-end. Output: a deploy-ready build + a short DEPLOY.md\
+    \ listing exactly what remains. [revenue-backlog 2026-06-23: rank 6, stage building\
+    \ \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T12:22:41.525551Z'
+  dispatch_log: []
+- id: REV-organvm-a-i-chat--exporter-revenue-funding-0623
+  title: Stage the donation funnel for ChatGPT Exporter
+  repo: organvm/a-i-chat--exporter
+  type: code
+  target_agent: any
+  priority: critical
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-funding
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/a-i-chat--exporter, add .github/FUNDING.yml (ko_fi + github\
+    \ sponsors entries \u2014 use the owner handle; if the exact Ko-fi slug isn't\
+    \ known yet, leave a single clearly-marked TODO) AND a concise 'Support / Sponsor'\
+    \ section in the README linking both. Goal: the moment the accounts exist the\
+    \ donate path is ALREADY live. Tasteful, no nagware. Open a PR, keep the build\
+    \ green. [revenue-backlog 2026-06-23: rank 1, stage deploy-ready \u2014 spend\
+    \ tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T12:22:41.525551Z'
+  dispatch_log: []
+- id: REV-organvm-universal-mail--automation-revenue-ship-0623
+  title: Drive Universal Mail Automation to deploy-ready
+  repo: organvm/universal-mail--automation
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-ship
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/universal-mail--automation, clear the concrete blockers between\
+    \ the current state and a DEPLOYABLE product: get open PRs green + merged, fix\
+    \ the critical path, confirm the app runs end-to-end. Output: a deploy-ready build\
+    \ + a short DEPLOY.md listing exactly what remains. [revenue-backlog 2026-06-23:\
+    \ rank 3, stage building \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T12:22:41.525551Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T12:22:41.525551Z'
+    agent: opencode
+    session_id: PR-37
+    status: dispatched
+  - timestamp: '2026-06-23T08:28:00Z'
+    agent: opencode
+    session_id: PR-37
+    status: done
+    output: 'PR #37: feat/trial-signup-flow — added sign-up dialog, trial
+      tracking (14-day), org creation flow, trial banner with Subscribe CTA
+      in Dashboard. 6 files changed, 385 insertions, 15 deletions.
+      Tests: 7 new (all passing). Build: green. CI: same 3 pre-existing
+      failures only.'
+- id: REV-organvm-the-invisible-ledger-revenue-ship-0623
+  title: Drive The Invisible Ledger to deploy-ready
+  repo: organvm/the-invisible-ledger
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-ship
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/the-invisible-ledger, clear the concrete blockers between the\
+    \ current state and a DEPLOYABLE product: get open PRs green + merged, fix the\
+    \ critical path, confirm the app runs end-to-end. Output: a deploy-ready build\
+    \ + a short DEPLOY.md listing exactly what remains. [revenue-backlog 2026-06-23:\
+    \ rank 4, stage building \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T12:22:41.525551Z'
+  dispatch_log: []
+- id: REV-organvm-mirror-mirror-revenue-ship-0623
+  title: Drive Mirror Mirror to deploy-ready
+  repo: organvm/mirror-mirror
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-ship
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/mirror-mirror, clear the concrete blockers between the current\
+    \ state and a DEPLOYABLE product: get open PRs green + merged, fix the critical\
+    \ path, confirm the app runs end-to-end. Output: a deploy-ready build + a short\
+    \ DEPLOY.md listing exactly what remains. [revenue-backlog 2026-06-23: rank 5,\
+    \ stage building \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T12:22:41.525551Z'
+  dispatch_log: []
+- id: REV-organvm-public-record-data-scrapper-revenue-ship-0623
+  title: Drive Public Record Data Scraper to deploy-ready
+  repo: organvm/public-record-data-scrapper
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-ship
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/public-record-data-scrapper, clear the concrete blockers between\
+    \ the current state and a DEPLOYABLE product: get open PRs green + merged, fix\
+    \ the critical path, confirm the app runs end-to-end. Output: a deploy-ready build\
+    \ + a short DEPLOY.md listing exactly what remains. [revenue-backlog 2026-06-23:\
+    \ rank 2, stage building \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T12:22:41.525551Z'
+  dispatch_log: []
+- id: REV-organvm-styx-revenue-readiness-0623
+  title: First-paying-customer readiness pass on Styx
+  repo: organvm/styx
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-readiness
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/styx, find the single highest-leverage gap between the current\
+    \ product and something a stranger would pay for (first-dollar path: paid tier\
+    \ once live) and close it with a real, tested change. One focused PR; keep CI\
+    \ green. [revenue-backlog 2026-06-23: rank 6, stage building \u2014 spend tokens\
+    \ on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T12:22:41.525551Z'
+  dispatch_log: []
+- id: REV-organvm-a-i-chat--exporter-revenue-pro-tier-0623
+  title: Make the Pro-tier checkout merge-ready for ChatGPT Exporter
+  repo: organvm/a-i-chat--exporter
+  type: code
+  target_agent: any
+  priority: critical
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-pro-tier
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/a-i-chat--exporter, rebase the stacked Pro-tier / LemonSqueezy\
+    \ checkout PRs onto the default branch, resolve conflicts, and get every check\
+    \ green so the ONLY remaining step is pasting LEMONSQUEEZY_STORE_ID. Don't invent\
+    \ product scope \u2014 just unblock what's already built (donations NOW via Ko-fi/Sponsors\
+    \ (individual rail); Pro tier via Lemon Squeezy (code already integrated). NOT\
+    \ Stripe \u2014 that needs an LLC blocked by the card-0186 hold.). [revenue-backlog\
+    \ 2026-06-23: rank 1, stage deploy-ready \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T12:22:41.525551Z'
+  dispatch_log: []
+- id: REV-organvm-universal-mail--automation-revenue-readiness-0623
+  title: First-paying-customer readiness pass on Universal Mail Automation
+  repo: organvm/universal-mail--automation
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-readiness
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/universal-mail--automation, find the single highest-leverage\
+    \ gap between the current product and something a stranger would pay for (first-dollar\
+    \ path: subscription on the automation tier once live) and close it with a real,\
+    \ tested change. One focused PR; keep CI green. [revenue-backlog 2026-06-23: rank\
+    \ 3, stage building \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T12:22:41.525551Z'
+  dispatch_log: []
+- id: REV-organvm-the-invisible-ledger-revenue-readiness-0623
+  title: First-paying-customer readiness pass on The Invisible Ledger
+  repo: organvm/the-invisible-ledger
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-readiness
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/the-invisible-ledger, find the single highest-leverage gap\
+    \ between the current product and something a stranger would pay for (first-dollar\
+    \ path: paid tier once live) and close it with a real, tested change. One focused\
+    \ PR; keep CI green. [revenue-backlog 2026-06-23: rank 4, stage building \u2014\
+    \ spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T12:22:41.525551Z'
+  dispatch_log: []
+- id: REV-organvm-mirror-mirror-revenue-readiness-0623
+  title: First-paying-customer readiness pass on Mirror Mirror
+  repo: organvm/mirror-mirror
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-readiness
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/mirror-mirror, find the single highest-leverage gap between\
+    \ the current product and something a stranger would pay for (first-dollar path:\
+    \ paid tier once live) and close it with a real, tested change. One focused PR;\
+    \ keep CI green. [revenue-backlog 2026-06-23: rank 5, stage building \u2014 spend\
+    \ tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T12:22:41.525551Z'
+  dispatch_log: []
+- id: REV-organvm-public-record-data-scrapper-revenue-readiness-0623
+  title: First-paying-customer readiness pass on Public Record Data Scraper
+  repo: organvm/public-record-data-scrapper
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-readiness
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/public-record-data-scrapper, find the single highest-leverage\
+    \ gap between the current product and something a stranger would pay for (first-dollar\
+    \ path: data-as-a-service / one-off scrape gigs once deployed) and close it with\
+    \ a real, tested change. One focused PR; keep CI green. [revenue-backlog 2026-06-23:\
+    \ rank 2, stage building \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T12:22:41.525551Z'
+  dispatch_log: []
