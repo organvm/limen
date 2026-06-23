@@ -50,6 +50,34 @@ def _parse_ts(value) -> "datetime.datetime | None":
     except (ValueError, TypeError):
         return None
 
+
+def _effective_reserve(reserve_pct: float, reserve_floor: float, time_left_frac: float) -> float:
+    """Reserve is high at reset start, low at reset edge, and never rises above either cap.
+
+    Reserve decays linearly from the live hold-back to its floor so a lane still has room
+    at the cliff and still retains a meaningful minimum buffer even if its configured floor
+    is large.
+    """
+    base = float(max(0.0, reserve_pct))
+    floor = float(max(0.0, reserve_floor))
+    if base <= floor:
+        return base
+    span = base - floor
+    if span <= 0:
+        return floor
+    return round(floor + span * max(0.0, min(1.0, float(time_left_frac)), ), 6)
+
+
+def _time_left_frac(agent: str, resets: dict[str, str], window_hours: float) -> float:
+    """Hours-left fraction in the current reset window, clamped to [0,1]."""
+    last = _parse_ts(resets.get(agent)) if isinstance(resets, dict) else None
+    if last is None:
+        return 1.0
+    if window_hours <= 0:
+        return 0.0
+    elapsed = (NOW - last).total_seconds() / 3600
+    return max(0.0, min(1.0, 1.0 - (elapsed / float(window_hours))))
+
 # tunable per-vendor LIMITS (the "amount possible") — defaults are honest estimates;
 # calibrate to your real plan (codex/claude: see each CLI's /status). Override via
 # logs/usage-limits.json or env LIMEN_<VENDOR>_LIMIT.

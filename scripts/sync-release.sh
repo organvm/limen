@@ -28,23 +28,81 @@ LOCAL="$(git rev-parse HEAD 2>/dev/null || echo)"
 REMOTE="$(git rev-parse "origin/$BRANCH" 2>/dev/null || echo)"
 [ -n "$REMOTE" ] || { echo "sync-release: no origin/$BRANCH — fail open"; exit 0; }
 [ "$LOCAL" = "$REMOTE" ] && { echo "sync-release: at release ${REMOTE:0:7} ✓"; exit 0; }
+TMP="$(mktemp 2>/dev/null || echo "$ROOT/logs/.tasks.sync.$$")"
+[ -f tasks.yaml ] && cp -f tasks.yaml "$TMP" 2>/dev/null || true
+stashed=0
 
-# fast-forward ONLY — never touch a diverged or rewound history
+# fast-forward ONLY, but handle identical-divergence replays by patch-id.
 if ! git merge-base --is-ancestor "$LOCAL" "$REMOTE" 2>/dev/null; then
-  echo "sync-release: local (${LOCAL:0:7}) diverged from origin/$BRANCH (${REMOTE:0:7}) — fail open"
-  echo "sync-release: cheapest path = reconcile by hand (this organ NEVER force-moves a branch)"
+  BASE="$(git merge-base "$LOCAL" "$REMOTE" 2>/dev/null || echo)"
+  LOCAL_ONLY="$(mktemp 2>/dev/null || echo "$ROOT/logs/.sync-local.only.$$")"
+  REMOTE_ONLY="$(mktemp 2>/dev/null || echo "$ROOT/logs/.sync-remote.only.$$")"
+  REMOTE_PATCH_IDS="$(mktemp 2>/dev/null || echo "$ROOT/logs/.sync-remote.patches.$$")"
+
+  if [ -n "$BASE" ]; then
+    git rev-list --no-merges "${BASE}..${LOCAL}" --not "$REMOTE" > "$LOCAL_ONLY" 2>/dev/null || true
+    git rev-list --no-merges "${BASE}..${REMOTE}" --not "$LOCAL" > "$REMOTE_ONLY" 2>/dev/null || true
+  else
+    # no common base => true fork, no safe reconciliation path
+    : > "$LOCAL_ONLY"
+    : > "$REMOTE_ONLY"
+  fi
+
+  while read -r sha; do
+    [ -n "$sha" ] || continue
+    pid="$(git show --no-color --format='' --patch "$sha" | git patch-id --stable | awk '{print $1}')"
+    [ -n "$pid" ] && echo "$pid" >> "$REMOTE_PATCH_IDS"
+  done < "$REMOTE_ONLY"
+
+  reconverge=1
+  while read -r sha; do
+    [ -n "$sha" ] || continue
+    pid="$(git show --no-color --format='' --patch "$sha" | git patch-id --stable | awk '{print $1}')"
+    if [ -z "$pid" ] || ! grep -Fxq "$pid" "$REMOTE_PATCH_IDS" 2>/dev/null; then
+      reconverge=0
+      break
+    fi
+  done < "$LOCAL_ONLY"
+
+  if [ "$reconverge" -eq 1 ] && [ -n "$BASE" ]; then
+    echo "sync-release: local (${LOCAL:0:7}) diverged from origin/$BRANCH (${REMOTE:0:7}) with redundant patches → re-converged by patch-id"
+  else
+    echo "sync-release: local (${LOCAL:0:7}) diverged from origin/$BRANCH (${REMOTE:0:7}) — fail open"
+    echo "sync-release: cheapest path = reconcile by hand (this organ NEVER force-moves a branch)"
+  fi
+
+  rm -f "$LOCAL_ONLY" "$REMOTE_ONLY" "$REMOTE_PATCH_IDS"
+  if [ "$reconverge" -eq 1 ] && [ -n "$BASE" ]; then
+    # preserve the LIVE queue when we re-converge
+    CUR="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo)"
+    if [ "$CUR" != "$BRANCH" ]; then
+      echo "sync-release: re-converge requires checkout on '$BRANCH' — fail open"
+      exit 0
+    fi
+    if git reset --quiet --hard "origin/$BRANCH"; then
+      [ -f "$TMP" ] && cp -f "$TMP" tasks.yaml 2>/dev/null || true
+      [ "$stashed" = 1 ] && git stash drop --quiet 2>/dev/null || true
+      rm -f "$TMP" 2>/dev/null || true
+      echo "sync-release: re-converged via patch-id equivalent commits to origin/$BRANCH ✓"
+      exit 0
+    fi
+    echo "sync-release: re-converge failed (checkout/permissions issue) — fail open"
+    rm -f "$TMP" 2>/dev/null || true
+    [ "$stashed" = 1 ] && git stash pop --quiet 2>/dev/null || true
+    exit 0
+  fi
+
+  echo "UNIQUE local work detected — keeping local branch in place and failing open"
+  rm -f "$TMP" 2>/dev/null || true
   exit 0
 fi
 CUR="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo)"
 [ "$CUR" = "$BRANCH" ] || { echo "sync-release: on '$CUR' not '$BRANCH' — fail open (no auto-switch)"; exit 0; }
 
 # preserve the LIVE queue (daemon-owned) across the ff
-TMP="$(mktemp 2>/dev/null || echo "$ROOT/logs/.tasks.sync.$$")"
-[ -f tasks.yaml ] && cp -f tasks.yaml "$TMP" 2>/dev/null || true
 
 # set tracked working changes aside so the ff isn't blocked (build artifacts, the live tasks.yaml);
 # we DROP this stash afterward — the released versions win, except tasks.yaml which we restore.
-stashed=0
 if ! git diff --quiet 2>/dev/null; then
   git stash push --quiet 2>/dev/null && stashed=1 || true
 fi

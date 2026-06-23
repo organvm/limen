@@ -14,15 +14,15 @@ portal:
       agy: 100
       claude: 100
     track:
-      date: '2026-06-22'
-      spent: 38
+      date: '2026-06-23'
+      spent: 39
       per_agent:
-        jules: 13
+        jules: 5
         gemini: 0
-        codex: 11
-        opencode: 4
-        agy: 6
-        claude: 4
+        codex: 12
+        opencode: 1
+        agy: 3
+        claude: 0
       per_agent_reset:
         jules: '2026-06-21T16:28:31.134770+00:00'
         gemini: '2026-06-21T16:28:31.134770+00:00'
@@ -50,7 +50,7 @@ tasks:
     agent each cycle.'
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T04:43:56.613434Z'
+  updated: '2026-06-23T23:40:48Z'
   dispatch_log:
   - timestamp: '2026-06-20T19:51:18.339621Z'
     agent: limen
@@ -34528,7 +34528,7 @@ tasks:
   target_agent: codex
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - ci-green
   - generated
@@ -34553,6 +34553,17 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-23T23:36:36Z'
+    agent: codex
+    session_id: codex/4444j99-limen-ci-green-0620
+    status: done
+    output: "Fixed CI regressions in scripts/route.py, scripts/usage-telemetry.py, scripts/corpus-converge.py, and scripts/sync-release.sh; targeted pytest checks pass."
+  - timestamp: '2026-06-23T23:40:48Z'
+    agent: codex
+    session_id: codex/4444j99-limen-ci-green-0620
+    status: done
+    output: "Confirmed checks pass: cli/tests/test_accelerator.py, test_route_bias.py, test_media_atomize.py, test_sync_reclaim.py (41 passed)."
+  status: done
 - id: GEN-a-organvm-a-i-chat--exporter-ci-green-0620
   title: Make a-organvm/a-i-chat--exporter CI green
   repo: organvm/a-i-chat--exporter

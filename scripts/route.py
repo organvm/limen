@@ -172,6 +172,52 @@ def _learned_weights() -> dict[str, float]:
     return weights
 
 
+def _ledger_bias(task: dict[str, object]) -> dict[str, float]:
+    """Derive soft penalties from the recent ledger:
+
+    - a lane is down-weighted (0.2) when task classes match its ``waste_classes``
+    - a lane is exempt if any class matches ``win_classes``
+
+    This is a floor, not a hard ban.
+    """
+    if os.environ.get("LIMEN_LEDGER_BIAS", "1") == "0":
+        return {}
+    if not task:
+        return {}
+    ledger_path = ROOT / "logs" / "ledger.json"
+    if not ledger_path.exists():
+        return {}
+    try:
+        data = json.loads(ledger_path.read_text(errors="ignore"))
+    except Exception:
+        return {}
+    lanes = data.get("lanes")
+    if not isinstance(lanes, dict):
+        return {}
+
+    classes = set()
+    t = task.get("type")
+    if t:
+        classes.add(t)
+    for lbl in task.get("labels") or []:
+        if lbl:
+            classes.add(lbl)
+    if not classes:
+        return {}
+
+    bias: dict[str, float] = {}
+    for lane, row in lanes.items():
+        if not isinstance(row, dict):
+            continue
+        waste = set(row.get("waste_classes") or [])
+        wins = set(row.get("win_classes") or [])
+        if classes & set(wins):
+            continue
+        if classes & waste:
+            bias[str(lane)] = 0.2
+    return bias
+
+
 def _pick_local(
     task: dict,
     health: dict[str, bool],
@@ -200,6 +246,7 @@ def _pick_local(
         return None
 
     weights = _learned_weights()  # {} unless LIMEN_SI_APPLY=1 -> pure budget+runway split
+    bias = _ledger_bias(task)
 
     def load(v: str) -> float:
         b = budget.get(v, 0) or 1
@@ -207,14 +254,16 @@ def _pick_local(
         base = assigned.get(v, 0) / b
         # self-improve nudge: a down-weighted (historically less-shipping) lane carries a higher
         # effective load so it's picked less; floored weight means never fully starved.
-        return round(base / weights.get(v, 1.0), 3)
+        lane_bias = max(0.2, bias.get(v, 1.0))
+        return round((base / weights.get(v, 1.0)) + (1.0 - lane_bias) * 0.03, 3)
 
     def runway_of(v: str) -> float:
         return runway.get(v, float("inf"))
 
     # least-loaded by budget ratio; then MOST refresh runway (freshest window); then higher-budget
     # lane; then name (stable).
-    return min(candidates, key=lambda v: (load(v), -runway_of(v), -budget.get(v, 0), v))
+    local_rank = {name: i for i, name in enumerate(_LOCAL_LANES)}
+    return min(candidates, key=lambda v: (load(v), -runway_of(v), -budget.get(v, 0), local_rank.get(v, 99)))
 
 
 def _capable_agents(

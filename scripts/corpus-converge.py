@@ -58,6 +58,10 @@ def _state_path() -> Path:
     return Path(os.environ.get("LIMEN_CORPUS_STATE", ROOT / "logs" / "corpus-converge-state.json"))
 
 
+def _media_atoms_root() -> Path:
+    return Path(os.environ.get("LIMEN_MEDIA_ATOMS", str(_corpus_root() / "02-media-atoms")))
+
+
 def _log_path() -> Path:
     return Path(os.environ.get("LIMEN_CORPUS_LOG", ROOT / "logs" / "corpus-converge-log.jsonl"))
 
@@ -139,6 +143,25 @@ def gather_new_material(limit: int, *, with_graph: bool = False, absorbed: set[s
             if iid in absorbed:
                 continue
             items.append({"id": iid, "text": text, "source": f"collection:{p.name}"})
+
+    # personal media atoms: documents converted to Shot payloads in the shared atom store.
+    mroot = _media_atoms_root()
+    if mroot.is_dir():
+        for p in sorted(mroot.glob("*.json")):
+            try:
+                atom = json.loads(p.read_text(errors="ignore"))
+            except Exception:
+                continue
+            if not isinstance(atom, dict):
+                continue
+            iid = atom.get("id")
+            if not iid or iid in absorbed:
+                continue
+            text = str(atom.get("text") or "")
+            if not text.strip():
+                continue
+            source = str(atom.get("source") or p)
+            items.append({"id": iid, "text": text, "source": source})
 
     # the universal context: a bounded slice of the GitHub graph (issues/PRs as shots).
     if with_graph:
