@@ -1,153 +1,165 @@
-# The Divine Comedy — film companion
-#
-# Mirroring the studium/film/iliad.yaml gold standard.
 work: divine-comedy
 title: "The Divine Comedy — a cinema of descent, ascent, and beatitude"
 principle: >
-  Do not assemble a list of "movies about Hell." Assemble the poem's FORCES given cinematic
-  bodies. The Divine Comedy is an architecture of the soul: an absolute descent into the
-  consequences of sin (Inferno), a grueling, communal ascent of purification (Purgatorio),
-  and a final revelation of the intellect dissolving into love (Paradiso). The companion
-  must cover this entire vertical spectrum. We use Fincher and the Coens for the relentless
-  machinery of contrapasso and fate in the Inferno; Wong Kar-wai for the airless trap of
-  pure desire; Cronenberg for the theft of the human form. For Purgatorio, we pivot to
-  Bresson and Powell & Pressburger—films of intercession, trial, and the agonizing climb.
-  For Paradiso, Malick and Dreyer provide the rare cinematic vocabulary for actual
-  salvation and the blinding light of the divine. The literal adaptations are set aside;
-  the force-companion carries the weight of the cosmic journey.
-force_coverage: [law, desire, divine-intervention, metamorphosis, plague, fate, ascent, supplication, revelation, salvation]
+  Do not assemble a list of "visions of the afterlife." Score the poem's FORCES: the terror
+  of being lost (exile), the structural necessity of justice (law), the consuming inwardness of
+  sin (wrath), the arduous climb of purgation (ascent), and the overwhelming light of grace (revelation).
+  Hell is not a torture chamber; it is the soul trapped in its own repetitive compulsions, which
+  is why its fitting films are about obsession and inexorability. Purgatory is the return to time
+  and the body's effort to change, filmed as metamorphosis and upward striving. Paradise is stillness
+  and overwhelming light, requiring films that can sustain beatitude without collapsing into sentiment.
+  A direct adaptation is set aside; the force-companion carries the weight of Dante's three realms.
+force_coverage: [exile, fate, law, wrath, divine-intervention, supplication, ascent, metamorphosis, revelation, salvation]
 films:
-  - title: "Se7en"
-    director: "David Fincher"
-    year: 1995
-    force: law
-    divisions: [5, 28, 32]
-    objects: []
-    letterboxd: se7en
-    scene_or_theme: "The architecture of Hell — the contrapasso (punishment fitting the crime)"
-    object_lesson: >
-      Hell is not chaos; it is law taken to its absolute, unforgiving conclusion. The contrapasso is justice
-      devoid of mercy. The meticulously designed murders are the object lesson: sin is its own eternal trap.
-    why: >
-      Fincher's city is a descending circle of tailored punishments. It perfectly encodes Dante's mechanism
-      where the sin becomes its own cage. The detective's journey mirrors the pilgrim's descent into the depths
-      of human depravity.
-    content_note: "Graphic violence, psychological horror; the ultimate contrapasso cinema."
-
-  - title: "In the Mood for Love"
-    director: "Wong Kar-wai"
-    year: 2000
-    force: desire
-    divisions: [5]
-    objects: [mirror, clock]
-    letterboxd: in-the-mood-for-love
-    scene_or_theme: "Inferno 5 — the wind of lust and the tragedy of romantic love"
-    object_lesson: >
-      Desire that orbits only itself becomes an inescapable room. The mirror reflects a love that cannot build
-      a world, only an endless cycle of longing. Canto 5 pities the lovers, but places them in Hell because
-      their love is entirely closed off from the divine.
-    why: >
-      Wong Kar-wai films desire as an exquisite, airless trap. The slow-motion pacing and repetitive
-      encounters match the eternal wind that tosses Paolo and Francesca. It is the tragedy of a love that goes nowhere.
-    content_note: "Themes of infidelity and emotional repression."
-
   - title: "Stalker"
     director: "Andrei Tarkovsky"
     year: 1979
     force: divine-intervention
-    divisions: [9]
-    objects: [door]
+    divisions: [1, 2]
+    objects: [telephone]
     letterboxd: stalker
-    scene_or_theme: "Inferno 9 (Gates of Dis) — the messenger from Heaven opening the way"
+    scene_or_theme: "Inferno 1-2 — The dark wood and the call from outside"
     object_lesson: >
-      When human agency hits its absolute limit, the path forward must come from outside the system.
-      The door to the Room represents a threshold that human reason (Virgil) cannot breach alone.
+      Grace does not appear as comfort, but as a dangerous, incomprehensible Zone that requires a guide.
+      The telephone ringing in the ruined room is the object lesson: connection from an impossible
+      outside. The journey cannot be navigated by reason alone; it requires submission to a terrifying
+      intervention.
     why: >
-      The Zone operates by rules alien to human logic, requiring a special guide. Tarkovsky's vision of
-      traversing a metaphysical landscape perfectly matches the pilgrims waiting for divine grace to open
-      the closed gates of the lower Hell.
-    content_note: "Meditative pace, philosophical density."
-
-  - title: "The Fly"
-    director: "David Cronenberg"
-    year: 1986
-    force: metamorphosis
-    divisions: [24, 25]
-    objects: [mirror]
-    letterboxd: the-fly-1986
-    scene_or_theme: "Inferno 24-25 (The Thieves) — the horrific fusion and theft of the human form"
-    object_lesson: >
-      To lose one's form is to lose the self. The mirror reveals the body becoming something alien, punishing
-      the sin of theft by stealing the very boundaries of the person.
-    why: >
-      Dante's thieves constantly mutate, violently exchanging human and serpentine shapes. Cronenberg's body
-      horror is the cinematic equivalent of this ultimate loss of identity, a literal unraveling of the flesh.
-    content_note: "Extreme body horror, gore."
-
+      Tarkovsky's Zone is Dante's selva oscura and the afterlife combined — a landscape that responds
+      to the moral state of those who walk it. It perfectly captures the disorientation of the opening cantos
+      and the necessity of the guide.
+    content_note: "philosophical density, extremely slow pace"
   - title: "No Country for Old Men"
-    director: "Joel & Ethan Coen"
+    director: "Joel and Ethan Coen"
     year: 2007
     force: fate
-    divisions: [3, 33]
+    divisions: [3, 5]
     objects: [gun]
     letterboxd: no-country-for-old-men
-    scene_or_theme: "The inexorable mechanism of damnation — the coin toss"
+    scene_or_theme: "Inferno 3-5 — The gates of Hell and the inexorable wind"
     object_lesson: >
-      You cannot barter with the end of the line. Damnation is not a surprise; it is the final coin toss
-      of a life that has already chosen its path.
+      Hell is not a punishment inflicted from outside, but the logical, inescapable end of a mechanism
+      one has set in motion. The captive bolt pistol (gun) represents the sheer impersonality of this
+      justice. It cannot be bargained with.
     why: >
-      Anton Chigurh is a force of pure, mechanical inevitability, much like the demons and judgments that
-      process the damned. The film's bleak, deterministic universe mirrors the absolute finality of the Inferno.
-    content_note: "Intense violence, suspense."
-
-  - title: "A Matter of Life and Death"
-    director: "Michael Powell, Emeric Pressburger"
-    year: 1946
-    force: ascent
-    divisions: [35, 67]
+      Anton Chigurh moves with the absolute, unquestionable certainty of divine justice in Hell. He is
+      Charon and Minos stripped of mythology: a force that simply executes what has already been decided.
+    content_note: "intense violence, suspense"
+  - title: "There Will Be Blood"
+    director: "Paul Thomas Anderson"
+    year: 2007
+    force: wrath
+    divisions: [32, 33]
+    objects: [milk]
+    letterboxd: there-will-be-blood
+    scene_or_theme: "Inferno 32-33 — Ugolino and the frozen lake of treachery"
+    object_lesson: >
+      Sin at its absolute bottom is not fire, but ice — a total, freezing isolation where the self
+      consumes the other. "I drink your milkshake" (the corrupted milk) is the exact equivalent of Ugolino
+      gnawing on Ruggieri's skull. It is the capitalism of souls.
+    why: >
+      Daniel Plainview's descent into total misanthropy and isolation mirrors the lowest circles of Dante's
+      Hell. He is not punished by external forces; he is frozen in the ice of his own making, unable to
+      love or be loved.
+    content_note: "violence, psychological darkness"
+  - title: "12 Angry Men"
+    director: "Sidney Lumet"
+    year: 1957
+    force: law
+    divisions: [4, 11]
     objects: [door]
-    letterboxd: a-matter-of-life-and-death
-    scene_or_theme: "Purgatorio — the climb toward the earthly paradise and the trial of the soul"
+    letterboxd: 12-angry-men
+    scene_or_theme: "Inferno 4, 11 — The structure of justice and the noble castle"
     object_lesson: >
-      Ascent is an active defense of one's worth in the face of eternity. The heavenly staircase is the
-      geography of moral elevation, requiring both effort and advocacy.
+      Reason has its own severe beauty, but it operates within a locked room. The locked door of the jury
+      room represents both the achievement of human intellect and its boundary: it can determine guilt, but
+      cannot offer grace.
     why: >
-      Powell & Pressburger give us a literal staircase between worlds and a trial to determine the soul's
-      fate. It captures the hopeful, rising trajectory of Purgatorio and the belief that the soul can be argued for.
-    content_note: "None; a classic romance of the afterlife."
-
+      Dante's Hell is obsessively structured, organized by Aristotelian ethics. Lumet's film captures the
+      architectural, almost scholastic parsing of right and wrong, mirroring the rational conversations of
+      Limbo and the detailed taxonomy of sins Virgil provides in Canto 11.
+    content_note: "none"
+  - title: "Spirited Away"
+    director: "Hayao Miyazaki"
+    year: 2001
+    force: metamorphosis
+    divisions: [35, 43]
+    objects: [door]
+    letterboxd: spirited-away
+    scene_or_theme: "Purgatorio 1-9 — The shores of Purgatory and the cleansing bathhouse"
+    object_lesson: >
+      Purgation is labor. It is the slow, often painful work of remembering one's true name and washing
+      away the accumulated sludge of the world. The doors of the bathhouse are thresholds of transformation.
+    why: >
+      Miyazaki's bathhouse is the finest cinematic Purgatory: a place of hard work, strange spirits, and
+      eventual purification. Chihiro's journey is exactly Dante's: shedding attachments, learning humility,
+      and earning her way upward.
+    content_note: "animated, intense sequences for children"
   - title: "Diary of a Country Priest"
     director: "Robert Bresson"
     year: 1951
     force: supplication
-    divisions: [37, 45]
+    divisions: [45, 55]
     objects: [milk]
     letterboxd: diary-of-a-country-priest
-    scene_or_theme: "The souls in Purgatory — intercession, suffering, and the community of grace"
+    scene_or_theme: "Purgatorio — The suffering of the penitent"
     object_lesson: >
-      Grace flows through weakness. The priest's diet of bread and milk—the body's purest sustenance—becomes
-      a symbol of his earthly failure and spiritual purification. Suffering is endured willingly for others.
+      True supplication requires an absolute emptying of the self. The priest's diet of bread and wine
+      (and corrupted milk) represents a body failing as the spirit clarifies. It is the cost of standing
+      between God and the world.
     why: >
-      Bresson's stripped-down spiritual realism perfectly embodies the penitent tone of Purgatorio, where
-      the focus is on internal cleansing, prayer, and the mysterious exchange of grace between the living and dead.
-    content_note: "Themes of illness, theological despair."
-
+      Bresson films grace not as a triumph but as an agonizing physical and spiritual exhaustion. The priest
+      is a living purgatory, bearing the sins of his parish and ascending through his own total depletion.
+    content_note: "illness, profound melancholy"
   - title: "The Tree of Life"
     director: "Terrence Malick"
     year: 2011
-    force: revelation
-    divisions: [68, 90]
+    force: ascent
+    divisions: [62, 67]
     objects: [door]
     letterboxd: the-tree-of-life
-    scene_or_theme: "Paradiso — the vision of the cosmos bound by love"
+    scene_or_theme: "Purgatorio 28-33 — The Earthly Paradise and the procession"
     object_lesson: >
-      The universe is held together not by mechanics, but by a luminous, pervasive love. The camera's upward
-      gaze is the soul attempting to comprehend the infinite and the reconciliation of nature and grace.
+      To ascend is to hold two ways of being simultaneously: the way of nature (survival) and the way of
+      grace (love). The literal door standing on the beach at the end of time is the threshold from temporal
+      suffering into eternal reconciliation.
     why: >
-      Malick's film is one of the few that attempts to visually represent the divine light and the
-      interconnectedness of all creation, which is the entire abstract project of Dante's Paradiso.
-    content_note: "Abstract, non-narrative sequences."
-
+      Malick films the upward pull of grace. The film moves from grief toward a luminous, forgiving vision
+      of all souls gathered on a shore, matching Dante's arrival at the top of the mountain and his reunion
+      with Beatrice.
+    content_note: "non-linear narrative, impressionistic"
+  - title: "Nostalghia"
+    director: "Andrei Tarkovsky"
+    year: 1983
+    force: exile
+    divisions: [68, 70]
+    objects: [mirror]
+    letterboxd: nostalghia
+    scene_or_theme: "The condition of the wanderer"
+    object_lesson: >
+      Exile is a spiritual sickness, a homesickness for a place that cannot be reached by traveling. The
+      reflection in the mirror is the divided self, stranded in a world that is not its own.
+    why: >
+      Dante is the great poet of exile. Tarkovsky's film perfectly captures the unbearable weight of being
+      separated from one's origin, which colors the entire Divine Comedy, even its highest spheres.
+    content_note: "long takes, brooding atmosphere"
+  - title: "Into Great Silence"
+    director: "Philip Gröning"
+    year: 2005
+    force: revelation
+    divisions: [71, 99]
+    objects: [clock]
+    letterboxd: into-great-silence
+    scene_or_theme: "Paradiso — The spheres of heaven and the stillness of the saints"
+    object_lesson: >
+      Beatitude is not an event, but a sustained condition. The clock measuring the monk's day is not a
+      countdown to death, but a rhythmic participation in eternity. The lesson is that true light requires
+      silence to be seen.
+    why: >
+      A documentary about Carthusian monks living in near-total silence. It provides the exact texture of
+      Paradiso: not dramatic conflict, but verticality, chant, and the pure contemplation of the divine. It
+      trains the eye to watch nothing happen, beautifully.
+    content_note: "documentary, almost no dialogue"
   - title: "Ordet"
     director: "Carl Theodor Dreyer"
     year: 1955
@@ -155,37 +167,22 @@ films:
     divisions: [100]
     objects: [clock]
     letterboxd: ordet
-    scene_or_theme: "Canto 100 — the final beatific vision, the direct experience of the divine"
+    scene_or_theme: "Paradiso 33 — The final vision and the resurrection of the flesh"
     object_lesson: >
-      True faith requires the suspension of the rational for the miraculous. The ticking clock of mortality
-      is halted by the absolute presence of life giving itself back.
+      The highest mystery is not abstract light, but love returning the body to life. The stopped clock in
+      the room of mourning is the suspension of time before the miracle breaks through. Faith is madness
+      until it works.
     why: >
-      The ending of Ordet is a pure, blinding moment of salvation and grace descending into the physical world,
-      analogous to Dante's final vision where the intellect fails and love moves the sun and the other stars.
-    content_note: "Themes of death, grief, and religious fanaticism."
-
-  - title: "The Seventh Seal"
-    director: "Ingmar Bergman"
-    year: 1957
-    force: plague
-    divisions: [29]
-    objects: []
-    letterboxd: the-seventh-seal
-    scene_or_theme: "The Malebolge — disease as a reflection of spiritual corruption"
-    object_lesson: >
-      Sickness in the body is the visible manifestation of a sickness in the world's order. Death plays
-      chess not to win, but to pass the time he already owns.
-    why: >
-      The landscape of plague and the stark, medieval confrontation with mortality align perfectly with
-      the diseased, scabbing bodies of Dante's lower Hell (the falsifiers).
-    content_note: "Dark themes, plague imagery."
-
+      Dreyer's ending is the closest cinema has come to the final canto of Paradiso: the impossible
+      synthesis of flesh and spirit, the love that moves the sun and the other stars rendered as a woman
+      opening her eyes and breathing again.
+    content_note: "slow pacing, themes of death and childbirth"
 adaptations:
   - title: "L'Inferno"
     director: "Francesco Bertolini, Adolfo Padovan, Giuseppe de Liguoro"
     year: 1911
     letterboxd: linferno
-    note: "The classic silent adaptation, heavily inspired by Gustave Doré's illustrations. Visually stunning but inherently limited to illustration. Set aside in favor of the force-companions."
+    note: "The silent epic, visually faithful to Doré's illustrations. Staged here merely as an overlay."
     scenes:
       - {division: 5, force: desire, scene: "Paolo and Francesca in the whirlwind"}
       - {division: 34, force: fate, scene: "Lucifer chewing the traitors"}
