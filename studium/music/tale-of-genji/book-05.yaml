@@ -1,0 +1,242 @@
+# Tale of Genji — Chapter 5 (Wakamurasaki, "Young Murasaki" / "Lavender") — curated music arc
+# Score the CHAPTER, not the novel. Wakamurasaki is the hinge of the whole work.
+# Ill with recurring fever, Genji withdraws to the northern hills for healing
+# rites and there glimpses, through a fence, a weeping ten-year-old girl whose
+# pet sparrow has flown off — and is transfixed, because she is the living image
+# of Fujitsubo, his father's young consort and the forbidden love of his life.
+# She is in fact Fujitsubo's niece. Interwoven with the discovery runs the
+# novel's central transgression: Genji's secret union with Fujitsubo herself,
+# who conceives a child — the boy who will one day reign as emperor, his true
+# father hidden forever. Genji takes the orphaned girl, Murasaki, to his Nijō
+# mansion to raise into his ideal woman. Two secrets are planted here that drive
+# everything after: the substitute child, and the hidden heir. Score both.
+work: tale-of-genji
+book: 5
+title: "Young Murasaki: The Found Child and the Forbidden Mother"
+length_minutes: 96
+principle: >
+  Do not score Chapter 5 as a single love story; it is two desires for the same
+  unreachable face, running in counterpoint. On the surface: the enchanting
+  discovery of a child who mirrors Fujitsubo, whom Genji will take and shape
+  into the woman he wants — desire sublimated into cultivation. Underneath: the
+  forbidden consummation with Fujitsubo herself and the pregnancy that becomes
+  the novel's buried engine — desire as transgression and fate. The arc must
+  hold both registers: the luminous, fairy-tale brightness of the mountain
+  discovery, and the dark, guilt-stricken weight of the sin against the
+  emperor-father. The dominant force is desire — because the substitute-love
+  and the forbidden-love are one longing, reaching twice for the same lost
+  face. Keep Japonisme out; this is the psychology of obsession and its
+  consequences.
+force_arc: [revelation, desire, metamorphosis, comedy, desire, grief, fate, grief, metamorphosis, memory, ascent]
+dominant_force: desire
+tracks:
+  - n: 1
+    scene: "The holy mountain / Genji ill, withdrawn for healing rites"
+    force: revelation
+    composer: Beethoven
+    work: "String Quartet No. 15 in A minor, Op. 132 — III. 'Heiliger Dankgesang'"
+    decision: added
+    why: >
+      Genji, wasted by a recurring fever, travels to a hermitage in the northern
+      hills for an ascetic's healing incantations, and the chapter opens in the
+      stillness of spring mountains and prayer. Beethoven's 'Heiliger Dankgesang'
+      — the "holy song of thanksgiving of a convalescent to the Divinity," in
+      the Lydian mode — is uncannily exact: it is literally a sick man's hymn of
+      recovery, music of pure verticality and stillness, time suspended in
+      gratitude and healing. It gives the chapter its sacred ground note, the
+      clean, rarefied air of the mountain retreat before desire enters. The
+      register is revelation — chant-like, vertical, hushed — and it will make
+      the worldly enchantment that follows feel like a fall.
+  - n: 2
+    scene: "The kaimami / the weeping girl whose sparrow flew away"
+    force: desire
+    composer: Debussy
+    work: "Préludes, Book I — 'La fille aux cheveux de lin'"
+    decision: added
+    why: >
+      Through a brushwood fence Genji watches a household of women and, among
+      them, a lovely child of about ten in tears because her pet sparrow has
+      escaped its cage. He cannot look away. Debussy's 'La fille aux cheveux de
+      lin' ('The Girl with the Flaxen Hair') is a portrait of innocent, fresh,
+      uncomplicated beauty — a simple pentatonic melody, tender and clear,
+      utterly without irony. It is the right music for the surface of the
+      moment: a man enchanted by a child's loveliness. The disquiet — that this
+      enchantment is the opening move in a project of possession — is left for
+      the listener to supply, exactly as the chapter does.
+  - n: 3
+    scene: "The recognition / she is the image of Fujitsubo, the living substitute"
+    force: metamorphosis
+    composer: Debussy
+    work: "Images, Book I — I. 'Reflets dans l'eau'"
+    decision: added
+    why: >
+      The enchantment turns electric when Genji realizes why the child moves him:
+      she is the very likeness of Fujitsubo, his forbidden love — in fact her
+      niece. The girl is a reflection of the unreachable woman, and in that
+      instant Genji's desire transforms its object, fixing on a child he can
+      legally take and shape into a copy of the original. Debussy's 'Reflets
+      dans l'eau' is the music of exactly that: a shimmering surface in which an
+      image forms, dissolves, and re-forms, water reflecting something that is
+      not itself. The force is metamorphosis — desire changing its shape to find
+      a permissible vessel for the impermissible. The whole tragedy of
+      Murasaki's life begins in this substitution.
+  - n: 4
+    scene: "The mountain household / the nun, the rustic priests, the child's world"
+    force: comedy
+    composer: Mendelssohn
+    work: "A Midsummer Night's Dream, Op. 61 — Scherzo"
+    decision: added
+    why: >
+      Around the discovery is a world of gentle comedy: the elderly nun who is
+      the child's grandmother, the bustling rustic clerics, the small domestic
+      fuss of a country retreat, the girl's nurse scolding her over the lost
+      sparrow. Mendelssohn's Scherzo is fleet, gossamer, faintly absurd fairy
+      music — the chatter of a small enchanted world going about its business.
+      It lightens the chapter at exactly the right moment and frames the child
+      in her proper element: a real little girl in a real, slightly comic
+      household, not yet the object she is about to become. The lightness is
+      also a mercy the narrative withholds from her future.
+  - n: 5
+    scene: "The forbidden night / Genji's secret union with Fujitsubo"
+    force: desire
+    composer: Wagner
+    work: "Tristan und Isolde — Act II, 'O sink hernieder, Nacht der Liebe'"
+    decision: added
+    why: >
+      The chapter cuts to the transgression itself: back in the capital,
+      Fujitsubo ill and withdrawn from the palace, Genji forces his way to a
+      single stolen night with his father's consort — the deepest taboo in his
+      world. Where Chapter 1 used the Tristan Prelude for desire-as-premise, here
+      the consummation demands the Act II love-duet, 'O sink hernieder' — the
+      great nocturne of lovers who can only exist in darkness, who long for the
+      night to swallow them and never bring day. It is forbidden union made
+      music: ecstatic, doomed, drunk on its own secrecy. The desire that has
+      organized the whole novel finally acts, and in acting plants its
+      irreversible consequence.
+  - n: 6
+    scene: "Fujitsubo's horror and withdrawal / the weight of the sin"
+    force: grief
+    composer: Mahler
+    work: "Rückert-Lieder — 'Ich bin der Welt abhanden gekommen'"
+    decision: added
+    why: >
+      For Fujitsubo there is no ecstasy, only dread: she has betrayed the emperor
+      who loves her, and she withdraws into guilt, terror of exposure, and a
+      grief that cuts her off from the world. Mahler's 'Ich bin der Welt
+      abhanden gekommen' ('I am lost to the world') is the supreme song of
+      withdrawal — a soul retiring from the living world into a still, private
+      grief, the long lines sinking inward toward "I live alone in my heaven, in
+      my love, in my song." It is Fujitsubo exactly: a woman who must vanish
+      inwardly to survive what has happened, carrying a secret that isolates her
+      absolutely. The same night is desire for Genji and grief for her; the
+      music takes her side.
+  - n: 7
+    scene: "Fujitsubo is with child / the hidden heir, the buried destiny"
+    force: fate
+    composer: Verdi
+    work: "La forza del destino — Overture"
+    decision: added
+    why: >
+      Fujitsubo conceives, and the chapter quietly sets the novel's deepest
+      machinery in motion: the child she carries, passed off as the emperor's,
+      will one day reign — his true paternity a secret that will warp Genji's
+      entire fate, raise him impossibly high and shadow him with dread of
+      discovery. Verdi's 'Force of Destiny' overture is the engine's fate-force
+      named outright: the hammering, recurring destiny-motif that returns
+      through every key, an unstoppable momentum set loose by a single
+      irreversible act. It is the sound of a consequence that has already
+      escaped its authors' control. Nothing in the remaining novel is free of
+      what is conceived here.
+  - n: 8
+    scene: "The grandmother-nun dies / Murasaki orphaned and exposed"
+    force: grief
+    composer: Dvořák
+    work: "Gypsy Songs, Op. 55 — IV. 'Songs My Mother Taught Me'"
+    decision: added
+    why: >
+      Back in the mountain strand, the old nun who has raised Murasaki sickens
+      and dies, leaving the child truly alone — no mother (long dead), a distant
+      and unsuitable father, no protector. Her exposure is what makes Genji's
+      scheme possible. Dvořák's 'Songs My Mother Taught Me' is tender, aching
+      grief for a vanished maternal world — a melody remembered through tears,
+      the lost warmth of being someone's cherished child. It mourns precisely
+      what Murasaki has lost and what Genji will never truly replace: the
+      protection of someone who wants nothing from her. The child weeps for her
+      grandmother; the music weeps with her.
+  - n: 9
+    scene: "Genji takes Murasaki to Nijō / the abduction-adoption, the shaping begins"
+    force: metamorphosis
+    composer: Ravel
+    work: "Ma mère l'Oye — I. 'Pavane de la Belle au bois dormant'"
+    decision: added
+    why: >
+      Seizing his chance, Genji effectively carries the orphaned girl off to his
+      Nijō mansion before her father can claim her, installing her to be raised
+      — and slowly transformed — into his ideal wife. She cries for her
+      grandmother and her home; he soothes her with pictures and games. Ravel's
+      'Pavane of Sleeping Beauty' is the perfect, terrible music for it: a brief,
+      exquisite, archaic miniature, a child laid down to sleep in a strange
+      enchanted house to be awakened, in time, into someone else's design. The
+      force is metamorphosis — a person being made into an object of cultivation
+      — and Ravel's tenderness makes the gentleness and the appropriation
+      inseparable, which is the moral truth of the scene.
+  - n: 10
+    scene: "Murasaki at Nijō / dolls, pictures, the child settling into her cage"
+    force: memory
+    composer: Schumann
+    work: "Kinderszenen, Op. 15 — XIII. 'Der Dichter spricht'"
+    decision: added
+    why: >
+      At Nijō the girl gradually settles: she plays with dolls and paintings,
+      grows fond of Genji as a kind of father-brother-guardian, and the
+      household arranges itself around her. It is domestic, tender, and quietly
+      uncanny — a childhood resuming inside a design she cannot see. Schumann's
+      'Der Dichter spricht' ('The Poet Speaks') closes his cycle of childhood
+      scenes from the adult's vantage: a backward, loving look at a child's
+      world, shadowed by the knowledge of what the child does not yet know.
+      That double vision — the child at play, the watcher who knows the future —
+      is exactly the chapter's standpoint on Murasaki. The force is memory: the
+      narrative already grieving a childhood as it happens.
+  - n: 11
+    scene: "Coda / two secrets planted, Genji's destiny deepening"
+    force: ascent
+    composer: Mahler
+    work: "Symphony No. 4 — IV. 'Das himmlische Leben'"
+    decision: added
+    why: >
+      The chapter closes with both secrets in place: the hidden heir growing in
+      Fujitsubo, the surrogate child growing at Nijō — Genji's life now built on
+      two concealments that will raise and ruin him. Mahler's Fourth finale,
+      'Das himmlische Leben,' is sung in a child's voice describing heaven — a
+      vision at once domestic and cosmic, innocent and vast, serene on a surface
+      that the orchestra keeps undercutting. It is the exact register for this
+      ending: the apparent radiance of a child's new life and a love
+      consummated, floating over depths the child's voice cannot sound. The
+      ascent is real and it is shadowed — a horizon of beauty resting on a
+      buried fate. The novel has set its true machinery turning.
+demoted:
+  - composer: Puccini
+    work: "Turandot — 'Nessun dorma'"
+    status: "rejected — Japonisme and wrong scale"
+    why: >
+      Any reach for orientalist grandeur to score a chapter set partly in
+      Japanese mountains must be refused. Wakamurasaki's power is in the
+      psychology of substitution and transgression, not in exotic spectacle.
+  - composer: Richard Strauss
+    work: "Metamorphosen"
+    status: "considered for the shaping of Murasaki, demoted for Ravel"
+    why: >
+      Strauss's 'Metamorphosen' is literally titled for transformation and would
+      carry the theme, but its elegiac, valedictory weight (a lament for a
+      destroyed culture) is far too heavy and too adult for a ten-year-old being
+      taken into a strange house. Ravel's Sleeping-Beauty pavane holds the
+      child-scale and the quiet menace together; that is the truer note.
+  - composer: Beethoven
+    work: "Symphony No. 5 — I. Allegro con brio"
+    status: "considered for the pregnancy/fate, demoted for Verdi"
+    why: >
+      Beethoven's fate-motif is the obvious choice, but its heroic,
+      will-driven striving is wrong for a fate that is secret, shameful, and
+      passive — a consequence no one can act against. Verdi's 'Forza' destiny-
+      motif, recurring helplessly through the overture, better fits a doom set
+      in motion by concealment rather than struggle.

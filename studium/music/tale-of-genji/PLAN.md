@@ -11,15 +11,15 @@
 - **Corpus:** `japanese/tale-of-genji` (japanese_original.txt)
 - **Source rail:** https://www.aozora.gr.jp/
 - **Divisions:** 54 × Chapter
-- **Progress:** 1/54 arcs authored
+- **Progress:** 5/54 arcs authored
 
 | Chapter | dominant force | status |
 | --: | --- | :--: |
-| 1 | (author) | ✓ |
-| 2 | (author) | ☐ |
-| 3 | (author) | ☐ |
-| 4 | (author) | ☐ |
-| 5 | (author) | ☐ |
+| 1 | grief | ✓ |
+| 2 | desire | ✓ |
+| 3 | metamorphosis | ✓ |
+| 4 | grief | ✓ |
+| 5 | desire | ✓ |
 | 6 | (author) | ☐ |
 | 7 | (author) | ☐ |
 | 8 | (author) | ☐ |

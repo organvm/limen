@@ -1,0 +1,172 @@
+# Tale of Genji — Chapter 3 (Utsusemi, "The Cicada Shell") — curated music arc
+# Score the CHAPTER, not the novel. Utsusemi is the shortest of the early
+# chapters and the most perfectly shaped: Genji returns to take the governor's
+# wife again; she senses him coming and slips away in the dark, leaving behind a
+# single thin summer robe — like the empty shell a cicada sheds. Genji, unwilling
+# to leave empty-handed, lies with her stepdaughter (Nokiba no Ogi) instead, and
+# carries off the discarded robe as his only trophy. The chapter's whole meaning
+# is in its central image: escape by self-shedding. Score the woman who survives
+# desire by molting out of its reach, and the man left holding the husk.
+work: tale-of-genji
+book: 3
+title: "The Cicada Shell: The Woman Who Sheds Herself to Escape"
+length_minutes: 58
+principle: >
+  Do not score Chapter 3 as a seduction. Score it as a disappearance. Its
+  governing force is metamorphosis — not transformation toward something, but
+  transformation as evasion: Utsusemi becomes an absence to keep her self. The
+  register is hushed, nocturnal, miniature: a spied game of Go, a robe slipped
+  off in the dark, a substitute woman taken almost absentmindedly, a keepsake
+  that is only an emptied skin. The emotional truth is that Genji's desire is
+  answered with vanishing, and that the vanishing is the woman's only victory.
+  Keep the scale small. This is a chamber chapter — water-music, miniatures,
+  things that recede.
+force_arc: [desire, comedy, desire, metamorphosis, desire, grief, memory, metamorphosis]
+dominant_force: metamorphosis
+tracks:
+  - n: 1
+    scene: "Genji obsessed by the refusal / plotting his return"
+    force: desire
+    composer: Scriabin
+    work: "Piano Sonata No. 4 in F-sharp major, Op. 30"
+    decision: added
+    why: >
+      Utsusemi's refusal in Chapter 2 has done what refusal does to a man like
+      Genji: made her the only thing he wants. Scriabin's Fourth Sonata is
+      desire as upward flight — a languid, yearning first movement that breaks
+      into ecstatic, accelerating pursuit, the whole piece reaching toward a
+      star it names but never quite touches. It is the sound of fixation that
+      mistakes itself for love, the will to possess accelerating precisely
+      because the object keeps its distance. Genji returns not because he loves
+      Utsusemi but because she eluded him, and Scriabin gives that hunger its
+      glittering, slightly airless intensity.
+  - n: 2
+    scene: "Utsusemi and her stepdaughter at Go / the household observed"
+    force: comedy
+    composer: Couperin
+    work: "Pièces de clavecin, Book III — 'Le Tic-Toc-Choc, ou Les Maillotins'"
+    decision: added
+    why: >
+      Genji, hidden, watches Utsusemi and her young stepdaughter Nokiba no Ogi
+      playing a game of Go by lamplight — a domestic genre-scene of two women at
+      ease, scoring points, teasing. Couperin's 'Le Tic-Toc-Choc' is the perfect
+      miniature for it: a crossed-hands keyboard piece of ticking, interlocking
+      figures, light and precise and entirely self-contained, like two players
+      placing stones. It gives the scene its true charm — the unguarded
+      intimacy of women who do not know they are watched — and its faint comedy,
+      the careful little world Genji is about to disturb for no good reason.
+  - n: 3
+    scene: "The kaimami / Genji watching Utsusemi's slight, plain form"
+    force: desire
+    composer: Couperin
+    work: "Pièces de clavecin, Book II — 'Les Barricades mystérieuses'"
+    decision: added
+    why: >
+      The chapter's quiet center: Genji, peering through a gap (the kaimami, the
+      "gap-glimpse" that is Heian fiction's signature erotic device), studies
+      Utsusemi and realizes she is not even beautiful — thin, unremarkable, her
+      appeal entirely in her self-possession. He wants her more. 'Les Barricades
+      mystérieuses' is the great enigma of the French keyboard repertoire: a
+      gentle, veiled piece of style brisé whose title no one can explain,
+      everything suggested and nothing disclosed. It is the sound of desire
+      organized around a screen — barriers that are themselves the attraction.
+      What Genji loves in Utsusemi is precisely the barrier she keeps up.
+  - n: 4
+    scene: "Utsusemi senses him, sheds her robe, slips away into the dark"
+    force: metamorphosis
+    composer: Ravel
+    work: "Gaspard de la nuit — I. 'Ondine'"
+    decision: added
+    why: >
+      The chapter's defining act: Utsusemi, feeling Genji approach in the night,
+      rises and steals away, leaving a single light robe behind like a cicada's
+      shed shell. She escapes by becoming, in effect, water — ungraspable,
+      already elsewhere. Ravel's 'Ondine' is the supreme musical image of that:
+      the water-sprite's shimmering, seductive song, and then her sudden
+      laughing dissolution into a spray of droplets when refused. Here the
+      genders invert — it is the woman who slips away — but the mechanism is
+      identical: a being that cannot be held because holding is not its element.
+      The robe is the shell; Utsusemi is the creature gone.
+  - n: 5
+    scene: "Genji in the dark with the wrong woman / Nokiba no Ogi"
+    force: desire
+    composer: Berg
+    work: "Lyric Suite — III. Allegro misterioso"
+    decision: added
+    why: >
+      Rather than leave empty-handed, Genji lies with the stepdaughter he had
+      not come for — taking the substitute almost without deciding to, in the
+      dark, where one body can stand in for another. Berg's 'Allegro
+      misterioso' is desire gone furtive and uncanny: muted, whispering,
+      hurtling figures that flicker past too fast to grasp, a movement built on
+      a hidden cipher of a forbidden name. It is the sound of an erotic act that
+      is also a substitution and an evasion of the real object — desire spending
+      itself on whatever is present because what it wanted has fled. The
+      mistaken night is not comic here; it is slightly hollow, slightly cold.
+  - n: 6
+    scene: "Utsusemi alone / her dignity, her diminished marriage"
+    force: grief
+    composer: Janáček
+    work: "On an Overgrown Path, Series I — X. 'The Barn Owl Has Not Flown Away'"
+    decision: added
+    why: >
+      Behind her escape is a real woman's sorrow. Utsusemi is married to a coarse
+      older provincial governor; Genji is a prince; she knows that to yield would
+      be to become a kept secret and then a discarded one, and she chooses the
+      smaller dignity of refusal. Janáček's late miniature is grief in the
+      Moravian idiom — terse, plain-spoken, shadowed by an omen (the barn owl, a
+      death-bird, that lingers). It carries the specific weight of a life
+      narrowed to almost nothing, held together by sheer will. Utsusemi's
+      victory is real and it costs her everything tender; Janáček refuses to
+      sweeten that.
+  - n: 7
+    scene: "Genji keeps the shed robe / the cicada-shell poem, the keepsake"
+    force: memory
+    composer: Schumann
+    work: "Fantasiestücke, Op. 12 — III. 'Warum?'"
+    decision: added
+    why: >
+      Genji carries off the abandoned robe and keeps it, breathing its faint
+      scent, and writes a poem on the utsusemi (cicada-shell) image that gives
+      the chapter and the woman their name. He is left loving a keepsake — a
+      thing she wore, not the woman. Schumann's 'Warum?' ('Why?') is a tiny,
+      questioning piece that asks and never answers, a melodic phrase that lifts
+      in interrogation and falls back unresolved. It is the sound of a man
+      turning an unanswerable absence over in his hands: why did she go, what
+      did the robe hold, why does the husk move him more than the living woman
+      let him. The keepsake is all he gets, and he treasures it.
+  - n: 8
+    scene: "Coda / the shell remains, the creature gone — absence as possession"
+    force: metamorphosis
+    composer: Debussy
+    work: "Préludes, Book I — 'Des pas sur la neige'"
+    decision: added
+    why: >
+      The chapter ends on its own central paradox: Genji possesses the trace and
+      not the thing. Debussy's 'Des pas sur la neige' — footprints in snow — is
+      music made entirely of an absence: a bleak, repeating two-note ostinato
+      that the composer marks should sound "like a tender and sad regret," a
+      landscape defined by the marks something left as it walked away. It is the
+      perfect close: the cicada has molted and flown, the shell lies in the
+      snow, and what remains is the shape of a departure. Utsusemi survives the
+      novel by this single act of vanishing; the music is the cooling print she
+      leaves behind.
+demoted:
+  - composer: Takemitsu
+    work: "Rain Tree Sketch II"
+    status: "considered for the coda, demoted for Debussy"
+    why: >
+      Takemitsu would be a defensible, genuinely modernist choice (not Japonisme
+      but real compositional depth), and his water-and-trace aesthetic suits the
+      cicada-shell image. Demoted only because 'Des pas sur la neige' renders
+      the specific idea — possession of a trace, not a thing — with unmatched
+      bleak exactness, and keeps the arc's voice consistent with the Debussy of
+      Chapter 1.
+  - composer: Mahler
+    work: "Symphony No. 9 — IV. Adagio"
+    status: "rejected — wrong scale of grief"
+    why: >
+      Utsusemi's sorrow is small and self-contained, a woman managing a
+      diminished life, not a death. Mahler's vast valedictory Adagio (used for
+      the Kiritsubo Lady's death in Chapter 1) would crush this chamber chapter.
+      Janáček's terse miniature is the correct size.

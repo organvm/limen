@@ -1,0 +1,240 @@
+# Tale of Genji — Chapter 4 (Yūgao, "The Evening Faces") — curated music arc
+# Score the CHAPTER, not the novel. Yūgao is one of the supreme chapters of world
+# fiction. Visiting his ailing old nurse, Genji notices white moonflower gourds
+# (yūgao, "evening faces") blooming on a humble fence; a fan with a poem is sent
+# out; and he begins a secret affair with the gentle, mysterious woman who lives
+# there — incognito, neither knowing the other's name. She is, unknown to him,
+# Tō no Chūjō's vanished love from the rainy-night talk. He carries her off to a
+# deserted, decaying villa; in the deep night a vengeful spirit (mononoke — the
+# living jealous spirit of the proud Lady Rokujō) appears at the pillow, and
+# Yūgao dies in his arms, instantly, of pure terror. Score the enchantment, the
+# dread, the irruption of the supernatural, and a grief that has no public name.
+work: tale-of-genji
+book: 4
+title: "Yūgao: Evening Faces, and the Jealous Spirit"
+length_minutes: 92
+principle: >
+  Do not score Chapter 4 as a ghost story for its frisson. Score it as the
+  collision of two forces Genji thinks he can keep separate: the tender,
+  anonymous idyll with a low-born woman who asks nothing — and the wounded
+  pride of the great lady he has been neglecting, whose jealousy has become, in
+  the world of this novel, literally lethal. The arc runs enchantment →
+  intimacy → dread → supernatural irruption → sudden death → secret grief. The
+  register must darken by degrees: hushed and moonlit at first, then the eerie
+  "night music" of the haunted house, then the irruption, then a grief Genji
+  cannot speak because the whole affair was a secret. Avoid horror-movie
+  scoring; the terror here is intimate and metaphysical, the death quiet and
+  irreversible.
+force_arc: [supplication, desire, desire, memory, desire, plague, divine-intervention, grief, supplication, grief, memory]
+dominant_force: grief
+tracks:
+  - n: 1
+    scene: "Genji visits his ailing old nurse / tenderness and her tears"
+    force: supplication
+    composer: Pärt
+    work: "Spiegel im Spiegel"
+    decision: added
+    why: >
+      The chapter opens in a register of gentleness: Genji calls on his old wet
+      nurse, gravely ill and about to take Buddhist vows, and her gratitude and
+      tears at the sight of him are overwhelming. It is a scene of plain human
+      devotion, of a plea for blessing on a dying woman. Pärt's 'Spiegel im
+      Spiegel' is supplication distilled to nothing but a rising arpeggio and a
+      held line — patient, exposed, devotional, asking quietly and continuously.
+      It establishes the chapter's tender baseline, the warmth against which the
+      coming dread will register. It also quietly tells us who Genji is at his
+      best: capable of real care, which makes his recklessness with Yūgao the
+      more culpable.
+  - n: 2
+    scene: "The white evening-faces on the fence / the fan with the poem"
+    force: desire
+    composer: Debussy
+    work: "Images, Book II — II. 'Et la lune descend sur le temple qui fut'"
+    decision: added
+    why: >
+      Next door, on a shabby fence, white yūgao flowers bloom in the dusk;
+      charmed, Genji asks for one, and a fan bearing a teasing poem comes back
+      over the wall. The whole enchantment of the chapter begins here, in
+      moonlight and anonymity. Debussy's 'And the moon descends on the temple
+      that was' is hushed, modal, suspended — slow bell-like chords falling
+      through still air over a ruined, beautiful place. It is the sound of a man
+      drawn by something modest and luminous in the half-dark, the lure of a
+      lowly house glimpsed at the magic hour. The desire here is gentle, almost
+      pastoral — which is exactly what makes its cost so shocking.
+  - n: 3
+    scene: "The secret courtship / Genji incognito, Yūgao's yielding softness"
+    force: desire
+    composer: Fauré
+    work: "Nocturne No. 6 in D-flat major, Op. 63"
+    decision: added
+    why: >
+      The affair deepens under cover of disguise: Genji hides his rank and even
+      his face, and Yūgao — pliant, trusting, unalarmed by the mystery —
+      receives him with a softness unlike any woman he has known. Fauré's Sixth
+      Nocturne is his greatest, a long-breathed nocturnal song that opens in
+      tender reverie and grows steadily more impassioned without ever turning
+      hard. It is the music of a love that feels like refuge precisely because
+      it asks no questions — no rank, no name, no future. The tragedy the music
+      does not yet know is that this refuge is being built in the open, within
+      reach of a jealousy Genji has underestimated.
+  - n: 4
+    scene: "The hidden identity / Yūgao as Tō no Chūjō's vanished 'wild pink'"
+    force: memory
+    composer: Schumann
+    work: "Fantasiestücke, Op. 12 — I. 'Des Abends'"
+    decision: added
+    why: >
+      The chapter quietly lets us understand what Genji does not: this gentle
+      woman is the lover Tō no Chūjō mourned on the rainy night in Chapter 2,
+      the one who bore his child and fled his wife's jealousy. The novel folds
+      its own past back into the present. Schumann's 'Des Abends' ('In the
+      Evening') is a gently rocking, dusky reverie in cross-rhythm, a piece that
+      seems to remember even as it happens, the present already tinged with
+      elegy. It carries the dramatic irony of the scene: we hold the memory the
+      lovers lack, and the music's evening tenderness is shadowed by everything
+      we know is coming.
+  - n: 5
+    scene: "Genji carries Yūgao off to the deserted villa / the reckless idyll"
+    force: desire
+    composer: Scriabin
+    work: "Poème, Op. 32 No. 1 in F-sharp major"
+    decision: added
+    why: >
+      Wanting her wholly to himself, away from prying eyes, Genji spirits Yūgao
+      at dawn to a decaying, isolated villa — a fatal romanticism, privacy
+      bought at the price of safety. Scriabin's Op. 32 Poème is brief, hovering,
+      voluptuous desire suspended out of time — a few minutes of harmonic
+      floating that feels like a stolen interval the world has stopped to allow.
+      It is the sound of lovers who believe they have escaped into a private
+      hour. The piece's very weightlessness is the warning: nothing this
+      ungrounded can hold. They have walked, hand in hand, into an empty house
+      that belongs to something else.
+  - n: 6
+    scene: "The haunted, ruined house at nightfall / the gathering dread"
+    force: plague
+    composer: Bartók
+    work: "Music for Strings, Percussion and Celesta — III. Adagio"
+    decision: added
+    why: >
+      As night falls the villa reveals itself: derelict, echoing, wrong. Yūgao is
+      frightened; the air thickens with something neither names. Bartók's Adagio
+      is the founding masterpiece of "night music" — sparse, shivering string
+      textures, the celesta's cold glints, sounds that seem to come from the
+      dark corners of an empty room. It is the sound of dread without an object,
+      of a place that is occupied by an absence. The force here is plague in its
+      pure sense from the engine — descending motion, dark orchestration, the
+      approach of something that kills — the malign atmosphere closing in before
+      it has a face. This is the hinge of the chapter, where the idyll curdles.
+  - n: 7
+    scene: "The apparition at the pillow / the jealous spirit irrupts"
+    force: divine-intervention
+    composer: Mussorgsky
+    work: "Night on Bald Mountain (original 1867 version)"
+    decision: added
+    why: >
+      In the dead of night Genji wakes to see a beautiful, furious woman standing
+      at the pillow, reproaching him for lavishing love on this nobody while
+      neglecting her — the materialized jealous spirit (the text leaves it the
+      living wraith of Lady Rokujō, Genji's proud, abandoned mistress). The lamp
+      gutters; the supernatural breaks the natural world open. Mussorgsky's
+      original 'Night on Bald Mountain' is raw, jagged, malevolent
+      manifestation — not the sanitized Rimsky version but the savage first
+      draft, all sudden brass and clawing strings. It is the engine's
+      'divine-intervention' in its dark mode: a sudden irruption of the
+      supernatural that shatters the human scene. The other world has reached in.
+  - n: 8
+    scene: "Yūgao dies in his arms / sudden, incomprehensible death"
+    force: grief
+    composer: Mahler
+    work: "Symphony No. 10 — I. Adagio (the dissonant nine-note climax)"
+    decision: added
+    why: >
+      Genji turns to wake Yūgao and finds her already cold — dead of sheer
+      terror, instantly, without illness or wound. The death is impossible to
+      absorb: a healthy young woman gone in an instant, in his arms, in a place
+      he brought her. Mahler's Tenth Adagio builds to the most harrowing sound
+      in the symphonic repertoire — a single dissonant chord of nine piled-up
+      notes that shrieks and will not resolve, the sound of a mind meeting
+      something it cannot contain. That is the register of this death: not the
+      slow withdrawal of the Kiritsubo Lady (Chapter 1, Mahler 9), but a violent,
+      vertical shock, grief as the collision with the unthinkable. Then the
+      chord must subside into numb aftermath.
+  - n: 9
+    scene: "Alone with the body in the dark / Koremitsu summoned, the secret kept"
+    force: supplication
+    composer: Bach
+    work: "St. John Passion, BWV 245 — 'Es ist vollbracht' (No. 30)"
+    decision: added
+    why: >
+      Genji, near collapse, alone in the haunted dark with a corpse and a few
+      terrified servants, must somehow act: he sends for his trusted man
+      Koremitsu and begins the agony of concealment, because the affair and the
+      death must never be known. 'Es ist vollbracht' ('It is finished') — the
+      viola da gamba's grieving lament beneath the alto voice — is the sound of
+      a thing accomplished that cannot be undone, sorrow that has passed beyond
+      pleading into exhausted acceptance. It is supplication at its lowest ebb,
+      the prayer of someone with nothing left to ask except the strength to
+      carry the body out. The Christian text is incidental; the emotional
+      mechanism is exact.
+  - n: 10
+    scene: "The secret cremation in the hills / grief that cannot be spoken"
+    force: grief
+    composer: Schubert
+    work: "Winterreise, D. 911 — No. 20 'Der Wegweiser'"
+    decision: added
+    why: >
+      Yūgao is carried in secret to a mountain temple and cremated almost
+      furtively; Genji, unable to mourn her publicly without exposing
+      everything, falls gravely ill with shock and guilt. His is a grief with no
+      rites, no name, no one to share it. Schubert's 'Der Wegweiser' ('The
+      Signpost') is the heart of Winterreise: a trudging, frozen tread toward
+      the one road "from which no man has ever returned," grief walking alone
+      through a dead landscape. It is the sound of bereavement that must keep
+      moving and cannot stop to weep, sorrow privatized into a solitary winter
+      journey. Genji rides back from the hills carrying a death no one may know
+      he is carrying.
+  - n: 11
+    scene: "Genji haunted, recovering / the evening-faces flower as memory"
+    force: memory
+    composer: Strauss
+    work: "'Morgen!', Op. 27 No. 4"
+    decision: added
+    why: >
+      As Genji slowly recovers he is left permanently marked: he keeps the
+      memory of Yūgao like a wound that will not close, and (the novel will
+      remember) her little daughter survives somewhere, to surface decades
+      later. Strauss's 'Morgen!' ('Tomorrow') is the supreme music of love
+      after loss — a long violin meditation over which the voice enters, almost
+      too late, on the word "and"; the song is all afterglow, a tenderness
+      addressed to a tomorrow the lovers will spend together and, here, never
+      will. It is the right close: not resolution but a luminous, grieving
+      memory, the evening face that bloomed for one night and was gone by
+      morning. The dominant force of the whole chapter is grief, and this is
+      where it goes to rest.
+demoted:
+  - composer: Berlioz
+    work: "Symphonie fantastique — V. 'Songe d'une nuit de sabbat'"
+    status: "considered for the apparition, demoted for Mussorgsky"
+    why: >
+      Berlioz's witches'-sabbath is a strong candidate for the spirit's
+      irruption, but its grotesque theatricality and Dies irae parody pull
+      toward burlesque. Mussorgsky's original Bald Mountain is more savage and
+      less ironic — closer to the genuine metaphysical violence of the mononoke,
+      which the chapter treats as terrifyingly real, not picturesque.
+  - composer: Barber
+    work: "Adagio for Strings"
+    status: "reserved, as in Chapter 1 — wrong kind of grief"
+    why: >
+      Yūgao's death, though shocking, is private and unspeakable, not a public,
+      collective loss. Barber's Adagio is monumental funeral music for shared
+      grief; here the grief is a secret Genji must hide. The Schubert
+      'Wegweiser' and Mahler 10 hold the privacy and the shock far better.
+      Barber is still saved for a chapter of communal mourning.
+  - composer: Puccini
+    work: "Madama Butterfly — Humming Chorus"
+    status: "rejected — Japonisme"
+    why: >
+      The temptation to score a moonlit Japanese death scene with Puccini's
+      orientalist nocturne must be refused on principle. The chapter's power is
+      psychological and metaphysical, not atmospheric; Western exotic "mood"
+      would falsify it.

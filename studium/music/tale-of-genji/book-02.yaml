@@ -1,0 +1,213 @@
+# Tale of Genji — Chapter 2 (Hahakigi, "The Broom Tree") — curated music arc
+# Score the CHAPTER, not the novel. Hahakigi is two movements welded together:
+# the famous "rainy-night ranking of women" (amayo no shinasadame), a comedy of
+# male connoisseurship in which young courtiers try to systematize women into
+# ranks — and then the reality that defeats every theory: Genji's clumsy,
+# coercive night with Utsusemi, the provincial governor's wife, who refuses to
+# become what he wants her to be. The broom tree (hahakigi) is a legendary tree
+# visible from afar that vanishes when you approach. Score that: desire building
+# an elaborate apparatus of taxonomy, and the one real woman who steps out of it.
+work: tale-of-genji
+book: 2
+title: "The Broom Tree: The Rating of Women, and the Woman Who Refuses"
+length_minutes: 74
+principle: >
+  Do not score Chapter 2 as "courtly romance." Score it as a comedy of male
+  discourse that curdles into something colder. The first half is talk —
+  witty, idle, faintly absurd young men ranking women into categories while
+  shut indoors by the long rains. The register there is courtly comedy and the
+  architecture of taxonomy: men trying to make desire orderly. The second half
+  is the failure of all that theory against an actual person — Utsusemi, who
+  will not be classified, who slips Genji's grasp by sheer refusal. The arc
+  moves from comedy to desire to grief, and its real subject is the gap between
+  the systems men build to manage longing and the women who escape them. Avoid
+  Japonisme; this is psychology, not atmosphere.
+force_arc: [comedy, law, comedy, desire, memory, desire, law, desire, grief, grief]
+dominant_force: desire
+tracks:
+  - n: 1
+    scene: "The long rains / the young men shut in, the idle talk begins"
+    force: comedy
+    composer: Poulenc
+    work: "Sextet for Piano and Winds, FP 100 — I. Allegro vivace"
+    decision: added
+    why: >
+      The chapter opens with Genji, Tō no Chūjō, and two friends penned indoors
+      by the seasonal rains, drifting into the kind of conversation that only
+      bored, privileged young men have: who are the truly desirable women, and
+      how would you know one? Poulenc's Sextet is the exact register —
+      urbane, quick, comically self-assured, full of wit that thinks itself
+      wiser than it is. The winds chatter over and around the piano like
+      courtiers topping each other's stories. Not Rameau (too ceremonial for
+      this private, joking intimacy); Poulenc has the specific tone of clever
+      people amusing themselves, which is what the rainy-night session is
+      before it pretends to be philosophy.
+  - n: 2
+    scene: "Tō no Chūjō's theory / the ranking of women into three grades"
+    force: law
+    composer: Bach
+    work: "The Art of Fugue, BWV 1080 — Contrapunctus I"
+    decision: added
+    why: >
+      Tō no Chūjō proposes the chapter's governing conceit: women, like rank
+      and office, can be sorted into upper, middle, and lower grades, each with
+      its characteristic virtues and traps. It is the impulse to make desire
+      into a system — to replace the chaos of attraction with a taxonomy. Bach's
+      Art of Fugue is the purest music of that impulse: a single subject worked
+      out with total architectural control, beautiful precisely because it is
+      lawful. The irony the chapter intends is audible here — the men's
+      confidence that desire can be made this orderly is as elegant, and as
+      abstract, as a fugue. Reality will not honor the schema. Not Handel
+      (too sovereign); the Art of Fugue's cool, closed perfection is the right
+      image of a theory admiring itself.
+  - n: 3
+    scene: "The tale of the jealous wife who bit his finger / domestic comedy"
+    force: comedy
+    composer: Rossini
+    work: "Il barbiere di Siviglia — Overture"
+    decision: added
+    why: >
+      The men trade cautionary anecdotes, and they are frankly funny: the
+      hyper-competent wife so jealous she bites her husband's finger in a fit;
+      the woman who overplays her refinement. These are domestic farces dressed
+      as wisdom. Rossini's Barber overture is comic machinery in its ideal
+      form — the crescendos that build to nothing, the patter that mistakes
+      speed for substance, the whole sparkling apparatus of opera buffa. It
+      gives the rainy-night anecdotes their true genre: not moral instruction
+      but entertainment, the men performing worldliness for one another. The
+      laughter is real, and so is the faint cruelty underneath it — the women
+      in these stories are types, not people.
+  - n: 4
+    scene: "Uma no Kami on the ideal woman / the broom-tree elusiveness"
+    force: desire
+    composer: Debussy
+    work: "Préludes, Book I — 'Voiles'"
+    decision: added
+    why: >
+      Beneath the comedy runs a real ache: the men are describing a woman who
+      does not exist, the perfect blend of accomplishment, discretion, and
+      warmth — visible, like the broom tree, from a distance, and gone when you
+      come near. Debussy's 'Voiles' is built almost entirely on the whole-tone
+      scale: it floats without a tonic, ungrounded, beautiful and impossible to
+      stand on. That is the ideal woman of the rainy-night discussion — a
+      shimmer with no center, a desire that has refined its object out of
+      reach. The prelude's veiled, weightless suspension is the sound of
+      longing for something that recedes by definition.
+  - n: 5
+    scene: "Tō no Chūjō's vanished love / the woman of the wild pink (proto-Yūgao)"
+    force: memory
+    composer: Fauré
+    work: "'Après un rêve,' Op. 7 No. 1"
+    decision: added
+    why: >
+      The talk turns, for a moment, genuinely sad. Tō no Chūjō tells of a gentle,
+      undemanding woman he loved and neglected, who bore him a child (a little
+      girl, "the wild pink") and then simply disappeared, frightened off by his
+      principal wife's jealousy. He has never found her. The reader does not yet
+      know this is Yūgao, whose death will devastate Chapter 4. Fauré's 'Après un
+      rêve' is the song of a tenderness recalled too late — a melody that rises
+      toward a remembered closeness and sinks back into waking loss. It punctures
+      the comedy: under all the ranking is a real woman, really lost, whom the
+      system could not hold and the man did not protect.
+  - n: 6
+    scene: "Dawn, the debate dissolves / Genji's thoughts return to Fujitsubo"
+    force: desire
+    composer: Wagner
+    work: "Wesendonck Lieder, WWV 91 — V. 'Träume'"
+    decision: added
+    why: >
+      The session ends as the rain lets up, and Genji, who has mostly listened,
+      is left with his own unspeakable longing: Fujitsubo, his father's young
+      consort, the one woman he cannot have and cannot stop wanting. 'Träume'
+      is Wagner's study for the Tristan love-music — the dream-song of a desire
+      that can only be lived at night, in secret, half-asleep. It gives the
+      private interior the rainy-night comedy was circling without naming: the
+      real object of Genji's longing is forbidden, and all the talk of ranks
+      and types is displacement. Using the Wesendonck rather than the Tristan
+      Prelude itself keeps the register intimate — a confession murmured, not
+      declared.
+  - n: 7
+    scene: "The directional taboo reroutes Genji to the governor's house"
+    force: law
+    composer: Stravinsky
+    work: "Apollon musagète — 'Apothéose'"
+    decision: added
+    why: >
+      A divination forbids Genji's direct route home (a kata-tagae, the
+      directional taboo), so he must lodge the night at the house of the
+      Governor of Kii — a small social rule that, obeyed, delivers him to
+      Utsusemi. Stravinsky's neoclassical Apollo is the music of pure formal
+      constraint made beautiful: strings moving in clean, lawful lines, a
+      cool diatonic order. It is the right sound for the way Heian life is
+      governed by rules that look arbitrary and turn out to be fate's
+      delivery system. The taboo is law on its surface; underneath, it is the
+      mechanism that routes Genji to the one encounter that will frustrate
+      him most. The Apothéose's serene order is exactly the wrong thing to
+      trust, which is why it fits.
+  - n: 8
+    scene: "Genji steals to Utsusemi in the dark"
+    force: desire
+    composer: Szymanowski
+    work: "Myths, Op. 30 — I. 'The Fountain of Arethusa'"
+    decision: added
+    why: >
+      In the unfamiliar house Genji learns the governor's young wife is sleeping
+      nearby, and — on impulse, in the dark — he goes to her. Szymanowski's
+      'Fountain of Arethusa' is shimmering, predatory desire in motion: the
+      violin spinning iridescent figuration over a restless, glinting piano,
+      water that is also pursuit (Arethusa is the nymph who flees and is chased).
+      The myth is exact — a woman becoming water to escape a god's desire. Genji
+      crosses the dark rooms toward Utsusemi with that same glamour and that same
+      heedlessness, and she will spend this chapter and the next becoming, in
+      effect, something he cannot hold.
+  - n: 9
+    scene: "The union and Utsusemi's shame / refusal inside submission"
+    force: grief
+    composer: Schubert
+    work: "Impromptu in G-flat major, D. 899 No. 3"
+    decision: added
+    why: >
+      The encounter is not romance; it is coercion softened by Genji's beauty
+      and rank. Utsusemi cannot physically refuse him, but she refuses
+      inwardly — she will not pretend to be moved, will not give him the woman
+      he imagined. Her dignity is a kind of grief: she knows exactly what she is
+      and what she cannot escape, married to a coarse older provincial, visited
+      by a prince who sees her as a conquest. Schubert's G-flat Impromptu is
+      that interior exactly: a long, flowing cantabile of almost unbearable
+      restraint, sorrow held in perfect composure, never breaking. It is the
+      sound of a woman keeping her self intact by withholding it.
+  - n: 10
+    scene: "Genji leaves unsatisfied / Utsusemi's married sorrow, the boy go-between"
+    force: grief
+    composer: Brahms
+    work: "Intermezzo in A major, Op. 118 No. 2"
+    decision: added
+    why: >
+      Genji departs having taken everything and won nothing — Utsusemi has not
+      yielded the one thing he wanted, her assent. He enlists her young brother
+      Kogimi as a go-between, but the chapter closes on her resolve to refuse
+      him again, and on the muffled sadness of a life she did not choose.
+      Brahms's A-major Intermezzo is autumnal consolation that knows it cannot
+      console: a tender melody folded around a darker, questioning middle, then
+      returning, resigned. It is the music of accommodation — of a person
+      making peace with a diminished life precisely by declining to dramatize
+      it. The chapter ends not in conquest but in a woman's quiet, intact No.
+demoted:
+  - composer: Puccini
+    work: "Madama Butterfly — 'Un bel dì'"
+    status: "rejected — Japonisme as substitute for psychology"
+    why: >
+      The obvious wrong move for any Genji chapter: Puccini's orientalist
+      atmosphere would replace Murasaki Shikibu's exact social comedy with a
+      Western fantasy of the East. Hahakigi is about how men talk, how desire
+      systematizes itself, and how a woman refuses — none of which is
+      "atmospheric." Demoted on principle.
+  - composer: Mozart
+    work: "Così fan tutte — Overture"
+    status: "considered for the rainy-night comedy, demoted for Poulenc"
+    why: >
+      Così is tonally perfect — a comedy about men theorizing women's
+      constancy and being proven fools — but its overture is too overtly
+      operatic and forward-driving for the indoor, conversational intimacy of
+      the rains. Poulenc's chamber wit keeps the scene the size it is: four
+      young men talking, not a stage.
