@@ -15,14 +15,14 @@ portal:
       claude: 100
     track:
       date: '2026-06-23'
-      spent: 31
+      spent: 39
       per_agent:
-        jules: 21
+        jules: 24
         gemini: 0
         codex: 0
-        opencode: 1
-        agy: 9
-        claude: 0
+        opencode: 2
+        agy: 12
+        claude: 1
       per_agent_reset:
         jules: '2026-06-23T16:33:06.844181+00:00'
         gemini: '2026-06-23T16:33:06.844181+00:00'
@@ -37564,6 +37564,10 @@ tasks:
     session_id: cli
     status: open
     output: Released stale claim after 24h
+  - timestamp: '2026-06-23T18:42:01.589387Z'
+    agent: jules
+    session_id: '7696148625912003292'
+    status: dispatched
 - id: GH-organvm-public-process-22
   title: '[STRANGER-TEST] Session 10: Security Researcher'
   repo: organvm/public-process
@@ -43758,6 +43762,10 @@ tasks:
     session_id: cli
     status: open
     output: Released stale claim after 24h
+  - timestamp: '2026-06-23T18:42:01.589387Z'
+    agent: jules
+    session_id: cli
+    status: dispatched
 - id: DISCOVER-organvm-search-local--happy-hour
   title: Discover the latent value of organvm/search-local--happy-hour
   repo: organvm/search-local--happy-hour
@@ -44103,10 +44111,10 @@ tasks:
   title: Discover the latent value of organvm/visual-substrate-inquiry
   repo: organvm/visual-substrate-inquiry
   type: research
-  target_agent: gemini
+  target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - discover
   - value-discovery
@@ -44128,7 +44136,7 @@ tasks:
     \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-23T17:27:57.008629Z'
+  updated: '2026-06-23T19:07:01.660776Z'
   dispatch_log:
   - timestamp: '2026-06-23T16:25:25.960227Z'
     agent: opencode
@@ -46194,20 +46202,21 @@ tasks:
   updated: '2026-06-23T18:35:03.595097Z'
   dispatch_log: []
 - id: studium-deepen-analects
-  title: "Analects — books 2..20 (19 arcs)"
+  title: "Analects \u2014 books 2..20 (19 arcs)"
   repo: organvm/limen
   type: content
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: done
+  status: cancelled
   labels:
   - studium
   - content
   - expansion-backlog
+  - noop
   urls: []
   context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
-    \ to the fleet). Analects — books 2..20 (19 arcs). The authoritative division\
+    \ to the fleet). Analects \u2014 books 2..20 (19 arcs). The authoritative division\
     \ checklist (which divisions are done [check] vs todo) is studium/music/analects/PLAN.md.\
     \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
     \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
@@ -46217,17 +46226,21 @@ tasks:
     \ green PR."
   depends_on: []
   created: '2026-06-23'
-  updated: '2026-06-23T22:00:00Z'
+  updated: '2026-06-23T18:42:01.589387Z'
   dispatch_log:
   - timestamp: '2026-06-23T22:00:00Z'
     agent: opencode
     session_id: current
     status: done
-    output: "Authored Analects Books 2-5 (Wei Zheng, Ba Yi, Li Ren, Gongye Chang) — \
-      4 force-matched music arcs (studium/music/analects/book-{02,03,04,05}.yaml) \
-      + 4 mirrored essays (studium/essays/analects/book-{02,03,04,05}.md). \
-      All forces from dominant-force.yaml; force_arc == ordered track forces; \
-      studium-validate.py passes. PLAN.md updated: 5/20 arcs done."
+    output: "Authored Analects Books 2-5 (Wei Zheng, Ba Yi, Li Ren, Gongye Chang)\
+      \ \u2014 4 force-matched music arcs (studium/music/analects/book-{02,03,04,05}.yaml)\
+      \ + 4 mirrored essays (studium/essays/analects/book-{02,03,04,05}.md). All forces\
+      \ from dominant-force.yaml; force_arc == ordered track forces; studium-validate.py\
+      \ passes. PLAN.md updated: 5/20 arcs done."
+  - timestamp: '2026-06-23T18:42:01.589387Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: studium-deepen-mahabharata
   title: "Mahabharata \u2014 parvas 2..18 (17 arcs)"
   repo: organvm/limen
@@ -46235,11 +46248,12 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: cancelled
   labels:
   - studium
   - content
   - expansion-backlog
+  - noop
   urls: []
   context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
     \ to the fleet). Mahabharata \u2014 parvas 2..18 (17 arcs). The authoritative\
@@ -46253,7 +46267,11 @@ tasks:
   depends_on: []
   created: '2026-06-23'
   updated: '2026-06-23T18:42:01.589387Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-23T18:42:01.589387Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: studium-deepen-bhagavad-gita
   title: "Bhagavad Gita \u2014 chapters 2..18 (17 arcs)"
   repo: organvm/limen
@@ -46261,11 +46279,12 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: cancelled
   labels:
   - studium
   - content
   - expansion-backlog
+  - noop
   urls: []
   context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
     \ to the fleet). Bhagavad Gita \u2014 chapters 2..18 (17 arcs). The authoritative\
@@ -46279,7 +46298,11 @@ tasks:
   depends_on: []
   created: '2026-06-23'
   updated: '2026-06-23T18:42:01.589387Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-23T18:42:01.589387Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: studium-deepen-metamorphoses
   title: "Metamorphoses \u2014 books 2..15 (14 arcs; metamorphosis as the spine)"
   repo: organvm/limen
@@ -46305,7 +46328,11 @@ tasks:
   depends_on: []
   created: '2026-06-23'
   updated: '2026-06-23T18:42:01.589387Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-23T18:42:01.589387Z'
+    agent: agy
+    session_id: https://github.com/organvm/limen/pull/85
+    status: dispatched
 - id: studium-deepen-aeneid
   title: "Aeneid \u2014 books 2..12 (11 arcs; empire/fate/sacrifice)"
   repo: organvm/limen
@@ -46331,7 +46358,11 @@ tasks:
   depends_on: []
   created: '2026-06-23'
   updated: '2026-06-23T18:42:01.589387Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-23T18:42:01.589387Z'
+    agent: agy
+    session_id: https://github.com/organvm/limen/pull/87
+    status: dispatched
 - id: studium-deepen-gilgamesh
   title: "Gilgamesh \u2014 tablets 2..12 (11 arcs)"
   repo: organvm/limen
@@ -46357,7 +46388,11 @@ tasks:
   depends_on: []
   created: '2026-06-23'
   updated: '2026-06-23T18:42:01.589387Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-23T18:42:01.589387Z'
+    agent: agy
+    session_id: https://github.com/organvm/limen/pull/86
+    status: dispatched
 - id: studium-deepen-heike
   title: "Tale of the Heike \u2014 books 2..12 (11 arcs)"
   repo: organvm/limen
@@ -46365,11 +46400,12 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: cancelled
   labels:
   - studium
   - content
   - expansion-backlog
+  - noop
   urls: []
   context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
     \ to the fleet). Tale of the Heike \u2014 books 2..12 (11 arcs). The authoritative\
@@ -46383,7 +46419,11 @@ tasks:
   depends_on: []
   created: '2026-06-23'
   updated: '2026-06-23T18:42:01.589387Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-23T18:42:01.589387Z'
+    agent: claude
+    session_id: cli
+    status: noop
 - id: studium-deepen-ramayana
   title: "Ramayana \u2014 kandas 2..7 (6 arcs)"
   repo: organvm/limen
@@ -46391,11 +46431,12 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: cancelled
   labels:
   - studium
   - content
   - expansion-backlog
+  - noop
   urls: []
   context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
     \ to the fleet). Ramayana \u2014 kandas 2..7 (6 arcs). The authoritative division\
@@ -46409,7 +46450,11 @@ tasks:
   depends_on: []
   created: '2026-06-23'
   updated: '2026-06-23T18:42:01.589387Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-23T18:42:01.589387Z'
+    agent: claude
+    session_id: cli
+    status: noop
 - id: studium-corpus-shahnameh
   title: "Fetch Shahnameh original (ganjoor.net) \u2192 corpus arabic-persian/shahnameh;\
     \ clear canon missing_from_corpus"
@@ -46432,7 +46477,11 @@ tasks:
   depends_on: []
   created: '2026-06-23'
   updated: '2026-06-23T18:42:01.589387Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-23T18:42:01.589387Z'
+    agent: claude
+    session_id: limen/studium-corpus-shahnameh-2f2f
+    status: dispatched
 - id: studium-corpus-tier2
   title: Fetch Tier-2 originals where public-domain (Upanishads/Shijing/Kojiki/Rumi-Hafez/Honglou-meng)
     from their source rails
@@ -46455,7 +46504,11 @@ tasks:
   depends_on: []
   created: '2026-06-23'
   updated: '2026-06-23T18:42:01.589387Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-23T18:42:01.589387Z'
+    agent: jules
+    session_id: '6704981649772972508'
+    status: dispatched
 - id: studium-film-odyssey
   title: Odyssey film companion (return/exile/recognition)
   repo: organvm/limen
@@ -46463,7 +46516,7 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - studium
   - content
@@ -46476,6 +46529,7 @@ tasks:
     green PR.'
   depends_on: []
   created: '2026-06-23'
+  updated: '2026-06-23T19:07:01.660776Z'
   dispatch_log: []
 - id: studium-film-aeneid
   title: Aeneid film companion (empire/fate/sacrifice)
@@ -46484,7 +46538,7 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - studium
   - content
@@ -46496,7 +46550,13 @@ tasks:
     track forces; no intra-arc duplicate pieces). One green PR.'
   depends_on: []
   created: '2026-06-23'
-  dispatch_log: []
+  updated: '2026-06-23T20:00:00Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:00:00Z'
+    agent: opencode
+    session_id: cli
+    status: done
+    output: "Authored studium/film/aeneid.yaml — 10 force-matched films (fate/sacrifice/exile/grief/kingship/desire/wrath/divine-intervention/revelation/supplication) + Franco Rossi adaptation overlay. Force_coverage covers the Aeneid's full spectrum. All forces ∈ dominant-force.yaml; all objects ∈ object-taxonomy.yaml. Validated: scripts/studium-validate.py PASS (97 arcs, 5 film companions)."
 - id: studium-film-metamorphoses
   title: Metamorphoses film companion (metamorphosis)
   repo: organvm/limen
@@ -46504,7 +46564,7 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - studium
   - content
@@ -46516,6 +46576,7 @@ tasks:
     track forces; no intra-arc duplicate pieces). One green PR.'
   depends_on: []
   created: '2026-06-23'
+  updated: '2026-06-23T19:07:01.660776Z'
   dispatch_log: []
 - id: studium-film-divine-comedy
   title: Divine Comedy film companion (descent/ascent/beatitude)
@@ -46524,7 +46585,7 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - studium
   - content
@@ -46537,6 +46598,7 @@ tasks:
     green PR.'
   depends_on: []
   created: '2026-06-23'
+  updated: '2026-06-23T19:07:01.660776Z'
   dispatch_log: []
 - id: studium-film-tanakh
   title: Tanakh film companion (covenant/law/exile)
@@ -46545,7 +46607,7 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - studium
   - content
@@ -46557,6 +46619,7 @@ tasks:
     track forces; no intra-arc duplicate pieces). One green PR.'
   depends_on: []
   created: '2026-06-23'
+  updated: '2026-06-23T19:07:01.660776Z'
   dispatch_log: []
 - id: studium-film-quran
   title: Qur'an film companion (revelation/law/the straight path)
@@ -46565,7 +46628,7 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - studium
   - content
@@ -46578,6 +46641,7 @@ tasks:
     green PR.'
   depends_on: []
   created: '2026-06-23'
+  updated: '2026-06-23T19:07:01.660776Z'
   dispatch_log: []
 - id: studium-film-gilgamesh
   title: Gilgamesh film companion (mortality/grief)
@@ -46586,7 +46650,7 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - studium
   - content
@@ -46598,6 +46662,7 @@ tasks:
     track forces; no intra-arc duplicate pieces). One green PR.'
   depends_on: []
   created: '2026-06-23'
+  updated: '2026-06-23T19:07:01.660776Z'
   dispatch_log: []
 - id: studium-film-beowulf
   title: Beowulf film companion (wyrd/heroic doom)
@@ -46606,7 +46671,7 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - studium
   - content
@@ -46618,6 +46683,7 @@ tasks:
     track forces; no intra-arc duplicate pieces). One green PR.'
   depends_on: []
   created: '2026-06-23'
+  updated: '2026-06-23T19:07:01.660776Z'
   dispatch_log: []
 - id: studium-film-canterbury-tales
   title: Canterbury Tales film companion (the human comedy)
@@ -46626,7 +46692,7 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - studium
   - content
@@ -46639,6 +46705,7 @@ tasks:
     green PR.'
   depends_on: []
   created: '2026-06-23'
+  updated: '2026-06-23T19:07:01.660776Z'
   dispatch_log: []
 - id: studium-film-mahabharata
   title: Mahabharata film companion (dharma/war)
@@ -46647,7 +46714,7 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - studium
   - content
@@ -46659,6 +46726,7 @@ tasks:
     track forces; no intra-arc duplicate pieces). One green PR.'
   depends_on: []
   created: '2026-06-23'
+  updated: '2026-06-23T19:07:01.660776Z'
   dispatch_log: []
 - id: studium-film-bhagavad-gita
   title: Bhagavad Gita film companion (right action/renunciation)
@@ -46667,7 +46735,7 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - studium
   - content
@@ -46680,6 +46748,7 @@ tasks:
     green PR.'
   depends_on: []
   created: '2026-06-23'
+  updated: '2026-06-23T19:07:01.660776Z'
   dispatch_log: []
 - id: studium-film-ramayana
   title: Ramayana film companion (fidelity/return)
