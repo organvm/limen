@@ -28,9 +28,14 @@ The Pro gate is **production-ready** (`a-organvm/a-i-chat--exporter`: 6-file lic
 - *"Ko-fi + GitHub Sponsors on the Exporter — donations flow TODAY (no LLC, no code; ~10 min each, I prep FUNDING.yml + README)"*
 - *"Create the LemonSqueezy product + paste LEMONSQUEEZY_STORE_ID — unlocks the Exporter Pro tier (code already integrated)"*
 
-**Owner:** you (account identity only). **Cheapest path:** create the Ko-fi/Sponsors/Lemon Squeezy
-accounts (yours), paste `LEMONSQUEEZY_STORE_ID`; the fleet lands `FUNDING.yml` + README + checkout-URL
-runbook. Nothing else blocks dollar #1.
+**Owner:** you (account identity only). **VERIFIED BUILT 2026-06-23** on remote `master`:
+`.github/FUNDING.yml` (`github:[4444J99]`, `ko_fi:4444J99`, custom `aichatexporter.com/pro` + `ko-fi.com/4444J99/tip`),
+README "Supporting the Project" section, Lemon Squeezy Pro checkout coded (fails closed). The funnel is
+**wired end-to-end** — nothing left to build. Confirmed live-checks: GitHub Sponsors **not yet enabled**
+(`hasSponsorsListing:false`), `aichatexporter.com` is a **parked domain**. **Cheapest path / the only
+remaining atom:** enroll ONE rail (GitHub Sponsors *or* Ko-fi `4444J99` *or* the Lemon Squeezy store +
+paste `LEMONSQUEEZY_STORE_ID`) — a payment processor accepts this only from your bank/identity (physics,
+not permissions). The dollar flows the instant any one is enrolled. Nothing else blocks dollar #1.
 
 ### 2. ENC1101 → D2L build — *deadline 6/25*
 Package staged **100%** at `edu-organism/classes/enc1101-summer-2026/prep/` (syllabus, schedule,
@@ -39,13 +44,15 @@ Shell is date-empty/unpublished. **Owner:** you (D2L login + cadence confirm). *
 Claude-in-Chrome drives Manage Dates + Announcements (CSV) + Intelligent Agents (XML) → publish → verify.
 Say go and I co-drive while you're logged in. [[education-monolith-canon]]
 
-### 3. Mail daemon credential — *revives the autonomous mail lane*
-`universal-mail--automation/gmail_auth.py` reads, in priority order:
-`GMAIL_TOKEN_JSON` → `GMAIL_TOKEN_OP_REF` → `OP_GMAIL_TOKEN_{ITEM,FIELD,VAULT}`; OAuth client via
-`GMAIL_OAUTH_JSON` → `GMAIL_OAUTH_OP_REF` → `OP_GMAIL_OAUTH_{ITEM,FIELD,VAULT}`. None are set.
-**Owner:** you. **Cheapest path:** set `GMAIL_OAUTH_OP_REF=op://Vault/Item/Field` in `~/.limen.env`; the
-first daemon run triggers consent and auto-stores the token. (Gmail already works live via MCP; this only
-revives the *autonomous* lane.) [[gmail-mutation-cascade-avenues]]
+### 3. Mail daemon credential — ~~your hand~~ **CLOSED 2026-06-23: NOT NEEDED**
+**Removed from the his-hand list.** Verified (3-reader sweep): the daemon mail lane (`mail-beat.sh` →
+`inbox_sweep.py`/`obligations_build.py`/`draft_writer.py`) is **fully keyless** — it sweeps/archives/drafts
+via Apple Mail AppleScript and never calls `op read`, Gmail OAuth, or IMAP. The op Touch-ID storm only ever
+fired from OPTIONAL write-levers (L-OAUTH / L-IMAP-APP-PW) that are **not activated** and not required.
+`gmail_auth.py`'s op fallback chain is dead code for the running lane. `~/.limen.env` is gitignored +
+existence-guarded by `drain.sh` (no wipe vector). The cred EXISTS at `op://Private/gmail-app-pw-2026-06-06`
+(never expires) **only if** a write-lever is someday activated — **DO NOT recreate, DO NOT re-run forensics**.
+[[gmail-mutation-cascade-avenues]] · [[excavate-before-redoing-solved-work]]
 
 ### 4. card-0186 Santander hold / Nelnet — *not required for dollar #1*
 Already in `your_levers`: *"Stripe = DEFERRED — blocked by the card-0186 Santander hold; one call clears it
