@@ -1,0 +1,81 @@
+work: beowulf
+book: 3
+title: "Beowulf Fitt III: The Arrival at Heorot"
+length_minutes: 52
+principle: >
+  Fitt III moves from the beach to the golden hall. The dominant texture is formal
+  procedure and architectural ascent. The Geats are permitted to pass, they march
+  inland with boar-crests gleaming, and they finally stand outside Heorot to be
+  questioned by Wulfgar. This is the poem at its most diplomatic and magnificent,
+  demonstrating that even in a monster-haunted world, civilization maintains its rites.
+force_arc: [kingship, ascent, revelation, law, law, fate]
+dominant_force: kingship
+tracks:
+  - n: 1
+    scene: "Beowulf's reply — naming his lineage"
+    force: kingship
+    composer: Elgar
+    work: "Symphony No. 1 — I. Andante. Nobilmente e semplice"
+    decision: added
+    why: >
+      Beowulf speaks his first words in the poem, identifying himself by his father's
+      fame (Ecgtheow) and his lord (Hygelac). It is a speech of immense confidence and
+      transparent nobility. Elgar's 'Nobilmente' captures this exact tone: a vast,
+      unhurried statement of character that requires no aggression because its authority
+      is complete.
+  - n: 2
+    scene: "The march inland — boar-crests shining"
+    force: ascent
+    composer: Holst
+    work: "The Planets — Jupiter, the Bringer of Jollity"
+    decision: added
+    why: >
+      The coastguard grants them passage, and they march up the stone-paved road. The
+      poem dwells on their gleaming armor and the gold-adorned boar-figures on their
+      helmets. Holst's 'Jupiter' possesses the right striding, expansive momentum for
+      this march — it is the sound of strong men moving forward in the sunlight,
+      destiny fully in their hands.
+  - n: 3
+    scene: "Heorot revealed — the foremost of halls under heaven"
+    force: revelation
+    composer: Messiaen
+    work: "L'Ascension — III. Alléluias sereins d'une âme qui désire le ciel"
+    decision: added
+    why: >
+      They see the timbered hall, gleaming with gold. The poem pauses to admire
+      Heorot's scale and brilliance. Messiaen provides the required sense of luminous,
+      almost overwhelming verticality. It is not just a building; it is a vision of
+      human achievement towering over the landscape.
+  - n: 4
+    scene: "Leaving the weapons — the protocol of the door"
+    force: law
+    composer: Bach
+    work: "The Art of Fugue — Contrapunctus I"
+    decision: added
+    why: >
+      Arriving at the door, the sea-weary men stack their shields and spears. They
+      cannot enter armed. This is the strict architecture of peace and custom. Bach's
+      fugue represents this perfect, unbending formal clarity — the rules of the house
+      must be observed, even by heroes.
+  - n: 5
+    scene: "Wulfgar's questioning — the herald of Hrothgar"
+    force: law
+    composer: Handel
+    work: "Zadok the Priest"
+    decision: added
+    why: >
+      Wulfgar, a proud Vandal prince and Hrothgar's herald, steps forward to demand
+      their names again. The bureaucracy of the court is functioning. Handel's
+      coronation anthem, with its structured buildup, fits the high-court formality
+      of the encounter. Wulfgar is the voice of the throne, demanding respect.
+  - n: 6
+    scene: "Wulfgar takes the message to the king"
+    force: fate
+    composer: Beethoven
+    work: "Symphony No. 7 — II. Allegretto"
+    decision: added
+    why: >
+      Wulfgar turns away to deliver Beowulf's request to the old, gray-haired king
+      sitting among his earls. The outcome hangs in the balance. Beethoven's Allegretto
+      provides a walking, measured, fateful pulse — the inevitable approach of the
+      messenger toward the center of power, carrying the news that could change everything.

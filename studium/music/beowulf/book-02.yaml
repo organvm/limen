@@ -1,0 +1,90 @@
+work: beowulf
+book: 2
+title: "Beowulf Fitt II: The Sea-Road and the Coastguard"
+length_minutes: 58
+principle: >
+  Fitt II shifts the poem from the paralyzed grief of Denmark to the deliberate,
+  kinetic action of the Geats. The movement is defined by forward motion and
+  institutional collision: Beowulf's decision, the swift sea-crossing, and the
+  confrontation with the Danish coastguard. Do not score this as an adventure
+  movie; score it as fate organizing itself into military and diplomatic reality.
+force_arc: [fate, law, ascent, revelation, law, kingship, fate]
+dominant_force: law
+tracks:
+  - n: 1
+    scene: "Beowulf commands the ship — the hero's decision"
+    force: fate
+    composer: Sibelius
+    work: "En Saga"
+    decision: added
+    why: >
+      The decision to cross the sea is not presented as hot-headed heroism but as an
+      inevitable aligning of the man with the moment. Sibelius's tone poem captures this
+      brooding, inevitable gathering of momentum. It sounds like a legend beginning to
+      take physical shape.
+  - n: 2
+    scene: "The fourteen board — armor and weapons stowed"
+    force: law
+    composer: Stravinsky
+    work: "Symphony of Psalms — I. Exaudi orationem meam"
+    decision: added
+    why: >
+      The loading of the ship is described with technical, almost ritualistic care:
+      the carrying of bright weapons, the securing of the armor. This is not chaos
+      but deep military order. Stravinsky's austere, driving rhythmic blocks convey
+      the strict, deliberate geometry of men preparing for war.
+  - n: 3
+    scene: "The voyage — the wind-driven hull over the waves"
+    force: ascent
+    composer: Debussy
+    work: "La Mer — I. De l'aube à midi sur la mer"
+    decision: added
+    why: >
+      The sea in Beowulf is both a highway and a hostile expanse. The voyage itself
+      is triumphant, described as a bird flying over the water. Debussy's ascent into
+      light captures the sheer elemental speed and lift of the crossing, an unironic
+      forward rush out of the dark.
+  - n: 4
+    scene: "Sight of land — the gleaming sea-cliffs of Denmark"
+    force: revelation
+    composer: Pärt
+    work: "Fratres (for strings and percussion)"
+    decision: added
+    why: >
+      They see the high hills and broad headlands. The voyage is over. Pärt's Fratres,
+      with its sudden stillness and ancient, ringing chords, gives exactly this feeling
+      of arriving at a massive, silent geography. It is the sudden drop in kinetic energy
+      as the ship strikes sand.
+  - n: 5
+    scene: "The coastguard observes them — the ride to the shore"
+    force: law
+    composer: Prokofiev
+    work: "Alexander Nevsky — The Crusaders in Pskov"
+    decision: added
+    why: >
+      A Danish watchman sees armored men landing and immediately rides his horse down
+      to the beach. This is the state responding to an incursion. Prokofiev's heavy,
+      rhythmic brass matches the weight of a lone, armed rider coming down the cliff
+      to demand order. It is institutional machinery functioning exactly as it should.
+  - n: 6
+    scene: "The challenge — 'Who are you in armor?'"
+    force: kingship
+    composer: Wagner
+    work: "Lohengrin — Prelude to Act III"
+    decision: added
+    why: >
+      The coastguard does not attack; he speaks. He demands to know their lineage
+      and purpose, noting Beowulf's sheer physical majesty. Wagner's Prelude is
+      martial but highly formal, aristocratic, and proud — the exact register of two
+      nobles assessing each other's worth across the length of a spear.
+  - n: 7
+    scene: "The standoff on the beach — waiting for the reply"
+    force: fate
+    composer: Verdi
+    work: "La Forza del Destino — Overture"
+    decision: added
+    why: >
+      Fitt II closes suspended in the tension of the standoff, before Beowulf speaks.
+      The air is thick with the possibility of violence, though the protocol holds.
+      Verdi's overture provides the necessary driving, hammered insistence of an
+      encounter that must now be resolved by words or blood.
