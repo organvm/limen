@@ -15,21 +15,21 @@ portal:
       claude: 100
     track:
       date: '2026-06-22'
-      spent: 24
+      spent: 31
       per_agent:
-        jules: 13
+        jules: 17
         gemini: 0
         codex: 0
         opencode: 2
-        agy: 8
+        agy: 11
         claude: 1
       per_agent_reset:
         jules: '2026-06-22T16:29:16.568799+00:00'
         gemini: '2026-06-22T16:29:16.568799+00:00'
-        codex: '2026-06-22T16:47:16.017025+00:00'
+        codex: '2026-06-22T22:07:07.335710+00:00'
         opencode: '2026-06-22T16:29:16.568799+00:00'
         agy: '2026-06-22T16:29:16.568799+00:00'
-        claude: '2026-06-22T16:47:16.017025+00:00'
+        claude: '2026-06-22T22:07:07.335710+00:00'
 tasks:
 - id: FORCE-route-all-services
   title: Router fans across ALL paid services, not just the 6 vendors
@@ -41551,13 +41551,14 @@ tasks:
   title: Discover the latent value of organvm/vigiles-aeternae--agon-cosmogonicum
   repo: organvm/vigiles-aeternae--agon-cosmogonicum
   type: research
-  target_agent: codex
+  target_agent: jules
   priority: medium
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - discover
   - value-discovery
+  - slow
   urls: []
   context: "DISCOVER the latent value of organvm/vigiles-aeternae--agon-cosmogonicum.\
     \ This repo currently has NO ranked value \u2014 your job is to find it (value\
@@ -41574,7 +41575,41 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-22T22:21:49.897576Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T21:20:53.667228Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-22T21:32:39.821891Z'
+    agent: opencode
+    session_id: cli
+    status: timeout->jules
+  - timestamp: '2026-06-22T22:07:07.335710Z'
+    agent: jules
+    session_id: '2000043059497305708'
+    status: dispatched
+  - timestamp: '2026-06-22T22:21:49.897576Z'
+    agent: jules
+    session_id: '2000043059497305708'
+    status: done
+    output: 'diff --git a/DISCOVERY.md b/DISCOVERY.md
+
+      new file mode 100644
+
+      index 0000000..a0979d8
+
+      --- /dev/null
+
+      +++ b/DISCOVERY.md
+
+      @@ -0,0 +1 @@
+
+      +The `vigiles-aeternae--agon-cosmogonicum` repository possesses significant
+      latent value as a sophisticated policy-as-code auditing engine disguised as
+      a narrative simulation. Its core capability lies in applying diverse, mythologically-derived
+      governance philosophies (defined as YAML rulesets) against real system states
+      to identify architectural blind spots, enforc'
 - id: DISCOVER-organvm-object-lessons
   title: Discover the latent value of organvm/object-lessons
   repo: organvm/object-lessons
@@ -41645,13 +41680,14 @@ tasks:
   title: Discover the latent value of organvm/dot-github--4444j99
   repo: organvm/dot-github--4444j99
   type: research
-  target_agent: codex
+  target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/dot-github--4444j99. This repo currently\
     \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
@@ -41667,7 +41703,16 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-22T21:32:39.821891Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T21:20:53.667228Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-22T21:32:39.821891Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-vox--architectura-gubernatio
   title: Discover the latent value of organvm/vox--architectura-gubernatio
   repo: organvm/vox--architectura-gubernatio
@@ -41738,13 +41783,14 @@ tasks:
   title: Discover the latent value of organvm/cvrsvs-honorvm
   repo: organvm/cvrsvs-honorvm
   type: research
-  target_agent: codex
+  target_agent: jules
   priority: medium
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - discover
   - value-discovery
+  - slow
   urls: []
   context: "DISCOVER the latent value of organvm/cvrsvs-honorvm. This repo currently\
     \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
@@ -41760,7 +41806,25 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-22T22:20:36.533927Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T21:20:53.667228Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-22T21:32:39.821891Z'
+    agent: opencode
+    session_id: cli
+    status: timeout->jules
+  - timestamp: '2026-06-22T22:07:07.335710Z'
+    agent: jules
+    session_id: '5401198665278813969'
+    status: dispatched
+  - timestamp: '2026-06-22T22:20:36.533927Z'
+    agent: jules
+    session_id: https://github.com/organvm/cvrsvs-honorvm/pull/2
+    status: done
+    output: 'jules-land: landed session 5401198665278813969 as PR'
 - id: DISCOVER-organvm-vox--publica
   title: Discover the latent value of organvm/vox--publica
   repo: organvm/vox--publica
@@ -41836,13 +41900,14 @@ tasks:
   title: Discover the latent value of organvm/system-system--system
   repo: organvm/system-system--system
   type: research
-  target_agent: codex
+  target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/system-system--system. This repo\
     \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -41858,7 +41923,16 @@ tasks:
     \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-22T22:07:07.335710Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T21:20:53.667228Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-22T22:07:07.335710Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-custodia-securitatis
   title: Discover the latent value of organvm/custodia-securitatis
   repo: organvm/custodia-securitatis
@@ -41929,10 +42003,10 @@ tasks:
   title: Discover the latent value of organvm/brainstorm-20260423
   repo: organvm/brainstorm-20260423
   type: research
-  target_agent: codex
+  target_agent: agy
   priority: medium
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - discover
   - value-discovery
@@ -41951,7 +42025,21 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-22T22:42:56.736500Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T21:20:53.667228Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-22T22:07:07.335710Z'
+    agent: agy
+    session_id: https://github.com/organvm/brainstorm-20260423/pull/3
+    status: dispatched
+  - timestamp: '2026-06-22T22:42:56.736500Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR merged \u2192 done"
 - id: DISCOVER-organvm-lido-v3-audit-2026-05-04
   title: Discover the latent value of organvm/lido-v3-audit-2026-05-04
   repo: organvm/lido-v3-audit-2026-05-04
@@ -42022,13 +42110,14 @@ tasks:
   title: Discover the latent value of organvm/persona-fleet
   repo: organvm/persona-fleet
   type: research
-  target_agent: codex
+  target_agent: claude
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/persona-fleet. This repo currently\
     \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
@@ -42044,7 +42133,25 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-22T22:45:28.047295Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T21:20:53.667228Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-22T22:07:07.335710Z'
+    agent: claude
+    session_id: limen/discover-organvm-persona-fleet-24be
+    status: dispatched
+  - timestamp: '2026-06-22T22:42:56.736500Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-22T22:45:28.047295Z'
+    agent: claude
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-composition-1-2
   title: Discover the latent value of organvm/composition-1-2
   repo: organvm/composition-1-2
@@ -42115,13 +42222,14 @@ tasks:
   title: Discover the latent value of organvm/quick-fire--all-command
   repo: organvm/quick-fire--all-command
   type: research
-  target_agent: codex
+  target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/quick-fire--all-command. This repo\
     \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -42137,7 +42245,16 @@ tasks:
     \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-22T22:07:07.335710Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T21:20:53.667228Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-22T22:07:07.335710Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-agent-runtime
   title: Discover the latent value of organvm/agent-runtime
   repo: organvm/agent-runtime
@@ -42208,10 +42325,10 @@ tasks:
   title: Discover the latent value of organvm/system-system--system--monad
   repo: organvm/system-system--system--monad
   type: research
-  target_agent: codex
+  target_agent: agy
   priority: medium
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - discover
   - value-discovery
@@ -42230,7 +42347,21 @@ tasks:
     \ Output the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-22T22:42:56.736500Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T21:20:53.667228Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-22T22:07:07.335710Z'
+    agent: agy
+    session_id: https://github.com/organvm/system-system--system--monad/pull/1
+    status: dispatched
+  - timestamp: '2026-06-22T22:42:56.736500Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR merged \u2192 done"
 - id: DISCOVER-organvm-generative-abstract-environments-studies
   title: Discover the latent value of organvm/generative-abstract-environments-studies
   repo: organvm/generative-abstract-environments-studies
@@ -44277,7 +44408,7 @@ tasks:
   target_agent: agy
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - discover
   - value-discovery
@@ -44297,12 +44428,17 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-22T19:23:53.407512Z'
+  updated: '2026-06-22T20:26:57.132205Z'
   dispatch_log:
   - timestamp: '2026-06-22T19:23:53.407512Z'
     agent: agy
     session_id: https://github.com/organvm/styx-behavioral-economics-theory/pull/11
     status: dispatched
+  - timestamp: '2026-06-22T20:26:57.132205Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR merged \u2192 done"
 - id: DISCOVER-organvm-mesh
   title: Discover the latent value of organvm/mesh
   repo: organvm/mesh
@@ -44381,7 +44517,7 @@ tasks:
   target_agent: agy
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - discover
   - value-discovery
@@ -44400,12 +44536,17 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-22T19:23:53.407512Z'
+  updated: '2026-06-22T20:26:57.132205Z'
   dispatch_log:
   - timestamp: '2026-06-22T19:23:53.407512Z'
     agent: agy
     session_id: https://github.com/organvm/growth-auditor/pull/13
     status: dispatched
+  - timestamp: '2026-06-22T20:26:57.132205Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: GH-organvm-domus-genoma-96
   title: "Memory index audit \u2014 rolling"
   repo: organvm/domus-genoma
@@ -44413,7 +44554,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - audit
   - slow
@@ -44427,12 +44568,21 @@ tasks:
     \ the web. **Las"
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-22T20:10:34.606049Z'
+  updated: '2026-06-22T20:21:49.771897Z'
   dispatch_log:
   - timestamp: '2026-06-22T19:36:02.328218Z'
     agent: opencode
     session_id: cli
     status: timeout->jules
+  - timestamp: '2026-06-22T20:10:34.606049Z'
+    agent: jules
+    session_id: '7120135112165077121'
+    status: dispatched
+  - timestamp: '2026-06-22T20:21:49.771897Z'
+    agent: jules
+    session_id: https://github.com/organvm/domus-genoma/pull/124
+    status: done
+    output: 'jules-land: landed session 7120135112165077121 as PR'
 - id: DISCOVER-organvm-orchestration-start-here
   title: Discover the latent value of organvm/orchestration-start-here
   repo: organvm/orchestration-start-here
@@ -44440,10 +44590,11 @@ tasks:
   target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/orchestration-start-here. This repo\
     \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -44460,7 +44611,11 @@ tasks:
   depends_on: []
   created: '2026-06-22'
   updated: '2026-06-22T20:10:34.606049Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-22T20:10:34.606049Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-relationship-pipeline
   title: Discover the latent value of organvm/relationship-pipeline
   repo: organvm/relationship-pipeline
@@ -44468,7 +44623,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - discover
   - value-discovery
@@ -44488,12 +44643,41 @@ tasks:
     \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-22T20:10:34.606049Z'
+  updated: '2026-06-22T20:22:27.398907Z'
   dispatch_log:
   - timestamp: '2026-06-22T19:36:02.328218Z'
     agent: opencode
     session_id: cli
     status: timeout->jules
+  - timestamp: '2026-06-22T20:10:34.606049Z'
+    agent: jules
+    session_id: '15584926433926536710'
+    status: dispatched
+  - timestamp: '2026-06-22T20:22:27.398907Z'
+    agent: jules
+    session_id: '15584926433926536710'
+    status: done
+    output: 'diff --git a/DISCOVERY.md b/DISCOVERY.md
+
+      new file mode 100644
+
+      index 0000000..1a76d2f
+
+      --- /dev/null
+
+      +++ b/DISCOVERY.md
+
+      @@ -0,0 +1,5 @@
+
+      +# Value Thesis
+
+      +
+
+      +The highest latent value of `organvm/relationship-pipeline` is its robust,
+      dependency-free Python decoder for Apple''s `attributedBody` binary blobs found
+      in modern `chat.db` databases. Since macOS Ventura and iOS 16, Apple moved a
+      significant fraction of message text out of the standard `text` column and into
+      these undocumented `NSArchiver` blob'
 - id: DISCOVER-organvm-petasum-super-petasum
   title: Discover the latent value of organvm/petasum-super-petasum
   repo: organvm/petasum-super-petasum
@@ -44501,10 +44685,11 @@ tasks:
   target_agent: claude
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/petasum-super-petasum. This repo\
     \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -44521,7 +44706,11 @@ tasks:
   depends_on: []
   created: '2026-06-22'
   updated: '2026-06-22T20:10:34.606049Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-22T20:10:34.606049Z'
+    agent: claude
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-limen
   title: Discover the latent value of organvm/limen
   repo: organvm/limen
@@ -44562,10 +44751,11 @@ tasks:
   target_agent: agy
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/specvla-ergon--avditor-mvndi. This\
     \ repo currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -44582,7 +44772,11 @@ tasks:
   depends_on: []
   created: '2026-06-22'
   updated: '2026-06-22T20:10:34.606049Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-22T20:10:34.606049Z'
+    agent: agy
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-conversation-corpus-engine
   title: Discover the latent value of organvm/conversation-corpus-engine
   repo: organvm/conversation-corpus-engine
@@ -44590,10 +44784,11 @@ tasks:
   target_agent: claude
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/conversation-corpus-engine. This\
     \ repo currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -44610,7 +44805,11 @@ tasks:
   depends_on: []
   created: '2026-06-22'
   updated: '2026-06-22T20:10:34.606049Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-22T20:10:34.606049Z'
+    agent: claude
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-media-ark
   title: Discover the latent value of organvm/media-ark
   repo: organvm/media-ark
@@ -44618,10 +44817,11 @@ tasks:
   target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: done
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/media-ark. This repo currently has\
     \ NO ranked value \u2014 your job is to find it (value is discovered, never assumed\
@@ -44647,11 +44847,15 @@ tasks:
     agent: opencode
     session_id: discover-media-ark
     status: done
-    output: "Discovered organvm/media-ark: promoted to ranked tier. Highest latent\
-      \ value: standalone SaaS product with Pro tier ($7/mo) revenue path via encrypted\
-      \ cloud sync, plus reusable auth/billing/pipeline modules for the estate. First\
-      \ task: swap placeholder sync cipher to AES-GCM + deploy self-hosted CI runner.\
-      \ Thesis appended to DISCOVERY.md, value-repos.json updated."
+    output: 'Discovered organvm/media-ark: promoted to ranked tier. Highest latent
+      value: standalone SaaS product with Pro tier ($7/mo) revenue path via encrypted
+      cloud sync, plus reusable auth/billing/pipeline modules for the estate. First
+      task: swap placeholder sync cipher to AES-GCM + deploy self-hosted CI runner.
+      Thesis appended to DISCOVERY.md, value-repos.json updated.'
+  - timestamp: '2026-06-22T20:10:34.606049Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-my--father-mother
   title: Discover the latent value of organvm/my--father-mother
   repo: organvm/my--father-mother
@@ -44659,7 +44863,7 @@ tasks:
   target_agent: agy
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - discover
   - value-discovery
@@ -44678,8 +44882,17 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-22T20:10:34.606049Z'
-  dispatch_log: []
+  updated: '2026-06-22T20:26:57.132205Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T20:10:34.606049Z'
+    agent: agy
+    session_id: https://github.com/organvm/my--father-mother/pull/27
+    status: dispatched
+  - timestamp: '2026-06-22T20:26:57.132205Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR merged \u2192 done"
 - id: DISCOVER-organvm-sovereign-systems--elevate-align
   title: Discover the latent value of organvm/sovereign-systems--elevate-align
   repo: organvm/sovereign-systems--elevate-align
@@ -44687,10 +44900,11 @@ tasks:
   target_agent: claude
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/sovereign-systems--elevate-align.\
     \ This repo currently has NO ranked value \u2014 your job is to find it (value\
@@ -44708,4 +44922,105 @@ tasks:
   depends_on: []
   created: '2026-06-22'
   updated: '2026-06-22T20:10:34.606049Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-22T20:10:34.606049Z'
+    agent: claude
+    session_id: cli
+    status: noop
+- id: DISCOVER-organvm-domus-genoma
+  title: Discover the latent value of organvm/domus-genoma
+  repo: organvm/domus-genoma
+  type: research
+  target_agent: opencode
+  priority: medium
+  budget_cost: 1
+  status: cancelled
+  labels:
+  - discover
+  - value-discovery
+  - noop
+  urls: []
+  context: "DISCOVER the latent value of organvm/domus-genoma. This repo currently\
+    \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
+    \ assumed absent). Steps: (1) Read the repo \u2014 what it is, its real entrypoints/exports,\
+    \ what it already does. (2) Identify its highest latent value: a concrete product,\
+    \ revenue path, reusable asset, or capability the rest of the estate could use\
+    \ \u2014 be specific and honest. (3) DECIDE: if there is real value, write a one-paragraph\
+    \ value thesis to DISCOVERY.md AND open a PR that ALSO appends \"organvm/domus-genoma\"\
+    \ to value-repos.json (promote it into the ranked tier so build-out can follow)\
+    \ AND name the single best concrete first task; if it is genuinely archival, write\
+    \ the thesis saying so (so it is never re-discovered) \u2014 do NOT promote it.\
+    \ Keep any build green. Output the thesis. [auto-discovery 2026-06-22; no repo\
+    \ stays dark]"
+  depends_on: []
+  created: '2026-06-22'
+  updated: '2026-06-22T20:25:55.786838Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T20:30:00Z'
+    agent: opencode
+    session_id: current
+    status: in_progress
+  - timestamp: '2026-06-22T20:25:55.786838Z'
+    agent: opencode
+    session_id: cli
+    status: noop
+- id: DISCOVER-organvm-domus
+  title: Discover the latent value of organvm/domus
+  repo: organvm/domus
+  type: research
+  target_agent: opencode
+  priority: medium
+  budget_cost: 1
+  status: cancelled
+  labels:
+  - discover
+  - value-discovery
+  - noop
+  urls: []
+  context: "DISCOVER the latent value of organvm/domus. This repo currently has NO\
+    \ ranked value \u2014 your job is to find it (value is discovered, never assumed\
+    \ absent). Steps: (1) Read the repo \u2014 what it is, its real entrypoints/exports,\
+    \ what it already does. (2) Identify its highest latent value: a concrete product,\
+    \ revenue path, reusable asset, or capability the rest of the estate could use\
+    \ \u2014 be specific and honest. (3) DECIDE: if there is real value, write a one-paragraph\
+    \ value thesis to DISCOVERY.md AND open a PR that ALSO appends \"organvm/domus\"\
+    \ to value-repos.json (promote it into the ranked tier so build-out can follow)\
+    \ AND name the single best concrete first task; if it is genuinely archival, write\
+    \ the thesis saying so (so it is never re-discovered) \u2014 do NOT promote it.\
+    \ Keep any build green. Output the thesis. [auto-discovery 2026-06-22; no repo\
+    \ stays dark]"
+  depends_on: []
+  created: '2026-06-22'
+  updated: '2026-06-22T20:43:46.169047Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T20:43:46.169047Z'
+    agent: opencode
+    session_id: cli
+    status: noop
+- id: GH-organvm-object-lessons-19
+  title: "Wire Letterboxd watch-history ingestion \u2192 join his diary to the 253-film\
+    \ DB"
+  repo: organvm/object-lessons
+  type: code
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: cancelled
+  labels:
+  - noop
+  urls:
+  - https://github.com/organvm/object-lessons/issues/19
+  context: "GitHub issue organvm/object-lessons#19. **Why:** The Studium (great-books\
+    \ transmission curriculum) now picks a daily *object-lesson film* and wants to\
+    \ know which of these films Anthony has actually **seen / rated**. `films.yaml`\
+    \ already uses `letterboxd_url` as the film-identity rail, so his Letterboxd watch\
+    \ history maps **directly** onto this database. The unifying model: `film \u2194\
+    \ { force (Studium) \xB7 object (Object Lessons) \xB7 watched (L"
+  depends_on: []
+  created: '2026-06-22'
+  updated: '2026-06-22T22:39:04.820526Z'
+  dispatch_log:
+  - timestamp: '2026-06-22T22:39:04.820526Z'
+    agent: opencode
+    session_id: cli
+    status: noop

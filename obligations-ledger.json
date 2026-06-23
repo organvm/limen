@@ -1,0 +1,688 @@
+{
+  "spine": "every buried obligation \u2014 known, owned, one tap. mail is the first feed; you tend only the handful you decide matters.",
+  "generated_at": "2026-06-22T20:04:15",
+  "accounts": [
+    {
+      "account": "a.j.padavano@icloud",
+      "total": 9,
+      "fires": 7,
+      "archived": 0
+    },
+    {
+      "account": "a.j.padavano@outlook",
+      "total": 0,
+      "fires": 0,
+      "archived": 0
+    },
+    {
+      "account": "ajpadavano@outlook",
+      "total": 0,
+      "fires": 0,
+      "archived": 0
+    },
+    {
+      "account": "padavano.anthony@gmail",
+      "total": 80,
+      "fires": 9,
+      "archived": 0
+    }
+  ],
+  "totals": {
+    "obligations": 12,
+    "fires": 16,
+    "verify_first": 1,
+    "noise_killers": 14,
+    "by_rung": {
+      "protocol": 4,
+      "precedent": 4,
+      "exploration": 4
+    },
+    "by_class": {
+      "fraud-alert": 1,
+      "loan-default": 1,
+      "billing-decline": 1,
+      "kyc": 1,
+      "precedent": 4,
+      "exploration": 4
+    }
+  },
+  "obligations": [
+    {
+      "cls": "fraud-alert",
+      "rung": "protocol",
+      "priority": 90,
+      "title": "Fraud alert \u2014 verify first \u2014 Stripe",
+      "sender": "Stripe <notifications@stripe.com>",
+      "domain": "stripe.com",
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "next_step": "VERIFY the sender is genuine (fraud notices are heavily spoofed \u2014 do NOT click links). If real, call the number on the back of the card.",
+      "why": "protocol:fraud-alert matched the subject/sender",
+      "owner": "yours",
+      "verify_first": true,
+      "requires_reply": false,
+      "draft_hint": null,
+      "tags": [
+        "security",
+        "money"
+      ],
+      "occurrences": 1,
+      "sample_subjects": [
+        "Unrecognized device signed in to your Stripe account"
+      ],
+      "message_ids": [
+        "74880"
+      ]
+    },
+    {
+      "cls": "loan-default",
+      "rung": "protocol",
+      "priority": 88,
+      "title": "Student loan \u2014 default risk \u2014 Nelnet",
+      "sender": "Nelnet <nelnetnoreply@nelnet.studentaid.gov>",
+      "domain": "nelnet.studentaid.gov",
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "next_step": "Log in at nelnet.studentaid.gov: check default status, recertify the income-driven repayment plan, and set the lowest viable payment.",
+      "why": "protocol:loan-default matched the subject/sender",
+      "owner": "yours",
+      "verify_first": false,
+      "requires_reply": false,
+      "draft_hint": null,
+      "tags": [
+        "money",
+        "gov"
+      ],
+      "occurrences": 1,
+      "sample_subjects": [
+        "Final reminder, ANTHONY - your loan is about to default"
+      ],
+      "message_ids": [
+        "75283"
+      ]
+    },
+    {
+      "cls": "billing-decline",
+      "rung": "protocol",
+      "priority": 82,
+      "title": "Billing \u2014 payment failed \u2014 Anthropic",
+      "sender": "Anthropic <no-reply-bTCLVDYQCc4pHGs2xR8Cgw@mail.anthropic.com>",
+      "domain": "mail.anthropic.com",
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "next_step": "Root cause is the card-0186 hold \u2014 resolve THAT first, then update the payment method here. (Cascades to Anthropic / Google Cloud / GitHub.)",
+      "why": "protocol:billing-decline matched the subject/sender",
+      "owner": "yours",
+      "verify_first": false,
+      "requires_reply": false,
+      "draft_hint": null,
+      "tags": [
+        "money",
+        "card-0186"
+      ],
+      "occurrences": 1,
+      "sample_subjects": [
+        "Your subscription access has been paused"
+      ],
+      "message_ids": [
+        "76337"
+      ]
+    },
+    {
+      "cls": "kyc",
+      "rung": "protocol",
+      "priority": 78,
+      "title": "KYC / identity verification \u2014 Stripe",
+      "sender": "Stripe <notifications@stripe.com>",
+      "domain": "stripe.com",
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "next_step": "Provide the exact info requested. Note: Stripe KYC is blocked on the dead LLC \u2014 prefer the individual monetization rail (Ko-fi/Lemon Squeezy).",
+      "why": "protocol:kyc matched the subject/sender",
+      "owner": "yours",
+      "verify_first": false,
+      "requires_reply": false,
+      "draft_hint": null,
+      "tags": [
+        "money",
+        "product"
+      ],
+      "occurrences": 1,
+      "sample_subjects": [
+        "[Action required] Provide information about Et4l"
+      ],
+      "message_ids": [
+        "75185"
+      ]
+    },
+    {
+      "cls": "precedent",
+      "rung": "precedent",
+      "priority": 45,
+      "title": "Personal \u2014 reply owed \u2014 Apple Developer",
+      "sender": "Apple Developer <developer@insideapple.apple.com>",
+      "domain": "insideapple.apple.com",
+      "accounts": [
+        "a.j.padavano@icloud"
+      ],
+      "next_step": "A real person wrote you \u2014 read and reply by precedent (match your prior tone with this correspondent).",
+      "why": "precedent: sender looks like a real human, no protocol matched",
+      "owner": "yours",
+      "verify_first": false,
+      "requires_reply": true,
+      "draft_hint": "Reply in your own voice; answer their question or set the next step.",
+      "tags": [
+        "human"
+      ],
+      "occurrences": 1,
+      "sample_subjects": [
+        "Dive deeper into WWDC26 announcements."
+      ],
+      "message_ids": [
+        "71448"
+      ],
+      "draft_text": "Hi Apple,\n\nThank you for your message regarding \"Dive deeper into WWDC26 announcements.\".\n\n[Reply in your own voice; answer their question or set the next step.]\n\n[Add your specifics here, then send.]\n\nBest,\nAnthony\n",
+      "draft_to": "developer@insideapple.apple.com"
+    },
+    {
+      "cls": "precedent",
+      "rung": "precedent",
+      "priority": 45,
+      "title": "Personal \u2014 reply owed \u2014 Mayur Kharwadkar",
+      "sender": "Mayur Kharwadkar <mayur.kharwadkar@stage4solutions.com>",
+      "domain": "stage4solutions.com",
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "next_step": "A real person wrote you \u2014 read and reply by precedent (match your prior tone with this correspondent).",
+      "why": "precedent: sender looks like a real human, no protocol matched",
+      "owner": "yours",
+      "verify_first": false,
+      "requires_reply": true,
+      "draft_hint": "Reply in your own voice; answer their question or set the next step.",
+      "tags": [
+        "human"
+      ],
+      "occurrences": 1,
+      "sample_subjects": [
+        "Needed: Digital Marketing Project Manager\u2013 Pharma (Hybrid \u2013 Lawrenceville, NJ)"
+      ],
+      "message_ids": [
+        "76796"
+      ],
+      "draft_text": "Hi Mayur,\n\nThank you for your message regarding \"Needed: Digital Marketing Project Manager\u2013 Pharma (Hybrid \u2013 Lawrenceville, NJ)\".\n\n[Reply in your own voice; answer their question or set the next step.]\n\n[Add your specifics here, then send.]\n\nBest,\nAnthony\n",
+      "draft_to": "mayur.kharwadkar@stage4solutions.com"
+    },
+    {
+      "cls": "precedent",
+      "rung": "precedent",
+      "priority": 45,
+      "title": "Personal \u2014 reply owed \u2014 Feross Aboukhadijeh",
+      "sender": "Feross Aboukhadijeh <feross@socket.dev>",
+      "domain": "socket.dev",
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "next_step": "A real person wrote you \u2014 read and reply by precedent (match your prior tone with this correspondent).",
+      "why": "precedent: sender looks like a real human, no protocol matched",
+      "owner": "yours",
+      "verify_first": false,
+      "requires_reply": true,
+      "draft_hint": "Reply in your own voice; answer their question or set the next step.",
+      "tags": [
+        "human"
+      ],
+      "occurrences": 1,
+      "sample_subjects": [
+        "Socket Weekly: 140+ Mastra Packages Compromised, GitHub Blocks pull_request_target Risk"
+      ],
+      "message_ids": [
+        "76615"
+      ],
+      "draft_text": "Hi Feross,\n\nThank you for your message regarding \"Socket Weekly: 140+ Mastra Packages Compromised, GitHub Blocks pull_request_target Risk\".\n\n[Reply in your own voice; answer their question or set the next step.]\n\n[Add your specifics here, then send.]\n\nBest,\nAnthony\n",
+      "draft_to": "feross@socket.dev"
+    },
+    {
+      "cls": "precedent",
+      "rung": "precedent",
+      "priority": 45,
+      "title": "Personal \u2014 reply owed \u2014 IBEN Team",
+      "sender": "IBEN Team <IBEN@ibo.org>",
+      "domain": "ibo.org",
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "next_step": "A real person wrote you \u2014 read and reply by precedent (match your prior tone with this correspondent).",
+      "why": "precedent: sender looks like a real human, no protocol matched",
+      "owner": "yours",
+      "verify_first": false,
+      "requires_reply": true,
+      "draft_hint": "Reply in your own voice; answer their question or set the next step.",
+      "tags": [
+        "human"
+      ],
+      "occurrences": 1,
+      "sample_subjects": [
+        "IBEN Insider - June 2026"
+      ],
+      "message_ids": [
+        "74706"
+      ],
+      "draft_text": "Hi Team,\n\nThank you for your message regarding \"IBEN Insider - June 2026\".\n\n[Reply in your own voice; answer their question or set the next step.]\n\n[Add your specifics here, then send.]\n\nBest,\nAnthony\n",
+      "draft_to": "iben@ibo.org"
+    },
+    {
+      "cls": "exploration",
+      "rung": "exploration",
+      "priority": 35,
+      "title": "Needs review \u2014 Apple",
+      "sender": "Apple <no_reply@email.apple.com>",
+      "domain": "email.apple.com",
+      "accounts": [
+        "a.j.padavano@icloud"
+      ],
+      "next_step": "Open and determine the required action (no protocol or precedent matched \u2014 verify what, if anything, is owed).",
+      "why": "exploration: no protocol or precedent matched",
+      "owner": "yours",
+      "verify_first": false,
+      "requires_reply": false,
+      "draft_hint": null,
+      "tags": [
+        "unknown"
+      ],
+      "occurrences": 5,
+      "sample_subjects": [
+        "Billing Problem"
+      ],
+      "message_ids": [
+        "49",
+        "55",
+        "69",
+        "68",
+        "70"
+      ]
+    },
+    {
+      "cls": "exploration",
+      "rung": "exploration",
+      "priority": 35,
+      "title": "Needs review \u2014 Apple",
+      "sender": "Apple <appleid@apple.com>",
+      "domain": "apple.com",
+      "accounts": [
+        "a.j.padavano@icloud"
+      ],
+      "next_step": "Open and determine the required action (no protocol or precedent matched \u2014 verify what, if anything, is owed).",
+      "why": "exploration: no protocol or precedent matched",
+      "owner": "yours",
+      "verify_first": false,
+      "requires_reply": false,
+      "draft_hint": null,
+      "tags": [
+        "unknown"
+      ],
+      "occurrences": 1,
+      "sample_subjects": [
+        "Your Apple Account has been disconnected from Microsoft Outlook apps and services"
+      ],
+      "message_ids": [
+        "50"
+      ]
+    },
+    {
+      "cls": "exploration",
+      "rung": "exploration",
+      "priority": 35,
+      "title": "Needs review \u2014 Amazon.com",
+      "sender": "Amazon.com <payments-update@amazon.com>",
+      "domain": "amazon.com",
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "next_step": "Open and determine the required action (no protocol or precedent matched \u2014 verify what, if anything, is owed).",
+      "why": "exploration: no protocol or precedent matched",
+      "owner": "yours",
+      "verify_first": false,
+      "requires_reply": false,
+      "draft_hint": null,
+      "tags": [
+        "unknown"
+      ],
+      "occurrences": 1,
+      "sample_subjects": [
+        "Payment declined: Update your information so we can ship your order."
+      ],
+      "message_ids": [
+        "71818"
+      ]
+    },
+    {
+      "cls": "exploration",
+      "rung": "exploration",
+      "priority": 35,
+      "title": "Needs review \u2014 Anthropic, PBC",
+      "sender": "\"Anthropic, PBC\" <failed-payments@mail.anthropic.com>",
+      "domain": "mail.anthropic.com",
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "next_step": "Open and determine the required action (no protocol or precedent matched \u2014 verify what, if anything, is owed).",
+      "why": "exploration: no protocol or precedent matched",
+      "owner": "yours",
+      "verify_first": false,
+      "requires_reply": false,
+      "draft_hint": null,
+      "tags": [
+        "unknown"
+      ],
+      "occurrences": 1,
+      "sample_subjects": [
+        "$217.75 payment to Anthropic, PBC was unsuccessful"
+      ],
+      "message_ids": [
+        "74483"
+      ]
+    }
+  ],
+  "noise_killers": [
+    {
+      "domain": "accounts.nintendo.com",
+      "sender": "no-reply@accounts.nintendo.com",
+      "name": "accounts.nintendo.com",
+      "count": 10,
+      "labels": [
+        "Misc/Other"
+      ],
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "sample_subjects": [
+        "[Nintendo Account] New sign-in",
+        "Nintendo Receipt: Funds Added to Your Account",
+        "[896963] Nintendo Account: E-mail address verification"
+      ],
+      "action": "Unsubscribe / create a filter for accounts.nintendo.com so it stops refilling the inbox",
+      "status": "proposed",
+      "gated_on": "L-MCP / L-OAUTH / L-IMAP-APP-PW"
+    },
+    {
+      "domain": "amazon.com",
+      "sender": "Amazon.com <order-update@amazon.com>",
+      "name": "Amazon.com",
+      "count": 7,
+      "labels": [
+        "Shopping"
+      ],
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "sample_subjects": [
+        "Delivered: \"The Iliad\" and \u20663\u2069 more items",
+        ".",
+        "amazon.com: Account confirmation request"
+      ],
+      "action": "Unsubscribe / create a filter for amazon.com so it stops refilling the inbox",
+      "status": "proposed",
+      "gated_on": "L-MCP / L-OAUTH / L-IMAP-APP-PW"
+    },
+    {
+      "domain": "customers.instacartemail.com",
+      "sender": "Instacart <no-reply@customers.instacartemail.com>",
+      "name": "Instacart",
+      "count": 5,
+      "labels": [
+        "Misc/Other"
+      ],
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "sample_subjects": [
+        "Anthony James, we saved this offer just for you",
+        "Here\u2019s how you can pay less for Instacart+",
+        "Don\u2019t forget to use your EBT SNAP funds for grocery delivery"
+      ],
+      "action": "Unsubscribe / create a filter for customers.instacartemail.com so it stops refilling the inbox",
+      "status": "proposed",
+      "gated_on": "L-MCP / L-OAUTH / L-IMAP-APP-PW"
+    },
+    {
+      "domain": "qemailserver.com",
+      "sender": "Quest Diagnostics <questfeedback@qemailserver.com>",
+      "name": "Quest Diagnostics",
+      "count": 4,
+      "labels": [
+        "Misc/Other",
+        "Notification"
+      ],
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "sample_subjects": [
+        "Reminder: How was your Quest visit?",
+        "New Groups: Anxiety Skills, Managing Overwhelm & Relapse Prevention",
+        "How was your Quest visit?"
+      ],
+      "action": "Unsubscribe / create a filter for qemailserver.com so it stops refilling the inbox",
+      "status": "proposed",
+      "gated_on": "L-MCP / L-OAUTH / L-IMAP-APP-PW"
+    },
+    {
+      "domain": "gitkraken.com",
+      "sender": "GitKraken <no-reply@gitkraken.com>",
+      "name": "GitKraken",
+      "count": 3,
+      "labels": [
+        "Misc/Other"
+      ],
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "sample_subjects": [
+        "\u00a0We extended the offer. Here's why.",
+        "This weekend is your last chance for Git GUI pricing.",
+        "Welcome to the Code Flow era"
+      ],
+      "action": "Unsubscribe / create a filter for gitkraken.com so it stops refilling the inbox",
+      "status": "proposed",
+      "gated_on": "L-MCP / L-OAUTH / L-IMAP-APP-PW"
+    },
+    {
+      "domain": "thefloweryny.com",
+      "sender": "The Flowery NY <hello@thefloweryny.com>",
+      "name": "The Flowery NY",
+      "count": 3,
+      "labels": [
+        "Misc/Other"
+      ],
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "sample_subjects": [
+        "Wizard Trees has officially landed at The Flowery NY",
+        "NEW YORK, THIS IS YOUR WAKE-UP CALL \ud83c\udf8a",
+        "THE CITY'S HAVING A PARADE. WE'RE HAVING A SALE."
+      ],
+      "action": "Unsubscribe / create a filter for thefloweryny.com so it stops refilling the inbox",
+      "status": "proposed",
+      "gated_on": "L-MCP / L-OAUTH / L-IMAP-APP-PW"
+    },
+    {
+      "domain": "linkedin.com",
+      "sender": "LinkedIn <notifications-noreply@linkedin.com>",
+      "name": "LinkedIn",
+      "count": 2,
+      "labels": [
+        "Social/LinkedIn"
+      ],
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "sample_subjects": [
+        "Anthony James, your posts got 12 impressions last week",
+        "Anthony James, your posts got 27 impressions last week"
+      ],
+      "action": "Unsubscribe / create a filter for linkedin.com so it stops refilling the inbox",
+      "status": "proposed",
+      "gated_on": "L-MCP / L-OAUTH / L-IMAP-APP-PW"
+    },
+    {
+      "domain": "email.openai.com",
+      "sender": "ChatGPT <noreply@email.openai.com>",
+      "name": "ChatGPT",
+      "count": 2,
+      "labels": [
+        "AI/Services"
+      ],
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "sample_subjects": [
+        "Your scheduled tasks are getting better",
+        "More Codex, on us."
+      ],
+      "action": "Unsubscribe / create a filter for email.openai.com so it stops refilling the inbox",
+      "status": "proposed",
+      "gated_on": "L-MCP / L-OAUTH / L-IMAP-APP-PW"
+    },
+    {
+      "domain": "po.atlassian.net",
+      "sender": "Atlassian Confluence <noreply@po.atlassian.net>",
+      "name": "Atlassian Confluence",
+      "count": 2,
+      "labels": [
+        "Misc/Other"
+      ],
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "sample_subjects": [
+        "Last chance: your subscription will be downgraded soon",
+        "Your subscription will be downgraded soon"
+      ],
+      "action": "Unsubscribe / create a filter for po.atlassian.net so it stops refilling the inbox",
+      "status": "proposed",
+      "gated_on": "L-MCP / L-OAUTH / L-IMAP-APP-PW"
+    },
+    {
+      "domain": "sniffieshush.com",
+      "sender": "Sniffies Hush <contact@sniffieshush.com>",
+      "name": "Sniffies Hush",
+      "count": 2,
+      "labels": [
+        "Misc/Other"
+      ],
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "sample_subjects": [
+        "Back in stock: our very, very explicit towel. \ud83d\udca6",
+        "Ribbed for your pleasure. \ud83d\ude0f"
+      ],
+      "action": "Unsubscribe / create a filter for sniffieshush.com so it stops refilling the inbox",
+      "status": "proposed",
+      "gated_on": "L-MCP / L-OAUTH / L-IMAP-APP-PW"
+    },
+    {
+      "domain": "ahf.org",
+      "sender": "AHF Healthcare Center <info@ahf.org>",
+      "name": "AHF Healthcare Center",
+      "count": 2,
+      "labels": [
+        "Misc/Other"
+      ],
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "sample_subjects": [
+        "You have access to all of our services"
+      ],
+      "action": "Unsubscribe / create a filter for ahf.org so it stops refilling the inbox",
+      "status": "proposed",
+      "gated_on": "L-MCP / L-OAUTH / L-IMAP-APP-PW"
+    },
+    {
+      "domain": "updates.patreon.com",
+      "sender": "Patreon <no-reply@updates.patreon.com>",
+      "name": "Patreon",
+      "count": 1,
+      "labels": [
+        "Marketing"
+      ],
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "sample_subjects": [
+        "Last chance for 50% off membership to AAMON HAWK"
+      ],
+      "action": "Unsubscribe / create a filter for updates.patreon.com so it stops refilling the inbox",
+      "status": "proposed",
+      "gated_on": "L-MCP / L-OAUTH / L-IMAP-APP-PW"
+    },
+    {
+      "domain": "cycling74.com",
+      "sender": "Cycling '74 <noreply@cycling74.com>",
+      "name": "Cycling '74",
+      "count": 1,
+      "labels": [
+        "Marketing"
+      ],
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "sample_subjects": [
+        "Last chance for 30% off Max 9 & RNBO"
+      ],
+      "action": "Unsubscribe / create a filter for cycling74.com so it stops refilling the inbox",
+      "status": "proposed",
+      "gated_on": "L-MCP / L-OAUTH / L-IMAP-APP-PW"
+    },
+    {
+      "domain": "news.ableton.com",
+      "sender": "Ableton Newsletter <no-reply@news.ableton.com>",
+      "name": "Ableton Newsletter",
+      "count": 1,
+      "labels": [
+        "Marketing"
+      ],
+      "accounts": [
+        "padavano.anthony@gmail"
+      ],
+      "sample_subjects": [
+        "Get free sounds made by Artefakt, eliseRS, and Nathan Fake"
+      ],
+      "action": "Unsubscribe / create a filter for news.ableton.com so it stops refilling the inbox",
+      "status": "proposed",
+      "gated_on": "L-MCP / L-OAUTH / L-IMAP-APP-PW"
+    }
+  ],
+  "levers": [
+    {
+      "id": "L-MCP",
+      "label": "Expand the Gmail MCP connector to write scope (gmail.modify) in claude.ai \u2014 one-time, Anthropic-managed refresh; unlocks reliable keyless Gmail archive + drafts in any live session.",
+      "owner": "yours",
+      "cost": "~30s, durable"
+    },
+    {
+      "id": "L-IMAP-APP-PW",
+      "label": "Generate a Google app-password (account.google.com \u2192 Security \u2192 App passwords) \u2014 unlocks reliable Gmail archive/draft over direct IMAP for the headless daemon; no weekly token death, no browser-driving.",
+      "owner": "yours",
+      "cost": "~60s once, durable"
+    },
+    {
+      "id": "L-OAUTH",
+      "label": "Revive the Gmail OAuth app: fresh consent + flip to Production publishing (stops the 7-day testing-mode token expiry). I can browser-drive the consent when you want it.",
+      "owner": "yours",
+      "cost": "a few min, durable"
+    },
+    {
+      "id": "LIMEN_NTFY_TOPIC",
+      "label": "Set LIMEN_NTFY_TOPIC to get high-priority obligations pushed to your phone (opt-in; no topic = no push).",
+      "owner": "yours",
+      "cost": "30s"
+    }
+  ]
+}
