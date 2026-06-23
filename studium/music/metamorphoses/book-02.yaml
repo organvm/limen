@@ -1,0 +1,156 @@
+# Metamorphoses — Book II — curated music arc
+work: metamorphoses
+book: 2
+title: "Metamorphoses Book II: Phaethon, Callisto, Europa"
+length_minutes: 85
+principle: >
+  Book II is driven by the catastrophic consequences of proximity to the divine.
+  Phaethon seeks proof of his divine paternity and burns the world; Callisto is
+  destroyed by Jupiter's desire; Coronis by Apollo's wrath; Aglauros by Mercury's
+  frustration; Europa is carried off across the sea. The dominant force is desire
+  — not just erotic desire, but the destructive pull of crossing the boundary
+  between mortal and immortal, which ends in combustion, exile, or form-change.
+force_arc: [ascent, fate, divine-intervention, grief, metamorphosis, desire, metamorphosis, wrath, metamorphosis, comedy, desire, desire]
+dominant_force: desire
+tracks:
+  - n: 1
+    scene: "The Palace of the Sun — Phaethon takes the chariot"
+    force: ascent
+    composer: Wagner
+    work: "Lohengrin — Prelude to Act III"
+    decision: added
+    why: >
+      Phaethon enters the blinding, gold-and-jewel Palace of the Sun to demand proof
+      that he is the Sun's son. He gets his proof by extracting a promise to drive the
+      chariot. The ascent into the sky begins with total, blinding confidence. Wagner's
+      Prelude is pure, radiant brass and driving rhythm — the sound of a triumphant launch
+      that cannot sustain its own momentum without burning up.
+  - n: 2
+    scene: "The chariot out of control — the world burns"
+    force: fate
+    composer: Shostakovich
+    work: "Symphony No. 10 — II. Allegro"
+    decision: added
+    why: >
+      The horses realize the driver is too light; they leave the path. The earth catches
+      fire, rivers boil, whole nations are burned to ash. The disaster is not malicious;
+      it is a failure of control at a cosmic scale, turning physics into fate. Shostakovich's
+      scherzo is four minutes of relentless, terrifying momentum — mechanical, unstoppable,
+      destructive energy moving too fast to be steered.
+  - n: 3
+    scene: "Jupiter strikes Phaethon from the sky"
+    force: divine-intervention
+    composer: Verdi
+    work: "Requiem — 'Dies irae'"
+    decision: added
+    why: >
+      Earth prays to Jupiter to save what is left. Jupiter, who has no water left to send,
+      sends a thunderbolt. Phaethon falls like a shooting star. This is divine-intervention
+      as absolute, instantaneous violence. The Verdi 'Dies irae' is the most famous thunderbolt
+      in choral music — four massive orchestral blows that smash the music into pieces.
+  - n: 4
+    scene: "The grief of Clymene and the Heliades"
+    force: grief
+    composer: Barber
+    work: "Adagio for Strings"
+    decision: added
+    why: >
+      Phaethon's mother Clymene searches the world for his bones. His sisters, the Heliades,
+      weep at his tomb for four months until their tears become amber. The grief is
+      prolonged, exhausted, and absolute. The Barber Adagio is a sustained, unresolving arc
+      of inward mourning that perfectly matches the sisters' frozen posture before they
+      change form.
+  - n: 5
+    scene: "The Heliades become poplars; Cygnus becomes a swan"
+    force: metamorphosis
+    composer: Strauss
+    work: "Metamorphosen — closing section"
+    decision: added
+    why: >
+      While weeping, the sisters feel bark enclosing their legs; their mother tries to
+      tear the wood away but only breaks twigs that bleed. Their cousin Cygnus, watching,
+      turns into a swan out of pure sorrow. Strauss's piece is an unbroken meditation on
+      form slowly giving way under the pressure of loss, which is exactly how Ovid scores
+      these transformations: sorrow calcifying into a new biological reality.
+  - n: 6
+    scene: "Jupiter discovers Callisto"
+    force: desire
+    composer: Debussy
+    work: "Pelléas et Mélisande — Act III, Scene 1 (opening)"
+    decision: added
+    why: >
+      Jupiter, patrolling the ruined earth, sees the nymph Callisto in the woods of Arcadia.
+      He disguises himself as Diana, the goddess she serves, to get close enough to rape her.
+      Debussy's music gives the shifting, shadowed, ambiguous atmosphere of a desire that
+      approaches under a false shape, building an erotic tension that relies entirely on deception.
+  - n: 7
+    scene: "Callisto banished and transformed into a bear"
+    force: metamorphosis
+    composer: Bartók
+    work: "The Miraculous Mandarin — Suite (excerpt)"
+    decision: added
+    why: >
+      Diana discovers Callisto's pregnancy and exiles her. After she gives birth, Juno
+      takes her revenge by turning Callisto into a bear. The transformation is violent and
+      degrading: she loses her voice, she loses her human hands, she is forced to live in
+      terror of the beasts she used to hunt. Bartók's music is brutally physical and harsh,
+      matching the visceral stripping of her humanity.
+  - n: 8
+    scene: "Coronis and the raven — Apollo's jealousy"
+    force: wrath
+    composer: Beethoven
+    work: "Symphony No. 5 — I. Allegro con brio"
+    decision: added
+    why: >
+      A raven tells Apollo that his lover Coronis is unfaithful. In a flash of divine jealousy,
+      Apollo shoots her with an arrow, only to regret it instantly and save the unborn child
+      (Aesculapius). Beethoven's hammered motif gives the exact quality of sudden, irreversible,
+      destructive action taken in anger, before regret can catch up.
+  - n: 9
+    scene: "Ocyrhoe's prophecy and transformation"
+    force: metamorphosis
+    composer: Scriabin
+    work: "The Poem of Ecstasy"
+    decision: added
+    why: >
+      The centaur Chiron's daughter, Ocyrhoe, is gripped by prophetic frenzy. She foretells
+      the fates of Aesculapius and Chiron, but the divine knowledge overloads her human form.
+      As she speaks, she turns into a mare. Scriabin's music captures the overwhelming,
+      mind-dissolving pressure of ecstatic revelation that quite literally breaks the vessel
+      trying to contain it.
+  - n: 10
+    scene: "Mercury and Battus — the stolen cattle"
+    force: comedy
+    composer: Mozart
+    work: "The Marriage of Figaro — Overture"
+    decision: added
+    why: >
+      Mercury steals Apollo's cattle. An old man, Battus, sees it. Mercury bribes him to stay
+      quiet, then returns disguised as someone else and offers a bigger bribe. Battus betrays
+      the secret immediately, and Mercury turns him to stone. The sequence is purely comedic
+      — a fast-paced, cynical farce about human greed. Mozart's overture gives it the speed
+      and lightness of a theatrical trick.
+  - n: 11
+    scene: "Mercury, Herse, and the petrifaction of Aglauros"
+    force: desire
+    composer: Ravel
+    work: "La Valse"
+    decision: added
+    why: >
+      Mercury flies over Athens, sees Herse, and wants her. Her sister Aglauros demands gold
+      for access. Minerva sends Envy to poison Aglauros's mind, making her so jealous she sits
+      in the doorway and refuses to move. Mercury turns her into a black statue. Ravel's waltz
+      begins elegantly and degrades into a mechanical, obsessive, self-destructive swirl, perfectly
+      matching the descent of Aglauros's mind into paralyzing, stony envy.
+  - n: 12
+    scene: "Jupiter, Europa, and the Bull"
+    force: desire
+    composer: Debussy
+    work: "L'Isle joyeuse"
+    decision: added
+    why: >
+      Jupiter transforms himself into a beautiful, gentle white bull to approach the princess
+      Europa. She garlands his horns; she climbs on his back. He walks into the sea and swims
+      away with her. The book ends on an image of abduction disguised as shimmering romance.
+      Debussy's piano piece is virtuosic, glittering, and oceanic — the perfect cover for a
+      divine kidnapping that looks, from the outside, like an ecstasy.

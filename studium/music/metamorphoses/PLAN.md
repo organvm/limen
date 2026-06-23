@@ -16,8 +16,8 @@
 | Book | dominant force | status |
 | --: | --- | :--: |
 | 1 | (author) | ✓ |
-| 2 | (author) | ☐ |
-| 3 | (author) | ☐ |
+| 2 | desire | ✓ |
+| 3 | revelation | ✓ |
 | 4 | (author) | ☐ |
 | 5 | (author) | ☐ |
 | 6 | (author) | ☐ |

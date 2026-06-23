@@ -1,0 +1,147 @@
+# Metamorphoses — Book III — curated music arc
+work: metamorphoses
+book: 3
+title: "Metamorphoses Book III: Cadmus, Actaeon, Narcissus, Pentheus"
+length_minutes: 92
+principle: >
+  Book III is the tragedy of looking. Almost every disaster in the founding of Thebes
+  comes from seeing something forbidden or seeing oneself too clearly. Cadmus sees the
+  serpent; Actaeon sees Diana naked; Semele demands to see Jupiter's true form; Tiresias
+  sees the mating snakes; Narcissus sees his own reflection; Pentheus insists on seeing
+  the Bacchic rites. The dominant force is revelation — but revelation here is not
+  salvation; it is a lethal unmasking that destroys the observer.
+force_arc: [fate, wrath, metamorphosis, revelation, fate, divine-intervention, metamorphosis, desire, metamorphosis, wrath, sacrifice]
+dominant_force: revelation
+tracks:
+  - n: 1
+    scene: "Cadmus follows the cow — the founding of Thebes"
+    force: fate
+    composer: Brahms
+    work: "Symphony No. 1 — I. Un poco sostenuto - Allegro"
+    decision: added
+    why: >
+      Exiled by his father until he finds Europa, Cadmus consults the oracle and is
+      told to follow a cow until it lies down, and build a city there. Brahms's opening,
+      with its pounding timpani and chromatic ascent, gives the heavy, inescapable weight
+      of a destiny being forged. It is the sound of a foundational myth walking forward
+      under the pressure of history.
+  - n: 2
+    scene: "The Serpent of Mars"
+    force: wrath
+    composer: Holst
+    work: "The Planets — 'Mars, the Bringer of War'"
+    decision: added
+    why: >
+      Cadmus sends his men for water. They find a pristine spring guarded by a massive
+      serpent with a triple row of teeth and a golden crest. The serpent massacres the men.
+      Holst's 'Mars' perfectly captures the hostility, the brutal asymmetric rhythm, and the
+      sheer territorial aggression of a primordial monster guarding the water source of
+      a future city.
+  - n: 3
+    scene: "The Dragon's Teeth — earth-born soldiers"
+    force: metamorphosis
+    composer: Stravinsky
+    work: "The Rite of Spring — 'The Augurs of Spring'"
+    decision: added
+    why: >
+      Cadmus slays the serpent and, following Minerva's instruction, sows its teeth in
+      the earth. The clods begin to move; spear points emerge, then helmets, then a full
+      crop of armed men who immediately slaughter each other until only five remain.
+      The hammering, rhythmic violence of Stravinsky's 'Augurs' is the exact sound of
+      an army growing out of the dirt like a violent crop.
+  - n: 4
+    scene: "Actaeon discovers Diana"
+    force: revelation
+    composer: Messiaen
+    work: "Quartet for the End of Time — I. Liturgie de cristal"
+    decision: added
+    why: >
+      Actaeon, wandering in the woods, stumbles into a sacred grotto and sees the virgin
+      goddess Diana bathing nude. It is a fatal accidental revelation. Messiaen's music,
+      with its crystalline piano chords and bird calls, gives the eerie, frozen stillness
+      of stepping out of ordinary time into a sacred, untouchable space that one is not
+      meant to see.
+  - n: 5
+    scene: "Actaeon turned into a stag and torn apart"
+    force: fate
+    composer: Tchaikovsky
+    work: "Symphony No. 4 — I. Andante sostenuto"
+    decision: added
+    why: >
+      Diana throws water in his face and he grows horns, hooves, and a pelt. He runs,
+      realizes he is a stag, and is then hunted down and torn apart by his own hounds
+      while he tries to scream his own name. Tchaikovsky's relentless "fate" fanfare
+      and the agonizing, driven descent of the movement mirror the terrifying realization
+      of his doom and the unstoppable pursuit by the dogs.
+  - n: 6
+    scene: "Semele's request — Jupiter's glory"
+    force: divine-intervention
+    composer: Strauss
+    work: "Also sprach Zarathustra — 'Sunrise'"
+    decision: added
+    why: >
+      Tricked by Juno, the pregnant Semele makes Jupiter swear to come to her in the
+      same majesty he uses when making love to Juno. Jupiter cannot break his oath. He
+      arrives with his thunderbolts, and Semele's mortal body is instantly incinerated
+      by his glory. Strauss's 'Sunrise' is the ultimate musical representation of
+      overwhelming, blinding divine radiance that simply obliterates the scale of the human.
+  - n: 7
+    scene: "Tiresias blinded and given prophecy"
+    force: metamorphosis
+    composer: Pärt
+    work: "Cantus in Memoriam Benjamin Britten"
+    decision: added
+    why: >
+      Tiresias, having lived as both a man and a woman (after striking mating snakes),
+      is asked to settle a bet between Jupiter and Juno. He agrees with Jupiter. Juno
+      blinds him; Jupiter, in compensation, gives him the gift of prophecy. Pärt's descending
+      bells and strings capture the solemnity of lost sight replaced by the cold, clear,
+      inexorable vision of the future.
+  - n: 8
+    scene: "Narcissus and his reflection"
+    force: desire
+    composer: Wagner
+    work: "Tristan und Isolde — Prelude"
+    decision: added
+    why: >
+      Narcissus sees his own reflection in an undisturbed pool. He falls in love with
+      an image that cannot hold him, cannot speak, and cannot exist outside the water.
+      He starves by the pool, weeping. Wagner's Prelude is the quintessential music of
+      unresolved, impossible longing—a desire that constantly reaches for a resolution
+      it can never attain.
+  - n: 9
+    scene: "Echo's voice fading to stone"
+    force: metamorphosis
+    composer: Vaughan Williams
+    work: "The Lark Ascending"
+    decision: added
+    why: >
+      Echo, rejected by Narcissus, wastes away in the caves. Her bones turn to stone,
+      and all that is left of her is her voice, bouncing back the ends of phrases.
+      The soaring, lonely violin of Vaughan Williams climbing higher and higher until
+      it disappears into nothingness captures the attenuation of a body becoming nothing
+      but an acoustic phenomenon.
+  - n: 10
+    scene: "Pentheus rejects Bacchus"
+    force: wrath
+    composer: Shostakovich
+    work: "Symphony No. 5 — IV. Allegro non troppo"
+    decision: added
+    why: >
+      King Pentheus of Thebes fiercely rejects the new cult of Bacchus. He orders the
+      god arrested, mocks his effeminate followers, and doubles down on his martial,
+      rational authority against the chaotic frenzy of the cult. Shostakovich's finale,
+      with its hard, forced, militaristic triumph, represents the brittle rigidity of
+      a tyrant trying to enforce order on a world that is already slipping away.
+  - n: 11
+    scene: "Pentheus torn apart by the Maenads"
+    force: sacrifice
+    composer: Stravinsky
+    work: "The Rite of Spring — 'Sacrificial Dance'"
+    decision: added
+    why: >
+      Pentheus goes to Mount Cithaeron to spy on the Bacchic rites. His own mother,
+      Agave, blinded by religious ecstasy, mistakes him for a wild boar. She and her
+      sisters tear his arms off and rip him to pieces. Stravinsky's 'Sacrificial Dance'
+      is the definitive score for a mob possessed by a rhythm it cannot control, enacting
+      a ritual murder with terrifying, mechanical precision.
