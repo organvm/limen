@@ -1,0 +1,97 @@
+# Conference of the Birds — Section 3 — curated music arc
+work: conference-of-birds
+book: 3
+title: "Conference of the Birds, Section 3: The Peacock's Excuse"
+length_minutes: 62
+principle: >
+  The peacock's excuse is rooted in a glorious past. He was a resident of paradise until he was
+  cast out due to his association with the serpent. Now, his only desire is to return there. He
+  does not seek the King (the Simurgh); he merely seeks the King's garden. The music explores
+  the tragic grandeur of nostalgia and the hoopoe's correction: that aiming for the created thing
+  (paradise) rather than the Creator is the ultimate failure of ambition.
+force_arc: [kingship, memory, grief, law, revelation, divine-intervention, return, ascent]
+dominant_force: memory
+tracks:
+  - n: 1
+    scene: "The peacock displays his feathers"
+    force: kingship
+    composer: Handel
+    work: "Zadok the Priest"
+    decision: added
+    why: >
+      The peacock arrives with the memory of royalty. He considers himself the king of birds by
+      right of his former residence. Handel's coronation anthem provides the overwhelming ceremonial
+      grandeur that the peacock projects — it is magnificent, but it is a worldly, courtly
+      magnificence.
+  - n: 2
+    scene: "The memory of Eden"
+    force: memory
+    composer: Elgar
+    work: "Enigma Variations — IX. Nimrod"
+    decision: added
+    why: >
+      The peacock speaks of paradise, a place he lost and cannot stop remembering. Elgar's Nimrod
+      is the quintessential music of noble, aching nostalgia. It swells with the warmth of what
+      was, capturing the peacock's complete absorption in his own backward-looking longing.
+  - n: 3
+    scene: "The grief of the fall"
+    force: grief
+    composer: Barber
+    work: "Adagio for Strings"
+    decision: added
+    why: >
+      The peacock remembers his expulsion. The stain of the serpent is on him. Barber's Adagio is
+      music that slowly, inescapably descends into the depths of sorrow. It is the sound of a
+      creature realizing the gates are locked behind it.
+  - n: 4
+    scene: "The hoopoe's correction — the King over the garden"
+    force: law
+    composer: Stravinsky
+    work: "Symphony of Psalms — I. Exaudi orationem meam"
+    decision: added
+    why: >
+      The hoopoe points out the fatal flaw: the peacock is settling for the King's real estate
+      instead of the King. Stravinsky's neoclassical architecture in the Symphony of Psalms is
+      austere and objective. It cuts through the peacock's sentimentality with cold, rigorous truth.
+  - n: 5
+    scene: "The tale of the apprentice and the king"
+    force: revelation
+    composer: Messiaen
+    work: "Quartet for the End of Time — V. Louange à l'Éternité de Jésus"
+    decision: added
+    why: >
+      Attar's sub-tale illustrates that proximity to the King is worth more than all the treasures
+      of the kingdom. Messiaen's endlessly slow, suspended cello line in the Louange is the sound
+      of stepping outside time and encountering the divine essence directly, bypassing all
+      intermediaries and gardens.
+  - n: 6
+    scene: "The flash of the Simurgh's true nature"
+    force: divine-intervention
+    composer: Strauss
+    work: "Also sprach Zarathustra — Introduction"
+    decision: added
+    why: >
+      The hoopoe reveals that the Simurgh is vastly greater than paradise. Paradise is a mere
+      shadow of the Simurgh's reality. The brass and timpani of Strauss's sunrise provide this
+      sudden, blinding shift in scale — the sudden realization of a vastly larger theological
+      framework.
+  - n: 7
+    scene: "The realization of true return"
+    force: return
+    composer: Beethoven
+    work: "Symphony No. 7 — II. Allegretto"
+    decision: added
+    why: >
+      The peacock realizes that true return is not going back to Eden, but moving forward to the
+      source. Beethoven's Allegretto, with its inexorable walking pace and circular variations,
+      embodies this truer, deeper march. It is not nostalgia; it is the rhythm of homecoming.
+  - n: 8
+    scene: "The peacock commits to the higher path"
+    force: ascent
+    composer: Mahler
+    work: "Symphony No. 2 ('Resurrection') — V. Im Tempo des Scherzos (opening section)"
+    decision: added
+    why: >
+      The peacock redirects his gaze from the past to the future, from the garden to the King. The
+      opening of Mahler's resurrection finale — before the choir — is music that pushes upward from
+      the ashes, full of terror but definitively ascending. The bird leaves his memories behind.

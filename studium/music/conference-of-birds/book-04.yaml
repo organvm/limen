@@ -1,0 +1,99 @@
+# Conference of the Birds — Section 4 — curated music arc
+work: conference-of-birds
+book: 4
+title: "Conference of the Birds, Section 4: The Duck and the Partridge"
+length_minutes: 54
+principle: >
+  Two birds who are trapped by their own obsessive purity and material attachments. The duck
+  is obsessed with ritual washing and water, substituting religious mechanics for the actual
+  journey. The partridge is obsessed with precious stones and the mountains, unable to leave
+  its physical wealth. The hoopoe's rebuke to both is about the danger of small horizons:
+  mistaking the puddle for the ocean, and the pebble for the mountain. The dominant force
+  here is comedy turning into revelation — the absurdity of their excuses gives way to the
+  staggering scale of what they are ignoring.
+force_arc: [comedy, law, desire, fate, divine-intervention, revelation, supplication, salvation]
+dominant_force: comedy
+tracks:
+  - n: 1
+    scene: "The duck emerges from the water, endlessly washing"
+    force: comedy
+    composer: Offenbach
+    work: "The Tales of Hoffmann — Barcarolle"
+    decision: added
+    why: >
+      The duck believes herself to be the most pure because she is always performing ablutions.
+      Offenbach's Barcarolle is swaying, watery, and slightly absurd in its repetitive lilt. It
+      perfectly captures the duck's self-satisfied routine — floating in circles, mistaking
+      hygiene for holiness.
+  - n: 2
+    scene: "The hoopoe shatters the duck's puddle"
+    force: law
+    composer: Handel
+    work: "Water Music — Suite No. 2 in D Major, II. Alla Hornpipe"
+    decision: added
+    why: >
+      The hoopoe answers that a drop of water is nothing compared to the ocean of the Simurgh.
+      Handel's Alla Hornpipe brings a completely different scale of water music — robust, regal,
+      and structured. It is the law of the ocean correcting the delusion of the pond.
+  - n: 3
+    scene: "The partridge displays its jewels"
+    force: desire
+    composer: Scriabin
+    work: "Le Poème de l'Extase"
+    decision: added
+    why: >
+      The partridge steps forward, completely infatuated with gems and stones. It cannot leave the
+      mountains where these treasures are hidden. Scriabin's music is glittering, jewel-encrusted,
+      chromatic desire — exactly the kind of intoxicating, material obsession that keeps the
+      partridge grounded.
+  - n: 4
+    scene: "The jewels turn to dust"
+    force: fate
+    composer: Verdi
+    work: "La Forza del Destino — Overture (opening)"
+    decision: added
+    why: >
+      The hoopoe points out that stones are dead, and that death will eventually take the partridge,
+      leaving the stones behind. Verdi's hammered 'fate' motif strikes with inexorable force. The
+      glittering illusion of wealth is instantly crushed by the reality of mortality.
+  - n: 5
+    scene: "The scale of the Simurgh's mountain"
+    force: divine-intervention
+    composer: Wagner
+    work: "Das Rheingold — Entry of the Gods into Valhalla"
+    decision: added
+    why: >
+      To a bird obsessed with pebbles and hills, the hoopoe reveals the true mountain — Mount Qaf,
+      the home of the Simurgh. Wagner's massive brass architecture provides this overwhelming
+      shift in perspective. The partridge's little hills are dwarfed by the terrifying grandeur of
+      the divine mountain.
+  - n: 6
+    scene: "The stillness of true purity"
+    force: revelation
+    composer: Tavener
+    work: "The Protecting Veil"
+    decision: added
+    why: >
+      Contrasting with the duck's frantic washing, the hoopoe describes the true purity of the
+      Simurgh's presence. Tavener's high, sustained cello line against the strings is the sound
+      of absolute, unmoving clarity. It is purity as a state of being, not as a repetitive action.
+  - n: 7
+    scene: "The duck and partridge bow their heads"
+    force: supplication
+    composer: Pärt
+    work: "Cantus in Memoriam Benjamin Britten"
+    decision: added
+    why: >
+      The two birds, recognizing the smallness of their excuses, finally yield. The Cantus, with
+      its slow, descending minor scales and tolling bell, is the sound of ego stepping down. They
+      lower their heads, their illusions broken.
+  - n: 8
+    scene: "The assembly grows in resolve"
+    force: salvation
+    composer: Bach
+    work: "Mass in B Minor — 'Dona nobis pacem'"
+    decision: added
+    why: >
+      As more excuses are dismantled, the collective resolve of the flock solidifies. The closing
+      chorus of Bach's B Minor Mass is not a solitary voice, but a vast, unified fugue asking for
+      peace and direction. The flock is binding together, readying for the launch.

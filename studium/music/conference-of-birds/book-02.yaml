@@ -1,0 +1,96 @@
+# Conference of the Birds — Section 2 — curated music arc
+work: conference-of-birds
+book: 2
+title: "Conference of the Birds, Section 2: The Parrot's Excuse"
+length_minutes: 58
+principle: >
+  The parrot is the prisoner who has fallen in love with his cell because it comes with immortality.
+  He wants the water of life, not the Simurgh. He is the archetype of spiritual conservatism:
+  seeking safety rather than truth. The music here explores the tension between false safety and
+  the terrifying necessity of the journey. The dominant force is exile, because the parrot is
+  essentially refusing to leave his exile.
+force_arc: [comedy, desire, law, exile, memory, fate, supplication, salvation]
+dominant_force: exile
+tracks:
+  - n: 1
+    scene: "The parrot steps forward, resplendent"
+    force: comedy
+    composer: Rameau
+    work: "Pièces de clavecin — 'Le Rappel des Oiseaux'"
+    decision: added
+    why: >
+      The parrot approaches in his green coat, full of self-importance. Attar's comedy is sharp here:
+      the bird is undeniably beautiful but completely missing the point. Rameau's harpsichord piece
+      mimics bird calls with a courtly, slightly ridiculous elegance that perfectly captures the
+      parrot's vanity.
+  - n: 2
+    scene: "The parrot demands the Water of Life"
+    force: desire
+    composer: Szymanowski
+    work: "Mythes, Op. 30 — I. La Fontaine d'Arethuse"
+    decision: added
+    why: >
+      The parrot's desire is not for the Simurgh but for immortality — the Water of Khizr. Szymanowski's
+      shimmering violin writing captures this exact liquid obsession. It is beautiful, chromatic, and
+      ultimately static, circling around an unattainable object rather than moving toward it.
+  - n: 3
+    scene: "The hoopoe's rebuke — immortality is a cage"
+    force: law
+    composer: Bach
+    work: "The Art of Fugue — Contrapunctus I"
+    decision: added
+    why: >
+      The hoopoe answers with structural clarity: what good is living forever if you are not alive?
+      Bach's opening fugue is the absolute statement of architectural law. It does not argue; it simply
+      demonstrates how things are constructed. The hoopoe applies this unyielding logic to the parrot's
+      false premise.
+  - n: 4
+    scene: "The reality of the parrot's cage"
+    force: exile
+    composer: Sibelius
+    work: "The Swan of Tuonela"
+    decision: added
+    why: >
+      The hoopoe points out that the parrot's green coat is exactly what puts him in an iron cage. His
+      safety is his prison. Sibelius's dark, wandering English horn solo embodies this profound isolation:
+      a creature trapped in a static, twilight world, cut off from the sky.
+  - n: 5
+    scene: "The tale of the ascetic and the water"
+    force: memory
+    composer: Fauré
+    work: "Élégie, Op. 24"
+    decision: added
+    why: >
+      Attar inserts a sub-tale of a man who found the water of life but realized it meant watching everyone
+      he loved die forever. Fauré's Élégie carries this exact weight of endless, weary recall — the burden
+      of outliving one's time. The cello line remembers without the possibility of closure.
+  - n: 6
+    scene: "The false eternity shattered"
+    force: fate
+    composer: Tchaikovsky
+    work: "Symphony No. 6 ('Pathétique') — IV. Adagio lamentoso"
+    decision: added
+    why: >
+      The illusion of safe immortality is finally crushed by the hoopoe. Fate cannot be outrun by staying
+      in a cage. Tchaikovsky's hammer blows of despair in the Pathétique finale represent the inevitable
+      collision with reality. The parrot must face that he will die.
+  - n: 7
+    scene: "The command to let go"
+    force: supplication
+    composer: Pärt
+    work: "Fratres (for violin, strings and percussion)"
+    decision: added
+    why: >
+      The hoopoe does not leave the parrot in despair, but commands him to let go of his small life for the
+      sake of the vast one. Pärt's Fratres is built on repeated, suspended supplication — it strips away
+      ornament and leaves only the raw need to surrender.
+  - n: 8
+    scene: "The parrot yields to the journey"
+    force: salvation
+    composer: Bach
+    work: "Chorale Prelude 'Ich ruf zu dir, Herr Jesu Christ', BWV 639"
+    decision: added
+    why: >
+      The parrot finally accepts the hoopoe's logic. He lets go of the cage. Bach's chorale prelude is not
+      triumphant, but deeply resolved. The continuous, steady flow of the left hand is the sound of a choice
+      made in the quietness of the soul, turning toward the true destination.
