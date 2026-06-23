@@ -38,6 +38,7 @@ each `principle` and let `scene_or_theme` point the film at the right division.
 | Work | Film companion |
 | --- | :--: |
 | The Iliad | ✓ (gold standard) |
+| The Qur'an | ✓ |
 | *all other first-pass works* | ☐ — staged in [`../expansion-backlog.yaml`](../expansion-backlog.yaml) (`film` pillar) |
 | *Tier-2 works* | ☐ — staged (after the first pass) |
 

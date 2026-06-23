@@ -1,0 +1,455 @@
+# The Qur'an — film companion (the FOURTH commentary system)
+# Gold-standard per studium/film/iliad.yaml. The Qur'an's forces orbit revelation, law,
+# and the straight path — the descent of speech that reorients a soul.
+#
+# The Qur'an is not a narrative epic; it is a recitation (qur'ān) — divine speech that
+# descends as warning, law, and mercy across 23 years of prophetic mission in Mecca and
+# Medina. Its forces are not driven by plot but by the movement between the vertical
+# (revelation, supplication) and the horizontal (law, community, exile, return). The
+# Fatiha is the paradigm: praise, petition, orientation — the soul asking to be guided
+# on the straight path (al-ṣirāṭ al-mustaqīm). Every other sura extends one or more of
+# the Fatiha's registers: theophany (revelation), command (law), warning (wrath, fate),
+# consolation (grief, salvation), the prophet-stories (exile, return, sacrifice), and
+# the signs of God in creation (divine-intervention). The companion does not seek films
+# "about Islam" — it seeks films that ENCODE the same forces: a Russian poet-bargain
+# (The Sacrifice) for revelation as a word that reorders life; a Tudor martyr (A Man
+# for All Seasons) for law as the soul's architecture; a medieval Passion (Joan of Arc)
+# for the exposed face of supplication; a desert crossing (Lawrence of Arabia) for
+# sovereignty emerging from the sands; a forbidden Zone (Stalker) for the irruption of
+# the transcendent; a Civil War captivity (The Searchers) for exile as the refusal to
+# become part of any settled thing; a Russian island (The Return) for the impossible
+# return of the father; an oil derrick (There Will Be Blood) for wrath consuming the
+# soul; a European widow (Three Colors: Blue) for grief survived; a bell-mold (Andrei
+# Rublev) for salvation through the work of one's hands; a Japanese hill (Silence) for
+# faith's cost under persecution; a desert coin-toss (No Country for Old Men) for fate
+# as divine decree. The direct adaptation (The Message) is set aside — the obvious one,
+# never promoted; the force-companion carries the weight.
+# Every force tag is a key of dominant-force.yaml; every object of object-taxonomy.yaml.
+work: quran
+title: "The Qur'an — a cinema of revelation, law, and the straight path"
+principle: >
+  Do not assemble a "movies about Islam" list. Assemble the Qur'an's FORCES given cinematic
+  bodies. The Qur'an is not primarily a book of theology; it is the descent of speech that
+  creates a community, a law, a way of seeing the world. Its central petition — ihdinā
+  al-ṣirāṭ al-mustaqīm, "guide us on the straight path" — is not a request for rescue but
+  for orientation: the soul asking to be pointed in the right direction and kept there.
+  Book 1 (Al-Fatiha) is not a chapter but a liturgy — seven lines that are simultaneously
+  praise, declaration of creaturehood, and petition, recited 17 times a day by every Muslim.
+  The fitting and NOT obvious film for it is therefore not a religious epic but The
+  Sacrifice — a man alone on his birthday, at the edge of the world, making a bargain with
+  God because he believes speech addressed upward can change what is coming. The companion
+  reaches across film history: a Tudor lawyer standing against his king (A Man for All
+  Seasons) for law as the soul's architecture; a medieval girl before her inquisitors (The
+  Passion of Joan of Arc) for supplication as exposure; a British officer crossing the
+  Negev (Lawrence of Arabia) for the sovereignty that emerges from the desert and answers
+  to no one; a writer and a professor following a guide into the Zone (Stalker) for the
+  moment the transcendent touches the ordinary; a Civil War veteran searching for a niece
+  taken by Comanches (The Searchers) for exile as a condition of the soul; a father
+  returning to his sons on a Russian island (The Return) for the impossible work of
+  reunion; a California oilman who destroys everyone he touches (There Will Be Blood) for
+  wrath as a consuming fire that leaves nothing behind; a French widow shedding her past
+  (Three Colors: Blue) for grief as a slow emergence from total loss; a 15th-century icon
+  painter whose masterpiece is a bell (Andrei Rublev) for salvation as the work of
+  creation in the midst of suffering; a Portuguese priest in 17th-century Japan (Silence)
+  for faith tested by the extremity of persecution; a sheriff in West Texas (No Country
+  for Old Men) for fate as divine decree — a qadr that cannot be reasoned with. The direct
+  adaptation (The Message) is included only as an overlay, honestly limited — the obvious
+  one, deliberately set aside; the force-companion carries the weight.
+force_coverage: [revelation, law, supplication, kingship, divine-intervention, exile, return, wrath, grief, salvation, sacrifice, fate]
+films:
+  - title: "The Sacrifice"
+    director: "Andrei Tarkovsky"
+    year: 1986
+    force: revelation
+    divisions: [1, 68, 87, 96, 112]
+    objects: [cigarette, door, mirror]
+    letterboxd: the-sacrifice
+    scene_or_theme: "The descent of speech that reorders a life — a man alone on his birthday makes a covenant with God, speaks a word that rewrites the world"
+    object_lesson: >
+      Revelation is not information; it is a word spoken that changes the ontological ground
+      under the one who hears it. Alexander's bargain with God — "I will give up everything
+      I love" — is the gesture of the soul that has understood that the vertical axis is
+      real, that speech addressed to the silence is heard. The cigarette is the object
+      lesson: Alexander smokes through the film's first hour, the small, nervous habit of
+      a man who has not yet understood that he is about to be addressed. When he makes the
+      covenant, he stubs it out — the old life ended. The door is the second object: the
+      door of the house, the door of the room where he lies with the witch, the door of the
+      shed he burns — thresholds crossed between the life before the word and the life after.
+      The mirror is the third: Alexander's reflection in the dark window as he speaks to
+      God — the face of a man who has become a petitioner, no longer master of his own
+      meaning. The Qur'an's first word is iqra — "Recite!" — a command that makes a prophet
+      of a man who could not read. The Sacrifice films that moment: the word descending,
+      the life reordered.
+    why: >
+      Tarkovsky's final film is the most precise cinematic treatment of revelation as an
+      event that rewrites the self from the ground up — not a message but a break in the
+      fabric. The stillness, the chant-like pacing, the long takes that register the weight
+      of the spoken word — these are the exact register of revelation as the Qur'an
+      understands it: not a book that fell out of the sky but a speaking that creates what
+      it names. Screen it for the revelation force (verticality, stillness, the word that
+      arrives from above and changes the one who hears it).
+    content_note: "slow, contemplative; one of cinema's most demanding final films; Tarkovsky's final statement"
+  - title: "A Man for All Seasons"
+    director: "Fred Zinnemann"
+    year: 1966
+    force: law
+    divisions: [2, 4, 5, 24, 65]
+    objects: [door]
+    letterboxd: a-man-for-all-seasons
+    scene_or_theme: "The architecture of law as the soul's protection — one man standing against a king who would tear the framework for his own desire"
+    object_lesson: >
+      Law is not a constraint on freedom; it is the architecture that makes freedom possible
+      — the framework within which the soul can say no to the sovereign. More's refusal is
+      not stubbornness but an act of legal precision: he will not speak against the Act of
+      Supremacy, and the law cannot convict him for silence. The door is the object lesson:
+      the door to the King's Council chamber, the door of the Tower, the door of the
+      scaffold — thresholds of the law that More crosses with the same composure whether
+      entering power or entering death. The Qur'an's dimension of law (sharī'a) is not a
+      code of restrictions but the path laid down — the straight path — whose architecture
+      makes it possible to live justly before God. More's last line — "I die His Majesty's
+      good servant, but God's first" — is the Qur'anic posture: obedience to God that
+      respects the lawful order but does not confuse it with the absolute.
+    why: >
+      More's stand is the Qur'an's legal register made flesh: a man who holds that law is
+      not whatever the sovereign wills but an order that precedes and constrains the
+      sovereign. The formal clarity of Zinnemann's direction — the clean frames, the
+      measured dialogue, the architecture of the courtroom and the Tower — is the formal
+      clarity the dominant-force engine requires of law. Screen it for the law suras:
+      Al-Baqarah's prescriptions, An-Nisa's inheritance mathematics, Al-Ma'idah's
+      contracts, An-Nur's boundaries, the divorce provisions of At-Talaq.
+    content_note: "no violence; execution by beheading (dignified, not graphic); the most articulate script about law in cinema"
+  - title: "The Passion of Joan of Arc"
+    director: "Carl Theodor Dreyer"
+    year: 1928
+    force: supplication
+    divisions: [1, 19, 21, 26, 36, 55]
+    objects: [door]
+    letterboxd: the-passion-of-joan-of-arc
+    scene_or_theme: "The exposed face before the divine — the soul alone, petitioning, its only resource the truth of what it has seen and heard"
+    object_lesson: >
+      Supplication is the creature's most exposed posture: the face turned upward, the
+      answer not yet arrived, the plea held in the body. Dreyer's camera stays on Joan's
+      face — the famous close-ups that frame her eyes, her tears, her mouth forming the
+      name of Jesus — for the entire trial. The door is the object lesson: the door of the
+      interrogation chamber, the door of the prison cell, the door of the cathedral from
+      which she is expelled — thresholds of human judgment that cannot touch the truth she
+      carries. The Qur'an's supplication is the Fatiha's pivot — "You alone we worship; You
+      alone we ask for help" — the moment when address becomes encounter. The entire
+      Passion is that pivot held for eighty minutes: a soul with nothing left but petition,
+      and petition made sufficient by the fact that it is true.
+    why: >
+      Dreyer's film is supplication purified of everything that is not supplication. There
+      is no landscape, no plot, no supporting narrative — only Joan's face and the
+      questions that cannot break her. This is the Fatiha's register: the creature before
+      the creator with nothing to offer but its need. The exposed melodic cry that
+      supplication requires is the cry of a girl who will not say what is not true. Screen
+      it for Al-Fatiha, for Maryam's prayer, for the supplications of the prophets in the
+      Qur'an's Meccan suras — the petition held against all pressure to deny it.
+    content_note: "intense close-ups of suffering; a silent film; the most concentrated study of the human face in cinema"
+  - title: "Lawrence of Arabia"
+    director: "David Lean"
+    year: 1962
+    force: kingship
+    divisions: [2, 18, 27, 67, 114]
+    objects: [gun]
+    letterboxd: lawrence-of-arabia
+    scene_or_theme: "Sovereignty emerging from the desert — the question of who rules and by what right, kingship as farr (the divine light that rests on a man)"
+    object_lesson: >
+      Kingship is not a title; it is a condition of being seen as having the right to lead
+      — a sovereignty that others recognize because it answers to something beyond itself.
+      Lawrence's crossing of the Negev, his leadership of the Arab army, his costume and
+      his status as a figure who is neither British nor Arab and yet commands both — this
+      is sovereignty as farr, the light of kingship that the ancient Iranian tradition
+      (present in the Qur'an's vision of divine sovereignty) describes as a radiance that
+      settles on a chosen figure. The gun is the object lesson: Lawrence fires his pistol
+      at the burning camel, then at the sand — the instrument of sovereignty as decision,
+      the power to act in a landscape where the rules of settled life do not apply. The
+      Qur'an's kingship force is Maliki yawm al-din — Master of the Day of Judgment — the
+      sovereignty that encompasses all of time. Lawrence's journey across the desert is the
+      scale that register requires: not the throne room but the sand.
+    why: >
+      Lean's epic is sovereignty as the Qur'an presents it: a weight that descends on a
+      man from outside himself and that he cannot fully control or explain. Lawrence is not
+      a king — he is a man who is treated as one because he carries something that looks
+      like chosenness. The desert photography, the ceremonial grandeur, the question of who
+      has the right to rule the land after the war — these are the exact register of
+      kingship in the Qur'an, where kingship belongs to God alone and human sovereignty
+      is derivative, contingent, always under the sign of Maliki yawm al-din. Screen it
+      for the Throne Verse, Al-Mulk, the sovereignty passages — but also for the tragic
+      gap between the farr and the man who carries it.
+    content_note: "desert warfare, camel charges; 227-minute runtime with intermission; one of the greatest epics ever made"
+  - title: "Stalker"
+    director: "Andrei Tarkovsky"
+    year: 1979
+    force: divine-intervention
+    divisions: [6, 7, 8, 17, 20, 36, 55]
+    objects: [cigarette, door, milk]
+    letterboxd: stalker
+    scene_or_theme: "The irruption of the transcendent into the ordinary — the Zone as a place where what you most deeply want is met, not by your choice but by a reality that knows you better than you know yourself"
+    object_lesson: >
+      Divine intervention is not a miracle in the sense of a suspension of natural law; it
+      is the entrance of another order of reality into the one we inhabit, indifferent to
+      our categories. The Zone is that entrance: a place where the rules change, where the
+      Stalker guides by intuition and the Writer and the Professor follow by trust. The
+      cigarette is the object lesson: the Writer smokes through the journey, the nervous
+      habit of a man who is used to controlling meaning with words, now in a place where
+      words do not control anything. The door is the threshold of the Room — the most
+      famous doorway in cinema — the entrance to the place where the deepest wish is
+      answered, not as you imagine but as you are. The milk is the third object: the glass
+      of milk left on the bar in the Zone, a small piece of the ordinary world carried into
+      the extraordinary, unchanged but now charged. The Qur'an's ayat — signs — are such
+      entrances: the natural world become a Zone where God's reality presses through.
+    why: >
+      The Qur'an does not narrate miracles as spectacle; it presents the world itself as a
+      sign (āya) — the turning of the seasons, the succession of night and day, the bee
+      that makes honey, the ship that sails — all are irruptions of the divine order into
+      the visible. Stalker trains the eye for this kind of sign: the Zone does not shout;
+      it organizes itself differently, and those who enter learn to read the difference.
+      The Room that does not give you what you ask for but what you are — this is the
+      Qur'an's vision of divine encounter: you are met at a level deeper than your
+      conscious request. Screen it for the āya suras — Al-An'am's signs, Ar-Rahman's
+      repeated "which of your Lord's favors will you deny?", the Night Journey, the signs
+      of God in creation.
+    content_note: "meditative, deliberately slow; Writer's monologues contain strong language; a film about faith, not religion"
+  - title: "The Searchers"
+    director: "John Ford"
+    year: 1956
+    force: exile
+    divisions: [2, 7, 12, 14, 19, 29]
+    objects: [door, gun]
+    letterboxd: the-searchers
+    scene_or_theme: "The exile who cannot come home — the condition of being cut off from one's people by a wound that cannot heal, a search that is also a refusal of the settled life"
+    object_lesson: >
+      Exile is not being in the wrong place; it is the soul's refusal to be at home anywhere
+      — a condition of permanent outsideness that becomes the self's only known mode. Ethan
+      Edwards arrives at his brother's door three years after the Civil War ended, still
+      wearing his Confederate coat, still fighting a war no one else remembers. The door is
+      the object lesson: the door of the Texas cabin at the opening — Ethan framed in it,
+      not quite entering, not quite outside — and the door at the close, where he does not
+      cross the threshold of the homecoming but turns back to the desert. The gun is the
+      second object: Ethan's rifle, the instrument of the search that is also the instrument
+      of his refusal to lay down his war. The Qur'an's exile register — Adam's descent from
+      the Garden, the prophets driven from their cities, the Hijra of the early Muslims —
+      is not merely geographical displacement; it is the soul's condition in a world that is
+      not its true home. Ethan is the exile who has forgotten what he is searching for.
+    why: >
+      The Searchers is not a Western about a rescue mission; it is a film about a man who
+      has been exiled from his own capacity for belonging and can only search. The
+      Qur'an's exile force (used in sura 2 for Adam's descent, in sura 7 for the soul's
+      wandering, in sura 12 for Yusuf's exile from his family, in sura 29 for the testing)
+      finds its cinematic body in Ethan's refusal to enter the final door. Screen it for
+      the exile passages — not as a story about the American West but as a portrait of the
+      soul that can no longer sit by the fire.
+    content_note: "Western violence; racial attitudes of the period are present and part of the character's arc; the ending is one of cinema's great thresholds"
+  - title: "The Return"
+    director: "Andrey Zvyagintsev"
+    year: 2003
+    force: return
+    divisions: [2, 7, 9, 24, 39, 109]
+    objects: [clock, door]
+    letterboxd: the-return-2003
+    scene_or_theme: "The return of the father — the impossible work of reunion after long absence, the silence that cannot be filled by presence alone"
+    object_lesson: >
+      Return is not arrival; it is the encounter between what was remembered and what is
+      — the impossible demand that absence be bridged by presence. The father returns to his
+      two sons after twelve years, and the boys do not know him, cannot speak to him, cannot
+      meet his gaze. The clock is the object lesson: the time that has passed is the space
+      between them that presence cannot collapse — the father tries to teach the younger son
+      to tell time, as if the skill of reading the clock were the skill of understanding
+      what has happened while he was gone. The door is the second object: the door of the
+      house the father opens, the door he walks through, the door of the boat — thresholds
+      that should be crossings but become barriers. The Qur'an's return is tawba —
+      repentance — which is not a regretful feeling but a return to the original state of
+      submission, turning back toward the source from which one has turned away. The father's
+      return in The Return is tawba enacted: the attempt to re-enter a relation that has
+      been broken by absence.
+    why: >
+      The Return is the inexact, almost unbearable image of Qur'anic return: the father who
+      comes back and cannot stay, the son who must learn to live without him again. The
+      Qur'an's most frequent pairing — "truly to your Lord is the return" — is not
+      consoling in the simple sense; it is an encounter the soul must prepare for. The film's
+      final image — the photograph the boys did not take, the father now absent again — is
+      the condition of faith: living in the space between one return and the next. Screen it
+      for the return passages — the tawba of Adam, the repentance of Yunus, the return to
+      God that is the axis of the Qur'anic message — and for the knowledge that return does
+      not erase absence but makes it bearable.
+    content_note: "psychological intensity; the father's discipline is severe; the ending is devastating; a film about what cannot be said"
+  - title: "There Will Be Blood"
+    director: "Paul Thomas Anderson"
+    year: 2007
+    force: wrath
+    divisions: [7, 11, 15, 22, 51, 69, 104, 105, 111]
+    objects: [cigarette, gun, milk]
+    letterboxd: there-will-be-blood
+    scene_or_theme: "Wrath as a consuming fire — a man who had everything present and destroyed it, the soul turned against itself and everyone near it"
+    object_lesson: >
+      Wrath in the Qur'an is not a temper but a condition of the soul that has turned away
+      from guidance and become a consuming fire. Plainview is the Qur'an's warning made
+      flesh: a man whose ambition, his drive to strike oil and own the land, becomes a
+      force that devours every human connection — his son, his brother, the faith of the
+      community, his own soul. The gun is the object lesson: Plainview shoots Eli Sunday in
+      the bowling alley of his own mansion — the instrument of wrath that answers the
+      humiliation of the baptism scene with the final word. The milk is the second object:
+      the milkshake — "I drink your milkshake!" — that speech is not about milk; it is about
+      taking, consuming, draining the other to fill the self, and it never fills. The
+      cigarette is the third: Plainview smokes alone in his house at the end, the only
+      companion of a man who has eliminated every other presence. The Qur'an's wrath suras
+      — the fate of 'Ad and Thamud, the warning of Al-Humazah (the slanderer), the
+      destruction of the people of the elephant — are not about God's anger; they are about
+      what the soul does to itself when it refuses the straight path.
+    why: >
+      Anderson's film is the Qur'an's wrath register without any religious vocabulary. It
+      is not a film about religion but about the soul's capacity to become its own hell —
+      which is exactly what the Qur'an's eschatological warnings are describing. The oil
+      derrick is the geras of this world: the prize that destroys the one who takes it.
+      Plainview's last line — "I'm finished" — is the word of the man who has consumed
+      everything and is left with nothing but the confession that the consumption is
+      complete. Screen it for the wrath suras — the warnings of Hud, Al-Hijr, Al-Hajj,
+      Adh-Dhariyat, Al-Humazah, Al-Fil, Al-Masad — not as divine punishment but as a
+      portrait of the soul's own capacity for self-destruction.
+    content_note: "extreme psychological violence; one scene of graphic physical violence (bowling alley); religious themes handled critically"
+  - title: "Three Colors: Blue"
+    director: "Krzysztof Kieślowski"
+    year: 1993
+    force: grief
+    divisions: [2, 3, 12, 16, 19, 42, 93]
+    objects: [cigarette]
+    letterboxd: three-colors-blue
+    scene_or_theme: "Grief as a condition that does not pass but is survived — the soul learning to inhabit a world from which everything has been taken"
+    object_lesson: >
+      Grief in the Qur'an is not an emotion to be overcome but a weight to be carried until
+      the weight is simply the self. Julie loses her husband and daughter in a car crash and
+      tries to shed every attachment — the house, the music, the past — as if by cutting the
+      ropes she could float free of the pain. The cigarette is the object lesson: Julie
+      smokes through the film, not as a habit but as a small act of presence in a world she
+      has stopped wanting to inhabit — the hand moving to the mouth, the inhale, the
+      exhale, the repetition of being alive. The Qur'an's comfort to the grieving —
+      "truly with hardship comes ease" (94:6), "God does not burden a soul beyond its
+      capacity" (2:286) — is not a promise that grief will end but that the self can hold it
+      and still be held by God. Julie's last act — finishing the symphony her husband
+      began, giving the music to the world — is the grief that has become creation, not
+      recovery but transformation.
+    why: >
+      Blue is grief as the Qur'an knows it: not a chapter to close but a condition the soul
+      must learn to inhabit differently. The Qur'an's consolation suras — Ad-Duha (the
+      morning brightness), Ash-Sharh (the opening of the breast), Al-Insan (the human) —
+      do not remove the cause of grief; they reframe it. The blue swim-pool, the blue
+      light in Julie's apartment, the blue crystal mobile she keeps from the old life —
+      these are the visual equivalent of the Qur'an's repeated "rahman, rahim" — mercy as
+      the medium of survival. Screen it for the grief registers of the Qur'an — the loss of
+      the Prophet's sons, the consolation of Al-Kawthar, the promise that grief is held.
+    content_note: "emotional devastation; a sex scene; Kieślowski's most interior film; the blue filter is a character"
+  - title: "Andrei Rublev"
+    director: "Andrei Tarkovsky"
+    year: 1966
+    force: salvation
+    divisions: [2, 3, 18, 20, 36, 55, 56, 76, 78, 92, 95, 103]
+    objects: [door, egg]
+    letterboxd: andrei-rublev
+    scene_or_theme: "Salvation as the work of creation in the midst of chaos — a bell cast after centuries of silence, a masterpiece that saves not because it is perfect but because it was made in faith"
+    object_lesson: >
+      Salvation in the Qur'an is not rescue from the world but the restoration of wholeness
+      within it — the soul that has been guided to the straight path and walks it, creating
+      beauty and justice along the way. The egg is the object lesson: the egg that the
+      young bell-founder Boriska holds in his hands before the casting — fragile, latent,
+      the unborn thing that will either ring or crack. The egg is the Resurrection, the
+      beginning, the thing that waits to be born through human craft. The door is the
+      second object: the door of the cathedral, the door of the bell-foundry, the door
+      through which Rublev enters the world again after his long silence — thresholds of
+      return to the work of salvation. The final sequence — the bell rises, the clapper
+      swings, the sound fills the valley — is the Qur'an's Jannah, the paradise that is
+      not a garden of idleness but of completion: the soul arriving at its fullness.
+    why: >
+      Tarkovsky's epic of the Russian icon-painter is the Qur'an's salvation register
+      stripped of confessional language: salvation is the act of making something true and
+      beautiful in a world that has broken everything. Rublev's long silence after the
+      sack of Vladimir is the Qur'an's patience (ṣabr) — the soul that waits for the
+      command to speak again. The bell completed by a boy who learned the secret of the
+      clay from his father — this is the Qur'an's promise that God opens the breast and
+      makes the work possible. Screen it for the salvation passages — Al-Kahf's story of
+      the sleepers, Ar-Rahman's balance, Al-Waqi'a's gardens, Al-Asr's wager of faith and
+      good works — and for the knowledge that paradise is not a reward given but a door
+      opened through the work of one's hands.
+    content_note: "extreme violence in the sack of Vladimir sequence; slow, demanding; the bell-casting finale is one of cinema's greatest acts of faith"
+  - title: "Silence"
+    director: "Martin Scorsese"
+    year: 2016
+    force: sacrifice
+    divisions: [2, 3, 8, 9, 22, 29, 60, 85]
+    objects: [cigarette, door]
+    letterboxd: silence-2016
+    scene_or_theme: "Faith tested by the extremity of persecution — the question of what it costs to hold to revelation when the price is everything, and the deeper question of whether apostasy can be an act of love"
+    object_lesson: >
+      Sacrifice in the Qur'an is not the giving up of things for God; it is the
+      willingness to release everything to God — Abraham surrenders his son, the early
+      Muslims surrender their homes, the patient ones surrender their lives. The cigarette
+      is the object lesson: Ferreira smokes through the film, a man who has apostatized and
+      lives — the small, worldly habit that signals he has chosen to exist rather than to
+      witness, but the grief in his eyes says the sacrifice has not ended. The door is the
+      second object: the door of the hut where Rodrigues hides, the door of the prison
+      where the Japanese Christians are held, the door of the temple where the fumie lies
+      — thresholds of faith that must be crossed. The film's central agony is the
+      fumie: the image of Christ that the missionary must step on to save the villagers
+      from torture. The question is not whether apostasy is wrong but whether love for the
+      suffering other can mandate the betrayal of the source of love. The Qur'an's
+      account of Abraham and Ismail does not answer this question; it only shows the
+      willingness — the sacrifice prepared, the knife raised, the ram provided.
+    why: >
+      Scorsese's film is the sacrifice register of the Qur'an with the theological
+      furniture of Christianity but the force-structure of the test of faith. Rodrigues's
+      journey to Japan is the Hijra inverted — he goes toward persecution, not away from
+      it. The moment he places his foot on the fumie (the sound of the foot on the image
+      is the loudest sound in the film) is sacrifice as the Qur'an means it: the
+      willingness to lose everything, including the integrity of the self, for the sake of
+      the other. The Qur'an's trials of the prophets — Nuh building the ark alone, Ibrahim
+      in the fire, Musa facing Pharaoh — are not tests of doctrine but tests of
+      willingness: will you do what is asked? Screen it for the sacrifice register of the
+      Qur'an — the trials of the prophets, the tests of Al-Ankabut, the Abraham and
+      Ismail story, the patience of Ayyub, the mother of Musa casting the basket on the
+      Nile — acts of trust that look like abandonment.
+    content_note: "graphic torture; sustained religious intensity; Scorsese's most patient film; the fumie scene is the most painful moment in his work"
+  - title: "No Country for Old Men"
+    director: "Joel Coen, Ethan Coen"
+    year: 2007
+    force: fate
+    divisions: [2, 3, 6, 17, 36, 50, 56]
+    objects: [gun, telephone]
+    letterboxd: no-country-for-old-men
+    scene_or_theme: "Fate as divine decree — a qadr that cannot be reasoned with, a reckoning that arrives on its own schedule, a world in which the outcome is written and the only question is how you meet it"
+    object_lesson: >
+      Fate in the Qur'an (qadr) is not fatalism — it is the recognition that God's
+      knowledge encompasses what the human mind cannot see, and that events move toward an
+      outcome that is known even when it is not understood. The gun is the object lesson:
+      Chigurh's compressed-air cattle gun is not a weapon of passion or choice or self-
+      defense — it is the instrument of fate, the tool of a decree that operates according
+      to a logic the human world cannot bargain with. The telephone is the second object:
+      the calls that arrive with news already determined — Llewelyn learning the
+      transponder is with the money, Moss calling the hotel room, the call that Sheriff
+      Bell cannot answer. The phone is the medium of the word that has already been spoken.
+      The Qur'an's Al-Qadr (The Decree, Sura 97) says the Night of Power is better than a
+      thousand months — one night when the decree descends, and everything is written. The
+      film's final phone call — Bell's dream of his father in the mountains carrying a
+      flame — is the soul's attempt to read the writing that has already been done.
+    why: >
+      The Coens' desert noir is the Qur'an's qadr given a body that the Western genre can
+      recognize but cannot explain. Chigurh is not a villain; he is the force of divine
+      decree moving through the world, and when he is hit by a car at a traffic light and
+      limps away, the film does not make him a victim — it makes him an ordinary part of
+      the mechanism he serves. Sheriff Bell's dreams, Llewelyn's luck, the coin that
+      decides whether a gas-station owner lives or dies — these are the Qur'an's signs:
+      the world saturated with a will that is not our own. Screen it for the fate passages
+      — the Night of Power, the words written on the preserved tablet, the suras that
+      insist that every soul will taste what it has earned, and that the reckoning is real.
+    content_note: "graphic violence; Chigurh is one of cinema's most unsettling figures; the coin toss is the definitive scene"
+adaptations:
+  - title: "The Message"
+    director: "Moustapha Akkad"
+    year: 1976
+    letterboxd: the-message
+    note: "the obvious screen-Qur'an — a reverent, panoramic epic covering the Prophet's mission from the first revelation to the conquest of Mecca. Muhammad is never shown (per Islamic tradition); the camera adopts his perspective. Strong on the Hijra, Badr, and the establishment of the first community; limited by its genre (the Hollywood historical epic) and by the theological discipline of not representing the Prophet. The inner experience of revelation — the force-structure of the Qur'an itself — is not the film's register; it is a respectful chronicle of events. Set aside; we screen the object lessons instead."
+    scenes:
+      - {division: 1, force: revelation, scene: "The first revelation in the Cave of Hira — 'Iqra!' — the descent of speech"}
+      - {division: 2, force: law, scene: "The establishment of the community in Medina — the Constitution of Medina"}
+      - {division: 8, force: divine-intervention, scene: "The Battle of Badr — the angels descending, the small army prevailing"}
+      - {division: 22, force: sacrifice, scene: "The persecution of the Muslims, the testing of the believers in Mecca"}
+      - {division: 48, force: return, scene: "The conquest of Mecca — the return of the exiles, the opening of the Kaaba"}
