@@ -1,0 +1,172 @@
+# Conference of the Birds — Section 3 — curated music arc
+# The Peacock's Objection: the longing for paradise lost
+work: conference-of-birds
+book: 3
+title: "Conference of the Birds, Section 3: The Peacock's Lament / The Gate of Paradise"
+length_minutes: 70
+principle: >
+  Do not score this as nostalgia for a lost golden age. Score it as the specific spiritual
+  problem of someone who has experienced the divine and then been separated from it — the peacock
+  was in paradise and was cast out. His longing is real and his memory is accurate. But the
+  hoopoe's teaching is devastating: the paradise the peacock wants to return to is not the
+  destination — the Simurgh is not Eden regained. The peacock must learn that the way forward
+  is not backward, that the fall is not a mistake to be undone but a condition to be traversed.
+force_arc: [memory, grief, revelation, desire, kingship, supplication, divine-intervention, memory, ascent, return]
+dominant_force: memory
+tracks:
+  - n: 1
+    scene: "The peacock steps forward — magnificent and ashamed"
+    force: memory
+    composer: Elgar
+    work: "Symphony No. 2 — I. Allegro vivace e nobilmente (opening theme)"
+    decision: added
+    why: >
+      The peacock is the poem's most beautiful contradiction: a bird whose very appearance is a
+      memory of paradise (the thousand eyes on his tail, the jewel-toned iridescence) and whose
+      voice speaks only of exile. Elgar's Second Symphony opens with a theme that is noble and
+      shadowed simultaneously — a melody that sounds like something remembered from a world that
+      no longer exists. The peacock's opening speech must have this quality: the grandeur of a
+      creature who once belonged somewhere unspeakably beautiful and cannot believe he has to
+      travel to reach what he has already lost.
+  - n: 2
+    scene: "The peacock tells his story — I was in paradise and was cast out"
+    force: grief
+    composer: Mahler
+    work: "Symphony No. 5 — IV. Adagietto"
+    decision: added
+    why: >
+      The peacock's story is the poem's most poignant individual testimony: he was Adam's
+      companion in Eden, the bird who walked among the angels, and then — through the serpent's
+      deception — he was driven out. Mahler's Adagietto is grief that has left behind all
+      specific content: it is the shape of loss itself, the strings moving in a parabola that
+      could only be called sorrow. The peacock's grief is not for anything he can name — it is
+      the grief of having been in the presence and then not. Mahler's music holds that specific
+      quality: the sadness of the door that closed behind you.
+  - n: 3
+    scene: "The hoopoe begins the tale of Adam's exile — the door that opened both ways"
+    force: revelation
+    composer: Pärt
+    work: "Fratres"
+    decision: added
+    why: >
+      The hoopoe does not comfort the peacock. He tells a tale about the gate of paradise: how
+      it opens in both directions, how Adam walked through it into the world and found that the
+      world was also a gate. Pärt's Fratres is revelation in the purest sense — a pattern that
+      repeats and deepens, each iteration revealing a new dimension of the same material. The
+      percussion underneath the strings feels like a pulse that was always there, that was
+      present even before we heard it. The hoopoe's tale works the same way: the gate was always
+      both entrance and exit; the peacock's exile was also his opportunity, if he could see it.
+  - n: 4
+    scene: "The peacock's longing — if I could return, I would never leave"
+    force: desire
+    composer: Wagner
+    work: "Lohengrin — Prelude to Act I"
+    decision: added
+    why: >
+      The peacock interrupts: you do not understand, I do not want an opportunity, I want
+      paradise — the actual place, the garden, the trees, the river, the proximity. Wagner's
+      Lohengrin Prelude is the sound of a desire so pure it has no words: the violins ascending
+      in octaves, the harmony moving from A major through an extended suspension, the whole
+      texture thinning into a transparency that feels like the membrane between this world and
+      the next. It is the sound of wanting something that you know you cannot have, and not
+      being able to stop wanting it. That is the peacock at his most exposed.
+  - n: 5
+    scene: "The hoopoe names the true king — beyond paradise"
+    force: kingship
+    composer: Handel
+    work: "Zadok the Priest (coronation anthem)"
+    decision: added
+    why: >
+      The hoopoe's answer is one of the poem's great theological pivots: paradise is a garden,
+      but the Simurgh is the king of that garden. To seek the garden without seeking the king
+      is to mistake the created for the creator. Handel's 'Zadok the Priest' — the anthem
+      written for George II's coronation, with its slow-building orchestral introduction and
+      sudden choral entry 'God save the King' — is sovereignty music in its most absolute form.
+      The hoopoe is not being political; he is naming a hierarchy of being. The peacock's
+      longing for paradise is real, but paradise is not the top of the chain.
+  - n: 6
+    scene: "The peacock's resistance — I have already been chosen"
+    force: supplication
+    composer: Barber
+    work: "Adagio for Strings, Op. 11"
+    decision: added
+    why: >
+      The peacock's deepest attachment is not to paradise but to his own election: he was the
+      most beautiful bird in Eden, the one who walked with Adam. His supplication is mixed with
+      pride, and he cannot separate them. Barber's Adagio is supplication stripped of everything
+      except the exposed line — the strings moving through a single arch of increasing intensity,
+      the texture thinning as the emotional weight increases. The peacock's prayer is like this:
+      a confession that is also a claim, a surrender that is also a demand. Barber holds the
+      tension without resolving it, because the peacock is not yet ready to resolve it.
+  - n: 7
+    scene: "A brief tale — the angel who loved his own light"
+    force: divine-intervention
+    composer: Strauss
+    work: "Also sprach Zarathustra — 'Das Grablied' (The Song of the Grave)"
+    decision: added
+    why: >
+      The hoopoe tells a second tale to answer the peacock's pride: of an angel who was so
+      beautiful that God commanded him to look away from himself, and the angel could not. The
+      tale is about Iblis (Satan) in the Sufi tradition — the one who loved God so perfectly
+      that he refused to bow to Adam, and in that refusal was both lost and, in some readings,
+      the most faithful of all. Strauss's 'Das Grablied' from Also sprach Zarathustra is a dark
+      meditation on beauty that turned inward — the brass and low strings moving in slow,
+      funereal arcs, the light draining from the register. The peacock recognizes himself in the
+      tale, and the recognition is painful.
+  - n: 8
+    scene: "The peacock remembers paradise — not as place, but as presence"
+    force: memory
+    composer: Vaughan Williams
+    work: "The Lark Ascending (opening)"
+    decision: added
+    why: >
+      The tale shifts something in the peacock. His memory of paradise begins to change — not
+      the memory of the garden but the memory of the presence that filled it. Vaughan Williams's
+      The Lark Ascending opens with a solo violin that rises as if it had no ceiling, the
+      orchestra beneath it a field of open fifths and pastoral stillness. It is not nostalgia —
+      it is memory transfigured into something else, the trace of the divine in the natural
+      world. The peacock begins to hear in his own memory a different note: not loss but the
+      thing that loss was carrying.
+  - n: 9
+    scene: "The first step — the peacock looks not backward but inward"
+    force: ascent
+    composer: Mahler
+    work: "Symphony No. 4 — IV. 'Sehr behaglich' (Das himmlische Leben)"
+    decision: added
+    why: >
+      The peacock does not declare he will join the journey. But the direction of his attention
+      changes — from the garden behind him to the possibility within him. Mahler's Fourth
+      Symphony finale, a child's vision of heaven, is ascent in the key of lightness: the
+      soprano voice presents the celestial banquet as a simple fact, without awe, without
+      terror, without the weight of adult theology. The peacock's shift has this quality: a
+      lightening, a remembering that the paradise he came from was not made of walls and rivers
+      but of presence, and presence can be carried.
+  - n: 10
+    scene: "The assembly held between two gardens"
+    force: return
+    composer: Dvořák
+    work: "Symphony No. 9 ('From the New World') — II. Largo (English horn theme)"
+    decision: added
+    why: >
+      The section closes with the assembly suspended between the peacock's remembered paradise
+      and the Simurgh's unknown one. Dvořák's Largo — the English horn melody over held chords
+      — is the sound of homesickness for a home you have not yet found. It is not the grief of
+      exile (the peacock's opening register) but the longing for a destination that the longing
+      itself is creating. The birds do not move in this section; they sit in the space the
+      peacock's story has opened. Dvořák holds them there: not in paradise, not on the road,
+      but in the awareness that there is somewhere to go.
+demoted:
+  - composer: Bach
+    work: "St Matthew Passion — 'Mache dich, mein Herze, rein' (No. 65)"
+    status: "reserved for Section 39 or 40 (the arrival at the Simurgh's court)"
+    why: >
+      The bass aria 'Make yourself clean, my heart' is the moment of readiness to receive the
+      divine presence. That register belongs to the arrival, not to the exploration of why
+      arrival is necessary.
+  - composer: Beethoven
+    work: "Symphony No. 9 — IV. 'Ode to Joy'"
+    status: "far too terminal and communal for the assembly phase; save for Section 45"
+    why: >
+      The Ninth's finale is the most public, most universal vision of paradise in Western music.
+      Attar's poem reserves its universal vision for the final revelation of the si-murgh;
+      the peacock's individual longing is not yet ready for the chorus of all humanity.

@@ -1,0 +1,177 @@
+# Conference of the Birds — Section 2 — curated music arc
+# The Parrot's Objection: the desire for immortality in form
+work: conference-of-birds
+book: 2
+title: "Conference of the Birds, Section 2: The Parrot's Objection / The Cage of Immortality"
+length_minutes: 66
+principle: >
+  Do not score this as a debate or argument. Score it as the parrot's genuine predicament: it has
+  heard of immortality (the Simurgh as eternal life) and wants it, but it wants it inside its
+  current form — it cannot imagine a good that exceeds its own survival. The hoopoe's answer is
+  an embedded tale about the vanity of seeking the eternal while clinging to the temporal. The
+  music must hold the parrot's longing (which is real) against its radical misapprehension (which
+  is also real). The comedy is in the gap, and the gap is tragic.
+force_arc: [desire, comedy, revelation, grief, desire, supplication, ascent, memory, metamorphosis, revelation]
+dominant_force: desire
+tracks:
+  - n: 1
+    scene: "The parrot speaks — I have heard of immortality, give it to me now"
+    force: desire
+    composer: Szymanowski
+    work: "Symphony No. 3 ('Song of the Night') — I. Moderato (opening)"
+    decision: added
+    why: >
+      The parrot's opening speech is not greed — it is the purest form of longing mistaking its
+      object. He has heard the hoopoe's description of the Simurgh and translated it as: eternal
+      life, which I want, now. Szymanowski's Third Symphony opens with an ecstatic tenor line
+      suspended above a shimmering orchestra — longing so refined it has forgotten it is attached
+      to anything. That is the parrot's mistake: he calls his attachment longing, and longing
+      thinks it has already transcended attachment. The music's chromatic yearning and delayed
+      resolution captures the precise note of desire that does not yet know what it desires.
+  - n: 2
+    scene: "The assembly laughs — the parrot's vanity exposed"
+    force: comedy
+    composer: Rossini
+    work: "Il barbiere di Siviglia — Overture"
+    decision: added
+    why: >
+      The other birds laugh at the parrot — not cruelly, but with the recognition of absurdity
+      that laughter alone registers. The parrot wants to live forever; the birds have just been
+      told the Simurgh cannot be approached by anything that wants to remain what it is. Rossini's
+      overture is the sound of formal comedy at its most surgical: the crescendi land exactly,
+      the thematic material is precise, the laughter is built into the musical architecture. The
+      birds' laughter is not mockery — it is the poem's method of releasing tension so the real
+      teaching can arrive. Rossini's timing, his structural wit, is the right register for this
+      social release.
+  - n: 3
+    scene: "The hoopoe begins the tale of the Prince and the Phoenix"
+    force: revelation
+    composer: Debussy
+    work: "Prélude à l'après-midi d'un faune"
+    decision: added
+    why: >
+      The hoopoe does not answer the parrot by refuting him. He tells a story: a prince sought
+      the phoenix for its promise of eternal life, pursued it across seven seas, and found at the
+      end that the phoenix is not a thing that gives immortality — it is the pattern of
+      transformation itself, the burning and rising that cannot be possessed. Debussy's prelude
+      is the sound of a story beginning: the flute line rises out of silence, unmoored from any
+      key, as if narrative itself were being invented in the moment. The revelation does not
+      arrive as argument — it arrives as world-disclosure, a shift in the ground of what can be
+      perceived. That is exactly what the hoopoe's tale does to the parrot's question.
+  - n: 4
+    scene: "The prince crosses the first sea — the cost becomes visible"
+    force: grief
+    composer: Mahler
+    work: "Kindertotenlieder — 'Nun will die Sonn' so hell aufgeh'n' (No. 1)"
+    decision: added
+    why: >
+      The tale within the tale: the prince's journey costs him his companions, his kingdom, his
+      name. Each loss brings him closer to a destination he no longer wants. Mahler's
+      Kindertotenlieder opens with the simplest possible grief: the sun will rise anyway, the
+      children will not see it. The voice moves above a sparse orchestra — funeral bells in
+      the horns, a melody that sounds like someone walking forward because there is nothing
+      behind them. The prince's losses have this quality: not dramatic, not theatrical, but the
+      slow erosion of everything he thought he was pursuing the thing he thought he wanted.
+  - n: 5
+    scene: "The phoenix appears — not as gift but as fire"
+    force: desire
+    composer: Scriabin
+    work: "The Poem of Ecstasy — opening (Lento)"
+    decision: added
+    why: >
+      The prince reaches the phoenix, and the phoenix burns him. It does not grant him eternal
+      life — it shows him what eternal life actually is: not the extension of his current form
+      but the dissolution of it into flame that does not die because it does not hold anything
+      back. Scriabin's Poem of Ecstasy inhabits exactly this register: desire so intense it has
+      left behind the personal, the particular, the attached. The opening, suspended and
+      gathering, builds from a single trumpet call into a texture of unbearable radiance. The
+      parrot, listening to this tale, begins to sense that the immortality it asked for is not
+      what it thought it was.
+  - n: 6
+    scene: "The parrot's confusion — I wanted life, not death"
+    force: supplication
+    composer: Bach
+    work: "Cantata BWV 60 — 'Es ist genug' (chorale)"
+    decision: added
+    why: >
+      The parrot, hearing the tale, protests: I asked for eternal life, not for burning. The
+      confusion is honest and central to Attar's teaching — every bird thinks the journey is
+      toward more of what it already has. The chorale 'Es ist genug' (It is enough) from
+      Bach's Cantata BWV 60 is the musical statement of surrender: the harmony moves through
+      a series of suspensions that never quite resolve, the text announcing that the speaker
+      has had enough, that the够了 is not exhaustion but arrival at the limit of what the self
+      can hold. The parrot is at this limit and does not yet know that arriving there is the
+      whole point.
+  - n: 7
+    scene: "The hoopoe answers — the self must be outlived"
+    force: ascent
+    composer: Bruckner
+    work: "Symphony No. 4 ('Romantic') — III. Scherzo (Trio)"
+    decision: added
+    why: >
+      The hoopoe's answer to the parrot is the poem's first full articulation of fana: the self
+      is not an object to be preserved but a condition to be outlived. He does not say this in
+      the abstract — he tells a second embedded tale, shorter now, about a dervish who prayed
+      for union and was told he must become nothing. Bruckner's Fourth Scherzo Trio is Bruckner
+      at his most lifted: a Ländler that seems to float above the earth, the horns and strings
+      in a dance that has no weightedness, no gravity. It is ascent not as effort but as the
+      natural motion of a soul that has stopped gripping itself. The parrot cannot yet hear
+      this fully, but the music — and the hoopoe — plant it.
+  - n: 8
+    scene: "The memory of the feather — the trace as clue"
+    force: memory
+    composer: Fauré
+    work: "Pavane, Op. 50"
+    decision: added
+    why: >
+      The hoopoe returns to the feather — the Simurgh's trace fallen in China — as his closing
+      gesture. The feather is not proof of eternal life; it is proof that something beyond the
+      parrot's imagination exists and has left a mark on the world. Fauré's Pavane is memory
+      rendered as a slow, formal dance: not grief, not hope, but the recognition that something
+      has passed through the world and left a pattern behind. The Pavane's famous melody,
+      moving above a repeated bass figure, is the trace itself — an impression of something
+      that was present and now is not, but whose shape remains.
+  - n: 9
+    scene: "The parrot begins to move — not convinced, but unseated"
+    force: metamorphosis
+    composer: Ravel
+    work: "Daphnis et Chloé — Suite No. 2, 'Lever du jour'"
+    decision: added
+    why: >
+      The section's conclusion: the parrot has not agreed to go, but it has been moved. Its
+      certainty about what immortality means has cracked. The change is incremental, hormonal,
+      happening below the level of decision. Ravel's dawn music — which builds from a single
+      flute line through layered strings to a full orchestral radiance — is the sound of
+      something changing before it is consciously chosen. The sun rises; the birds do not decide
+      to wake; the waking happens. The parrot's unseating is like this: not a conversion but a
+      shift in the light, a fracture in the shell of its certainty.
+  - n: 10
+    scene: "The hoopoe's prayer for the assembly — may you die before you die"
+    force: revelation
+    composer: Tavener
+    work: "The Protecting Veil — I. The Protecting Veil (opening)"
+    decision: added
+    why: >
+      The hoopoe closes the section with a prayer that is also a teaching: the death before
+      death that opens the only true life. Tavener's The Protecting Veil opens with a cello
+      melody of immense stillness — not grief, not triumph, but the sound of a threshold held
+      open. The strings beneath the cello line sustain a single chord, as if time itself were
+      suspended. The hoopoe's prayer is exactly this: a threshold that remains open, waiting
+      for the birds to choose to walk through it into the not-knowing. The parrot does not yet
+      walk through, but the door is visible now.
+demoted:
+  - composer: Wagner
+    work: "Tristan und Isolde — Liebestod"
+    status: "too terminal for the assembly phase; save for Section 44 or 45 (the Simurgh / dissolution)"
+    why: >
+      The Liebestod is the sound of desire consuming itself into death as fulfillment. That
+      register belongs to the poem's final movement, where annihilation is not a teaching but
+      an event. The parrot is learning about the death of the self, not experiencing it.
+  - composer: Mahler
+    work: "Symphony No. 2 ('Resurrection') — V. 'Auferstehn' (chorale finale)"
+    status: "reserved for Section 45 (the Simurgh / the thirty birds become what they sought)"
+    why: >
+      The Resurrection finale is the most terminal apotheosis in the Western canon — the soul
+      rising through judgment into eternal life. That is the register of the poem's final
+      revelation (the si-murgh pun, the recognition), not of a bird learning that immortality
+      is not what it thought.

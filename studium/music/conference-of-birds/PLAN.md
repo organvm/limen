@@ -11,16 +11,16 @@
 - **Corpus:** `arabic-persian/conference-of-birds` (translations only)
 - **Source rail:** https://ganjoor.net/attar/manteghotteyr/
 - **Divisions:** 45 × Section
-- **Progress:** 1/45 arcs authored
+- **Progress:** 6/45 arcs authored
 
 | Section | dominant force | status |
 | --: | --- | :--: |
 | 1 | (author) | ✓ |
-| 2 | (author) | ☐ |
-| 3 | (author) | ☐ |
-| 4 | (author) | ☐ |
-| 5 | (author) | ☐ |
-| 6 | (author) | ☐ |
+| 2 | desire | ✓ |
+| 3 | memory | ✓ |
+| 4 | sacrifice | ✓ |
+| 5 | desire | ✓ |
+| 6 | kingship | ✓ |
 | 7 | (author) | ☐ |
 | 8 | (author) | ☐ |
 | 9 | (author) | ☐ |

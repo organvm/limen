@@ -14,22 +14,22 @@ portal:
       agy: 100
       claude: 100
     track:
-      date: '2026-06-22'
-      spent: 21
+      date: '2026-06-23'
+      spent: 17
       per_agent:
-        jules: 13
+        jules: 7
         gemini: 0
         codex: 0
         opencode: 1
         agy: 6
-        claude: 1
+        claude: 3
       per_agent_reset:
-        jules: '2026-06-22T16:29:16.568799+00:00'
-        gemini: '2026-06-22T16:29:16.568799+00:00'
-        codex: '2026-06-22T16:47:16.017025+00:00'
-        opencode: '2026-06-22T16:29:16.568799+00:00'
-        agy: '2026-06-22T16:29:16.568799+00:00'
-        claude: '2026-06-22T16:47:16.017025+00:00'
+        jules: '2026-06-23T19:19:07.848509+00:00'
+        gemini: '2026-06-23T19:19:07.848509+00:00'
+        codex: '2026-06-23T19:19:07.848509+00:00'
+        opencode: '2026-06-23T19:19:07.848509+00:00'
+        agy: '2026-06-23T19:19:07.848509+00:00'
+        claude: '2026-06-23T19:19:07.848509+00:00'
 tasks:
 - id: FORCE-route-all-services
   title: Router fans across ALL paid services, not just the 6 vendors
@@ -30048,7 +30048,7 @@ tasks:
     \ issue #1). \u2014 ESC"
   depends_on: []
   created: '2026-06-19'
-  updated: '2026-06-22T13:22:49.067777Z'
+  updated: '2026-06-23T20:38:03.566790Z'
   dispatch_log:
   - timestamp: '2026-06-20T09:14:24.968499Z'
     agent: limen
@@ -30067,6 +30067,15 @@ tasks:
   - timestamp: '2026-06-22T13:22:49.067777Z'
     agent: jules
     session_id: '2721306510172335407'
+    status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
+  - timestamp: '2026-06-23T20:38:03.566790Z'
+    agent: jules
+    session_id: '17745261278760414371'
     status: dispatched
 - id: GH-organvm-i-theoria-atomic-substrata-1
   title: "EV Activation Audit: ship-soon \u2014 UAKS pipeline operational but unreleased"
@@ -31579,7 +31588,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - test-coverage
   - generated
@@ -31591,12 +31600,59 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T13:35:44.917359Z'
+  updated: '2026-06-23T20:13:16.939005Z'
   dispatch_log:
   - timestamp: '2026-06-22T13:35:44.917359Z'
     agent: jules
     session_id: '11145480784445674959'
     status: dispatched
+  - timestamp: '2026-06-23T20:13:16.939005Z'
+    agent: jules
+    session_id: '11145480784445674959'
+    status: done
+    output: 'diff --git a/scripts/test.sh b/scripts/test.sh
+
+      new file mode 100755
+
+      index 0000000..ebf76a2
+
+      --- /dev/null
+
+      +++ b/scripts/test.sh
+
+      @@ -0,0 +1,32 @@
+
+      +#!/bin/bash
+
+      +
+
+      +set -Eeuo pipefail
+
+      +
+
+      +# Find project root
+
+      +PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+      +TESTS_DIR="${PROJECT_ROOT}/tests"
+
+      +
+
+      +echo "========================================"
+
+      +echo "RUNNING ALL TESTS"
+
+      +echo "========================================"
+
+      +
+
+      +FAILED_TESTS=0
+
+      +
+
+      +for test_script in "${TESTS_DIR}"/test_*.sh; do
+
+      +  '
 - id: GEN-organvm-i-theoria-organvm-iii-ergon.github.io-test-coverage-0620
   title: Raise test coverage in organvm-i-theoria/organvm-iii-ergon.github.io
   repo: organvm/organvm-iii-ergon.github.io
@@ -31667,9 +31723,18 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T13:35:44.917359Z'
+  updated: '2026-06-23T20:38:03.566790Z'
   dispatch_log:
   - timestamp: '2026-06-22T13:35:44.917359Z'
+    agent: jules
+    session_id: cli
+    status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
+  - timestamp: '2026-06-23T20:38:03.566790Z'
     agent: jules
     session_id: cli
     status: dispatched
@@ -31712,9 +31777,18 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T13:35:44.917359Z'
+  updated: '2026-06-23T20:38:03.566790Z'
   dispatch_log:
   - timestamp: '2026-06-22T13:35:44.917359Z'
+    agent: jules
+    session_id: cli
+    status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
+  - timestamp: '2026-06-23T20:38:03.566790Z'
     agent: jules
     session_id: cli
     status: dispatched
@@ -31981,12 +32055,17 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T14:02:00.661465Z'
+  updated: '2026-06-23T21:12:24.847899Z'
   dispatch_log:
   - timestamp: '2026-06-22T14:02:00.661465Z'
     agent: jules
     session_id: cli
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: GEN-organvm-i-theoria-conversation-corpus-engine-test-coverage-0620
   title: Raise test coverage in organvm-i-theoria/conversation-corpus-engine
   repo: organvm/conversation-corpus-engine
@@ -32138,7 +32217,7 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T14:33:41.428935Z'
+  updated: '2026-06-23T21:12:24.847899Z'
   dispatch_log:
   - timestamp: '2026-06-22T14:32:26.890622Z'
     agent: limen
@@ -32149,6 +32228,11 @@ tasks:
     agent: jules
     session_id: cli
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: GEN-organvm-iii-ergon-sovereign-systems--layer-above-hokage-test-coverage-0620
   title: Raise test coverage in organvm-iii-ergon/sovereign-systems--layer-above-hokage
   repo: organvm/sovereign-systems--layer-above-hokage
@@ -32176,7 +32260,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - test-coverage
   - generated
@@ -32188,7 +32272,7 @@ tasks:
     to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T14:33:41.428935Z'
+  updated: '2026-06-23T20:14:43.454665Z'
   dispatch_log:
   - timestamp: '2026-06-22T14:32:26.890622Z'
     agent: limen
@@ -32199,6 +32283,11 @@ tasks:
     agent: jules
     session_id: '16345082591710621284'
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: GEN-a-organvm-alchemia-ingestvm-test-coverage-0620
   title: Raise test coverage in a-organvm/alchemia-ingestvm
   repo: organvm/alchemia-ingestvm
@@ -32226,7 +32315,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - test-coverage
   - generated
@@ -32238,7 +32327,7 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T14:33:41.428935Z'
+  updated: '2026-06-23T20:13:16.941107Z'
   dispatch_log:
   - timestamp: '2026-06-22T14:32:26.890622Z'
     agent: limen
@@ -32249,6 +32338,16 @@ tasks:
     agent: jules
     session_id: '17404864352305606977'
     status: dispatched
+  - timestamp: '2026-06-23T20:13:16.941107Z'
+    agent: jules
+    session_id: '17404864352305606977'
+    status: done
+    output: "diff --git a/Makefile b/Makefile\nindex 9df3350..253d052 100644\n---\
+      \ a/Makefile\n+++ b/Makefile\n@@ -3,7 +3,7 @@ SCHEMA := standards/FUNCTIONcalled_Metadata_Sidecar.v1.1.schema.json\n\
+      \ VALIDATOR := tools/validate_meta.py\n NAMING_VALIDATOR := tools/validate_naming.py\n\
+      \ SEMGREP_RULES := tools/semgrep/functioncalled.yaml\n-REG_BUILDER := tools/registry-builder.py\n\
+      +REG_BUILDER := tools/registry_builder.py\n META_FILES := $(shell find . -type\
+      \ f -name \"*.meta.json\" 2>/dev/null)\n \n .PHONY: validate validate-nam"
 - id: GEN-a-organvm-metasystem-master-test-coverage-0620
   title: Raise test coverage in a-organvm/metasystem-master
   repo: organvm/metasystem-master
@@ -32276,7 +32375,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - test-coverage
   - generated
@@ -32288,12 +32387,59 @@ tasks:
     to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T14:13:33.083168Z'
+  updated: '2026-06-23T20:13:16.941692Z'
   dispatch_log:
   - timestamp: '2026-06-22T14:13:33.083168Z'
     agent: jules
     session_id: '11730836602200380135'
     status: dispatched
+  - timestamp: '2026-06-23T20:13:16.941692Z'
+    agent: jules
+    session_id: '11730836602200380135'
+    status: done
+    output: 'diff --git a/tests/test_git_sensor.py b/tests/test_git_sensor.py
+
+      new file mode 100644
+
+      index 0000000..ce3054b
+
+      --- /dev/null
+
+      +++ b/tests/test_git_sensor.py
+
+      @@ -0,0 +1,210 @@
+
+      +"""Tests for the Git sensor."""
+
+      +
+
+      +import shutil
+
+      +import subprocess
+
+      +from pathlib import Path
+
+      +from unittest.mock import MagicMock
+
+      +
+
+      +import pytest
+
+      +
+
+      +from ontologia.sensing.git_sensor import GitSensor
+
+      +
+
+      +
+
+      +@pytest.fixture
+
+      +def workspace(tmp_path: Path) -> Path:
+
+      +    """Provide a temporary workspace directory."""
+
+      +    return '
 - id: GEN-organvm-i-theoria-.github-test-coverage-0620
   title: Raise test coverage in organvm-i-theoria/.github
   repo: organvm/.github
@@ -32648,7 +32794,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - test-coverage
   - generated
@@ -32660,12 +32806,17 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T14:13:33.083168Z'
+  updated: '2026-06-23T20:14:43.454665Z'
   dispatch_log:
   - timestamp: '2026-06-22T14:13:33.083168Z'
     agent: jules
     session_id: '12487064549975318679'
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: GEN-organvm-iii-ergon-organvm-iii-ergon--superproject-test-coverage-0620
   title: Raise test coverage in organvm-iii-ergon/organvm-iii-ergon--superproject
   repo: organvm/organvm-iii-ergon--superproject
@@ -32693,7 +32844,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - test-coverage
   - generated
@@ -32705,12 +32856,22 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T14:25:40.865908Z'
+  updated: '2026-06-23T20:13:16.942262Z'
   dispatch_log:
   - timestamp: '2026-06-22T14:25:40.865908Z'
     agent: jules
     session_id: '9319963180367885654'
     status: dispatched
+  - timestamp: '2026-06-23T20:13:16.942262Z'
+    agent: jules
+    session_id: '9319963180367885654'
+    status: done
+    output: "diff --git a/.gitignore b/.gitignore\nindex 78e96f6..567481f 100644\n\
+      --- a/.gitignore\n+++ b/.gitignore\n@@ -1,2 +1,4 @@\n .lh/\n .specstory/\n+node_modules/\n\
+      +coverage/\ndiff --git a/apps/voice-bridge/bridge.js b/apps/voice-bridge/bridge.js\n\
+      index fa0c2cb..de76f9c 100644\n--- a/apps/voice-bridge/bridge.js\n+++ b/apps/voice-bridge/bridge.js\n\
+      @@ -25,6 +25,10 @@ const STEP_MS = process.env.WHISPER_STEP_MS || '500';\n const\
+      \ LENGTH_MS = process.env.WHISPER_LENGTH_MS || '3000';\n const VAD_THOLD = process.env.WHISP"
 - id: GEN-organvm-iv-taxis-org-dotgithub-test-coverage-0620
   title: Raise test coverage in organvm-iv-taxis/org-dotgithub
   repo: organvm/org-dotgithub
@@ -32779,7 +32940,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - test-coverage
   - generated
@@ -32791,12 +32952,17 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T14:25:40.865908Z'
+  updated: '2026-06-23T20:14:43.454665Z'
   dispatch_log:
   - timestamp: '2026-06-22T14:25:40.865908Z'
     agent: jules
     session_id: '9364499713217586359'
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: GEN-organvm-v-logos-organvm-v-logos.github.io-test-coverage-0620
   title: Raise test coverage in organvm-v-logos/organvm-v-logos.github.io
   repo: organvm/organvm-v-logos.github.io
@@ -32897,7 +33063,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - test-coverage
   - generated
@@ -32909,12 +33075,17 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T14:43:18.150320Z'
+  updated: '2026-06-23T20:14:43.454665Z'
   dispatch_log:
   - timestamp: '2026-06-22T14:43:18.150320Z'
     agent: jules
     session_id: cli
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: GEN-a-organvm-recursive-engine--generative-entity-test-coverage-0620
   title: Raise test coverage in a-organvm/recursive-engine--generative-entity
   repo: organvm/recursive-engine--generative-entity
@@ -33469,7 +33640,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - test-coverage
   - generated
@@ -33481,12 +33652,17 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T14:43:18.150320Z'
+  updated: '2026-06-23T20:14:43.454665Z'
   dispatch_log:
   - timestamp: '2026-06-22T14:43:18.150320Z'
     agent: jules
     session_id: '14690705693218430940'
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: GEN-a-organvm-essay-pipeline-test-coverage-0620
   title: Raise test coverage in a-organvm/essay-pipeline
   repo: organvm/essay-pipeline
@@ -35012,7 +35188,7 @@ tasks:
     That violates h'
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T18:44:42.714436Z'
+  updated: '2026-06-23T20:15:56.637552Z'
   dispatch_log:
   - timestamp: '2026-06-22T04:41:45.670336Z'
     agent: limen
@@ -35035,6 +35211,15 @@ tasks:
   - timestamp: '2026-06-22T18:44:42.714436Z'
     agent: jules
     session_id: '2042283984671032209'
+    status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
+  - timestamp: '2026-06-23T20:15:56.637552Z'
+    agent: jules
+    session_id: '9087281447121473017'
     status: dispatched
 - id: GH-4444j99-hokage-chess-50
   title: '[V-D] Maddie-side parallel substrate doc (sister-stream governance parity)'
@@ -35091,7 +35276,7 @@ tasks:
     \ ## Why The 2026-04-30 Maddie-intent \u2192 Rob-s"
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T18:44:42.714436Z'
+  updated: '2026-06-23T20:15:56.637552Z'
   dispatch_log:
   - timestamp: '2026-06-22T04:41:45.670336Z'
     agent: limen
@@ -35114,6 +35299,15 @@ tasks:
   - timestamp: '2026-06-22T18:44:42.714436Z'
     agent: jules
     session_id: '2386016186607210080'
+    status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
+  - timestamp: '2026-06-23T20:15:56.637552Z'
+    agent: jules
+    session_id: '14202931374749114433'
     status: dispatched
 - id: GH-4444j99-hokage-chess-43
   title: '[MP-10] Rob''s actual time budget (hours/week, current allocation, target
@@ -35272,7 +35466,7 @@ tasks:
     \ cues - **Voice:** direct, profanity-OK, level-talk (per persona f"
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T18:44:42.714436Z'
+  updated: '2026-06-23T20:15:56.637552Z'
   dispatch_log:
   - timestamp: '2026-06-22T04:41:45.670336Z'
     agent: limen
@@ -35295,6 +35489,15 @@ tasks:
   - timestamp: '2026-06-22T18:44:42.714436Z'
     agent: jules
     session_id: '10717978239770726269'
+    status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
+  - timestamp: '2026-06-23T20:15:56.637552Z'
+    agent: jules
+    session_id: '910207409824242659'
     status: dispatched
 - id: GH-4444j99-hokage-chess-36
   title: '[MP-3] Audience overlap analysis (do chess viewers care about fitness?)'
@@ -35705,7 +35908,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - test-coverage
   - generated
@@ -35717,12 +35920,17 @@ tasks:
     to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T14:51:41.314045Z'
+  updated: '2026-06-23T20:14:43.454665Z'
   dispatch_log:
   - timestamp: '2026-06-22T14:51:41.314045Z'
     agent: jules
     session_id: cli
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: GEN-organvm-radix-recursiva-solve-coagula-redi-test-coverage-0620
   title: Raise test coverage in organvm/radix-recursiva-solve-coagula-redi
   repo: organvm/radix-recursiva-solve-coagula-redi
@@ -35968,7 +36176,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - test-coverage
   - generated
@@ -35980,12 +36188,17 @@ tasks:
     to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T14:59:17.706331Z'
+  updated: '2026-06-23T20:14:43.454665Z'
   dispatch_log:
   - timestamp: '2026-06-22T14:59:17.706331Z'
     agent: jules
     session_id: '9280351451969333955'
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: GEN-organvm-auto-revision-epistemic-engine-test-coverage-0620
   title: Raise test coverage in organvm/auto-revision-epistemic-engine
   repo: organvm/auto-revision-epistemic-engine
@@ -36548,7 +36761,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - agent-fix
   - P2
@@ -36562,7 +36775,7 @@ tasks:
     Reject session-start calls that do'
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T17:21:07.408453Z'
+  updated: '2026-06-23T20:14:43.454665Z'
   dispatch_log:
   - timestamp: '2026-06-22T03:01:00.689305Z'
     agent: gemini
@@ -36581,6 +36794,11 @@ tasks:
     agent: jules
     session_id: '13730156575430876090'
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: GH-4444j99-hokage-chess-48
   title: "[V-B] Phase 3 \u2014 substrate-doc canonical-home promotion + seed.yaml\
     \ normalization"
@@ -37057,7 +37275,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - agent-fix
   - P2
@@ -37070,7 +37288,7 @@ tasks:
     \ (verified: SKILL.md + assets + scripts). ## Fix"
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T17:21:07.408453Z'
+  updated: '2026-06-23T20:14:43.454665Z'
   dispatch_log:
   - timestamp: '2026-06-22T03:35:38.489610Z'
     agent: gemini
@@ -37089,6 +37307,11 @@ tasks:
     agent: jules
     session_id: '15681313148384681717'
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: GH-4444j99-hokage-chess-14
   title: '[AF-3] Deepen Stratum 2 timeslices (real research, not seed prose)'
   repo: 4444J99/hokage-chess
@@ -37182,7 +37405,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - slow
   urls:
@@ -37196,7 +37419,7 @@ tasks:
     \ c"
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T17:29:20.266121Z'
+  updated: '2026-06-23T20:14:43.454665Z'
   dispatch_log:
   - timestamp: '2026-06-22T03:35:38.489610Z'
     agent: agy
@@ -37215,6 +37438,11 @@ tasks:
     agent: jules
     session_id: '3685426854290686674'
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: GH-organvm-session-meta-87
   title: "\U0001F4CB Outstanding work \u2014 organvm (2026-06-20)"
   repo: organvm/session-meta
@@ -37249,7 +37477,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels: []
   urls:
   - https://github.com/organvm/session-meta/issues/79
@@ -37261,7 +37489,7 @@ tasks:
     \ (same as 2026-06-19; see first comment for fix) _Automated by `li"
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T17:29:20.266121Z'
+  updated: '2026-06-23T19:56:26.571716Z'
   dispatch_log:
   - timestamp: '2026-06-22T03:35:38.489610Z'
     agent: gemini
@@ -37280,6 +37508,11 @@ tasks:
     agent: jules
     session_id: '12508919536904440649'
     status: dispatched
+  - timestamp: '2026-06-23T19:56:26.571716Z'
+    agent: jules
+    session_id: https://github.com/organvm/session-meta/pull/109
+    status: done
+    output: 'jules-land: landed session 7696148625912003292 as PR'
 - id: GH-organvm-public-process-22
   title: '[STRANGER-TEST] Session 10: Security Researcher'
   repo: organvm/public-process
@@ -37455,7 +37688,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels: []
   urls:
   - https://github.com/organvm/public-process/issues/16
@@ -37467,12 +37700,23 @@ tasks:
     \ ## Trust Signals - Detailed Code of Conduct present. #"
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T15:46:54.440063Z'
+  updated: '2026-06-23T20:13:16.943910Z'
   dispatch_log:
   - timestamp: '2026-06-22T15:46:54.440063Z'
     agent: jules
     session_id: '4'
     status: dispatched
+  - timestamp: '2026-06-23T20:13:16.943910Z'
+    agent: jules
+    session_id: '14758609716653288660'
+    status: done
+    output: "diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md\nindex f225007..50acfe4\
+      \ 100644\n--- a/CONTRIBUTING.md\n+++ b/CONTRIBUTING.md\n@@ -37,6 +37,10 @@ #\
+      \ Site available at http://localhost:4000\n \n ## How to Contribute\n \n+###\
+      \ Getting Started (First Contribution)\n+\n+If you are a new contributor, please\
+      \ start by reviewing our [Contributor Runway](docs/contributor-runway.md) for\
+      \ detailed onboarding steps. We recommend finding an issue labeled [`good first\
+      \ issue`](https://github.com/organvm-v-logos/public-proces"
 - id: GH-organvm-public-process-15
   title: '[STRANGER-TEST] Session 3: Senior Backend Engineer'
   repo: organvm/public-process
@@ -37649,7 +37893,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels: []
   urls:
   - https://github.com/organvm/dot-github--logos/issues/17
@@ -37658,12 +37902,23 @@ tasks:
     We need a short, plain English summary at the top.
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T16:29:16.568799Z'
+  updated: '2026-06-23T20:13:16.944440Z'
   dispatch_log:
   - timestamp: '2026-06-22T16:29:16.568799Z'
     agent: jules
     session_id: '4803618110450476623'
     status: dispatched
+  - timestamp: '2026-06-23T20:13:16.944440Z'
+    agent: jules
+    session_id: '4803618110450476623'
+    status: done
+    output: "diff --git a/profile/README.md b/profile/README.md\nindex ac6e7b8..adce429\
+      \ 100644\n--- a/profile/README.md\n+++ b/profile/README.md\n@@ -19,6 +19,8 @@\
+      \ _Essays, case studies, and methodology documentation_\n > **New here?** The\
+      \ **[Quick Start guide](../QUICK_START.md)** tells you which\n > repository\
+      \ to clone first and how to run it locally.\n \n+**TL;DR (Plain English):**\
+      \ This organization builds the tools and processes to publish long-form essays\
+      \ and case studies. It is where we document how the rest o"
 - id: GH-organvm-session-meta-53
   title: 'Session walk: we-need-to-reach-out-to (30249e53)'
   repo: organvm/session-meta
@@ -41263,7 +41518,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - discover
   - value-discovery
@@ -41283,7 +41538,7 @@ tasks:
     \ Output the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-22T16:25:04.643273Z'
+  updated: '2026-06-23T20:14:43.454665Z'
   dispatch_log:
   - timestamp: '2026-06-22T15:20:35.505303Z'
     agent: limen
@@ -41298,6 +41553,11 @@ tasks:
     agent: jules
     session_id: cli
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: DISCOVER-organvm-application-pipeline
   title: Discover the latent value of organvm/application-pipeline
   repo: organvm/application-pipeline
@@ -41551,13 +41811,14 @@ tasks:
   title: Discover the latent value of organvm/vigiles-aeternae--agon-cosmogonicum
   repo: organvm/vigiles-aeternae--agon-cosmogonicum
   type: research
-  target_agent: codex
+  target_agent: jules
   priority: medium
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - discover
   - value-discovery
+  - slow
   urls: []
   context: "DISCOVER the latent value of organvm/vigiles-aeternae--agon-cosmogonicum.\
     \ This repo currently has NO ranked value \u2014 your job is to find it (value\
@@ -41574,7 +41835,37 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T20:13:16.945541Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:23:27.647859Z'
+    agent: opencode
+    session_id: cli
+    status: timeout->jules
+  - timestamp: '2026-06-23T19:59:22.057557Z'
+    agent: jules
+    session_id: cli
+    status: dispatched
+  - timestamp: '2026-06-23T20:13:16.945541Z'
+    agent: jules
+    session_id: cli
+    status: done
+    output: 'diff --git a/DISCOVERY.md b/DISCOVERY.md
+
+      new file mode 100644
+
+      index 0000000..a0979d8
+
+      --- /dev/null
+
+      +++ b/DISCOVERY.md
+
+      @@ -0,0 +1 @@
+
+      +The `vigiles-aeternae--agon-cosmogonicum` repository possesses significant
+      latent value as a sophisticated policy-as-code auditing engine disguised as
+      a narrative simulation. Its core capability lies in applying diverse, mythologically-derived
+      governance philosophies (defined as YAML rulesets) against real system states
+      to identify architectural blind spots, enforc'
 - id: DISCOVER-organvm-object-lessons
   title: Discover the latent value of organvm/object-lessons
   repo: organvm/object-lessons
@@ -41645,13 +41936,14 @@ tasks:
   title: Discover the latent value of organvm/dot-github--4444j99
   repo: organvm/dot-github--4444j99
   type: research
-  target_agent: codex
+  target_agent: agy
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/dot-github--4444j99. This repo currently\
     \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
@@ -41667,7 +41959,12 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:23:27.647859Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:23:27.647859Z'
+    agent: agy
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-vox--architectura-gubernatio
   title: Discover the latent value of organvm/vox--architectura-gubernatio
   repo: organvm/vox--architectura-gubernatio
@@ -41738,13 +42035,14 @@ tasks:
   title: Discover the latent value of organvm/cvrsvs-honorvm
   repo: organvm/cvrsvs-honorvm
   type: research
-  target_agent: codex
+  target_agent: claude
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/cvrsvs-honorvm. This repo currently\
     \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
@@ -41760,7 +42058,12 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:23:27.647859Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:23:27.647859Z'
+    agent: claude
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-vox--publica
   title: Discover the latent value of organvm/vox--publica
   repo: organvm/vox--publica
@@ -41836,13 +42139,14 @@ tasks:
   title: Discover the latent value of organvm/system-system--system
   repo: organvm/system-system--system
   type: research
-  target_agent: codex
+  target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/system-system--system. This repo\
     \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -41858,7 +42162,17 @@ tasks:
     \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:56:26.571716Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:23:27.647859Z'
+    agent: opencode
+    session_id: cli
+    status: noop
+  - timestamp: '2026-06-23T19:56:26.571716Z'
+    agent: jules
+    session_id: https://github.com/organvm/system-system--system/pull/13
+    status: done
+    output: 'jules-land: landed session 17054544476561595197 as PR'
 - id: DISCOVER-organvm-custodia-securitatis
   title: Discover the latent value of organvm/custodia-securitatis
   repo: organvm/custodia-securitatis
@@ -41929,13 +42243,14 @@ tasks:
   title: Discover the latent value of organvm/brainstorm-20260423
   repo: organvm/brainstorm-20260423
   type: research
-  target_agent: codex
+  target_agent: agy
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/brainstorm-20260423. This repo currently\
     \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
@@ -41951,7 +42266,12 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:23:27.647859Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:23:27.647859Z'
+    agent: agy
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-lido-v3-audit-2026-05-04
   title: Discover the latent value of organvm/lido-v3-audit-2026-05-04
   repo: organvm/lido-v3-audit-2026-05-04
@@ -42022,13 +42342,14 @@ tasks:
   title: Discover the latent value of organvm/persona-fleet
   repo: organvm/persona-fleet
   type: research
-  target_agent: codex
+  target_agent: claude
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/persona-fleet. This repo currently\
     \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
@@ -42044,7 +42365,12 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:23:27.647859Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:23:27.647859Z'
+    agent: claude
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-composition-1-2
   title: Discover the latent value of organvm/composition-1-2
   repo: organvm/composition-1-2
@@ -42115,13 +42441,14 @@ tasks:
   title: Discover the latent value of organvm/quick-fire--all-command
   repo: organvm/quick-fire--all-command
   type: research
-  target_agent: codex
+  target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/quick-fire--all-command. This repo\
     \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -42137,7 +42464,12 @@ tasks:
     \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:23:27.647859Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:23:27.647859Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-agent-runtime
   title: Discover the latent value of organvm/agent-runtime
   repo: organvm/agent-runtime
@@ -42208,13 +42540,14 @@ tasks:
   title: Discover the latent value of organvm/system-system--system--monad
   repo: organvm/system-system--system--monad
   type: research
-  target_agent: codex
+  target_agent: agy
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/system-system--system--monad. This\
     \ repo currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -42230,7 +42563,12 @@ tasks:
     \ Output the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:23:27.647859Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:23:27.647859Z'
+    agent: agy
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-generative-abstract-environments-studies
   title: Discover the latent value of organvm/generative-abstract-environments-studies
   repo: organvm/generative-abstract-environments-studies
@@ -42302,13 +42640,14 @@ tasks:
   title: Discover the latent value of organvm/speculum-opencode
   repo: organvm/speculum-opencode
   type: research
-  target_agent: codex
+  target_agent: claude
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/speculum-opencode. This repo currently\
     \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
@@ -42324,7 +42663,12 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:23:27.647859Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:23:27.647859Z'
+    agent: claude
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-md-summoning
   title: Discover the latent value of organvm/md-summoning
   repo: organvm/md-summoning
@@ -42400,13 +42744,14 @@ tasks:
   title: Discover the latent value of organvm/prompt-registry-archive
   repo: organvm/prompt-registry-archive
   type: research
-  target_agent: codex
+  target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/prompt-registry-archive. This repo\
     \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -42422,7 +42767,12 @@ tasks:
     \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:59:22.057557Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:59:22.057557Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-bound
   title: Discover the latent value of organvm/bound
   repo: organvm/bound
@@ -42502,13 +42852,14 @@ tasks:
   title: Discover the latent value of organvm/payrail
   repo: organvm/payrail
   type: research
-  target_agent: codex
+  target_agent: agy
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/payrail. This repo currently has\
     \ NO ranked value \u2014 your job is to find it (value is discovered, never assumed\
@@ -42524,7 +42875,12 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:59:22.057557Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:59:22.057557Z'
+    agent: agy
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-claude-runtime-state
   title: Discover the latent value of organvm/claude-runtime-state
   repo: organvm/claude-runtime-state
@@ -42714,13 +43070,14 @@ tasks:
   title: Discover the latent value of organvm/contrib
   repo: organvm/contrib
   type: research
-  target_agent: codex
+  target_agent: claude
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/contrib. This repo currently has\
     \ NO ranked value \u2014 your job is to find it (value is discovered, never assumed\
@@ -42736,7 +43093,12 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:59:22.057557Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:59:22.057557Z'
+    agent: claude
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-ops
   title: Discover the latent value of organvm/ops
   repo: organvm/ops
@@ -42817,13 +43179,14 @@ tasks:
   title: Discover the latent value of organvm/process-environment-enactment-20260609173021
   repo: organvm/process-environment-enactment-20260609173021
   type: research
-  target_agent: codex
+  target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/process-environment-enactment-20260609173021.\
     \ This repo currently has NO ranked value \u2014 your job is to find it (value\
@@ -42840,18 +43203,24 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:59:22.057557Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:59:22.057557Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-process-environment-enactment-public-20260609173432
   title: Discover the latent value of organvm/process-environment-enactment-public-20260609173432
   repo: organvm/process-environment-enactment-public-20260609173432
   type: research
-  target_agent: codex
+  target_agent: agy
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/process-environment-enactment-public-20260609173432.\
     \ This repo currently has NO ranked value \u2014 your job is to find it (value\
@@ -42868,7 +43237,12 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:59:22.057557Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:59:22.057557Z'
+    agent: agy
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-session-stone-sanitized-019ea761-bff5-7841-b772-f2d85475092e-20260609175059
   title: Discover the latent value of organvm/session-stone-sanitized-019ea761-bff5-7841-b772-f2d85475092e-20260609175059
   repo: organvm/session-stone-sanitized-019ea761-bff5-7841-b772-f2d85475092e-20260609175059
@@ -43076,13 +43450,14 @@ tasks:
   title: Discover the latent value of organvm/system-governance-framework
   repo: organvm/system-governance-framework
   type: research
-  target_agent: codex
+  target_agent: claude
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/system-governance-framework. This\
     \ repo currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -43098,7 +43473,12 @@ tasks:
     \ Output the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:59:22.057557Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:59:22.057557Z'
+    agent: claude
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-select-or-left-or-right-or
   title: Discover the latent value of organvm/select-or-left-or-right-or
   repo: organvm/select-or-left-or-right-or
@@ -43218,7 +43598,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - discover
   - value-discovery
@@ -43237,7 +43617,7 @@ tasks:
     \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-22T17:29:20.266121Z'
+  updated: '2026-06-23T20:14:43.454665Z'
   dispatch_log:
   - timestamp: '2026-06-22T17:21:07.408453Z'
     agent: gemini
@@ -43247,6 +43627,11 @@ tasks:
     agent: jules
     session_id: cli
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: DISCOVER-organvm-search-local--happy-hour
   title: Discover the latent value of organvm/search-local--happy-hour
   repo: organvm/search-local--happy-hour
@@ -43383,10 +43768,10 @@ tasks:
   title: Discover the latent value of organvm/client-sdk
   repo: organvm/client-sdk
   type: research
-  target_agent: codex
+  target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - discover
   - value-discovery
@@ -43405,7 +43790,13 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T19:56:26.571716Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:56:26.571716Z'
+    agent: jules
+    session_id: https://github.com/organvm/client-sdk/pull/13
+    status: done
+    output: 'jules-land: landed session 16122216887257957281 as PR'
 - id: DISCOVER-organvm-sovereign-ecosystem--real-estate-luxury
   title: Discover the latent value of organvm/sovereign-ecosystem--real-estate-luxury
   repo: organvm/sovereign-ecosystem--real-estate-luxury
@@ -43578,13 +43969,15 @@ tasks:
   title: Discover the latent value of organvm/visual-substrate-inquiry
   repo: organvm/visual-substrate-inquiry
   type: research
-  target_agent: codex
+  target_agent: agy
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - discover
   - value-discovery
+  - tried:opencode
+  - tried:agy
   urls: []
   context: "DISCOVER the latent value of organvm/visual-substrate-inquiry. This repo\
     \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -43600,7 +43993,28 @@ tasks:
     \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T21:12:24.847899Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:07:01.660776Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T19:19:07.848509Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T19:59:22.057557Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T20:07:06.981754Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T20:38:03.566790Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
 - id: DISCOVER-organvm-a-i-council--coliseum
   title: Discover the latent value of organvm/a-i-council--coliseum
   repo: organvm/a-i-council--coliseum
@@ -43671,13 +44085,14 @@ tasks:
   title: Discover the latent value of organvm/4444J99.github.io
   repo: organvm/4444J99.github.io
   type: research
-  target_agent: codex
+  target_agent: agy
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - discover
   - value-discovery
+  - tried:claude
   urls: []
   context: "DISCOVER the latent value of organvm/4444J99.github.io. This repo currently\
     \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
@@ -43693,7 +44108,16 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T20:07:06.981754Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T19:59:22.057557Z'
+    agent: claude
+    session_id: cli
+    status: failed->gemini
+  - timestamp: '2026-06-23T20:07:06.981754Z'
+    agent: agy
+    session_id: https://github.com/organvm/4444J99.github.io/pull/11
+    status: dispatched
 - id: DISCOVER-organvm-stakeholder-portal
   title: Discover the latent value of organvm/stakeholder-portal
   repo: organvm/stakeholder-portal
@@ -44052,7 +44476,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - schedule
   - automation
@@ -44067,7 +44491,7 @@ tasks:
     Staggered Scheduling? Staggered scheduling prev'
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-22T18:52:23.835828Z'
+  updated: '2026-06-23T20:12:18.604355Z'
   dispatch_log:
   - timestamp: '2026-06-22T18:44:42.714436Z'
     agent: gemini
@@ -44077,6 +44501,11 @@ tasks:
     agent: jules
     session_id: '17519424778738308744'
     status: dispatched
+  - timestamp: '2026-06-23T20:12:18.604355Z'
+    agent: jules
+    session_id: https://github.com/organvm/dot-github--theoria/pull/479
+    status: done
+    output: 'jules-land: landed session 17519424778738308744 as PR'
 - id: GH-organvm-organvm-corpvs-testamentvm-489
   title: "IRF P0 surface \u2014 rolling"
   repo: organvm/organvm-corpvs-testamentvm
@@ -44084,7 +44513,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: open
   labels: []
   urls:
   - https://github.com/organvm/organvm-corpvs-testamentvm/issues/489
@@ -44096,7 +44525,7 @@ tasks:
     \ Each comment reports **only the delta** since the previous comm"
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-22T18:52:23.835828Z'
+  updated: '2026-06-23T20:14:43.454665Z'
   dispatch_log:
   - timestamp: '2026-06-22T18:44:42.714436Z'
     agent: gemini
@@ -44106,6 +44535,11 @@ tasks:
     agent: jules
     session_id: '16905566231491117985'
     status: dispatched
+  - timestamp: '2026-06-23T20:14:43.454665Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
 - id: DISCOVER-organvm-scale-threshold-emergence
   title: Discover the latent value of organvm/scale-threshold-emergence
   repo: organvm/scale-threshold-emergence
@@ -44205,7 +44639,10 @@ tasks:
     agent: opencode
     session_id: default
     status: done
-    output: "Promoted organvm/vigiles-aeternae--corpus-mythicum to ranked tier. Value thesis: governance-through-mythology framework as IP foundation for 7-organ Vigiles franchise. DISCOVERY.md written. value-repos.json updated. Best first task: B2 Marvel Cosmic synthesis."
+    output: 'Promoted organvm/vigiles-aeternae--corpus-mythicum to ranked tier. Value
+      thesis: governance-through-mythology framework as IP foundation for 7-organ
+      Vigiles franchise. DISCOVERY.md written. value-repos.json updated. Best first
+      task: B2 Marvel Cosmic synthesis.'
 - id: DISCOVER-organvm-hierarchia-mundi
   title: Discover the latent value of organvm/hierarchia-mundi
   repo: organvm/hierarchia-mundi
@@ -44213,7 +44650,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - discover
   - value-discovery
@@ -44232,7 +44669,7 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-22T18:52:23.835828Z'
+  updated: '2026-06-23T20:13:16.946576Z'
   dispatch_log:
   - timestamp: '2026-06-22T18:44:42.714436Z'
     agent: gemini
@@ -44242,6 +44679,31 @@ tasks:
     agent: jules
     session_id: '3712546864444405389'
     status: dispatched
+  - timestamp: '2026-06-23T20:13:16.946576Z'
+    agent: jules
+    session_id: '3712546864444405389'
+    status: done
+    output: 'diff --git a/DISCOVERY.md b/DISCOVERY.md
+
+      new file mode 100644
+
+      index 0000000..23c3a24
+
+      --- /dev/null
+
+      +++ b/DISCOVERY.md
+
+      @@ -0,0 +1,5 @@
+
+      +# Value Thesis
+
+      +
+
+      +The highest latent value of `organvm/hierarchia-mundi` lies in its function
+      as a heavily structured, typed, multi-domain knowledge graph and "world model"
+      for AI systems. By codifying domains from physical laws to biological processes
+      and narrative tropes into a uniform schema (with inputs, outputs, and cross-references),
+      it provides a procedura'
 - id: DISCOVER-organvm-styx-behavioral-economics-theory
   title: Discover the latent value of organvm/styx-behavioral-economics-theory
   repo: organvm/styx-behavioral-economics-theory
@@ -44372,11 +44834,12 @@ tasks:
   target_agent: any
   priority: medium
   budget_cost: 1
-  status: done
+  status: cancelled
   labels:
   - studium
   - content
   - expansion-backlog
+  - noop
   urls: []
   context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
     to the fleet). Odyssey film companion (return/exile/recognition). Acceptance:
@@ -44385,10 +44848,1635 @@ tasks:
     green PR.'
   depends_on: []
   created: '2026-06-23'
-  updated: '2026-06-23T23:00:00Z'
+  updated: '2026-06-23T19:07:01.660776Z'
   dispatch_log:
   - timestamp: '2026-06-23T23:00:00Z'
     agent: opencode
     session_id: current
     status: done
-    output: "Created studium/film/odyssey.yaml — 12 force-matched films (return/exile/revelation/comedy/metamorphosis/desire/memory/divine-intervention/wrath/grief/fate/law) + set-aside adaptation overlay (The Odyssey 1997). Forces validated against dominant-force.yaml; objects validated against object-taxonomy.yaml. studium-validate.py passes."
+    output: "Created studium/film/odyssey.yaml \u2014 12 force-matched films (return/exile/revelation/comedy/metamorphosis/desire/memory/divine-intervention/wrath/grief/fate/law)\
+      \ + set-aside adaptation overlay (The Odyssey 1997). Forces validated against\
+      \ dominant-force.yaml; objects validated against object-taxonomy.yaml. studium-validate.py\
+      \ passes."
+  - timestamp: '2026-06-23T19:07:01.660776Z'
+    agent: opencode
+    session_id: cli
+    status: noop
+- id: GH-organvm-domus-genoma-96
+  title: "Memory index audit \u2014 rolling"
+  repo: organvm/domus-genoma
+  type: code
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: cancelled
+  labels:
+  - audit
+  - noop
+  urls:
+  - https://github.com/organvm/domus-genoma/issues/96
+  context: "GitHub issue organvm/domus-genoma#96. Rolling audit issue for `private_dot_claude/projects/*/memory/`\
+    \ scopes in this repo. Scheduled agent: **memory-index-audit** \xB7 daily 22:08\
+    \ UTC \xB7 read-only except this issue. > **NOTE:** Designed to post to `4444J99/session-meta`\
+    \ but that repo is not in this session's allowed scope. Posting here as fallback.\
+    \ To fix: add `session-meta` to this session's allowed repos in Claude Code on\
+    \ the web. **Las"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:38:03.566790Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:38:03.566790Z'
+    agent: agy
+    session_id: cli
+    status: noop
+- id: REV-organvm-styx-revenue-ship-0623
+  title: Drive Styx to deploy-ready
+  repo: organvm/styx
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-ship
+  - revenue
+  - product
+  - ship-order
+  - generated
+  - tried:opencode
+  - tried:agy
+  urls: []
+  context: "In organvm/styx, clear the concrete blockers between the current state\
+    \ and a DEPLOYABLE product: get open PRs green + merged, fix the critical path,\
+    \ confirm the app runs end-to-end. Output: a deploy-ready build + a short DEPLOY.md\
+    \ listing exactly what remains. [revenue-backlog 2026-06-23: rank 6, stage building\
+    \ \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T21:12:24.847899Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:15:56.637552Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T20:38:03.566790Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+- id: REV-organvm-a-i-chat--exporter-revenue-funding-0623
+  title: Stage the donation funnel for ChatGPT Exporter
+  repo: organvm/a-i-chat--exporter
+  type: code
+  target_agent: any
+  priority: critical
+  budget_cost: 2
+  status: cancelled
+  labels:
+  - revenue-funding
+  - revenue
+  - product
+  - ship-order
+  - generated
+  - noop
+  urls: []
+  context: "In organvm/a-i-chat--exporter, add .github/FUNDING.yml (ko_fi + github\
+    \ sponsors entries \u2014 use the owner handle; if the exact Ko-fi slug isn't\
+    \ known yet, leave a single clearly-marked TODO) AND a concise 'Support / Sponsor'\
+    \ section in the README linking both. Goal: the moment the accounts exist the\
+    \ donate path is ALREADY live. Tasteful, no nagware. Open a PR, keep the build\
+    \ green. [revenue-backlog 2026-06-23: rank 1, stage deploy-ready \u2014 spend\
+    \ tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:15:56.637552Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:20:00Z'
+    agent: opencode
+    session_id: cli
+    status: done
+    output: 'Added .github/FUNDING.yml with ko-fi (TODO) and github sponsors entries
+      (owner: organvm). Added concise ''Support / Sponsor'' section in README linking
+      both funding channels. Donation funnel now live when accounts exist. Tasteful
+      implementation with no nagware. Ready for PR.'
+  - timestamp: '2026-06-23T20:15:56.637552Z'
+    agent: opencode
+    session_id: cli
+    status: noop
+- id: REV-organvm-universal-mail--automation-revenue-ship-0623
+  title: Drive Universal Mail Automation to deploy-ready
+  repo: organvm/universal-mail--automation
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: cancelled
+  labels:
+  - revenue-ship
+  - revenue
+  - product
+  - ship-order
+  - generated
+  - noop
+  urls: []
+  context: "In organvm/universal-mail--automation, clear the concrete blockers between\
+    \ the current state and a DEPLOYABLE product: get open PRs green + merged, fix\
+    \ the critical path, confirm the app runs end-to-end. Output: a deploy-ready build\
+    \ + a short DEPLOY.md listing exactly what remains. [revenue-backlog 2026-06-23:\
+    \ rank 3, stage building \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:15:56.637552Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:15:56.637552Z'
+    agent: agy
+    session_id: cli
+    status: noop
+- id: REV-organvm-the-invisible-ledger-revenue-ship-0623
+  title: Drive The Invisible Ledger to deploy-ready
+  repo: organvm/the-invisible-ledger
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-ship
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/the-invisible-ledger, clear the concrete blockers between the\
+    \ current state and a DEPLOYABLE product: get open PRs green + merged, fix the\
+    \ critical path, confirm the app runs end-to-end. Output: a deploy-ready build\
+    \ + a short DEPLOY.md listing exactly what remains. [revenue-backlog 2026-06-23:\
+    \ rank 4, stage building \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:15:56.637552Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:15:56.637552Z'
+    agent: agy
+    session_id: https://github.com/organvm/the-invisible-ledger/pull/41
+    status: dispatched
+- id: REV-organvm-mirror-mirror-revenue-ship-0623
+  title: Drive Mirror Mirror to deploy-ready
+  repo: organvm/mirror-mirror
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-ship
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/mirror-mirror, clear the concrete blockers between the current\
+    \ state and a DEPLOYABLE product: get open PRs green + merged, fix the critical\
+    \ path, confirm the app runs end-to-end. Output: a deploy-ready build + a short\
+    \ DEPLOY.md listing exactly what remains. [revenue-backlog 2026-06-23: rank 5,\
+    \ stage building \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:15:56.637552Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:15:56.637552Z'
+    agent: agy
+    session_id: https://github.com/organvm/mirror-mirror/pull/33
+    status: dispatched
+- id: REV-organvm-public-record-data-scrapper-revenue-ship-0623
+  title: Drive Public Record Data Scraper to deploy-ready
+  repo: organvm/public-record-data-scrapper
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-ship
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/public-record-data-scrapper, clear the concrete blockers between\
+    \ the current state and a DEPLOYABLE product: get open PRs green + merged, fix\
+    \ the critical path, confirm the app runs end-to-end. Output: a deploy-ready build\
+    \ + a short DEPLOY.md listing exactly what remains. [revenue-backlog 2026-06-23:\
+    \ rank 2, stage building \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:15:56.637552Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:15:56.637552Z'
+    agent: claude
+    session_id: https://github.com/organvm/public-record-data-scrapper/pull/306
+    status: dispatched
+- id: REV-organvm-styx-revenue-readiness-0623
+  title: First-paying-customer readiness pass on Styx
+  repo: organvm/styx
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 2
+  status: open
+  labels:
+  - revenue-readiness
+  - revenue
+  - product
+  - ship-order
+  - generated
+  - tried:claude
+  urls: []
+  context: "In organvm/styx, find the single highest-leverage gap between the current\
+    \ product and something a stranger would pay for (first-dollar path: paid tier\
+    \ once live) and close it with a real, tested change. One focused PR; keep CI\
+    \ green. [revenue-backlog 2026-06-23: rank 6, stage building \u2014 spend tokens\
+    \ on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:15:56.637552Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:15:56.637552Z'
+    agent: claude
+    session_id: cli
+    status: failed->gemini
+- id: REV-organvm-a-i-chat--exporter-revenue-pro-tier-0623
+  title: Make the Pro-tier checkout merge-ready for ChatGPT Exporter
+  repo: organvm/a-i-chat--exporter
+  type: code
+  target_agent: any
+  priority: critical
+  budget_cost: 2
+  status: cancelled
+  labels:
+  - revenue-pro-tier
+  - revenue
+  - product
+  - ship-order
+  - generated
+  - noop
+  urls: []
+  context: "In organvm/a-i-chat--exporter, rebase the stacked Pro-tier / LemonSqueezy\
+    \ checkout PRs onto the default branch, resolve conflicts, and get every check\
+    \ green so the ONLY remaining step is pasting LEMONSQUEEZY_STORE_ID. Don't invent\
+    \ product scope \u2014 just unblock what's already built (donations NOW via Ko-fi/Sponsors\
+    \ (individual rail); Pro tier via Lemon Squeezy (code already integrated). NOT\
+    \ Stripe \u2014 that needs an LLC blocked by the card-0186 hold.). [revenue-backlog\
+    \ 2026-06-23: rank 1, stage deploy-ready \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:15:56.637552Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:15:56.637552Z'
+    agent: opencode
+    session_id: cli
+    status: noop
+- id: REV-organvm-universal-mail--automation-revenue-readiness-0623
+  title: First-paying-customer readiness pass on Universal Mail Automation
+  repo: organvm/universal-mail--automation
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: cancelled
+  labels:
+  - revenue-readiness
+  - revenue
+  - product
+  - ship-order
+  - generated
+  - noop
+  urls: []
+  context: "In organvm/universal-mail--automation, find the single highest-leverage\
+    \ gap between the current product and something a stranger would pay for (first-dollar\
+    \ path: subscription on the automation tier once live) and close it with a real,\
+    \ tested change. One focused PR; keep CI green. [revenue-backlog 2026-06-23: rank\
+    \ 3, stage building \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:15:56.637552Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:15:56.637552Z'
+    agent: claude
+    session_id: cli
+    status: noop
+- id: REV-organvm-the-invisible-ledger-revenue-readiness-0623
+  title: First-paying-customer readiness pass on The Invisible Ledger
+  repo: organvm/the-invisible-ledger
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: cancelled
+  labels:
+  - revenue-readiness
+  - revenue
+  - product
+  - ship-order
+  - generated
+  - noop
+  urls: []
+  context: "In organvm/the-invisible-ledger, find the single highest-leverage gap\
+    \ between the current product and something a stranger would pay for (first-dollar\
+    \ path: paid tier once live) and close it with a real, tested change. One focused\
+    \ PR; keep CI green. [revenue-backlog 2026-06-23: rank 4, stage building \u2014\
+    \ spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:15:56.637552Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:15:56.637552Z'
+    agent: claude
+    session_id: cli
+    status: noop
+- id: REV-organvm-mirror-mirror-revenue-readiness-0623
+  title: First-paying-customer readiness pass on Mirror Mirror
+  repo: organvm/mirror-mirror
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - revenue-readiness
+  - revenue
+  - product
+  - ship-order
+  - generated
+  - slow
+  urls: []
+  context: "In organvm/mirror-mirror, find the single highest-leverage gap between\
+    \ the current product and something a stranger would pay for (first-dollar path:\
+    \ paid tier once live) and close it with a real, tested change. One focused PR;\
+    \ keep CI green. [revenue-backlog 2026-06-23: rank 5, stage building \u2014 spend\
+    \ tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T21:12:24.847899Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:38:03.566790Z'
+    agent: opencode
+    session_id: cli
+    status: timeout->jules
+- id: REV-organvm-public-record-data-scrapper-revenue-readiness-0623
+  title: First-paying-customer readiness pass on Public Record Data Scraper
+  repo: organvm/public-record-data-scrapper
+  type: code
+  target_agent: any
+  priority: high
+  budget_cost: 2
+  status: cancelled
+  labels:
+  - revenue-readiness
+  - revenue
+  - product
+  - ship-order
+  - generated
+  - noop
+  urls: []
+  context: "In organvm/public-record-data-scrapper, find the single highest-leverage\
+    \ gap between the current product and something a stranger would pay for (first-dollar\
+    \ path: data-as-a-service / one-off scrape gigs once deployed) and close it with\
+    \ a real, tested change. One focused PR; keep CI green. [revenue-backlog 2026-06-23:\
+    \ rank 2, stage building \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:38:03.566790Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:38:03.566790Z'
+    agent: opencode
+    session_id: cli
+    status: noop
+- id: studium-deepen-quran
+  title: "Qur'an \u2014 suras 2..114 (113 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Qur'an \u2014 suras 2..114 (113 arcs). The authoritative division\
+    \ checklist (which divisions are done [check] vs todo) is studium/music/quran/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:38:03.566790Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:38:03.566790Z'
+    agent: agy
+    session_id: https://github.com/organvm/limen/pull/102
+    status: dispatched
+- id: studium-deepen-journey-to-the-west
+  title: "Journey to the West \u2014 chapters 2..100 (99 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Journey to the West \u2014 chapters 2..100 (99 arcs). The authoritative\
+    \ division checklist (which divisions are done [check] vs todo) is studium/music/journey-to-the-west/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:38:03.566790Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:38:03.566790Z'
+    agent: claude
+    session_id: https://github.com/organvm/limen/pull/105
+    status: dispatched
+- id: studium-deepen-divine-comedy
+  title: "Divine Comedy \u2014 cantos 2..100 (99 arcs; Inferno\u2192Purgatorio\u2192\
+    Paradiso = descent\u2192ascent\u2192revelation)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: cancelled
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  - noop
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Divine Comedy \u2014 cantos 2..100 (99 arcs; Inferno\u2192Purgatorio\u2192\
+    Paradiso = descent\u2192ascent\u2192revelation). The authoritative division checklist\
+    \ (which divisions are done [check] vs todo) is studium/music/divine-comedy/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:38:03.566790Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:38:03.566790Z'
+    agent: claude
+    session_id: cli
+    status: noop
+- id: studium-deepen-tao-te-ching
+  title: "Dao De Jing \u2014 chapters 2..81 (80 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: cancelled
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  - noop
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Dao De Jing \u2014 chapters 2..81 (80 arcs). The authoritative\
+    \ division checklist (which divisions are done [check] vs todo) is studium/music/tao-te-ching/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T20:38:03.566790Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T20:38:03.566790Z'
+    agent: claude
+    session_id: cli
+    status: noop
+- id: studium-deepen-tale-of-genji
+  title: "Tale of Genji \u2014 chapters 2..54 (53 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Tale of Genji \u2014 chapters 2..54 (53 arcs). The authoritative\
+    \ division checklist (which divisions are done [check] vs todo) is studium/music/tale-of-genji/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T21:12:24.847899Z'
+  dispatch_log: []
+- id: studium-deepen-shahnameh
+  title: "Shahnameh \u2014 cycles 2..50 (49 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Shahnameh \u2014 cycles 2..50 (49 arcs). The authoritative division\
+    \ checklist (which divisions are done [check] vs todo) is studium/music/shahnameh/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T21:12:24.847899Z'
+  dispatch_log: []
+- id: studium-deepen-conference-of-birds
+  title: "Conference of the Birds \u2014 sections 2..45 (44 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: done
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Conference of the Birds \u2014 sections 2..45 (44 arcs). The\
+    \ authoritative division checklist (which divisions are done [check] vs todo)\
+    \ is studium/music/conference-of-birds/PLAN.md. Author the NEXT BOUNDED BATCH\
+    \ of undone divisions (a handful per PR, NOT all at once) as force-matched arcs\
+    \ + mirrored essays in the Iliad gold-standard format (see studium/music/iliad/\
+    \ + studium/essays/iliad/ and studium/music/<work>/PLAN.md). Acceptance: scripts/studium-validate.py\
+    \ must PASS (every force in studium/dominant-force.yaml; force_arc equals the\
+    \ ordered track forces; no intra-arc duplicate pieces). One green PR."
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T21:30:00Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T21:30:00Z'
+    agent: opencode
+    session_id: cli
+    status: done
+    output: "Authored sections 2-6 (bounded batch of 5 arcs) for Conference of the\
+      \ Birds: book-02 (The Parrot's Objection / desire), book-03 (The Peacock's\
+      \ Lament / memory), book-04 (The Duck's Purity / sacrifice), book-05 (The\
+      \ Partridge's Jewels / desire), book-06 (The Hawk's Devotion / kingship).\
+      \ Created music YAML files in studium/music/conference-of-birds/ and mirrored\
+      \ essays in studium/essays/conference-of-birds/. Updated PLAN.md (6/45 arcs\
+      \ authored). studium-validate.py PASSES (96 arcs, 3 film companions all valid)."
+- id: studium-deepen-beowulf
+  title: "Beowulf \u2014 fitts 2..43 (42 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Beowulf \u2014 fitts 2..43 (42 arcs). The authoritative division\
+    \ checklist (which divisions are done [check] vs todo) is studium/music/beowulf/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T21:12:24.847899Z'
+  dispatch_log: []
+- id: studium-deepen-tanakh
+  title: "Tanakh \u2014 books 2..39 (38 arcs; Torah \xB7 Nevi'im \xB7 Ketuvim)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Tanakh \u2014 books 2..39 (38 arcs; Torah \xB7 Nevi'im \xB7 Ketuvim).\
+    \ The authoritative division checklist (which divisions are done [check] vs todo)\
+    \ is studium/music/tanakh/PLAN.md. Author the NEXT BOUNDED BATCH of undone divisions\
+    \ (a handful per PR, NOT all at once) as force-matched arcs + mirrored essays\
+    \ in the Iliad gold-standard format (see studium/music/iliad/ + studium/essays/iliad/\
+    \ and studium/music/<work>/PLAN.md). Acceptance: scripts/studium-validate.py must\
+    \ PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered\
+    \ track forces; no intra-arc duplicate pieces). One green PR."
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T21:12:24.847899Z'
+  dispatch_log: []
+- id: studium-deepen-canterbury-tales
+  title: "Canterbury Tales \u2014 tales 2..24 (23 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Canterbury Tales \u2014 tales 2..24 (23 arcs). The authoritative\
+    \ division checklist (which divisions are done [check] vs todo) is studium/music/canterbury-tales/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T21:12:24.847899Z'
+  dispatch_log: []
+- id: studium-deepen-analects
+  title: "Analects \u2014 books 2..20 (19 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Analects \u2014 books 2..20 (19 arcs). The authoritative division\
+    \ checklist (which divisions are done [check] vs todo) is studium/music/analects/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T21:12:24.847899Z'
+  dispatch_log: []
+- id: studium-deepen-mahabharata
+  title: "Mahabharata \u2014 parvas 2..18 (17 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Mahabharata \u2014 parvas 2..18 (17 arcs). The authoritative\
+    \ division checklist (which divisions are done [check] vs todo) is studium/music/mahabharata/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-bhagavad-gita
+  title: "Bhagavad Gita \u2014 chapters 2..18 (17 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Bhagavad Gita \u2014 chapters 2..18 (17 arcs). The authoritative\
+    \ division checklist (which divisions are done [check] vs todo) is studium/music/bhagavad-gita/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-metamorphoses
+  title: "Metamorphoses \u2014 books 2..15 (14 arcs; metamorphosis as the spine)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Metamorphoses \u2014 books 2..15 (14 arcs; metamorphosis as the\
+    \ spine). The authoritative division checklist (which divisions are done [check]\
+    \ vs todo) is studium/music/metamorphoses/PLAN.md. Author the NEXT BOUNDED BATCH\
+    \ of undone divisions (a handful per PR, NOT all at once) as force-matched arcs\
+    \ + mirrored essays in the Iliad gold-standard format (see studium/music/iliad/\
+    \ + studium/essays/iliad/ and studium/music/<work>/PLAN.md). Acceptance: scripts/studium-validate.py\
+    \ must PASS (every force in studium/dominant-force.yaml; force_arc equals the\
+    \ ordered track forces; no intra-arc duplicate pieces). One green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-aeneid
+  title: "Aeneid \u2014 books 2..12 (11 arcs; empire/fate/sacrifice)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Aeneid \u2014 books 2..12 (11 arcs; empire/fate/sacrifice). The\
+    \ authoritative division checklist (which divisions are done [check] vs todo)\
+    \ is studium/music/aeneid/PLAN.md. Author the NEXT BOUNDED BATCH of undone divisions\
+    \ (a handful per PR, NOT all at once) as force-matched arcs + mirrored essays\
+    \ in the Iliad gold-standard format (see studium/music/iliad/ + studium/essays/iliad/\
+    \ and studium/music/<work>/PLAN.md). Acceptance: scripts/studium-validate.py must\
+    \ PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered\
+    \ track forces; no intra-arc duplicate pieces). One green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-gilgamesh
+  title: "Gilgamesh \u2014 tablets 2..12 (11 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Gilgamesh \u2014 tablets 2..12 (11 arcs). The authoritative division\
+    \ checklist (which divisions are done [check] vs todo) is studium/music/gilgamesh/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-heike
+  title: "Tale of the Heike \u2014 books 2..12 (11 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Tale of the Heike \u2014 books 2..12 (11 arcs). The authoritative\
+    \ division checklist (which divisions are done [check] vs todo) is studium/music/heike/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-ramayana
+  title: "Ramayana \u2014 kandas 2..7 (6 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Ramayana \u2014 kandas 2..7 (6 arcs). The authoritative division\
+    \ checklist (which divisions are done [check] vs todo) is studium/music/ramayana/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-corpus-shahnameh
+  title: "Fetch Shahnameh original (ganjoor.net) \u2192 corpus arabic-persian/shahnameh;\
+    \ clear canon missing_from_corpus"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Fetch Shahnameh original (ganjoor.net) \u2192 corpus arabic-persian/shahnameh;\
+    \ clear canon missing_from_corpus. Acceptance: scripts/studium-validate.py must\
+    \ PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered\
+    \ track forces; no intra-arc duplicate pieces). One green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-corpus-tier2
+  title: Fetch Tier-2 originals where public-domain (Upanishads/Shijing/Kojiki/Rumi-Hafez/Honglou-meng)
+    from their source rails
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Fetch Tier-2 originals where public-domain (Upanishads/Shijing/Kojiki/Rumi-Hafez/Honglou-meng)
+    from their source rails. Acceptance: scripts/studium-validate.py must PASS (every
+    force in studium/dominant-force.yaml; force_arc equals the ordered track forces;
+    no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-aeneid
+  title: Aeneid film companion (empire/fate/sacrifice)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Aeneid film companion (empire/fate/sacrifice). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-metamorphoses
+  title: Metamorphoses film companion (metamorphosis)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Metamorphoses film companion (metamorphosis). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-divine-comedy
+  title: Divine Comedy film companion (descent/ascent/beatitude)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Divine Comedy film companion (descent/ascent/beatitude). Acceptance:
+    scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-tanakh
+  title: Tanakh film companion (covenant/law/exile)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Tanakh film companion (covenant/law/exile). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-quran
+  title: Qur'an film companion (revelation/law/the straight path)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Qur''an film companion (revelation/law/the straight path). Acceptance:
+    scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-gilgamesh
+  title: Gilgamesh film companion (mortality/grief)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Gilgamesh film companion (mortality/grief). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-beowulf
+  title: Beowulf film companion (wyrd/heroic doom)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Beowulf film companion (wyrd/heroic doom). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-canterbury-tales
+  title: Canterbury Tales film companion (the human comedy)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Canterbury Tales film companion (the human comedy). Acceptance:
+    scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-mahabharata
+  title: Mahabharata film companion (dharma/war)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Mahabharata film companion (dharma/war). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-bhagavad-gita
+  title: Bhagavad Gita film companion (right action/renunciation)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Bhagavad Gita film companion (right action/renunciation). Acceptance:
+    scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-ramayana
+  title: Ramayana film companion (fidelity/return)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Ramayana film companion (fidelity/return). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-analects
+  title: Analects film companion (ritual order/the rectified self)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Analects film companion (ritual order/the rectified self). Acceptance:
+    scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-tao-te-ching
+  title: Dao De Jing film companion (wu wei/the Way)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Dao De Jing film companion (wu wei/the Way). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-journey-to-the-west
+  title: Journey to the West film companion (pilgrimage/comic transcendence)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Journey to the West film companion (pilgrimage/comic transcendence).
+    Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-tale-of-genji
+  title: Tale of Genji film companion (desire/impermanence)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Tale of Genji film companion (desire/impermanence). Acceptance:
+    scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-heike
+  title: Tale of the Heike film companion (mono no aware)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Tale of the Heike film companion (mono no aware). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-conference-of-birds
+  title: "Conference of the Birds film companion (the seven valleys/fan\u0101)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Conference of the Birds film companion (the seven valleys/fan\u0101\
+    ). Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-shahnameh
+  title: Shahnameh film companion (kingship/the farr)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Shahnameh film companion (kingship/the farr). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: DISCOVER-organvm-domus
+  title: Discover the latent value of organvm/domus
+  repo: organvm/domus
+  type: research
+  target_agent: agy
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/domus. This repo currently has NO\
+    \ ranked value \u2014 your job is to find it (value is discovered, never assumed\
+    \ absent). Steps: (1) Read the repo \u2014 what it is, its real entrypoints/exports,\
+    \ what it already does. (2) Identify its highest latent value: a concrete product,\
+    \ revenue path, reusable asset, or capability the rest of the estate could use\
+    \ \u2014 be specific and honest. (3) DECIDE: if there is real value, write a one-paragraph\
+    \ value thesis to DISCOVERY.md AND open a PR that ALSO appends \"organvm/domus\"\
+    \ to value-repos.json (promote it into the ranked tier so build-out can follow)\
+    \ AND name the single best concrete first task; if it is genuinely archival, write\
+    \ the thesis saying so (so it is never re-discovered) \u2014 do NOT promote it.\
+    \ Keep any build green. Output the thesis. [auto-discovery 2026-06-23; no repo\
+    \ stays dark]"
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: DISCOVER-organvm-call-function--ontological
+  title: Discover the latent value of organvm/call-function--ontological
+  repo: organvm/call-function--ontological
+  type: research
+  target_agent: opencode
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/call-function--ontological. This\
+    \ repo currently has NO ranked value \u2014 your job is to find it (value is discovered,\
+    \ never assumed absent). Steps: (1) Read the repo \u2014 what it is, its real\
+    \ entrypoints/exports, what it already does. (2) Identify its highest latent value:\
+    \ a concrete product, revenue path, reusable asset, or capability the rest of\
+    \ the estate could use \u2014 be specific and honest. (3) DECIDE: if there is\
+    \ real value, write a one-paragraph value thesis to DISCOVERY.md AND open a PR\
+    \ that ALSO appends \"organvm/call-function--ontological\" to value-repos.json\
+    \ (promote it into the ranked tier so build-out can follow) AND name the single\
+    \ best concrete first task; if it is genuinely archival, write the thesis saying\
+    \ so (so it is never re-discovered) \u2014 do NOT promote it. Keep any build green.\
+    \ Output the thesis. [auto-discovery 2026-06-23; no repo stays dark]"
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: DISCOVER-organvm-organvm-ontologia
+  title: Discover the latent value of organvm/organvm-ontologia
+  repo: organvm/organvm-ontologia
+  type: research
+  target_agent: claude
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/organvm-ontologia. This repo currently\
+    \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
+    \ assumed absent). Steps: (1) Read the repo \u2014 what it is, its real entrypoints/exports,\
+    \ what it already does. (2) Identify its highest latent value: a concrete product,\
+    \ revenue path, reusable asset, or capability the rest of the estate could use\
+    \ \u2014 be specific and honest. (3) DECIDE: if there is real value, write a one-paragraph\
+    \ value thesis to DISCOVERY.md AND open a PR that ALSO appends \"organvm/organvm-ontologia\"\
+    \ to value-repos.json (promote it into the ranked tier so build-out can follow)\
+    \ AND name the single best concrete first task; if it is genuinely archival, write\
+    \ the thesis saying so (so it is never re-discovered) \u2014 do NOT promote it.\
+    \ Keep any build green. Output the thesis. [auto-discovery 2026-06-23; no repo\
+    \ stays dark]"
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: DISCOVER-organvm-digital-income-organism-inquiry
+  title: Discover the latent value of organvm/digital-income-organism-inquiry
+  repo: organvm/digital-income-organism-inquiry
+  type: research
+  target_agent: claude
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/digital-income-organism-inquiry.\
+    \ This repo currently has NO ranked value \u2014 your job is to find it (value\
+    \ is discovered, never assumed absent). Steps: (1) Read the repo \u2014 what it\
+    \ is, its real entrypoints/exports, what it already does. (2) Identify its highest\
+    \ latent value: a concrete product, revenue path, reusable asset, or capability\
+    \ the rest of the estate could use \u2014 be specific and honest. (3) DECIDE:\
+    \ if there is real value, write a one-paragraph value thesis to DISCOVERY.md AND\
+    \ open a PR that ALSO appends \"organvm/digital-income-organism-inquiry\" to value-repos.json\
+    \ (promote it into the ranked tier so build-out can follow) AND name the single\
+    \ best concrete first task; if it is genuinely archival, write the thesis saying\
+    \ so (so it is never re-discovered) \u2014 do NOT promote it. Keep any build green.\
+    \ Output the thesis. [auto-discovery 2026-06-23; no repo stays dark]"
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: DISCOVER-organvm-orchestration-start-here
+  title: Discover the latent value of organvm/orchestration-start-here
+  repo: organvm/orchestration-start-here
+  type: research
+  target_agent: opencode
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/orchestration-start-here. This repo\
+    \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
+    \ never assumed absent). Steps: (1) Read the repo \u2014 what it is, its real\
+    \ entrypoints/exports, what it already does. (2) Identify its highest latent value:\
+    \ a concrete product, revenue path, reusable asset, or capability the rest of\
+    \ the estate could use \u2014 be specific and honest. (3) DECIDE: if there is\
+    \ real value, write a one-paragraph value thesis to DISCOVERY.md AND open a PR\
+    \ that ALSO appends \"organvm/orchestration-start-here\" to value-repos.json (promote\
+    \ it into the ranked tier so build-out can follow) AND name the single best concrete\
+    \ first task; if it is genuinely archival, write the thesis saying so (so it is\
+    \ never re-discovered) \u2014 do NOT promote it. Keep any build green. Output\
+    \ the thesis. [auto-discovery 2026-06-23; no repo stays dark]"
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: DISCOVER-organvm-relationship-pipeline
+  title: Discover the latent value of organvm/relationship-pipeline
+  repo: organvm/relationship-pipeline
+  type: research
+  target_agent: agy
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/relationship-pipeline. This repo\
+    \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
+    \ never assumed absent). Steps: (1) Read the repo \u2014 what it is, its real\
+    \ entrypoints/exports, what it already does. (2) Identify its highest latent value:\
+    \ a concrete product, revenue path, reusable asset, or capability the rest of\
+    \ the estate could use \u2014 be specific and honest. (3) DECIDE: if there is\
+    \ real value, write a one-paragraph value thesis to DISCOVERY.md AND open a PR\
+    \ that ALSO appends \"organvm/relationship-pipeline\" to value-repos.json (promote\
+    \ it into the ranked tier so build-out can follow) AND name the single best concrete\
+    \ first task; if it is genuinely archival, write the thesis saying so (so it is\
+    \ never re-discovered) \u2014 do NOT promote it. Keep any build green. Output\
+    \ the thesis. [auto-discovery 2026-06-23; no repo stays dark]"
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: DISCOVER-organvm-petasum-super-petasum
+  title: Discover the latent value of organvm/petasum-super-petasum
+  repo: organvm/petasum-super-petasum
+  type: research
+  target_agent: claude
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/petasum-super-petasum. This repo\
+    \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
+    \ never assumed absent). Steps: (1) Read the repo \u2014 what it is, its real\
+    \ entrypoints/exports, what it already does. (2) Identify its highest latent value:\
+    \ a concrete product, revenue path, reusable asset, or capability the rest of\
+    \ the estate could use \u2014 be specific and honest. (3) DECIDE: if there is\
+    \ real value, write a one-paragraph value thesis to DISCOVERY.md AND open a PR\
+    \ that ALSO appends \"organvm/petasum-super-petasum\" to value-repos.json (promote\
+    \ it into the ranked tier so build-out can follow) AND name the single best concrete\
+    \ first task; if it is genuinely archival, write the thesis saying so (so it is\
+    \ never re-discovered) \u2014 do NOT promote it. Keep any build green. Output\
+    \ the thesis. [auto-discovery 2026-06-23; no repo stays dark]"
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: DISCOVER-organvm-specvla-ergon--avditor-mvndi
+  title: Discover the latent value of organvm/specvla-ergon--avditor-mvndi
+  repo: organvm/specvla-ergon--avditor-mvndi
+  type: research
+  target_agent: opencode
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/specvla-ergon--avditor-mvndi. This\
+    \ repo currently has NO ranked value \u2014 your job is to find it (value is discovered,\
+    \ never assumed absent). Steps: (1) Read the repo \u2014 what it is, its real\
+    \ entrypoints/exports, what it already does. (2) Identify its highest latent value:\
+    \ a concrete product, revenue path, reusable asset, or capability the rest of\
+    \ the estate could use \u2014 be specific and honest. (3) DECIDE: if there is\
+    \ real value, write a one-paragraph value thesis to DISCOVERY.md AND open a PR\
+    \ that ALSO appends \"organvm/specvla-ergon--avditor-mvndi\" to value-repos.json\
+    \ (promote it into the ranked tier so build-out can follow) AND name the single\
+    \ best concrete first task; if it is genuinely archival, write the thesis saying\
+    \ so (so it is never re-discovered) \u2014 do NOT promote it. Keep any build green.\
+    \ Output the thesis. [auto-discovery 2026-06-23; no repo stays dark]"
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: DISCOVER-organvm-conversation-corpus-engine
+  title: Discover the latent value of organvm/conversation-corpus-engine
+  repo: organvm/conversation-corpus-engine
+  type: research
+  target_agent: agy
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/conversation-corpus-engine. This\
+    \ repo currently has NO ranked value \u2014 your job is to find it (value is discovered,\
+    \ never assumed absent). Steps: (1) Read the repo \u2014 what it is, its real\
+    \ entrypoints/exports, what it already does. (2) Identify its highest latent value:\
+    \ a concrete product, revenue path, reusable asset, or capability the rest of\
+    \ the estate could use \u2014 be specific and honest. (3) DECIDE: if there is\
+    \ real value, write a one-paragraph value thesis to DISCOVERY.md AND open a PR\
+    \ that ALSO appends \"organvm/conversation-corpus-engine\" to value-repos.json\
+    \ (promote it into the ranked tier so build-out can follow) AND name the single\
+    \ best concrete first task; if it is genuinely archival, write the thesis saying\
+    \ so (so it is never re-discovered) \u2014 do NOT promote it. Keep any build green.\
+    \ Output the thesis. [auto-discovery 2026-06-23; no repo stays dark]"
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: DISCOVER-organvm-media-ark
+  title: Discover the latent value of organvm/media-ark
+  repo: organvm/media-ark
+  type: research
+  target_agent: claude
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/media-ark. This repo currently has\
+    \ NO ranked value \u2014 your job is to find it (value is discovered, never assumed\
+    \ absent). Steps: (1) Read the repo \u2014 what it is, its real entrypoints/exports,\
+    \ what it already does. (2) Identify its highest latent value: a concrete product,\
+    \ revenue path, reusable asset, or capability the rest of the estate could use\
+    \ \u2014 be specific and honest. (3) DECIDE: if there is real value, write a one-paragraph\
+    \ value thesis to DISCOVERY.md AND open a PR that ALSO appends \"organvm/media-ark\"\
+    \ to value-repos.json (promote it into the ranked tier so build-out can follow)\
+    \ AND name the single best concrete first task; if it is genuinely archival, write\
+    \ the thesis saying so (so it is never re-discovered) \u2014 do NOT promote it.\
+    \ Keep any build green. Output the thesis. [auto-discovery 2026-06-23; no repo\
+    \ stays dark]"
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: DISCOVER-organvm-my--father-mother
+  title: Discover the latent value of organvm/my--father-mother
+  repo: organvm/my--father-mother
+  type: research
+  target_agent: opencode
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/my--father-mother. This repo currently\
+    \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
+    \ assumed absent). Steps: (1) Read the repo \u2014 what it is, its real entrypoints/exports,\
+    \ what it already does. (2) Identify its highest latent value: a concrete product,\
+    \ revenue path, reusable asset, or capability the rest of the estate could use\
+    \ \u2014 be specific and honest. (3) DECIDE: if there is real value, write a one-paragraph\
+    \ value thesis to DISCOVERY.md AND open a PR that ALSO appends \"organvm/my--father-mother\"\
+    \ to value-repos.json (promote it into the ranked tier so build-out can follow)\
+    \ AND name the single best concrete first task; if it is genuinely archival, write\
+    \ the thesis saying so (so it is never re-discovered) \u2014 do NOT promote it.\
+    \ Keep any build green. Output the thesis. [auto-discovery 2026-06-23; no repo\
+    \ stays dark]"
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: DISCOVER-organvm-sovereign-systems--elevate-align
+  title: Discover the latent value of organvm/sovereign-systems--elevate-align
+  repo: organvm/sovereign-systems--elevate-align
+  type: research
+  target_agent: agy
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - discover
+  - value-discovery
+  urls: []
+  context: "DISCOVER the latent value of organvm/sovereign-systems--elevate-align.\
+    \ This repo currently has NO ranked value \u2014 your job is to find it (value\
+    \ is discovered, never assumed absent). Steps: (1) Read the repo \u2014 what it\
+    \ is, its real entrypoints/exports, what it already does. (2) Identify its highest\
+    \ latent value: a concrete product, revenue path, reusable asset, or capability\
+    \ the rest of the estate could use \u2014 be specific and honest. (3) DECIDE:\
+    \ if there is real value, write a one-paragraph value thesis to DISCOVERY.md AND\
+    \ open a PR that ALSO appends \"organvm/sovereign-systems--elevate-align\" to\
+    \ value-repos.json (promote it into the ranked tier so build-out can follow) AND\
+    \ name the single best concrete first task; if it is genuinely archival, write\
+    \ the thesis saying so (so it is never re-discovered) \u2014 do NOT promote it.\
+    \ Keep any build green. Output the thesis. [auto-discovery 2026-06-23; no repo\
+    \ stays dark]"
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
