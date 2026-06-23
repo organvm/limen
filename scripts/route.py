@@ -145,7 +145,7 @@ def _task_cost(task: dict) -> int:
 # jules async-fallback bound its historical big-task timeouts. It still gets FIRST pick for genuine
 # deploy/infra work (the _DEPLOY_HINTS branch below) when that's unblocked.
 _DEPLOY_HINTS = ("deploy", "cloudflare", "worker", "wrangler", "infra", "hosting")
-_LOCAL_LANES = ("codex", "claude", "agy", "opencode")
+_LOCAL_LANES = ("codex", "claude", "agy", "opencode", "gemini")
 
 
 def _learned_weights() -> dict[str, float]:
@@ -343,6 +343,10 @@ def main() -> int:
     _dead = _down_lanes()
     if _dead:
         health = {k: (v and k not in _dead) for k, v in health.items()}
+        census = [
+            {**row, "reachable": bool(row["reachable"] and row["agent"] not in _dead)}
+            for row in census
+        ]
 
     # The refresh-vs-remaining split signal: hours of runway per lane (live, derived).
     runway = _vendor_runway()

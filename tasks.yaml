@@ -15,11 +15,11 @@ portal:
       claude: 100
     track:
       date: '2026-06-22'
-      spent: 38
+      spent: 40
       per_agent:
         jules: 13
         gemini: 0
-        codex: 11
+        codex: 13
         opencode: 4
         agy: 6
         claude: 4
@@ -38,7 +38,7 @@ tasks:
   target_agent: codex
   priority: high
   budget_cost: 2
-  status: dispatched
+  status: done
   labels:
   - full-agent-force
   - infra
@@ -50,7 +50,7 @@ tasks:
     agent each cycle.'
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T04:43:56.613434Z'
+  updated: '2026-06-23T23:37:56Z'
   dispatch_log:
   - timestamp: '2026-06-20T19:51:18.339621Z'
     agent: limen
@@ -62,6 +62,11 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-23T23:37:56Z'
+    agent: codex
+    session_id: "cli"
+    status: done
+    output: "Implemented paid-lane router completion: added gemini to local paid rotation, and applied down-lane filtering to capacity census output in both route and dispatch paths."
 - id: FORCE-warp-oz-lane
   title: Enlist the installed oz-by-warp GitHub App as a dispatch lane
   repo: organvm/limen

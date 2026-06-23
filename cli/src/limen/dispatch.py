@@ -856,7 +856,13 @@ def dispatch_tasks(
         return
 
     remaining = _remaining_budget(limen, agent_filter, budget)
-    print(format_capacity_census(capacity_census(limen, budget_limit=budget)))
+    census = capacity_census(limen, budget_limit=budget)
+    if down:
+        census = [
+            {**row, "reachable": bool(row["reachable"] and row["agent"] not in down)}
+            for row in census
+        ]
+    print(format_capacity_census(census))
     if remaining <= 0:
         print(
             f"Budget exhausted for {agent_filter} ({track.spent}/{budget} total spent)"
