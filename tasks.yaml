@@ -15,14 +15,14 @@ portal:
       claude: 100
     track:
       date: '2026-06-23'
-      spent: 35
+      spent: 41
       per_agent:
-        jules: 19
+        jules: 21
         gemini: 0
         codex: 0
         opencode: 4
-        agy: 12
-        claude: 0
+        agy: 14
+        claude: 2
       per_agent_reset:
         jules: '2026-06-22T16:29:16.568799+00:00'
         gemini: '2026-06-22T16:29:16.568799+00:00'
@@ -43864,7 +43864,7 @@ tasks:
     \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  updated: '2026-06-23T12:18:48.290359Z'
+  updated: '2026-06-23T12:37:31.807071Z'
   dispatch_log:
   - timestamp: '2026-06-23T03:29:17.742172Z'
     agent: codex
@@ -44331,6 +44331,10 @@ tasks:
     session_id: cli
     status: failed->agy
   - timestamp: '2026-06-23T12:18:48.290359Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T12:37:31.807071Z'
     agent: codex
     session_id: cli
     status: failed->opencode
@@ -45635,16 +45639,19 @@ tasks:
   title: Drive Styx to deploy-ready
   repo: organvm/styx
   type: code
-  target_agent: any
+  target_agent: claude
   priority: high
   budget_cost: 2
-  status: dispatched
+  status: open
   labels:
   - revenue-ship
   - revenue
   - product
   - ship-order
   - generated
+  - tried:codex
+  - tried:opencode
+  - tried:agy
   urls: []
   context: "In organvm/styx, clear the concrete blockers between the current state\
     \ and a DEPLOYABLE product: get open PRs green + merged, fix the critical path,\
@@ -45653,22 +45660,35 @@ tasks:
     \ \u2014 spend tokens on income, not busywork]"
   depends_on: []
   created: '2026-06-23'
-  updated: '2026-06-23T12:22:41.525551Z'
-  dispatch_log: []
+  updated: '2026-06-23T12:48:18.881443Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T12:22:41.525551Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T12:37:31.807071Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T12:48:18.881443Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
 - id: REV-organvm-a-i-chat--exporter-revenue-funding-0623
   title: Stage the donation funnel for ChatGPT Exporter
   repo: organvm/a-i-chat--exporter
   type: code
-  target_agent: any
+  target_agent: opencode
   priority: critical
   budget_cost: 2
-  status: dispatched
+  status: cancelled
   labels:
   - revenue-funding
   - revenue
   - product
   - ship-order
   - generated
+  - noop
   urls: []
   context: "In organvm/a-i-chat--exporter, add .github/FUNDING.yml (ko_fi + github\
     \ sponsors entries \u2014 use the owner handle; if the exact Ko-fi slug isn't\
@@ -45679,16 +45699,24 @@ tasks:
     \ tokens on income, not busywork]"
   depends_on: []
   created: '2026-06-23'
-  updated: '2026-06-23T12:22:41.525551Z'
-  dispatch_log: []
+  updated: '2026-06-23T12:37:31.807071Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T12:22:41.525551Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T12:37:31.807071Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: REV-organvm-universal-mail--automation-revenue-ship-0623
   title: Drive Universal Mail Automation to deploy-ready
   repo: organvm/universal-mail--automation
   type: code
-  target_agent: any
+  target_agent: agy
   priority: high
   budget_cost: 2
-  status: dispatched
+  status: done
   labels:
   - revenue-ship
   - revenue
@@ -45703,7 +45731,7 @@ tasks:
     \ rank 3, stage building \u2014 spend tokens on income, not busywork]"
   depends_on: []
   created: '2026-06-23'
-  updated: '2026-06-23T12:22:41.525551Z'
+  updated: '2026-06-23T12:45:42.521178Z'
   dispatch_log:
   - timestamp: '2026-06-23T12:22:41.525551Z'
     agent: opencode
@@ -45713,25 +45741,38 @@ tasks:
     agent: opencode
     session_id: PR-37
     status: done
-    output: 'PR #37: feat/trial-signup-flow — added sign-up dialog, trial
-      tracking (14-day), org creation flow, trial banner with Subscribe CTA
-      in Dashboard. 6 files changed, 385 insertions, 15 deletions.
-      Tests: 7 new (all passing). Build: green. CI: same 3 pre-existing
-      failures only.'
+    output: "PR #37: feat/trial-signup-flow \u2014 added sign-up dialog, trial tracking\
+      \ (14-day), org creation flow, trial banner with Subscribe CTA in Dashboard.\
+      \ 6 files changed, 385 insertions, 15 deletions. Tests: 7 new (all passing).\
+      \ Build: green. CI: same 3 pre-existing failures only."
+  - timestamp: '2026-06-23T12:22:41.525551Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T12:37:31.807071Z'
+    agent: agy
+    session_id: https://github.com/organvm/universal-mail--automation/pull/76
+    status: dispatched
+  - timestamp: '2026-06-23T12:45:42.521178Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: REV-organvm-the-invisible-ledger-revenue-ship-0623
   title: Drive The Invisible Ledger to deploy-ready
   repo: organvm/the-invisible-ledger
   type: code
-  target_agent: any
+  target_agent: claude
   priority: high
   budget_cost: 2
-  status: dispatched
+  status: cancelled
   labels:
   - revenue-ship
   - revenue
   - product
   - ship-order
   - generated
+  - noop
   urls: []
   context: "In organvm/the-invisible-ledger, clear the concrete blockers between the\
     \ current state and a DEPLOYABLE product: get open PRs green + merged, fix the\
@@ -45740,13 +45781,21 @@ tasks:
     \ rank 4, stage building \u2014 spend tokens on income, not busywork]"
   depends_on: []
   created: '2026-06-23'
-  updated: '2026-06-23T12:22:41.525551Z'
-  dispatch_log: []
+  updated: '2026-06-23T12:37:31.807071Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T12:22:41.525551Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T12:37:31.807071Z'
+    agent: claude
+    session_id: cli
+    status: noop
 - id: REV-organvm-mirror-mirror-revenue-ship-0623
   title: Drive Mirror Mirror to deploy-ready
   repo: organvm/mirror-mirror
   type: code
-  target_agent: any
+  target_agent: jules
   priority: high
   budget_cost: 2
   status: dispatched
@@ -45764,22 +45813,35 @@ tasks:
     \ stage building \u2014 spend tokens on income, not busywork]"
   depends_on: []
   created: '2026-06-23'
-  updated: '2026-06-23T12:22:41.525551Z'
-  dispatch_log: []
+  updated: '2026-06-23T12:48:18.881443Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T12:22:41.525551Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T12:37:31.807071Z'
+    agent: gemini
+    session_id: cli
+    status: ratelimited->jules
+  - timestamp: '2026-06-23T12:48:18.881443Z'
+    agent: jules
+    session_id: '3841943548034233810'
+    status: dispatched
 - id: REV-organvm-public-record-data-scrapper-revenue-ship-0623
   title: Drive Public Record Data Scraper to deploy-ready
   repo: organvm/public-record-data-scrapper
   type: code
-  target_agent: any
+  target_agent: opencode
   priority: high
   budget_cost: 2
-  status: dispatched
+  status: cancelled
   labels:
   - revenue-ship
   - revenue
   - product
   - ship-order
   - generated
+  - noop
   urls: []
   context: "In organvm/public-record-data-scrapper, clear the concrete blockers between\
     \ the current state and a DEPLOYABLE product: get open PRs green + merged, fix\
@@ -45788,40 +45850,28 @@ tasks:
     \ rank 2, stage building \u2014 spend tokens on income, not busywork]"
   depends_on: []
   created: '2026-06-23'
-  updated: '2026-06-23T12:22:41.525551Z'
-  dispatch_log: []
+  updated: '2026-06-23T12:48:18.881443Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T12:22:41.525551Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T12:37:31.807071Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T12:48:18.881443Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: REV-organvm-styx-revenue-readiness-0623
-  title: First-paying-customer readiness pass on Styx
-  repo: organvm/styx
-  type: code
-  target_agent: any
-  priority: high
-  budget_cost: 2
-  status: dispatched
-  labels:
-  - revenue-readiness
-  - revenue
-  - product
-  - ship-order
-  - generated
-  urls: []
-  context: "In organvm/styx, find the single highest-leverage gap between the current\
-    \ product and something a stranger would pay for (first-dollar path: paid tier\
-    \ once live) and close it with a real, tested change. One focused PR; keep CI\
-    \ green. [revenue-backlog 2026-06-23: rank 6, stage building \u2014 spend tokens\
-    \ on income, not busywork]"
-  depends_on: []
-  created: '2026-06-23'
-  updated: '2026-06-23T12:22:41.525551Z'
-  dispatch_log: []
-- id: REV-organvm-a-i-chat--exporter-revenue-pro-tier-0623
   title: Make the Pro-tier checkout merge-ready for ChatGPT Exporter
   repo: organvm/a-i-chat--exporter
   type: code
-  target_agent: any
+  target_agent: opencode
   priority: critical
   budget_cost: 2
-  status: dispatched
+  status: in_progress
   labels:
   - revenue-pro-tier
   - revenue
@@ -45838,8 +45888,16 @@ tasks:
     \ 2026-06-23: rank 1, stage deploy-ready \u2014 spend tokens on income, not busywork]"
   depends_on: []
   created: '2026-06-23'
-  updated: '2026-06-23T12:22:41.525551Z'
-  dispatch_log: []
+  updated: '2026-06-23T12:37:31.807071Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T12:22:41.525551Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T12:37:31.807071Z'
+    agent: opencode
+    session_id: current
+    status: in_progress
 - id: REV-organvm-universal-mail--automation-revenue-readiness-0623
   title: First-paying-customer readiness pass on Universal Mail Automation
   repo: organvm/universal-mail--automation
@@ -45847,13 +45905,14 @@ tasks:
   target_agent: any
   priority: high
   budget_cost: 2
-  status: dispatched
+  status: cancelled
   labels:
   - revenue-readiness
   - revenue
   - product
   - ship-order
   - generated
+  - noop
   urls: []
   context: "In organvm/universal-mail--automation, find the single highest-leverage\
     \ gap between the current product and something a stranger would pay for (first-dollar\
@@ -45863,7 +45922,11 @@ tasks:
   depends_on: []
   created: '2026-06-23'
   updated: '2026-06-23T12:22:41.525551Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-23T12:22:41.525551Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: REV-organvm-the-invisible-ledger-revenue-readiness-0623
   title: First-paying-customer readiness pass on The Invisible Ledger
   repo: organvm/the-invisible-ledger
@@ -45871,13 +45934,14 @@ tasks:
   target_agent: any
   priority: high
   budget_cost: 2
-  status: dispatched
+  status: cancelled
   labels:
   - revenue-readiness
   - revenue
   - product
   - ship-order
   - generated
+  - noop
   urls: []
   context: "In organvm/the-invisible-ledger, find the single highest-leverage gap\
     \ between the current product and something a stranger would pay for (first-dollar\
@@ -45887,7 +45951,11 @@ tasks:
   depends_on: []
   created: '2026-06-23'
   updated: '2026-06-23T12:22:41.525551Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-23T12:22:41.525551Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: REV-organvm-mirror-mirror-revenue-readiness-0623
   title: First-paying-customer readiness pass on Mirror Mirror
   repo: organvm/mirror-mirror
@@ -45895,13 +45963,14 @@ tasks:
   target_agent: any
   priority: high
   budget_cost: 2
-  status: dispatched
+  status: cancelled
   labels:
   - revenue-readiness
   - revenue
   - product
   - ship-order
   - generated
+  - noop
   urls: []
   context: "In organvm/mirror-mirror, find the single highest-leverage gap between\
     \ the current product and something a stranger would pay for (first-dollar path:\
@@ -45911,12 +45980,16 @@ tasks:
   depends_on: []
   created: '2026-06-23'
   updated: '2026-06-23T12:22:41.525551Z'
-  dispatch_log: []
+  dispatch_log:
+  - timestamp: '2026-06-23T12:22:41.525551Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: REV-organvm-public-record-data-scrapper-revenue-readiness-0623
   title: First-paying-customer readiness pass on Public Record Data Scraper
   repo: organvm/public-record-data-scrapper
   type: code
-  target_agent: any
+  target_agent: claude
   priority: high
   budget_cost: 2
   status: dispatched
@@ -45926,6 +45999,7 @@ tasks:
   - product
   - ship-order
   - generated
+  - tried:agy
   urls: []
   context: "In organvm/public-record-data-scrapper, find the single highest-leverage\
     \ gap between the current product and something a stranger would pay for (first-dollar\
@@ -45934,5 +46008,968 @@ tasks:
     \ rank 2, stage building \u2014 spend tokens on income, not busywork]"
   depends_on: []
   created: '2026-06-23'
-  updated: '2026-06-23T12:22:41.525551Z'
+  updated: '2026-06-23T12:48:18.881443Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T12:22:41.525551Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T12:37:31.807071Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T12:48:18.881443Z'
+    agent: claude
+    session_id: https://github.com/organvm/public-record-data-scrapper/pull/304
+    status: dispatched
+- id: REV-organvm-a-i-chat--exporter-revenue-landing-0623
+  title: Ship a landing page for ChatGPT Exporter
+  repo: organvm/a-i-chat--exporter
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 2
+  status: cancelled
+  labels:
+  - revenue-landing
+  - revenue
+  - product
+  - ship-order
+  - generated
+  - noop
+  urls: []
+  context: "Create a single deploy-ready product page for ChatGPT Exporter in organvm/a-i-chat--exporter\
+    \ (docs/ or a gh-pages-ready index) explaining the real value and linking install\
+    \ + the donation/Pro options. Real copy derived from what the product ACTUALLY\
+    \ does \u2014 no lorem, no invented features. [revenue-backlog 2026-06-23: rank\
+    \ 1, stage deploy-ready \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T12:48:18.881443Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T12:37:31.807071Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T12:48:18.881443Z'
+    agent: opencode
+    session_id: cli
+    status: noop
+- id: REV-organvm-a-i-chat--exporter-revenue-launch-post-0623
+  title: Draft the build-in-public launch post for ChatGPT Exporter
+  repo: organvm/a-i-chat--exporter
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 2
+  status: open
+  labels:
+  - revenue-launch-post
+  - revenue
+  - product
+  - ship-order
+  - generated
+  - slow
+  urls: []
+  context: "Write a ready-to-post launch announcement for ChatGPT Exporter (Show HN\
+    \ + Reddit + X variants), grounded in what it ACTUALLY does and its real users.\
+    \ Save as marketing/launch-post.md in organvm/a-i-chat--exporter. No hype, no\
+    \ invented metrics. [revenue-backlog 2026-06-23: rank 1, stage deploy-ready \u2014\
+    \ spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-06-23'
+  updated: '2026-06-23T12:48:18.881443Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T12:37:31.807071Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T12:48:18.881443Z'
+    agent: opencode
+    session_id: cli
+    status: timeout->jules
+- id: studium-deepen-quran
+  title: "Qur'an \u2014 suras 2..114 (113 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Qur'an \u2014 suras 2..114 (113 arcs). The authoritative division\
+    \ checklist (which divisions are done [check] vs todo) is studium/music/quran/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-journey-to-the-west
+  title: "Journey to the West \u2014 chapters 2..100 (99 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Journey to the West \u2014 chapters 2..100 (99 arcs). The authoritative\
+    \ division checklist (which divisions are done [check] vs todo) is studium/music/journey-to-the-west/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-divine-comedy
+  title: "Divine Comedy \u2014 cantos 2..100 (99 arcs; Inferno\u2192Purgatorio\u2192\
+    Paradiso = descent\u2192ascent\u2192revelation)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Divine Comedy \u2014 cantos 2..100 (99 arcs; Inferno\u2192Purgatorio\u2192\
+    Paradiso = descent\u2192ascent\u2192revelation). The authoritative division checklist\
+    \ (which divisions are done [check] vs todo) is studium/music/divine-comedy/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-tao-te-ching
+  title: "Dao De Jing \u2014 chapters 2..81 (80 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Dao De Jing \u2014 chapters 2..81 (80 arcs). The authoritative\
+    \ division checklist (which divisions are done [check] vs todo) is studium/music/tao-te-ching/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-tale-of-genji
+  title: "Tale of Genji \u2014 chapters 2..54 (53 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Tale of Genji \u2014 chapters 2..54 (53 arcs). The authoritative\
+    \ division checklist (which divisions are done [check] vs todo) is studium/music/tale-of-genji/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-shahnameh
+  title: "Shahnameh \u2014 cycles 2..50 (49 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Shahnameh \u2014 cycles 2..50 (49 arcs). The authoritative division\
+    \ checklist (which divisions are done [check] vs todo) is studium/music/shahnameh/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-conference-of-birds
+  title: "Conference of the Birds \u2014 sections 2..45 (44 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Conference of the Birds \u2014 sections 2..45 (44 arcs). The\
+    \ authoritative division checklist (which divisions are done [check] vs todo)\
+    \ is studium/music/conference-of-birds/PLAN.md. Author the NEXT BOUNDED BATCH\
+    \ of undone divisions (a handful per PR, NOT all at once) as force-matched arcs\
+    \ + mirrored essays in the Iliad gold-standard format (see studium/music/iliad/\
+    \ + studium/essays/iliad/ and studium/music/<work>/PLAN.md). Acceptance: scripts/studium-validate.py\
+    \ must PASS (every force in studium/dominant-force.yaml; force_arc equals the\
+    \ ordered track forces; no intra-arc duplicate pieces). One green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-beowulf
+  title: "Beowulf \u2014 fitts 2..43 (42 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Beowulf \u2014 fitts 2..43 (42 arcs). The authoritative division\
+    \ checklist (which divisions are done [check] vs todo) is studium/music/beowulf/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-tanakh
+  title: "Tanakh \u2014 books 2..39 (38 arcs; Torah \xB7 Nevi'im \xB7 Ketuvim)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Tanakh \u2014 books 2..39 (38 arcs; Torah \xB7 Nevi'im \xB7 Ketuvim).\
+    \ The authoritative division checklist (which divisions are done [check] vs todo)\
+    \ is studium/music/tanakh/PLAN.md. Author the NEXT BOUNDED BATCH of undone divisions\
+    \ (a handful per PR, NOT all at once) as force-matched arcs + mirrored essays\
+    \ in the Iliad gold-standard format (see studium/music/iliad/ + studium/essays/iliad/\
+    \ and studium/music/<work>/PLAN.md). Acceptance: scripts/studium-validate.py must\
+    \ PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered\
+    \ track forces; no intra-arc duplicate pieces). One green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-canterbury-tales
+  title: "Canterbury Tales \u2014 tales 2..24 (23 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Canterbury Tales \u2014 tales 2..24 (23 arcs). The authoritative\
+    \ division checklist (which divisions are done [check] vs todo) is studium/music/canterbury-tales/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-analects
+  title: "Analects \u2014 books 2..20 (19 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Analects \u2014 books 2..20 (19 arcs). The authoritative division\
+    \ checklist (which divisions are done [check] vs todo) is studium/music/analects/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-mahabharata
+  title: "Mahabharata \u2014 parvas 2..18 (17 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Mahabharata \u2014 parvas 2..18 (17 arcs). The authoritative\
+    \ division checklist (which divisions are done [check] vs todo) is studium/music/mahabharata/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-bhagavad-gita
+  title: "Bhagavad Gita \u2014 chapters 2..18 (17 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Bhagavad Gita \u2014 chapters 2..18 (17 arcs). The authoritative\
+    \ division checklist (which divisions are done [check] vs todo) is studium/music/bhagavad-gita/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-metamorphoses
+  title: "Metamorphoses \u2014 books 2..15 (14 arcs; metamorphosis as the spine)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Metamorphoses \u2014 books 2..15 (14 arcs; metamorphosis as the\
+    \ spine). The authoritative division checklist (which divisions are done [check]\
+    \ vs todo) is studium/music/metamorphoses/PLAN.md. Author the NEXT BOUNDED BATCH\
+    \ of undone divisions (a handful per PR, NOT all at once) as force-matched arcs\
+    \ + mirrored essays in the Iliad gold-standard format (see studium/music/iliad/\
+    \ + studium/essays/iliad/ and studium/music/<work>/PLAN.md). Acceptance: scripts/studium-validate.py\
+    \ must PASS (every force in studium/dominant-force.yaml; force_arc equals the\
+    \ ordered track forces; no intra-arc duplicate pieces). One green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-aeneid
+  title: "Aeneid \u2014 books 2..12 (11 arcs; empire/fate/sacrifice)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Aeneid \u2014 books 2..12 (11 arcs; empire/fate/sacrifice). The\
+    \ authoritative division checklist (which divisions are done [check] vs todo)\
+    \ is studium/music/aeneid/PLAN.md. Author the NEXT BOUNDED BATCH of undone divisions\
+    \ (a handful per PR, NOT all at once) as force-matched arcs + mirrored essays\
+    \ in the Iliad gold-standard format (see studium/music/iliad/ + studium/essays/iliad/\
+    \ and studium/music/<work>/PLAN.md). Acceptance: scripts/studium-validate.py must\
+    \ PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered\
+    \ track forces; no intra-arc duplicate pieces). One green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-gilgamesh
+  title: "Gilgamesh \u2014 tablets 2..12 (11 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Gilgamesh \u2014 tablets 2..12 (11 arcs). The authoritative division\
+    \ checklist (which divisions are done [check] vs todo) is studium/music/gilgamesh/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-heike
+  title: "Tale of the Heike \u2014 books 2..12 (11 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Tale of the Heike \u2014 books 2..12 (11 arcs). The authoritative\
+    \ division checklist (which divisions are done [check] vs todo) is studium/music/heike/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-deepen-ramayana
+  title: "Ramayana \u2014 kandas 2..7 (6 arcs)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Ramayana \u2014 kandas 2..7 (6 arcs). The authoritative division\
+    \ checklist (which divisions are done [check] vs todo) is studium/music/ramayana/PLAN.md.\
+    \ Author the NEXT BOUNDED BATCH of undone divisions (a handful per PR, NOT all\
+    \ at once) as force-matched arcs + mirrored essays in the Iliad gold-standard\
+    \ format (see studium/music/iliad/ + studium/essays/iliad/ and studium/music/<work>/PLAN.md).\
+    \ Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-corpus-shahnameh
+  title: "Fetch Shahnameh original (ganjoor.net) \u2192 corpus arabic-persian/shahnameh;\
+    \ clear canon missing_from_corpus"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Fetch Shahnameh original (ganjoor.net) \u2192 corpus arabic-persian/shahnameh;\
+    \ clear canon missing_from_corpus. Acceptance: scripts/studium-validate.py must\
+    \ PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered\
+    \ track forces; no intra-arc duplicate pieces). One green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-corpus-tier2
+  title: Fetch Tier-2 originals where public-domain (Upanishads/Shijing/Kojiki/Rumi-Hafez/Honglou-meng)
+    from their source rails
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Fetch Tier-2 originals where public-domain (Upanishads/Shijing/Kojiki/Rumi-Hafez/Honglou-meng)
+    from their source rails. Acceptance: scripts/studium-validate.py must PASS (every
+    force in studium/dominant-force.yaml; force_arc equals the ordered track forces;
+    no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-odyssey
+  title: Odyssey film companion (return/exile/recognition)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Odyssey film companion (return/exile/recognition). Acceptance:
+    scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-aeneid
+  title: Aeneid film companion (empire/fate/sacrifice)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Aeneid film companion (empire/fate/sacrifice). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-metamorphoses
+  title: Metamorphoses film companion (metamorphosis)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Metamorphoses film companion (metamorphosis). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-divine-comedy
+  title: Divine Comedy film companion (descent/ascent/beatitude)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Divine Comedy film companion (descent/ascent/beatitude). Acceptance:
+    scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-tanakh
+  title: Tanakh film companion (covenant/law/exile)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Tanakh film companion (covenant/law/exile). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-quran
+  title: Qur'an film companion (revelation/law/the straight path)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Qur''an film companion (revelation/law/the straight path). Acceptance:
+    scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-gilgamesh
+  title: Gilgamesh film companion (mortality/grief)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Gilgamesh film companion (mortality/grief). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-beowulf
+  title: Beowulf film companion (wyrd/heroic doom)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Beowulf film companion (wyrd/heroic doom). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-canterbury-tales
+  title: Canterbury Tales film companion (the human comedy)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Canterbury Tales film companion (the human comedy). Acceptance:
+    scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-mahabharata
+  title: Mahabharata film companion (dharma/war)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Mahabharata film companion (dharma/war). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-bhagavad-gita
+  title: Bhagavad Gita film companion (right action/renunciation)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Bhagavad Gita film companion (right action/renunciation). Acceptance:
+    scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-ramayana
+  title: Ramayana film companion (fidelity/return)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Ramayana film companion (fidelity/return). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-analects
+  title: Analects film companion (ritual order/the rectified self)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Analects film companion (ritual order/the rectified self). Acceptance:
+    scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-tao-te-ching
+  title: Dao De Jing film companion (wu wei/the Way)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Dao De Jing film companion (wu wei/the Way). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-journey-to-the-west
+  title: Journey to the West film companion (pilgrimage/comic transcendence)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Journey to the West film companion (pilgrimage/comic transcendence).
+    Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-tale-of-genji
+  title: Tale of Genji film companion (desire/impermanence)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Tale of Genji film companion (desire/impermanence). Acceptance:
+    scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;
+    force_arc equals the ordered track forces; no intra-arc duplicate pieces). One
+    green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-heike
+  title: Tale of the Heike film companion (mono no aware)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Tale of the Heike film companion (mono no aware). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-conference-of-birds
+  title: "Conference of the Birds film companion (the seven valleys/fan\u0101)"
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: "STUDIUM content task (staged in studium/expansion-backlog.yaml, released\
+    \ to the fleet). Conference of the Birds film companion (the seven valleys/fan\u0101\
+    ). Acceptance: scripts/studium-validate.py must PASS (every force in studium/dominant-force.yaml;\
+    \ force_arc equals the ordered track forces; no intra-arc duplicate pieces). One\
+    \ green PR."
+  depends_on: []
+  created: '2026-06-23'
+  dispatch_log: []
+- id: studium-film-shahnameh
+  title: Shahnameh film companion (kingship/the farr)
+  repo: organvm/limen
+  type: content
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: open
+  labels:
+  - studium
+  - content
+  - expansion-backlog
+  urls: []
+  context: 'STUDIUM content task (staged in studium/expansion-backlog.yaml, released
+    to the fleet). Shahnameh film companion (kingship/the farr). Acceptance: scripts/studium-validate.py
+    must PASS (every force in studium/dominant-force.yaml; force_arc equals the ordered
+    track forces; no intra-arc duplicate pieces). One green PR.'
+  depends_on: []
+  created: '2026-06-23'
   dispatch_log: []
