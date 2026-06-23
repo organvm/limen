@@ -1,0 +1,74 @@
+work: quran
+book: 4
+title: "Sura 4: An-Nisa (Women)"
+length_minutes: 90
+principle: >
+  An-Nisa is deeply concerned with the vulnerable—orphans, women, the weak—and establishes
+  the detailed legal framework to protect them and structure society. The focus is on
+  equity, inheritance, and social responsibility. The music here is architectural,
+  measured, and precise, reflecting the divine scales of justice and the building of a
+  fair community out of the chaos of pre-Islamic practices.
+force_arc: [law, law, desire, wrath, supplication, return]
+dominant_force: law
+tracks:
+  - n: 1
+    scene: "Reverence for the womb and the rights of orphans"
+    force: law
+    composer: "Handel"
+    work: "Music for the Royal Fireworks — La Réjouissance"
+    decision: added
+    why: >
+      The opening immediately establishes the foundational rules of human relation,
+      kinship, and the protection of the vulnerable. Handel's formal clarity and
+      architecture suit the laying down of foundational societal structures.
+  - n: 2
+    scene: "The mathematics of inheritance"
+    force: law
+    composer: "Bach"
+    work: "The Well-Tempered Clavier, Book I — Fugue in C-sharp minor"
+    decision: added
+    why: >
+      The precise, fractional divisions of inheritance are laid out with mathematical
+      exactitude. The intricate, interlocking voices of a complex Bach fugue reflect this
+      perfectly balanced system of rights and shares.
+  - n: 3
+    scene: "The boundaries of marriage and forbidden relations"
+    force: desire
+    composer: "Wagner"
+    work: "Tristan und Isolde — Prelude"
+    decision: added
+    why: >
+      The sura delineates exactly who one may and may not marry, controlling and
+      channeling human desire through divine boundaries. The chromatic longing of Wagner's
+      prelude captures the raw force of desire that the law seeks to contain.
+  - n: 4
+    scene: "The hypocrites and the threat to internal cohesion"
+    force: wrath
+    composer: "Stravinsky"
+    work: "The Rite of Spring — Glorification of the Chosen One"
+    decision: added
+    why: >
+      Strong condemnation is directed at hypocrites who sow discord and undermine the
+      community from within. Stravinsky's rhythmic pressure and unresolved harmony mirror
+      the dangerous instability and the harsh divine warning against them.
+  - n: 5
+    scene: "The prayer of the oppressed: 'Rescue us from this town'"
+    force: supplication
+    composer: "Pärt"
+    work: "Da pacem Domine"
+    decision: added
+    why: >
+      A poignant moment where the text asks why believers do not fight for the oppressed
+      men, women, and children crying out for a savior. Pärt's exposed choral writing
+      perfectly holds this pure, suspended plea for rescue.
+  - n: 6
+    scene: "The reward of the truthful and the realization of justice"
+    force: return
+    composer: "Beethoven"
+    work: "Symphony No. 7 — Allegretto"
+    decision: added
+    why: >
+      The sura closes by affirming that God does not wrong anyone by even an atom's
+      weight, and all actions return to Him for perfect recompense. The circular form
+      and steady tread of Beethoven's Allegretto represent this inevitable return to
+      justice.

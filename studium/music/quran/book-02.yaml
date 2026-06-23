@@ -1,0 +1,74 @@
+work: quran
+book: 2
+title: "Sura 2: Al-Baqarah (The Cow)"
+length_minutes: 110
+principle: >
+  Al-Baqarah is the longest and most architecturally complex of all suras. It establishes
+  the legal and theological bedrock of the community, detailing dietary laws, fasting,
+  contracts, and the paradigm of the Israelites and Abraham. Here, revelation takes the
+  form of law and covenant. The musical arc moves from the initial premise of guidance
+  for the God-conscious, through the historical narratives of covenant (exile, law),
+  culminating in the absolute cosmological majesty of the Throne Verse (Ayat al-Kursi).
+force_arc: [revelation, law, exile, kingship, law, divine-intervention]
+dominant_force: law
+tracks:
+  - n: 1
+    scene: "Alif Lam Mim — The guidance for those conscious of God"
+    force: revelation
+    composer: "Messiaen"
+    work: "Méditations sur le mystère de la Sainte Trinité — I"
+    decision: added
+    why: >
+      The sura begins with the mystery letters and the declaration that this is the Book
+      about which there is no doubt. Messiaen's stillness and theological density match
+      this opening.
+  - n: 2
+    scene: "The Covenant of the Israelites — The narrative of the calf"
+    force: law
+    composer: "Schoenberg"
+    work: "Moses und Aron — Act II: The Golden Calf"
+    decision: added
+    why: >
+      The recounting of the Israelites and the episode of the calf is a central warning
+      about breaking the covenant. Schoenberg's complex, modernist handling of the calf
+      episode provides the necessary rigidity and structural anxiety.
+  - n: 3
+    scene: "The expulsion of Adam and the descent to Earth"
+    force: exile
+    composer: "Vaughan Williams"
+    work: "Symphony No. 5 — Romanza"
+    decision: added
+    why: >
+      Adam's exile from the Garden establishes the human condition of longing and wandering
+      on Earth. Vaughan Williams' wandering tonality and open intervals capture this
+      state of exile perfectly.
+  - n: 4
+    scene: "Ayat al-Kursi — The Throne Verse"
+    force: kingship
+    composer: "Mahler"
+    work: "Symphony No. 8 — Part I: Veni Creator Spiritus"
+    decision: added
+    why: >
+      The Throne Verse is the cosmological peak of the sura, asserting God's absolute
+      sovereignty and wakefulness over all creation. Mahler's 8th provides the immense
+      ceremonial grandeur and scale required for this vision of totality.
+  - n: 5
+    scene: "The establishment of fasting and contracts"
+    force: law
+    composer: "Bach"
+    work: "The Art of Fugue — Contrapunctus 1"
+    decision: added
+    why: >
+      The detailed legal prescriptions—fasting, usury, marriage, contracts—are the
+      architectural framework of the community. Bach's strict, clear fugal writing
+      embodies the formal clarity and necessity of divine law.
+  - n: 6
+    scene: "The final supplication: 'God does not burden a soul beyond its capacity'"
+    force: divine-intervention
+    composer: "Wagner"
+    work: "Parsifal — Prelude to Act I"
+    decision: added
+    why: >
+      The sura concludes with a profound prayer for forgiveness and mercy, recognizing
+      human limits. The sudden color shifts and profound depth of the Parsifal prelude
+      match this concluding descent of grace and intervention.

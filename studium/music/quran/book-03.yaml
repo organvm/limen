@@ -1,0 +1,73 @@
+work: quran
+book: 3
+title: "Sura 3: Ali 'Imran (Family of Imran)"
+length_minutes: 85
+principle: >
+  Ali 'Imran oscillates between the serene, miraculous narratives of Mary and Jesus,
+  and the harsh, bruising historical reality of the Battle of Uhud, where the early
+  Muslim community suffered a devastating defeat. The arc moves from pure revelation
+  and the miraculous to the profound grief and introspection following military and
+  spiritual testing, resolving into the steadfastness of faith.
+force_arc: [revelation, metamorphosis, fate, grief, sacrifice, salvation]
+dominant_force: grief
+tracks:
+  - n: 1
+    scene: "The clear and unspecific verses — The foundation of the Book"
+    force: revelation
+    composer: "Pärt"
+    work: "Cantus in Memoriam Benjamin Britten"
+    decision: added
+    why: >
+      The opening establishes the tension between verses that are clear and those that are
+      allegorical, demanding humility in interpretation. Pärt's descending bell-like
+      stillness instills the necessary verticality and reverence.
+  - n: 2
+    scene: "The birth and dedication of Mary"
+    force: metamorphosis
+    composer: "Debussy"
+    work: "La Damoiselle élue"
+    decision: added
+    why: >
+      The miraculous birth of Mary and her sequestered devotion in the sanctuary involves
+      a subtle spiritual elevation and shift in reality. Debussy's fluid harmony and
+      changing orchestral color provide the atmosphere of delicate, secluded grace.
+  - n: 3
+    scene: "The confrontation with the People of the Book"
+    force: fate
+    composer: "Verdi"
+    work: "La forza del destino — Overture"
+    decision: added
+    why: >
+      The theological debates and the insistence on monotheism carry an inexorable,
+      hammering weight. Verdi's driving motif represents the unstoppable reality of the
+      divine decree meeting human stubbornness.
+  - n: 4
+    scene: "The aftermath of the Battle of Uhud — defeat and sorrow"
+    force: grief
+    composer: "Barber"
+    work: "Adagio for Strings"
+    decision: added
+    why: >
+      The middle of the sura processes the shock and sorrow of the defeat at Uhud,
+      urging the community not to despair. The slow tempo and inward line of Barber's
+      Adagio hold the heavy communal mourning and the search for consolation.
+  - n: 5
+    scene: "The martyrs are alive with their Lord"
+    force: sacrifice
+    composer: "Gluck"
+    work: "Iphigénie en Tauride — O toi qui prolongeas mes jours"
+    decision: added
+    why: >
+      The re-framing of death in battle not as loss but as immediate presence with God.
+      The ritual weight and processional quality of Gluck's writing elevate the loss
+      into a noble, transcendent sacrifice.
+  - n: 6
+    scene: "The closing exhortation to patience and piety"
+    force: salvation
+    composer: "Mahler"
+    work: "Symphony No. 2 — Finale: Aufersteh'n"
+    decision: added
+    why: >
+      The sura concludes by urging believers to be patient and steadfast, promising
+      ultimate success and salvation. Mahler's resolving radiance and chorale apotheosis
+      provide the necessary uplifting release from the earlier grief.
