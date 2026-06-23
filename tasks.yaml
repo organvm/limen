@@ -14,22 +14,22 @@ portal:
       agy: 100
       claude: 100
     track:
-      date: '2026-06-22'
-      spent: 31
+      date: '2026-06-23'
+      spent: 33
       per_agent:
-        jules: 17
+        jules: 19
         gemini: 0
         codex: 0
         opencode: 2
-        agy: 11
-        claude: 1
+        agy: 12
+        claude: 0
       per_agent_reset:
         jules: '2026-06-22T16:29:16.568799+00:00'
         gemini: '2026-06-22T16:29:16.568799+00:00'
-        codex: '2026-06-22T22:07:07.335710+00:00'
+        codex: '2026-06-23T03:29:17.742172+00:00'
         opencode: '2026-06-22T16:29:16.568799+00:00'
         agy: '2026-06-22T16:29:16.568799+00:00'
-        claude: '2026-06-22T22:07:07.335710+00:00'
+        claude: '2026-06-23T03:29:17.742172+00:00'
 tasks:
 - id: FORCE-route-all-services
   title: Router fans across ALL paid services, not just the 6 vendors
@@ -36394,7 +36394,7 @@ tasks:
     to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T16:22:57.824939Z'
+  updated: '2026-06-23T03:38:20.625817Z'
   dispatch_log:
   - timestamp: '2026-06-22T15:23:52.697366Z'
     agent: jules
@@ -36411,6 +36411,11 @@ tasks:
       @@ -0,0 +1,1551 @@\n+{\n+  \"name\": \"client-sdk\",\n+  \"version\": \"0.1.0\"\
       ,\n+  \"lockfileVersion\": 3,\n+  \"requires\": true,\n+  \"packages\": {\n\
       +    \"\": {\n+      \"name\": \"client-sdk\",\n+      \"version\": \""
+  - timestamp: '2026-06-23T03:38:20.625817Z'
+    agent: jules
+    session_id: https://github.com/organvm/client-sdk/pull/11
+    status: done
+    output: 'jules-land: landed session 5830715392897973617 as PR'
 - id: GEN-organvm-audio-synthesis-bridge-test-coverage-0620
   title: Raise test coverage in organvm/audio-synthesis-bridge
   repo: organvm/audio-synthesis-bridge
@@ -42433,13 +42438,14 @@ tasks:
   title: Discover the latent value of organvm/speculum-opencode
   repo: organvm/speculum-opencode
   type: research
-  target_agent: codex
+  target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/speculum-opencode. This repo currently\
     \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
@@ -42455,7 +42461,16 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T01:07:33.632341Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T01:02:24.984820Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T01:07:33.632341Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-md-summoning
   title: Discover the latent value of organvm/md-summoning
   repo: organvm/md-summoning
@@ -42531,10 +42546,10 @@ tasks:
   title: Discover the latent value of organvm/prompt-registry-archive
   repo: organvm/prompt-registry-archive
   type: research
-  target_agent: codex
+  target_agent: agy
   priority: medium
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - discover
   - value-discovery
@@ -42553,7 +42568,21 @@ tasks:
     \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T01:57:33.990489Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T01:02:24.984820Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T01:07:33.632341Z'
+    agent: agy
+    session_id: https://github.com/organvm/prompt-registry-archive/pull/2
+    status: dispatched
+  - timestamp: '2026-06-23T01:57:33.990489Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR merged \u2192 done"
 - id: DISCOVER-organvm-bound
   title: Discover the latent value of organvm/bound
   repo: organvm/bound
@@ -42633,13 +42662,14 @@ tasks:
   title: Discover the latent value of organvm/payrail
   repo: organvm/payrail
   type: research
-  target_agent: codex
+  target_agent: claude
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/payrail. This repo currently has\
     \ NO ranked value \u2014 your job is to find it (value is discovered, never assumed\
@@ -42655,7 +42685,16 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T01:07:33.632341Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T01:02:24.984820Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T01:07:33.632341Z'
+    agent: claude
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-claude-runtime-state
   title: Discover the latent value of organvm/claude-runtime-state
   repo: organvm/claude-runtime-state
@@ -42845,10 +42884,10 @@ tasks:
   title: Discover the latent value of organvm/contrib
   repo: organvm/contrib
   type: research
-  target_agent: codex
+  target_agent: jules
   priority: medium
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - discover
   - value-discovery
@@ -42867,7 +42906,25 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T01:53:15.489486Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T01:02:24.984820Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T01:07:33.632341Z'
+    agent: gemini
+    session_id: cli
+    status: ratelimited->jules
+  - timestamp: '2026-06-23T01:42:16.829140Z'
+    agent: jules
+    session_id: '9131188608977020607'
+    status: dispatched
+  - timestamp: '2026-06-23T01:53:15.489486Z'
+    agent: jules
+    session_id: https://github.com/organvm/contrib/pull/1
+    status: done
+    output: 'jules-land: landed session 9131188608977020607 as PR'
 - id: DISCOVER-organvm-ops
   title: Discover the latent value of organvm/ops
   repo: organvm/ops
@@ -42948,13 +43005,14 @@ tasks:
   title: Discover the latent value of organvm/process-environment-enactment-20260609173021
   repo: organvm/process-environment-enactment-20260609173021
   type: research
-  target_agent: codex
+  target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/process-environment-enactment-20260609173021.\
     \ This repo currently has NO ranked value \u2014 your job is to find it (value\
@@ -42971,18 +43029,28 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T01:07:33.632341Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T01:02:24.984820Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T01:07:33.632341Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-process-environment-enactment-public-20260609173432
   title: Discover the latent value of organvm/process-environment-enactment-public-20260609173432
   repo: organvm/process-environment-enactment-public-20260609173432
   type: research
-  target_agent: codex
+  target_agent: jules
   priority: medium
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - discover
   - value-discovery
+  - slow
   urls: []
   context: "DISCOVER the latent value of organvm/process-environment-enactment-public-20260609173432.\
     \ This repo currently has NO ranked value \u2014 your job is to find it (value\
@@ -42999,7 +43067,39 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T01:53:52.773671Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T01:02:24.984820Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T01:07:33.632341Z'
+    agent: agy
+    session_id: cli
+    status: timeout->jules
+  - timestamp: '2026-06-23T01:42:16.829140Z'
+    agent: jules
+    session_id: '11994433617474094480'
+    status: dispatched
+  - timestamp: '2026-06-23T01:53:52.773671Z'
+    agent: jules
+    session_id: '11994433617474094480'
+    status: done
+    output: 'diff --git a/DISCOVERY.md b/DISCOVERY.md
+
+      index 5e0b8a2..eadefb3 100644
+
+      --- a/DISCOVERY.md
+
+      +++ b/DISCOVERY.md
+
+      @@ -1,3 +1,3 @@
+
+      -This repository contains cross-platform (POSIX and Windows) C programs that
+      enact and validate how environment variables are propagated to child processes.
+      Its highest latent value is as a robust conformance test suite or compliance
+      probe for any runtime, process runner, or VM within the `organvm` estate. By
+      explicitly testing edge cases such as empty names, missing equal'
 - id: DISCOVER-organvm-session-stone-sanitized-019ea761-bff5-7841-b772-f2d85475092e-20260609175059
   title: Discover the latent value of organvm/session-stone-sanitized-019ea761-bff5-7841-b772-f2d85475092e-20260609175059
   repo: organvm/session-stone-sanitized-019ea761-bff5-7841-b772-f2d85475092e-20260609175059
@@ -43207,13 +43307,14 @@ tasks:
   title: Discover the latent value of organvm/system-governance-framework
   repo: organvm/system-governance-framework
   type: research
-  target_agent: codex
+  target_agent: claude
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/system-governance-framework. This\
     \ repo currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -43229,7 +43330,16 @@ tasks:
     \ Output the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T01:07:33.632341Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T01:02:24.984820Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T01:07:33.632341Z'
+    agent: claude
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-select-or-left-or-right-or
   title: Discover the latent value of organvm/select-or-left-or-right-or
   repo: organvm/select-or-left-or-right-or
@@ -43519,13 +43629,14 @@ tasks:
   title: Discover the latent value of organvm/client-sdk
   repo: organvm/client-sdk
   type: research
-  target_agent: codex
+  target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/client-sdk. This repo currently has\
     \ NO ranked value \u2014 your job is to find it (value is discovered, never assumed\
@@ -43541,7 +43652,20 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T03:33:51.735702Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T03:29:17.742172Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T04:00:00Z'
+    agent: opencode
+    session_id: current
+    status: in_progress
+  - timestamp: '2026-06-23T03:33:51.735702Z'
+    agent: opencode
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-sovereign-ecosystem--real-estate-luxury
   title: Discover the latent value of organvm/sovereign-ecosystem--real-estate-luxury
   repo: organvm/sovereign-ecosystem--real-estate-luxury
@@ -43714,13 +43838,17 @@ tasks:
   title: Discover the latent value of organvm/visual-substrate-inquiry
   repo: organvm/visual-substrate-inquiry
   type: research
-  target_agent: codex
+  target_agent: agy
   priority: medium
   budget_cost: 1
   status: open
   labels:
   - discover
   - value-discovery
+  - tried:codex
+  - tried:agy
+  - tried:claude
+  - tried:opencode
   urls: []
   context: "DISCOVER the latent value of organvm/visual-substrate-inquiry. This repo\
     \ currently has NO ranked value \u2014 your job is to find it (value is discovered,\
@@ -43736,7 +43864,104 @@ tasks:
     \ the thesis. [auto-discovery 2026-06-22; no repo stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T05:17:11.485540Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T03:29:17.742172Z'
+    agent: codex
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-06-23T03:33:51.735702Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T03:40:17.117350Z'
+    agent: claude
+    session_id: cli
+    status: failed->gemini
+  - timestamp: '2026-06-23T03:44:37.951977Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T03:48:41.980080Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T03:55:01.953770Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T03:57:53.113094Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T04:02:13.163027Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T04:09:19.611004Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T04:13:47.800567Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T04:16:15.960570Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T04:22:59.377167Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T04:27:45.604865Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T04:32:08.248529Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T04:37:16.069568Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T04:41:43.173882Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T04:46:50.462834Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T04:53:10.065867Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T04:56:02.738273Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T05:00:22.102422Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T05:05:15.912736Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T05:09:32.664325Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
+  - timestamp: '2026-06-23T05:11:58.950281Z'
+    agent: agy
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-06-23T05:17:11.485540Z'
+    agent: opencode
+    session_id: cli
+    status: failed->agy
 - id: DISCOVER-organvm-a-i-council--coliseum
   title: Discover the latent value of organvm/a-i-council--coliseum
   repo: organvm/a-i-council--coliseum
@@ -43807,13 +44032,14 @@ tasks:
   title: Discover the latent value of organvm/4444J99.github.io
   repo: organvm/4444J99.github.io
   type: research
-  target_agent: codex
+  target_agent: claude
   priority: medium
   budget_cost: 1
-  status: open
+  status: cancelled
   labels:
   - discover
   - value-discovery
+  - noop
   urls: []
   context: "DISCOVER the latent value of organvm/4444J99.github.io. This repo currently\
     \ has NO ranked value \u2014 your job is to find it (value is discovered, never\
@@ -43829,7 +44055,16 @@ tasks:
     \ stays dark]"
   depends_on: []
   created: '2026-06-22'
-  dispatch_log: []
+  updated: '2026-06-23T03:33:51.735702Z'
+  dispatch_log:
+  - timestamp: '2026-06-23T03:29:17.742172Z'
+    agent: codex
+    session_id: cli
+    status: ratelimited->opencode
+  - timestamp: '2026-06-23T03:33:51.735702Z'
+    agent: claude
+    session_id: cli
+    status: noop
 - id: DISCOVER-organvm-stakeholder-portal
   title: Discover the latent value of organvm/stakeholder-portal
   repo: organvm/stakeholder-portal
