@@ -11,18 +11,18 @@
 - **Corpus:** `sanskrit/bhagavad-gita` (sanskrit_original.txt)
 - **Source rail:** https://gretil.sub.uni-goettingen.de/gretil.html#BhG
 - **Divisions:** 18 × Chapter
-- **Progress:** 1/18 arcs authored
+- **Progress:** 8/18 arcs authored
 
 | Chapter | dominant force | status |
 | --: | --- | :--: |
-| 1 | (author) | ✓ |
-| 2 | (author) | ☐ |
-| 3 | (author) | ☐ |
-| 4 | (author) | ☐ |
-| 5 | (author) | ☐ |
-| 6 | (author) | ☐ |
-| 7 | (author) | ☐ |
-| 8 | (author) | ☐ |
+| 1 | grief | ✓ |
+| 2 | revelation | ✓ |
+| 3 | law | ✓ |
+| 4 | revelation | ✓ |
+| 5 | metamorphosis | ✓ |
+| 6 | exile | ✓ |
+| 7 | revelation | ✓ |
+| 8 | fate | ✓ |
 | 9 | (author) | ☐ |
 | 10 | (author) | ☐ |
 | 11 | (author) | ☐ |

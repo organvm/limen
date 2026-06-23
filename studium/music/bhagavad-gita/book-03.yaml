@@ -1,0 +1,134 @@
+# Bhagavad Gita — Chapter 3 — curated music arc
+# Karma Yoga: The Yoga of Action
+work: bhagavad-gita
+book: 3
+title: "Bhagavad Gita Chapter 3: Action, Sacrifice, the Inescapable"
+length_minutes: 74
+principle: >
+  Do not score Chapter 3 as "Krishna explains the philosophy of action." Score it as Arjuna's
+  resistance meeting Krishna's deepening insistence: you cannot not act. The chapter is about the
+  inescapability of action as the human condition — even the choice not to act is a form of action,
+  driven by the gunas of nature. Drama arises from the paradox at the heart of karma yoga: the
+  wise act not because they need to but because the world needs them to serve as example. The
+  chapter is structured as a series of intensifications: knowledge vs action → the cosmic cycle
+  of sacrifice → the wise person as model → the compulsion of the gunas → the final enemy
+  (desire and anger). Each layer strips away the illusion that non-action is a refuge.
+force_arc: [supplication, law, sacrifice, ascent, fate, wrath]
+dominant_force: law
+tracks:
+  - n: 1
+    scene: "Arjuna's opening question: 'If knowledge is superior to action, why do you force me into this terrible action?'"
+    force: supplication
+    composer: Bach
+    work: "St. Matthew Passion — 'Erbarme dich, mein Gott'"
+    decision: added
+    why: >
+      Arjuna has heard Chapter 2 — the soul is eternal, act without attachment — and still he
+      resists. His question is the most honest in the Gita: if the state of knowledge is supreme,
+      why am I being commanded to fight? It is supplication wearing the form of argument — the
+      plea for a teaching that will not contradict itself. Bach's 'Erbarme dich' is the same
+      register we used for Arjuna's ethical surrender in Chapter 1 — and it earns its return here
+      because Arjuna is again casting himself before a higher will, this time not in grief but in
+      the confusion of a disciple who cannot reconcile the teaching with the instruction. The
+      violin obbligato circles above Peter's weeping voice as the question circles above Arjuna's
+      resistance: unresolved, exposed, the self asking for something it does not yet know how to
+      receive. We use the same aria in three Gita chapters (1, 3, 18) — each time a different
+      register of supplication: grief, confusion, surrender.
+  - n: 2
+    scene: "Krishna's answer: two paths — sankhya (knowledge) for the contemplative, karma (action) for the active — but action is inescapable"
+    force: law
+    composer: Bach
+    work: "The Art of Fugue — Contrapunctus I"
+    decision: added
+    why: >
+      Krishna does not choose between knowledge and action: he establishes their proper
+      relationship. The contemplative path and the active path are not rivals but complementary
+      architectures within the same system. Bach's Contrapunctus I — the first fugue of The Art
+      of Fugue — is formal clarity at its most elemental: a single subject stated alone, then
+      answered, then woven into a structure where every voice carries the same theme in different
+      registers, the whole building from a single principle without contradiction. That is exactly
+      how Krishna treats the relationship of knowledge and action: they are not opposed; they are
+      the same subject played at different times in different voices. Law requires formal clarity,
+      repetition, architecture. The Art of Fugue is the grammar of law itself.
+  - n: 3
+    scene: "The cycle of sacrifice: 'From food come beings, from rain food, from sacrifice rain — the wheel of being that never stops'"
+    force: sacrifice
+    composer: Stravinsky
+    work: "The Rite of Spring — 'The Augurs of Spring (Dances of the Young Girls)'"
+    decision: added
+    why: >
+      Krishna describes the cosmic economy: the gods receive sacrifice, give rain, produce food,
+      sustain life. The cycle is not a metaphor — it is a mechanism. To step out of the cycle is
+      to live in vain. Stravinsky's 'Augurs of Spring' is the most iconic instance of ritual
+      violence in Western music: the hammering ostinato, the irregular accents, the sense of a
+      world-system that predates and outlasts the individual dancer's will. The young girls dance
+      not because they choose to but because the spring demands it — as human beings offer sacrifice
+      not because they invent the form but because the cosmos runs on the exchange. Sacrifice's
+      requirement is ritual weight, processional gravity, immolation build. The 'Augurs' has all
+      three, delivered as a hammer to the chest.
+  - n: 4
+    scene: "The wise act as example: 'Whatever the best do, the world follows — I act though I have nothing to gain'"
+    force: ascent
+    composer: Bruckner
+    work: "Symphony No. 7 — II. Adagio (opening)"
+    decision: added
+    why: >
+      This is the most surprising claim in Chapter 3: Krishna himself acts, though he has nothing
+      to gain or lose from action. He acts so that the world has a model — not for his own
+      perfection but for the maintenance of order. The wise person acts as a mountain acts: not
+      achieving anything, simply being there, providing the ground for others. Bruckner's Seventh
+      Adagio opens with the great Wagner tuba theme — slow, spacious, rising through registers of
+      extraordinary gravity — the sound of something that exists before and after the human drama,
+      that does not act for results but stands as a landmark. The ascent force requires a rising
+      sequence and luminous orchestration; Bruckner's Adagio gives ascent at a pace that is almost
+      geological — the mountain rising, the example established, the wise person acting not for
+      fruit but because action is the shape of being itself.
+  - n: 5
+    scene: "The gunas compel: 'All actions are performed by the gunas of nature — one deluded by ego thinks I am the doer'"
+    force: fate
+    composer: Verdi
+    work: "La Forza del Destino — Overture"
+    decision: added
+    why: >
+      Krishna's most unsettling claim: you are not the agent of your actions. The three gunas —
+      sattva, rajas, tamas — are the forces that act through every creature, and the ego that
+      claims authorship is deluded. This is fate not as cosmic decree but as the structure of
+      nature itself. Verdi's La Forza del Destino (The Force of Destiny) Overture opens with
+      three hammered notes — fate as a knock at the door — then descends into the dark theme
+      that the opera identifies with the inescapable. The overture does not resolve; it cycles
+      through themes that return and return, as the gunas cycle through every act. Fate's
+      requirement is inexorable motif and hammered insistence; Verdi delivers it as Italian
+      opera's most concentrated dose of inescapability. The gunas are the force of destiny
+      operating as the mechanism of every mundane action.
+  - n: 6
+    scene: "The enemy within: 'Desire and anger — insatiable, terrible — these must be slain. Knowing their origin in the senses, overcome them'"
+    force: wrath
+    composer: Holst
+    work: "The Planets — 'Mars, the Bringer of War'"
+    decision: added
+    why: >
+      Chapter 3 closes not with resolution but with an internal battle: the senses, the mind, and
+      the higher self form a hierarchy, and desire and anger are the enemies seated in the senses.
+      Arjuna must fight the war inside before he can fight the war outside. Holst's 'Mars' returns
+      from Chapter 1's conch-scene — but this time it is not the martial terror of armies declaring
+      themselves. It is the internal 5/4 pulse of the war against desire: asymmetric, hostile,
+      the rhythm of a struggle that cannot find its downbeat. Wrath here is turned inward —
+      the rhythmic pressure of a self fighting its own mechanisms. The same piece that scored the
+      noise of armies now scores the silence of a man wrestling with the thing inside him that
+      wants what it wants. Holst's brass does not point outward; it surrounds. The chapter ends
+      with the enemy identified, not yet defeated — that belongs to later chapters.
+demoted:
+  - composer: Beethoven
+    work: "Symphony No. 5 — I. Allegro con brio"
+    status: "reserved for fate in later chapters; Verdi's La Forza del Destino captures the gunas' mechanism better"
+    why: >
+      The fate force in Chapter 3 is not cosmic decree (Beethoven's knock) but structural
+      inevitability (the gunas cycling through nature). Verdi's overture cycles rather than
+      hammers — a better match for the impersonal mechanism of the three gunas.
+  - composer: Wagner
+    work: "Das Rheingold — Prelude"
+    status: "save for Chapter 4 (divine incarnation) or Chapter 11 (cosmic form)"
+    why: >
+      The Rheingold Prelude is world-creation, the divine machinery engaging. Chapter 3 is
+      about human action in a world already created — dharma, sacrifice, the example of the
+      wise. The cosmic machinery is not yet needed.
