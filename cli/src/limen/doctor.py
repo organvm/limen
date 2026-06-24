@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -140,7 +140,7 @@ def readiness_report(
 def _iso(value: Any) -> str | None:
     if value is None:
         return None
-    if isinstance(value, (datetime, date)):
+    if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)
 
