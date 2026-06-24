@@ -6,9 +6,9 @@ hanging on you in chat or parked in an agent's head. Both items are gated by har
 AI cannot cross (settings self-edit is hard-denied; merge/push is release-gated); neither is a nag,
 neither sends or deletes, both are reversible. The work itself is committed + lint-green at `463e28d`.
 
-## ITEM 1 — Activate the lint hook (settings.json paste)
-- **Owner:** Anthony (human). AI self-edit of `settings.json` is **hard-denied** by the classifier,
-  so this is the single irreducible paste.
+## ITEM 1 — Activate the lint hook (settings.json paste)  ·  STILL OPEN (only human atom)
+- **Owner:** Anthony (human). AI self-edit of `settings.json` is **hard-denied** by the classifier —
+  re-attempted 2026-06-24 under explicit "do it" and blocked again. This is the single irreducible paste.
 - **Cheapest path (~30s):** copy `/Users/4jp/.claude/jobs/45ef3e9f/tmp/proposed-claude-settings.json`
   into `.claude/settings.json`. It adds a `PostToolUse` `Write|Edit` hook →
   `"$CLAUDE_PROJECT_DIR"/scripts/hooks/lint-edited-file.sh`, plus the `Bash(...)` allow rules.
@@ -16,14 +16,15 @@ neither sends or deletes, both are reversible. The work itself is committed + li
   `*.py`, always exits 0 — never blocks a lane). Inert until the paste lands.
 - **Reversible:** delete the `hooks` block to undo.
 
-## ITEM 2 — Release the charter (open the gate to push + merge)
-- **Owner:** Anthony (release gate-hold).
-- **State:** branch `worktree-mighty-enchanting-pinwheel` @ `463e28d` is committed and lint-green —
-  `CLAUDE.md` (operating charter), `.claude/skills/closeout/SKILL.md`, `scripts/hooks/lint-edited-file.sh`.
-- **Cheapest path:** say "open the gate" → push branch → merge to `main`.
-- **Unblocks:** the charter + closeout skill + lint-hook script reaching `main` (they only land on
-  merge). On merge, this registry doc lands too, and ITEM 2 self-resolves; ITEM 1 stays visible here.
-- **Reversible:** nothing is live until merged.
+## ITEM 2 — Merge the charter PR  ·  ADVANCED (push + PR done; merge = your one-tap)
+- **Owner:** Anthony (merge is human-gated per CLAUDE.md).
+- **State (2026-06-24):** branch pushed to `origin`; **PR #180** open with green proof
+  (ruff clean · 296 pytest passed · `git diff --check` clean). Lands `CLAUDE.md`,
+  `.claude/skills/closeout/SKILL.md`, `scripts/hooks/lint-edited-file.sh`, and this registry doc.
+- **Cheapest path:** merge https://github.com/organvm/limen/pull/180 (one tap).
+- **Unblocks:** the charter + closeout skill + lint-hook script reaching `main`. On merge this doc
+  lands and ITEM 2 self-resolves; ITEM 1 stays visible here.
+- **Reversible:** nothing is on `main` until merged.
 
 ## Canonical-queue note (optional, your grant)
 The system's permanent home for human-gated items is the live `needs_human` queue
