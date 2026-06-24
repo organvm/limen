@@ -29,8 +29,9 @@ fi
 # load local secrets (gemini key, etc.) from the single un-committed secrets file
 [ -f "$HOME/.limen.env" ] && { set -a; . "$HOME/.limen.env"; set +a; }
 
-LANES="${LIMEN_LANES:-codex,opencode,agy,claude}"   # gemini auto-joins below iff its key is present
-[ -n "${GEMINI_API_KEY:-}" ] && LANES="$LANES,gemini"
+LOCAL_LANES="${LIMEN_LANES:-codex,opencode,agy,claude}"   # gemini auto-joins below iff its key is present
+[ -n "${GEMINI_API_KEY:-}" ] && LOCAL_LANES="$LOCAL_LANES,gemini"
+LANES="$LOCAL_LANES,copilot,github_actions"
 [ -n "${WARP_API_KEY:-}" ] && LANES="$LANES,warp,oz"
 LOCAL_LIMIT="${LIMEN_LOCAL_LIMIT:-50}"
 JULES_LIMIT="${LIMEN_JULES_LIMIT:-100}"
@@ -59,7 +60,7 @@ fi
 bash   "$LIMEN_ROOT/scripts/drain.sh"                              2>&1 | tail -3 || true
 python3 "$LIMEN_ROOT/scripts/mine-backlog.py" --limit "$MINE_LIMIT" --apply 2>&1 | tail -3 || true
 python3 "$LIMEN_ROOT/scripts/route.py" --apply                    2>&1 | tail -3 || true
-python3 "$LIMEN_ROOT/scripts/rebalance.py" --lanes "$LANES" --apply 2>&1 | tail -2 || true
+python3 "$LIMEN_ROOT/scripts/rebalance.py" --lanes "$LOCAL_LANES" --apply 2>&1 | tail -2 || true
 python3 -m limen release-stale --agent jules --hours 24 --apply   2>&1 | tail -2 || true
 python3 -m limen dispatch --agent jules --live --limit "$JULES_LIMIT" 2>&1 | tail -4 || true
 IFS=',' read -ra A <<< "$LANES"

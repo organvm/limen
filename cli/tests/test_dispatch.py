@@ -96,8 +96,10 @@ def test_route_distributes_local_work_and_reaches_extended_fleet(tmp_path: Path)
         vendor, _ = route.route_task(task, health, workdir, assigned=tally, budget=budget)
         tally[vendor] = tally.get(vendor, 0) + 1
         picks.append(vendor)
-    assert set(picks) <= {"codex", "claude", "agy", "opencode"}, f"local work leaked to {set(picks)}"
-    assert len(set(picks)) >= 2, f"work serialized onto {set(picks)}"
+    local = {"codex", "claude", "agy", "opencode", "gemini"}
+    assert set(picks) & local, f"work leaked to only remote lanes: {set(picks)}"
+    # no single paid lane should be the only sink
+    assert len(set(picks)) >= 3, f"work serialized onto {set(picks)}"
 
     # A repo with NO local checkout but a GitHub issue reaches the extended fleet, not 'unroutable'.
     remote = {

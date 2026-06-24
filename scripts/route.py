@@ -145,7 +145,7 @@ def _task_cost(task: dict) -> int:
 # jules async-fallback bound its historical big-task timeouts. It still gets FIRST pick for genuine
 # deploy/infra work (the _DEPLOY_HINTS branch below) when that's unblocked.
 _DEPLOY_HINTS = ("deploy", "cloudflare", "worker", "wrangler", "infra", "hosting")
-_LOCAL_LANES = ("codex", "claude", "agy", "opencode")
+_LOCAL_LANES = ("codex", "claude", "agy", "opencode", "gemini")
 
 
 def _learned_weights() -> dict[str, float]:
@@ -178,31 +178,28 @@ def _pick_local(
     assigned: dict[str, int],
     budget: dict[str, int],
     runway: dict[str, float] | None = None,
+    candidate_agents: list[str] | None = None,
 ) -> str | None:
-    """Pick a healthy LOCAL lane, splitting across ALL of them by per-agent budget headroom AND
-    live refresh-window runway.
-
-    The old version returned the first healthy lane (always codex), which serialized the whole
-    fleet onto one vendor and starved claude/agy/jules — violating the use-all-vendors mandate.
-    We now spread load proportional to each lane's daily budget (least assigned/budget ratio first)
-    and, among lanes at the same load, STEER toward the one with the most refresh runway — so when
-    loads are even (early/idle) work flows to the freshest rolling window, and a lane pacing toward
-    its reserve sheds new work before it trips the gate. Both signals are live + derived, not pinned.
-    """
+    """Pick a healthy lane by per-agent budget headroom and runway."""
     runway = runway or {}
     text = f"{task.get('type','')} {task.get('title','')} {task.get('context','')}".lower()
-    if any(h in text for h in _DEPLOY_HINTS) and health.get("opencode"):
+    candidates = [v for v in (candidate_agents or _LOCAL_LANES) if health.get(v)]
+    if any(h in text for h in _DEPLOY_HINTS) and "opencode" in candidates:
         return "opencode"
-    candidates = [v for v in _LOCAL_LANES if health.get(v)]
-    if not candidates and health.get("opencode"):  # only opencode is up locally -> use it
-        candidates = ["opencode"]
     if not candidates:
         return None
+
+    max_budget = max(
+        [v for v in budget.values() if isinstance(v, int) and v > 0],
+        default=100,
+    )
 
     weights = _learned_weights()  # {} unless LIMEN_SI_APPLY=1 -> pure budget+runway split
 
     def load(v: str) -> float:
-        b = budget.get(v, 0) or 1
+        b = budget.get(v, max_budget)
+        if b <= 0:
+            b = max_budget
         # round so near-equal loads tie and let the refresh-runway signal break the tie.
         base = assigned.get(v, 0) / b
         # self-improve nudge: a down-weighted (historically less-shipping) lane carries a higher
@@ -214,18 +211,28 @@ def _pick_local(
 
     # least-loaded by budget ratio; then MOST refresh runway (freshest window); then higher-budget
     # lane; then name (stable).
-    return min(candidates, key=lambda v: (load(v), -runway_of(v), -budget.get(v, 0), v))
+    return min(
+        candidates,
+        key=lambda v: (
+            load(v),
+            -runway_of(v),
+            -budget.get(v, max_budget),
+            PAID_AGENT_ORDER.index(v),
+            v,
+        ),
+    )
 
 
 def _capable_agents(
     task: dict,
     health: dict[str, bool],
-    planned_remaining: dict[str, int],
+    budget: dict[str, int],
     workdir: Path,
 ) -> tuple[list[str], dict[str, str]]:
-    """The full paid-fleet capability map for one task — kept so the conductor can reach the
-    EXTENDED lanes (copilot/github_actions/warp/oz) when no local lane can serve a repo, instead of
-    stranding it. Local lanes here are still subject to the budget+runway split via _pick_local."""
+    """Return all paid lanes that can execute the task.
+
+    `budget` is a per-agent headroom hint; missing entries are treated as available.
+    """
     repo = task.get("repo")
     checkout = _local_checkout(repo, workdir)
     has_repo = bool(repo)
@@ -237,7 +244,8 @@ def _capable_agents(
     for agent in PAID_AGENT_ORDER:
         if not health.get(agent):
             continue
-        if planned_remaining.get(agent, 0) < cost:
+        budget_rem = budget.get(agent)
+        if budget_rem is not None and budget_rem < cost:
             continue
         if agent in LOCAL_CHECKOUT_AGENTS:
             if checkout is None:
@@ -278,30 +286,20 @@ def route_task(
 ) -> tuple[str, str]:
     """Return (vendor, reason) for one open task.
 
-    Local-first: if a local checkout exists, split across the healthy local lanes by budget + refresh
-    runway. Otherwise extend to the full paid fleet (copilot for issues, github_actions, warp/oz),
-    and fall back to Jules' remote clone — so a repo with no local copy is never stranded."""
+    Select across the full paid catalog the tasks can execute, using load/runway balancing for
+    all reachable options (including remote lanes), so no paid lane is serialized.
+    """
     assigned = assigned if assigned is not None else {}
     budget = budget if budget is not None else {}
-    repo = task.get("repo")
-    checkout = _local_checkout(repo, workdir)
-    if checkout is not None:
-        local = _pick_local(task, health, assigned, budget, runway)
-        if local:
-            return local, f"local checkout at {checkout} -> {local} (split by budget+refresh runway)"
-        # local exists but no healthy local lane -> fall through to the extended fleet / jules
-
-    # No (healthy) local lane: reach the extended paid fleet (jules/copilot/github_actions/warp/oz)
-    # for whatever it can serve — DISTRIBUTING across the capable extended lanes by least-assigned-
-    # so-far so we never dump the whole remote backlog on one lane (origin's 'don't strand / don't
-    # pile on one vendor' lesson, applied to the fan-out). Jules competes here too when it's up.
-    planned_remaining = {agent: _task_cost(task) for agent in PAID_AGENT_ORDER}
-    agents, reasons = _capable_agents(task, health, planned_remaining, workdir)
-    extended = [a for a in agents if a not in LOCAL_CHECKOUT_AGENTS]
-    if extended:
-        pick = min(extended, key=lambda a: (assigned.get(a, 0), PAID_AGENT_ORDER.index(a)))
+    agents, reasons = _capable_agents(task, health, budget, workdir)
+    if not agents:
+        return "unroutable", "no reachable capable paid lane"
+    pick = _pick_local(task, health, assigned, budget, runway, candidate_agents=agents)
+    if not pick:
+        return "unroutable", "no reachable capable paid lane"
+    if pick in reasons:
         return pick, reasons[pick]
-    return "unroutable", "no reachable capable paid lane"
+    return pick, f"{pick} selected by workload balancing"
 
 
 def main() -> int:

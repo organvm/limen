@@ -15,7 +15,7 @@ LIMEN_DISPATCH_ASYNC=1. The synchronous dispatch-parallel.py is left completely 
 Concurrency: at most LIMEN_ASYNC_MAX (default 12) background runs at once; per-agent in-flight count
 is tracked via <task-id>__<agent>.running markers so budgets aren't blown between reserve & harvest.
 
-Usage: dispatch-async.py --lanes codex,claude,opencode,jules --per-lane 8 --max 12 [--dry-run]
+Usage: dispatch-async.py --lanes codex,opencode,agy,claude,gemini,jules,copilot,github_actions,warp,oz --per-lane 8 --max 12 [--dry-run]
 """
 import argparse
 import datetime
@@ -28,6 +28,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.dispatch import _queue_lock, _apply_result, _down_lanes, _PRIORITY_ORDER, _deps_met  # noqa: E402
+
+
+def _parse_lanes(raw: str) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for lane in raw.split(","):
+        lane = lane.strip()
+        if not lane or lane in seen:
+            continue
+        out.append(lane)
+        seen.add(lane)
+    return out
+
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 TASKS = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
@@ -159,13 +172,16 @@ def reserve_and_launch(agents, per_agent, cap, dry):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--lanes", default="codex,opencode,agy,claude,gemini,jules")
+    ap.add_argument(
+        "--lanes",
+        default="codex,opencode,agy,claude,gemini,jules,copilot,github_actions,warp,oz",
+    )
     ap.add_argument("--per-lane", type=int, default=int(os.environ.get("LIMEN_LOCAL_LIMIT", "8")))
     ap.add_argument("--max", type=int, default=int(os.environ.get("LIMEN_ASYNC_MAX", "12")))
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
     down = _down_lanes()
-    lanes = [x.strip() for x in a.lanes.split(",") if x.strip() and x.strip() not in down]
+    lanes = [x for x in _parse_lanes(a.lanes) if x not in down]
     if down:
         print(f"── skipping down lanes: {sorted(down)}")
     reaped = reap_stale(int(os.environ.get("LIMEN_ASYNC_MAX_AGE", "1200")))

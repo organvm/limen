@@ -10,7 +10,7 @@
 # under a launchd KeepAlive daemon, NOT a StartInterval timer).
 #
 #   VOICE          cadence (beats)   what plays
-#   dispatch       every 1 (kick)    use idle capacity across all 6 lanes
+#   dispatch       every 1 (kick)    use idle capacity across all paid lanes
 #   tick           every 1           emit logs/ticks.jsonl (portal pulse)
 #   balance        every 2 (snare)   route + rebalance the queue across lanes
 #   feed           every 3           mine the GitHub backlog
@@ -54,8 +54,9 @@ fi
 echo $$ > "$DAEMON_LOCK"
 echo $$ > "$LIMEN_ROOT/logs/heartbeat-loop.pid"
 
-LANES="${LIMEN_LANES:-codex,opencode,agy,claude}"
-[ -n "${GEMINI_API_KEY:-}" ] && LANES="$LANES,gemini"
+LOCAL_LANES="${LIMEN_LANES:-codex,opencode,agy,claude}"
+[ -n "${GEMINI_API_KEY:-}" ] && LOCAL_LANES="$LOCAL_LANES,gemini"
+LANES="$LOCAL_LANES,copilot,github_actions"
 [ -n "${WARP_API_KEY:-}" ] && LANES="$LANES,warp,oz"
 # per-lane tasks PER BEAT kept low so no single lane hogs a beat — lanes rotate fast
 # (the safe throughput fix; real braking is the rate-limit detector in dispatch.py).
@@ -128,6 +129,7 @@ while true; do
   play "$C_SYNC" && bash "$LIMEN_ROOT/scripts/sync-release.sh" 2>&1 | tail -2 || true
   python3 "$LIMEN_ROOT/scripts/usage-telemetry.py" 2>&1 | tail -1 || true   # refresh lane health BEFORE route/dispatch
   EFFECTIVE_LANES="$(healthy_lanes "$LANES")"
+  LOCAL_EFFECTIVE_LANES="$(healthy_lanes "$LOCAL_LANES")"
   if [ "$EFFECTIVE_LANES" != "$LANES" ]; then
     echo "  lanes: ${EFFECTIVE_LANES:-none} active from requested [$LANES]"
   fi
@@ -156,7 +158,11 @@ while true; do
                            python3 "$LIMEN_ROOT/scripts/generate-backlog.py" --apply 2>&1 | tail -1 || true; }  # SELF-FEED: top queue to floor when mining is dry → never idle
     play "$C_BALANCE" && { python3 "$LIMEN_ROOT/scripts/route.py" --apply 2>&1 | tail -1 || true   # PLAN
                            if [ -n "$EFFECTIVE_LANES" ]; then
-                             python3 "$LIMEN_ROOT/scripts/rebalance.py" --lanes "$EFFECTIVE_LANES" --apply 2>&1 | tail -1 || true
+                             if [ -n "$LOCAL_EFFECTIVE_LANES" ]; then
+                               python3 "$LIMEN_ROOT/scripts/rebalance.py" --lanes "$LOCAL_EFFECTIVE_LANES" --apply 2>&1 | tail -1 || true
+                             else
+                               echo "no live local lanes available for rebalance"
+                             fi
                            else
                              echo "no live local lanes available for rebalance"
                            fi; }
