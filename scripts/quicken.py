@@ -114,9 +114,15 @@ def _decode_worktree(projdir: str) -> str:
     return s.replace("--", "/.").replace("-", "/")  # best-effort; cwd from transcript preferred
 
 
+def _enc(p: str) -> str:
+    """Encode a path the way Claude names its project dirs: '.' and '/' both -> '-'."""
+    return p.replace(".", "-").replace("/", "-")
+
+
 def load_session(stream: Path) -> dict | None:
     sid = stream.stem
-    title = last_prompt = perm = cwd = None
+    title = last_prompt = perm = None
+    cwds: list[str] = []
     has_title = False
     last_ts = 0.0
     for e in _read_jsonl(stream):
@@ -128,9 +134,9 @@ def load_session(stream: Path) -> dict | None:
             last_prompt = e.get("lastPrompt") or last_prompt
         elif t == "permission-mode":
             perm = e.get("permissionMode") or perm
-        # conversation entries carry cwd + timestamp -> the real movement signal
+        # conversation entries carry cwd + timestamp -> movement signal (cwd roams between trees)
         if e.get("cwd"):
-            cwd = e["cwd"]
+            cwds.append(e["cwd"])
         ts = e.get("timestamp")
         if isinstance(ts, str):
             # ISO 8601 -> epoch, fail-open
@@ -141,8 +147,11 @@ def load_session(stream: Path) -> dict | None:
                 pass
     mtime = stream.stat().st_mtime if stream.exists() else 0.0
     move = max(last_ts, mtime)
-    if not cwd:
-        cwd = _decode_worktree(stream.parent.name)
+    # CANONICAL resume dir = the cwd whose encoding matches the stream's project-dir name (that is
+    # the tree `claude --resume` will find the session under). Roving cwds and the lossy decode are
+    # only fallbacks — using the wrong one yields "No conversation found".
+    proj = stream.parent.name
+    cwd = next((c for c in cwds if _enc(c) == proj), None) or (cwds[-1] if cwds else _decode_worktree(proj))
     # A USER FleetView session has a human ai-title AND is not a daemon "Complete task <ID>"
     # dispatch run (those live under ~/Workspace/.limen-worktrees and have their own heal lifecycle).
     is_dispatch = (last_prompt or "").startswith("Complete task ") or "/.limen-worktrees/" in (cwd or "")
@@ -342,10 +351,14 @@ def breathe(rows: list[dict], sel: str, dry: bool) -> None:
     import subprocess
     cap = int(os.environ.get("LIMEN_QUICKEN_BREATHE_CAP", "1"))     # bounded-work contract: small
     to = int(os.environ.get("LIMEN_QUICKEN_BREATHE_TIMEOUT", "900"))
-    alive_cwds = {r["cwd"] for r in rows if r["state"] == "ALIVE"}
-    targets = [r for r in rows if r["state"] == "STALLED" and not r["is_self"]
-               and (sel == "all" or r["sessionId"] == sel)]
-    targets = [r for r in targets if not _contended(r["cwd"], alive_cwds)]
+    # `all` breathes only STALLED (never auto-touch a moving session); a NAMED sid is an explicit
+    # choice — honor it regardless of the flickery ALIVE/STALLED label (still skip contended trees).
+    targets = [r for r in rows if not r["is_self"]
+               and (r["sessionId"] == sel if sel != "all" else r["state"] == "STALLED")]
+    # contention = ANOTHER moving session shares the tree; a session never self-contends.
+    def _others(sid):
+        return {r["cwd"] for r in rows if r["state"] == "ALIVE" and r["sessionId"] != sid}
+    targets = [r for r in targets if not _contended(r["cwd"], _others(r["sessionId"]))]
     targets.sort(key=lambda r: r["moved"])                          # oldest-stalled first
     targets = targets[:cap]
     print(f"\n[breathe] {len(targets)} session(s) within cap={cap}; contended/ALIVE worktrees skipped.")
