@@ -1,0 +1,160 @@
+# Tale of Genji — Chapter 2 (Hahakigi) — curated music arc
+# Score the CHAPTER, not the novel. Hahakigi is a chapter of two motions:
+# first, the famous "Rainy Night's Ranking of Women" — a protracted, comic,
+# philosophically charged taxonomy; second, Genji's first active seduction,
+# which ends in rebuff and leaves him sleeping with the woman's young
+# brother. The chapter is a comedy of male judgment, a manual of desire,
+# and the novel's first demonstration that Genji does not always get what
+# he wants.
+work: tale-of-genji
+book: 2
+title: "Hahakigi: Taxonomy, Longing, The Broom Tree"
+length_minutes: 76
+principle: >
+  Do not score Chapter 2 as "Genji's first love affair." Score it as the
+  moment where the novel's male epistemology of women — the compulsion to
+  classify, rank, and possess — is laid bare as both comic and doomed. The
+  rainy-night conversation is a philosophical comedy: men defining the ideal
+  woman while Genji sleeps through half of it. Then the second half shows
+  the real woman — Utsusemi — who resists, evades, and finally escapes,
+  leaving only her robe. The chapter is about the gap between the taxonomy
+  and the real, between the desire to know women and the impossibility of
+  doing so. The broom tree of the title is a mythical tree that recedes as
+  you approach it: the chapter's subject is exactly that recession.
+force_arc: [comedy, law, memory, desire, comedy, desire, exile, comedy]
+dominant_force: comedy
+tracks:
+  - n: 1
+    scene: "The rainy season confinement / four men gathered"
+    force: comedy
+    composer: Rossini
+    work: "Il barbiere di Siviglia — Overture"
+    decision: added
+    why: >
+      Rossini's overture opens with a quiet, expectant introduction that
+      suddenly accelerates into the famous comic presto — exactly the
+      structure of the rainy-night conversation, which begins in desultory
+      boredom and then ignites into animated debate about women. Rossini
+      is the sound of male conviviality: talkative, competitive, self-
+      amused, never quite serious about itself. Not Rameau (too courtly,
+      too structured for this intimate scene) and not Mozart (too elegant,
+      too psychologically precise). Rossini gives the sheer pleasure of
+      talk among young men with nothing to do but rank the world.
+  - n: 2
+    scene: "The taxonomy of women / Tō no Chūjō's three categories"
+    force: law
+    composer: Bach
+    work: "The Art of Fugue, BWV 1080 — Contrapunctus I"
+    decision: added
+    why: >
+      The men classify women into types — high rank, middle rank, low rank
+      — and discuss the virtues and defects of each. It is a systematic
+      exercise, almost scholastic in its desire to bring the chaos of
+      erotic experience under rational order. Bach's Contrapunctus I is
+      pure architectural clarity: a subject stated, inverted, developed,
+      resolved. It sounds like what Tō no Chūjō believes he is doing:
+      bringing fugal order to the disorder of desire. The comedy is that
+      the system will immediately fail when confronted with actual women.
+  - n: 3
+    scene: "Tō no Chūjō's story of the meek woman"
+    force: memory
+    composer: Fauré
+    work: "Élégie, Op. 24"
+    decision: added
+    why: >
+      Tō no Chūjō's story of the woman he abandoned because she was too
+      meek and forgiving — the woman who bore his child and whom he left
+      for being insufficiently interesting — is the chapter's emotional
+      pivot. Fauré's Élégie is not grief in the grand Mahlerian register;
+      it is a quiet, private, cello-borne regret. The story foreshadows
+      Yūgao, and Fauré gives it the tenderness that Tō no Chūjō himself
+      cannot quite articulate: a sense of loss that the speaker does not
+      fully admit to feeling.
+  - n: 4
+    scene: "Genji overhears Utsusemi / the first glimpse of the real"
+    force: desire
+    composer: Debussy
+    work: "Préludes, Book I — 'Les sons et les parfums tournent dans l'air du soir'"
+    decision: added
+    why: >
+      At the Governor of Kii's house, Genji overhears the young wife
+      (Utsusemi) talking about him. Her voice, glimpsed through a screen,
+      moves him. Debussy's prelude — the title translates 'Sounds and
+      perfumes turn in the evening air' — is the music of something
+      sensed before it is seen, of knowledge that comes through atmosphere
+      rather than sight. The prelude hovers on the edge of resolution,
+      like Genji hovering at the edge of the woman's room.
+  - n: 5
+    scene: "The failed seduction / Utsusemi rebuffs Genji"
+    force: comedy
+    composer: Mozart
+    work: "Le nozze di Figaro — Overture"
+    decision: added
+    why: >
+      Genji carries Utsusemi off to his room, but she resists. The next
+      morning, she sends him away. Mozart's Figaro Overture is the sound
+      of a comic plot moving too fast for its hero — a breathless presto
+      that keeps arriving at doors that have just been closed. The music
+      knows that desire is funny when it fails, and Genji's frustration
+      is the novel's first genuine comic defeat. Not Rossini (too
+      purely farcical; Mozart has more psychological shading).
+  - n: 6
+    scene: "Genji's letter exchange / the pursuit continues"
+    force: desire
+    composer: Szymanowski
+    work: "Mythes, Op. 30 — 'La fontaine d'Aréthuse'"
+    decision: added
+    why: >
+      Genji sends increasingly urgent letters; Utsusemi sends careful,
+      evasive replies. Szymanowski's 'La fontaine d'Aréthuse' is desire
+      music in the chromatic, post-Wagnerian register — the violin line
+      is all reaching and ornament, never quite arriving at rest. It
+      captures the specific quality of Genji's pursuit: urgent, refined,
+      and increasingly aware that the object is escaping.
+  - n: 7
+    scene: "The second visit / sleeping with the brother"
+    force: exile
+    composer: Sibelius
+    work: "Valse triste, Op. 44"
+    decision: added
+    why: >
+      Genji manages a second visit but is again rebuffed; Utsusemi has
+      moved to a different pavilion. Defeated, Genji ends up sleeping
+      with her young brother, Kogimi — a strange, melancholic substitution
+      that the novel treats with eerie matter-of-factness. Sibelius's
+      Valse triste is a waltz that has lost its partner, a dance that
+      goes through the motions without joy. It gives the chapter's
+      nocturnal mood of desire that has not so much failed as dissolved
+      into something awkward and unresolved.
+  - n: 8
+    scene: "The broom tree poem / the title's meaning revealed"
+    force: comedy
+    composer: Rameau
+    work: "Les Indes galantes — 'Rondeau des Sauvages'"
+    decision: added
+    why: >
+      Genji's final poem compares Utsusemi to the mythical broom tree
+      that vanishes as you approach it. The 'Rondeau des Sauvages' is
+      Rameau's wittiest dance movement: a tune that seems simple and
+      cheerful but has an intricate harmonic structure underneath.
+      It captures the chapter's final mood — comedy that has learned
+      something, laughter that is slightly rueful, a taxonomy that has
+      met its first failure and survived to tell the tale.
+demoted:
+  - composer: Ravel
+    work: "Pavane pour une infante défunte"
+    status: "demoted — too melancholy for Chapter 2's mixed register"
+    why: >
+      The Pavane was considered for Genji's letter exchange. It has the
+      right atmosphere of courtly longing but lacks the comic edge that
+      the chapter requires — Chapter 2 is never purely wistful, and
+      Ravel's piece would tip the balance toward sadness too early.
+  - composer: Wagner
+    work: "Tristan und Isolde — Prelude to Act I"
+    status: "already reserved for Chapter 1; too heavy for this chapter"
+    why: >
+      The Tristan Prelude belongs to the emperor's first sight of the
+      Kiritsubo Lady, which is desire at the scale of absolute
+      possession. Genji's desire in Chapter 2 is lighter, more
+      experimental, partly comic. Wagner would overinvest the scene
+      with a gravity the chapter does not yet bear.

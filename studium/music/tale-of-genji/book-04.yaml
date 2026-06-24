@@ -1,0 +1,158 @@
+# Tale of Genji — Chapter 4 (Yūgao) — curated music arc
+# Score the CHAPTER, not the novel. Yūgao is the first death in the novel
+# since Kiritsubo — and it is far more shocking: a young woman, in the
+# prime of tenderness, killed by a spirit of jealousy while Genji sleeps
+# beside her. The chapter moves from erotic curiosity to secret romance
+# to catastrophic possession to helpless grief. The evening-face flower
+# that opens the chapter — delicate, white, blooming at dusk — becomes
+# the emblem of a life that opens, blooms, and is extinguished in a
+# single night.
+work: tale-of-genji
+book: 4
+title: "Yūgao: The Evening Face"
+length_minutes: 72
+principle: >
+  Do not score Chapter 4 as "a ghost story." Score it as the chapter where
+  the novel's erotic economy produces its first innocent victim. Yūgao is
+  gentle, passive, utterly unguarded — the "too meek" woman Tō no Chūjō
+  abandoned — and she dies because Genji's world cannot contain a love that
+  exists outside court protocol. Lady Rokujō's jealous spirit (whether
+  literal or psychological) is the price of Genji's way of loving: the
+  accumulation of women who have claims on him, the spaces between them,
+  the violence of erotic inequality. Yūgao dies because she occupies a
+  space that someone else's jealousy has already claimed.
+force_arc: [memory, desire, desire, fate, plague, grief, memory]
+dominant_force: grief
+tracks:
+  - n: 1
+    scene: "The visit to the dying nurse / nostalgia for childhood"
+    force: memory
+    composer: Elgar
+    work: "Enigma Variations — 'Nimrod' (Variation IX)"
+    decision: added
+    why: >
+      Genji visits his old nurse, who has become a nun and is near
+      death. The scene is saturated with the past: his mother's death,
+      his childhood, the nurse's devoted care. Elgar's 'Nimrod' is
+      love remembered — a piece that builds from near-silence to a
+      sustained tenderness that has nowhere to go. It is not grief
+      (the nurse is still alive) but the premonition of loss, the
+      atmosphere of a relationship that is about to cross into
+      memory. This is the exact feeling the chapter's opening requires.
+  - n: 2
+    scene: "The yūgao flowers / the fan with the poem"
+    force: desire
+    composer: Debussy
+    work: "Estampes — 'Pagodes'"
+    decision: added
+    why: >
+      Genji sees the white flowers blooming at dusk before a shabby
+      house, sends for one, and receives a fan inscribed with a poem.
+      The exchange is pure Heian erotic protocol — oblique, poetic,
+      charged with possibility. Debussy's 'Pagodes' is pentatonic,
+      delicate, exquisitely decorative — the sound of an encounter
+      that is entirely aesthetic on the surface and entirely urgent
+      underneath. The music has the quality of something being
+      revealed slowly, note by note, like the mystery of the veiled
+      woman emerging through correspondence.
+  - n: 3
+    scene: "The secret affair / Yūgao's gentleness"
+    force: desire
+    composer: Ravel
+    work: "Pavane pour une infante défunte"
+    decision: added
+    why: >
+      Genji and Yūgao begin their affair in secret, meeting in the
+      shabby house. She is gentle, passive, infinitely yielding —
+      Tō no Chūjō's discarded mistress, now Genji's hidden treasure.
+      Ravel's Pavane has the right register for this brief erotic
+      peace: nostalgic even in the present tense, as if the happiness
+      is already being remembered before it ends. The Pavane was
+      demoted from Chapter 1 (too decorative for Kiritsubo's weight)
+      and from Chapter 2 (too melancholy for Hahakigi's comedy); here
+      it finds its natural home — a love that is already touched by
+      the fatal quality of a flower that blooms only at evening.
+  - n: 4
+    scene: "The procession to the deserted villa / love's wrong turn"
+    force: fate
+    composer: Beethoven
+    work: "Symphony No. 5 in C minor, Op. 67 — I. Allegro con brio (excerpt)"
+    decision: added
+    why: >
+      Genji, in an impulsive decision, takes Yūgao to an abandoned
+      villa in a desolate quarter. The journey is shadowed by
+      foreboding. Beethoven's Fifth — the famous four-note motif —
+      is fate knocking at the door, but used here with restraint:
+      not the full movement but the inexorable opening, the sense of
+      a pattern being set in motion that cannot be undone. The
+      chapter has already seeded the motif of Yūgao's vulnerability;
+      the journey to the villa is where that vulnerability crosses
+      into danger.
+  - n: 5
+    scene: "The spirit possession / Yūgao's death"
+    force: plague
+    composer: Penderecki
+    work: "Threnody for the Victims of Hiroshima"
+    decision: added
+    why: >
+      In the middle of the night, an apparition appears — the jealous
+      spirit of Lady Rokujō (or Genji's guilt made visible). Yūgao
+      dies in Genji's arms, silently, without warning. Penderecki's
+      Threnody is the only piece in the Western repertoire that gives
+      the sound of a life being erased in real time: the string
+      clusters, the glissandi, the texture of consciousness being
+      torn apart. It is not the Mahler Ninth Adagio (reserved for the
+      Kiritsubo Lady's more dignified death); it is uglier, more
+      violent, more senseless — which is exactly the register of
+      Yūgao's death, a death that has no meaning, only cause.
+  - n: 6
+    scene: "Genji's grief / the aftermath"
+    force: grief
+    composer: Barber
+    work: "Adagio for Strings, Op. 11"
+    decision: added
+    why: >
+      After Yūgao's death, Genji falls ill — physically collapses
+      from the shock. The Adagio for Strings was reserved in Chapter 1
+      for a moment of "collective grief"; here it finds its place.
+      The grief is not collective but it is public in a way the
+      Kiritsubo Lady's death was not — Genji must hide his loss,
+      cannot explain his illness, must pretend the night never
+      happened. Barber's Adagio gives the funeral music for a death
+      that cannot be mourned aloud, the terrible interior of a
+      grief that has no social outlet.
+  - n: 7
+    scene: "The farewell poems / release into memory"
+    force: memory
+    composer: Fauré
+    work: "Requiem, Op. 48 — 'In Paradisum'"
+    decision: added
+    why: >
+      The chapter ends with Genji exchanging final poems with Utsusemi
+      (closing that thread) and with the narrator's apology for the
+      scandalous events just recounted. Fauré's 'In Paradisum' is the
+      closing movement of his Requiem — not a plea for the dead but
+      an escort, a musical guide leading the soul into peace. It
+      gives the chapter its final note: Yūgao is gone, but the music
+      does not end in tragedy; it ends in a kind of sad, luminous
+      acceptance. The choir's ascent into the upper register is the
+      sound of Yūgao's spirit being released from the story, as the
+      evening face fades into the night.
+demoted:
+  - composer: Mahler
+    work: "Symphony No. 9 — IV. Adagio"
+    status: "reserved for the Kiritsubo Lady's death in Chapter 1"
+    why: >
+      The Mahler Ninth Adagio is the death music for the novel's
+      originating loss — the emperor's grief for the Kiritsubo Lady.
+      To reuse it for Yūgao would diminish both deaths. Yūgao's
+      death requires a different register: more violent, less
+      philosophical, more shocking.
+  - composer: Wagner
+    work: "Siegfried's Funeral March"
+    status: "reserved for a much later death — never use before Chapter 40"
+    why: >
+      The funeral march is too terminal, too monumental. Yūgao's
+      death is not heroic or mythic; it is senseless, small, and
+      devastating. The music must match the scale of the loss, not
+      exceed it.

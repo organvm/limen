@@ -1,0 +1,131 @@
+# Tale of Genji — Chapter 3 (Utsusemi) — curated music arc
+# Score the CHAPTER, not the novel. Utsusemi continues Genji's pursuit of
+# the resistant wife of the Iyo Deputy. It is a short, tight chapter of
+# voyeurism, frustration, and the iconic image of the empty robe. The
+# chapter is about desire that produces only absence — Genji obtains not
+# the woman but her abandoned garment, which he keeps as a fetish. The
+# "shell of the locust" is the form left behind when the living thing has
+# escaped.
+work: tale-of-genji
+book: 3
+title: "Utsusemi: The Shell of the Locust"
+length_minutes: 58
+principle: >
+  Do not score Chapter 3 as "another seduction attempt." Score it as the
+  chapter where desire discovers that its true object may be absence rather
+  than presence — that what Genji ultimately wants is not Utsusemi herself
+  but the shape she leaves behind. The chapter is a comedy of errors
+  that keeps a straight face: the midnight sneak, the Go game, the wrong
+  woman, the fleeing figure, the abandoned robe. It is also, in its final
+  movement, unexpectedly tender: Utsusemi's poem is the first time in the
+  novel that a woman speaks back to Genji on equal emotional terms.
+force_arc: [desire, comedy, desire, metamorphosis, grief, law]
+dominant_force: desire
+tracks:
+  - n: 1
+    scene: "Kogimi's loyalty / the brother becomes go-between"
+    force: desire
+    composer: Debussy
+    work: "Préludes, Book I — 'Voiles'"
+    decision: added
+    why: >
+      Kogimi, Utsusemi's young brother, becomes Genji's ally and
+      arranges the midnight visit. Debussy's 'Voiles' ('Sails' or
+      'Veils') is a whole-tone prelude that drifts without tonal
+      gravity, suspended in a medium that is neither air nor water.
+      It captures the stealthy, veiled quality of the chapter's first
+      movement: figures moving through darkness, intentions concealed,
+      a world seen through curtains and screens.
+  - n: 2
+    scene: "The Go game / two women at play"
+    force: comedy
+    composer: Rameau
+    work: "Platée — Ouverture"
+    decision: added
+    why: >
+      Genji spies on Utsusemi playing Go with her stepdaughter Nokiba
+      no Ogi. Rameau's Platée Overture is theatrical, slightly absurd
+      court music — the opera is about a marsh nymph who is tricked
+      into believing Jupiter loves her. The parallel is perfect: Genji
+      is the concealed observer, the women are absorbed in their game,
+      and the whole situation has the quality of an operetta that its
+      participants do not know they are in. The music gives the
+      voyeuristic pleasure and the comic tension of the scene.
+  - n: 3
+    scene: "Utsusemi flees / Genji left with the empty robe"
+    force: desire
+    composer: Scriabin
+    work: "Piano Sonata No. 4 in F-sharp major, Op. 30 — I. Andante"
+    decision: added
+    why: >
+      Utsusemi catches Genji's scent, recognizes him, and flees —
+      leaving only her outer robe behind. Genji picks it up, presses
+      it to his face. Scriabin's Fourth Sonata is desire music of a
+      specific kind: not the suspended longing of Tristan but a reaching
+      that is already turning inward, becoming its own object. The
+      first movement has an almost febrile intensity, a chromatic
+      interiority that matches Genji's condition: he holds the robe,
+      breathes the scent, and the woman herself is already gone.
+  - n: 4
+    scene: "The cicada shell poem / absence as presence"
+    force: metamorphosis
+    composer: Debussy
+    work: "Préludes, Book II — 'Brouillards'"
+    decision: added
+    why: >
+      Genji composes the poem that gives the chapter its name: the
+      cicada's empty shell, left behind when the insect has flown.
+      'Brouillards' ('Mists') is a prelude about forms that dissolve
+      as you approach them — a melody that keeps losing its outline
+      in harmonic fog. It is the sound of something that was present
+      and is now only its trace, exactly the register of Utsusemi's
+      abandoned robe and the poem that mourns its emptiness.
+  - n: 5
+    scene: "Utsusemi's reply / the woman's voice at last"
+    force: grief
+    composer: Fauré
+    work: "Requiem, Op. 48 — 'Agnus Dei'"
+    decision: added
+    why: >
+      Utsusemi copies a poem by Lady Ise in reply — it speaks of
+      sleeves wet with tears, of love that must remain secret. This
+      is the chapter's emotional revelation: the woman who resisted
+      is also the woman who feels. Fauré's Agnus Dei from the Requiem
+      is a piece about sacrifice that asks for rest, not for
+      vindication. It is not the Pie Jesu (reserved for the Kiritsubo
+      Lady's death scene in Chapter 1) but the communion text,
+      quieter, more resigned. It gives the unheard music of
+      Utsusemi's interior world — a woman who has made a choice she
+      may later regret.
+  - n: 6
+    scene: "Genji alone with the robe / the fetish endures"
+    force: law
+    composer: Bach
+    work: "Cello Suite No. 1 in G major, BWV 1007 — Prélude"
+    decision: added
+    why: >
+      Genji keeps the robe, returns to it night after night, pressing
+      it for its vanished scent. Bach's Cello Prélude is an arpeggiated
+      journey through the G major scale — a piece that finds order and
+      resolution through sustained focus on a single instrument. It
+      gives the chapter's strange final note: not tragedy, not triumph,
+      but a settled, almost monastic devotion to an object that
+      substitutes for a person. The chapter ends not with desire
+      satisfied but with desire converted into ritual.
+demoted:
+  - composer: Wagner
+    work: "Tristan und Isolde — Liebe-Nacht scene"
+    status: "too climactic for Chapter 3"
+    why: >
+      The Liebe-Nacht is a scene of fulfilled, if doomed, erotic
+      union. Chapter 3 is the opposite: desire that is never fulfilled
+      and turns inward. Wagner's ecstatic register would impose a
+      consummation the chapter withholds.
+  - composer: Mahler
+    work: "Symphony No. 5 — IV. Adagietto"
+    status: "reserved for a chapter with greater emotional weight"
+    why: >
+      The Adagietto's wounded inwardness is too precious for this
+      chapter; it belongs to a scene of genuine loss rather than
+      erotic frustration. Save for later (perhaps Chagabatake or
+      the death of a major character).
