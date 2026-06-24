@@ -65,6 +65,9 @@ jobs:
       # pr-status.json) has produced every input the validator reads.
 
       - name: Run API and CLI tests
+        env:
+          LIMEN_OLLAMA_BIN: agent-dispatch
+          LIMEN_OLLAMA_MODEL: qwen2.5-coder:7b
         run: python -m pytest web/api/tests cli/tests -q
 
       - name: Probe local runtime adapter

@@ -15,11 +15,11 @@ portal:
       claude: 100
     track:
       date: '2026-06-24'
-      spent: 79
+      spent: 81
       per_agent:
         jules: 56
         gemini: 0
-        codex: 0
+        codex: 2
         opencode: 8
         agy: 15
         claude: 0
@@ -38,7 +38,8 @@ tasks:
   target_agent: codex
   priority: high
   budget_cost: 2
-  status: dispatched
+  status: in_progress
+  updated: '2026-06-24T14:37:17Z'
   labels:
   - full-agent-force
   - infra
@@ -50,7 +51,7 @@ tasks:
     agent each cycle.'
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T04:43:56.613434Z'
+  updated: '2026-06-24T14:49:40Z'
   dispatch_log:
   - timestamp: '2026-06-20T19:51:18.339621Z'
     agent: limen
@@ -62,6 +63,11 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-24T14:43:02Z'
+    agent: codex
+    session_id: gen-4444j99-limen-ci-green-0620-c71b
+    status: in_progress
+    output: "Restoring CI regressions from dispatch/routing/capacity/telemetry/corpus/sync path and validating checks."
 - id: FORCE-warp-oz-lane
   title: Enlist the installed oz-by-warp GitHub App as a dispatch lane
   repo: organvm/limen
@@ -109,7 +115,7 @@ tasks:
   target_agent: agy
   priority: critical
   budget_cost: 2
-  status: dispatched
+  status: in_progress
   labels:
   - full-agent-force
   - infra
@@ -123,7 +129,7 @@ tasks:
     \ health-check returns down. This puts the PAID Copilot to work as a fleet lane."
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-22T04:43:56.613434Z'
+  updated: '2026-06-24T14:43:02Z'
   dispatch_log:
   - timestamp: '2026-06-22T04:41:45.670336Z'
     agent: limen
@@ -34453,6 +34459,11 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-24T14:37:17Z'
+    agent: codex
+    session_id: cli
+    status: in_progress
+    output: "Claimed task and began CI-failure triage."
 - id: GEN-organvm-i-theoria-scale-threshold-emergence-ci-green-0620
   title: Make organvm-i-theoria/scale-threshold-emergence CI green
   repo: organvm/scale-threshold-emergence
@@ -34528,7 +34539,7 @@ tasks:
   target_agent: codex
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - ci-green
   - generated
@@ -34553,6 +34564,16 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-24T14:43:02Z'
+    agent: codex
+    session_id: gen-4444j99-limen-ci-green-0620-c71b
+    status: in_progress
+    output: "Restoring CI regressions from dispatch/routing/capacity/telemetry/corpus/sync path and validating checks."
+  - timestamp: '2026-06-24T14:49:40Z'
+    agent: codex
+    session_id: gen-4444j99-limen-ci-green-0620-c71b
+    status: done
+    output: "Restored missing dispatch/routing/capacity/telemetry/corpus/sync logic; added claude_tier on Task model; added CI Ollama floor env defaults."
 - id: GEN-a-organvm-a-i-chat--exporter-ci-green-0620
   title: Make a-organvm/a-i-chat--exporter CI green
   repo: organvm/a-i-chat--exporter
