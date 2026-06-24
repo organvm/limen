@@ -102,7 +102,7 @@ def apply_toml_codex(path: Path, rendered: str, apply: bool) -> None:
 
 
 def apply_claude(rendered: str, apply: bool) -> None:
-    print(f"  claude mcp (via CLI)")
+    print("  claude mcp (via CLI)")
     if not apply:
         print(f"    would run: {rendered} (dry run)")
         return

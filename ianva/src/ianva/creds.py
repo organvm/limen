@@ -20,7 +20,6 @@ import contextlib
 import fcntl
 import os
 import re
-from pathlib import Path
 
 from . import paths
 
