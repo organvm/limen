@@ -1,0 +1,69 @@
+work: shahnameh
+book: 3
+title: "Shahnameh Cycle 3: The Serpent King and the Blacksmith's Banner"
+length_minutes: 74
+principle: >
+  Score this cycle as the mechanism of righteous rebellion. Zahhak is not merely evil; he is
+  the institutionalization of terror. Opposing him is not a noble prince but Kaveh, a grieving
+  blacksmith who raises a leather apron as a flag. Fereydun is the ordained savior, but Kaveh is
+  the human engine of the revolt. The music must move from the suffocating paranoia of a tyrant's
+  dream to the raw, unpolished wrath of the people, culminating in divine right restored.
+force_arc: [fate, sacrifice, grief, wrath, supplication, divine-intervention, law, kingship]
+dominant_force: wrath
+tracks:
+  - n: 1
+    scene: "Zahhak's nightmare of the three warriors"
+    force: fate
+    composer: Tchaikovsky
+    work: "Symphony No. 4 — I. Andante sostenuto"
+    decision: added
+    why: "Zahhak dreams of three warriors, one of whom strikes him with a mace and drags him to Mount Damavand. Tchaikovsky's fate motif is the sound of a destiny that cannot be avoided, hanging over the tyrant's head like a suspended blade."
+  - n: 2
+    scene: "The slaughter of the children; Abtin is killed"
+    force: sacrifice
+    composer: Gluck
+    work: "Iphigénie en Aulide — Overture to Act I"
+    decision: added
+    why: "Told that a boy named Fereydun will destroy him, Zahhak slaughters every child he suspects. Fereydun's father, Abtin, is captured and killed. Gluck's overture carries the grave, formal horror of state-sanctioned slaughter."
+  - n: 3
+    scene: "Faranak flees with infant Fereydun; the cow Barmayeh is slain"
+    force: grief
+    composer: Mahler
+    work: "Symphony No. 5 — IV. Adagietto"
+    decision: added
+    why: "Fereydun's mother hides him in a meadow where he is nursed by the magical cow Barmayeh. When Zahhak's men find the meadow, they kill the cow. The Adagietto captures the intensely private, withdrawn sorrow of a mother trying to keep her child alive in a world built on murder."
+  - n: 4
+    scene: "Kaveh the Blacksmith confronts Zahhak"
+    force: wrath
+    composer: Holst
+    work: "The Planets — 'Mars, the Bringer of War'"
+    decision: added
+    why: "Kaveh storms the court, demanding justice for his murdered sons, and tears up Zahhak's false decree of benevolence. Holst's 'Mars' provides the asymmetrical, hammering, aggressive pulse of a man who has lost everything and is no longer afraid of the king."
+  - n: 5
+    scene: "The raising of the Derafsh Kaviani"
+    force: supplication
+    composer: Bach
+    work: "St. Matthew Passion — 'Erbarme dich'"
+    decision: added
+    why: "Kaveh raises his leather blacksmith's apron on a spear. It becomes the banner of rebellion. The people rally to him, pleading for deliverance. Bach's 'Erbarme dich' holds the exposed, desperate plea of a wounded community begging for mercy and justice."
+  - n: 6
+    scene: "Fereydun crosses the river, guided by angels"
+    force: divine-intervention
+    composer: Strauss
+    work: "Also sprach Zarathustra — Sunrise"
+    decision: added
+    why: "Kaveh finds Fereydun, who has an ox-headed mace forged. Guided by the angels Jebrail and Sorush, Fereydun crosses the Arvand river. Strauss's sunrise represents the sudden, blinding return of divine favor to the world after a thousand years of darkness."
+  - n: 7
+    scene: "Fereydun shatters the talisman in Jerusalem"
+    force: law
+    composer: Brahms
+    work: "Symphony No. 4 — I. Allegro non troppo"
+    decision: added
+    why: "Fereydun enters Zahhak's capital, shatters his dark talismans, and frees the captive women of Jamshid's line. Brahms's Fourth is form under pressure—the architecture of the world being forcibly righted, law re-establishing its borders against chaos."
+  - n: 8
+    scene: "Zahhak is bound to Mount Damavand; Fereydun assumes the throne"
+    force: kingship
+    composer: Handel
+    work: "Zadok the Priest (HWV 258)"
+    decision: added
+    why: "Fereydun strikes Zahhak but an angel commands him not to kill the tyrant, only to bind him in the volcano. Fereydun takes the throne, and the Farr is restored. Handel's coronation anthem provides the absolute, unimpeachable ceremonial majesty of legitimate restoration."

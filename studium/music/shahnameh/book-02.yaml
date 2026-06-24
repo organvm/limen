@@ -1,0 +1,82 @@
+work: shahnameh
+book: 2
+title: "Shahnameh Cycle 2: Jamshid and the Fading of the Light"
+length_minutes: 85
+principle: >
+  Score the reign of Jamshid not as a standard rise-and-fall, but as the moment humanity overreaches.
+  Jamshid brings the golden age — medicine, armor, the division of classes, the lifting of humanity from the dust.
+  But when he claims divine status, the farr (divine grace) departs. The music must capture this supreme architectural order
+  followed by the sudden, terrifying vacuum of abandoned grace, leading to the nightmare of Zahhak's usurpation.
+force_arc: [ascent, kingship, law, revelation, metamorphosis, desire, fate, exile, sacrifice, grief]
+dominant_force: metamorphosis
+tracks:
+  - n: 1
+    scene: "Jamshid ascends the throne — the golden age begins"
+    force: ascent
+    composer: Strauss
+    work: "Death and Transfiguration — Finale"
+    decision: added
+    why: "Jamshid's rule brings an unprecedented elevation of humanity. Disease and aging stop; the world is bathed in light. Strauss's finale is an ascent that feels earned and total, capturing the luminosity of the Persian golden age before it turns into arrogance."
+  - n: 2
+    scene: "The construction of society — weapons, armor, architecture"
+    force: kingship
+    composer: Walton
+    work: "Crown Imperial"
+    decision: added
+    why: "Unlike Keyumars' ontological kingship, Jamshid's kingship is imperial, material, and structural. He builds. He marshals forces. Walton's march holds the exact ceremonial swagger and material weight of an empire flexing its administrative and physical power."
+  - n: 3
+    scene: "The division of society into four classes"
+    force: law
+    composer: Bach
+    work: "The Art of Fugue — Contrapunctus I"
+    decision: added
+    why: "Jamshid organizes humanity into priests, warriors, farmers, and artisans — a cosmological ordering of the social body. Bach's fugue is the purest musical expression of order dividing and structuring itself without losing its unity. Law here is architecture."
+  - n: 4
+    scene: "The establishment of Nowruz — time measured and celebrated"
+    force: revelation
+    composer: Messiaen
+    work: "Quartet for the End of Time — 'Louange à l'Éternité de Jésus'"
+    decision: added
+    why: "Jamshid establishes the calendar and the New Year (Nowruz). Time itself is brought into human comprehension. Messiaen's static, luminous chords arrest time, making the measurement of days feel like a divine revelation rather than a human invention."
+  - n: 5
+    scene: "Jamshid claims divinity and the Farr departs"
+    force: metamorphosis
+    composer: Strauss
+    work: "Metamorphosen"
+    decision: added
+    why: "Hubris. Jamshid demands to be worshipped as the Creator. The divine grace (Farr) leaves him in the form of a bird, and his substance hollows out. Strauss's Metamorphosen captures the collapse of a civilization's spirit from within — a sickening, inevitable decay of former glory."
+  - n: 6
+    scene: "Zahhak's pact with Ahriman in Arabia"
+    force: desire
+    composer: Scriabin
+    work: "The Poem of Ecstasy"
+    decision: added
+    why: "Meanwhile, Zahhak desires his father's throne. Ahriman feeds that ambition until the prince murders his father. Scriabin's chromatic, surging longing perfectly matches the toxic, deferred ambition that Ahriman cultivates in Zahhak."
+  - n: 7
+    scene: "Ahriman kisses Zahhak's shoulders; the serpents erupt"
+    force: fate
+    composer: Verdi
+    work: "La Forza del Destino — Overture"
+    decision: added
+    why: "The kiss is a trap. Two black serpents grow from Zahhak's shoulders, demanding human brains. The trap of fate snaps shut on the tyrant, turning him into a monster. Verdi's overture carries the inexorable, hammering realization that a curse has been sealed."
+  - n: 8
+    scene: "Jamshid flees his crumbling empire"
+    force: exile
+    composer: Vaughan Williams
+    work: "Fantasia on a Theme by Thomas Tallis"
+    decision: added
+    why: "Abandoned by the Farr and his people, Jamshid flees into the wilderness. He wanders for a hundred years. The open, wandering intervals and hollow string textures of Vaughan Williams evoke an immense, lonely landscape where a fallen king is reduced to a shadow."
+  - n: 9
+    scene: "Zahhak captures Jamshid and saws him in half"
+    force: sacrifice
+    composer: Stravinsky
+    work: "The Rite of Spring — 'Sacrificial Dance'"
+    decision: added
+    why: "Jamshid is caught by Zahhak's forces and executed with a saw. It is a brutal, ritualistic end to the golden king, feeding the new era of darkness. Stravinsky's asymmetrical, punishing rhythms provide the terror of a machine consuming a human life."
+  - n: 10
+    scene: "Darkness settles over Iran under Zahhak's reign"
+    force: grief
+    composer: Barber
+    work: "Adagio for Strings"
+    decision: added
+    why: "The golden age is dead. Young men are fed to the serpents daily; wisdom is hidden, and magic thrives. Barber's Adagio holds the slow, collective mourning of a nation plunging into a thousand-year nightmare, grieving for the light they let die."

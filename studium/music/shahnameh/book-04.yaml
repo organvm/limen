@@ -1,0 +1,69 @@
+work: shahnameh
+book: 4
+title: "Shahnameh Cycle 4: The Division of the World and the First Fratricide"
+length_minutes: 81
+principle: >
+  Score the tragedy of Fereydun's lineage not as an accident, but as a structural failure
+  of the world's division. When the earth is carved into three, envy is born. Iraj goes to
+  his brothers in peace and is butchered; his death is the original sin that guarantees
+  endless war between Iran and Turan. The music must reflect the shift from administrative
+  majesty to festering resentment, ending in a grief that cannot be resolved, only avenged.
+force_arc: [kingship, law, memory, desire, wrath, exile, sacrifice, grief]
+dominant_force: grief
+tracks:
+  - n: 1
+    scene: "Fereydun's long and prosperous reign"
+    force: kingship
+    composer: Walton
+    work: "Orb and Sceptre"
+    decision: added
+    why: "Fereydun rules for five hundred years in peace. He seeks wives for his three sons from the King of Yemen. Walton's march captures the established, confident majesty of a reign that has vanquished darkness and believes it will last forever."
+  - n: 2
+    scene: "The division of the world into three realms"
+    force: law
+    composer: Handel
+    work: "Music for the Royal Fireworks — La Réjouissance"
+    decision: added
+    why: "Fereydun divides the world: the West to Salm, the East to Tur, and the center (Iran) to Iraj. Handel's music conveys the formal, architectural clarity of drawing borders and establishing treaties—the law as an instrument of peace."
+  - n: 3
+    scene: "Salm and Tur brood over their inheritance"
+    force: memory
+    composer: Elgar
+    work: "Enigma Variations — 'Nimrod'"
+    decision: added
+    why: "Over time, the older brothers grow resentful that the youngest received the heart of the empire. They remember their birthright and feel slighted. Elgar's Nimrod is used here not for majesty, but for a nostalgic, heavy brooding on what they believe they are owed."
+  - n: 4
+    scene: "Envy and ambition fester; the conspiracy forms"
+    force: desire
+    composer: Scriabin
+    work: "The Poem of Ecstasy"
+    decision: added
+    why: "Salm and Tur exchange messages, feeding each other's ambition until it becomes a toxic obsession to take Iran. Scriabin's chromatic longing perfectly embodies this unfulfilled, twisting desire that corrupts the brothers' minds."
+  - n: 5
+    scene: "Iraj decides to go to his brothers unarmed"
+    force: wrath
+    composer: Wagner
+    work: "Tristan und Isolde — Prelude"
+    decision: added
+    why: "Fereydun receives their hostile message and prepares for war, but Iraj refuses to fight. He goes to them with a message of peace. Wagner's prelude acts here as the unresolved tension of the brothers' wrath, waiting for Iraj like a coiled spring."
+  - n: 6
+    scene: "Iraj's lonely journey into Turan"
+    force: exile
+    composer: Sibelius
+    work: "Symphony No. 4 — III. Il tempo largo"
+    decision: added
+    why: "Iraj leaves the safety of Iran and travels into hostile territory, vulnerable and without an army. Sibelius's open, stark intervals evoke the isolation and the terrifying emptiness of stepping outside the protection of the law."
+  - n: 7
+    scene: "Tur murders Iraj"
+    force: sacrifice
+    composer: Gluck
+    work: "Iphigénie en Aulide — Overture to Act I"
+    decision: added
+    why: "Despite Iraj's pleas for brotherhood, Tur strikes him with a heavy chair and slashes his throat. It is a sacrifice to ambition, destroying the innocent brother. Gluck's overture carries the grave, terrifying weight of familial slaughter."
+  - n: 8
+    scene: "Fereydun receives Iraj's severed head"
+    force: grief
+    composer: Barber
+    work: "Adagio for Strings"
+    decision: added
+    why: "Fereydun prepares a feast for his son's return, but instead a rider brings Iraj's head. The king's sorrow is absolute; he weeps until his eyes go blind. Barber's Adagio holds the devastating, suffocating grief of a father burying his favorite son, knowing it means endless war."

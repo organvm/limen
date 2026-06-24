@@ -11,18 +11,18 @@
 - **Corpus:** `arabic-persian/shahnameh` (persian_original_seed.txt)
 - **Source rail:** https://ganjoor.net/ferdousi/shahname/
 - **Divisions:** 50 × Cycle
-- **Progress:** 1/50 arcs authored
+- **Progress:** 8/50 arcs authored
 
 | Cycle | dominant force | status |
 | --: | --- | :--: |
-| 1 | (author) | ✓ |
-| 2 | (author) | ☐ |
-| 3 | (author) | ☐ |
-| 4 | (author) | ☐ |
-| 5 | (author) | ☐ |
-| 6 | (author) | ☐ |
-| 7 | (author) | ☐ |
-| 8 | (author) | ☐ |
+| 1 | kingship | ✓ |
+| 2 | metamorphosis | ✓ |
+| 3 | wrath | ✓ |
+| 4 | grief | ✓ |
+| 5 | grief | ✓ |
+| 6 | kingship | ✓ |
+| 7 | desire | ✓ |
+| 8 | divine-intervention | ✓ |
 | 9 | (author) | ☐ |
 | 10 | (author) | ☐ |
 | 11 | (author) | ☐ |

@@ -1,0 +1,173 @@
+# Shahnameh — Cycle 5 — Fereydun's Sons — curated music arc
+# THE gold-standard form. Every other book/work converges toward this shape.
+work: shahnameh
+book: 5
+title: "Shahnameh Cycle 5: Fereydun's Sons — The Divided Inheritance"
+length_minutes: 90
+principle: >
+  Do not score Cycle 5 as "a story about jealousy." Score it as the moment where the
+  Shahnameh's most tragic pattern — brother killing brother over kingship — is first
+  established. Fereydun divides the world among his three sons: Salm, Tur, and Iraj.
+  Iraj receives Iran, the heartland, the best portion. Salm and Tur, enraged, murder
+  him. The murder is not impulsive — it is deliberated, cold, and its consequence will
+  be generations of war between Iran and Turan. The arc is about the birth of fratricide
+  as a political structure, the grief of a father forced to outlive his own justice,
+  and the seed of vengeance that will become the Shahnameh's longest war.
+force_arc: [kingship, kingship, fate, wrath, sacrifice, wrath, grief, exile, fate, grief]
+dominant_force: grief
+tracks:
+  - n: 1
+    scene: "Fereydun in old age — the great king divides his realm"
+    force: kingship
+    composer: Elgar
+    work: "Enigma Variations — 'Nimrod' (Variation IX)"
+    decision: added
+    why: >
+      Fereydun is now old. The king who bound Zahhak, who restored the world, who ruled
+      for centuries, must decide how to pass on his inheritance. He divides the world
+      into three: Rum (the West) to Salm, Turan (the East) to Tur, Iran (the center) to
+      Iraj. Elgar's Nimrod, used in Cycle 1 for Keyumars and Cycle 2 for Jamshid's prime,
+      returns here for the gravity of a king making a decision he knows will outlast him
+      — the slow, noble tread of a sovereign who is trying to be just and may not be
+      wise enough. The kingship here is the weight of legacy.
+  - n: 2
+    scene: "The three sons receive their portions — Salm and Tur's resentment"
+    force: kingship
+    composer: Walton
+    work: "Crown Imperial — March"
+    decision: added
+    why: >
+      Salm and Tur accept their thrones but their acceptance is poisoned. Iraj — youngest,
+      most beloved, most worthy — has received the crown of Iran, the heart of the world.
+      Walton's Crown Imperial is ceremonial music, but here it is played in a register
+      that reveals the ceremony's undertow: the march is grand but the ear catches the
+      dissonance, the brass is bright but the key is wrong. The sons bow to their father
+      and the music is the bow: formal, correct, and full of the worm that will destroy
+      everything.
+  - n: 3
+    scene: "Salm and Tur's plot — the envious brothers counsel murder"
+    force: fate
+    composer: Beethoven
+    work: "Symphony No. 5 — I. Allegro con brio"
+    decision: added
+    why: >
+      Salm and Tur do not kill in hot blood. They send messengers, they negotiate, they
+      write letters, and they decide that Iraj must die because his existence is an
+      accusation. Beethoven's Fifth returns — hammering the motif of inescapable doom
+      — not as cosmic fate (Cycle 3) but as the inexorability of a decision that two
+      powerful men have made and will not unmake. The fate here is human, not divine:
+      once the letter is sent, the trajectory is locked.
+  - n: 4
+    scene: "Iraj receives the brothers' envoy — he offers peace, he offers all he has"
+    force: wrath
+    composer: Brahms
+    work: "Symphony No. 1 — IV. Allegro non troppo, ma con brio (opening Adagio)"
+    decision: added
+    why: >
+      Iraj is not naive. He knows his brothers are envious; he offers to give them Iran
+      if they will not kill him. He offers peace, friendship, the full treasury, the
+      crown itself — anything to avoid the blood of family. Brahms's opening Adagio to
+      the First's finale is the sound of a generous heart under extreme pressure: the
+      strings rise with a grave, almost funereal dignity, knowing that generosity will
+      not be accepted but offering it anyway. Wrath here is inverted — it is the wrath
+      of the victim who refuses to hate, which is a different kind of force.
+  - n: 5
+    scene: "The murder of Iraj — Salm and Tur kill their brother"
+    force: sacrifice
+    composer: Stravinsky
+    work: "The Rite of Spring — 'The Augurs of Spring'"
+    decision: added
+    why: >
+      Salm and Tur meet Iraj and kill him. The Shahnameh does not flinch: they drive a
+      dagger into him, and he dies forgiving them. Stravinsky's 'Augurs of Spring' —
+      used in the Iliad for the violence beneath the quarrel — here registers the ritual
+      nature of the murder: it is not a crime of passion but the enactment of a structure
+      that jealousy has already built. The pounding repeated chords are the heartbeat of
+      a world that will now be at war for generations because two brothers could not bear
+      a brother's good fortune. The sacrifice is of peace itself.
+  - n: 6
+    scene: "Salm and Tur send Iraj's head to Fereydun — the father's monstrous gift"
+    force: wrath
+    composer: Bartók
+    work: "Concerto for Orchestra — IV. Intermezzo interrotto"
+    decision: added
+    why: >
+      The brothers sever Iraj's head and send it to Fereydun. The old king receives his
+      son's head as a message: this is what your division has cost. Bartók's Intermezzo
+      interrotto is grotesque in its mock-innocence: a folk-like melody that keeps being
+      interrupted by a cynical, aggressive brass intrusion — the song of a world that
+      wants to be peaceful and keeps being violated by violence. Fereydun holding the
+      head of his youngest son is the interruption that cannot be assimilated.
+  - n: 7
+    scene: "Fereydun's grief — the king who cannot save his child"
+    force: grief
+    composer: Mahler
+    work: "Kindertotenlieder — 'Wenn dein Mütterlein' (When your mother)"
+    decision: added
+    why: >
+      Fereydun, who chained Zahhak, who restored the world, who ruled for centuries, is
+      now an old man holding the head of his murdered son. The grief is not the geological
+      grief of Cycle 2 (the exhaustion of an era after Jamshid) nor the empathetic grief of
+      Cycle 1 (Keyumars mourning Siamak). It is the grief of a father who was given the
+      three best sons in the world and watched two destroy the third. Mahler's second
+      Kindertotenlieder song opens with a cruel tenderness — the image of the mother
+      coming through the door, the child not there — that is too intimate for the funeral
+      march register. Grief here is private, old, and without remedy.
+  - n: 8
+    scene: "Iraj's daughter — the hidden line that will bring vengeance"
+    force: exile
+    composer: Debussy
+    work: "La mer — 'Dialogue du vent et de la mer' (opening)"
+    decision: added
+    why: >
+      Iraj leaves a daughter, pregnant by a secret marriage. The line is hidden — she
+      is sent away, protected by loyal servants, raised in the borderlands where Salm
+      and Tur will not find her. From this hidden line will come Manuchehr, the avenger.
+      Debussy's 'Dialogue du vent et de la mer' opens with a restless, unsettled energy
+      — the wind and the sea speaking in a language that is not yet music, a condition
+      of potential that has not yet formed into event. The hidden heir is that dialogue:
+      a story that has not yet happened but is already being told by the wind.
+  - n: 9
+    scene: "Fereydun's curse — the father's final prophecy: 'Iran and Turan will war until the end'"
+    force: fate
+    composer: Sibelius
+    work: "Symphony No. 2 in D major — IV. Allegro moderato (opening)"
+    decision: added
+    why: >
+      Fereydun does not curse his sons in rage. He pronounces the consequence: because
+      they have killed Iraj, the war between Iran and Turan will last until the end of
+      time. It is not a wish but a structural prediction — the first statement of the
+      Shahnameh's longest theme. Sibelius's Second Symphony finale opens with a theme
+      of vast, wind-swept inevitability: the brass and strings converging on a statement
+      that sounds like a law of nature rather than a human decree. Fate here is Fereydun
+      reading the pattern that his own division has created. The music must sound like
+      a continent's weather being announced.
+  - n: 10
+    scene: "The long waiting — the throne empty, the farr hidden, the child growing in secret"
+    force: grief
+    composer: Sibelius
+    work: "Symphony No. 4 — II. Molto allegro"
+    decision: added
+    why: >
+      The cycle does not end with vengeance. It ends with waiting: Iraj's line preserved
+      in secret, the child growing toward the vengeance that will be Manuchehr, the
+      Shahnameh pausing before the long arc of Iran-Turan war begins. Sibelius's Fourth's
+      second movement is the most compressed and isolated music in the symphonic canon
+      — fast, flickering, and bleak, as if it were trying to outrun something that
+      cannot be outrun. Grief here is not the exhausted grief of Fereydun but the
+      anticipatory grief of a world that knows what is coming: generations of war,
+      of heroes dead on both sides, of a blood-feud that will make the Iliad look
+      brief.
+demoted:
+  - composer: Wagner
+    work: "Götterdämmerung — 'Siegfried's Funeral March'"
+    status: "reserved; Iraj's death is not yet the funeral-monumental register"
+    why: "Iraj is murdered in secret, not fallen in battle. His body is dismembered, his head sent to his father. The funeral march belongs to a public death publicly mourned — Sohrab, Esfandiyar, Rostam."
+  - composer: Verdi
+    work: "Requiem — 'Dies Irae'"
+    status: "not here; the death of Iraj is a single murder, not an apocalypse"
+    why: "The Dies Irae is the judgment of the dead. Iraj's death is a private crime; it does not yet operate at cosmological scale."
+  - composer: Barber
+    work: "Adagio for Strings"
+    status: "demoted; too public-oratorical for this grief"
+    why: "Fereydun's grief is not civic mourning but a father's private devastation. Mahler's Kindertotenlieder holds that register."

@@ -1,0 +1,172 @@
+# Shahnameh — Cycle 6 — Manuchehr — curated music arc
+# THE gold-standard form. Every other book/work converges toward this shape.
+work: shahnameh
+book: 6
+title: "Shahnameh Cycle 6: Manuchehr — The Avenger"
+length_minutes: 96
+principle: >
+  Do not score Cycle 6 as "revenge accomplished." Score it as the moment where the
+  Shahnameh's founding wound begins to close — Manuchehr, Iraj's grandson, grows in
+  secret, learns his lineage, and rides to avenge his grandfather against Salm and Tur.
+  The arc moves from the growth of the hidden heir through the war of vengeance through
+  the deaths of the fratricidal uncles and into the establishment of a new reign — but
+  the shadow of the Iran-Turan war, which Fereydun named in his curse, is already falling
+  across the victory. The cycle also introduces Sam, Zal, and the Simurgh — the thread
+  that will lead to Rostam, the Shahnameh's greatest hero.
+force_arc: [exile, kingship, wrath, wrath, fate, kingship, kingship, sacrifice, law, ascent]
+dominant_force: kingship
+tracks:
+  - n: 1
+    scene: "Manuchehr grows in secret — Iraj's line preserved in the borderlands"
+    force: exile
+    composer: Vaughan Williams
+    work: "Fantasia on a Theme by Thomas Tallis"
+    decision: added
+    why: >
+      Manuchehr is raised away from the throne, hidden by loyal servants in the
+      mountains of the borderland. He does not know his lineage. He grows strong and
+      brave and ignorant of the vengeance that awaits his maturity. Vaughan Williams's
+      Tallis Fantasia is a work of vast, open, modal space — string choirs answering
+      each other across a cathedral-of-the-mind that is also a mountain landscape,
+      a music of waiting and distance. Exile's requirement is wandering tonality and
+      open intervals; the Tallis Fantasia has intervals as wide as the Alborz range.
+  - n: 2
+    scene: "The revelation — Manuchehr is told who he is and what he must do"
+    force: kingship
+    composer: Elgar
+    work: "Symphony No. 1 — I. Andante. Nobilmente e semplice (opening)"
+    decision: added
+    why: >
+      A messenger (or his mother) tells Manuchehr the story: Iraj was his grandfather,
+      the best of Fereydun's sons, murdered by Salm and Tur for the crime of being
+      loved. Manuchehr learns that his life has been hidden for a purpose, and the
+      purpose is vengeance. Elgar's First Symphony opening — the same theme that
+      accompanied Fereydun's birth in Cycle 4 — returns here as the recognition of
+      destiny: the nobility that was latent in the child on Alborz is now claimed by
+      the grown man who must continue the line. Kingship as the acceptance of a burden
+      that was placed on you before you were born.
+  - n: 3
+    scene: "Manuchehr marches against Tur — the war of vengeance begins"
+    force: wrath
+    composer: Prokofiev
+    work: "Alexander Nevsky — 'Arise, Ye Russian People'"
+    decision: added
+    why: >
+      Manuchehr does not negotiate. He raises an army and marches against Tur, the
+      elder brother, the one who drove the dagger into Iraj. Prokofiev's chorus returns
+      from Cycle 4 — the same piece that accompanied Fereydun's descent from Alborz
+      — but here the register is different. In Cycle 4 the march was the sound of a
+      people discovering they were an army. Here it is the sound of a righteous avenger
+      leading a justified campaign. Wrath with the full weight of the law behind it.
+  - n: 4
+    scene: "The first battle — Manuchehr's forces meet Tur's army"
+    force: wrath
+    composer: Shostakovich
+    work: "Symphony No. 10 — II. Allegro (Scherzo)"
+    decision: added
+    why: >
+      The battle is decisive and brutal. Manuchehr is young, strong, and fighting for
+      the right; Tur is old, experienced, and fighting for a position he has held for
+      decades. Shostakovich's Tenth Scherzo returns — the compressed ferocity of a
+      force that has been accumulating for a generation and is now discharging in a
+      single concentrated act of violence. The movement is brief because the battle
+      is brief: the hidden heir is stronger than the aging fratricide.
+  - n: 5
+    scene: "Manuchehr kills Tur — the first vengeance completed"
+    force: fate
+    composer: Beethoven
+    work: "Symphony No. 7 — II. Allegretto"
+    decision: added
+    why: >
+      Manuchehr faces Tur in single combat and kills him. The death is not celebrated
+      in the Shahnameh as a triumph — it is recorded as the consequence of a choice
+      made long ago. Beethoven's Seventh Allegretto returns from Cycle 4, where it
+      accompanied Zahhak's cornering. Here it sounds for Tur's death: fate walking
+      at its measured pace, the inexorable arrival of a debt that was incurred when
+      Iraj was murdered and has now been paid. The music does not exult; it registers
+      the settlement of an account.
+  - n: 6
+    scene: "Manuchehr enthroned in Iran — the line of Iraj restored"
+    force: kingship
+    composer: Handel
+    work: "Zadok the Priest (HWV 258)"
+    decision: added
+    why: >
+      Manuchehr returns to Iran and is crowned. The same piece that accompanied
+      Jamshid's installation in Cycle 2 returns for the installation of Iraj's
+      grandson — the full choral crescendo from solo to massed voices, the sound
+      of divine approval being poured onto a legitimate head. The line has been
+      restored. The farr descends again. Kingship returns to its proper house.
+  - n: 7
+    scene: "Sam returns — the hero of Zabulistan presents himself to the new king"
+    force: kingship
+    composer: Walton
+    work: "Crown Imperial — March"
+    decision: added
+    why: >
+      Sam — the great hero of the age, ruler of Zabulistan, the father who will
+      later abandon Zal because of his white hair — comes to pay homage to Manuchehr.
+      Walton's Crown Imperial, heard in Cycles 2, 4, and 5 as ceremonial-march-with-
+      undertow, here returns as pure court spectacle: not the poisoned ceremony of
+      Salm and Tur's accession but the legitimate alignment of the realm's greatest
+      military power behind its new sovereign. The march is confident, the brass is
+      clean. The realm is whole. For this moment.
+  - n: 8
+    scene: "The birth of Zal — Sam's white-haired son, the omen child"
+    force: sacrifice
+    composer: Gluck
+    work: "Iphigénie en Aulide — Overture to Act I"
+    decision: added
+    why: >
+      The cycle pivots. Sam's son is born with white hair — in a world where that
+      is an omen of demonic possession. Sam, ashamed, abandons the child on Mount
+      Alborz, where the Simurgh (the mythical bird) finds him and raises him. This
+      is the birth of the Shahnameh's most consequential lineage: Zal, who will be
+      Rostam's father. Gluck's Iphigénie en Aulide Overture, used in Cycle 1 for
+      the sacrifice of Siamak, returns here for the sacrifice of a child to fear
+      and custom. The overture's ceremonial gravity holds the weight of a father
+      doing the wrong thing because his society tells him it is right.
+  - n: 9
+    scene: "Manuchehr's justice — the king establishes peace, the realm settles"
+    force: law
+    composer: Bach
+    work: "Suite No. 3 in D major, BWV 1068 — II. Air"
+    decision: added
+    why: >
+      With Tur dead and Salm's fate approaching, Manuchehr establishes a reign of
+      justice. The Shahnameh describes his rule as a time of peace, of abundance,
+      of the fields and flocks returning to health. Bach's Air on the G String
+      returns from Cycle 4 — the serene melodic line of order restored, of form
+      that precedes and outlasts chaos. Law here is not the establishment of new
+      rules but the return of the old ones, the melody that was overlaid by the
+      noise of vengeance and is now audible again.
+  - n: 10
+    scene: "The Song of the Simurgh — Zal grows on the mountain, the divine bird nurturing the future"
+    force: ascent
+    composer: Messiaen
+    work: "Quartet for the End of Time — V. 'Louange à l'Éternité de Jésus'"
+    decision: added
+    why: >
+      The cycle closes not with Manuchehr's court but with a mountain and a bird.
+      Zal — the white-haired child — is being raised by the Simurgh, learning the
+      wisdom of the creature that will later save Rostam's life and stitch his wounds.
+      Messiaen's 'Louange à l'Éternité de Jésus' is cello and piano, still and
+      ecstatic, a melody of such unworldly patience that it seems to come from
+      a different order of time — the time of myth, of birds that live for millennia,
+      of children raised by wings. Ascent here is not personal glory but the slow,
+      luminous preparation of the hero who will define the Shahnameh: Rostam is
+      not yet born, but the conditions for his existence are being assembled on
+      a mountainside.
+demoted:
+  - composer: Wagner
+    work: "Götterdämmerung — 'Siegfried's Funeral March'"
+    status: "reserved for Sohrab, Esfandiyar, Rostam — heroes whose deaths are the Shahnameh's great public mournings"
+    why: "Manuchehr's vengeance is completed; no hero dies in Cycle 6 whose death the poem has prepared us to mourn at the funeral-monumental scale."
+  - composer: Verdi
+    work: "Requiem — 'Dies Irae'"
+    status: "demoted; Manuchehr's vengeance is judicial, not apocalyptic"
+    why: "The war against Tur is a campaign of justice rather than an eschatological struggle. Verdi's Dies Irae would overshoot the register."
+  - composer: Strauss
+    work: "Also sprach Zarathustra — 'Von den Freuden und Leidenschaften'"
+    status: "considered for the ascent track; replaced by Messiaen"
+    why: "Strauss gives ascent as human joy; Messiaen gives ascent as divine patience. The Simurgh rearing Zal on Alborz requires the latter register: not a man ascending but a world preparing."
