@@ -98,12 +98,12 @@ class TaskUpdate(BaseModel):
 
 
 class AssignmentRequest(BaseModel):
-    target_agent: str | None = None
+    target_agent: str | None = Field(default=None, min_length=1, max_length=32)
     priority: str | None = None
     budget_cost: int | None = Field(default=None, ge=1, le=100)
     status: str | None = "open"
-    note: str = Field(default="", max_length=2000)
-    session_id: str = Field(default="assignment", max_length=128)
+    note: str = Field(default="", min_length=0, max_length=2000)
+    session_id: str = Field(default="assignment", min_length=1, max_length=128)
 
     @field_validator("priority")
     @classmethod
@@ -128,22 +128,36 @@ class AssignmentRequest(BaseModel):
 
 
 class ArchiveRequest(BaseModel):
-    note: str = ""
-    session_id: str = "archive"
+    note: str = Field(default="", min_length=0, max_length=2000)
+    session_id: str = Field(default="archive", min_length=1, max_length=128)
 
 
 class VerifyRequest(BaseModel):
     status: str = Field(default="done", pattern="^(done|needs_human|failed|failed_blocked)$")
-    note: str = ""
-    session_id: str = "qa-verify"
+    note: str = Field(default="", min_length=0, max_length=2000)
+    session_id: str = Field(default="qa-verify", min_length=1, max_length=128)
 
 
 class DispatchRequest(BaseModel):
-    agent: str = "jules"
-    limit: int = 1
+    agent: str = Field(default="jules", pattern=r"^[a-z_]+$", min_length=1, max_length=32)
+    limit: int = Field(default=1, ge=1, le=100)
     live: bool = False
     task_id: str | None = None
-    session_id: str = "api"
+    session_id: str = Field(default="api", min_length=1, max_length=128)
+
+    @field_validator("task_id")
+    @classmethod
+    def validate_task_id(cls, v: str | None) -> str | None:
+        if v is not None and not (1 <= len(v) <= 128):
+            raise ValueError("task_id must be between 1 and 128 characters")
+        return v
+
+    @field_validator("agent")
+    @classmethod
+    def validate_agent(cls, v: str) -> str:
+        if v not in VALID_AGENTS:
+            raise ValueError(f"agent must be one of {', '.join(sorted(VALID_AGENTS))}")
+        return v
 
 
 @dataclass
@@ -906,8 +920,10 @@ def get_public_status() -> dict[str, Any]:
 
 
 @app.get("/api/qa-status")
-def get_qa_status(authorization: str | None = Header(None), agent: str = Query("jules")) -> dict[str, Any]:
+def get_qa_status(authorization: str | None = Header(None), agent: str = Query("jules", min_length=1, max_length=32, pattern=r"^[a-z_]+$")) -> dict[str, Any]:
     require_persona(authorization, {"owner"})
+    if agent not in VALID_AGENTS:
+        raise HTTPException(status_code=400, detail=f"invalid agent: {agent}")
     return qa_status(load_board(), agent=agent)
 
 
@@ -917,8 +933,10 @@ def get_surface_manifest(authorization: str | None = Header(None)) -> dict[str, 
 
 
 @app.get("/api/readiness")
-def get_readiness(authorization: str | None = Header(None), agent: str = Query("jules")) -> dict[str, Any]:
+def get_readiness(authorization: str | None = Header(None), agent: str = Query("jules", min_length=1, max_length=32, pattern=r"^[a-z_]+$")) -> dict[str, Any]:
     require_persona(authorization, {"owner"})
+    if agent not in VALID_AGENTS:
+        raise HTTPException(status_code=400, detail=f"invalid agent: {agent}")
     return readiness(load_board(), agent=agent)
 
 
@@ -1125,7 +1143,7 @@ def dispatch(req: DispatchRequest, authorization: str | None = Header(None)) -> 
 @app.post("/api/release-stale")
 def release_stale(
     authorization: str | None = Header(None),
-    hours: int = 24,
+    hours: int = Query(24, ge=1, le=720),
     dry_run: bool = True,
 ) -> dict[str, Any]:
     require_persona(authorization, {"owner"})
