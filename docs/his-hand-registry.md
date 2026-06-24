@@ -92,6 +92,7 @@ The running system holds these — this doc is the annotated view, not the home;
   `claude setup-token` (credential-race self-heal staged at `fix/claude-credential-race@b1274bf`,
   probes ready) + reconnect the hotspot.
 - **Open the gate** → already hung as **`ASK-5-open-merge-gate`** (a standing posture, never
-  duplicated). **Cheapest path:** say the word; the staged pushes (`unblock-pr-fix-deploy-gates`,
-  QUICKEN `d586e63`+`e464855`, Etceter4) land with no re-asking. Until then **held, not hanging** —
-  daemon-owned, catalogued, deploy on gate-open.
+  duplicated). **Cheapest path:** say the word; the staged pushes land with no re-asking. Until then
+  **held, not hanging** — daemon-owned, catalogued, deploy on gate-open. Staged payloads include:
+  branch **`worktree-optimized-wishing-crayon`** — the complete QUICKEN organ (from `d586e63`, tree
+  clean, merge to main) — plus `unblock-pr-fix-deploy-gates` and Etceter4.
