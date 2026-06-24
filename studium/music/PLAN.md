@@ -13,7 +13,7 @@
 - [`bhagavad-gita`](bhagavad-gita/PLAN.md) — The Bhagavad Gita · 1/18 arcs
 - [`tao-te-ching`](tao-te-ching/PLAN.md) — The Dao De Jing · 1/81 arcs
 - [`aeneid`](aeneid/PLAN.md) — The Aeneid · 1/12 arcs
-- [`metamorphoses`](metamorphoses/PLAN.md) — Metamorphoses · 1/15 arcs
+- [`metamorphoses`](metamorphoses/PLAN.md) — Metamorphoses · 8/15 arcs
 - [`quran`](quran/PLAN.md) — The Qur'an · 1/114 arcs
 - [`conference-of-birds`](conference-of-birds/PLAN.md) — The Conference of the Birds · 1/45 arcs
 - [`shahnameh`](shahnameh/PLAN.md) — The Shahnameh (Book of Kings) · 1/50 arcs

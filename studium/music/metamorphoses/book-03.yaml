@@ -1,0 +1,213 @@
+# Metamorphoses — Book III — curated music arc
+# Score the TRAGEDY OF LOOKING — not "Thebes as story" but the specific
+# structure of every incident: a gaze that should not have been cast, a
+# body that cannot survive what it has seen. Actaeon sees Diana; Semele
+# demands to see Jupiter; Narcissus sees himself; Pentheus spies on the
+# Bacchic rites. The gaze is the wound.
+# Register rule: the visual is the lethal sense. Score what happens to
+# the eye when it looks where it should not.
+work: metamorphoses
+book: 3
+title: "Metamorphoses Book III: Thebes, Dogs, Reflections"
+length_minutes: 95
+principle: >
+  Book III is the tragedy of looking. Actaeon sees Diana naked and is
+  torn apart by his own dogs; Semele demands to see Jupiter in his
+  full glory and is incinerated; Tiresias sees the copulating snakes
+  and is blinded; Narcissus sees his own reflection and wastes away;
+  Pentheus sees the Bacchic rites and is dismembered by his own mother.
+  The dominant force is fate — not as a personified power but as the
+  inexorable structure of consequence that governs the house of Cadmus
+  from its founding, a doom set in motion before any of these characters
+  drew breath, operating through the eye as its instrument.
+force_arc:
+- fate
+- wrath
+- metamorphosis
+- sacrifice
+- desire
+- divine-intervention
+- revelation
+- memory
+- exile
+- fate
+dominant_force: fate
+tracks:
+- n: 1
+  scene: "Cadmus and the Dragon — Thebes founded under a curse"
+  force: fate
+  composer: Verdi
+  work: "La forza del destino — Overture"
+  decision: added
+  why: >
+    Cadmus, sent by his father Agenor to find his sister Europa, consults
+    the oracle of Delphi and is told to follow a heifer and found a city
+    where it stops. At the site, he sends his men for water; the dragon of
+    Mars kills them. Cadmus destroys the dragon and sows its teeth. A voice
+    from heaven tells him: you too will one day be a serpent. The house of
+    Thebes begins under a curse spoken before a stone is laid. Verdi's
+    La forza del destino overture is fate as thematic material: the motif
+    that returns throughout the opera, inescapable, unforgettable, the
+    musical idea that governs everything that follows. Here it is Cadmus
+    hearing his own destiny before he has begun to live it.
+- n: 2
+  scene: The sown men fight
+  force: wrath
+  composer: Prokofiev
+  work: "Romeo and Juliet — 'Dance of the Knights'"
+  decision: added
+  why: >
+    Cadmus sows the dragon's teeth. From the furrows spring armed men —
+    Spartoi, the sown ones — who immediately turn on each other in a frenzy
+    of slaughter. Only five survive. The city of Thebes is baptized in
+    fratricidal blood before it has walls. Prokofiev's 'Dance of the
+    Knights' is heavy, rhythmic, ceremonial violence — music that walks
+    with the deliberate step of men who have just risen from the earth to
+    kill each other. The rhythmic pressure of the repeated chords, the
+    brass and lower strings in lockstep, the dance that is not a dance
+    but a killing floor.
+- n: 3
+  scene: Actaeon discovers Diana
+  force: metamorphosis
+  composer: Debussy
+  work: Jeux
+  decision: added
+  why: >
+    Actaeon, wandering from the hunt at midday, steps into a valley where
+    a spring feeds a grotto. He parts the branches and sees Diana bathing,
+    naked, surrounded by her nymphs. She turns, sees him, and — unable to
+    reach her bow — splashes water on his face. The antlers begin to grow
+    from his head before she has finished speaking. Debussy's Jeux — game,
+    play, the title means all of these — is ballet music about a game of
+    tennis that becomes something else: the harmony shifts by minute degrees,
+    the orchestral colors mutate into each other, nothing in the piece stays
+    the same for more than a few bars. It is music that changes form as it
+    moves, which is what Actaeon's body begins to do under the splash of
+    water: silently, inexorably, becoming something else.
+- n: 4
+  scene: Actaeon torn apart by his own dogs
+  force: sacrifice
+  composer: Stravinsky
+  work: "The Rite of Spring — 'Sacrificial Dance'"
+  decision: added
+  why: >
+    Actaeon tries to speak — the dogs will recognize his voice — but he
+    can only groan. His own hounds catch his scent. Blackfoot, Tracker,
+    Mountain-eater — the poem names them all — pull him down. His friends
+    call for Actaeon, not knowing the stag they are watching is their
+    companion. Stravinsky's 'Sacrificial Dance' is the most brutal piece
+    of ritual music ever composed: the irregular accents, the hammering
+    ostinato, the sense of a body being offered to a force that does not
+    hear appeals. Sacrifice requires ritual weight and immolation build;
+    this is a man sacrificed to his own dogs while the gods watch and the
+    hunt continues in another valley, as if nothing has happened.
+- n: 5
+  scene: Semele's demand
+  force: desire
+  composer: Wagner
+  work: "Tristan und Isolde — 'Liebestod'"
+  decision: added
+  why: >
+    Semele, pregnant with Bacchus, is tricked by Juno into demanding that
+    Jupiter make love to her in his full divine form. She makes him swear
+    on the Styx to grant her wish, then asks. It is a suicide by desire
+    — she wants to see the god she has been sleeping with, and the sight
+    will kill her. Wagner's 'Liebestod' — love-death from Tristan und
+    Isolde — is the most sustained erotic and fatal climax in the operatic
+    repertoire: chromatic longing that climbs through key after key, never
+    quite resolving, until it releases in a moment that is both ecstasy
+    and dissolution. Semele's desire has this exact shape: she wants to
+    see Jupiter because she wants to die into his full reality, and the
+    music gives her that.
+- n: 6
+  scene: Semele incinerated
+  force: divine-intervention
+  composer: Messiaen
+  work: "Turangalîla-Symphonie — V. Joie du sang des étoiles"
+  decision: added
+  why: >
+    Jupiter arrives in his full glory — lightning, radiance, the presence
+    that no mortal body can withstand. Semele's flesh catches fire; her
+    body dissolves into light; she is reduced to ash. But from her womb
+    Jupiter snatches the unborn Bacchus and sews him into his own thigh,
+    where he will gestate until term. The 'Joy of the Blood of Stars' from
+    Messiaen's Turangalîla is overwhelming, ecstatic, terrifying in its
+    brightness — the ondes Martenot singing at the edge of hearing, the
+    piano and percussion creating a texture of cosmic radiance. Divine-
+    intervention requires sudden color shift and overwhelming force;
+    Messiaen's joy is so intense it burns.
+- n: 7
+  scene: Tiresias' prophecy
+  force: revelation
+  composer: Pärt
+  work: Cantus in Memoriam Benjamin Britten
+  decision: added
+  why: >
+    Tiresias, as a young man, saw two snakes coupling on Mount Cyllene and
+    struck them with his staff. He was transformed into a woman for seven
+    years, then back into a man. When Jupiter and Juno asked him who
+    enjoyed sex more — men or women — he answered that women enjoyed it
+    nine times more. Juno, enraged, struck him blind; Jupiter, in
+    compensation, gave him prophecy. He sees what others cannot because
+    he no longer sees what others do. Pärt's Cantus is a descending A
+    minor scale repeated by the strings over tolling bells — a structure
+    so simple it sounds like the universe revealing its own grammar.
+    Revelation requires stillness, verticality, the quality of a thing
+    that has always been visible but is seen for the first time.
+- n: 8
+  scene: Narcissus at the pool
+  force: memory
+  composer: Fauré
+  work: Pavane
+  decision: added
+  why: >
+    Narcissus, the most beautiful of young men, has rejected every suitor.
+    The nymph Echo pines for him until only her voice remains. Nemesis
+    answers a prayer: let him feel what it means to love and be rejected.
+    Narcissus, thirsty from the hunt, leans over a clear pool and sees
+    himself for the first time — and falls in love with the image. He
+    cannot touch it; he cannot kiss it; he lies on the bank and stares
+    into the water, slowly wasting away. Fauré's Pavane is a slow court
+    dance that circles itself — a melody that returns to its beginning
+    without arriving anywhere else. Memory requires nostalgic recall and
+    faded recapitulation; Narcissus's love is memory before it happens,
+    a desire for an image that is always already lost.
+- n: 9
+  scene: Echo fades away
+  force: exile
+  composer: Vaughan Williams
+  work: The Lark Ascending
+  decision: added
+  why: >
+    Echo, rejected by Narcissus, hides in caves and mountain valleys.
+    Her body wastes away from grief until nothing is left but her voice
+    — and even her voice cannot initiate speech but only repeat the last
+    words of others. She is exiled into the condition of pure response,
+    sound without origin. Vaughan Williams's The Lark Ascending is a
+    violin solo that rises through the orchestra like a bird climbing
+    into a sky that has no boundaries: exposed, solitary, drifting upward
+    until it is barely audible. Exile requires wandering tonality and
+    open intervals; the lark's song is the sound of a voice that has
+    detached from its body and floats, unreachable, in the upper air.
+- n: 10
+  scene: Pentheus torn apart
+  force: fate
+  composer: Beethoven
+  work: "Symphony No. 5 — I. Allegro con brio"
+  decision: added
+  why: >
+    Pentheus, king of Thebes, mocks the worship of Bacchus. He imprisons
+    the god's followers, refuses the signs. The disguised god convinces
+    him to dress as a woman and spy on the Bacchic rites on Mount Cithaeron.
+    The women, mad with wine, see him in the trees and pull him down —
+    his mother Agave first among them, tearing off his head, carrying it
+    back to Thebes on a thyrsus, calling to her son to see what she has
+    caught. Beethoven's Fifth opens with the most famous four notes in
+    Western music — the fate motif, the hammered insistence of a destiny
+    that arrives before the first phrase is finished. The entire movement
+    is the working out of that opening gesture: once the motif is stated,
+    the movement cannot go anywhere else, just as Pentheus, once he walks
+    up that mountain, cannot come down alive. Fate is not what happens
+    to Pentheus; fate is what Pentheus is walking toward from the moment
+    he refuses Bacchus, and the Fifth's first movement is what that walk
+    sounds like.

@@ -1,0 +1,219 @@
+# Metamorphoses — Book IV — curated music arc
+# Score the BOUNDARIES OF THE PERMITTED — stories told in secret while
+# the city worships a god the tellers refuse. Pyramus and Thisbe love
+# through a wall; Salmacis and Hermaphroditus are joined in a pool;
+# the Minyades weave their doom into their tapestries; Perseus flies
+# across the edges of the earth.
+# Register rule: this book is about what happens when boundaries are
+# crossed in privacy — the secret kiss, the hidden room, the god unseen.
+work: metamorphoses
+book: 4
+title: "Metamorphoses Book IV: Weavers, Lovers, Monsters"
+length_minutes: 92
+principle: >
+  Book IV is the book of secret spaces — the places where transformations
+  occur away from the city's eye. The daughters of Minyas refuse the
+  worship of Bacchus and stay indoors, weaving and telling stories of
+  forbidden love: Pyramus and Thisbe whispering through a wall, Mars
+  and Venus caught in Vulcan's net, Salmacis and Hermaphroditus melting
+  together in a pool. But the secret space cannot hold; Bacchus punishes
+  the weavers, turning them into bats. The book then opens into the
+  larger world: Perseus flying across the earth on winged sandals,
+  rescuing Andromeda, creating coral from Medusa's head. The dominant
+  force is memory — the act of storytelling that preserves what is lost,
+  the weave of narrative that holds shape through change.
+force_arc:
+- law
+- grief
+- comedy
+- supplication
+- metamorphosis
+- divine-intervention
+- wrath
+- memory
+- ascent
+- revelation
+dominant_force: memory
+tracks:
+- n: 1
+  scene: The Minyades weave — craft as resistance
+  force: law
+  composer: Bach
+  work: "The Art of Fugue — Contrapunctus I"
+  decision: added
+  why: >
+    While all of Thebes pours into the streets for the festival of Bacchus,
+    the daughters of Minyas — Alcithoe, Leucippe, and Arsippe — stay indoors,
+    devoted to Minerva, working their looms. They refuse the new god. Their
+    craft is a form of law: thread, tension, pattern, the geometry of the
+    weave. Bach's Art of Fugue is the most purely architectural music ever
+    written — a single theme subjected to every contrapuntal transformation
+    the mind can devise, the entire structure built from a single idea. The
+    Minyades' weaving is the same act: the shuttle passes; the pattern
+    emerges; the weaver's hands move in a rhythm as old as the loom.
+- n: 2
+  scene: "Pyramus and Thisbe — love through a wall"
+  force: grief
+  composer: Elgar
+  work: "Enigma Variations — 'Nimrod'"
+  decision: added
+  why: >
+    Pyramus and Thisbe, neighbors in Babylon, fall in love. Their families
+    forbid them, but they have found a crack in the shared wall — they
+    whisper through it, breathe through it, arrange to meet at Ninus's tomb
+    under the mulberry tree. Thisbe arrives first, sees a lioness fresh
+    from the kill, and flees, dropping her veil. Pyramus finds the veil
+    torn and bloodied and, assuming Thisbe dead, falls on his sword. Thisbe
+    returns, finds him dying, and joins him under the mulberry whose berries
+    will be red forever. Elgar's 'Nimrod' is the slowest, most inward of the
+    Enigma Variations: a melody that builds from a single interval to a
+    noble, unbearable height, the sound of great loss held in dignity.
+- n: 3
+  scene: Mars and Venus trapped
+  force: comedy
+  composer: Mozart
+  work: "Così fan tutte — Overture"
+  decision: added
+  why: >
+    Venus, wife of Vulcan, is sleeping with Mars. The Sun sees them and
+    tells Vulcan. The smith-god forges a net of bronze so fine it is
+    invisible, suspends it over the bed, and catches the lovers in mid-
+    embrace. He calls the gods to witness: come see how the beautiful and
+    the strong look when they are caught. Comedy requires dance rhythm
+    and courtly exaggeration — and here the comedy is at once cosmic and
+    humiliating, the gods laughing at the exposed bodies of the war god
+    and the love goddess tangled in the blacksmith's craft. Mozart's
+    Così fan tutte overture is the most elegant music ever written about
+    infidelity: graceful, knowing, dancing on the surface of something
+    that would be cruel if it were not so beautiful.
+- n: 4
+  scene: Clytie becomes a sunflower
+  force: supplication
+  composer: Bach
+  work: "Matthäus-Passion — 'Erbarme dich'"
+  decision: added
+  why: >
+    Clytie loved the Sun god, who left her for Leucothoe. In jealousy,
+    she revealed the affair to Leucothoe's father, who buried his daughter
+    alive. The Sun, enraged, abandoned Clytie entirely. She sat on the
+    bare ground for nine days, doing nothing but watching the sun move
+    across the sky, refusing food, her tears watering the earth. On the
+    ninth day, she had taken root — she had become a heliotrope, forever
+    turning her face toward the sun she cannot reach. The 'Erbarme dich'
+    from Bach's St. Matthew Passion is a violin aria of unbearable beauty
+    — a suspended cadence, an exposed melodic line that reaches and falls
+    and reaches again, the human voice pleading for something that will
+    not answer.
+- n: 5
+  scene: Salmacis and Hermaphroditus
+  force: metamorphosis
+  composer: Schoenberg
+  work: "Verklärte Nacht"
+  decision: added
+  why: >
+    Hermaphroditus, the son of Mercury and Venus, stops to drink from a
+    clear pool. The nymph Salmacis, who lives in the pool, sees him and
+    burns with desire. He rejects her; she pretends to leave, then wraps
+    herself around him in the water, praying to the gods that they never
+    be separated. Her prayer is answered: their bodies melt together into
+    a single form, both male and female, neither fully one nor the other.
+    Schoenberg's Verklärte Nacht — Transfigured Night — is late-Romantic
+    chromaticism at its most fluid: the harmony never settles, the themes
+    transform into each other, the music itself enacts the dissolution of
+    boundaries it describes. The piece is the sound of two bodies becoming
+    one texture, and the texture is night, water, longing, and the bliss
+    of being unable to tell where one ends and the other begins.
+- n: 6
+  scene: Minyades turned to bats
+  force: divine-intervention
+  composer: Strauss
+  work: "Elektra — Agamemnon motif"
+  decision: added
+  why: >
+    Bacchus, tired of being refused, punishes the daughters of Minyas. The
+    looms turn to vines; the room fills with the cries of phantom beasts;
+    oil drips from the rafters; the sisters shrink, their arms become
+    webbed membranes, their voices become thin squeaking. They are bats
+    now, the creatures that shun the light, flying through the darkness
+    they chose when they refused the god of ecstasy. The Agamemnon motif
+    from Strauss's Elektra is a single chord that arrives with the force
+    of a god's decision — brass, strings, percussion coalescing into a
+    sound that is less music than verdict. Divine-intervention requires
+    sudden color shift; this chord is the swift, brutal transformation
+    of a roomful of women into things that hang in the dark.
+- n: 7
+  scene: Tisiphone's madness
+  force: wrath
+  composer: Berlioz
+  work: "Symphonie fantastique — V. 'Dream of a Witches' Sabbath'"
+  decision: added
+  why: >
+    Juno, implacable, descends to the underworld and hires Tisiphone, the
+    Fury, to destroy Ino and Athamas. The Fury arrives with snakes, poison,
+    madness. Athamas, driven mad, sees his wife as a lioness and throws
+    their son Learchus against a wall. Ino, also mad, leaps into the sea
+    with her surviving son Melicertes. They become sea deities — Leucothea
+    and Palaemon — but the cost is everything they were. Berlioz's
+    'Dream of a Witches' Sabbath' is the most grotesque orchestral movement
+    of the 19th century: the Dies irae melody played as a dance, the
+    strings col legno, the percussion and brass creating a texture of
+    shrill and infernal energy. Wrath here is not personal but mythological
+    — the fury of a goddess who will destroy a house to satisfy a grudge.
+- n: 8
+  scene: Cadmus and Harmonia become serpents
+  force: memory
+  composer: Tchaikovsky
+  work: "Symphony No. 6 ('Pathétique') — IV. Finale"
+  decision: added
+  why: >
+    Old, broken by the ruin of their house, Cadmus and Harmonia leave
+    Thebes. They wander into the Illyrian hills, remembering the city
+    they founded and the children they lost: Semele incinerated, Pentheus
+    torn apart, Ino mad. Cadmus remembers the oracle: you too will one
+    day be a serpent. They feel their skin hardening, their bodies
+    lengthening; they become snakes, gentle and slow, and they remember
+    what it was to be human. Tchaikovsky's Pathétique finale is the most
+    heartbroken music in the symphonic repertoire — a slow movement of
+    descending phrases that sound like memories falling through water,
+    the strings singing a melody that returns to its beginning because
+    there is nowhere else to go. Memory requires faded recapitulation;
+    this is the music of a life that is ending by becoming what it always
+    was.
+- n: 9
+  scene: Perseus takes flight
+  force: ascent
+  composer: Strauss
+  work: "Ein Heldenleben — 'The Hero'"
+  decision: added
+  why: >
+    The book shifts registers. Perseus, wearing the winged sandals of
+    Mercury, rises into the air above the known world. Below him, the
+    deserts of Libya unroll; the Gorgons' island appears; Medusa's head
+    is in his bag, dripping blood that will become the snakes of the
+    Sahara. He flies, casting his shadow on the sand, and the whole
+    poem rises with him. Strauss's Ein Heldenleben — A Hero's Life —
+    opens with the hero theme: a rising sequence in the strings and
+    horns that announces someone who moves through the world at a
+    different altitude than everyone else. Ascent requires rising
+    sequence and luminous orchestration; Perseus flying on winged
+    sandals is exactly the hero climbing into a realm that belongs
+    to the gods, at least for a few hours.
+- n: 10
+  scene: Perseus creates coral
+  force: revelation
+  composer: Messiaen
+  work: "Quatuor pour la fin du temps — VIII. Louange à l'Immortalité de Jésus"
+  decision: added
+  why: >
+    Perseus, after killing the sea monster and freeing Andromeda, lays
+    Medusa's head on a bed of seaweed. The seaweed, touched by the
+    Gorgon's gaze, hardens into coral — the first coral the world has
+    ever seen. The ocean floor becomes a reef, branching and still, the
+    petrification of a glance that retains the shape of what it froze.
+    The 'Louange à l'Immortalité de Jésus' from Messiaen's Quartet for
+    the End of Time is the composer's most ecstatic meditation on
+    eternity: the cello spins a long, singing line over the piano's
+    slow harmonies, rising toward a register that sounds like light
+    entering a deep place. Revelation requires stillness and verticality
+    — the moment when the sea becomes stone and the hero, hanging in
+    the air above the new reef, sees what his journey has made.

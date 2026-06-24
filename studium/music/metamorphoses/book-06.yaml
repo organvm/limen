@@ -1,0 +1,88 @@
+work: metamorphoses
+book: 6
+title: 'Metamorphoses Book VI: The Loom, The Stone, The Tongue'
+length_minutes: 92
+principle: "Book VI is the book of wrath — divine punishment, human vengeance, the anger that cannot be contained by any civilizing structure. Arachne is destroyed for out-weaving a goddess; Niobe loses all fourteen children for boasting against Latona; Marsyas is flayed for losing a musical contest; and the Tereus-Procne-Philomela cycle ends with a mother killing her own son and serving him to his father. The dominant force is wrath — not as single explosion but as a spectrum: the cold institutional anger of the Olympians, the hot grief-driven rage of a mother avenging her sister, the mechanical cruelty of revenge that reproduces itself across generations."
+force_arc:
+- law
+- wrath
+- metamorphosis
+- kingship
+- fate
+- grief
+- exile
+- sacrifice
+- desire
+- wrath
+dominant_force: wrath
+tracks:
+- n: 1
+  scene: Minerva visits Arachne — the weaving contest begins
+  force: law
+  composer: Bach
+  work: "The Well-Tempered Clavier, Book I — Prelude and Fugue No. 1 in C major, BWV 846"
+  decision: added
+  why: "Arachne is famous for her weaving — girls come from all over Lydia to watch her work wool into forms that seem alive. Her craft follows rules: thread, tension, pattern, color. Law requires formal clarity and architecture; the C major Prelude is the most famous instance of music that sounds like pure structure — the arpeggios ascend and descend in a pattern so transparent that it feels less like composition than like the discovery of an order that was already there, waiting in the keyboard. Arachne's loom works the same way."
+- n: 2
+  scene: Minerva strikes Arachne — the tapestry is destroyed
+  force: wrath
+  composer: Prokofiev
+  work: "Symphony No. 5 — I. Andante (opening, through climax)"
+  decision: added
+  why: "Minerva, disguised as an old woman, warns Arachne to honor the gods; Arachne refuses. Minerva reveals herself, and the contest begins. Both weave — Minerva showing the contest with Neptune (the olive springing from the rock, the gods witnessing, herself creating), Arachne showing the gods' crimes (Europa, Leda, Danaë). The tapestries are perfect. Minerva, enraged by the perfection of her rival, destroys Arachne's weaving and strikes her on the forehead. Prokofiev's Fifth opens with a melody of terrible solemnity — the old woman's warning — and then builds into something massive, percussive, overwhelming. The climax is Minerva's anger: the rhythmic pressure of a goddess who cannot bear to share her gift."
+- n: 3
+  scene: Arachne becomes a spider
+  force: metamorphosis
+  composer: Ligeti
+  work: "Atmosphères"
+  decision: added
+  why: "Arachne, shamed by Minerva's violence, tries to hang herself. Minerva catches the rope — and her punishment is crueler than death: Arachne shrinks, her nose and ears and head contract, her fingers become legs, her body becomes a small dark thing that spins thread forever. Ligeti's Atmosphères is music that has no melody, no harmony, no rhythm in any conventional sense — only orchestral color shifting through textures so dense they seem to be alive. It is the sound of a form dissolving into something that was always latent in it. Arachne the weaver becomes the thing that weaves: her body becomes her craft, reduced and eternal."
+- n: 4
+  scene: Niobe boasts of her children
+  force: kingship
+  composer: Elgar
+  work: "Pomp and Circumstance March No. 1"
+  decision: added
+  why: "Niobe, queen of Thebes, mother of seven sons and seven daughters, tells the women of Thebes to stop worshiping Latona — who has only two children — and worship her instead. Her pride is the pride of the sovereign who believes her own power extends beyond the human. Elgar's March is ceremonial grandeur at its most public: the tune that is the sound of Britain's coronations, the sovereign displaying herself with full orchestral confidence. Niobe in this moment is walking to her throne. The hubris in the music is the scaffold from which she will fall."
+- n: 5
+  scene: Apollo and Diana kill Niobe's sons
+  force: fate
+  composer: Beethoven
+  work: "Symphony No. 7 — I. Poco sostenuto — Vivace"
+  decision: added
+  why: "Latona calls on her children. Apollo strings his bow and shoots Niobe's sons one by one, hunting them in the fields as if they were game. The youngest, Ilioneus, prays for mercy — but the arrow is already released. Fate here is the mechanism of divine vengeance: once Latona has been insulted, the deaths are merely execution. Beethoven's Seventh opens with a long, solemn introduction that feels like the gods considering, then launches into the Vivace — a rhythmic engine that cannot stop, the famous dotted rhythm driving forward like an arrow that has been loosed and cannot be recalled. The inexorable motif of fate is here the hunt."
+- n: 6
+  scene: Niobe's daughters killed, Niobe weeps
+  force: grief
+  composer: Mahler
+  work: "Kindertotenlieder — No. 1, 'Nun will die Sonn' so hell aufgehn'"
+  decision: added
+  why: "Niobe's daughters are killed at the altar, among them the youngest, hidden in her mother's robes — the arrow finds her anyway. Niobe stands among her dead children, fourteen bodies, and weeps. Then she stops — she is weeping, but she cannot feel herself weeping. Her body is hardening. Mahler's Kindertotenlieder — Songs on the Death of Children — is the most unbearable music ever written on this subject. The first song opens with the sun rising as if nothing has happened, and the voice line is grief so inward it can barely release its own sound. Grief requires slow tempo and inward line; this is grief so concentrated it turns into stone, which is what happens to Niobe."
+- n: 7
+  scene: Niobe turns to stone on Mount Sipylus
+  force: exile
+  composer: Sibelius
+  work: "Symphony No. 4 — I. Tempo molto moderato"
+  decision: added
+  why: "Niobe's body becomes marble — but her eyes still weep, and she is carried by a whirlwind to Mount Sipylus, where she stands alone, a stone woman on a stone mountain, weeping forever. Exile here is not wandering but eternity in a single place: she could not move even if she wanted to. Sibelius's Fourth Symphony is his most austere — open intervals, tritones, a landscape so cold and sparse that it feels like the end of the world. The opening movement has the quality of a thing that has been still so long it has become the landscape."
+- n: 8
+  scene: Marsyas flayed by Apollo
+  force: sacrifice
+  composer: Penderecki
+  work: "Threnody to the Victims of Hiroshima"
+  decision: added
+  why: "Marsyas found Athena's flute, learned to play it, challenged Apollo to a musical contest — and lost. Apollo's punishment: he flays Marsyas alive, removing the skin from his body. The poem describes the man as a single wound, his nerves exposed, his blood running. Penderecki's Threnody is the most physical piece of music ever written for strings: the players produce sound that is not pitched but textural — shrieks, scrapes, massed glissandi, the sound of flesh being separated from flesh. Sacrifice requires ritual weight and immolation build; this is the immolation of a human being, the body becoming music the only way it can."
+- n: 9
+  scene: Tereus rapes Philomela, cuts out her tongue
+  force: desire
+  composer: Berg
+  work: "Three Orchestral Pieces, Op. 6 — I. Präludium"
+  decision: added
+  why: "Tereus, married to Procne, rapes her sister Philomela in a hunting lodge. When Philomela threatens to tell, Tereus seizes her tongue with forceps and cuts it out. The tongue writhes on the ground. Berg's Präludium is slow and oppressive — sliding chromatics, dark orchestration, a forward motion that feels like something approaching that cannot be stopped. Desire here is not longing but predation: chromatic harmony that does not resolve because the act it scores is not love but the destruction of the capacity to speak."
+- n: 10
+  scene: Procne kills Itys and serves him to Tereus; all three become birds
+  force: wrath
+  composer: Shostakovich
+  work: "Symphony No. 10 — II. Scherzo"
+  decision: added
+  why: "Philomela weaves her story into a robe and sends it to Procne. Procne, in a fury of grief and vengeance, kills her own son Itys, boils his flesh, and serves him to Tereus. When Tereus calls for his son, Procne tells him: he is inside you. Tereus pursues the sisters with an axe; the gods turn all three into birds — Tereus the hoopoe, Procne the nightingale, Philomela the swallow. Shostakovich's Tenth Scherzo is the most violent two minutes in the symphonic repertoire: a scherzo that does not dance but attacks, the strings in manic octaves, the brass and percussion joining a chase that sounds like murder. Wrath here is the anger of a mother who loves her sister more than her son, and the music is the sound of that love tipping into total destruction."

@@ -1,0 +1,88 @@
+work: metamorphoses
+book: 5
+title: "Metamorphoses Book V: Medusa's Feast, The Muses' Song"
+length_minutes: 90
+principle: "Book V finishes the Perseus cycle and then opens into the Muses' song — the rape of Proserpina, Ceres' search, Arethusa's flight. The dominant force is metamorphosis, which here operates as the power of song itself: the Muses sing and Proserpina is carried off; Ceres wanders and the world changes; Arethusa tells her story and we are inside her transformation before we hear the word."
+force_arc:
+- kingship
+- wrath
+- fate
+- divine-intervention
+- law
+- desire
+- metamorphosis
+- exile
+- metamorphosis
+- grief
+dominant_force: metamorphosis
+tracks:
+- n: 1
+  scene: The wedding feast of Perseus and Andromeda
+  force: kingship
+  composer: Handel
+  work: "Music for the Royal Fireworks — Overture"
+  decision: added
+  why: "Perseus has won Andromeda, and Cepheus holds the wedding feast — the court of Ethiopia in full ceremonial display. Kingship here is triumphant, public, sovereign: the hero claims his bride with the gods' favor. The Royal Fireworks Overture is ceremonial grandeur at its most unambiguous — brass, timpani, courtly splendor announcing a world restored."
+- n: 2
+  scene: Phineus attacks the feast
+  force: wrath
+  composer: Mussorgsky
+  work: "Night on Bald Mountain"
+  decision: added
+  why: "Phineus, to whom Andromeda was betrothed before Perseus rescued her, bursts into the wedding hall with armed men. The peace of the feast shatters into immediate violence. Mussorgsky's Night on Bald Mountain is the sound of civilized space invaded by demonic force: the frantic strings, the howling brass, the sheer velocity of the attack."
+- n: 3
+  scene: The battle — Perseus fights Phineus' army
+  force: fate
+  composer: Tchaikovsky
+  work: "Symphony No. 5 — IV. Finale (Andante maestoso — Allegro vivace)"
+  decision: added
+  why: "The battle is long and brutal. Perseus fights alone against a hall full of men, and the violence is inexorable. Fate here is the mechanism of combat once it is set in motion — Perseus cannot stop, Phineus cannot retreat, the room is already a slaughterhouse. Tchaikovsky's Fifth Finale is fate as inexorable drive: it begins with the fate motif transformed into a march, then accelerates into something unstoppable."
+- n: 4
+  scene: Perseus uses Medusa's head
+  force: divine-intervention
+  composer: Wagner
+  work: "Das Rheingold — Entrance of the Gods into Valhalla"
+  decision: added
+  why: "Perseus can no longer hold the hall by force alone. He calls out to his friends to turn away, then lifts Medusa's head — and Phineus' men freeze into stone, still in the postures of attack. The sudden shift from combat to petrified stillness requires divine-intervention's sudden color shift: Wagner's Valhalla entrance has exactly the overwhelming brass-and-strings authority of a force that simply ends the fighting by changing the rules."
+- n: 5
+  scene: The Muses' contest — Calliope sings
+  force: law
+  composer: Bach
+  work: "Brandenburg Concerto No. 3 — I. Allegro"
+  decision: added
+  why: "Minerva visits the Muses on Helicon; they tell her of the contest with the Pierides, who challenged them to song and lost. Calliope sings the song that won — the long tale of Proserpina. This frame is the poem's most explicit meditation on the power of song itself. Law requires formal clarity and architecture; the Brandenburg No. 3's first movement is pure structure in joyful motion, the sound of a form that holds because it is perfectly built."
+- n: 6
+  scene: The rape of Proserpina
+  force: desire
+  composer: Tchaikovsky
+  work: "Romeo and Juliet — Overture-Fantasy"
+  decision: added
+  why: "Dis sees Proserpina gathering flowers in the fields of Henna and carries her off. The abduction is violent and erotic — the ground opens, the chariot descends, the flowers fall from her loosened dress. Tchaikovsky's Romeo and Juliet is desire as catastrophic force: the love theme is swelling, chromatic, fatally beautiful, and the violence of the Montague-Capulet music surrounds it like the opening of the earth itself."
+- n: 7
+  scene: Cyane dissolves into her spring
+  force: metamorphosis
+  composer: Debussy
+  work: "Nocturnes — I. Nuages"
+  decision: added
+  why: "Cyane, the nymph of the spring, tries to block Dis — and is torn open by his chariot. She can find no words to tell Ceres what she saw. Her body dissolves, slowly, into the water that is her own domain — her bones become liquid, her hair becomes flowing water, her voice becomes the sound of the spring. Nuages is Debussy's most fluid orchestral texture: chords that shift without arriving, colors that dissolve into each other, music that refuses to hold a fixed shape. It is water remembering it was once a body."
+- n: 8
+  scene: Ceres searches for her daughter
+  force: exile
+  composer: Dvořák
+  work: "Symphony No. 9 'From the New World' — II. Largo"
+  decision: added
+  why: "Ceres wanders the whole earth with torches, searching for Proserpina, her grief turning into a curse on the land. The soil withholds its fruit; the goddess does not care. Exile here is the wandering of a mother who has lost the center of her world. Dvořák's Largo is the most familiar melody of homesickness in Western music — the English horn solo, the slow burn of a search that has no end in sight, the open intervals of a landscape too vast to be comforted."
+- n: 9
+  scene: Arethusa tells her story
+  force: metamorphosis
+  composer: Ravel
+  work: "Jeux d'eau"
+  decision: added
+  why: "Arethusa emerges from the river Alph and tells Ceres her own story: she was a huntress bathing in a stream when the river god Alpheus saw her and pursued. She fled across mountains and plains, exhausted, and called on Diana to save her. The goddess wrapped her in mist and transformed her into a spring — but Alpheus follows even underground, mingling his fresh water with her salt. Ravel's Jeux d'eau is entirely about water-as-form: cascading arpeggios, splashing figuration, a texture that shapes itself into melody and then releases it back into spray. The piece is metamorphosis as perpetual motion — the body of music that will not hold still because it is made of water."
+- n: 10
+  scene: Ceres' grief — the pomegranate seed
+  force: grief
+  composer: Fauré
+  work: "Élégie"
+  decision: added
+  why: "Ceres finally finds Proserpina — but the girl has eaten seven pomegranate seeds in the underworld, and therefore must stay. The compromise is struck: half the year with Dis, half with Ceres. The mother's grief is double — she has found her daughter and lost her in the same moment, and the loss will return every year. Fauré's Élégie is slow, inward, cello-led music of grief that does not rage but mourns with the particular ache of a love that is not allowed to fully possess its object."

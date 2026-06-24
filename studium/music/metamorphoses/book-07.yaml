@@ -1,0 +1,88 @@
+work: metamorphoses
+book: 7
+title: 'Metamorphoses Book VII: Medea, Plague, Myrmidons'
+length_minutes: 88
+principle: "Book VII is the book of Medea — the archetype of the sorceress, the woman who can reverse age, kill kings by deception, and destroy her own children. Her magic makes visible the connection between metamorphosis and violence: every transformation she performs is also a destruction. The book then opens into the plague at Aegina, the Myrmidons (ants turned into men), and the story of Cephalus and Procris — the lover who kills his beloved by accident. The dominant force is metamorphosis, which here is the power of the boundary-crosser: Medea moves between youth and age, life and death, sanity and fury; the Myrmidons move between insect and human; Procris moves between love and death."
+force_arc:
+- metamorphosis
+- sacrifice
+- grief
+- exile
+- revelation
+- plague
+- metamorphosis
+- desire
+- fate
+- grief
+dominant_force: metamorphosis
+tracks:
+- n: 1
+  scene: Medea rejuvenates Aeson
+  force: metamorphosis
+  composer: Dukas
+  work: "The Sorcerer's Apprentice"
+  decision: added
+  why: "Medea prepares the cauldron for the first magic in the poem that reverses time: herbs from the Caucasus, the skin of a wolf, bones of a stag, the liver of a long-lived deer. She stirs the mixture, and Aeson's old age dissolves — his wrinkles smooth, his limbs fill with strength, he is forty years younger. Dukas' The Sorcerer's Apprentice is the canonical piece of magic operating: the tension between control and chaos, the sense that the spells are real and that they have consequences. The scherzo's bubbling energy is Medea's cauldron, her craft, her power over form. But the piece also carries the shadow of the apprentice who cannot stop what he starts — which is the shadow Medea carries through the rest of the book."
+- n: 2
+  scene: The daughters of Pelias kill their father
+  force: sacrifice
+  composer: Bartók
+  work: "The Miraculous Mandarin — Suite, opening through the chase"
+  decision: added
+  why: "Medea tells the daughters of Pelias that she can rejuvenate their father the same way. She demonstrates on a ram — boiling it down to bones, then drawing a young lamb from the cauldron. The daughters believe her. They stab their father to drain his old blood, then wait for Medea's spell. There is no spell. Pelias dies on the floor, and his daughters have killed their own father. Bartók's Miraculous Mandarin is music of predatory violence — the opening builds a thick, chromatic texture of urban menace, and the chase sequences are the most brutal rhythmic writing in 20th-century music. Sacrifice requires ritual weight and immolation; here the ritual is a lie, and the immolation is a father killed by love."
+- n: 3
+  scene: Medea kills her children
+  force: grief
+  composer: Cherubini
+  work: "Medea — Overture"
+  decision: added
+  why: "Medea flees Iolcus, pursued by the avengers of Pelias. She pauses — she has done what she has done — and in some accounts, she kills her own children by Jason before leaving. The overture to Cherubini's Medea is the most famous operatic treatment of this story: the music begins in darkness, builds to storm, and carries the weight of a woman who has made herself monstrous by love and necessity. Grief here is not the grief that arrives after loss; it is the grief that the woman who is about to act already carries, and the overture holds both the coming violence and the cost of it in a single arc."
+- n: 4
+  scene: Medea arrives in Athens
+  force: exile
+  composer: Sibelius
+  work: "Pohjola's Daughter"
+  decision: added
+  why: "Medea flies through the air on her dragon-drawn chariot, over mountains and seas, pursued by the shades of those she killed. She lands in Athens and marries King Aegeus — a new country, a new life, but the old one will follow her. Exile here is the condition of the woman who cannot stay anywhere because she carries her crimes with her. Pohjola's Daughter is Sibelius at his most northern — open intervals, wandering tonality, a tone poem built on the story of a stranger in a strange land. Medea in Athens is always the foreigner, always the woman who came on a chariot of dragons."
+- n: 5
+  scene: Theseus recognized by Aegeus
+  force: revelation
+  composer: Pärt
+  work: "Fratres"
+  decision: added
+  why: "Theseus arrives in Athens, unknown to his father. Medea, who fears that Theseus will take her place, convinces Aegeus to poison him. At the feast, Theseus draws his sword to carve the meat, and Aegeus recognizes the weapon — his own sword — and knocks the poisoned cup from his son's hand. The recognition is a moment of stillness in the middle of violence: the father sees his son, the poison spills, and the house is saved. Fratres is Pärt's meditation on recurrence — the same chord pattern repeats, each time slightly transformed, building toward a moment of revelation that arrives not as climax but as clarity. Revelation requires stillness and the quality of seeing what was always there but hidden."
+- n: 6
+  scene: The plague at Aegina
+  force: plague
+  composer: Rachmaninoff
+  work: "The Isle of the Dead"
+  decision: added
+  why: "Minos, king of Crete, besieges Athens. Aegeus sends to Aegina for allies, but the city is devastated by a plague that has killed everyone — the sick die in the streets, the fields are untended, the houses are full of corpses. The opening of The Isle of the Dead is the sound of a black ship approaching across still water: the 5/8 rhythm of oars, the relentless descending phrases, the dark orchestration of a place that has become a necropolis. Plague requires descending motion and dark orchestration; Rachmaninoff's tone poem is the most sustained stretch of darkness in the repertoire, the sound of a city that has become a tomb."
+- n: 7
+  scene: Aeacus tells of the Myrmidons
+  force: metamorphosis
+  composer: Ravel
+  work: "Alborada del gracioso"
+  decision: added
+  why: "Aeacus prays to Jupiter after the plague, asking to repopulate his city. He dreams of ants — long columns of ants carrying grain — and in the morning, his people have returned: the ants have become men, each ant a laborer, each laborer an ant. The Myrmidons are the most literal transformation in the poem: insect into human, the boundary between species crossed by divine will. Ravel's Alborada del gracioso is built on Spanish dance rhythms but pushed through a sensibility that makes the music seem to skitter — the repeated notes, the rapid figuration, the sense of a texture that is alive and moving at a scale below the threshold of individual perception. Metamorphosis here is not a body changing but a population changing: a whole city becoming what it was from what it was not."
+- n: 8
+  scene: Cephalus and Procris — the lovers' story
+  force: desire
+  composer: Rachmaninoff
+  work: "Symphony No. 2 — III. Adagio"
+  decision: added
+  why: "Cephalus tells how he met Procris and married her — the love of his life, the woman he was devoted to. Their love was tested by Aurora, the dawn goddess, who tried to seduce Cephalus and, failing, sowed suspicion in Procris' mind. Rachmaninoff's Second Symphony Adagio is the most sustained erotic melody in the Russian repertoire — the clarinet theme that climbs and resolves and climbs again, the strings that take it over and heat it to the temperature of full Romantic longing. Desire here is memory-shaped: Cephalus is telling this story after Procris is dead, and the beauty of the music is the beauty of what has been lost."
+- n: 9
+  scene: Procris spies on Cephalus and dies
+  force: fate
+  composer: Sibelius
+  work: "Symphony No. 5 — I. Tempo molto moderato — Allegro moderato"
+  decision: added
+  why: "Procris, suspicious, hides in the bushes to watch Cephalus. Cephalus, hearing a noise, throws his unerring javelin into the brush — and kills his wife. The javelin that never misses has found the one person it should never have found. Fate here is the mechanism of tragic irony: the perfect weapon, the faithful lover, the innocent suspicion, the dead woman in the leaves. Sibelius's Fifth opens with the most famous horn call in Finnish music — an interval that sounds like a question, a theme that emerges from haze and slowly assembles itself into certainty. The symphony's first movement is about form taking shape, and the shape it takes is tragic. Procris dies, and Cephalus stands over her holding the javelin that can never miss."
+- n: 10
+  scene: Cephalus mourns Procris
+  force: grief
+  composer: Fauré
+  work: "Requiem — 'In Paradisum'"
+  decision: added
+  why: "Procris dies in Cephalus' arms, forgiving him. He carries her home, buries her in the grove where she died, and mourns her for the rest of his life. The 'In Paradisum' from Fauré's Requiem is the gentlest music ever written for the transition between life and death: the soprano floats over organ and strings, the words ask the angels to receive the soul, and the music does not weep but release. Grief here is not dramatic; it is the grief of a man who loved one woman and lost her by his own hand, and the only adequate response is not rage but a kind of gentleness that carries the loss without trying to fix it."

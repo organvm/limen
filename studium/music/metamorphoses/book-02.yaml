@@ -1,0 +1,198 @@
+# Metamorphoses — Book II — curated music arc
+# Score the CONSEQUENCES OF PROXIMITY — not desire abstractly, but the
+# gravitational pull between mortal and divine that destroys whatever it
+# brings together. Phaethon drives the sun; Callisto is seduced; Coronis
+# is shot; Europa is carried across the sea. Each story enacts the same
+# force at a different temperature.
+# Register rule: desire here is not romance but thermodynamics — the heat
+# that transfers between bodies of different temperature until equilibrium
+# (or catastrophe) is reached.
+work: metamorphoses
+book: 2
+title: "Metamorphoses Book II: The Chariot, The Bear, The Bull"
+length_minutes: 92
+principle: >
+  Book II is the book of proximity — what happens when mortals come too
+  close to gods, or gods come too close to mortals. Phaethon demands to
+  drive the sun and burns the world; Callisto is raped by Jupiter and
+  banished; Coronis is killed by Apollo's arrow of jealous rage; Europa
+  is abducted by a bull who is a god. The dominant force is desire — not
+  as romance, but as a gravitation that destroys the boundary between
+  the divine and the mortal, the boundary that keeps both alive.
+force_arc:
+- kingship
+- desire
+- fate
+- supplication
+- divine-intervention
+- metamorphosis
+- comedy
+- exile
+- wrath
+- desire
+dominant_force: desire
+tracks:
+- n: 1
+  scene: Palace of the Sun
+  force: kingship
+  composer: Walton
+  work: Crown Imperial
+  decision: added
+  why: >
+    The Palace of the Sun is described by Ovid as an architectural marvel
+    of gold, bronze, and ivory, with the Sun god enthroned among the Days,
+    Months, Years, and Ages. The cosmic court is a display of sovereign
+    authority so absolute it is indistinguishable from the fabric of the
+    universe. Walton's Crown Imperial is ceremonial grandeur in the English
+    coronation tradition — sovereign display, public majesty, the sound of
+    a throne that does not ask for recognition because it assumes it.
+- n: 2
+  scene: "Phaethon's request — desire as ambition"
+  force: desire
+  composer: Scriabin
+  work: "The Poem of Ecstasy"
+  decision: added
+  why: >
+    Phaethon asks for a single day driving the chariot of the sun. Phoebus
+    warns him it is certain death — the horses are fire, the track is tilted,
+    the journey requires strength no mortal has. But Phaethon's longing for
+    glory overpowers his reason. Scriabin's Poem of Ecstasy is desire as
+    metaphysical ambition: chromatic, soaring, the harmony reaching toward
+    release that never quite arrives. The piece is the sound of a will that
+    has outstripped its capacity to judge what it wants.
+- n: 3
+  scene: The chariot out of control
+  force: fate
+  composer: Tchaikovsky
+  work: "Symphony No. 4 — I. Andante sostenuto"
+  decision: added
+  why: >
+    Phaethon drops the reins. The horses, feeling the weight of an unfamiliar
+    hand, bolt from the track. The chariot pitches, the world below begins
+    to burn — first the mountains, then the cities, then the rivers drying
+    up. Fate here is the momentum of a mechanism that can no longer be guided
+    by any will, human or divine. Tchaikovsky's Fourth opens with the famous
+    fate motif — a brass fanfare that sounds like a question being answered
+    before it is fully asked — and the movement that follows is the inescapable
+    rolling forward of disaster: hammered insistence, the inexorable motif
+    of fate as mechanical collapse.
+- n: 4
+  scene: Earth's plea
+  force: supplication
+  composer: Barber
+  work: Adagio for Strings
+  decision: added
+  why: >
+    The Earth herself, burning, cracking, her forests ash and her seas
+    boiling, raises a voice to Jupiter. Not a demand but a prayer — spare
+    what is left, stop the fire, do not let the world you made be unmade
+    by a boy's recklessness. Supplication requires a suspended cadence and
+    an exposed melodic line. Barber's Adagio is the sound of a plea so
+    concentrated that melody becomes nearly unbearable. The line climbs,
+    breaks, and climbs again — the Earth speaking through strings, asking
+    for the mercy she cannot demand.
+- n: 5
+  scene: "Jupiter's thunderbolt — divine force"
+  force: divine-intervention
+  composer: Verdi
+  work: "Requiem — 'Dies irae'"
+  decision: added
+  why: >
+    Jupiter cannot refuse the Earth. He hurls a thunderbolt — not at the
+    chariot but at the driver. Phaethon falls from the sky like a comet,
+    his hair on fire, his body trailing smoke. His sisters find his bones
+    on the riverbank. The Dies irae from Verdi's Requiem is the most
+    overwhelming depiction of divine judgment in the choral repertoire: the
+    brass and percussion announce the day of wrath with a suddenness that
+    seems to come from everywhere at once. Divine-intervention requires
+    sudden color shift and brass/strings contrast; Verdi gives it at the
+    maximum register of cosmic violence.
+- n: 6
+  scene: The Heliades become trees
+  force: metamorphosis
+  composer: Strauss
+  work: Metamorphosen
+  decision: added
+  why: >
+    Phaethon's three sisters, the Heliades, weep on his grave. Day after
+    day they refuse to leave, and as they weep their bodies change: their
+    feet take root, their arms become branches, their tears become amber
+    that hardens in the sun. Strauss's Metamorphosen — written after the
+    destruction of German opera houses in World War II — is a study in
+    transformation as elegy: themes dissolve into other themes, the
+    orchestral texture shifts and reforms like a body that cannot hold its
+    shape because grief is dissolving it from within. Metamorphosis requires
+    changing orchestral color and fluid harmony; Metamorphosen is the work
+    that names — in its title and its substance — the force of becoming-other
+    that transformation shares with mourning.
+- n: 7
+  scene: Jupiter and Callisto
+  force: comedy
+  composer: Mozart
+  work: "Le nozze di Figaro — Overture"
+  decision: added
+  why: >
+    Jupiter, pursuing the nymph Callisto, disguises himself as Diana —
+    the goddess Callisto serves and loves. He enters her company in the
+    goddess's form, embraces her, and when she resists he reveals himself
+    through the disguise by force. The scene is disturbing and theatrical
+    at once — a god wearing another god's face to bypass a nymph's defenses.
+    Mozart's Figaro Overture is the most brilliant comic overture in the
+    repertoire: rapid, plotting, full of the energy of servants outwitting
+    masters and gods outwitting everyone. Comedy here operates as the
+    register that makes bearable the horror of divine predation — the
+    courtly exaggeration that the gods use to frame their cruelties as
+    entertainment.
+- n: 8
+  scene: Callisto as a bear
+  force: exile
+  composer: Vaughan Williams
+  work: "Symphony No. 3 (Pastoral) — II. Lento moderato"
+  decision: added
+  why: >
+    Juno, discovering Jupiter's crime, punishes Callisto by transforming
+    her into a bear. Callisto, who was a hunter, now haunts the forests
+    she once hunted, terrified of the wolves and the hunters' spears.
+    She cannot speak to warn them — she is a bear now, and her voice is
+    a growl. Vaughan Williams's Pastoral Symphony was written in the
+    aftermath of World War I and carries the memory of soldiers returning
+    to landscapes that no longer recognize them. The Lento moderato opens
+    with open intervals and wandering harmony — the sound of a vast,
+    lonely space in which a creature that was once human moves without
+    the comfort of language.
+- n: 9
+  scene: Apollo kills Coronis
+  force: wrath
+  composer: Shostakovich
+  work: "String Quartet No. 8 — II. Allegro molto"
+  decision: added
+  why: >
+    The raven, sent by Apollo to watch his beloved Coronis, returns to
+    tell him she has been unfaithful. Apollo, in a flash of jealous rage,
+    shoots her with an arrow — and immediately regrets it, but the arrow
+    cannot be called back. She dies; Apollo saves the unborn child from
+    her womb (Aesculapius, the god of medicine). Wrath here is not
+    calculated but reflexive — a trigger-pull before the mind has decided.
+    Shostakovich's Eighth Quartet, written in the ruins of Dresden, is
+    the composer's most personal and violent work: the second movement's
+    Allegro molto is frantic, rhythmic pressure that accelerates toward
+    an event too fast to stop, the unresolved harmony of a decision made
+    in the instant and regretted in the next.
+- n: 10
+  scene: Europa and the Bull
+  force: desire
+  composer: Szymanowski
+  work: Violin Concerto No. 1
+  decision: added
+  why: >
+    Jupiter, still insatiable, sees the princess Europa playing on the
+    beach at Tyre. He transforms into a bull — beautiful, gentle, white,
+    his horns like jewels — and mingles with her father's herd. Europa
+    is charmed, climbs on his back, and he carries her into the sea.
+    She clings to his horns as the shore recedes, looking back at the
+    land she will never see again. Szymanowski's Violin Concerto No. 1
+    is shimmering, erotic, iridescent — chromatic longing suspended in
+    a texture of orchestral color that never resolves into a stable key.
+    The violin line soars above the orchestra like a girl being carried
+    across a sea she did not choose to cross, and the music does not
+    tell us whether she is victim or passenger or both.
