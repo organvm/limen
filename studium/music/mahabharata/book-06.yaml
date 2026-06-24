@@ -1,0 +1,212 @@
+# Mahabharata — Bhishma Parva (Book 6) — curated music arc
+# Gold-standard form matching iliad/book-01.yaml.
+# Score the TEN DAYS OF BHISHMA'S COMMAND and the BHAGAVAD GITA: the first
+# blood of Kurukshetra, the collapse of Arjuna at the moment of battle,
+# Krishna's teaching on action and detachment, the revelation of the cosmic
+# form that devours time, and the fall of the grandsire who would not die
+# until he chose to. The dominant force is revelation — not the revelation
+# of a god in a temple but the revelation that occurs in a chariot between
+# two armies, where a warrior is told that his duty is to kill and his
+# salvation is to renounce the fruits of killing.
+work: mahabharata
+book: 6
+title: "Bhishma Parva: The Gita, the Grandsire, and the First Blood of Kurukshetra"
+length_minutes: 112
+principle: >
+  Do not score Bhishma Parva as "the first ten days of the war." Score it
+  as the poem's theological center: the Bhagavad Gita is spoken on a chariot
+  between the two armies, and its teaching — act without attachment to the
+  fruit of action — is the most radical response ever given to the problem
+  of necessary violence. The war begins, Arjuna breaks, Krishna teaches,
+  the cosmic form appears, Bhishma rages across the field for nine days,
+  and on the tenth, the grandsire falls because he will not fight a woman.
+  The dominant force is revelation: the Gita is the epic's still point, a
+  teaching that takes place in the pause before the first arrow and changes
+  the meaning of every arrow that follows.
+force_arc: [wrath, grief, revelation, divine-intervention, fate, sacrifice, wrath, supplication, law]
+dominant_force: revelation
+tracks:
+  - n: 1
+    scene: "The war begins — Bhishma's war cry"
+    force: wrath
+    composer: Stravinsky
+    work: "The Rite of Spring — Part I, 'The Augurs of Spring (Dances of the Young Girls)'"
+    decision: added
+    why: >
+      Bhishma sounds his conch; the Kaurava army roars; Arjuna sounds his
+      conch; the Pandava army answers; and the plain of Kurukshetra becomes
+      a single field of reciprocal violence. The Augurs of Spring is the
+      sound of ritual violence at full intensity — the hammered chords in
+      the strings, the off-balance accents that never settle into comfort,
+      the sense of a world that has committed itself irrevocably to the
+      logic of percussive force. Wrath requires rhythmic pressure and
+      unresolved harmony; Stravinsky gives it at the precise register of
+      eighteen armies meeting on a field that has been waiting for this
+      moment since the Mahabharata began.
+  - n: 2
+    scene: "Arjuna's despair — the chariot between the armies"
+    force: grief
+    composer: Mahler
+    work: "Symphony No. 5 in C-sharp minor — IV. Adagietto"
+    decision: added
+    why: >
+      Arjuna asks Krishna to drive the chariot to the centre of the field.
+      He sees his grandfathers, teachers, kinsmen, friends — the faces of
+      everyone he has ever loved arrayed in lines of death. He drops the
+      bow. 'I will not fight,' he says, 'even if it means the kingdom of
+      heaven.' Mahler's Adagietto, used in the Iliad for Achilles' private
+      grief and in Vana Parva for Draupadi's public grief, here finds its
+      exact register: the soldier who has trained his whole life for this
+      moment and finds, at the moment, that he cannot do what he was born
+      to do. Grief requires slow tempo and inward line; the Adagietto's
+      strings-only orchestra is the sound of a man who has gone deaf to
+      everything except his own refusal.
+  - n: 3
+    scene: "The Gita begins — Krishna teaches the immortal self"
+    force: revelation
+    composer: Pärt
+    work: "Spiegel im Spiegel"
+    decision: added
+    why: >
+      Krishna's first teaching: the self cannot be killed. The soul is
+      eternal, unchanging, beyond birth and death; the bodies it inhabits
+      are garments that are shed and replaced. Arjuna is not being asked
+      to kill his kin — he is being asked to perform his dharma in the
+      knowledge that nothing real is destroyed. Pärt's Spiegel im Spiegel,
+      used for Vyasa's cosmogony in Adi Parva and the consolatory story
+      of Nala in Vana Parva, here sounds the depth of the teaching: the
+      piano's arpeggios moving through the tonic with no harmonic drama,
+      the strings sustaining a melody that never seems to originate or
+      conclude. Revelation requires stillness, chant, and verticality;
+      Pärt's piece is revelation as ontology — not instruction but simply
+      the sound of what is true when all contingencies are removed.
+  - n: 4
+    scene: "The Vishvarupa — time devouring the worlds"
+    force: divine-intervention
+    composer: Wagner
+    work: "Das Rheingold — Entry of the Gods into Valhalla"
+    decision: added
+    why: >
+      Arjuna asks Krishna to show him his true form. Krishna grants the
+      vision: the cosmic form with a thousand mouths and a thousand eyes,
+      the gods entering Krishna's body as rivers enter the sea, the heroes
+      of both armies already dead inside his teeth. Arjuna sees the form
+      of Time devouring everything that will ever live. Wagner's Entry of
+      the Gods into Valhalla — the transfigured version of the Rheingold
+      Prelude — is the moment when the gods cross the rainbow bridge into
+      their fortress, the orchestra rising to a C major apotheosis that
+      is both triumph and fate. The gods enter their hall; the Kuru heroes
+      enter the mouth of time. Divine-intervention requires sudden colour
+      shift; Wagner shifts the colour of the entire Ring cycle at this
+      moment, and Krishna shifts the colour of the entire epic.
+  - n: 5
+    scene: "The war continues — day after day of blood"
+    force: fate
+    composer: Beethoven
+    work: "Symphony No. 7 in A major, Op. 92 — II. Allegretto"
+    decision: added
+    why: >
+      The Gita ends; the war resumes. Day after day the armies clash,
+      Bhishma unstoppable, the Pandavas losing ground, the field accumulating
+      bodies. Beethoven's Allegretto is the inexorable rhythm of war as
+      industrial process — the low strings repeating their figure, the
+      woodwinds entering with variations that change nothing, the movement
+      moving through its form without arriving at a conclusion. Fate requires
+      inexorable motif and hammered insistence; the Allegretto is fate as
+      the second week of a battle: the heroism has worn off, the numbers
+      are the only language left, and the music is the sound of something
+      that will continue until there is nothing left to continue on.
+  - n: 6
+    scene: "Shikhandi advances — the taboo that kills the grandsire"
+    force: sacrifice
+    composer: Stravinsky
+    work: "The Rite of Spring — Part II, 'Sacrificial Dance (The Chosen One)'"
+    decision: added
+    why: >
+      On the tenth day, the Pandavas place Shikhandi — who was born a woman,
+      later became a man through a boon — at the front of their formation.
+      Bhishma, bound by his vow never to fight a woman or one who was born
+      a woman, lowers his bow. Arjuna's arrows pierce him from behind
+      Shikhandi's chariot. The grandsire falls, his body held above the
+      ground by the arrows that have pierced him. Stravinsky's Sacrificial
+      Dance is the moment in the Rite when the chosen victim dances herself
+      to death — the irregular accents, the percussive drive, the sacrifice
+      that cannot stop once it has begun. Sacrifice requires ritual weight
+      and processional build; Shikhandi's advance is the processional, and
+      the Sacrificial Dance is the sound of a vow that has become a weapon.
+  - n: 7
+    scene: "Bhishma on his bed of arrows — the death deferred"
+    force: wrath
+    composer: Prokofiev
+    work: "Alexander Nevsky, Op. 78 — IV. 'Arise, Ye Russian People'"
+    decision: added
+    why: >
+      Bhishma does not die. He lies on a bed of arrows — the shafts that
+      pierce his body hold him suspended above the earth — and he waits,
+      because he has the boon of choosing his own death. He will not die
+      until the sun is on the northern course, the precise cosmology of
+      his mortality. He is still a warrior, still a commander, still the
+      grandsire of both armies, held above the ground by the weapons of
+      his enemy. Prokofiev's 'Arise, Ye Russian People' is martial music
+      that refuses to be purely martial — the chorus enters over a
+      processional rhythm that is not quite a march, the melody is too
+      wide for the battlefield, the mood is not triumph but massive,
+      deliberate purpose. Bhishma's suspension between life and death
+      needs this register: not funeral, not victory, but the terrible
+      patience of a man waiting for the sun.
+  - n: 8
+    scene: "Bhishma on the arrow-bed — the silence after the fall"
+    force: supplication
+    composer: Barber
+    work: "Adagio for Strings, Op. 11"
+    decision: added
+    why: >
+      After the fall, the battlefield is quieter. The war continues but
+      the great voice of the grandsire — the moral authority of the Kuru
+      dynasty — lies pierced and suspended, a living man who has decided
+      to die. Draupadi comes to him, kneels, asks him how she can ever
+      forgive the court that watched her dragged by the hair. Bhishma,
+      from the arrow-bed, teaches her forgiveness. Barber's Adagio,
+      used in Sabha Parva for Draupadi's own prayer during the disrobing,
+      returns here in the same register: the strings climbing through the
+      single melodic arc, the pressure accumulating toward the climax,
+      the resolution that is also an exhaustion. Supplication requires
+      suspended cadence and exposed line; here the supplication is the
+      grandsire's last gift to the woman he failed in the assembly hall.
+  - n: 9
+    scene: "The Gita's afterimage — dharma as action without fruit"
+    force: law
+    composer: Bach
+    work: "The Art of Fugue, BWV 1080 — Contrapunctus IV"
+    decision: added
+    why: >
+      The Bhishma Parva ends with the Gita reverberating across the field:
+      act without attachment; do what is right because it is right, not
+      because it will succeed. Bhishma has fallen, the Pandavas have
+      survived ten days, and the war will continue for eight more books.
+      But the teaching — the single most important philosophical statement
+      in the epic — hangs over everything that follows. Bach's Contrapunctus
+      IV is a fugue in inversion, augmentation, and diminution — the subject
+      turned upside down, stretched, compressed, examined from every angle
+      while remaining recognisably itself. Law requires formal clarity and
+      architecture; the Art of Fugue is law as pure thought, and the Gita
+      is the fugue-subject of the Mahabharata — the teaching that returns
+      in every book that follows, inverted by circumstances, augmented by
+      tragedy, but never abandoned.
+demoted:
+  - composer: Wagner
+    work: "Götterdämmerung — 'Siegfried's Funeral March'"
+    status: "save for Drona Parva or Karna Parva (Books 7-8); Bhishma does not die in Bhishma Parva, he falls and waits"
+    why: >
+      Bhishma's fall is not his death — he lies on the arrow-bed through
+      Shanti Parva and Anushasana Parva (Books 12-13), teaching the kings
+      who will inherit the war. The terminal funeral register belongs to
+      the deaths that are actually terminal: Abhimanyu, Drona, Karna,
+      Duryodhana.
+  - composer: Mozart
+    work: "Requiem — 'Lacrimosa'"
+    status: "save for Stri Parva (Book 11)"
+    why: >
+      The Lacrimosa is the weeping of the women over the bodies of the
+      dead. Bhishma Parva has many dead but no collective women's grief
+      yet; that register belongs to the book named for the women.

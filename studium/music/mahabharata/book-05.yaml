@@ -1,0 +1,184 @@
+# Mahabharata — Udyoga Parva (Book 5) — curated music arc
+# Gold-standard form matching iliad/book-01.yaml.
+# Score the DIPLOMATIC EFFORT and the MARCH TO WAR: Krishna's peace embassy,
+# the secret meeting of Kunti and Karna, the count of armies, the discus
+# rising over a blind king's court, and the moment when war becomes the only
+# remaining grammar. The dominant force is law — not the law of the courtroom
+# but the moral architecture of a world trying, and failing, to hold itself
+# together by reason.
+work: mahabharata
+book: 5
+title: "Udyoga Parva: The Peace Embassy, the Secret, and the Arithmetic of Destruction"
+length_minutes: 94
+principle: >
+  Do not score Udyoga Parva as "the Pandavas try diplomacy before the war."
+  Score it as the moment when every conceivable alternative to violence is
+  exhausted in full view of the reader: Krishna walks into Hastinapura with
+  a peace offer Duryodhana will never accept; Karna learns his mother's
+  secret and chooses the side that will kill him; the armies are counted
+  with the precision of a ledger; and a blind king who cannot see his own
+  court becomes the symbol of a civilization failing to see what it is
+  doing. The dominant force is law — the architecture of moral argument
+  that is too rational to prevent catastrophe, too necessary to abandon.
+force_arc: [kingship, supplication, fate, revelation, law, wrath, divine-intervention, sacrifice]
+dominant_force: law
+tracks:
+  - n: 1
+    scene: "Sanjay reports — the blind king's seer"
+    force: kingship
+    composer: Elgar
+    work: "Enigma Variations, Op. 36 — I. Theme (Enigma)"
+    decision: added
+    why: >
+      The Udyoga Parva opens not in the Pandava camp or the Kaurava court
+      but in the space between them: Sanjay, the king's charioteer and seer,
+      has been granted divine sight to report the battle to the blind Dhritarashtra.
+      He is the king's eyes; the poem proceeds through his telling. The theme
+      of Elgar's Enigma is itself a variation before the variation — a melody
+      that points to something known but never stated, a kingship exercised
+      through the voice of another. Kingship requires ceremonial presence;
+      here the presence is indirect, the king seated, the court listening,
+      the war arriving through a single voice.
+  - n: 2
+    scene: "Krishna offers peace — the last embassy"
+    force: supplication
+    composer: Bach
+    work: "St Matthew Passion, BWV 244 — 'Erbarme dich, mein Gott'"
+    decision: added
+    why: >
+      Krishna enters Hastinapura not as Vishnu but as envoy. He offers the
+      Kauravas a single village for each Pandava — five villages and the war
+      is averted. The offer is genuine; Krishna knows it will be refused; he
+      makes it anyway because the form of peace requires that the offer be
+      made. Bach's Erbarme dich, used in Adi Parva for Astika's successful
+      supplication at the snake sacrifice, appears here in its dark inversion:
+      the same suspended cadence, the same exposed melodic line — but this
+      supplication will be refused, and the melody's beauty becomes the
+      measure of what is about to be lost. Supplication requires suspended
+      cadence; Bach gives the cadence knowing it will not resolve.
+  - n: 3
+    scene: "Duryodhana's refusal — the mechanism of war engaged"
+    force: fate
+    composer: Tchaikovsky
+    work: "Symphony No. 4 in F minor, Op. 36 — I. Andante sostenuto — Moderato con anima"
+    decision: added
+    why: >
+      Duryodhana does not consider Krishna's offer. He will not give up a
+      needle's point of earth to the Pandavas. The refusal is not calculated
+      — it is structural, the same mechanism that drove the dice game: the
+      pride that will not release, the rivalry that requires destruction as
+      its proof. Tchaikovsky's Fourth opens with the brass fanfare of fate
+      — the descending figure that returns to break every movement's attempt
+      at escape. Fate requires inexorable motif; the fanfare is fate as
+      declaration: the war is not coming, it has already arrived in the only
+      register that matters, the register of certainty.
+  - n: 4
+    scene: "Kunti's secret — the mother finds her firstborn"
+    force: revelation
+    composer: Elgar
+    work: "Cello Concerto in E minor, Op. 85 — I. Adagio — Moderato"
+    decision: added
+    why: >
+      Kunti, alone on the bank of the Ganges, tells Karna the secret of his
+      birth: she bore him before her marriage, to the sun-god Surya, set him
+      adrift in a basket on the river, and he was raised by a charioteer. He
+      is the eldest Pandava. If Karna crosses to the Pandava side, the war
+      ends before it begins. Karna refuses — not because he does not believe
+      her but because his loyalty to Duryodhana, who raised him from obscurity
+      to kingship, is absolute. Elgar's Cello Concerto opens with a statement
+      that is both confession and refusal: the cello's first recitative,
+      unaccompanied, then the orchestral entry carrying the weight of the
+      knowledge into a more structured grief. Revelation requires stillness
+      and verticality; the cello's opening is revelation as wound — a truth
+      that changes nothing because it comes too late.
+  - n: 5
+    scene: "The army count — the ledger of death"
+    force: law
+    composer: Bach
+    work: "The Well-Tempered Clavier, Book I — Prelude and Fugue in C major, BWV 846"
+    decision: added
+    why: >
+      The epic counts the armies: eleven akshauhinis on the Kaurava side,
+      seven on the Pandava side. Each akshauhini is 21,870 chariots, 21,870
+      elephants, 65,610 cavalry, 109,350 infantry. The epic does not let you
+      forget the arithmetic — these are not warriors, they are units in a
+      sum whose total is the continent's youth. Bach's C major Prelude, the
+      simplest and most architectural of the forty-eight, is the sound of
+      law as pure structure: the arpeggios ascending and descending through
+      the key, the form generating itself without ornament. The fugue enters
+      and complicates the simplicity; the voices multiply, the subject is
+      transformed, the architecture becomes labyrinthine — the sound of a
+      system too large to control. Law requires formal clarity and architecture;
+      Bach's C major is clarity at the edge of complexity.
+  - n: 6
+    scene: "Duryodhana arrests Krishna — the discus rises"
+    force: wrath
+    composer: Prokofiev
+    work: "Scythian Suite, Op. 20 — II. The Evil God and the Dance of the Spirits of Darkness"
+    decision: added
+    why: >
+      In the Hastinapura assembly, Duryodhana orders his men to seize Krishna.
+      Krishna laughs. He reveals his divine form — not the full Vishvarupa
+      (Book 6) but the discus-bearer, the warrior aspect: the room shakes,
+      the discus spins on his finger, the Kauravas are blinded by the light.
+      Duryodhana's attempt to bind the god triggers the first open theophany
+      of the war books. Prokofiev's Scythian Suite movement is the twentieth
+      century's most brutal orchestral assault — the low brass grinding, the
+      percussion driving, the harmony collapsing into dissonance as the evil
+      god dances. Wrath requires rhythmic pressure and unresolved harmony;
+      Prokofiev gives wrath as dance, the god of war moving through his
+      worshippers whether they worship him or not.
+  - n: 7
+    scene: "Krishna reveals the cosmic form — the court sees what it cannot bear"
+    force: divine-intervention
+    composer: Strauss
+    work: "Also sprach Zarathustra, Op. 30 — I. Sunrise"
+    decision: added
+    why: >
+      Krishna, in the Kaurava court, shows them not his discus-bearing aspect
+      but his full cosmic form: the universe contained in his body, the sun
+      and moon as his eyes, the wheel of time turning through his breath.
+      Dhritarashtra is granted sight for this moment — and he sees the god,
+      then goes blind again. Strauss's Sunrise — the most famous opening in
+      twentieth-century music — is fanfare at the edge of revelation: the low
+      C pedal, the trumpet rising through the harmonic series, the orchestra
+      entering in C major as though the key itself were the discovery. Divine-
+      intervention requires sudden colour shift; Strauss's shift from pedal
+      to C major is the most sudden colour shift in music, the same boundary
+      the Kaurava court crosses when the god appears in the room.
+  - n: 8
+    scene: "The march to Kurukshetra — the plain receives them"
+    force: sacrifice
+    composer: Stravinsky
+    work: "Symphony of Psalms — I. Exaudi orationem meam"
+    decision: added
+    why: >
+      The Udyoga Parva ends with the armies in motion — eighteen akshauhinis
+      converging on the field of Kurukshetra, the plain that will become the
+      mouth of time. The epic does not linger on the march; it simply reports
+      that the armies arrayed themselves, the war was declared, and the earth
+      groaned under the weight of what was about to happen. Stravinsky's
+      Symphony of Psalms opens with an E-minor chord in the winds that is
+      both a cry and a foundation — the prayer 'Hear my prayer, O Lord' set
+      in archaic block harmony that refuses to move. The music does not ask;
+      it presents itself as an offering already made. Sacrifice requires ritual
+      weight and processional build; Stravinsky's psalms are the century's
+      most austere liturgical procession, the sound of something being lifted
+      onto an altar that is also a battlefield.
+demoted:
+  - composer: Wagner
+    work: "Götterdämmerung — 'Siegfried's Funeral March'"
+    status: "save for Drona Parva or Karna Parva (Books 7-8); the Udyoga Parva is pre-war, not terminal"
+    why: >
+      The funeral march belongs to the actual deaths of the great warriors.
+      Udyoga Parva has no deaths of the central heroes — it has decisions,
+      refusals, counts, and the approach of the war. The terminal register
+      is still to come.
+  - composer: Mahler
+    work: "Symphony No. 2 'Resurrection' — V. 'Auferstehung'"
+    status: "save for Book 18 (Svarga Arohana Parva)"
+    why: >
+      The Resurrection finale is apotheosis at full eschatological register.
+      Udyoga Parva is the opposite of resurrection: it is the machinery of
+      destruction being assembled. The resurrection of the Pandava kingdom
+      belongs to the end of the epic, not to the threshold of war.
