@@ -295,11 +295,14 @@ def write_residue(rows: list[dict]) -> str:
         if r["state"] == "STALLED" and r["decision"]["residue"]:
             atoms.setdefault(r["decision"]["residue"], []).append(r["title"][:48])
     lines = ["# QUICKEN residue — the irreducible human atoms (deduped)", "",
-             "> Surfaced only after every reversible step was driven to done. One touch each.", ""]
+             "> Surfaced only after every reversible step was driven to done. One touch each.",
+             "> **Owner of every atom below: you** (identity / login / send / physical / gate —",
+             "> the only things a loop can't do). Everything else is **daemon-owned** and fires each",
+             "> beat; it is not hanging. Canonical persistent owner-record: `docs/his-hand-registry.md`.", ""]
     for atom, titles in sorted(atoms.items()):
-        lines.append(f"- **{atom}**  ·  unblocks: {', '.join(sorted(set(titles)))}")
+        lines.append(f"- **{atom}**  ·  owner: **you**  ·  unblocks: {', '.join(sorted(set(titles)))}")
     if not atoms:
-        lines.append("- (none — every stalled purpose was fully driveable)")
+        lines.append("- (none — every stalled purpose was fully driveable; nothing waits on you)")
     return "\n".join(lines) + "\n"
 
 

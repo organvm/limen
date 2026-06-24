@@ -82,3 +82,14 @@ the fraud hold. Defers the subscription/Stripe path only — individual MoR rail
 No completed backup. Data already has **3 copies** (iCloud + Archive4T + Backblaze), so TM is a
 convenience, not a durability gap. **Owner:** you. **Cheapest path:** staging drive →
 `tmutil setdestination`. Not blocking anything.
+
+### 6. Session residue (from QUICKEN) — *the two atoms stalled sessions surfaced*
+QUICKEN drove every reversible step of the sitting sessions to done; these two are the only touches a
+loop can't make. Auto-surfaced to `docs/QUICKEN-RESIDUE.md` each beat; recorded here as the persistent
+owner-record so they're never re-asked.
+- **One login/identity step** — **Owner:** you. **Cheapest path:** `claude setup-token` (the
+  credential-race self-heal is staged at `fix/claude-credential-race@b1274bf` and probes ready) +
+  reconnect the hotspot. Unblocks `login-successful` + connectivity troubleshooting.
+- **Open the gate** — **Owner:** you (it's your lever, by protocol). **Cheapest path:** say the word;
+  the staged pushes (`unblock-pr-fix-deploy-gates`, QUICKEN `d586e63`+`e464855`, Etceter4) land with no
+  re-asking. Until then they're **held, not hanging** — daemon-owned, catalogued, deploy on gate-open.
