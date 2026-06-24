@@ -1,0 +1,122 @@
+# Bhagavad Gita — Chapter 4 — curated music arc
+# Jnana Yoga: The Yoga of Wisdom
+work: bhagavad-gita
+book: 4
+title: "Bhagavad Gita Chapter 4: Divine Origin, the Varieties of Sacrifice, the Boat of Knowledge"
+length_minutes: 58
+principle: >
+  Do not score Chapter 4 as "another chapter on knowledge." Score it as the moment
+  where the speaker of the Gita reveals himself — not as a philosopher-commentator on
+  the Upanishads, but as the origin of the teaching itself, the one who taught it to
+  the sun at the beginning of time. The chapter moves from the revelation of divine
+  avatara (I am born age after age to restore righteousness), through the
+  transformation of action into sacrifice, through the astonishing catalog of
+  sacrificial forms, to the closing promise: knowledge purifies everything, even the
+  most sinful. The dominant motion is not instruction but disclosure — the teacher
+  showing himself as the teaching's source.
+force_arc: [divine-intervention, revelation, sacrifice, metamorphosis, salvation]
+dominant_force: revelation
+tracks:
+  - n: 1
+    scene: "Krishna reveals his divine origin: 'I taught this imperishable yoga to Vivasvan, the sun-god. Vivasvan taught Manu, Manu taught Ikshvaku — and today I teach it to you.'"
+    force: divine-intervention
+    composer: Wagner
+    work: "Das Rheingold — Prelude (opening) / Entry of the Gods into Valhalla (close)"
+    decision: added
+    why: >
+      Chapter 4 opens with the revelation that Krishna's teaching is not new — he
+      taught the same yoga at the beginning of time to the sun-god, and it has been
+      transmitted through the dynasties of kings. This is the Gita's first explicit
+      claim to divine authority: the speaker is not a philosopher reporting what he
+      has read but the origin of the tradition itself. Wagner's Rheingold Prelude grows
+      from a single deep E-flat — the first note of the world — into a chord, a
+      current, a cosmos coming into being. The brass arrival of the Entry of the Gods
+      is not pomp but the disclosure of identity: the one who spoke to the sun now
+      speaks to you. Divine-intervention requires sudden color shift and brass/strings
+      contrast; Wagner gives the emergence of a teacher who has always been the source.
+  - n: 2
+    scene: "The avatara: 'Whenever righteousness declines and unrighteousness prevails, I manifest myself. For the protection of the good and the destruction of evil, I am born age after age.'"
+    force: revelation
+    composer: Rachmaninoff
+    work: "Vocalise, Op. 34, No. 14"
+    decision: added
+    why: >
+      The avatara verses are the Gita's most famous passage — the promise that the
+      divine descends whenever order falters. Rachmaninoff's Vocalise is a wordless
+      melody for soprano (or violin) over piano, rising and falling like a prayer that
+      has no need of language. The melody is always arriving and always departing, like
+      the avatar who comes age after age, never fully staying, never fully leaving. The
+      vertical, chant-like quality of the vocal line — its stillness within motion — is
+      revelation as musical fact: the divine manifesting in sound without argument,
+      without defense, simply present. Revelation requires stillness and verticality;
+      Rachmaninoff gives the eternal descent of grace into time.
+  - n: 3
+    scene: "Action as sacrifice: 'Sacrifice is the offering of the material, the offering of knowledge, the offering of the senses. One who sees action and inaction clearly acts in wisdom.'"
+    force: sacrifice
+    composer: Gluck
+    work: "Iphigénie en Aulide — Overture"
+    decision: added
+    why: >
+      Chapter 4 redefines sacrifice entirely: it is not offerings in fire but the
+      offering of action itself — every act consecrated, every breath a libation.
+      Gluck's overture to Iphigénie en Aulide is the sound of sacrifice as
+      foundation: the ceremonial gravity before the event, the dotted rhythms that
+      evoke processional movement, the minor key that carries not dread but the weight
+      of something offered. The Gita says sacrifice is not a ritual one performs but a
+      way of performing every action. Gluck gives that claim its proper gravity —
+      sacrifice as the structure of existence, not a break from it.
+  - n: 4
+    scene: "The varieties of sacrifice: 'Some offer their senses into the fires of restraint; some offer sense-objects into the fires of the senses; some offer their life-breath into life-breath — all are knowers of sacrifice.'"
+    force: metamorphosis
+    composer: Debussy
+    work: "Préludes, Book I — No. 2: 'Voiles' (Sails / Veils)"
+    decision: added
+    why: >
+      The Gita catalogs the forms of sacrifice with astonishing variety: each different
+      but each the same act — offering — in a different key. One sacrifices the senses,
+      another sacrifices sense-objects, another sacrifices the breath itself. Debussy's
+      'Voiles' is a whole-tone meditation that shifts color without changing tonic, the
+      veil of sound transforming from within, matter becoming melody, the whole thing
+      suspended in a harmonic field that refuses to settle into a single identity. It
+      is the musical equivalent of the Gita's demonstration that sacrifice is one
+      process with infinite forms — and that each form, genuinely offered, arrives at
+      the same destination.
+  - n: 5
+    scene: "The boat of knowledge: 'Even if you are the most sinful of all sinners, you will cross all evil by the boat of knowledge. As fire reduces fuel to ashes, so the fire of knowledge reduces all karma to ashes.'"
+    force: salvation
+    composer: Bruckner
+    work: "Symphony No. 5 in B-flat major — IV. Finale (opening chorale)"
+    decision: added
+    why: >
+      Chapter 4 closes with the ultimate promise: knowledge purifies everything. There
+      is no sin it cannot cross, no darkness it cannot illuminate. Bruckner's Fifth
+      Symphony finale opens with a chorale across the full orchestra — massive,
+      luminous, the sound of something that has arrived at its destination after a long
+      journey through form. The chorale does not ask forgiveness; it declares that
+      knowledge has already purified. Salvation requires resolving radiance and chorale
+      apotheosis; Bruckner gives the fire of knowledge that burns all remaining karma
+      and leaves only the self, standing, in the clear air of having understood.
+demoted:
+  - composer: Bach
+    work: "St. Matthew Passion — 'Erbarme dich, mein Gott'"
+    status: "belongs to Chapter 1 (supplication); demoted from Chapter 4"
+    why: >
+      Chapter 1's 'Erbarme dich' is the sound of supplication unanswered. Chapter 4 is
+      the answer already given — the knowledge that purifies before the plea is
+      complete. The two registers must not trade places.
+  - composer: Pärt
+    work: "Spiegel im Spiegel"
+    status: "belongs to Chapter 1 (the silence after the dropped bow); Chapter 4 has a different stillness"
+    why: >
+      The tintinnabuli stillness of Chapter 1's close is the silence of collapse.
+      Chapter 4's close is the radiance of arrival. Both are still, but the first is
+      the question and the second is the answer. They are the same musical register
+      reversed in meaning.
+  - composer: Tavener
+    work: "Song for Athene"
+    status: "reserved for Chapter 2 (the revelation of the eternal self); the revelation register is differently placed here"
+    why: >
+      Chapter 2 uses Tavener for the soul that was never born. Chapter 4 uses
+      Rachmaninoff for the divine that descends age after age. Both are revelation,
+      but the first is ontological (what the self is) and the second is historical
+      (what the divine does). The musical distinction matters.

@@ -1,0 +1,132 @@
+# Bhagavad Gita — Chapter 2 — curated music arc
+# Sankhya Yoga: The Yoga of Knowledge
+work: bhagavad-gita
+book: 2
+title: "Bhagavad Gita Chapter 2: The Eternal Self, Karma Yoga, the Steady-Minded Sage"
+length_minutes: 72
+principle: >
+  Do not score Chapter 2 as "philosophical answer to Chapter 1." Score it as the moment
+  where grief is met not with comfort but with ontology — the self cannot be slain, so
+  grief for the body is grief for a garment that was always going to be shed. The chapter
+  moves through four distinct movements: Krishna's rebuke (law correcting delusion), the
+  revelation of the eternal self (the soul that was never born and never dies), the
+  teaching of karma yoga (action without attachment to fruits), and the portrait of the
+  sthitaprajna (the steady-minded one who has finished the work of wanting). Do not
+  anticipate Chapter 3's focus on action or Chapter 4's focus on divine origin. Chapter 2
+  is the foundation — the ontology that makes everything else possible.
+force_arc: [law, revelation, metamorphosis, law, ascent, salvation]
+dominant_force: revelation
+tracks:
+  - n: 1
+    scene: "Krishna's opening rebuke: 'Whence this defilement in the hour of crisis? The wise do not grieve for the dead or the living.'"
+    force: law
+    composer: Bach
+    work: "Mass in B minor — 'Kyrie eleison'"
+    decision: added
+    why: >
+      Krishna does not comfort Arjuna — he corrects him. The opening verse identifies
+      Arjuna's grief not as compassion but as delusion, and the correction is delivered
+      with the formal architecture of a legal judgment. The Kyrie of Bach's B minor Mass
+      is not angry: it is architectonic, the plea for mercy structured as formal
+      counterpoint, each voice entering in order, the supplication already governed by the
+      shape of what will answer it. Krishna's first speech is the same: rebuke that is
+      also the beginning of teaching, the architecture of correction unfolding phrase by
+      phrase. Law's requirement is formal clarity and architecture; the Kyrie is law as
+      mercy taking the shape of judgment.
+  - n: 2
+    scene: "The soul is eternal: 'Never was there a time when I did not exist, nor you, nor these kings. The soul is never born, never dies, not slain when the body is slain.'"
+    force: revelation
+    composer: Tavener
+    work: "Song for Athene"
+    decision: added
+    why: >
+      This is the Gita's central ontological claim — the atman that cannot be slain, that
+      is older than the universe and younger than the present moment. Tavener's 'Song for
+      Athene' was written for the funeral of a young woman, but the register is not grief:
+      it is vertical, ecstatic, the sound of something passing through time without being
+      touched by it. The repeated alleluias are the soul's affirmation of itself beyond
+      the body's duration. Revelation requires stillness and verticality; Tavener gives
+      eternity as a musical fact — the self that was never born sounding through the one
+      who thinks he is about to die.
+  - n: 3
+    scene: "The body as garment: 'As a man casts off worn-out clothes and puts on new ones, so the soul casts off worn-out bodies and enters new ones.'"
+    force: metamorphosis
+    composer: Ravel
+    work: "Le tombeau de Couperin — I. Prélude"
+    decision: added
+    why: >
+      The garment-simile is the Gita's most vivid image of transformation: the body is
+      clothing, the soul is the wearer, death is nothing but a change of dress. Ravel's
+      Prélude is a tombeau — a memorial — but its treatment of the baroque dance suite is
+      not mournful: it is fluid, color-shifting, the old forms dissolving into modern
+      harmony. That is exactly what the Gita does here: it takes the fear of death and
+      reframes it as a change of garment. The flute line is the soul, unharmed, passing
+      through. Metamorphosis requires changing orchestral color and fluid harmony; Ravel
+      gives the transformation without the tragedy.
+  - n: 4
+    scene: "Action without attachment: 'You have a right to action alone, never to its fruits. Let not the fruits of action be your motive, nor be you attached to inaction.'"
+    force: law
+    composer: Handel
+    work: "Water Music — Suite in D major, Alla Hornpipe"
+    decision: added
+    why: >
+      This is the most famous single teaching in the Gita — a legal proposition that
+      functions as a spiritual methodology. The principle is stated with the clarity of a
+      statute: you are entitled to the act, not its outcome. The Alla Hornpipe from
+      Handel's Water Music is the purest emblem of law as tonal architecture: ceremonial,
+      bright, every phrase leading to the next with the inevitability of a proposition
+      stated clearly and accepted. It is not mystical. It is the sound of obligation
+      recognized as liberation. The brass and strings give it the character of civic
+      announcement — which it is, because this is the civic basis of spiritual freedom.
+  - n: 5
+    scene: "The sthitaprajna — the steady-minded sage: 'When one completely casts off all desires and is satisfied in the Self alone, then one is called steady-minded.'"
+    force: ascent
+    composer: Bruckner
+    work: "Symphony No. 7 — II. Adagio (opening)"
+    decision: added
+    why: >
+      The sthitaprajna is the Gita's portrait of human completion: desires abandoned,
+      senses controlled, the self established in the Self alone. This is not the ascent
+      of achievement — it is the ascent of arrival, the soul that has finished the work
+      of wanting and is ready to simply be. Bruckner's Adagio rises from the lowest
+      strings in a long, luminous arc that ascends through the entire orchestra without
+      hurry, without effort, with the weight of something that has been preparing itself
+      for a very long time. Ascent requires rising sequence and luminous orchestration;
+      Bruckner gives the sound of a being becoming what it has always been.
+  - n: 6
+    scene: "Abiding in Brahman: 'One who is free from desire, self-controlled, and attains peace — this is the state of Brahman. Attaining this, one is never deluded again.'"
+    force: salvation
+    composer: Fauré
+    work: "Requiem — In Paradisum"
+    decision: added
+    why: >
+      Chapter 2 closes with the description of the one who has attained Brahman — the
+      final, settled condition of the soul that has understood the teaching. Fauré's In
+      Paradisum is the most luminous music ever written for death: the choir and organ
+      ascend through modal harmony into a white, radiant space that is not afterlife but
+      presence. The Gita does not say the steady-minded sage goes to heaven after death.
+      It says he attains Brahman now, in this life, while still walking the earth.
+      Salvation requires resolving radiance and chorale apotheosis; Fauré's Paradisum is
+      not a promise about the future but a description of the present condition of the
+      one who knows. The closing cadence is the soul settling into itself.
+demoted:
+  - composer: Pärt
+    work: "Spiegel im Spiegel"
+    status: "reserved for Chapter 1; owns that stillness, cannot be re-used here"
+    why: >
+      The silence-after-collapse register belongs uniquely to Chapter 1's close.
+      Chapter 2 begins with Krishna speaking, and what replaces the silence is ontology.
+      The stillness is no longer Arjuna's — it is the soul's.
+  - composer: Barber
+    work: "Adagio for Strings"
+    status: "belongs to Chapter 1 (the physical collapse); not re-used here"
+    why: >
+      Barber's Adagio scores the body failing. Chapter 2 is the body understood — the
+      soul that cannot fail. The two registers must not blend.
+  - composer: Brahms
+    work: "Intermezzo in A major, Op. 118, No. 2"
+    status: "belongs to Chapter 1 (grief become architecture); not re-used here"
+    why: >
+      Chapter 1 uses Brahms for grief that has organized itself into argument. Chapter 2
+      replaces argument with ontology. The grief-architecture of Chapter 1 is the
+      question; the law-and-revelation of Chapter 2 is the beginning of the answer.

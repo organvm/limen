@@ -1,0 +1,135 @@
+# Bhagavad Gita — Chapter 3 — curated music arc
+# Karma Yoga: The Yoga of Action
+work: bhagavad-gita
+book: 3
+title: "Bhagavad Gita Chapter 3: Action, Sacrifice, the Slaying of Desire"
+length_minutes: 66
+principle: >
+  Do not score Chapter 3 as "a treatise on work ethic." Score it as the chapter where
+  the teaching of Chapter 2 is pressed against a paradox: if knowledge alone liberates,
+  why is action necessary? The answer is that action is ontologically inescapable —
+  the body acts by the mere fact of being alive — and the only freedom lies in acting
+  without attachment. The chapter moves from Arjuna's honest confusion through the
+  revelation that sacrifice sustains the cosmos, through the nature of the gunas as
+  the true agents of all doing, to the closing command: kill desire, the only enemy
+  worth fighting. The dominant motion is not ethical advice but cosmological necessity.
+force_arc: [supplication, fate, sacrifice, kingship, law, wrath]
+dominant_force: sacrifice
+tracks:
+  - n: 1
+    scene: "Arjuna's dilemma: 'If you think knowledge is superior to action, why do you engage me in this terrible deed? You confuse my mind.'"
+    force: supplication
+    composer: Schubert
+    work: "String Quartet No. 15 in G major, D. 887 — I. Allegro molto moderato (opening)"
+    decision: added
+    why: >
+      Arjuna is not refusing to fight here — he is genuinely confused. Krishna has
+      praised knowledge AND commanded action, and Arjuna cannot see how both can be
+      true. Schubert's G-major quartet opens with a question: an unaccompanied G-major
+      chord that immediately dissolves into restlessness, the harmony suspended, the
+      melodic line exposed and vulnerable. The cadence does not arrive; it waits. This
+      is the sound of sincere confusion arriving at the edge of what it can hold and
+      asking for help. Supplication requires suspended cadence and exposed melodic line;
+      Schubert gives the question before the answer.
+  - n: 2
+    scene: "No one can remain without action: 'Not for a single moment can anyone remain without performing action. All beings are driven to act by the gunas of nature.'"
+    force: fate
+    composer: Beethoven
+    work: "Symphony No. 5 — II. Andante con moto"
+    decision: added
+    why: >
+      Chapter 3's radical claim is that inaction is impossible — breathing is action,
+      thinking is action, the body performs action by the mere fact of being alive. The
+      Andante of Beethoven's Fifth is the hammered fate-motif rendered as process: the
+      inexorable forward movement of the theme through its variations, the sense that
+      there is no place to stop, no moment where the machinery of being pauses. Fate
+      here is not destiny announced from above — it is the condition of having a body
+      that must act. The Andante's variations show the theme moving through different
+      keys, different textures, never able to stop, never needing to. That is the
+      condition Chapter 3 describes.
+  - n: 3
+    scene: "The sacrificial economy: 'Together with sacrifice, the Lord of beings created mankind. Let this be the cow of plenty that yields all your desires. Nourish the gods and they will nourish you.'"
+    force: sacrifice
+    composer: Stravinsky
+    work: "The Rite of Spring — Part I: 'The Augurs of Spring (Dance of the Adolescents)'"
+    decision: added
+    why: >
+      The Gita grounds action in the Vedic sacrificial cycle: the gods receive
+      sacrifice, send rain, produce food, produce life — the reciprocal economy that
+      sustains the world. Stravinsky's Augurs is the canonical musical rendering of
+      ritual mechanics: the hammered primordial ostinato, irregular accents that feel
+      both violent and ordered, the sense of a world-system operating through
+      repetitive, irrevocable acts. It is not dark here — it is structural, the sound
+      of a cosmos that lives because it is fed. Sacrifice requires ritual weight and
+      processional gravity; Stravinsky gives the machinery of offering at the scale of
+      world-maintenance.
+  - n: 4
+    scene: "The exemplar: 'Whatever a great man does, others follow. I have no duty in all the worlds — yet I act. If I did not act, these worlds would perish.'"
+    force: kingship
+    composer: Elgar
+    work: "Pomp and Circumstance March No. 1 — Trio (opening)"
+    decision: added
+    why: >
+      Krishna argues that the wise must act not for themselves but as exemplars — the
+      world watches, and the world learns by imitation. Even God acts, though he needs
+      nothing. Elgar's trio melody is the grandeur of right action displayed before the
+      world: ceremonial, public, marching in the consciousness that others are watching
+      and will follow. The famous 'Land of Hope and Glory' melody is not triumphalist
+      here — it is the weight of visible obligation, the king who must be seen doing
+      what is right because the kingdom's order depends on it. Kingship requires
+      ceremonial grandeur and sovereign display; Elgar gives the pageantry of duty.
+  - n: 5
+    scene: "The gunas act, not the self: 'All actions are performed by the gunas of nature. The one deluded by ego thinks, \"I am the doer.\" One who knows the gunas is not attached.'"
+    force: law
+    composer: Bach
+    work: "Brandenburg Concerto No. 3 in G major, BWV 1048 — I. Allegro"
+    decision: added
+    why: >
+      The gunas — sattva, rajas, tamas — are the three strands of nature that perform
+      all action; the self is merely the witness. This is law as cosmic grammar: the
+      description of a system so formal that the personal 'I' dissolves into its
+      categories. Bach's Third Brandenburg opens with all strings in unison, then
+      separates into the architecture of the fugue — every voice entering with the same
+      material, each equally responsible and equally subordinate to the system. The self
+      here is not the doer. The system is the doer. Law requires formal clarity,
+      repetition, and architecture. Bach gives the machine of nature its proper sound.
+  - n: 6
+    scene: "Kill desire: 'The senses, the mind, and the intellect are said to be the seat of desire, which veils knowledge. Kill this enemy in the form of desire.'"
+    force: wrath
+    composer: Prokofiev
+    work: "Symphony No. 5 in B-flat major, Op. 100 — II. Allegro marcato"
+    decision: added
+    why: >
+      Chapter 3 closes with the most violent image in the teaching: desire as an enemy
+      to be killed — not suppressed, not managed, but destroyed, because it blocks
+      knowledge of the self. Prokofiev's Fifth Symphony second movement is brutal,
+      sardonic, and rhythmically unstoppable. The extended marcato passages feel like an
+      army advancing through resistance, the brass and percussion hammering the motif
+      with a relentlessness that refuses all settlement. The hero of Chapter 3 is not
+      Arjuna but the person who recognizes desire as the only enemy worth fighting. Wrath
+      here is turned inward — the warrior's violence redirected from external enemies to
+      the internal usurper. Wrath requires rhythmic pressure and unresolved harmony;
+      Prokofiev gives the battle that no external weapon can win.
+demoted:
+  - composer: Holst
+    work: "The Planets — 'Mars, the Bringer of War'"
+    status: "belongs to Chapter 1 (the conch-fanfare) and Iliad Book I (the quarrel); not for Chapter 3's interior wrath"
+    why: >
+      Chapter 3's wrath is entirely inward — the killing of desire, not the killing of
+      enemies. Mars is the sound of armies; Prokofiev's Fifth is the sound of a man
+      fighting himself. The distinction is the chapter's central claim.
+  - composer: Verdi
+    work: "Requiem — 'Dies irae'"
+    status: "belongs to Chapter 1 (the fatal catalogue); too terminal for Chapter 3's argument"
+    why: >
+      Chapter 3 is not about death but about the structure of action. The Dies irae is
+      final judgment; Chapter 3 is instruction on how to live. The registers do not align.
+  - composer: Wagner
+    work: "Tristan und Isolde — Prelude"
+    status: "demoted; desire here is the enemy, not the subject of longing"
+    why: >
+      Wagner's Tristan desire is erotic, chromatic, infinitely deferred — it is the
+      condition of longing itself. Chapter 3 says desire must be killed. The aesthetic
+      of longing would contradict the teaching. Prokofiev's violence is the correct
+      register for the destruction of desire; Wagner would romanticize what must be
+      annihilated.
