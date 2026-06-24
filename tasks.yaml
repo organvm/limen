@@ -44391,3 +44391,25 @@ tasks:
     session_id: https://github.com/organvm/limen/pull/116
     status: done
     output: 'Tanakh film companion (covenant/law/exile) — 8 force-matched films (revelation, law, exile, divine-intervention, sacrifice, kingship, plague, return) + adaptations overlay. File studium/film/tanakh.yaml landed via PR #116 (merged by Anthony). scripts/studium-validate.py passes (no tanakh violations).'
+- id: LIMEN-033
+  title: "studium-deepen-bhagavad-gita: Bhagavad Gita chapters 2-4 arcs and essays"
+  repo: organvm/limen
+  type: studium
+  target_agent: opencode
+  priority: medium
+  budget_cost: 2
+  status: done
+  labels:
+  - studium
+  - bhagavad-gita
+  urls: []
+  context: "Authored Bhagavad Gita Chapters 2-4 (Sankhya, Karma, Jnana) music arcs and mirrored essays. Validation passes all 209 arcs. Branch: studium-deepen-bhagavad-gita."
+  depends_on: []
+  created: '2026-06-24'
+  updated: '2026-06-24T10:30:00Z'
+  dispatch_log:
+  - timestamp: '2026-06-24T10:30:00Z'
+    agent: opencode
+    session_id: current
+    status: done
+    output: "Authored 3 music YAML files (book-02: 6 tracks law→revelation→metamorphosis→law→ascent→salvation; book-03: 6 tracks supplication→fate→sacrifice→kingship→law→wrath; book-04: 5 tracks divine-intervention→revelation→sacrifice→metamorphosis→salvation) + 3 essay MD files. Updated PLAN.md to 4/18. studium-validate.py: all 209 arcs valid. PR: https://github.com/organvm/limen/pull/new/studium-deepen-bhagavad-gita"
