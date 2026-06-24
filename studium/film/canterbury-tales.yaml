@@ -1,0 +1,158 @@
+work: canterbury-tales
+title: "The Canterbury Tales — a cinema of social speech, type, and the human comedy"
+principle: >
+  Do not assemble a "movies about medieval England" list. Assemble the poem's FORCES given
+  cinematic bodies. The Canterbury Tales is the study of the human comedy — a cross-section
+  of society placed on a road, forced to interact, where every figure is a performance and
+  every tale a confession or a weapon. The fitting and NOT obvious films are those that
+  capture a group of people bound by circumstance, revealing their hypocrisies, desires, and
+  mortality through talk. The comedy is not decoration; it is the argument. The companion
+  reaches past the medieval setting: formal social arrangement collapsing into farce (The
+  Rules of the Game), the road as a place of shifting identities (Some Like It Hot), the
+  monstrous vitality of the grotesque (Amarcord), and the interplay of justice and
+  forgiveness (12 Angry Men).
+force_coverage: [comedy, metamorphosis, memory, law, desire, fate, salvation]
+films:
+  - title: "The Rules of the Game"
+    director: "Jean Renoir"
+    year: 1939
+    force: comedy
+    divisions: [1, 4]
+    objects: [door]
+    letterboxd: the-rules-of-the-game
+    scene_or_theme: "The General Prologue and the social frame — the estate portrait and its subversion"
+    object_lesson: >
+      Society is a fragile arrangement of types trying to maintain their performances.
+      The DOOR is the object lesson: characters constantly entering and exiting the frame,
+      violating boundaries they claim to uphold. It teaches that the social hierarchy is
+      a mechanism that requires everyone's complicity to function, and the comedy arises
+      when the mechanism breaks down.
+    why: >
+      Renoir's masterpiece of social comedy works exactly like Chaucer's General Prologue:
+      a cross-section of society gathered in one place, their polite facades hiding deep
+      corruption and desire. Both authors look at their flawed characters not with judgment
+      but with a profound, complicit sympathy.
+    content_note: "social farce, implied adultery"
+
+  - title: "Some Like It Hot"
+    director: "Billy Wilder"
+    year: 1959
+    force: metamorphosis
+    divisions: [3, 14]
+    objects: [mirror]
+    letterboxd: some-like-it-hot
+    scene_or_theme: "The Wife of Bath and the Pardoner — performance, disguise, and shifting identity"
+    object_lesson: >
+      Identity is a costume you wear until you believe it yourself. The MIRROR reflects
+      the self as spectacle. It teaches that the truth of a person is often found not beneath
+      their disguise, but in the specific lie they choose to tell.
+    why: >
+      Wilder's film is the ultimate comedy of disguise and desire, where characters
+      adopt new identities to survive and end up discovering their true natures. This
+      is the exact register of the Wife of Bath and the Pardoner — characters whose
+      outrageous performances reveal the truth about their desires.
+    content_note: "farce, mild innuendo"
+
+  - title: "The Grand Budapest Hotel"
+    director: "Wes Anderson"
+    year: 2014
+    force: memory
+    divisions: [2, 11]
+    objects: [telephone]
+    letterboxd: the-grand-budapest-hotel
+    scene_or_theme: "The Knight's Tale and the Clerk's Tale — stylized nobility and the recollection of a lost world"
+    object_lesson: >
+      The past is not what happened; it is the highly stylized story we tell to comfort
+      ourselves in a brutal present. The TELEPHONE connects disparate points in time and
+      space. It teaches that courtly love and absolute loyalty are fictions, but necessary ones.
+    why: >
+      Anderson's film is a nested narrative about the memory of a vanished, courtly world,
+      told with extreme formal control. This mirrors Chaucer's romances, where idealized
+      types act out stylized dramas of honor and endurance against the backdrop of a much
+      messier reality.
+    content_note: "stylized violence, comic vulgarity"
+
+  - title: "12 Angry Men"
+    director: "Sidney Lumet"
+    year: 1957
+    force: law
+    divisions: [10, 15]
+    objects: [clock]
+    letterboxd: 12-angry-men
+    scene_or_theme: "The Franklin's Tale and the Man of Law's Tale — argument, judgment, and the negotiation of truth"
+    object_lesson: >
+      Truth is not an objective fact but something built through the friction of human
+      voices in a closed room. The CLOCK measures the pressure of time against the process
+      of judgment. It teaches that law is only as strong as the flawed people administering it.
+    why: >
+      Lumet's film is essentially a single, extended debate where different types clash
+      over the nature of justice. Chaucer's pilgrims are constantly judging each other's
+      tales and morality. Both works understand that formal law often fails, and human
+      consensus must take its place.
+    content_note: "tense argument, claustrophobia"
+
+  - title: "Amarcord"
+    director: "Federico Fellini"
+    year: 1973
+    force: desire
+    divisions: [5, 6, 8]
+    objects: [balloon]
+    letterboxd: amarcord
+    scene_or_theme: "The Miller's Tale and the Reeve's Tale — the grotesque, the bawdy, and the vitality of the body"
+    object_lesson: >
+      The body is a chaotic, hungry machine that constantly undermines the intellect's
+      pretensions. The BALLOON represents the inflation of desire and its inevitable,
+      comic bursting. It teaches that physical appetite is the great leveler of society.
+    why: >
+      Fellini's loving, episodic portrait of an Italian town is driven by the same bawdy,
+      anarchic energy as Chaucer's fabliaux. It celebrates the grotesque and the physical
+      without reducing its characters to mere caricatures, capturing the sheer vitality
+      of the Miller's and Reeve's tales.
+    content_note: "bawdy humor, sexual themes"
+
+  - title: "The Seventh Seal"
+    director: "Ingmar Bergman"
+    year: 1957
+    force: fate
+    divisions: [12, 21]
+    objects: [milk]
+    letterboxd: the-seventh-seal
+    scene_or_theme: "The Pardoner's Tale and the Monk's Tale — the omnipresence of death and the illusion of control"
+    object_lesson: >
+      Death cannot be outsmarted, only met. The MILK represents the brief, fragile moments
+      of innocence and communion that we steal from the inevitability of the end. It teaches
+      that the most profound human act is offering comfort in the shadow of the plague.
+    why: >
+      Bergman's medieval allegory is the perfect companion for Chaucer's darker tales. The
+      knight's chess game with Death mirrors the rioters in the Pardoner's Tale who set out
+      to slay Death and find him in a pile of gold. Both works use the medieval setting to
+      explore the stark reality of mortality.
+    content_note: "existential dread, depictions of the plague"
+
+  - title: "Ordet"
+    director: "Carl Theodor Dreyer"
+    year: 1955
+    force: salvation
+    divisions: [24]
+    objects: []
+    letterboxd: ordet
+    scene_or_theme: "The Parson's Tale and Chaucer's Retraction — the sudden shift from fiction to absolute truth"
+    object_lesson: >
+      At the end of all the talking, the games must stop, and the soul must stand bare.
+      It teaches that true revelation breaks the frame of the story entirely.
+    why: >
+      Dreyer's film builds slowly through theological debate before culminating in a
+      miracle that defies all rational explanation. This captures the radical shift at
+      the end of the Canterbury Tales, where Chaucer abandons the comedy, the frame story,
+      and his own fictions to present a straight sermon and a plea for his soul.
+    content_note: "slow pacing, theological intensity"
+
+adaptations:
+  - title: "The Canterbury Tales"
+    director: "Pier Paolo Pasolini"
+    year: 1972
+    letterboxd: the-canterbury-tales
+    note: "Pasolini's adaptation focuses heavily on the bawdy and the grotesque, excising the noble and pious tales. It captures the vitality of the fabliaux but misses the work's larger dialectic. Set aside."
+    scenes:
+      - {division: 5, force: desire, scene: "The Miller's Tale — the triumph of physical appetite"}
+      - {division: 14, force: comedy, scene: "The Wife of Bath's Prologue — the assertion of experience over authority"}
