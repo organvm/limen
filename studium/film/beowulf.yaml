@@ -1,0 +1,205 @@
+# Beowulf — film companion (the FOURTH commentary system)
+work: beowulf
+title: "Beowulf — a cinema of wyrd and heroic doom"
+principle: >
+  Do not assemble a "movies about monsters" list. Assemble the poem's FORCES given cinematic
+  bodies. Beowulf is not primarily an action story; it is an elegy for a doomed worldview.
+  It is about the human attempt to build a lit hall (civilisation, kingship) in a dark world
+  that will inevitably reclaim it, watched over by wyrd (fate). The monster Grendel is the
+  ultimate exile; the Dragon is the curse of hoarding. The hero is the one who steps into the
+  dark knowing he will ultimately lose. The fitting, non-obvious film for Grendel's terror is
+  not a fantasy epic but Jaws — a plague that empties the public space. For the exile looking
+  into the light, The Searchers. For the burden of kingship, The Godfather. For the deep time
+  and the sorrow of forgotten civilizations, A Ghost Story. For the aging hero spending his last
+  strength, Logan. The poem's register is autumnal, heroic, and deeply melancholic.
+force_coverage: [plague, exile, wrath, revelation, kingship, memory, desire, fate, sacrifice, grief]
+films:
+  - title: "Jaws"
+    director: "Steven Spielberg"
+    year: 1975
+    force: plague
+    divisions: [1, 2, 3, 4]
+    objects: []
+    letterboxd: jaws
+    scene_or_theme: "Fitts 1-4 — Grendel's terror and the emptying of the great hall"
+    object_lesson: >
+      A monster's primary violence is political: it empties the public space. Like Grendel rendering
+      the great hall of Heorot useless at night, the shark's true terror is that it shuts down the
+      beach — the center of the community's life. The lesson is that plague is not just death, but
+      the cessation of civilised gathering.
+    why: >
+      Spielberg's shark is Grendel: a stalker from the dark water that preys on the edge of the human
+      domain. We don't need a literal dark age film to understand the dynamic of a king failing to
+      protect his people from a primal, unseen terror.
+    content_note: "animal attacks, suspense, blood"
+
+  - title: "The Searchers"
+    director: "John Ford"
+    year: 1956
+    force: exile
+    divisions: [6, 11, 12]
+    objects: [door]
+    letterboxd: the-searchers
+    scene_or_theme: "Fitts 6-12 — Grendel as the kin-slayer, the outsider looking into the light"
+    object_lesson: >
+      The exile is defined by his exclusion from the hearth. Ethan Edwards standing in the doorway,
+      unable to enter the home he saved, is the tragedy of the outcast. Grendel is the ultimate
+      exile — condemned to the moors, hearing the laughter of the hall but forever barred from it.
+    why: >
+      Grendel is descended from Cain, the original wanderer. Ford's masterpiece is about a man who
+      is a necessary monster, useful for violence but too savage for the civilization he protects.
+      The framing of the door is the exact boundary of Heorot.
+    content_note: "racism, implied violence, psychological darkness"
+
+  - title: "Alien"
+    director: "Ridley Scott"
+    year: 1979
+    force: wrath
+    divisions: [19, 20]
+    objects: [egg]
+    letterboxd: alien
+    scene_or_theme: "Fitts 19-20 — The vengeance of Grendel's Mother"
+    object_lesson: >
+      Retribution from the dark is maternal and absolute. Grendel's Mother does not attack for malice;
+      she attacks for blood-vengeance. The Xenomorph is the perfect, unreasoning embodiment of a
+      hostile environment striking back when its offspring are threatened.
+    why: >
+      While Grendel is a lonely exile, his Mother is pure, terrifying retribution. The claustrophobia
+      of the Nostromo mimics the terrifying descent into the alien, suffocating logic of the mere.
+    content_note: "sci-fi horror, gore, intense suspense"
+
+  - title: "Stalker"
+    director: "Andrei Tarkovsky"
+    year: 1979
+    force: revelation
+    divisions: [21, 22, 23]
+    objects: []
+    letterboxd: stalker
+    scene_or_theme: "Fitts 21-23 — The descent into the mere and the alien landscape"
+    object_lesson: >
+      To face the deepest truth, you must leave the mapped world and enter a zone where the rules
+      of reality warp. The mere where Grendel's Mother lives is an alien, unnatural landscape. The
+      lesson is that true confrontation happens outside the geometry of human reason.
+    why: >
+      Tarkovsky's Zone is the perfect cinematic equivalent of the haunted mere — a place of strange
+      physics, oppressive atmosphere, and psychological trial, where the hero must strip away his
+      defenses to reach the center.
+    content_note: "slow, philosophical, meditative pace"
+
+  - title: "The Godfather"
+    director: "Francis Ford Coppola"
+    year: 1972
+    force: kingship
+    divisions: [24, 25, 29]
+    objects: [door]
+    letterboxd: the-godfather
+    scene_or_theme: "Fitts 24-29 — Hrothgar's sermon and the burden of sovereignty"
+    object_lesson: >
+      Sovereignty isolates the ruler from the humanity he is supposed to protect. The door closing
+      on Kay at the end of the film is the moment Michael fully assumes the 'kingship' — becoming
+      the untouchable center of power, walled off from the light.
+    why: >
+      The Godfather is American cinema's greatest study of dynastic succession, gift-giving (favors),
+      and the moral cost of holding power. It fits the political dimensions of Beowulf perfectly,
+      translating the Anglo-Saxon hall into the mafia compound.
+    content_note: "mafia violence, language"
+
+  - title: "A Ghost Story"
+    director: "David Lowery"
+    year: 2017
+    force: memory
+    divisions: [32]
+    objects: []
+    letterboxd: a-ghost-story
+    scene_or_theme: "Fitt 32 — The Lay of the Last Survivor and the burying of the treasure"
+    object_lesson: >
+      Time outlasts everything we build. The Last Survivor burying his people's treasure in the earth
+      is the ultimate expression of historical grief — the recognition that a whole civilisation has
+      passed away. The lesson is the unbearable weight of deep time.
+    why: >
+      Lowery's film is an extended elegy about time washing over a specific place. It captures the
+      deep, melancholic tone of the Anglo-Saxon elegies (like The Wanderer or The Ruin) better than
+      any conventional historical epic could.
+    content_note: "existential themes, prolonged stillness"
+
+  - title: "The Treasure of the Sierra Madre"
+    director: "John Huston"
+    year: 1948
+    force: desire
+    divisions: [32, 33]
+    objects: [gun]
+    letterboxd: the-treasure-of-the-sierra-madre
+    scene_or_theme: "Fitts 32-33 — The awakening of the Dragon and the curse of the hoard"
+    object_lesson: >
+      Gold drawn from the earth carries the weight of the earth with it. The dragon does not use the
+      treasure; he merely guards it, just as the prospectors are destroyed by their own hoarding.
+      The lesson is that wealth separated from circulation becomes a curse that consumes its owner.
+    why: >
+      Huston's film perfectly captures the Anglo-Saxon terror of buried treasure — gold that has been
+      taken out of human ring-giving and left to the dark, breeding paranoia, violence, and death.
+    content_note: "violence, psychological breakdown"
+
+  - title: "The Seventh Seal"
+    director: "Ingmar Bergman"
+    year: 1957
+    force: fate
+    divisions: [34, 35, 37]
+    objects: []
+    letterboxd: the-seventh-seal
+    scene_or_theme: "Fitts 34-37 — Wyrd (fate) and the hero's approach to inevitable death"
+    object_lesson: >
+      Fate cannot be defeated, only met with open eyes. The Knight playing chess with Death knows he
+      will lose, but plays to buy time and perform one meaningful act. Beowulf goes to the dragon's
+      barrow knowing 'Wyrd goes ever as she must,' but goes anyway.
+    why: >
+      Bergman's knight is the ultimate figure of a man acting under the shadow of absolute doom. The
+      film's medieval setting and stark confrontation with mortality align perfectly with the Old
+      English concept of wyrd.
+    content_note: "existential dread, plague imagery"
+
+  - title: "Logan"
+    director: "James Mangold"
+    year: 2017
+    force: sacrifice
+    divisions: [36, 38, 41]
+    objects: []
+    letterboxd: logan
+    scene_or_theme: "Fitts 36-41 — The aging hero, the failing strength, and the final fight"
+    object_lesson: >
+      The heroic code is a terminal condition. A hero who outlives his era is a ghost, and his only
+      remaining function is to spend his final strength to buy the future for someone else. Beowulf
+      fighting the dragon as an old man is the exact arc of Logan.
+    why: >
+      Beowulf is unique because it shows us the hero in his prime, and then cuts to him fifty years
+      later, old and facing his doom. Logan is the finest cinematic study of an aged warrior whose
+      body is failing but who must rise for one last, fatal defense of his people.
+    content_note: "extreme violence, language"
+
+  - title: "Nomadland"
+    director: "Chloé Zhao"
+    year: 2020
+    force: grief
+    divisions: [42, 43]
+    objects: []
+    letterboxd: nomadland
+    scene_or_theme: "Fitts 42-43 — Beowulf's funeral pyre and the Geats' impending doom"
+    object_lesson: >
+      To lose your king is to lose your place in the world. The Geatish woman mourning at Beowulf's
+      pyre knows that his death means the end of her people — slavery and exile await. Grief here is
+      not just personal, but the death of a community.
+    why: >
+      The Old English elegiac mood is profoundly nomadic — wandering the paths of exile. Zhao's film
+      captures the modern version of this: people cut loose from their moorings, moving through a
+      ruined, beautiful landscape, carrying their dead with them.
+    content_note: "melancholy, themes of loss"
+
+adaptations:
+  - title: "Beowulf"
+    director: "Robert Zemeckis"
+    year: 2007
+    letterboxd: beowulf-2007
+    note: "The obvious screen-Beowulf — motion-captured, turns Grendel's mother into a seductress to fix a perceived structural flaw in the poem. Set aside; we screen the force companions instead."
+    scenes:
+      - {division: 2, force: kingship, scene: "The celebration in Heorot"}
+      - {division: 12, force: wrath, scene: "Beowulf fights Grendel naked"}
+      - {division: 41, force: sacrifice, scene: "The final fight with the golden dragon"}
