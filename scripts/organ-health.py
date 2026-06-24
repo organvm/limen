@@ -171,10 +171,6 @@ def _registry():
              gate="GMAIL_OAUTH_OP_REF", gate_default="", gate_truthy_nonempty=True,
              what="sweep inbound (flag/archive) + rebuild obligations ledger",
              probe=lambda: _mtime(LOGS / "obligations-view.json")),
-        dict(key="nomenclator", rung="NOMENCLATOR", voice="nomenclator", cadence_key="NOMENCLATOR",
-             gate="LIMEN_NOMENCLATOR", gate_default="0",
-             what="INDEX·NOMINVM — hold the roll of names to the canon (nota)",
-             probe=lambda: _mtime(LOGS / "nomenclator.json")),
     ]
 
 
