@@ -83,13 +83,15 @@ No completed backup. Data already has **3 copies** (iCloud + Archive4T + Backbla
 convenience, not a durability gap. **Owner:** you. **Cheapest path:** staging drive →
 `tmutil setdestination`. Not blocking anything.
 
-### 6. Session residue (from QUICKEN) — *the two atoms stalled sessions surfaced*
-QUICKEN drove every reversible step of the sitting sessions to done; these two are the only touches a
-loop can't make. Auto-surfaced to `docs/QUICKEN-RESIDUE.md` each beat; recorded here as the persistent
-owner-record so they're never re-asked.
-- **One login/identity step** — **Owner:** you. **Cheapest path:** `claude setup-token` (the
-  credential-race self-heal is staged at `fix/claude-credential-race@b1274bf` and probes ready) +
-  reconnect the hotspot. Unblocks `login-successful` + connectivity troubleshooting.
-- **Open the gate** — **Owner:** you (it's your lever, by protocol). **Cheapest path:** say the word;
-  the staged pushes (`unblock-pr-fix-deploy-gates`, QUICKEN `d586e63`+`e464855`, Etceter4) land with no
-  re-asking. Until then they're **held, not hanging** — daemon-owned, catalogued, deploy on gate-open.
+### 6. Session residue (from QUICKEN) — *hung in the permanent queue, not this doc*
+QUICKEN drives every reversible step of a sitting session to done, then hangs the one touch a loop
+can't make in the **permanent `needs_human` queue** as `ASK-quicken-<key>` (lockless/atomic into
+`tasks.yaml`; surfaced by `obligations-view` / `organ-health` / `reclassify`; capture-pushed off-disk).
+The running system holds these — this doc is the annotated view, not the home; nothing waits on memory.
+- **One login/identity step** → hung as `ASK-quicken-login` when surfaced. **Cheapest path:**
+  `claude setup-token` (credential-race self-heal staged at `fix/claude-credential-race@b1274bf`,
+  probes ready) + reconnect the hotspot.
+- **Open the gate** → already hung as **`ASK-5-open-merge-gate`** (a standing posture, never
+  duplicated). **Cheapest path:** say the word; the staged pushes (`unblock-pr-fix-deploy-gates`,
+  QUICKEN `d586e63`+`e464855`, Etceter4) land with no re-asking. Until then **held, not hanging** —
+  daemon-owned, catalogued, deploy on gate-open.

@@ -38,6 +38,7 @@ import argparse
 import json
 import os
 import re
+import sys
 import time
 from pathlib import Path
 
@@ -47,6 +48,11 @@ TASKS = HOME / ".claude" / "tasks"
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 JOURNAL = ROOT / "logs" / "session-lifecycle.jsonl"
 RESIDUE_OUT = ROOT / "docs" / "QUICKEN-RESIDUE.md"
+# The PERMANENT home of a human atom is the running system's needs_human queue (surfaced by
+# obligations-view / organ-health / reclassify), NOT a worktree doc. We hang residue there.
+LEDGER = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
+# atoms whose permanent home is a STANDING posture already hung once — never multiply into a task.
+_POSTURE = {"push": "ASK-5-open-merge-gate (the standing gate-hold)"}
 
 # A session idle longer than this (and with pending work) is STALLED, not "working".
 STALE_MIN = int(os.environ.get("LIMEN_QUICKEN_STALE_MIN", "20"))
@@ -287,6 +293,70 @@ def fmt_report(rows: list[dict]) -> str:
     return "\n".join(out)
 
 
+def _atom_key(atom: str) -> str:
+    """The PROTOCOL key that produced this atom (stable id namespace), or 'misc'."""
+    return next((k for k, _rx, a in PROTOCOL if a == atom), "misc")
+
+
+def hang_residue(rows: list[dict]) -> dict:
+    """Hang each irreducible human atom in the PERMANENT needs_human queue — the running system of
+    record (obligations-view / organ-health / reclassify all read it), capture-pushed off-disk — so
+    no obligation ever lives only in a disposable worktree doc. Idempotent within QUICKEN's own
+    `ASK-quicken-<key>` namespace; written under the shared queue-lock via the atomic primitive so a
+    concurrent heartbeat can never see a torn queue. Posture atoms (gate-hold) are already homed once
+    and are never multiplied. Fail-open: a lock miss skips this beat and self-corrects next."""
+    by_key: dict[str, dict] = {}
+    for r in rows:
+        if r["state"] != "STALLED" or not r["decision"]["residue"]:
+            continue
+        atom = r["decision"]["residue"]
+        k = _atom_key(atom)
+        by_key.setdefault(k, {"atom": atom, "unblocks": set()})["unblocks"].add(r["title"][:48])
+    res = {"created": [], "refreshed": [], "homed": [], "ledger": str(LEDGER)}
+    if not by_key:
+        return res
+    try:
+        sys.path.insert(0, str(ROOT / "cli" / "src"))
+        from datetime import date, datetime, timezone
+        from limen.io import load_limen_file, queue_lock, save_limen_file
+        from limen.models import Task
+    except Exception as e:  # never dead-stop the apply if the cli pkg isn't importable
+        res["error"] = f"ledger unavailable ({e}); residue digest still written"
+        return res
+    if not LEDGER.exists():
+        res["error"] = f"no ledger at {LEDGER}; residue digest still written"
+        return res
+    with queue_lock(LEDGER) as got:
+        if not got:
+            res["error"] = "queue busy; skipped this beat (self-corrects)"
+            return res
+        lf = load_limen_file(LEDGER)
+        index = {t.id: t for t in lf.tasks}
+        now = datetime.now(timezone.utc)
+        for k, info in sorted(by_key.items()):
+            if k in _POSTURE:
+                res["homed"].append(f"{info['atom']} → {_POSTURE[k]}")
+                continue
+            tid = f"ASK-quicken-{k}"
+            ctx = (f"Cheapest path → {info['atom']}. Unblocks: {', '.join(sorted(info['unblocks']))}. "
+                   f"Auto-hung by QUICKEN (finish-not-park); refreshes each beat until you act.")
+            ex = index.get(tid)
+            if ex and ex.status != "done":
+                ex.status, ex.context, ex.updated = "needs_human", ctx, now
+                if "quicken-residue" not in (ex.labels or []):
+                    ex.labels = list(ex.labels or []) + ["quicken-residue"]
+                res["refreshed"].append(tid)
+            elif ex is None:
+                lf.tasks.append(Task(
+                    id=tid, title=info["atom"], type="ops", target_agent="human",
+                    priority="high", status="needs_human",
+                    labels=["user-ask", "quicken-residue", "needs-human"],
+                    context=ctx, created=date.today(), updated=now))
+                res["created"].append(tid)
+        save_limen_file(LEDGER, lf)
+    return res
+
+
 def write_residue(rows: list[dict]) -> str:
     """The deduped irreducible residue — surfaced ONLY after driving to completion, never as a
     substitute for finishing. One line per genuinely-human atom, deduped across sessions."""
@@ -295,12 +365,15 @@ def write_residue(rows: list[dict]) -> str:
         if r["state"] == "STALLED" and r["decision"]["residue"]:
             atoms.setdefault(r["decision"]["residue"], []).append(r["title"][:48])
     lines = ["# QUICKEN residue — the irreducible human atoms (deduped)", "",
-             "> Surfaced only after every reversible step was driven to done. One touch each.",
-             "> **Owner of every atom below: you** (identity / login / send / physical / gate —",
-             "> the only things a loop can't do). Everything else is **daemon-owned** and fires each",
-             "> beat; it is not hanging. Canonical persistent owner-record: `docs/his-hand-registry.md`.", ""]
+             "> A VIEW, not the home. Each atom is hung in the PERMANENT `needs_human` queue as",
+             "> `ASK-quicken-<key>` (surfaced by obligations-view / organ-health / reclassify,",
+             "> capture-pushed off-disk) — so nothing waits in a disposable doc. Owner of every",
+             "> atom: you (identity / login / send / physical / gate). Everything else is",
+             "> daemon-owned and fires each beat; it is not hanging.", ""]
     for atom, titles in sorted(atoms.items()):
-        lines.append(f"- **{atom}**  ·  owner: **you**  ·  unblocks: {', '.join(sorted(set(titles)))}")
+        home = _POSTURE.get(_atom_key(atom)) or f"`ASK-quicken-{_atom_key(atom)}` (needs_human)"
+        lines.append(f"- **{atom}**  ·  owner: **you**  ·  hung: {home}  ·  "
+                     f"unblocks: {', '.join(sorted(set(titles)))}")
     if not atoms:
         lines.append("- (none — every stalled purpose was fully driveable; nothing waits on you)")
     return "\n".join(lines) + "\n"
@@ -333,6 +406,15 @@ def main() -> int:
         RESIDUE_OUT.parent.mkdir(parents=True, exist_ok=True)
         RESIDUE_OUT.write_text(write_residue(rows))
         print(f"\n[apply] journal+residue written -> {JOURNAL.name}, {RESIDUE_OUT.name}")
+        # hang each atom in the PERMANENT needs_human queue — the running system holds it, not a doc.
+        h = hang_residue(rows)
+        bits = []
+        if h["created"]:   bits.append(f"created {', '.join(h['created'])}")
+        if h["refreshed"]: bits.append(f"refreshed {', '.join(h['refreshed'])}")
+        if h["homed"]:     bits.append(f"already-homed {len(h['homed'])}")
+        if h.get("error"): bits.append(h["error"])
+        print(f"[apply] permanent ledger ({Path(h['ledger']).name}): "
+              f"{'; '.join(bits) or 'no residue to hang'}")
 
     if args.breathe:
         breathe(rows, args.breathe, dry=args.dry_breathe)
