@@ -1,0 +1,130 @@
+# Bhagavad Gita — Chapter 4 — curated music arc
+# Jnana-Karma-Sannyasa Yoga: The Yoga of Knowledge and the Renunciation of Action
+work: bhagavad-gita
+book: 4
+title: "Bhagavad Gita Chapter 4: The Avatar's Descent, Action in Inaction, the Sword of Wisdom"
+length_minutes: 76
+principle: >
+  Do not score Chapter 4 as "the avatara chapter." Score it as the chapter where
+  Krishna reveals not just what he taught but who he is — the eternal teacher who
+  descends whenever dharma declines, the god who acts without acting, the one who
+  burns all actions in the fire of knowledge. The chapter is a series of unveilings:
+  the transmission of yoga through time, the incarnation of the divine in history,
+  the paradox of action without action, the sacrifice of wisdom that surpasses all
+  material sacrifice. It ends with a command: cut doubt with the sword of
+  self-knowledge, and arise.
+force_arc: [memory, divine-intervention, revelation, metamorphosis, ascent, fate]
+dominant_force: revelation
+tracks:
+  - n: 1
+    scene: "The ancient lineage — 'I taught this imperishable yoga to the sun-god Vivasvan; Vivasvan taught it to Manu; Manu taught it to Ikshvaku. Thus transmitted through the chain of royal sages.'"
+    force: memory
+    composer: Elgar
+    work: "Enigma Variations — Variation IX (Nimrod)"
+    decision: added
+    why: >
+      The teaching did not begin with Krishna — it has been transmitted from sun-god
+      to ancient king to the present moment, a chain of tradition that stretches
+      back before time. Memory requires nostalgic recall and faded recapitulation:
+      the sense of something old, precious, still alive. Elgar's Nimrod is the
+      great musical image of this — not grief but the fullness of a tradition
+      recalled, a theme that carries within it the weight of all its past
+      performances, the golden chain of teachers and students reaching across
+      the ages. The string line ascends like a tradition that has never broken.
+  - n: 2
+    scene: "The avatar descends — 'Whenever dharma declines, O Arjuna, and adharma prevails, I manifest Myself. For the protection of the good and the destruction of the wicked, I appear age after age.'"
+    force: divine-intervention
+    composer: Wagner
+    work: "Das Rheingold — Prelude"
+    decision: added
+    why: >
+      The avatara declaration is the Gita's central theological claim: God enters
+      history when history breaks faith. The E flat rising from the depths of
+      Wagner's Rheingold Prelude is the exact sound of this — a world-system
+      coming into being from a single note, the divine making itself audible at
+      the threshold of matter. Divine-intervention requires sudden color shift
+      and brass/strings contrast; the Rheingold Prelude is the slow emergence of
+      a god into the world of time, the cosmic machinery engaging because the
+      human situation has become unbearable without it.
+  - n: 3
+    scene: "Knowing the divine — 'One who knows My divine birth and work in truth is not reborn. Leaving the body, that one attains Me.'"
+    force: revelation
+    composer: Tavener
+    work: "The Protecting Veil — I. The Protecting Veil"
+    decision: added
+    why: >
+      The knowledge that liberates is not intellectual assent but recognition: the
+      soul knows the divine because it is of the same substance, and that knowing
+      is itself the crossing from death to immortality. Tavener's The Protecting
+      Veil opens with the solo cello rising in a chant-like line over a hushed
+      string chorus — stillness so exposed it becomes vision. Revelation requires
+      stillness, chant, verticality; Tavener gives the quality of a soul that
+      has seen and has been changed by seeing, the veil of the world parting to
+      reveal what was always there.
+  - n: 4
+    scene: "Action in inaction — 'The one who sees inaction in action and action in inaction is wise among all. Such a person performs all actions while remaining established in the self.'"
+    force: metamorphosis
+    composer: Ravel
+    work: "Pavane pour une infante défunte"
+    decision: added
+    why: >
+      The paradox of action without attachment — performing all acts while resting
+      in the self — is a transformation of the very category of action. It is no
+      longer doing vs. not-doing but a third state: acting from stillness, like
+      a dancer who is both moving and centered. Ravel's Pavane is the sound of
+      this paradox: the slow dance unfolds with perfect grace, the melodic line
+      moving forward while the harmony holds a deep, reflective stillness.
+      Metamorphosis requires changing orchestral color and fluid harmony; the
+      Pavane weaves both into the single image of motion that does not disturb
+      the depth.
+  - n: 5
+    scene: "The sacrifice of wisdom — 'All actions culminate in wisdom. Those who are learned see the same thing in a learned Brahmin, a cow, an elephant, a dog, and an outcaste.'"
+    force: ascent
+    composer: Mahler
+    work: "Symphony No. 2 (Resurrection) — V. Aufersteh'n (opening)"
+    decision: added
+    why: >
+      The vision of equality — seeing the same Self in all beings regardless of
+      station — is the ascent from partial to universal vision. It is not an
+      ethical improvement but a change in the quality of sight. Mahler's
+      Resurrection finale rises from the hushed chorus to the full orchestra:
+      the promise that all that was divided will be gathered, all that was lost
+      restored, the self lifted from the particular to the whole. Ascent requires
+      rising sequence and luminous orchestration; Mahler's rising of the dead —
+      the great gathering of all souls into one fabric — is the sound of wisdom
+      seeing the one in the many.
+  - n: 6
+    scene: "The sword of knowledge — 'Cut this doubt in your heart with the sword of self-knowledge. Arise, Arjuna!'"
+    force: fate
+    composer: Beethoven
+    work: "Symphony No. 5 — IV. Allegro"
+    decision: added
+    why: >
+      The chapter ends with a command to cut through doubt — not to resolve it
+      but to sever it. The sword of knowledge does not argue with doubt; it
+      ends it with one stroke, and the self is free to act. Beethoven's Fifth
+      finale is the sound of that cut: the C major triumph after the long
+      struggle of the minor-key movements, the hammered resolution of a
+      question that has finally received its answer. Fate's requirement is
+      inexorable motif and hammered insistence; the finale marches through
+      the doubt that tried to stop it, arriving at the affirmation that was
+      always waiting.
+demoted:
+  - composer: Holst
+    work: "The Planets — 'Mars, the Bringer of War'"
+    status: "wrong register; Chapter 4 is about the divine descent and the sacrifice of wisdom, not martial combat"
+    why: >
+      Mars is pressure and asymmetry — the sound of unresolved aggression.
+      Chapter 4's action is the opposite: the action that comes from complete
+      stillness, the god who acts without acting, the wisdom that cuts without
+      wounding. Even the closing command to cut doubt is not Mars-style
+      aggression but the clean stroke of clarity.
+  - composer: Wagner
+    work: "Götterdämmerung — Siegfried's Funeral March"
+    status: "never before Chapter 11 or Chapter 18"
+    why: >
+      The Funeral March is the sound of a world ending. Chapter 4 ends with a
+      beginning — arise, cut doubt, act. Even its severity is generative, not
+      terminal. The Funeral March would place the weight of death on a chapter
+      that is announcing the perpetual renewal of dharma through divine
+      intervention in time.

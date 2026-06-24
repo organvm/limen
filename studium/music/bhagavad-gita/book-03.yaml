@@ -1,0 +1,127 @@
+# Bhagavad Gita — Chapter 3 — curated music arc
+# Karma Yoga: The Yoga of Action
+work: bhagavad-gita
+book: 3
+title: "Bhagavad Gita Chapter 3: Action, Sacrifice, the Enemy Within"
+length_minutes: 72
+principle: >
+  Do not score Chapter 3 as "a justification for fighting." Score it as the chapter
+  where knowledge meets action and discovers they are not opposed. Arjuna asks the
+  sharpest question yet: if knowledge is supreme, why force me into action at all?
+  Krishna answers that no one can avoid action — the world itself is a mechanism of
+  sacrifice, giving and receiving, each part feeding the whole. The chapter then
+  turns inward: the real enemy is not the opposing army but desire, which is
+  insatiable, eternal, seated in the senses and the mind. The battle of Kurukshetra
+  is already being fought inside every human being.
+force_arc: [supplication, fate, law, kingship, supplication, wrath]
+dominant_force: law
+tracks:
+  - n: 1
+    scene: "Arjuna's question — 'If you consider knowledge superior to action, why do you force me into this terrible deed?'"
+    force: supplication
+    composer: Mozart
+    work: "Ave verum corpus"
+    decision: added
+    why: >
+      Arjuna's question is not tactical but spiritual: he has just heard that
+      knowledge is supreme, and he cannot reconcile that with Krishna's command
+      to fight. The question is an exposed plea — help me understand how these
+      fit together. Mozart's Ave verum corpus is the purest form of supplication
+      in the classical repertoire: short, suspended, the melodic line exposed
+      above a hushed string accompaniment, the cadence unresolved until the final
+      breath. It is the sound of a soul asking to be shown.
+  - n: 2
+    scene: "No one remains without action — 'No one can remain without acting even for a moment; everyone is helplessly driven to action by the gunas born of nature.'"
+    force: fate
+    composer: Verdi
+    work: "Requiem — Dies irae"
+    decision: added
+    why: >
+      Krishna's answer is cosmological determinism: the three gunas (sattva, rajas,
+      tamas) drive all beings to act regardless of will. You cannot choose not to
+      act — you can only choose whether your action binds you or frees you. Verdi's
+      Dies irae carries the same weight: the mechanism of judgment that operates
+      regardless of preference, the brass and percussion of a cosmic order that
+      does not consult human desire. Fate's requirement — inexorable motif,
+      hammered insistence — is the sound of the gunas grinding through every
+      living thing.
+  - n: 3
+    scene: "The sacrificial wheel — 'The Creator fashioned sacrifice together with humankind from the beginning and said: by this shall you multiply. Let this be the cow of plenty that grants all your desires.'"
+    force: law
+    composer: Handel
+    work: "Zadok the Priest"
+    decision: added
+    why: >
+      The image of the cosmic wheel of sacrifice — each creature feeding the next,
+      the gods fed by offerings, humans fed by rain, rain fed by sacrifice — is
+      the Gita's great vision of lawful interdependence. Handel's Zadok the Priest
+      is the coronation anthem of structure: the hushed opening, the slow build
+      of voices and orchestra, then the explosion of sound as the system reveals
+      itself in full glory. Law's requirement is formal clarity, repetition,
+      architecture; the wheel of sacrifice is architecture — the universe as a
+      closed system of giving and receiving, each part playing its ordained role.
+  - n: 4
+    scene: "The wise one's sovereign action — 'The wise act without attachment for the welfare of the world, without unsettling the ignorant who are attached to action.'"
+    force: kingship
+    composer: Elgar
+    work: "Pomp and Circumstance March No. 1 — Trio (Land of Hope and Glory)"
+    decision: added
+    why: >
+      The wise person acts not for personal gain but as a public service — setting
+      an example, holding the world together by acting correctly within it. This
+      is sovereign action: the king who serves the kingdom by ruling, the sage who
+      serves the world by remaining in it. Elgar's trio theme is the sound of
+      regal service — not martial pomp but ceremonial generosity, the grandeur of
+      one who acts because the world needs the action, not because the action
+      benefits the actor. Kingship requires ceremonial grandeur and sovereign
+      display; Elgar gives it with the dignity of purpose, not self-aggrandizement.
+  - n: 5
+    scene: "The chain of confusion — 'Actions cling to one who is attached to the fruits of action. One who is free from attachment is not bound.'"
+    force: supplication
+    composer: Schubert
+    work: "Ave Maria"
+    decision: added
+    why: >
+      The teaching on the chain of attachment — desire leads to action, action
+      leads to entanglement — is the chapter's most vulnerable moment: every
+      human being is caught in this chain, and the only way out is to see it.
+      Schubert's Ave Maria is the exposed line of this recognition: the voice
+      rising in plea, the piano writing that is simple and devastating, the
+      supplication of a creature who has seen its own bondage and asks to be
+      released. The exposed melodic line and suspended cadence of supplication
+      find their exact musical form here.
+  - n: 6
+    scene: "Slay desire — 'Desire and anger are born of the passion-guna; know these as the enemies of the self. Slay this enemy that takes the form of desire.'"
+    force: wrath
+    composer: Stravinsky
+    work: "The Rite of Spring — 'The Sacrificial Dance (The Chosen One)'"
+    decision: added
+    why: >
+      The chapter closes not with peace but with war — the war within. Desire is
+      not a weakness to be managed but an enemy to be slain, and the battlefield
+      is the body itself. Stravinsky's Sacrificial Dance is ritual violence as
+      purification: the irregular accents, the pounding ostinato, the dance that
+      does not stop until the enemy is destroyed. Wrath's requirement is rhythmic
+      pressure and unresolved harmony; the inner battle against desire is the
+      most intimate and most savage war in the Gita, and Stravinsky gives it the
+      register of ritual combat, the self casting out its own demon in a dance
+      that will not be refused.
+demoted:
+  - composer: Holst
+    work: "The Planets — 'Mars, the Bringer of War'"
+    status: "reserved for external battle (Chapters 1 and possible later arcs); Chapter 3's war is interior"
+    why: >
+      Mars is the sound of armies facing armies, of conchs and chariots and
+      arrows. Chapter 3's wrath is the inner war against desire — a different
+      register entirely. Stravinsky's Sacrificial Dance gives the quality of
+      intimate ritual violence that Mars, for all its power, cannot reach
+      because it is scored for the public square, not the interior of the self.
+  - composer: Wagner
+    work: "Götterdämmerung — Siegfried's Funeral March"
+    status: "never for a teaching chapter; reserved for theophany (Chapter 11) or the closing liberation (Chapter 18)"
+    why: >
+      The Funeral March belongs to a public death. Chapter 3 is about the death
+      of desire within the living self. These are opposite gestures: one
+      commemorates a hero fallen, the other describes the discipline of the
+      inner life. Wagner's weight would crush the delicacy of the psychological
+      insight Krishna is developing here.

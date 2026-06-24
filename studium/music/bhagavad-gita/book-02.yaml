@@ -1,0 +1,161 @@
+# Bhagavad Gita — Chapter 2 — curated music arc
+# Sankhya Yoga: The Yoga of Transcendental Knowledge
+work: bhagavad-gita
+book: 2
+title: "Bhagavad Gita Chapter 2: The Deathless Self, the Warrior's Dharma, the Stabilized Mind"
+length_minutes: 96
+principle: >
+  Do not score Chapter 2 as "the philosophy chapter." Score it as the moment where
+  grief receives its first answer — not a gentle answer, but a cosmological one: the
+  self cannot die, the body is a garment, the warrior must fight because the universe
+  requires it. The chapter moves from rebuke through ontology through ethics through
+  psychology, arriving at the portrait of one whose mind is fixed in wisdom. It is not
+  one teaching but a cascade of them, each building on the last: soul, duty, action,
+  equanimity, liberation. Krishna does not console Arjuna — he rebuilds him from
+  first principles.
+force_arc: [law, revelation, metamorphosis, ascent, fate, law, supplication, salvation]
+dominant_force: law
+tracks:
+  - n: 1
+    scene: "Krishna's opening rebuke — 'Where has this dejection come from? This is unworthy of an Aryan. Do not yield to unmanliness.'"
+    force: law
+    composer: Bach
+    work: "Brandenburg Concerto No. 3 — I. Allegro"
+    decision: added
+    why: >
+      Krishna opens not with comfort but with correction — a formal rebuke delivered
+      in the grammar of philosophical argument. The first word is not mercy but
+      clarity. The Brandenburg Concerto No. 3 opens with a clean, articulated line
+      that builds through the whole ensemble: it is architecture declaring itself,
+      the sound of a system assembling. Law's requirement is formal clarity and
+      structure; Bach at full architectural strength is the voice of a teacher who
+      builds truth from the ground up.
+  - n: 2
+    scene: "The eternal self — 'Never was there a time when I did not exist, nor you, nor these lords of men; nor shall we ever cease to exist hereafter.'"
+    force: revelation
+    composer: Pärt
+    work: "Cantus in Memoriam Benjamin Britten"
+    decision: added
+    why: >
+      The teaching of the immortal self is the first great unveiling of the Gita:
+      the self (ātman) is not born, does not die, has always been and will always be.
+      The verse is not argument but announcement — a truth too large for debate. Pärt's
+      Cantus is the exact register of this: the tolling bell of the eternal, the
+      descending scale of the strings moving through grief into something that outlasts
+      grief. Revelation's requirement is stillness, chant, verticality. The Cantus
+      opens a vertical axis — time standing still, the self seen from above time.
+  - n: 3
+    scene: "The body as garment — 'As a person casts off worn-out garments and puts on new ones, so the embodied self casts off worn-out bodies and enters new ones.'"
+    force: metamorphosis
+    composer: Debussy
+    work: "Nocturnes — I. Nuages"
+    decision: added
+    why: >
+      The garment-simile is the Gita's most beautiful image of transformation: the
+      body is not the self but the self's temporary clothing, changing forms as the
+      seasons change clouds. Debussy's Nuages is clouds passing — orchestral color
+      shifting without resolution, forms dissolving into other forms, the feeling
+      of impermanence as not tragic but natural. Metamorphosis requires changing
+      orchestral color and fluid harmony; Nuages is the sound of one thing becoming
+      another without rupture, the way a body becomes a body becomes a body across
+      lifetimes.
+  - n: 4
+    scene: "The indestructible self — 'Weapons do not cut it, fire does not burn it, water does not wet it, wind does not dry it.'"
+    force: ascent
+    composer: Bruckner
+    work: "Symphony No. 7 — I. Allegro moderato (opening)"
+    decision: added
+    why: >
+      The fourfold negation — not cut, not burned, not wetted, not dried — is a
+      cumulative rising: each line builds on the last, negating every possible
+      destruction until the self stands revealed as indestructible by any element.
+      Bruckner's Seventh opens with a rising line in the cellos and violins that
+      builds through the orchestra like a great affirmation from below, gathering
+      force until the full ensemble rings. Ascent requires rising sequence and
+      luminous orchestration; Bruckner gives the slow, inevitable building of
+      something that cannot be diminished.
+  - n: 5
+    scene: "The warrior's dharma — 'If you do not fight this righteous war, you will abandon your duty and your glory.'"
+    force: fate
+    composer: Shostakovich
+    work: "Symphony No. 5 — IV. Moderato — Allegro non troppo"
+    decision: added
+    why: >
+      The call to fight is not a request but a demand of the cosmic order: Arjuna
+      cannot refuse without losing both honor and the structure of reality. The
+      inexorability of this demand — duty as iron mechanism — requires the quality
+      of fate: hammered insistence, a motif that cannot be argued with. Shostakovich's
+      Fifth finale moves with the tread of history, a forced march through the
+      clarion brass and the unrelenting percussion, the sound of a choice that has
+      already been made before the chooser is aware of it.
+  - n: 6
+    scene: "Karma yoga — 'Your right is to action alone, never to its fruits. Do not be motivated by the fruits of action, nor be attached to inaction.'"
+    force: law
+    composer: Bach
+    work: "The Art of Fugue — Contrapunctus I"
+    decision: added
+    why: >
+      This verse is the Gita's central ethical axiom: act without attachment to
+      outcome. It is not a maxim about disinterest — it is a complete architecture
+      of right action, a grammar of ethical motion. The Art of Fugue is the same
+      architecture: a single subject stated, then developed through all its
+      implications, worked out with absolute formal clarity. Contrapunctus I is
+      pure structure, the mind moving through the logic of action without regard
+      for applause or reward. Law's requirement — formal clarity, repetition,
+      architecture — is Bach's subject, and here it becomes the sound of a life
+      lived without grasping at results.
+  - n: 7
+    scene: "The stabilized mind — 'When the self completely withdraws the senses from their objects, like a tortoise withdrawing its limbs, that is steadiness of wisdom.'"
+    force: supplication
+    composer: Allegri
+    work: "Miserere mei, Deus"
+    decision: added
+    why: >
+      The tortoise withdrawing its limbs is the Gita's great image of introversion:
+      not repression but the sovereign gathering of the self into its own center.
+      Allegri's Miserere is the supreme musical image of this gesture — the exposed
+      high C of the plea, the suspended cadences that do not resolve toward the
+      world but hold the soul in its own space. Supplication requires a suspended
+      cadence and an exposed melodic line; the Miserere is suspended prayer, the
+      voice turning inward until it finds itself alone with the one who hears.
+  - n: 8
+    scene: "Peace like the ocean — 'One attains peace who, like the ocean, remains undisturbed by desires entering, not the one who desires the fulfillment of desires.'"
+    force: salvation
+    composer: Fauré
+    work: "Requiem — In Paradisum"
+    decision: added
+    why: >
+      The chapter closes with the image of the stabilized self as the full ocean —
+      receiving all rivers, never rising above its shore. It is not death but
+      completion: the self that has found its own depth. Fauré's In Paradisum is
+      the music of that completion — the ascending soprano line, the harp and
+      organ beneath, the final radiance of a self that has arrived at its true
+      condition. Salvation requires resolving radiance and chorale apotheosis;
+      Fauré gives the sound of peace that has become the ocean itself.
+demoted:
+  - composer: Beethoven
+    work: "Symphony No. 5 — I. Allegro con brio"
+    status: "reserved for Chapter 1 (track 1), where the fate motif fits Dhritarashtra's blind question"
+    why: >
+      Using fate here for the warrior's dharma would repeat the opening gesture
+      of Chapter 1. Shostakovich's Fifth gives a different register of fate —
+      twentieth-century, iron, political, the sound of duty under an inexorable
+      system — which fits Krishna's cosmological demand more precisely than
+      Beethoven's classical inevitability.
+  - composer: Wagner
+    work: "Götterdämmerung — Siegfried's Funeral March"
+    status: "never before Chapter 11 (Vishvarupa) or Chapter 18 (liberation); too terminal for a teaching chapter"
+    why: >
+      Chapter 2 is about the deathless nature of the self. Using the Funeral March
+      here would contradict the chapter's central assertion — that the self cannot
+      die. The register of public heroic death belongs to later chapters where
+      cosmic form and final liberation require the weight of termination.
+  - composer: Beethoven
+    work: "Symphony No. 3 (Eroica) — I. Allegro con brio"
+    status: "too martial-heroic for a chapter whose battle is philosophical"
+    why: >
+      The Eroica's opening is the forging of a heroic self in the public register
+      of struggle. Chapter 2's battle is interior — the self recognizing its own
+      deathlessness — and requires the architectural clarity of law and the
+      stillness of revelation, not the narrative of the hero overcoming
+      obstacles in history.
