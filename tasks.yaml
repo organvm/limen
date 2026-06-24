@@ -14,13 +14,13 @@ portal:
       agy: 100
       claude: 100
     track:
-      date: '2026-06-22'
-      spent: 21
+      date: '2026-06-24'
+      spent: 22
       per_agent:
         jules: 13
         gemini: 0
         codex: 0
-        opencode: 1
+        opencode: 2
         agy: 6
         claude: 1
       per_agent_reset:
@@ -44413,3 +44413,26 @@ tasks:
     session_id: current
     status: done
     output: "Authored 3 music YAML files (book-02: 6 tracks law→revelation→metamorphosis→law→ascent→salvation; book-03: 6 tracks supplication→fate→sacrifice→kingship→law→wrath; book-04: 5 tracks divine-intervention→revelation→sacrifice→metamorphosis→salvation) + 3 essay MD files. Updated PLAN.md to 4/18. studium-validate.py: all 209 arcs valid. PR: https://github.com/organvm/limen/pull/new/studium-deepen-bhagavad-gita"
+- id: studium-deepen-metamorphoses
+  title: "Metamorphoses — books 2..8 (7 arcs; metamorphosis as the spine)"
+  repo: organvm/limen
+  type: studium
+  target_agent: opencode
+  priority: medium
+  budget_cost: 1
+  status: done
+  labels:
+  - studium
+  - metamorphoses
+  urls:
+  - https://github.com/organvm/limen/pull/160
+  context: "Authored Metamorphoses books 2-4 (Phaethon, Thebes, Minyades) + committed pre-existing books 5-8 (Perseus, Arachne, Medea, Labyrinth). studium-validate.py: all 209 arcs valid, 15 film companions valid. Branch: studium-deepen-metamorphoses."
+  depends_on: []
+  created: '2026-06-24'
+  updated: '2026-06-24T03:00:00Z'
+  dispatch_log:
+  - timestamp: '2026-06-24T03:00:00Z'
+    agent: opencode
+    session_id: current
+    status: done
+    output: "Authored books 2-4 music arcs (book-02: kingship→desire→fate→supplication→divine-intervention→metamorphosis→comedy→exile→wrath→desire; book-03: fate→wrath→metamorphosis→sacrifice→desire→divine-intervention→revelation→memory→exile→fate; book-04: law→grief→comedy→supplication→metamorphosis→divine-intervention→wrath→memory→ascent→revelation) + 3 gold-standard essays. Committed pre-existing books 5-8. Updated PLAN.md to 8/15. Fixed film/conference-of-birds.yaml + film/gilgamesh.yaml validation issues. PR: https://github.com/organvm/limen/pull/160"
