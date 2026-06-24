@@ -11,25 +11,25 @@
 - **Corpus:** `chinese-classical/tao-te-ching` (chinese_original.txt)
 - **Source rail:** https://ctext.org/dao-de-jing
 - **Divisions:** 81 × Chapter
-- **Progress:** 1/81 arcs authored
+- **Progress:** 15/81 arcs authored
 
 | Chapter | dominant force | status |
 | --: | --- | :--: |
 | 1 | (author) | ✓ |
-| 2 | (author) | ☐ |
-| 3 | (author) | ☐ |
-| 4 | (author) | ☐ |
-| 5 | (author) | ☐ |
-| 6 | (author) | ☐ |
-| 7 | (author) | ☐ |
-| 8 | (author) | ☐ |
-| 9 | (author) | ☐ |
-| 10 | (author) | ☐ |
-| 11 | (author) | ☐ |
-| 12 | (author) | ☐ |
-| 13 | (author) | ☐ |
-| 14 | (author) | ☐ |
-| 15 | (author) | ☐ |
+| 2 | (author) | ✓ |
+| 3 | (author) | ✓ |
+| 4 | (author) | ✓ |
+| 5 | (author) | ✓ |
+| 6 | (author) | ✓ |
+| 7 | (author) | ✓ |
+| 8 | (author) | ✓ |
+| 9 | (author) | ✓ |
+| 10 | (author) | ✓ |
+| 11 | (author) | ✓ |
+| 12 | (author) | ✓ |
+| 13 | (author) | ✓ |
+| 14 | (author) | ✓ |
+| 15 | (author) | ✓ |
 | 16 | (author) | ☐ |
 | 17 | (author) | ☐ |
 | 18 | (author) | ☐ |

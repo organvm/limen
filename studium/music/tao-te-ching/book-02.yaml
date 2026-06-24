@@ -1,0 +1,57 @@
+work: tao-te-ching
+book: 2
+title: "Tao Te Ching Chapter 2: The Co-arising of Opposites"
+length_minutes: 48
+principle: >
+  Chapter 2 introduces the mutual arising of opposites: beauty and ugliness, good and evil, being and non-being. It argues that value judgments are relative and interdependent. Because of this, the sage embraces 'wu wei' (non-action) and 'wordless teaching'. The music should explore duality, the pairing of high and low, long and short, and finally resolve into the unforced action that does not claim credit. Do not score this as conflict or war; score it as structural interdependence.
+force_arc: [law, metamorphosis, metamorphosis, law, revelation, law]
+dominant_force: law
+tracks:
+  - n: 1
+    scene: "When the world knows beauty, ugliness arises"
+    force: law
+    composer: Johann Sebastian Bach
+    work: "The Well-Tempered Clavier, Book I — Fugue in C minor (BWV 847)"
+    decision: added
+    why: >
+      The fugue demonstrates the structural necessity of counterpoint—every voice defines itself against another. Bach's C minor Fugue is strict and inexorable. Beauty and ugliness, good and evil, are not independent forces but two sides of the same structural coin.
+  - n: 2
+    scene: "Being and non-being produce each other"
+    force: metamorphosis
+    composer: Claude Debussy
+    work: "La Mer — I. De l'aube à midi sur la mer"
+    decision: added
+    why: >
+      The fluidity of being and non-being is captured in Debussy's shifting orchestral colors. Water changes state continuously, and the transition from dawn to noon mirrors the co-arising of forms from formlessness.
+  - n: 3
+    scene: "Difficult and easy, long and short"
+    force: metamorphosis
+    composer: Maurice Ravel
+    work: "Daphnis et Chloé — Lever du jour"
+    decision: added
+    why: >
+      A continuation of the fluid, interdependent reality. The music swells and recedes; high and low notes mutually define the texture. It is a world of relative positions, all in motion.
+  - n: 4
+    scene: "The sage acts without doing (wu wei)"
+    force: law
+    composer: Anton Webern
+    work: "Symphony, Op. 21 — I. Ruhig schreitend"
+    decision: added
+    why: >
+      Webern's music is the ultimate expression of economy—every note is necessary, nothing is forced, nothing is superfluous. This is the musical equivalent of wu wei: maximum effect with minimum apparent effort. The silence is as important as the sound.
+  - n: 5
+    scene: "Teaching without words"
+    force: revelation
+    composer: Arvo Pärt
+    work: "Cantus in Memoriam Benjamin Britten"
+    decision: added
+    why: >
+      A descending scale that repeats and deepens, conveying a profound message entirely without text. It is a wordless teaching that resonates in the vertical dimension of stillness.
+  - n: 6
+    scene: "Accomplishing without claiming credit"
+    force: law
+    composer: Johann Sebastian Bach
+    work: "Goldberg Variations — Aria"
+    decision: added
+    why: >
+      The Aria provides the ground for all the variations, yet simply presents itself and departs. It does not insist on its own importance. It is accomplished, complete, and unattached.

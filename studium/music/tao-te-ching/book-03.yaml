@@ -1,0 +1,49 @@
+work: tao-te-ching
+book: 3
+title: "Tao Te Ching Chapter 3: Emptying the Mind, Filling the Belly"
+length_minutes: 42
+principle: >
+  Chapter 3 applies the Tao to governance and personal discipline: do not exalt the gifted, do not prize rare goods. The sage leads by emptying the mind of ambition and filling the core (the belly). It is an argument against the fever of desire and for a return to grounded simplicity. The music must move from the chromatic longing of ambition to the severe, unadorned law of wu-wei.
+force_arc: [desire, exile, revelation, law, return]
+dominant_force: law
+tracks:
+  - n: 1
+    scene: "Exalting the gifted breeds contention"
+    force: desire
+    composer: Richard Wagner
+    work: "Tristan und Isolde — Prelude to Act I"
+    decision: added
+    why: >
+      Wagner's chromatic longing perfectly captures the fever of ambition and desire for what is rare. The music never resolves, just as the pursuit of exalted status breeds endless contention.
+  - n: 2
+    scene: "Prizing rare goods leads to theft"
+    force: exile
+    composer: Dmitri Shostakovich
+    work: "Symphony No. 5 — III. Largo"
+    decision: added
+    why: >
+      The spiritual exile that results from materialism and contention. Shostakovich's bleak, wandering lines evoke the barren landscape of a society consumed by hoarding and theft.
+  - n: 3
+    scene: "Emptying the mind"
+    force: revelation
+    composer: John Tavener
+    work: "The Protecting Veil — I. The Protecting Veil"
+    decision: added
+    why: >
+      The active process of emptying the mind. Tavener's soaring cello line above static strings creates a vertical stillness, stripping away the noise of ambition to reveal the clear sky of non-desire.
+  - n: 4
+    scene: "Strengthening the bones"
+    force: law
+    composer: Igor Stravinsky
+    work: "Symphony of Psalms — I. Exaudi orationem meam"
+    decision: added
+    why: >
+      The core must be strong. Stravinsky's neoclassical architecture here is objective, unadorned, and structurally rigid. It is the musical equivalent of "strengthening the bones"—building a foundation that cannot be swayed by passing fads.
+  - n: 5
+    scene: "Doing nothing, nothing is left ungoverned"
+    force: return
+    composer: Johannes Brahms
+    work: "Symphony No. 3 — III. Poco allegretto"
+    decision: added
+    why: >
+      The gentle, circular return to order. It is governance through non-action, where everything naturally falls into its proper place without coercion.

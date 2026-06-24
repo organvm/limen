@@ -1,0 +1,169 @@
+# Tao Te Ching — Chapter 9 — curated music arc
+# Hold a cup and overfill it — better to stop. Temper a blade to its sharpest — it cannot last.
+# Retire when the work is done — this is the Tao of heaven.
+work: tao-te-ching
+book: 9
+title: "Tao Te Ching Chapter 9: Withdrawal When Full"
+length_minutes: 50
+principle: >
+  Chapter 9 is the Dao De Jing's sternest warning against excess and the most direct
+  statement of the principle that culmination is also the beginning of decline. 'Hold a
+  cup and overfill it — it is better to stop. Temper a blade to its sharpest edge — it
+  cannot last long. Fill a hall with gold and jade — no one can protect it. Pride in
+  wealth and position brings ruin upon itself. Retire when the work is done — this is
+  the Tao of heaven (tian dao, 天道).' The chapter is not a counsel of caution or
+  middle-path moderation. It is a description of the structural law that every fullness
+  contains its own emptiness, every peak its own descent. The arc must move through the
+  images of excess — overfilled cup, oversharpened blade, overflowing hoard — toward
+  the recognition that withdrawal is not loss but the completion of the cycle. The music
+  must build toward fullness and then demonstrate that the fullness itself is the sign
+  to withdraw.
+force_arc: [fate, desire, fate, metamorphosis, grief, law, return, revelation, metamorphosis, law]
+dominant_force: fate
+tracks:
+  - n: 1
+    scene: "Hold a cup and overfill it — the excess that spills"
+    force: fate
+    composer: Igor Stravinsky
+    work: "The Rite of Spring — 'The Augurs of Spring'"
+    decision: added
+    why: >
+      The cup overfilled is the image of excess that has passed its point of utility.
+      Stravinsky's pounding, irregular chords are the drumbeat of a ritual that has
+      become too much — the spring sacrifice pushed beyond necessity into frenzy.
+      The fate force registers the inevitability that follows from overfilling: the
+      cup will spill not because of external force but because its own fullness
+      exceeds its capacity.
+  - n: 2
+    scene: "Better to stop — yi yi (已已) — the art of ceasing"
+    force: desire
+    composer: Richard Wagner
+    work: "Tristan und Isolde — Prelude (closing section)"
+    decision: added
+    why: >
+      'Better to stop' — yi (已) — is the simplest and hardest teaching in the Dao
+      De Jing. The Tristan Prelude's closing section is all deferred resolution, the
+      desire for culmination that cannot release itself. The music wants to finish
+      but cannot, because desire does not know how to stop. The desire force registers
+      the tension between the knowledge that one should stop and the inability to do
+      so — the recognition that stopping is an art, not a reflex.
+  - n: 3
+    scene: "Temper a blade to its sharpest — the edge that turns"
+    force: fate
+    composer: Dmitri Shostakovich
+    work: "Symphony No. 10 — II. Allegro"
+    decision: added
+    why: >
+      A blade tempered to its sharpest edge will dull faster than a blade that has
+      been allowed some softness. Shostakovich's Second Movement of the Tenth is a
+      brutal, relentless scherzo — the sound of a system pushed to its sharpest edge,
+      the Soviet machinery of oppression at peak performance, already beginning to
+      crack under its own perfection. The fate force is the inevitability of decline
+      that is built into every peak.
+  - n: 4
+    scene: "Fill a hall with gold and jade — no one can protect it"
+    force: metamorphosis
+    composer: Maurice Ravel
+    work: "Pavane pour une infante défunte"
+    decision: added
+    why: >
+      Gold and jade fill the hall, but no one can protect them — not because of
+      thieves but because the holding itself is a form of loss. Ravel's Pavane for
+      a Dead Princess is the sound of accumulated beauty that cannot be kept: the
+      melody is a slow dance through halls of treasure that are already fading.
+      The metamorphosis is from possession to memory, from the hall filled with
+      gold to the hall filled with the sound of what was once possessed.
+  - n: 5
+    scene: "Pride in wealth and position brings ruin — the self that boasts"
+    force: grief
+    composer: Gustav Mahler
+    work: "Symphony No. 5 — I. Trauermarsch"
+    decision: added
+    why: >
+      'Pride in wealth and position brings ruin upon itself' (gong cheng shen tui,
+      功成身退). Mahler's Funeral March opens the Fifth Symphony with a drama of
+      immense pride and sudden collapse: the trumpet call is the boast of the self
+      that has achieved, and the march that follows is the slow, inexorable descent
+      into the realization that achievement cannot save you. The grief force is not
+      for what is lost but for the self that thought it could keep what it had
+      achieved.
+  - n: 6
+    scene: "The Tao of heaven — tian dao (天道) — the law of cycles"
+    force: law
+    composer: Johann Sebastian Bach
+    work: "The Art of Fugue — Contrapunctus III"
+    decision: added
+    why: >
+      The Tao of heaven is the law that governs the cycle of fullness and withdrawal:
+      the sun reaches its zenith and descends, the tide reaches its height and
+      recedes, the year reaches its fullness and turns toward winter. Bach's
+      Contrapunctus III is a fugue on the same subject that opens the Art of Fugue,
+      but inverted — the same theme turned upside down, the law demonstrated in its
+      reversal. The law force is the structural principle: every fullness contains
+      the seed of its own withdrawal.
+  - n: 7
+    scene: "Retire when the work is done — gong cheng shen tui (功成身退)"
+    force: return
+    composer: Franz Schubert
+    work: "String Quintet in C Major — II. Adagio"
+    decision: added
+    why: >
+      'When the work is done, retire' (gong cheng shen tui) — not as defeat but as
+      completion. The work is done; the self withdraws not because it is exhausted
+      but because its purpose is fulfilled. Schubert's Adagio is the music of
+      completion: the long, singing lines unfold with the patience of a life that
+      has done what it came to do and is ready to release its hold. The return force
+      is the return to the origin from which the work emerged — not empty-handed but
+      finished.
+  - n: 8
+    scene: "The cycle completes — the cup emptied by its own fullness"
+    force: revelation
+    composer: Arvo Pärt
+    work: "Spiegel im Spiegel"
+    decision: added
+    why: >
+      The cup that overfills is also the cup that empties — fullness and emptiness
+      are the same cycle at different phases. Pärt's mirror piece returns the arc
+      to the quality of perfect stillness: two voices, one relation, the mirror
+      reflecting not what is held but the space that holds. The revelation is that
+      the cup was never full — it was always already empty, and the overfilling
+      was the illusion that it could hold more than it was. Withdrawal is not loss
+      but the restoration of the cup to its true nature: empty, useful, ready.
+  - n: 9
+    scene: "The sage withdraws — the act that does not cling"
+    force: metamorphosis
+    composer: Claude Debussy
+    work: "Préludes, Book I — 'Des pas sur la neige'"
+    decision: added
+    why: >
+      Footsteps in the snow — the trace of passage that does not cling to the ground
+      but moves on. Debussy's prelude is the sound of withdrawal without regret:
+      the footsteps fade, the snow covers them, and the landscape returns to its
+      original silence. The metamorphosis is from the presence that leaves a mark
+      to the presence that leaves no trace — the sage who retires when the work is
+      done, not because the work is forgotten but because it is finished.
+  - n: 10
+    scene: "Coda: this is the Tao of heaven — the law of timely withdrawal"
+    force: law
+    composer: Johann Sebastian Bach
+    work: "Well-Tempered Clavier, Book II — Fugue in D Major (BWV 874)"
+    decision: added
+    why: >
+      'This is the Tao of heaven' — tian dao (天道) — the final sentence of Chapter
+      9 is not a conclusion but a disclosure: the pattern of timely withdrawal is
+      not a human invention but the structure of reality itself. Bach's D Major
+      Fugue from Book II is a fugue of radiant clarity that ends exactly when its
+      material is complete — no extra statement, no unnecessary ornament, the
+      final cadence arriving at the precise moment the ear has been prepared to
+      receive it. The law force is the principle of enough: the cup that knows
+      when it is full, the blade that knows when it is sharp enough, the work that
+      knows when it is done.
+demoted:
+  - composer: Bruckner
+    work: "Symphony No. 8 — Finale"
+    status: "removed; save for chapters on cosmic completion (25, 34, 77)"
+    why: "Bruckner's massive, culminating finales are about arrival — the apotheosis of a symphonic argument. Chapter 9 is about the moment AFTER arrival: the recognition that the work is done and withdrawal is the next movement. Bruckner builds cathedrals; Chapter 9 is the moment you step out of the cathedral and let it stand."
+  - composer: Richard Strauss
+    work: "Death and Transfiguration — Transfiguration section"
+    status: "removed; save for chapters on transformation beyond death (33, 52, 81)"
+    why: "Strauss's transfiguration is the climax of a life narrative — the artist's final triumph. Chapter 9's withdrawal is pre-narrative: it is the principle that governs cycles before they reach their end, not the glorification of the end itself."

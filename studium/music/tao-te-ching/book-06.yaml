@@ -1,0 +1,164 @@
+# Tao Te Ching — Chapter 6 — curated music arc
+# The valley spirit never dies — the mysterious female, the root of heaven and earth.
+# Continuous, seemingly always present — use it without effort.
+work: tao-te-ching
+book: 6
+title: "Tao Te Ching Chapter 6: The Valley Spirit"
+length_minutes: 55
+principle: >
+  Chapter 6 is the briefest and most concentrated statement of the Tao as generative
+  emptiness in the entire Dao De Jing. 'The valley spirit never dies — it is called the
+  mysterious female (xuan pin, 玄牝). The gate of the mysterious female is called the
+  root of heaven and earth. Continuous, seemingly always present — use it without effort.'
+  Every image is feminine, generative, and hollow: the valley that receives, the female
+  that births, the root that nourishes. This is not a metaphor for the Tao — it is the
+  Tao apprehended at its most purely creative register, prior to any distinction between
+  being and non-being, prior to the ten thousand things. The arc must trace the quality
+  of this generativity without rendering it as narrative, ascent, or drama. It is the
+  endless spring, not the river it feeds.
+force_arc: [revelation, metamorphosis, supplication, metamorphosis, revelation, law, revelation, metamorphosis, revelation, return]
+dominant_force: revelation
+tracks:
+  - n: 1
+    scene: "The valley spirit never dies — the immortal hollow"
+    force: revelation
+    composer: Gregorian chant
+    work: "Alma Redemptoris Mater (Mode V)"
+    decision: added
+    why: >
+      The valley spirit (gu shen, 谷神) is the spirit of the hollow — not a deity
+      inhabiting a valley but the hollowness itself as spirit. Mode V (Lydian) chant
+      floats above a tonic that is never quite grounded, the melody curving through
+      the air like the contour of a valley that receives whatever passes through it.
+      The Alma Redemptoris Mater invokes the receptive mother — the closest the Latin
+      tradition comes to the xuan pin. The revelation is that emptiness itself is the
+      immortal thing.
+  - n: 2
+    scene: "The mysterious female — xuan pin (玄牝)"
+    force: metamorphosis
+    composer: Hildegard von Bingen
+    work: "O frondens virga"
+    decision: added
+    why: >
+      Hildegard's vision of the flowering branch is a feminine principle that is also
+      cosmic: the virga (branch) that holds the blossom is the same energy that holds
+      the universe. The music is ecstatic but not personal — it is generativity singing
+      itself. The metamorphosis force registers the shift from valley-as-image to
+      female-as-principle: the same capacity, now seen as originary.
+  - n: 3
+    scene: "The gate of the mysterious female"
+    force: supplication
+    composer: Arvo Pärt
+    work: "Summa"
+    decision: added
+    why: >
+      The gate (men, 門) of the mysterious female is the threshold through which all
+      life emerges. Pärt's Summa sets the Credo in a single, suspended gesture —
+      belief as an opening, not a conclusion. The supplication force is the posture of
+      the gate itself: open, waiting, asking nothing, receiving everything. The Credo
+      text (I believe in one God) becomes, in Pärt's hands, not an assertion but an
+      opening of the self to the mystery of generation.
+  - n: 4
+    scene: "The root of heaven and earth — the rhizomatic source"
+    force: metamorphosis
+    composer: Claude Debussy
+    work: "Préludes, Book I — 'La fille aux cheveux de lin'"
+    decision: added
+    why: >
+      The root (gen, 根) of heaven and earth is not a taproot reaching down to
+      something deeper — it is the lateral, rhizomatic connection that holds the
+      entire field in place. Debussy's 'The Girl with the Flaxen Hair' is a portrait
+      of something that is rooted by being light, by not grasping. The metamorphosis
+      from root to flower, from the underground to the visible, is the work of the
+      mysterious female: she births heaven and earth without effort, the way a plant
+      puts forth its stem without deciding to.
+  - n: 5
+    scene: "Continuous, seemingly always present — mian mian (綿綿)"
+    force: revelation
+    composer: Morton Feldman
+    work: "Triadic Memories (excerpt)"
+    decision: added
+    why: >
+      Mian mian (綿綿) — continuous, unbroken, like silk thread, like breath.
+      Feldman's Triadic Memories places soft, isolated piano chords in a continuous
+      present that seems to have no beginning and no end. Each chord is a small
+      event in an endless field of sound that does not develop, does not conclude,
+      does not arrive. This is the quality of the mysterious female: she is always
+      present but never asserts herself, continuous as the thread of a silkworm,
+      fine as breath.
+  - n: 6
+    scene: "Use it without effort — yong zhi bu qin (用之不勤)"
+    force: law
+    composer: Johann Sebastian Bach
+    work: "Well-Tempered Clavier, Book I — Prelude in C Major (BWV 846)"
+    decision: added
+    why: >
+      Yong zhi bu qin: use it and it never wears out. The Tao is not a resource
+      that depletes with use — it is the principle of generativity itself, and
+      the more it is drawn upon, the more it gives. Bach's C Major Prelude is the
+      musical demonstration of inexhaustibility: thirty-five measures that generate
+      an entire harmonic universe from a single arpeggio pattern, never tiring,
+      never repeating identically, never depleting the simple formula at its core.
+      The law force is the principle that the well does not run dry.
+  - n: 7
+    scene: "The well that never runs dry — the Tao as spring"
+    force: revelation
+    composer: John Tavener
+    work: "Song for Athene"
+    decision: added
+    why: >
+      The Tao as spring does not gush — it seeps, rises, fills the hollow of its
+      own accord. Tavener's Song for Athene is sung from the place where the dead
+      are held in eternal light: the voice rises and rests, rises and rests, never
+      forcing, never ceasing. The revelation is that the spring is not separate from
+      the emptiness that receives it — the valley and the spirit are one motion.
+  - n: 8
+    scene: "The birth that does not cease — generativity without separation"
+    force: metamorphosis
+    composer: Arvo Pärt
+    work: "Spiegel im Spiegel"
+    decision: added
+    why: >
+      The mysterious female does not birth the ten thousand things and then withdraw.
+      She is the continuous birthing — the valley that never stops being the valley,
+      the spirit that never stops being the spirit. Pärt's mirror piece returns the
+      arc to the quality of the opening: two voices (violin and piano) in a relation
+      that never resolves, never closes, never becomes a third thing. The metamorphosis
+      is from birth as an event (a single emergence) to birth as a continuous condition
+      (the valley that is always giving).
+  - n: 9
+    scene: "The emptiness that is fullness — the valley contains all"
+    force: revelation
+    composer: Olivier Messiaen
+    work: "Le Banquet Céleste"
+    decision: added
+    why: >
+      The valley is empty — that is why it can receive the entire sky. Messiaen's
+      Le Banquet Céleste (The Celestial Banquet) is a communion meditation scored
+      for organ, with chords so slow they seem to be standing still, each one a
+      vessel containing the mystery of the Eucharist. The emptiness of the valley
+      and the fullness of the banquet are the same reality: the space that receives
+      the sacred is the sacred itself.
+  - n: 10
+    scene: "Coda: use it without effort — the Tao that does not deplete"
+    force: return
+    composer: John Cage
+    work: "4'33\""
+    decision: added
+    why: >
+      The final sentence of Chapter 6 returns to the opening quality: the valley
+      spirit never dies, and its use (yong, 用) is without effort or exhaustion.
+      Cage's 4'33" is the definitive demonstration of a use that does not deplete:
+      the music is the silence that frames every sound, and no matter how many
+      times you listen, the silence is never used up. The return to the opening
+      is not a repetition but a deepening: the valley is still there, the gate is
+      still open, the mystery is still birthing.
+demoted:
+  - composer: Richard Wagner
+    work: "Das Rheingold — Prelude"
+    status: "removed; save for chapters on cosmic emergence (25, 42, 52)"
+    why: "Wagner's E-flat major emergence from the Rhine's depths is too narrative, too dramatic. Chapter 6's valley spirit is generative but without drama — it does not surge, it does not swell. It is the quiet, continuous birthing of the universe, not the grand opening of an opera."
+  - composer: Igor Stravinsky
+    work: "The Rite of Spring — Introduction"
+    status: "removed; save for chapters on the violent emergence of form (42, 55)"
+    why: "Stravinsky's primordial emergence is erotic and violent. Chapter 6 is erotic but not violent, generative but not dramatic. The valley spirit births without effort, without rupture."

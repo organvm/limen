@@ -1,0 +1,49 @@
+work: tao-te-ching
+book: 4
+title: "Tao Te Ching Chapter 4: The Empty Vessel"
+length_minutes: 38
+principle: >
+  Chapter 4 describes the Tao as an empty vessel whose use is inexhaustible. It blunts sharpness, untangles knots, softens glare, and merges with the dust. It is older than the gods. The arc should reflect this bottomless depth and the gentle softening of the world's harsh edges. It is not an ascent, but a descent into the profound and quiet origin of all things.
+force_arc: [revelation, metamorphosis, metamorphosis, exile, memory]
+dominant_force: metamorphosis
+tracks:
+  - n: 1
+    scene: "The Tao is an empty vessel"
+    force: revelation
+    composer: Olivier Messiaen
+    work: "Le Banquet Céleste"
+    decision: added
+    why: >
+      The slow, suspended chords evoke an infinite, empty space that is nonetheless full of potential. It is the inexhaustible vessel, holding stillness.
+  - n: 2
+    scene: "Blunting the sharpness, untangling the knots"
+    force: metamorphosis
+    composer: Ralph Vaughan Williams
+    work: "Fantasia on a Theme by Thomas Tallis"
+    decision: added
+    why: >
+      The rich, layered string textures smooth over the harshness of the world. Vaughan Williams weaves disparate lines into a unified, softened whole, untangling the knots of tension.
+  - n: 3
+    scene: "Softening the glare, merging with dust"
+    force: metamorphosis
+    composer: Toru Takemitsu
+    work: "Requiem for String Orchestra"
+    decision: added
+    why: >
+      Takemitsu's fluid, shifting harmonies capture the idea of merging with the dust. The music does not insist on its own brilliance; it softens the glare and integrates into the shadows.
+  - n: 4
+    scene: "Deep and clear, seeming to exist forever"
+    force: exile
+    composer: Jean Sibelius
+    work: "Symphony No. 7 in C major — Adagio"
+    decision: added
+    why: >
+      A sense of ancient, unpeopled landscapes. Sibelius evokes a depth that precedes human history, matching the Tao's existence prior to any known origin.
+  - n: 5
+    scene: "I do not know whose child it is; it precedes the ancestor"
+    force: memory
+    composer: Gabriel Fauré
+    work: "Requiem — In Paradisum"
+    decision: added
+    why: >
+      The faded recapitulation of an origin that cannot be traced. Fauré's ethereal conclusion sounds like the memory of something older than time, gently resting in its own antiquity.

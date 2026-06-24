@@ -1,0 +1,41 @@
+work: tao-te-ching
+book: 5
+title: "Tao Te Ching Chapter 5: The Bellows"
+length_minutes: 36
+principle: >
+  Chapter 5 states that Heaven and Earth are not humane; they treat the ten thousand things as straw dogs. The space between them is like a bellows: empty, but when moved, it produces more. Too many words hasten exhaustion; one should hold to the center. The music must be objective, vast, and unsentimental, reflecting the cosmic indifference that is actually a space of infinite potential.
+force_arc: [fate, law, revelation, law]
+dominant_force: law
+tracks:
+  - n: 1
+    scene: "Heaven and Earth are not humane (straw dogs)"
+    force: fate
+    composer: Ludwig van Beethoven
+    work: "Symphony No. 5 — I. Allegro con brio"
+    decision: added
+    why: >
+      The relentless, hammered insistence of fate. Beethoven's opening demonstrates the unsentimental, objective laws of nature. The universe does not pause for human feelings; it treats all things equally, like straw dogs for a sacrifice.
+  - n: 2
+    scene: "The space between is like a bellows"
+    force: law
+    composer: Philip Glass
+    work: "Music in Twelve Parts — Part 1"
+    decision: added
+    why: >
+      The repetitive, expanding and contracting nature of minimalism perfectly mirrors the bellows. It is empty of narrative but infinitely productive when set in motion.
+  - n: 3
+    scene: "Empty but inexhaustible, moving and producing more"
+    force: revelation
+    composer: Steve Reich
+    work: "Music for 18 Musicians — Pulses"
+    decision: added
+    why: >
+      The continuous, pulsating energy of life emerging from emptiness. The acoustic space is filled with interlocking patterns that seem to generate themselves without end.
+  - n: 4
+    scene: "Too many words hasten failure; hold to the center"
+    force: law
+    composer: Johann Sebastian Bach
+    work: "The Art of Fugue — Contrapunctus IV"
+    decision: added
+    why: >
+      The ultimate expression of holding to the center. The fugue is a strictly governed space where every voice answers to the central subject. It wastes no words, achieving complete expression through structural integrity.
