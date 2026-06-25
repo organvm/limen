@@ -17,17 +17,13 @@ state, never a crash. Read-only on the ledger; writes only its own output files.
 """
 import json
 import os
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 LOGS = ROOT / "logs"
 OUT_DIRS = [ROOT / "web" / "app" / "out", ROOT / "web" / "app" / "public"]
 LEDGER = Path(os.environ.get("LIMEN_OBLIGATIONS_LEDGER", ROOT / "obligations-ledger.json"))
-# His-hand atoms hang HERE, in git — a separate file from the ledger ON PURPOSE: the mail
-# builder regenerates obligations-ledger.json every sweep, so any lever placed there is wiped.
-# These are unioned in below and survive regen. A his-hand task never hangs on him or in memory.
-HIS_HAND = Path(os.environ.get("LIMEN_HIS_HAND_LEVERS", ROOT / "his-hand-levers.json"))
 
 
 def _load_json(path, default):
@@ -35,21 +31,6 @@ def _load_json(path, default):
         return json.loads(Path(path).read_text())
     except (OSError, ValueError):
         return default
-
-
-def _union_levers(ledger):
-    """His-hand levers (git, durable) first, then the mail ledger's levers; dedup by id.
-    Fail-open: a missing/torn his-hand file just yields the ledger levers, never a crash."""
-    his_hand = _load_json(HIS_HAND, {})
-    his = his_hand.get("levers", []) if isinstance(his_hand, dict) else []
-    out, seen = [], set()
-    for lev in list(his) + list(ledger.get("levers", [])):
-        lid = lev.get("id")
-        if lid in seen:
-            continue
-        seen.add(lid)
-        out.append(lev)
-    return out
 
 
 def build_view():
@@ -64,7 +45,7 @@ def build_view():
         "obligations": obligations,
         "verify_first": [o for o in obligations if o.get("verify_first")],
         "noise_killers": ledger.get("noise_killers", []),
-        "levers": _union_levers(ledger),
+        "levers": ledger.get("levers", []),
     }
 
 
@@ -86,27 +67,6 @@ _RUNG_BADGE = {"protocol": ("protocol", "#2ecc71"),
 
 def _esc(s):
     return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
-
-
-def _deadline_badge(lever, today=None):
-    """The face's own clock: a lever past (or near) its `deadline` auto-flags so it can never
-    silently rot on the surface. Pure + derived — no hand-maintained status field. Fails open:
-    a missing or malformed deadline yields no badge, never a crash."""
-    raw = lever.get("deadline")
-    if not raw:
-        return ""
-    try:
-        due = datetime.strptime(str(raw), "%Y-%m-%d").date()
-    except ValueError:
-        return ""
-    delta = (due - (today or date.today())).days
-    if delta < 0:
-        return f'<span class="due overdue">OVERDUE {-delta}d</span>'
-    if delta == 0:
-        return '<span class="due overdue">DUE TODAY</span>'
-    if delta <= 3:
-        return f'<span class="due soon">due in {delta}d</span>'
-    return f'<span class="due">due {_esc(raw)}</span>'
 
 
 def render_html(v):
@@ -171,11 +131,9 @@ def render_html(v):
         for a in v["accounts"]) or "—"
 
     levers = "".join(
-        f'<li><b>{_esc(lev.get("id"))}</b> — {_esc(lev.get("label"))} '
-        f'<span class="cost">({_esc(lev.get("cost",""))})</span>'
-        f'{_deadline_badge(lev)}'
-        f'{(" &rarr; <b>" + _esc(lev.get("unlocks")) + "</b>") if lev.get("unlocks") else ""}</li>'
-        for lev in v["levers"])
+        f'<li><b>{_esc(l.get("id"))}</b> — {_esc(l.get("label"))} '
+        f'<span class="cost">({_esc(l.get("cost",""))})</span></li>'
+        for l in v["levers"])
 
     return f"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -202,9 +160,6 @@ def render_html(v):
  .vd{{display:inline-block;margin-right:14px;font-size:13px;color:#c9d1d9}}
  ul{{margin:6px 0;padding-left:18px}} li{{margin:4px 0}}
  .cost{{color:#8a93a6;font-size:11px}}
- .due{{font-size:11px;border-radius:5px;padding:1px 6px;margin-left:5px;background:#21262d;color:#8a93a6}}
- .due.overdue{{background:#e74c3c;color:#fff;font-weight:700}}
- .due.soon{{background:#f1c40f;color:#06140c;font-weight:700}}
  .big{{font-size:28px;font-weight:700}} .k{{color:#8a93a6;font-size:12px}}
  .row{{display:flex;gap:24px;flex-wrap:wrap}}
 </style></head><body><div class="wrap">
