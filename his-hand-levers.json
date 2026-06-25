@@ -15,9 +15,9 @@
     },
     {
       "id": "L-REVENUE-ACCT",
-      "label": "Revenue first-dollar accounts: create Ko-fi + GitHub Sponsors on the Exporter, create a LemonSqueezy product and paste LEMONSQUEEZY_STORE_ID into CI. FUNDING.yml + Pro-tier checkout are already staged — only account creation is missing.",
+      "label": "Revenue first-dollar accounts. DONE: Ko-fi tip rail live (ko-fi.com/4444j99, wired into Exporter FUNDING.yml via organvm/a-i-chat--exporter#79) — confirm a payout method (PayPal/Stripe) is connected on Ko-fi so tips land. REMAINING: (1) enable GitHub Sponsors on `organvm` (FUNDING.yml github: organvm already staged); (2) create a LemonSqueezy product and paste LEMONSQUEEZY_STORE_ID into CI (Pro-tier checkout already staged).",
       "owner": "yours",
-      "cost": "~10 min, no code",
+      "cost": "~5 min (Sponsors enable + LemonSqueezy store)",
       "unlocks": "first dollar (income before August)",
       "source_task": "revenue-ladder (whose_hand: yours)",
       "issue": 253
