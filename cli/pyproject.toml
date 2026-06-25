@@ -37,6 +37,7 @@ module = [
   "anthropic",
   "conversation_corpus_engine",
   "conversation_corpus_engine.*",
+  "yaml",
 ]
 ignore_missing_imports = true
 
