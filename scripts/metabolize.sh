@@ -24,19 +24,6 @@ cd "$LIMEN_ROOT" || exit 1
 
 echo "═══ metabolize $(date '+%F %T') — dispatch=${LIMEN_DISPATCH:-0} isolation=$LIMEN_ISOLATION ═══"
 
-echo "── 0a. hydrate credentials (1Password → ~/.limen.env → every lane; never re-login) ──"
-# Refresh fleet creds from the ONE source of truth so a one-time login never has to be repeated
-# (lapsed tokens / fresh worktrees self-heal). Fail-open: skips silently if op is locked/absent.
-if [ "${LIMEN_CREDS_HYDRATE:-1}" = "1" ]; then
-  python3 "$LIMEN_ROOT/scripts/creds-hydrate.py" --apply || echo "  (creds-hydrate skipped — op locked/absent)"
-  # PRESENCE is not VALIDITY: a stale/revoked/suspended token sits in the floor looking ✓ while every
-  # lane it feeds is dead. Probe each materialized cred against its service and surface the dead ones.
-  # Non-fatal (never breaks the beat) and fail-open offline; a re-mint into op self-heals on next --apply.
-  python3 "$LIMEN_ROOT/scripts/creds-hydrate.py" --verify || echo "  ↑ DEAD credential(s) above — re-mint into the op:// item, then they self-heal next beat"
-fi
-# Source the cred cache so THIS shell + every child (route.py, the agent CLIs) inherit the keys.
-if [ -f "$HOME/.limen.env" ]; then set -a; . "$HOME/.limen.env"; set +a; fi
-
 echo "── 0. refresh usage telemetry / lane health ──"
 python3 "$LIMEN_ROOT/scripts/usage-telemetry.py" || echo "  (usage telemetry skipped)"
 
@@ -68,13 +55,6 @@ fi
 
 echo "── 5. board ──"
 python3 -m limen doctor 2>&1 | head -12
-
-echo "── 5b. insight-cadence (proposal-only auto-reporting) ──"
-# Generates reports at 4 tiers (hourly/daily/weekly/monthly). Self-gates behind
-# elapsed wall-clock time internally, but --once forces it to run if due.
-if [ "${LIMEN_INSIGHT_CADENCE:-1}" = "1" ]; then
-  python3 "$LIMEN_ROOT/scripts/insight-cadence.py" --once || echo "  (insight-cadence skipped)"
-fi
 
 # ── 6. self-improve (LOW cadence) — the last rung of the self-* ladder ──
 # Reads the loop's own dispatch_log track record and emits a re-plan PROPOSAL to
