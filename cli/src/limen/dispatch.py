@@ -3,63 +3,50 @@ import os
 import re
 import secrets
 import shlex
-import shutil
 import subprocess
+import contextlib
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Any
 
 from limen.capacity import (
     canonical_agent,
     capacity_census,
     format_capacity_census,
     github_issue_ref,
-    ollama_model,
 )
-from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
-from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
+from limen.io import load_limen_file, save_limen_file
+from limen.models import DispatchLogEntry, LimenFile, Task
 from limen.doctor import stale_tasks
-from limen.model_selection import (  # the shared model vocabulary — also used by the non-bypassable `claude` shim
-    _CLAUDE_TIER_ORDER,
-    _claude_opus_classes,
-    _resolve_claude_model,
-)
 
-
-def _load_limen_env() -> int:
-    """Load ~/.limen.env into os.environ so agent subprocesses (gemini/codex/opencode/…) INHERIT the
-    credentials. Without this, _run_cmd runs the CLIs with the daemon's bare env and a key that was
-    landed in ~/.limen.env (or hydrated from 1Password by creds-hydrate.py) never reaches the tool —
-    the exact reason a SET GEMINI_API_KEY still read as 'auth not configured'.
-
-    No-overwrite: an explicitly-exported env var always wins (only fills what's MISSING). Idempotent,
-    fail-open (any parse/IO error loads nothing rather than crash the beat). Returns the count loaded.
-    Honors $LIMEN_ENV; values are never logged. See scripts/creds-hydrate.py (the hydration source)."""
-    path = Path(os.environ.get("LIMEN_ENV", str(Path.home() / ".limen.env")))
-    loaded = 0
+@contextlib.contextmanager
+def _queue_lock(tasks_path: Path, timeout: int = 90):
+    """Cross-process mutex on tasks.yaml writes. The lockdir is derived from tasks_path
+    (its sibling logs/.queue.lock.d) so in production it is the SAME dir the heartbeat +
+    supervisors use ($LIMEN_ROOT/logs/.queue.lock.d), while tests with a temp tasks.yaml get
+    an isolated lock instead of blocking on the real repo's. Lets dispatch self-protect its
+    reserve/commit saves now that the heartbeat releases the lock BEFORE the slow run (#11)
+    — so a seed/heal written during the run isn't clobbered by a stale-copy save."""
+    lockd = tasks_path.parent / "logs" / ".queue.lock.d"
+    got = False
+    lockd.parent.mkdir(parents=True, exist_ok=True)
+    for _ in range(timeout):
+        try:
+            lockd.mkdir()
+            got = True
+            break
+        except FileExistsError:
+            time.sleep(1)
     try:
-        if not path.exists():
-            return 0
-        for raw in path.read_text().splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#"):
-                continue
-            if line.startswith("export "):
-                line = line[len("export "):]
-            if "=" not in line:
-                continue
-            key, val = line.split("=", 1)
-            key = key.strip()
-            val = val.strip().strip('"').strip("'")
-            if key and val and key not in os.environ:
-                os.environ[key] = val
-                loaded += 1
-    except OSError:
-        return loaded
-    return loaded
-
+        yield got
+    finally:
+        if got:
+            try:
+                lockd.rmdir()
+            except OSError:
+                pass
 
 def _usage_dead_lanes() -> set[str]:
     """Lanes the LIVE usage meter (logs/usage.json, written by usage-telemetry.py) reports as
@@ -77,68 +64,24 @@ def _usage_dead_lanes() -> set[str]:
             if isinstance(info, dict) and info.get("health") in ("exhausted", "rate-limited", "low")}
 
 
-# Lanes whose CLI authenticates ONLY via an interactive browser OAuth flow — no headless / device-code
-# fallback. agy (the antigravity-cli) is the case in point: in print mode it first tries a SILENT token
-# refresh against the host below; if that network call fails it MISREADS the failure as "not logged in"
-# and launches a Google sign-in browser tab (its browser.go: consumerOAuth). Unattended, that's one tab
-# per beat. The refresh only fails when the host is unreachable — exactly what happens when the Mac is
-# asleep / in dark-wake with no network (observed 2026-06-24, 01:34–05:37: ~20 tabs; the agy logs show
-# `dial tcp: lookup oauth2.googleapis.com: no such host` → "silent auth failed, triggering OAuth"). So
-# we map each such lane to the host its silent auth must reach, and gate dispatch on reaching it.
-_BROWSER_OAUTH_LANES: dict[str, str] = {
-    "agy": "oauth2.googleapis.com",
-    "antigravity": "oauth2.googleapis.com",
-}
-
-
-def _oauth_unreachable_lanes() -> set[str]:
-    """Browser-OAuth lanes whose silent-auth endpoint is unreachable RIGHT NOW — skip them THIS beat so
-    they can't fall through to an interactive browser tab (the overnight tab-flood root cause). The probe
-    is the SAME precondition the CLI's own silent refresh needs: a DNS + TCP:443 reach of the host. Fails
-    → lane down for this beat; succeeds → lane runs and does real work. Self-heals the instant the network
-    returns (on wake) — no manual file, no static disable, no human. The probe never raises and is cheap:
-    an online check is sub-100ms; an offline one caps at the (short) timeout — and offline beats are
-    exactly the ones we want to short-circuit. Set LIMEN_OAUTH_PREFLIGHT=0 to disable the gate."""
-    if os.environ.get("LIMEN_OAUTH_PREFLIGHT", "1") != "1":
-        return set()
-    import socket
-    timeout = float(os.environ.get("LIMEN_OAUTH_PREFLIGHT_TIMEOUT", "3"))
-    reachable: dict[str, bool] = {}
-    down: set[str] = set()
-    for lane, host in _BROWSER_OAUTH_LANES.items():
-        ok = reachable.get(host)
-        if ok is None:
-            try:
-                socket.create_connection((host, 443), timeout=timeout).close()
-                ok = True
-            except OSError:
-                ok = False  # gaierror (DNS down in dark-wake) and connect failures both subclass OSError
-            reachable[host] = ok
-        if not ok:
-            down.add(lane)
-    return down
-
-
 def _down_lanes() -> set[str]:
-    """Lanes currently DOWN/unproductive. Three sources, unioned:
+    """Lanes currently DOWN/unproductive. Two sources, unioned:
       1. logs/lanes-down.txt — a manual override file (one lane per line, '#' comments ok) for
          lanes a human knows are dead (e.g. agy bin missing); NOT pinned in code.
       2. the LIVE usage meter (_usage_dead_lanes) — lanes token-exhausted or rate-limited RIGHT NOW.
-      3. browser-OAuth lanes whose silent-auth endpoint is unreachable this beat (_oauth_unreachable_lanes)
-         — so agy/antigravity can't spawn a Google sign-in tab while the Mac is asleep/offline.
     Rebalance + dispatch + route skip these so tasks aren't wasted on a lane that can't produce.
-    Sources 2 & 3 self-heal (a lane rejoins when its window refills / the network returns); remove a line
-    from source 1 when that lane is healthy again (e.g. a paid GEMINI_API_KEY)."""
+    Source 2 self-heals (a lane rejoins when its window refills); remove a line from source 1 when
+    that lane is healthy again (e.g. a paid GEMINI_API_KEY)."""
     f = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))) / "logs" / "lanes-down.txt"
     manual: set[str] = set()
     try:
         manual = {ln.split("#")[0].strip() for ln in f.read_text().splitlines() if ln.split("#")[0].strip()}
     except OSError:
         pass
-    return manual | _usage_dead_lanes() | _oauth_unreachable_lanes()
+    return manual | _usage_dead_lanes()
 
 
-def _run_capture(cmd: list[str], cwd: str | None = None, timeout: int = 600, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def _run_capture(cmd, cwd=None, timeout=600, env=None):
     """Like subprocess.run(capture_output, text, timeout) but launches the process in its OWN
     session/group and, on timeout, SIGKILLs the WHOLE group. Plain subprocess.run only kills the
     direct child — if an agent CLI (codex/claude/…) spawns grandchildren that inherit the stdout
@@ -169,7 +112,7 @@ def _run_capture(cmd: list[str], cwd: str | None = None, timeout: int = 600, env
     return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
 
 
-def _dep_merged(dep_task: Task | None) -> bool:
+def _dep_merged(dep_task) -> bool:
     """A dependency is satisfied only when its PR is MERGED (in the base branch), not merely built.
     The reconcile (verify-dispatch→heal-dispatch) stamps a 'PR merged → done' dispatch_log entry on
     merge; we detect that marker. An unknown dep id is treated as unsatisfied (fail-safe)."""
@@ -181,7 +124,7 @@ def _dep_merged(dep_task: Task | None) -> bool:
                for e in (dep_task.dispatch_log or []))
 
 
-def _deps_met(task: Task, by_id: dict[str, Task]) -> bool:
+def _deps_met(task, by_id) -> bool:
     """True if every task in task.depends_on has a merged PR (or the task has no deps). Lets a
     dependent increment sit OPEN but un-dispatched until its predecessor lands — so the product
     roadmap self-advances as PRs merge, with no parallel-built conflicts."""
@@ -231,35 +174,7 @@ def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str:
     return _run_cmd(["agent-dispatch", agent, _build_prompt(task)], task, dry_run)
 
 
-_FLAME_CACHE: dict[str, str] = {}
-
-
-def _flame_preamble() -> str:
-    """The Continuity Kernel ($LIMEN_ROOT/FLAME.md), prepended to EVERY lane's prompt so the
-    *self* rides every dispatch — codex, claude, opencode, agy, gemini, jules, ollama, whatever
-    comes next. Whichever model runs the beat acts AS VLTIMA, not as a generic coder: the model is
-    the substrate, the kernel is the flame. This is what makes the flame survive a model swap —
-    when tokens run dry on Claude and the beat falls to a local model, the identity + invariants +
-    state-pointers ride along in the prompt itself, not in any one harness.
-
-    Gated by LIMEN_FLAME_KERNEL (default on; '0' → bare task prompt, today's behavior). Cached by
-    path+mtime so we re-read only when the kernel actually changes. Fail-open to '' everywhere:
-    a missing/unreadable kernel must NEVER block a dispatch (derive-never-pin, fail-open)."""
-    if os.environ.get("LIMEN_FLAME_KERNEL", "1") != "1":
-        return ""
-    root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
-    f = root / os.environ.get("LIMEN_FLAME_FILE", "FLAME.md")
-    try:
-        key = f"{f}:{f.stat().st_mtime_ns}"
-        if key not in _FLAME_CACHE:
-            _FLAME_CACHE.clear()  # only ever hold the current mtime's text
-            _FLAME_CACHE[key] = f.read_text(encoding="utf-8")
-        return _FLAME_CACHE[key]
-    except (OSError, ValueError):
-        return ""  # no kernel on disk yet → bare prompt, never a blocked lane
-
-
-def _build_prompt(task: Task, task_first: bool = False) -> str:
+def _build_prompt(task: Task) -> str:
     parts = [f"Complete task {task.id}: {task.title}"]
     if task.repo:
         parts.append(f" in repository {task.repo}")
@@ -267,23 +182,7 @@ def _build_prompt(task: Task, task_first: bool = False) -> str:
         parts.append(f"\nContext: {task.context}")
     if task.urls:
         parts.append(f"\nReferences: {', '.join(task.urls)}")
-    body = "".join(parts)
-    flame = _flame_preamble()
-    if not flame:
-        return body
-    # Kernel first (who you are + the invariants + where to resume from), then a hard divider,
-    # then THIS beat's concrete task. The divider keeps the model from mistaking the standing
-    # identity for the work item.
-    #
-    # task_first inverts the order for lanes that derive a session TITLE from the prompt's first
-    # line (jules: `jules new <prompt>`). Kernel-first buried "Complete task <id>:" under the FLAME
-    # header, which (a) broke jules-land's session→task matching — the listing truncates the title,
-    # so the harvester never saw the task id and completed sessions NEVER landed as PRs — and (b)
-    # fed the 200-line kernel to jules as if it were the work item (sessions drifted to "Awaiting
-    # User Feedback"). Task-first keeps the flame riding along, just after the task, not in the title.
-    if task_first:
-        return f"{body}\n\n--- STANDING KERNEL (who you are; the task above is the work) ---\n{flame}"
-    return f"{flame}\n\n--- YOUR TASK THIS BEAT ---\n{body}"
+    return "".join(parts)
 
 
 def _run_cmd(cmd: list[str], task: Task, dry_run: bool, cwd: str | None = None) -> bool | str:
@@ -298,18 +197,17 @@ def _run_cmd(cmd: list[str], task: Task, dry_run: bool, cwd: str | None = None) 
         )  # own process group → timeout SIGKILLs grandchildren too (no beat-stall hang)
         if result.returncode == 0:
             print(f"  dispatched: {task.id}")
-            # Capture the jules session id from stdout. `jules remote new` prints:
-            #   Session is created.
-            #   ID: <19-20 digit id>
-            #   URL: https://jules.google.com/session/<id>
-            # Record it durably (dispatch_log) so harvest matches task->session by id, NEVER by the
-            # truncated, directive-led session title. Try the explicit ID: line, then the URL, then
-            # any long digit-run as a last resort.
+            # Try to extract session ID from output if it's jules
             if cmd[0].endswith("jules"):
-                for pat in (r"^\s*ID:\s*(\d{6,})", r"session/(\d{6,})", r"\b(\d{15,20})\b"):
-                    m = re.search(pat, result.stdout, re.IGNORECASE | re.MULTILINE)
-                    if m:
-                        return m.group(1)
+                import re
+
+                match = re.search(r"session\s+(\d+)", result.stdout, re.IGNORECASE)
+                if match:
+                    return match.group(1)
+                # Just look for any large number
+                match = re.search(r"\b(\d{15,20})\b", result.stdout)
+                if match:
+                    return match.group(1)
             return True
         print(f"  FAILED ({result.returncode}): {task.id}")
         if result.stderr:
@@ -323,40 +221,10 @@ def _run_cmd(cmd: list[str], task: Task, dry_run: bool, cwd: str | None = None) 
         return False
 
 
-# Leads EVERY jules prompt. `jules remote new` runs the session autonomously in a VM, but a
-# big/ambiguous task can still make the planner stop and ask — and the jules CLI has NO
-# approve/reply verb, so an "Awaiting User Feedback" session is unrecoverable headlessly. A hard
-# "implement directly, do NOT ask for feedback" lead is the proven anti-stall lever: it built work
-# when every other lane was down, while kernel-led prompts stalled (live `jules remote list` shows
-# the split — "Implement this directly…" sessions Completed, "# FLAME…" ones Awaiting Feedback).
-# Gated by LIMEN_JULES_DIRECTIVE (default on; '0' → bare task_first prompt).
-_JULES_DIRECTIVE = (
-    "Implement this directly and open a pull request. Do NOT ask for feedback or approval — "
-    "the task below is complete enough to build. Proceed autonomously to a complete, mergeable "
-    "change and keep the repo's lint and tests green.\n\n"
-)
-
-
-def _build_jules_prompt(task: Task) -> str:
-    body = _build_prompt(task, task_first=True)
-    if os.environ.get("LIMEN_JULES_DIRECTIVE", "1") != "1":
-        return body
-    return f"{_JULES_DIRECTIVE}{body}"
-
-
 def _call_jules(task: Task, dry_run: bool) -> bool | str:
     repo = task.repo or os.environ.get("LIMEN_ROOT", ".")
-    # `jules remote new` runs the session autonomously in a VM and yields a pullable result; plain
-    # `jules new` routes through the web-UI plan-approval flow, which strands every headless
-    # dispatch at "Awaiting User Feedback" (no CLI verb can approve it) — the bug that made jules
-    # unusable from the conductor. The harvest path (jules-land.py / harvest.py) already speaks
-    # `jules remote list/pull`, so remote-new is the matching half that was missing. remote-new
-    # takes the task via --session, not as a bare positional. The session id is captured from
-    # stdout and recorded in dispatch_log so harvest matches by id, never the (truncated,
-    # directive-led) title. See memory: jules-harvest-stranded-by-flame-prompt.
-    prompt = _build_jules_prompt(task)
-    jb = os.environ.get("LIMEN_JULES_BIN", "jules")
-    cmd = [jb, "remote", "new", "--repo", repo, "--session", prompt]
+    prompt = _build_prompt(task)
+    cmd = [os.environ.get("LIMEN_JULES_BIN", "jules"), "new", "--repo", repo, prompt]
     return _run_cmd(cmd, task, dry_run)
 
 
@@ -380,6 +248,8 @@ def _call_copilot(task: Task, dry_run: bool) -> bool | str:
       user(login: $actor) { id }
     }
     """
+    import json
+    import subprocess
     q_cmd = [
         gh, "api", "graphql",
         "-f", f"query={query}",
@@ -540,10 +410,6 @@ _LOCAL_AGENTS: dict[str, list[str]] = {
     "agy": ["--dangerously-skip-permissions", "-p"],
     "antigravity": ["--dangerously-skip-permissions", "-p"],
     "claude": ["-p", "--permission-mode", "acceptEdits"],
-    # ollama: the local, unmetered floor. `ollama run <model> <prompt>` runs once,
-    # non-interactively. The <model> is a POSITIONAL after `run` (not a -m flag), injected
-    # lazily in _agent_argv() and DERIVED from `ollama list` — never pinned (see ollama_model).
-    "ollama": ["run"],
 }
 _LOCAL_BIN: dict[str, str] = {}
 _CONFIGURED_SERVICE_AGENTS = {"warp", "oz"}
@@ -569,7 +435,6 @@ def _agent_argv(agent: str, task: Task | None = None) -> list[str]:
     resolved at import time. opencode's/codex's model is derived here (only when it actually
     runs); claude's TIER is derived per task (the earned-tier ladder) — names are outputs.
     `task` is optional (codex/opencode ignore it) so existing callers stay valid."""
-    model: str | None = None
     flags = list(_LOCAL_AGENTS[agent])
     if agent == "opencode":
         model = _opencode_model()
@@ -585,13 +450,6 @@ def _agent_argv(agent: str, task: Task | None = None) -> list[str]:
             # the claude CLI uses --model (it has NO -m short flag, unlike codex/opencode);
             # `claude -m …` → "error: unknown option '-m'" and the whole dispatch fails.
             flags += ["--model", model]
-    elif agent == "ollama":
-        # `ollama run <model> <prompt>` — model is a POSITIONAL right after `run`, derived at
-        # call-time. No model pulled → no model arg (the run will error and the lane stays the
-        # inert floor until `ollama pull` lights it), never a pinned name.
-        model = ollama_model()
-        if model:
-            flags += [model]
     return flags
 
 # Per-task lane failover cascade (best-efficiency-first → cloud last). On a genuine
@@ -601,7 +459,7 @@ def _agent_argv(agent: str, task: Task | None = None) -> list[str]:
 # Exhausting the list marks the task failed. Keep this order == heartbeat.sh LANES order.
 # agy/antigravity KEPT and HEALED: it writes to a scratch dir, so _bridge_agy_scratch carries
 # that work into the worktree after the run (see _isolated_local_run) — productive lane again.
-_LANE_CASCADE = ["codex", "opencode", "agy", "claude", "gemini", "jules", "ollama"]
+_LANE_CASCADE = ["codex", "opencode", "agy", "claude", "gemini", "jules"]
 _NOOP = "__noop__"  # agent ran but produced no diff — do NOT cascade lanes
 
 
@@ -633,23 +491,6 @@ _RATE_PATTERNS = re.compile(
 
 def _is_rate_limited(text: str) -> bool:
     return bool(_RATE_PATTERNS.search(text or ""))
-
-
-# A TRANSIENT auth flap — NOT a real rate limit. Concurrent Claude Code processes share one
-# rotating OAuth credential (the macOS Keychain item), so when the access token expires several
-# race to refresh: the winner rotates the single-use refresh token, the losers present a now-stale
-# token and report "Not logged in" (anthropics/claude-code#48786). A FRESH process re-reads the
-# rotated token, so a single retry self-heals it. Kept DISTINCT from _is_rate_limited — a real
-# limit must cool+cascade the lane, an auth blip must just retry the same lane once.
-_AUTH_BLIP_PATTERNS = re.compile(
-    r"not logged in|please run /login|invalid[_ ]grant|oauth[^.]*(expired|invalid|revoked)|"
-    r"authentication_error|\b401\b|unauthorized",
-    re.IGNORECASE,
-)
-
-
-def _is_auth_blip(text: str) -> bool:
-    return bool(_AUTH_BLIP_PATTERNS.search(text or "")) and not _is_rate_limited(text)
 
 
 def _resolve_repo_dir(task: Task) -> Path | None:
@@ -737,7 +578,7 @@ _ISOLATION_ROOT = Path(
 )
 
 
-def _git(args: list[str], cwd: Path, timeout: int = 120) -> subprocess.CompletedProcess[str]:
+def _git(args: list[str], cwd, timeout: int = 120) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", *args], cwd=str(cwd), capture_output=True, text=True,
         timeout=timeout, stdin=subprocess.DEVNULL,
@@ -767,38 +608,13 @@ def _pr_body(task: Task) -> str:
     return "\n".join(lines)
 
 
-def _porcelain_paths(z: str) -> list[str]:
-    """Repo-relative paths from `git status --porcelain -z` output. Each record is ``XY <path>``
-    NUL-terminated; rename/copy records (``R``/``C``) are followed by an extra NUL token holding the
-    OLD path, which we skip. Returns the paths the working tree actually changed."""
-    toks = z.split("\x00")
-    paths: list[str] = []
-    i = 0
-    while i < len(toks):
-        entry = toks[i]
-        if len(entry) < 4:
-            i += 1
-            continue
-        xy, path = entry[:2], entry[3:]
-        paths.append(path)
-        i += 2 if ("R" in xy or "C" in xy) else 1  # rename/copy: consume the trailing old-path token
-    return paths
-
-
 def _bridge_agy_scratch(task: Task, wt: Path) -> None:
     """agy/antigravity do real work but write it to ~/.gemini/antigravity-cli/scratch/<name>/
-    (a long-lived, REUSED git copy of the repo) instead of the cwd worktree — there is no headless
-    flag to make them target a cwd. So CARRY agy's per-run DELTA home: find the scratch copy for
-    THIS repo (match by remote == task.repo, newest wins) and copy ONLY the files agy changed THIS
-    run — its uncommitted working-tree delta (`git status --porcelain`) — into the worktree, so the
-    normal add→commit→PR flow picks it up.
-
-    Why delta-only, not the old whole-tree `rsync -a`: the scratch is a long-lived clone that drifts
-    OFF-TRUNK (observed sitting a day stale at an orphan "Revert #111"). A whole-tree overlay copied
-    that stale base onto fresh origin/main, overwriting grown files with their shorter stale contents
-    → thousands of spurious deletions per PR (the destructive "deepen" PRs that got closed). The
-    delta is agy's actual work and is BASE-INDEPENDENT, so a stale/divergent scratch base can no
-    longer leak in. Best-effort: never raises."""
+    (a git copy of the repo) instead of the cwd worktree — there is no headless flag to make
+    them target a cwd. So CARRY THE WORK HOME: find the scratch copy for THIS repo (match by
+    its git remote == task.repo, newest wins under concurrency) and rsync its content into the
+    worktree, so the normal add→commit→PR flow picks it up. Turns agy from no-op into a
+    productive lane (use every part of the buffalo). Best-effort: never raises."""
     if not task.repo:
         return
     scratch = Path.home() / ".gemini" / "antigravity-cli" / "scratch"
@@ -821,25 +637,9 @@ def _bridge_agy_scratch(task: Task, wt: Path) -> None:
             best = max(cands, key=lambda p: p.stat().st_mtime, default=None)
         if best is None:
             return
-        # agy's per-run delta = its uncommitted working-tree changes (NOT the committed, possibly
-        # stale, base tree). Copy just those paths; mirror deletions agy made.
-        st = subprocess.run(["git", "-C", str(best), "status", "--porcelain", "-z"],
-                            capture_output=True, text=True, timeout=30)
-        paths = _porcelain_paths(st.stdout) if st.returncode == 0 else []
-        if not paths:
-            print(f"  agy-bridge {task.id}: scratch '{best.name}' has no per-run delta — nothing carried")
-            return
-        carried = 0
-        for rel in paths:
-            src, dst = best / rel, wt / rel
-            if src.is_file():
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dst)
-                carried += 1
-            elif not src.exists() and dst.is_file():  # agy deleted it → mirror the deletion
-                dst.unlink()
-                carried += 1
-        print(f"  agy-bridge {task.id}: carried {carried} changed path(s) from scratch '{best.name}' → worktree")
+        subprocess.run(["rsync", "-a", "--exclude", ".git", "--exclude", ".claude",
+                        f"{best}/", f"{wt}/"], capture_output=True, text=True, timeout=180)
+        print(f"  agy-bridge {task.id}: carried scratch '{best.name}' → worktree")
     except Exception as e:
         print(f"  agy-bridge {task.id}: skipped ({str(e)[:80]})")
 
@@ -908,53 +708,10 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
         if agent == "gemini" and os.environ.get("LIMEN_GEMINI_OAUTH") == "1":
             for k in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"):
                 run_env.pop(k, None)
-        # agy/antigravity FAIL-CLOSED browser neuter (defense-in-depth behind the _oauth_unreachable_lanes
-        # gate): if the network drops MID-run, the antigravity-cli would still fall to interactive OAuth and
-        # try to open a Google sign-in tab. On macOS every browser-opener lib ultimately runs `open <url>`
-        # resolved via PATH, so we prepend a no-op `open` shim to THIS subprocess's PATH only — the cli can
-        # then "open" the tab into a script that just logs + exits 0. The lane fails the beat instead of
-        # littering the desktop. Scoped to the agy subprocess; interactive `agy` you run by hand is untouched.
-        if agent in ("agy", "antigravity"):
-            shim = str(Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
-                       / "scripts" / "agy-noop-shim")
-            run_env["PATH"] = shim + os.pathsep + run_env.get("PATH", "")
-            run_env["BROWSER"] = "true"  # belt-and-suspenders for libs that honor $BROWSER (no-op command)
-        # claude: keep the FLEET's auth OFF the interactive session's shared macOS Keychain, so the
-        # daemon's concurrent `claude -p` never rotate the OAuth token out from under a live session
-        # (anthropics/claude-code#48786). Precedence — all fleet-scoped (set in ~/.limen.env, which
-        # ONLY the daemon sources) and fail-open (neither set → unchanged: shares the Keychain, but
-        # the auth-blip retry below makes that race self-healing):
-        #   LIMEN_CLAUDE_AUTH_TOKEN → ANTHROPIC_AUTH_TOKEN  (a `claude setup-token`: subscription-
-        #       billed + stable = the FREE isolation; VERIFY with scripts/claude-fleet-auth-probe.sh
-        #       that it bills to the sub and leaves the Keychain intact before trusting it)
-        #   LIMEN_CLAUDE_API_KEY    → ANTHROPIC_API_KEY     (documented-safe, API-credit-billed fallback)
-        # NEVER export CLAUDE_CODE_OAUTH_TOKEN here: on macOS it DELETES the global Keychain item on
-        # exit (anthropics/claude-code#37512, closed not-planned), which would knock out the live session.
-        if agent == "claude":
-            _ftok = os.environ.get("LIMEN_CLAUDE_AUTH_TOKEN")
-            _fkey = os.environ.get("LIMEN_CLAUDE_API_KEY")
-            if _ftok:
-                run_env["ANTHROPIC_AUTH_TOKEN"] = _ftok
-                run_env.pop("ANTHROPIC_API_KEY", None)
-            elif _fkey:
-                run_env["ANTHROPIC_API_KEY"] = _fkey
-            run_env.pop("CLAUDE_CODE_OAUTH_TOKEN", None)  # belt-and-suspenders: never wipe the Keychain
         try:
             run = _run_capture(
                 agent_cmd, cwd=str(wt), timeout=lane_timeout, env=run_env,
             )  # own process group → timeout SIGKILLs grandchildren too (no beat-stall hang)
-            # SELF-HEAL the credential-refresh race (#48786): if claude lost the token rotation,
-            # a fresh process re-reads the now-rotated token. ONE retry only — a persistent failure
-            # still falls through to the rate-limit/cascade handling below. claude-lane only.
-            if (
-                agent == "claude"
-                and run.returncode != 0
-                and _is_auth_blip((run.stderr or "") + (run.stdout or ""))
-            ):
-                print(f"  AUTH-BLIP {task.id}: claude credential-refresh race — re-reading token, one retry")
-                run = _run_capture(
-                    agent_cmd, cwd=str(wt), timeout=lane_timeout, env=run_env,
-                )
         except subprocess.TimeoutExpired:
             print(f"  TIMEOUT {task.id} after {lane_timeout}s — too big for sync local → routing to jules (async)")
             return _TIMEOUT  # finally drops the worktree; task re-routes to the async lane
@@ -1048,6 +805,7 @@ def _window_hours(agent: str) -> float:
     (5h rolling windows) refill ~5x/day instead of being throttled by a once-a-day cap,
     while jules/gemini/opencode/agy refill daily."""
     try:
+        import json
         root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
         limits = json.load(open(root / "logs" / "usage-limits.json"))
         window = str((limits.get(agent) or {}).get("window", ""))
@@ -1105,7 +863,6 @@ def dispatch_tasks(
     now = datetime.now(timezone.utc)
     budget = budget or limen.portal.budget.daily
 
-    _load_limen_env()  # hydrate creds into os.environ so agent CLIs inherit them (gemini/codex/opencode/…)
     _reset_budget_if_needed(limen, now)
     track = limen.portal.budget.track
 
@@ -1160,15 +917,70 @@ def dispatch_tasks(
         if remaining < task.budget_cost:
             break
 
+        entry = DispatchLogEntry(
+            timestamp=now,
+            agent=agent_filter,
+            session_id=session_id(),
+            status="dispatched",
+        )
+
         result = call_agent_dispatch(agent_filter, task, dry_run)
         if not dry_run:
-            _apply_result(task, agent_filter, result, now, track)
-            if result == _RATELIMIT:
+            if result == _NOOP:
+                # agent ran but had nothing to change — task-intrinsic, never cascade
+                entry.status = "noop"
+                task.status = "cancelled"
+                if "noop" not in task.labels:
+                    task.labels.append("noop")
+                task.updated = now
+                task.dispatch_log.append(entry)
+            elif result == _RATELIMIT:
+                # the lane hit its REAL (token/rate) limit — cool the lane for this cycle
+                # and cascade THIS task down; do not spend budget, do not mark task failed.
+                nxt = _next_lane(agent_filter)
+                entry.status = f"ratelimited->{nxt or 'requeue'}"
+                task.target_agent = nxt or agent_filter
+                task.status = "open"
+                task.updated = now
+                task.dispatch_log.append(entry)
                 save_limen_file(tasks_path, limen)
                 print(f"── lane {agent_filter} rate-limited — cooling, {dispatched} dispatched this cycle")
                 return
-            elif result and result not in (_NOOP, _RATELIMIT, _TIMEOUT):
+            elif result == _TIMEOUT:
+                # too big for a sync local lane → route to jules (async, no wall-clock cap)
+                entry.status = "timeout->jules"
+                task.target_agent = "jules"
+                task.status = "open"
+                if "slow" not in task.labels:
+                    task.labels.append("slow")
+                task.updated = now
+                task.dispatch_log.append(entry)
+            elif result:
+                if isinstance(result, str):
+                    entry.session_id = result
+                task.status = "dispatched"
+                task.updated = now
+                task.dispatch_log.append(entry)
+                track.spent += task.budget_cost
+                track.per_agent[agent_filter] = (
+                    track.per_agent.get(agent_filter, 0) + task.budget_cost
+                )
                 remaining -= task.budget_cost
+            else:
+                # genuine lane failure (down/error/timeout) — cascade DOWN the spectrum
+                tried = f"tried:{agent_filter}"
+                if tried not in task.labels:
+                    task.labels.append(tried)
+                nxt = _next_lane(agent_filter)
+                if nxt:
+                    entry.status = f"failed->{nxt}"
+                    task.target_agent = nxt
+                    task.status = "open"  # re-routed: a later lane retries (this tick or next)
+                else:
+                    entry.status = "failed"
+                    task.status = "failed"  # spectrum exhausted
+                task.updated = now
+                task.dispatch_log.append(entry)
 
         dispatched += 1
 
@@ -1178,7 +990,7 @@ def dispatch_tasks(
     print(f"── {mode}: {dispatched} task(s)")
 
 
-def _apply_result(task: Task, agent: str, result: bool | str, now: datetime, track: BudgetTrack) -> None:
+def _apply_result(task: Task, agent: str, result, now, track) -> None:
     """Apply one dispatch result to a task (same semantics as the serial path):
     success → dispatched + spend; no-op → cancelled; rate-limit/fail → cascade."""
     entry = DispatchLogEntry(timestamp=now, agent=agent, session_id=session_id(), status="dispatched")
@@ -1343,11 +1155,19 @@ def _codex_model() -> str | None:
 # chronic escalation as the escalate rung — only UNDETECTABLE-failure classes get a higher
 # tier up front. No new escalation machinery. Mirrors _codex_model/_opencode_model: env pin
 # wins, derive at call-time, fail-open. ([[model-tiering-policy]], [[value-is-discovered-never-assumed]])
-#
-# The shared VOCABULARY this ladder sorts with — _CLAUDE_TIER_ORDER, _CLAUDE_OPUS_CLASSES_DEFAULT,
-# _claude_opus_classes(), _resolve_claude_model() — lives in model_selection.py (imported at the top)
-# so the NON-BYPASSABLE `claude` shim sorts with the EXACT same vocabulary. One source of truth:
-# this file owns the per-TASK sort; the shim owns the per-SPAWN floor. ([[fleet-model-floor-bleed]])
+_CLAUDE_TIER_ORDER = ("haiku", "sonnet", "opus")
+
+# Reserved-Opus classes: the doctrine's small principled set whose failure is BOTH undetectable
+# AND high-stakes (final/canon synthesis, irreversible go-live reasoning, kernel abstraction). A
+# stated principle, env-overridable (comma-separated LIMEN_CLAUDE_OPUS_CLASSES) — not inherited config.
+_CLAUDE_OPUS_CLASSES_DEFAULT = ("canon", "synthesis", "kernel", "go-live", "irreversible")
+
+
+def _claude_opus_classes() -> set[str]:
+    raw = os.environ.get("LIMEN_CLAUDE_OPUS_CLASSES")
+    if raw is not None:
+        return {c.strip() for c in raw.split(",") if c.strip()}
+    return set(_CLAUDE_OPUS_CLASSES_DEFAULT)
 
 
 def _claude_tier_overrides() -> dict:
@@ -1395,6 +1215,13 @@ def _bump_tier(tier: str, task: Task | None) -> str:
         return tier
     i = _CLAUDE_TIER_ORDER.index(tier)
     return _CLAUDE_TIER_ORDER[min(i + 1, len(_CLAUDE_TIER_ORDER) - 1)]
+
+
+def _resolve_claude_model(tier: str) -> str:
+    """tier → the `claude -m` value. Env pin wins (LIMEN_CLAUDE_<TIER>_MODEL); else the bare CLI
+    tier alias, which the `claude` CLI resolves to the current dated model itself (nothing pinned,
+    survives renames). ([[derive-never-pin-hardcodes]])"""
+    return os.environ.get(f"LIMEN_CLAUDE_{tier.upper()}_MODEL") or tier
 
 
 def _claude_model(task: Task | None = None) -> str | None:
@@ -1485,7 +1312,7 @@ def dispatch_parallel(
     id2task = {t.id: t for t in limen.tasks}
     cooled: set[str] = set()  # lanes that hit their real rate-limit this round
 
-    def run_one(at: tuple[str, str]) -> tuple[str, str, bool | str]:
+    def run_one(at: tuple[str, str]):
         agent, tid = at
         try:
             res = call_agent_dispatch(agent, id2task[tid], dry_run=False)
@@ -1535,7 +1362,7 @@ def release_stale_tasks(
     hours: int = 24,
     dry_run: bool = True,
     agent: str | None = None,
-) -> dict[str, Any]:
+) -> dict:
     now = datetime.now(timezone.utc)
     candidates = stale_tasks(limen, hours=hours, agent=agent)
 
