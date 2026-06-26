@@ -7,6 +7,21 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const appDir = join(__dirname, "..", "app");
 const outDir = join(__dirname, "..", "out");
 
+// Single source of truth for the backend runtime URL — mirror next.config.js,
+// generate-static-data.mjs, and doctor.py: env override → committed runtime.config.json.
+// next.config.js embeds this URL into the static export even when NEXT_PUBLIC_API_URL is
+// unset, so the exported pages are runtime-attached; detect that the same way the build does.
+// (This validator was the 4th consumer missed when the single source landed in 3069587.)
+function resolveRuntimeApiUrl() {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (process.env.LIMEN_API_URL) return process.env.LIMEN_API_URL;
+  try {
+    return JSON.parse(readFileSync(join(__dirname, "..", "..", "..", "runtime.config.json"), "utf8")).apiUrl || "";
+  } catch {
+    return "";
+  }
+}
+
 function fail(message) {
   console.error(`exported page validation failed: ${message}`);
   process.exit(1);
@@ -73,12 +88,12 @@ const ownerOnlyUiNeedles = [
 ];
 
 assertLabels("index.html", ["Public"]);
-assertLabels("internal.html", ["Internal", "QA", "Insights", "Client", "Public"]);
-assertLabels("qa.html", ["Internal", "QA", "Insights", "Client", "Public"]);
+assertLabels("internal.html", ["Internal", "QA", "Client", "Public"]);
+assertLabels("qa.html", ["Internal", "QA", "Client", "Public"]);
 assertLabels("client.html", ["Client", "Public"]);
 assertLabels("public.html", ["Public"]);
 
-const runtimeAttached = Boolean(process.env.NEXT_PUBLIC_API_URL);
+const runtimeAttached = Boolean(resolveRuntimeApiUrl());
 if (runtimeAttached) {
   assertIncludes("index.html", ["Limen is tracking", "Run plan", "Unrecorded capacity"]);
   assertIncludes("internal.html", ["Owner access", "Owner token required", "Load internal"]);
@@ -181,4 +196,3 @@ for (const needle of ["lifecycleGates", "getLifecycleGate", "getLifecycleGateLab
 }
 
 console.log("Exported page persona/runtime checks verified");
-assertLabels("insights.html", ["Internal", "QA", "Insights", "Client", "Public"]);

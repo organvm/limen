@@ -31,22 +31,6 @@ export LIMEN_ROOT=~/limen
 limen init --root $LIMEN_ROOT
 ```
 
-## Adding Tasks
-
-Tasks are added by editing `tasks.yaml` directly:
-
-```yaml
-tasks:
-  - id: LIMEN-001
-    title: "Fix TypeScript errors"
-    repo: owner/repo
-    type: code
-    target_agent: jules
-    priority: high
-    budget_cost: 2
-    status: open
-```
-
 ## Dispatching Tasks
 
 ```bash
@@ -99,8 +83,8 @@ workflow.
 ## Harvesting Results
 
 ```bash
-# Check completed tasks (all agents)
-limen harvest
+# Check all agents for completed tasks
+limen harvest --all
 
 # Check a specific agent
 limen harvest --agent jules
