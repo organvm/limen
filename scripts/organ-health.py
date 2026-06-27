@@ -200,6 +200,7 @@ def _registry():
              what="mine + generate backlog (revenue-first)",
              probe=lambda: _mtime(LOGS / "feed-health.json")),  # generate-backlog.py stamps this every feed beat
         dict(key="merge", rung="MERGE", voice="merge", cadence_key="DRAIN",
+             claim_cadence=False,
              gate_note="merge-drain runs inside the drain voice; merges remain policy-gated",
              what="merge-ready assessment; CLEAN PRs ship",
              probe=lambda: _last_log_ts(LOGS / "merge-drain.log")),
@@ -259,7 +260,8 @@ def _doors(text):
         spec = dict(o)
         bk = (o.get("cadence_key") or "").lower()
         if bk:
-            claimed.add(bk)
+            if spec.get("claim_cadence", True):
+                claimed.add(bk)
             if bk not in by_key:
                 spec["_absent"] = True
                 spec["gate_note"] = "beat absent from heartbeat — drift"

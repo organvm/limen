@@ -16,6 +16,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from limen import dispatch as D  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def disable_oauth_preflight(monkeypatch):
+    monkeypatch.setenv("LIMEN_OAUTH_PREFLIGHT", "0")
+
+
 def test_run_capture_fast_path():
     r = D._run_capture(["echo", "ok"], timeout=5)
     assert r.returncode == 0 and "ok" in r.stdout
@@ -115,7 +120,10 @@ def test_heal_dispatch_funnel_transitions(tmp_path):
     script = Path(__file__).resolve().parents[2] / "scripts" / "heal-dispatch.py"
     env = {**os.environ, "LIMEN_ROOT": str(tmp_path), "LIMEN_TASKS": str(tmp_path / "tasks.yaml"),
            "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")}
-    subprocess.run([sys.executable, str(script), "--apply"], env=env, capture_output=True, text=True, timeout=40)
+    result = subprocess.run([sys.executable, str(script), "--apply"], env=env,
+                            capture_output=True, text=True, timeout=40)
+    assert result.returncode == 0, result.stderr
+    assert "1 merged→done, 1 open-pr→done, 2 stuck→open" in result.stdout
     st = {t.id: t.status for t in load_limen_file(tmp_path / "tasks.yaml").tasks}
     assert st["M"] == "done" and st["O"] == "done", st     # merged / open-PR → done
     assert st["C"] == "open" and st["N"] == "open", st      # closed / no-PR → reopened

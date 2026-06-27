@@ -29,10 +29,10 @@ import yaml
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 PR_RE = re.compile(r"github\.com/([^/]+)/([^/]+)/pull/(\d+)")
-# a dispatch is RESERVED (status=dispatched, `updated` stamped) before its slow run; the
-# dispatch_log entry only lands at COMMIT. So a freshly-reserved task that's still running
-# looks identical to a silent failure. Only treat a no-PR task as STRANDED once it has sat
-# longer than any run could take: lane_timeout (900s) + fetch/worktree/push/PR overhead.
+# A dispatch is RESERVED (status=dispatched, updated stamped, reserve log appended) before its
+# slow run. A freshly reserved local task still has no PR/session result, so only treat it as
+# STRANDED once it has sat longer than any run could take: lane_timeout (900s) +
+# fetch/worktree/push/PR overhead.
 GRACE = int(os.environ.get("LIMEN_LANE_TIMEOUT", "900")) + 600
 
 
@@ -52,6 +52,8 @@ def chronic_tasks(all_tasks, min_reopens=3):
     one capable lane / human eyes), don't silently re-loop and don't cancel real work."""
     out = []
     for t in all_tasks:
+        if t.get("status", "open") not in {"open", "dispatched", "in_progress", "failed"}:
+            continue
         log = t.get("dispatch_log") or []
         # every reopen mechanism (release-stale / recover / heal-dispatch) appends a
         # status=="open" entry — count those, robust across all three.

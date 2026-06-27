@@ -189,6 +189,13 @@ def _deps_met(task: Task, by_id: dict[str, Task]) -> bool:
     return all(_dep_merged(by_id.get(d)) for d in deps)
 
 
+def _dispatchable(task: Task) -> bool:
+    """Open machine-work only. Human-gated levers stay surfaced as needs_human, never reserved."""
+    if task.status != "open":
+        return False
+    return "needs-human" not in (task.labels or [])
+
+
 _PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "backlog": 4}
 # Git worktree add/remove briefly locks the PARENT repo index; serialize just that fast
 # plumbing across threads so concurrent same-repo dispatches don't collide on index.lock.
@@ -1134,7 +1141,7 @@ def dispatch_tasks(
     candidates = [
         t
         for t in tasks
-        if t.status == "open"
+        if _dispatchable(t)
         and (t.target_agent == agent_filter or t.target_agent == "any")
         and t.budget_cost <= remaining
     ]
@@ -1180,11 +1187,14 @@ def dispatch_tasks(
 
 def _apply_result(task: Task, agent: str, result: bool | str, now: datetime, track: BudgetTrack) -> None:
     """Apply one dispatch result to a task (same semantics as the serial path):
-    success → dispatched + spend; no-op → cancelled; rate-limit/fail → cascade."""
+    success → dispatched + spend; no-op → archived; rate-limit/fail → cascade."""
     entry = DispatchLogEntry(timestamp=now, agent=agent, session_id=session_id(), status="dispatched")
     if result == _NOOP:
-        entry.status = "noop"
-        task.status = "cancelled"
+        entry.status = "archived"
+        entry.output = "No-op result; archived without requeueing."
+        task.status = "archived"
+        if "cancelled" not in task.labels:
+            task.labels.append("cancelled")
         if "noop" not in task.labels:
             task.labels.append("noop")
     elif result == _RATELIMIT:
@@ -1444,7 +1454,7 @@ def dispatch_parallel(
         if rem <= 0:
             continue
         cands = [t for t in limen.tasks
-                 if t.status == "open" and (t.target_agent == agent or t.target_agent == "any")
+                 if _dispatchable(t) and (t.target_agent == agent or t.target_agent == "any")
                  and t.budget_cost <= rem and _deps_met(t, id2)]
         cands.sort(key=lambda t: _PRIORITY_ORDER.get(t.priority, 99))
         # FRONT-LOAD: base picks by priority, then an ACCELERATION TAIL (only when the lane is
@@ -1468,6 +1478,15 @@ def dispatch_parallel(
                 continue
             t.status = "dispatched"  # reserve so nothing else grabs it
             t.updated = now
+            t.dispatch_log.append(
+                DispatchLogEntry(
+                    timestamp=now,
+                    agent=agent,
+                    session_id="reserve",
+                    status="dispatched",
+                    output="dispatch-parallel: reserved before agent execution",
+                )
+            )
             picked.append((agent, t.id))
 
     if dry_run:

@@ -1,11 +1,10 @@
 from datetime import date, datetime
 from math import ceil
-from typing import Any
 
 from limen.models import LimenFile
 
 
-def _as_date(value: Any) -> date | None:
+def _as_date(value: date | datetime | str | None) -> date | None:
     if value is None:
         return None
     if isinstance(value, datetime):
@@ -37,7 +36,7 @@ def _throughput(limen: LimenFile) -> dict[str, int | str | None]:
         [
             status
             for status in event_statuses
-            if status in ("done", "completed", "failed", "failed_blocked")
+            if status in ("done", "failed", "failed_blocked", "archived")
         ]
     )
     return {
