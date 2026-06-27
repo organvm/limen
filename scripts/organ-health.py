@@ -199,7 +199,8 @@ def _registry():
         dict(key="feed", rung="FEED", voice="feed", cadence_key="FEED",
              what="mine + generate backlog (revenue-first)",
              probe=lambda: _mtime(LOGS / "feed-health.json")),  # generate-backlog.py stamps this every feed beat
-        dict(key="merge", rung="MERGE", voice="merge", cadence_beats=1, gate_note="merges gated on permission",
+        dict(key="merge", rung="MERGE", voice="merge", cadence_key="DRAIN",
+             gate_note="merge-drain runs inside the drain voice; merges remain policy-gated",
              what="merge-ready assessment; CLEAN PRs ship",
              probe=lambda: _last_log_ts(LOGS / "merge-drain.log")),
         dict(key="heal", rung="HEAL", voice="heal", cadence_key="HEAL",
