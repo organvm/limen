@@ -16,3 +16,4 @@ When a task belongs to one of these lanes:
 Current lane receipts:
 
 - [`rob-game`](rob-game.md) - Micro Tato, the newer personal game with Rob and John F.
+- [`network-substrate`](network-substrate.md) - local connectivity, launchd timers, and incident-to-system healing.
