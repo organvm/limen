@@ -16,3 +16,4 @@ When a task belongs to one of these lanes:
 Current lane receipts:
 
 - [`rob-game`](rob-game.md) - Micro Tato, the newer personal game with Rob and John F.
+- [`main-conductor-trench`](main-conductor-trench.md) - GitHub/org consolidation, limen[bot], async dispatch, and durable receipts.
