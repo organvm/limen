@@ -12,7 +12,9 @@ issues/PRs/stars and redirects old URLs (reversible: transfer back). Never delet
   python3 scripts/consolidate-github.py            # dry-run plan (read-only)
   python3 scripts/consolidate-github.py --apply     # ⚠ GATED: actually transfer + topic
 """
-import json, subprocess, sys
+import json
+import subprocess
+import sys
 from collections import defaultdict
 
 TARGET = "organvm"
@@ -55,7 +57,7 @@ def main():
     print(f"  name collisions (must rename before transfer): {len(collisions)}")
     for n, v in sorted(collisions.items()):
         print(f"    ⚠ '{n}': {', '.join(v)}")
-    print(f"\n  sample transfers (first 20):")
+    print("\n  sample transfers (first 20):")
     for owner, name, topic, arch in plan[:20]:
         flag = " [archived]" if arch else ""
         print(f"    {owner}/{name}{flag}  →  {TARGET}/{name}   +topic:{topic}")
@@ -63,8 +65,8 @@ def main():
         print(f"    … +{len(plan)-20} more")
 
     if not APPLY:
-        print(f"\nDRY-RUN — nothing executed. Collisions above must be resolved first.")
-        print(f"Re-run with --apply (GATED) to transfer non-colliding repos + set topics.")
+        print("\nDRY-RUN — nothing executed. Collisions above must be resolved first.")
+        print("Re-run with --apply (GATED) to transfer non-colliding repos + set topics.")
         return
 
     print(f"\n⚠ --apply: transferring NON-colliding repos into {TARGET} …")

@@ -30,7 +30,12 @@ Env: LIMEN_WORKTREE_ROOT, LIMEN_RECLAIM_MIN_AGE_H (6), LIMEN_RECLAIM_CLAUDE_WT (
      LIMEN_RECLAIM_CLAUDE_AGE_H (24), LIMEN_RECLAIM_MAX (50), LIMEN_RECLAIM_EVERY_MIN (30).
 """
 from __future__ import annotations
-import json, os, shutil, subprocess, sys, time
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 HOME = os.environ.get("HOME", "/Users/4jp")
