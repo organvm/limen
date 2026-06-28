@@ -22,6 +22,6 @@ AI roles + workflows + what real institution it rivals), then the organ's workin
 | media/ | Carrier-Wave Media — a cross-platform empire | seeded |
 | governance/ | Aerarium / Cvrsvs Honorvm — governance-as-code | seeded |
 | consulting/ | Sovereign Systems — agency-as-a-service | seeded |
-| artist/ | A-MAVS-OLEVM — a living museum/studio | seeded |
+| [artist/](artist/) | A-MAVS-OLEVM — a living museum/studio | temple built (70%), chambers under-filled |
 | social/ | Koinonia — civic + relationship support | seeded |
 | health/ | Health / Body — concierge recovery + ADA access | seeded |
