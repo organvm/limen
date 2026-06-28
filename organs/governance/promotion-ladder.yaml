@@ -1,0 +1,96 @@
+# organs/governance/promotion-ladder.yaml
+# Cvrsvs Honorvm — the canonical promotion state machine for ORGANVM repos.
+# Referenced by scripts/validate-promotion.py.
+# Named after the Roman cursus honorum: the ordered sequence of public offices.
+# ORGANVM orthography: V for U.
+
+schema_version: "1"
+name: cvrsvs-honorvm-promotion-ladder
+
+# --------------------------------------------------------------------------- #
+# States (the cursus offices, in order)                                        #
+# --------------------------------------------------------------------------- #
+states:
+  INCUBATOR:
+    description: >
+      Seed stage: concept defined, seed.yaml present, no runnable artifact yet.
+      The idea has been named and staked, but nothing runs.
+    maturity_range: [0, 29]
+    transitions_to: [ALPHA, FROZEN, ARCHIVED]
+
+  ALPHA:
+    description: >
+      First working vertical slice: something executes end-to-end, however rough.
+      Not production-ready, but the core loop is proven.
+    maturity_range: [20, 59]
+    transitions_to: [BETA, INCUBATOR, FROZEN, ARCHIVED]
+
+  BETA:
+    description: >
+      Usable institution: feature-complete for the primary use-case, integration-tested,
+      available for early adopters. The organ breathes on its own.
+    maturity_range: [50, 89]
+    transitions_to: [STABLE, ALPHA, FROZEN, ARCHIVED]
+
+  STABLE:
+    description: >
+      Self-running: no active build work, the organ meets its full macro + micro mandate.
+      Changes are maintenance, not construction.
+    maturity_range: [80, 100]
+    transitions_to: [ARCHIVED, DEPRECATED]
+
+  FROZEN:
+    description: >
+      Temporarily halted: work paused with intent to resume. State preserved; no active
+      beat tasks. May re-enter any pre-terminal state when unfrozen.
+    maturity_range: [0, 100]
+    transitions_to: [INCUBATOR, ALPHA, BETA, STABLE, ARCHIVED]
+
+  ARCHIVED:
+    description: >
+      Read-only: the repo is preserved but no longer active. Historical record only.
+    terminal: true
+    maturity_range: [0, 100]
+    transitions_to: []
+
+  DEPRECATED:
+    description: >
+      Superseded: a successor exists; this repo is scheduled for archival. The successor
+      must be named in the seed.yaml notes before DEPRECATED is valid.
+    terminal: false
+    maturity_range: [0, 100]
+    transitions_to: [ARCHIVED]
+
+# --------------------------------------------------------------------------- #
+# Rules (the ONE operationalized Cvrsvs Honorvm rule — and its siblings)      #
+# --------------------------------------------------------------------------- #
+rules:
+  - id: valid-promotion-status
+    severity: error
+    description: >
+      Every seed.yaml must declare a metadata.promotion_status that is a known state
+      in this ladder. Unknown states indicate a repo that has drifted outside the
+      governance contract and cannot be reliably reasoned about by the fleet.
+    field: metadata.promotion_status
+    check: must be one of the states listed above
+
+  - id: required-fields
+    severity: error
+    description: >
+      A seed.yaml must supply schema_version, organ, repo, org, and
+      metadata.promotion_status for the promotion validator to function.
+    fields:
+      - schema_version
+      - organ
+      - repo
+      - org
+      - metadata.promotion_status
+
+  - id: maturity-range-consistency
+    severity: warning
+    description: >
+      When organ-ladder.json maturity is available, it should fall within the
+      maturity_range defined for the declared promotion_status. A score outside the
+      range signals that the ladder score and the promotion state have drifted apart
+      and need reconciliation.
+    check: organ-ladder maturity in state.maturity_range (when available)
