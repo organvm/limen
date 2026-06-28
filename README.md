@@ -51,7 +51,7 @@ Mounts `./tasks.yaml` into the API container.
 | Command | Flags | Description |
 |---------|-------|-------------|
 | `limen init` | `--root`, `--budget` (default 100) | Scaffold a new `tasks.yaml` |
-| `limen dispatch` | `--agent`, `--budget`, `--dry-run/--live`, `--task`, `--limit` | Dispatch open tasks to agents (default: dry-run) |
+| `limen dispatch` | `--agent`, `--budget` (optional cap), `--dry-run/--live`, `--task`, `--limit` | Dispatch open tasks to agents (default: dry-run) |
 | `limen release-stale` | `--hours` (default 24), `--agent`, `--dry-run/--apply`, `--json-output`, `--report-file` | Reopen stale dispatched/in-progress tasks (default: dry-run) |
 | `limen doctor` | `--agent` (default jules), `--json-output`, `--report-file` | Report local readiness for dispatch and stale-claim recovery |
 | `limen qa` | `--agent` (default jules), `--json-output`, `--report-file` | Report QA lifecycle gates and steering queues (read-only) |
