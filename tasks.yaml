@@ -17,19 +17,19 @@ portal:
       date: '2026-06-29'
       spent: 57
       per_agent:
-        jules: 50
+        jules: 51
         gemini: 0
-        codex: 1
+        codex: 0
         opencode: 1
         agy: 5
         claude: 0
       per_agent_reset:
         jules: '2026-06-29T05:54:07.312618+00:00'
         gemini: '2026-06-29T05:54:07.312618+00:00'
-        codex: '2026-06-29T11:05:16.865822+00:00'
+        codex: '2026-06-29T16:35:44.732517+00:00'
         opencode: '2026-06-29T05:54:07.312618+00:00'
         agy: '2026-06-29T05:54:07.312618+00:00'
-        claude: '2026-06-29T11:05:16.865822+00:00'
+        claude: '2026-06-29T16:35:44.732517+00:00'
 tasks:
 - id: FORCE-route-all-services
   title: Router fans across ALL paid services, not just the 6 vendors
@@ -59710,7 +59710,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - typing
   - generated
@@ -59723,7 +59723,7 @@ tasks:
     green. [auto-generated 2026-06-27 to keep the stream endless]
   depends_on: []
   created: '2026-06-27'
-  updated: '2026-06-29T14:56:33.239181Z'
+  updated: '2026-06-29T15:31:30.354986Z'
   dispatch_log:
   - timestamp: '2026-06-27T12:16:14.621714Z'
     agent: agy
@@ -59801,6 +59801,11 @@ tasks:
     agent: jules
     session_id: '9178946619465049274'
     status: dispatched
+  - timestamp: '2026-06-29T15:31:30.354986Z'
+    agent: jules
+    session_id: https://github.com/organvm/limen/pull/403
+    status: done
+    output: 'jules-land: landed session 9178946619465049274 as PR'
 - id: GEN-organvm-mirror-mirror-test-coverage-0628
   title: Raise test coverage in organvm/mirror-mirror
   repo: organvm/mirror-mirror
@@ -62902,7 +62907,7 @@ tasks:
     should not grow without cause. [auto-generated 2026-06-28 to keep the stream endless]
   depends_on: []
   created: '2026-06-28'
-  updated: '2026-06-28T16:19:33.856007Z'
+  updated: '2026-06-29T16:35:44.732517Z'
   dispatch_log:
   - timestamp: '2026-06-28T15:24:13.775957Z'
     agent: codex
@@ -62945,6 +62950,20 @@ tasks:
   - timestamp: '2026-06-28T16:19:33.856007Z'
     agent: jules
     session_id: '1559557622914424071'
+    status: dispatched
+  - timestamp: '2026-06-29T16:32:51.922021Z'
+    agent: limen
+    session_id: cli
+    status: open
+    output: Released stale claim after 24h
+  - timestamp: '2026-06-29T16:35:44.732517Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T16:35:44.732517Z'
+    agent: jules
+    session_id: '10016698256651704508'
     status: dispatched
 - id: GEN-organvm-session-meta-test-coverage-0629
   title: Raise test coverage in organvm/session-meta
@@ -64182,6 +64201,40 @@ tasks:
     session_id: https://github.com/organvm/limen/pull/402
     status: dispatched
   - timestamp: '2026-06-29T11:29:48.488178Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
+- id: GEN-organvm-limen-typing-0629
+  title: Tighten types in organvm/limen
+  repo: organvm/limen
+  type: code
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: done
+  labels:
+  - typing
+  - generated
+  - build-out
+  urls: []
+  context: Eliminate the worst untyped hotspots in organvm/limen's most-imported module
+    (remove `any` / add type hints / fix loose signatures). Keep the build and tests
+    green. [auto-generated 2026-06-29 to keep the stream endless]
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T16:18:51.759899Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T15:36:44.048469Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T15:36:44.048469Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/404
+    status: dispatched
+  - timestamp: '2026-06-29T16:18:51.759899Z'
     agent: limen
     session_id: heal
     status: done
