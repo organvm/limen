@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-06-29T23:17:00Z",
+  "generated_utc": "2026-06-29T23:17:49Z",
   "receipts": [
     {
       "branch": "limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e",
@@ -68,6 +68,22 @@
       "preserved_ref_head": "1741370e59110aa3f667b9d0f48ede43277eb6a5",
       "repo": "organvm/the-invisible-ledger",
       "root": "resolve-a-organvm-the-invisible-ledger-4-f657",
+      "score_discount": 35,
+      "status": "default_branch_preserved"
+    },
+    {
+      "branch": "codex/rob-game-lane-20260628",
+      "classification": "remote branch head is clean and included in origin/main",
+      "default_branch": "origin/main",
+      "default_head": "7ecdd65a529802a581d173b4cb390d19bcb20e55",
+      "evidence_updated_utc": "2026-06-29T23:17:49Z",
+      "head": "fec929aa261c8666a49779fecdca397964af6cb1",
+      "lane": "remote-default-proof",
+      "next_action": "No local source preservation action remains. Local HEAD equals origin/codex/rob-game-lane-20260628 at fec929aa261c8666a49779fecdca397964af6cb1; git merge-base --is-ancestor HEAD origin/main exited 0; git cherry origin/main HEAD and git status --porcelain are empty. Reclaim the local checkout only after normal operator acceptance.",
+      "repo": "organvm/limen",
+      "remote_branch": "origin/codex/rob-game-lane-20260628",
+      "remote_head": "fec929aa261c8666a49779fecdca397964af6cb1",
+      "root": "limen-rob-game-lane-20260628",
       "score_discount": 35,
       "status": "default_branch_preserved"
     },
