@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-06-29T23:17:49Z",
+  "generated_utc": "2026-06-29T23:21:00Z",
   "receipts": [
     {
       "branch": "limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e",
@@ -86,6 +86,32 @@
       "root": "limen-rob-game-lane-20260628",
       "score_discount": 35,
       "status": "default_branch_preserved"
+    },
+    {
+      "base_branch": "origin/main",
+      "base_head": "7ecdd65a529802a581d173b4cb390d19bcb20e55",
+      "branch": "work/photos-universe-20260629-182431",
+      "classification": "local branch range and untracked reports privately preserved",
+      "evidence_updated_utc": "2026-06-29T23:21:00Z",
+      "head": "1fcf7579405c95e69735215566a1fa0ff91dbfa6",
+      "lane": "owner-blocker",
+      "next_action": "Local HEAD is not included in origin/main and has 11 unique commits. The origin/main..HEAD commit range and untracked reports/ tree are privately preserved. Create a new narrow owner packet to merge, supersede, or abandon this branch and report archive; reclaim the local checkout only after operator acceptance.",
+      "private_patch": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T232100Z-photos-universe-20260629-182431/origin-main-range.patch",
+      "private_patch_bytes": 719776,
+      "private_patch_sha256": "6a1769c92d5ee7e54223f1a3d541447a6a24a1ac24e12b6d7fb3b0e839977589",
+      "private_receipt": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T232100Z-photos-universe-20260629-182431/receipt.json",
+      "private_reports_archive": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T232100Z-photos-universe-20260629-182431/reports.tar.gz",
+      "private_reports_archive_bytes": 4908127,
+      "private_reports_archive_sha256": "315edcb92bb483817dcbf68fa1ce47305995ff6c1cd85ca8e68b79f7d2c036ff",
+      "remote_branch_present": false,
+      "repo": "organvm/limen",
+      "root": "photos-universe-20260629-182431",
+      "score_discount": 20,
+      "status": "private_patch_preserved",
+      "unique_commits_vs_origin_main": 11,
+      "untracked_roots": [
+        "reports/"
+      ]
     },
     {
       "branch": "limen/rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f",
