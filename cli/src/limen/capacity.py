@@ -5,6 +5,7 @@ import re
 import shlex
 import shutil
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypedDict, TypeVar
 
@@ -27,6 +28,26 @@ class CapacityRow(AgentStatus):
     remaining: int | None
 
 
+class CapacityFillRow(AgentStatus):
+    target: int
+    productive: int
+    attempts: int
+    expected_now: int
+    open_work: int
+    active_work: int
+    remaining: int
+    status: str
+    evidence: str
+    action: str
+
+
+class CapacityFillSnapshot(TypedDict):
+    generated_at: str
+    status: str
+    rows: list[CapacityFillRow]
+    blockers: list[dict[str, str]]
+
+
 PAID_AGENT_ORDER: tuple[str, ...] = (
     "codex",
     "claude",
@@ -44,6 +65,10 @@ PAID_AGENT_ORDER: tuple[str, ...] = (
     "oz",
     "github_actions",
 )
+
+DEFAULT_FILL_AGENTS: tuple[str, ...] = ("codex", "claude", "opencode", "agy", "gemini", "jules")
+
+BAD_USAGE_HEALTH = frozenset({"throttle", "ratelimited", "depleted", "down", "error", "blocked"})
 
 AGENT_ALIASES: dict[str, str] = {
     "actions": "github_actions",
@@ -381,3 +406,229 @@ def format_capacity_census(rows: list[CapacityRow]) -> str:
             f"  {state:4} {row['agent']:<14} {row['kind']:<14} remaining={remaining}/{limit} - {row['detail']}"
         )
     return "\n".join(lines)
+
+
+def _load_limen_json(path: Path) -> dict[str, object]:
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except (FileNotFoundError, PermissionError):
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _parse_dt(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _load_usage(root: Path) -> dict[str, object]:
+    return _load_limen_json(root / "logs" / "usage.json")
+
+
+def _usage_consumed_runs(agent: str, usage: dict[str, object]) -> int:
+    vendors = usage.get("vendors") if isinstance(usage, dict) else {}
+    info = vendors.get(agent) if isinstance(vendors, dict) else {}
+    if not isinstance(info, dict):
+        return 0
+    signal = str(info.get("signal") or "")
+    if signal in {"count", "dispatch-count", "runs"}:
+        return _int(info.get("consumed"), 0)
+    return 0
+
+
+def _usage_health(agent: str, usage: dict[str, object]) -> str:
+    vendors = usage.get("vendors") if isinstance(usage, dict) else {}
+    info = vendors.get(agent) if isinstance(vendors, dict) else {}
+    return str(info.get("health") or "") if isinstance(info, dict) else ""
+
+
+def _task_status(task: object) -> str:
+    return str(_get(task, "status") or "")
+
+
+def _task_agent(task: object) -> str:
+    return canonical_agent(_get(task, "target_agent", ""))
+
+
+def _task_cost_int(task: object) -> int:
+    return _int(_get(task, "budget_cost"), 0)
+
+
+def _lane_work_counts(board: object, agent: str) -> tuple[int, int]:
+    tasks = _get(board, "tasks", []) or []
+    if not isinstance(tasks, list):
+        return 0, 0
+    open_work = 0
+    active_work = 0
+    for task in tasks:
+        status = _task_status(task)
+        task_agent = _task_agent(task)
+        if status == "open" and task_agent in {agent, "any"}:
+            open_work += _task_cost_int(task)
+        elif status in {"dispatched", "in_progress"} and task_agent == agent:
+            active_work += _task_cost_int(task)
+    return open_work, active_work
+
+
+def _dispatch_event_attempts(board: object, agent: str) -> int:
+    tasks = _get(board, "tasks", []) or []
+    if not isinstance(tasks, list):
+        return 0
+    attempts = 0
+    for task in tasks:
+        if _task_agent(task) not in {agent, "any"}:
+            continue
+        log = _get(task, "dispatch_log", []) or []
+        if not isinstance(log, list):
+            continue
+        attempts += sum(1 for event in log if isinstance(event, dict) and str(event.get("status", "")).strip())
+    return attempts
+
+
+def _daily_task_target(board: object, agent: str, *, default: int | None = None) -> int:
+    budget = _budget_from_board(board)
+    caps = _get(budget, "per_agent", {}) or {}
+    if isinstance(caps, dict) and agent in caps:
+        return _int(caps.get(agent), default=default or 0)
+    return default or 0
+
+
+def capacity_fill_snapshot(
+    board: object,
+    *,
+    now: datetime | None = None,
+    usage: dict[str, object] | None = None,
+    down_lanes: set[str] | None = None,
+    agents: tuple[str, ...] | None = None,
+) -> CapacityFillSnapshot:
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    budget = _budget_from_board(board)
+    track = _get(budget, "track", {}) or {}
+    per_agent_spent = _get(track, "per_agent", {}) or {}
+    per_agent_reset = _get(track, "per_agent_reset", {}) or {}
+    per_agent_caps = _get(budget, "per_agent", {}) or {}
+    if not isinstance(per_agent_spent, dict):
+        per_agent_spent = {}
+    if not isinstance(per_agent_reset, dict):
+        per_agent_reset = {}
+    if not isinstance(per_agent_caps, dict):
+        per_agent_caps = {}
+
+    usage = usage if usage is not None else _load_usage(Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))))
+    down_lanes = set(down_lanes or ())
+    census = {row["agent"]: row for row in capacity_census(board)}
+    rows: list[CapacityFillRow] = []
+    blockers: list[dict[str, str]] = []
+
+    for agent in agents or DEFAULT_FILL_AGENTS:
+        target = _daily_task_target(board, agent)
+        if target <= 0:
+            continue
+        reset_at = _parse_dt(per_agent_reset.get(agent))
+        if reset_at is None:
+            expected_now = target
+        else:
+            progress = max(0.0, min(1.0, (now - reset_at).total_seconds() / (24 * 60 * 60)))
+            expected_now = max(1 if progress > 0 else 0, int(round(target * progress)))
+        productive = _int(per_agent_spent.get(agent), 0)
+        attempts = max(_dispatch_event_attempts(board, agent), _usage_consumed_runs(agent, usage))
+        observed = max(productive, attempts)
+        open_work, active_work = _lane_work_counts(board, agent)
+        row_census = census.get(agent, {})
+        reachable = bool(row_census.get("reachable", False))
+        usage_health = _usage_health(agent, usage)
+        if agent in down_lanes:
+            status = "blocked"
+            evidence = "lane is down by the live dispatch gate"
+            action = "clear the lane-down/auth/rate-limit gate, then route and dispatch this lane"
+        elif usage_health in BAD_USAGE_HEALTH and observed > 0:
+            status = "depleted"
+            evidence = f"usage meter health={usage_health}; observed={observed}, productive={productive}"
+            action = "wait for this lane's meter to refresh or fail over before feeding it again"
+        elif expected_now > 0 and productive < expected_now:
+            if attempts >= expected_now:
+                status = "unproductive"
+                evidence = (
+                    f"attempted {attempts}/{expected_now}, but productive board spend is "
+                    f"{productive}/{expected_now}"
+                )
+                action = "heal failed/rerouted dispatches so attempts become done/dispatched work"
+            elif reachable and open_work > 0:
+                status = "underfilled"
+                evidence = f"productive {productive}/{expected_now}; attempts {attempts}/{expected_now}"
+                action = "route open work to this lane and dispatch before the window resets"
+            elif open_work <= 0:
+                status = "no_work"
+                evidence = f"productive {productive}/{expected_now}, but no open/any work is available"
+                action = "generate or route appropriate open work for this lane"
+            else:
+                status = "blocked"
+                evidence = f"productive {productive}/{expected_now}, but the lane is not reachable"
+                action = "fix lane reachability/auth/budget before routing more work"
+        else:
+            status = "healthy"
+            evidence = f"productive {productive}/{expected_now}; attempts {attempts}/{expected_now}"
+            action = "keep pacing normally"
+        row: CapacityFillRow = {
+            "agent": agent,
+            "target": target,
+            "productive": productive,
+            "attempts": attempts,
+            "expected_now": expected_now,
+            "open_work": open_work,
+            "active_work": active_work,
+            "remaining": max(0, target - productive),
+            "reachable": reachable,
+            "status": status,
+            "evidence": evidence,
+            "action": action,
+            "kind": str(row_census.get("kind", "unknown")),
+            "detail": str(row_census.get("detail", "")),
+            "command": row_census.get("command") if isinstance(row_census.get("command"), list) else None,
+        }
+        rows.append(row)
+        if status in {"underfilled", "unproductive", "blocked", "no_work"}:
+            blockers.append({"id": f"lane-fill-{agent}", "evidence": f"{agent}: {evidence}"})
+
+    overall = "healthy" if not blockers else "blocked"
+    return {
+        "generated_at": now.isoformat(timespec="seconds"),
+        "status": overall,
+        "rows": rows,
+        "blockers": blockers,
+    }
+
+
+def format_capacity_fill(snapshot: CapacityFillSnapshot) -> str:
+    lines = [
+        "# Capacity Fill",
+        "",
+        f"Generated: `{snapshot['generated_at']}`",
+        "",
+        f"Status: `{snapshot['status']}`",
+        "",
+        "| Lane | Status | Productive | Attempts | Expected now | Target | Open work | Active | Action |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---|",
+    ]
+    for row in snapshot["rows"]:
+        lines.append(
+            "| "
+            f"`{row['agent']}` | `{row['status']}` | {row['productive']} | {row['attempts']} | "
+            f"{row['expected_now']} | {row['target']} | {row['open_work']} | {row['active_work']} | "
+            f"{row['action']} |"
+        )
+    lines.extend(["", "## Evidence", ""])
+    for row in snapshot["rows"]:
+        lines.append(f"- `{row['agent']}`: {row['evidence']}")
+    return "\n".join(lines) + "\n"
