@@ -15,21 +15,21 @@ portal:
       claude: 100
     track:
       date: '2026-06-29'
-      spent: 58
+      spent: 57
       per_agent:
         jules: 51
         gemini: 0
-        codex: 1
+        codex: 0
         opencode: 1
         agy: 5
         claude: 0
       per_agent_reset:
         jules: '2026-06-29T05:54:07.312618+00:00'
         gemini: '2026-06-29T05:54:07.312618+00:00'
-        codex: '2026-06-29T16:35:44.732517+00:00'
+        codex: '2026-06-29T22:22:29.412423+00:00'
         opencode: '2026-06-29T05:54:07.312618+00:00'
         agy: '2026-06-29T05:54:07.312618+00:00'
-        claude: '2026-06-29T16:35:44.732517+00:00'
+        claude: '2026-06-29T22:22:29.412423+00:00'
 tasks:
 - id: FORCE-route-all-services
   title: Router fans across ALL paid services, not just the 6 vendors
@@ -64278,3 +64278,1755 @@ tasks:
     session_id: heal
     status: done
     output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
+- id: CAPFILL-jules-20260629-01
+  title: Jules daily capacity-fill packet 01
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-01.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-claude-20260629-01
+  title: Claude daily capacity-fill packet 01
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-01.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: claude
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-opencode-20260629-01
+  title: OpenCode daily capacity-fill packet 01
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-01.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-agy-20260629-01
+  title: Agy daily capacity-fill packet 01
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-01.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-gemini-20260629-01
+  title: Gemini daily capacity-fill packet 01
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:gemini
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/gemini/20260629-01.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-jules-20260629-02
+  title: Jules daily capacity-fill packet 02
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-02.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-claude-20260629-02
+  title: Claude daily capacity-fill packet 02
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-02.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: claude
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-opencode-20260629-02
+  title: OpenCode daily capacity-fill packet 02
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-02.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-agy-20260629-02
+  title: Agy daily capacity-fill packet 02
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-02.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-gemini-20260629-02
+  title: Gemini daily capacity-fill packet 02
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:gemini
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/gemini/20260629-02.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-jules-20260629-03
+  title: Jules daily capacity-fill packet 03
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-03.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-claude-20260629-03
+  title: Claude daily capacity-fill packet 03
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-03.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: claude
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-opencode-20260629-03
+  title: OpenCode daily capacity-fill packet 03
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-03.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-agy-20260629-03
+  title: Agy daily capacity-fill packet 03
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-03.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-gemini-20260629-03
+  title: Gemini daily capacity-fill packet 03
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:gemini
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/gemini/20260629-03.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-jules-20260629-04
+  title: Jules daily capacity-fill packet 04
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-04.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-claude-20260629-04
+  title: Claude daily capacity-fill packet 04
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-04.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-opencode-20260629-04
+  title: OpenCode daily capacity-fill packet 04
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-04.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-agy-20260629-04
+  title: Agy daily capacity-fill packet 04
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-04.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-gemini-20260629-04
+  title: Gemini daily capacity-fill packet 04
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:gemini
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/gemini/20260629-04.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-jules-20260629-05
+  title: Jules daily capacity-fill packet 05
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-05.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-claude-20260629-05
+  title: Claude daily capacity-fill packet 05
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-05.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-opencode-20260629-05
+  title: OpenCode daily capacity-fill packet 05
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-05.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-agy-20260629-05
+  title: Agy daily capacity-fill packet 05
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-05.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-gemini-20260629-05
+  title: Gemini daily capacity-fill packet 05
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:gemini
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/gemini/20260629-05.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-jules-20260629-06
+  title: Jules daily capacity-fill packet 06
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-06.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-claude-20260629-06
+  title: Claude daily capacity-fill packet 06
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-06.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-opencode-20260629-06
+  title: OpenCode daily capacity-fill packet 06
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-06.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-agy-20260629-06
+  title: Agy daily capacity-fill packet 06
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-06.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-gemini-20260629-06
+  title: Gemini daily capacity-fill packet 06
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:gemini
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/gemini/20260629-06.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-jules-20260629-07
+  title: Jules daily capacity-fill packet 07
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-07.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-claude-20260629-07
+  title: Claude daily capacity-fill packet 07
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-07.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-opencode-20260629-07
+  title: OpenCode daily capacity-fill packet 07
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-07.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-agy-20260629-07
+  title: Agy daily capacity-fill packet 07
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-07.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-gemini-20260629-07
+  title: Gemini daily capacity-fill packet 07
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:gemini
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/gemini/20260629-07.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-jules-20260629-08
+  title: Jules daily capacity-fill packet 08
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-08.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-claude-20260629-08
+  title: Claude daily capacity-fill packet 08
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-08.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-opencode-20260629-08
+  title: OpenCode daily capacity-fill packet 08
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-08.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-agy-20260629-08
+  title: Agy daily capacity-fill packet 08
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-08.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T22:22:29.412423Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-jules-20260629-09
+  title: Jules daily capacity-fill packet 09
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-09.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-opencode-20260629-09
+  title: OpenCode daily capacity-fill packet 09
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-09.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-agy-20260629-09
+  title: Agy daily capacity-fill packet 09
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-09.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-opencode-20260629-10
+  title: OpenCode daily capacity-fill packet 10
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-10.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-agy-20260629-10
+  title: Agy daily capacity-fill packet 10
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-10.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-opencode-20260629-11
+  title: OpenCode daily capacity-fill packet 11
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-11.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-agy-20260629-11
+  title: Agy daily capacity-fill packet 11
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-11.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-opencode-20260629-12
+  title: OpenCode daily capacity-fill packet 12
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-12.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-agy-20260629-12
+  title: Agy daily capacity-fill packet 12
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-12.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-opencode-20260629-13
+  title: OpenCode daily capacity-fill packet 13
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-13.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-agy-20260629-13
+  title: Agy daily capacity-fill packet 13
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-13.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-opencode-20260629-14
+  title: OpenCode daily capacity-fill packet 14
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-14.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-agy-20260629-14
+  title: Agy daily capacity-fill packet 14
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-14.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-opencode-20260629-15
+  title: OpenCode daily capacity-fill packet 15
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-15.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-agy-20260629-15
+  title: Agy daily capacity-fill packet 15
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-15.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-claude-20260629-09
+  title: Claude daily capacity-fill packet 09
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-09.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-jules-20260629-10
+  title: Jules daily capacity-fill packet 10
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-10.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-claude-20260629-10
+  title: Claude daily capacity-fill packet 10
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-10.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-jules-20260629-11
+  title: Jules daily capacity-fill packet 11
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-11.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-claude-20260629-11
+  title: Claude daily capacity-fill packet 11
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-11.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-jules-20260629-12
+  title: Jules daily capacity-fill packet 12
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-12.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-claude-20260629-12
+  title: Claude daily capacity-fill packet 12
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-12.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-jules-20260629-13
+  title: Jules daily capacity-fill packet 13
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-13.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-claude-20260629-13
+  title: Claude daily capacity-fill packet 13
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-13.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-jules-20260629-14
+  title: Jules daily capacity-fill packet 14
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-14.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-claude-20260629-14
+  title: Claude daily capacity-fill packet 14
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-14.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-jules-20260629-15
+  title: Jules daily capacity-fill packet 15
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:jules
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Jules lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/jules/20260629-15.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []
+- id: CAPFILL-claude-20260629-15
+  title: Claude daily capacity-fill packet 15
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:claude
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/claude/20260629-15.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  dispatch_log: []

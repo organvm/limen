@@ -1,6 +1,6 @@
 # Corpus Command Center
 
-Generated: `2026-06-29T21:35:01+00:00`
+Generated: `2026-06-29T22:02:13+00:00`
 
 ## Canonical Decision
 
@@ -10,21 +10,21 @@ Generated: `2026-06-29T21:35:01+00:00`
 
 ## Coverage
 
-- Units indexed: `408766`.
-- Unique hashes: `250706`.
-- Clusters: `228966`.
+- Units indexed: `409692`.
+- Unique hashes: `251213`.
+- Clusters: `229384`.
 - Side-by-side comparisons: `24`.
-- Private body objects: `250706`.
+- Private body objects: `251213`.
 
 ## Kind Mix
 
 | Kind | Units |
 |---|---:|
-| `tool` | 202567 |
-| `response` | 99303 |
-| `prompt` | 97863 |
-| `system` | 4658 |
-| `artifact` | 2875 |
+| `tool` | 203221 |
+| `response` | 99489 |
+| `prompt` | 97914 |
+| `system` | 4689 |
+| `artifact` | 2879 |
 | `task` | 1500 |
 
 ## Goal Panels

@@ -1,6 +1,6 @@
 # Live Root Gate
 
-Generated: `2026-06-29T21:37:22+00:00`
+Generated: `2026-06-29T22:18:14+00:00`
 
 Status: `blocked`
 
@@ -15,20 +15,21 @@ Status: `blocked`
 - Operator gate required: `True`.
 - Release reconcile allowed without human: `False`.
 - Launchd reload allowed without human: `False`.
-- Blocking gates: `live-root-not-release-branch`, `live-root-not-at-release`, `live-root-unique-commits`, `live-root-dirty`.
+- Blocking gates: `live-root-not-release-branch`, `live-root-not-at-release`, `live-root-unique-commits`, `live-root-dirty`, `live-root-task-board-dirty`.
 
 ## Live Root
 
 - Path: `~/Workspace/limen`.
 - Branch: `work/workstream-agent-launcher-20260629`; release branch `main`.
-- HEAD: `78f7de9f8c31c75d68cce82fd8800d72be249145`.
+- HEAD: `e61656ef2a15fab12ed7500f80559b59c92325f0`.
 - Release head: `7ecdd65a529802a581d173b4cb390d19bcb20e55`.
-- Matches release: `False`; ahead `9` behind `0`.
-- Unique local commits: `9`; patch-equivalent commits: `0`.
-- Dirty entries: `27`.
+- Matches release: `False`; ahead `10` behind `0`.
+- Unique local commits: `10`; patch-equivalent commits: `0`.
+- Dirty entries: `21`.
 
 ### Local Commits
 
+- `e61656e limen: add prompt acceptance checkpoint`
 - `78f7de9 limen: preserve august pipeline acceptance packet`
 - `61c8071 limen: refresh corpus command center snapshot`
 - `65b6d23 limen: sync live task board state`
@@ -41,33 +42,27 @@ Status: `blocked`
 
 ### Dirty Paths
 
-- `cli/tests/test_aug1_view.py`
-- `cli/tests/test_corpus_command_center.py`
+- `cli/src/limen/capacity.py`
+- `docs/DISPATCH-ARCHITECTURE.md`
 - `docs/conductor-tranche.md`
 - `docs/corpus-command-center.md`
 - `docs/dispatch-health.md`
-- `docs/live-root-gate.md`
-- `docs/positioning/public-record-data-scrapper-case-study.md`
-- `docs/positioning/public-record-data-scrapper-contact-path.md`
-- `docs/positioning/public-record-data-scrapper-proof-page.md`
-- `docs/positioning/public-record-data-scrapper-sample-output.json`
+- `docs/prompt-acceptance-ledger.md`
 - `docs/prompt-batch-review-ledger.md`
 - `docs/prompt-lifecycle-ledger.md`
 - `docs/prompt-packet-ledger.md`
-- `docs/prompt-packet-resolution-receipts.json`
 - `docs/prompt-priority-map.md`
-- `docs/root-to-leaf-acceptance-packet-2026-06-29.md`
 - `docs/session-attack-paths.md`
 - `docs/session-lifecycle-blockers.md`
-- `scripts/aug1-view.py`
-- `scripts/corpus-command-center.py`
+- `scripts/dispatch-health.py`
+- `scripts/heartbeat-loop.sh`
 - `scripts/verify-whole.sh`
-- `state/aug1/pipeline-scoreboard.json`
-- `cli/tests/test_prompt_acceptance_ledger.py`
-- `docs/prompt-acceptance-ledger.md`
-- `docs/prompt-acceptance-standard.md`
-- `scripts/prompt-acceptance-ledger.py`
-- `state/outward-reciprocity.json`
+- `tasks.yaml`
+- `cli/tests/test_capacity_fill.py`
+- `cli/tests/test_generate_capacity_fill.py`
+- `docs/capacity-fill.md`
+- `scripts/capacity-fill-ledger.py`
+- `scripts/generate-capacity-fill.py`
 
 ## Heartbeat
 

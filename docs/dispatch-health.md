@@ -1,6 +1,6 @@
 # Dispatch Health
 
-Generated: `2026-06-29T21:37:17+00:00`
+Generated: `2026-06-29T22:15:31+00:00`
 
 Status: `blocked`
 
@@ -19,60 +19,69 @@ Status: `blocked`
 - Loaded launchd state: `running` pid `1656`.
 - Loaded LIMEN_ROOT: `/Users/4jp/Workspace/limen`.
 - Loaded LIMEN_DISPATCH_ASYNC: `0`.
-- Watchdog dry-run healthy: `True`; `[watchdog] 2026-06-29T21:37:17.727383+00:00 HEALTHY sig=healthy`.
+- Watchdog dry-run healthy: `True`; `[watchdog] 2026-06-29T22:15:31.254563+00:00 HEALTHY sig=healthy`.
 
 ## Async Dispatch
 
-- Async dry-run requested: `False`.
-- Async dry-run ok: `None`; timed out `False`.
-- Async dry-run summary: ``.
+- Async dry-run requested: `True`.
+- Async dry-run ok: `True`; timed out `False`.
+- Async dry-run summary: `-- async: reaped 0 dead ; harvested 0 ; 0 still running ; would launch 12 (cap 12) -> ['CAPFILL-opencode-20260629-01', 'CAPFILL-opencode-20260629-02', 'CAPFILL-opencode-20260629-03', 'CAPFILL-agy-20260629-01', 'CAPFILL-agy-20260629-02', 'CAPFILL-agy-20260629-03', 'CAPFILL-claude-20260629-01', 'CAPFILL-claude-20260629-02', 'CAPFILL-claude-20260629-03', 'CAPFILL-gemini-20260629-01', 'CAPFILL-gemini-20260629-02', 'CAPFILL-gemini-20260629-03']`.
+
+## Capacity Fill
+
+- Capacity fill status: `blocked`.
+- Productive means task-board spend/reservation. Attempts alone do not satisfy a lane's fill contract.
+
+| Lane | Status | Productive | Attempts | Expected now | Target | Open work | Active |
+|---|---|---:|---:|---:|---:|---:|---:|
+| `jules` | `underfilled` | 51 | 51 | 68 | 100 | 15 | 44 |
+| `claude` | `underfilled` | 0 | 5 | 15 | 15 | 15 | 0 |
+| `opencode` | `underfilled` | 1 | 10 | 100 | 100 | 15 | 1 |
+| `agy` | `underfilled` | 5 | 11 | 100 | 100 | 15 | 0 |
+| `gemini` | `blocked` | 0 | 5 | 7 | 10 | 7 | 0 |
+| `codex` | `depleted` | 1 | 17 | 100 | 100 | 0 | 0 |
 
 ## Live Root
 
 - Live root: `~/Workspace/limen`.
-- Branch: `work/workstream-agent-launcher-20260629`; status `## work/workstream-agent-launcher-20260629...origin/work/workstream-agent-launcher-20260629 [ahead 1]`.
-- HEAD: `78f7de9f8c31c75d68cce82fd8800d72be249145`.
+- Branch: `work/workstream-agent-launcher-20260629`; status `## work/workstream-agent-launcher-20260629...origin/work/workstream-agent-launcher-20260629 [ahead 2]`.
+- HEAD: `e61656ef2a15fab12ed7500f80559b59c92325f0`.
 - origin/main: `7ecdd65a529802a581d173b4cb390d19bcb20e55`.
-- Matches origin/main: `False`; ahead `9` behind `0`.
-- Dirty entries: `27`.
-  - `cli/tests/test_aug1_view.py`
-  - `cli/tests/test_corpus_command_center.py`
-  - `docs/conductor-tranche.md`
+- Matches origin/main: `False`; ahead `10` behind `0`.
+- Dirty entries: `17`.
+  - `cli/src/limen/capacity.py`
   - `docs/corpus-command-center.md`
   - `docs/dispatch-health.md`
-  - `docs/live-root-gate.md`
-  - `docs/positioning/public-record-data-scrapper-case-study.md`
-  - `docs/positioning/public-record-data-scrapper-contact-path.md`
-  - `docs/positioning/public-record-data-scrapper-proof-page.md`
-  - `docs/positioning/public-record-data-scrapper-sample-output.json`
+  - `docs/prompt-acceptance-ledger.md`
   - `docs/prompt-batch-review-ledger.md`
   - `docs/prompt-lifecycle-ledger.md`
   - `docs/prompt-packet-ledger.md`
-  - `docs/prompt-packet-resolution-receipts.json`
   - `docs/prompt-priority-map.md`
-  - `docs/root-to-leaf-acceptance-packet-2026-06-29.md`
-  - `docs/session-attack-paths.md`
-  - `docs/session-lifecycle-blockers.md`
-  - `scripts/aug1-view.py`
-  - `scripts/corpus-command-center.py`
+  - `scripts/dispatch-health.py`
+  - `scripts/heartbeat-loop.sh`
   - `scripts/verify-whole.sh`
-  - `state/aug1/pipeline-scoreboard.json`
-  - `cli/tests/test_prompt_acceptance_ledger.py`
-  - `docs/prompt-acceptance-ledger.md`
-  - `docs/prompt-acceptance-standard.md`
-  - `scripts/prompt-acceptance-ledger.py`
-  - `state/outward-reciprocity.json`
+  - `tasks.yaml`
+  - `cli/tests/test_capacity_fill.py`
+  - `cli/tests/test_generate_capacity_fill.py`
+  - `docs/capacity-fill.md`
+  - `scripts/capacity-fill-ledger.py`
+  - `scripts/generate-capacity-fill.py`
 
 ## Verified Worktree
 
 - Verified worktree: `~/Workspace/limen`.
-- Branch: `work/workstream-agent-launcher-20260629`; status `## work/workstream-agent-launcher-20260629...origin/work/workstream-agent-launcher-20260629 [ahead 1]`.
+- Branch: `work/workstream-agent-launcher-20260629`; status `## work/workstream-agent-launcher-20260629...origin/work/workstream-agent-launcher-20260629 [ahead 2]`.
 - HEAD matches origin/main: `False`.
 
 ## Blockers
 
-- `live-root-not-at-origin-main`: live root branch work/workstream-agent-launcher-20260629 head 78f7de9f8c31 differs from origin/main 7ecdd65a5298.
-- `live-root-dirty`: live root has 27 dirty entries.
+- `live-root-not-at-origin-main`: live root branch work/workstream-agent-launcher-20260629 head e61656ef2a15 differs from origin/main 7ecdd65a5298.
+- `live-root-dirty`: live root has 17 dirty entries.
+- `lane-fill-jules`: jules: productive 51/68; attempts 51/68
+- `lane-fill-claude`: claude: productive 0/15; attempts 5/15
+- `lane-fill-opencode`: opencode: productive 1/100; attempts 10/100
+- `lane-fill-agy`: agy: productive 5/100; attempts 11/100
+- `lane-fill-gemini`: gemini: productive 0/7, but the lane is not reachable
 
 ## Commands
 

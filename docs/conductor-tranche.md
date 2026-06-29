@@ -1,8 +1,8 @@
 # Conductor Tranche
 
-Generated: `2026-06-29T21:26:55+00:00`
+Generated: `2026-06-29T22:17:40+00:00`
 
-Summary: `tranche-remote-receipts-disabled` -> `remote-receipts-disabled` (`blocker`); stop before: Stop before changing task states, launching live dispatch, or touching credentials unless the packet explicitly includes that gate.
+Summary: `tranche-triptych-media-offload-20260629` -> `triptych-media-offload-20260629` (`remote-proof`); stop before: Stop before deletion, force-push, merge, or owner-repo source edits unless a narrower owner packet names the repo, branch, predicate, and receipt.
 
 ## Cadence Contract
 
@@ -16,30 +16,30 @@ Summary: `tranche-remote-receipts-disabled` -> `remote-receipts-disabled` (`bloc
 
 | Field | Value |
 |---|---|
-| Packet | `tranche-remote-receipts-disabled` |
-| Selected path | `remote-receipts-disabled` |
-| Kind | `blocker` |
-| Lane | `blocker` |
-| Score | `72` |
-| Agent fit | `codex` |
-| Attack index generated | `2026-06-29T21:26:48+00:00` |
+| Packet | `tranche-triptych-media-offload-20260629` |
+| Selected path | `triptych-media-offload-20260629` |
+| Kind | `worktree` |
+| Lane | `remote-proof` |
+| Score | `58` |
+| Agent fit | `codex first; opencode/jules after packetization` |
+| Attack index generated | `2026-06-29T22:17:32+00:00` |
 | Ranked paths read | `41` |
-| Skipped family/human-gate/parked/observe/auth paths | `session_lifecycle`, `dispatch-heartbeat-substrate-unhealthy`, `worktree_lifecycle`, `github_review`, `github-app-limen-bot-not-wired`, `github-consolidation-collisions`, `agent_coordination`, `technical_debt_ci`, `local-lifecycle-disk-pressure`, `convergence_corpus`, `mirror-mirror`, `the-invisible-ledger`, `triptych-story`, `gen-organvm-universal-mail--automation-test-coverage-0625-151e`, `uncategorized`, `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b`, `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f`, `credential-codex-auth-sessions`, `cifix-organvm-i-theoria-conversation-corpus-engine-f02e`, `cifix-organvm-i-theoria-hierarchia-mundi-3145`, `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2`, `discover-organvm-kerygma-profiles-6c74`, `bld-mirror-mirror-harden-350f`, `bld-my--father-mother-harden-44b2`, `bld-promptscope-next-rev-3fde`, `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38`, `resolve-organvm-i-theoria-.github-459-1ade`, `auth_credentials` |
+| Skipped family/human-gate/parked/observe/auth paths | `session_lifecycle`, `dispatch-heartbeat-substrate-unhealthy`, `worktree_lifecycle`, `github_review`, `github-app-limen-bot-not-wired`, `github-consolidation-collisions`, `agent_coordination`, `technical_debt_ci`, `mirror-mirror`, `the-invisible-ledger`, `local-lifecycle-disk-pressure`, `convergence_corpus`, `gen-organvm-universal-mail--automation-test-coverage-0625-151e`, `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f`, `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b`, `triptych-story`, `cloud-runtime-endpoint-unconfigured`, `uncategorized`, `cifix-organvm-i-theoria-hierarchia-mundi-3145`, `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2`, `bld-mirror-mirror-harden-350f`, `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38`, `cloud-credential-handles-unconfigured`, `credential-codex-auth-sessions`, `resolve-organvm-i-theoria-.github-459-1ade`, `auth_credentials`, `cifix-organvm-i-theoria-conversation-corpus-engine-f02e`, `discover-organvm-kerygma-profiles-6c74`, `bld-my--father-mother-harden-44b2`, `bld-promptscope-next-rev-3fde` |
 
 ## Work Packet
 
-Purpose: Repair dispatch/remote proof drift so the queue can distinguish healthy async work, stranded claims, merged PRs, and real blockers.
+Purpose: Resolve `triptych-media-offload-20260629` to a preservation proof, owner blocker, remote/default proof, or documented non-source residue without deleting unique work.
 
-Repo/worktree: `organvm/limen` conductor checkout only.
+Repo/worktree: Owner worktree `triptych-media-offload-20260629` under `~/Workspace/.limen-worktrees` plus Limen receipts.
 
 Allowed files:
 
-- `scripts/dispatch*.py`
-- `scripts/verify-dispatch.py`
-- `scripts/heal-dispatch.py`
-- `cli/tests/test_async_dispatch.py`
-- `docs/DISPATCH-ARCHITECTURE.md`
+- `docs/worktree-lifecycle-ledger.md`
+- `docs/worktree-preservation-receipts.json`
+- `docs/session-attack-paths.md`
+- `docs/session-lifecycle-blockers.md`
 - `docs/conductor-tranche.md`
+- `.limen-private/session-corpus/lifecycle/**`
 
 Forbidden:
 
@@ -49,19 +49,21 @@ Forbidden:
 - `irreversible GitHub transfer/rename/App install/credential actions`
 - `task-board mutation unless the direct request explicitly requires it`
 
-Stop condition: Stop before changing task states, launching live dispatch, or touching credentials unless the packet explicitly includes that gate.
+Stop condition: Stop before deletion, force-push, merge, or owner-repo source edits unless a narrower owner packet names the repo, branch, predicate, and receipt.
 
-Receipt: docs/DISPATCH-ARCHITECTURE.md and docs/conductor-tranche.md.
+Receipt: Update the owning worktree lifecycle receipt and regenerate docs/conductor-tranche.md.
 
 Verification:
 
-- `pytest -q cli/tests/test_async_dispatch.py`
-- `python3 scripts/verify-dispatch.py`
+- `python3 scripts/worktree-debt.py --json`
+- `python3 scripts/session-lifecycle-pressure.py --write`
+- `python3 scripts/session-blockers-ledger.py --write`
+- `python3 scripts/session-attack-paths.py --write`
 - `python3 scripts/conductor-tranche.py --write`
 
 ## Source Next Action
 
-Refresh with remote enabled before using GitHub state as closure proof.
+Verify remote/default preservation; reclaim local checkout only after exact proof.
 
 ## Refresh
 

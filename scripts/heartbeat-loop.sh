@@ -284,6 +284,7 @@ while true; do
                                        python3 -m limen release-stale --agent jules --hours 24 --apply 2>&1 | tail -1 || true; }
       due_voice heal "$C_HEAL"     && python3 "$LIMEN_ROOT/scripts/recover.py" --apply 2>&1 | tail -1 || true   # HEAL
       play "$C_FEED"               && { python3 "$LIMEN_ROOT/scripts/mine-backlog.py" --limit "${LIMEN_MINE_LIMIT:-25}" --apply 2>&1 | tail -1 || true  # EXPLORE
+                                       python3 "$LIMEN_ROOT/scripts/generate-capacity-fill.py" --apply 2>&1 | tail -1 || true  # PAID-LANE FILL: if a subscription lane is below its pacing contract, seed lane-specific daily packets so the scheduler has work to feed it
                                        [ "${LIMEN_REVENUE_BACKLOG:-1}" = "1" ] && timeout "${LIMEN_REVENUE_TIMEOUT:-120}" python3 "$LIMEN_ROOT/scripts/generate-revenue-backlog.py" --apply 2>&1 | tail -1 || true  # REVENUE FIRST: ladder→tasks so win-class capacity builds products, not busywork (default-ON; floor-gated)
                                        [ "${LIMEN_ORGAN_BACKLOG:-1}" = "1" ] && timeout "${LIMEN_ORGAN_TIMEOUT:-120}" python3 "$LIMEN_ROOT/scripts/generate-organ-backlog.py" --apply 2>&1 | tail -1 || true  # ORGANS (VLTIMA): organ-ladder->tasks so idle capacity builds the institutional pillars (legal/financial/education/...), not busywork (default-ON; floor-gated; lockless)
                                        python3 "$LIMEN_ROOT/scripts/generate-backlog.py" --apply 2>&1 | tail -1 || true  # SELF-FEED: build-out levers on the ranked tier

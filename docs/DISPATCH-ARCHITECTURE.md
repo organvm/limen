@@ -58,6 +58,15 @@ results → **reserve + launch** detached workers up to a global cap, then **ret
 - **Lane-down filter** (`dispatch._down_lanes` ← `logs/lanes-down.txt`, derive-not-pin): rebalance
   + both dispatchers skip unproductive lanes (currently gemini=ratelimited-to-0, agy=bin-missing)
   and re-route their tasks to productive lanes (codex, claude). Remove a line when a lane recovers.
+- **Capacity-fill contract** (`scripts/capacity-fill-ledger.py`, wired into `dispatch-health.py`):
+  every paid lane is checked against its own reset window and daily task target. `productive`
+  means task-board spend/reservation; failed attempts and reroutes prove the lane was touched but do
+  not satisfy the fill contract. Claude carries an explicit 15-task daily floor. When a lane is
+  below expected fill and has no open work, `scripts/generate-capacity-fill.py --apply` seeds
+  idempotent lane/day packets (`CAPFILL-<lane>-<yyyymmdd>-NN`) so the scheduler has work to feed it.
+  The heartbeat feed voice runs that generator before generic backlog generation, so this should not
+  depend on the operator remembering to ask whether Jules, Claude, OpenCode, Agy, Gemini, Codex, or
+  Copilot got used.
 - **Reconcile** (`scripts/verify-dispatch.py` → `scripts/heal-dispatch.py`): every C_HEAL beat,
   verify each `dispatched` task's real PR state on GitHub; PR_MERGED/PR_OPEN→done, PR_CLOSED/
   DISPATCHED_NO_PR→open (re-dispatch). Respects async `.running` markers (won't reopen a live run).

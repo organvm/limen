@@ -1,6 +1,6 @@
 # Prompt Lifecycle Ledger
 
-Generated: `2026-06-29T21:23:45+00:00`
+Generated: `2026-06-29T22:00:16+00:00`
 Horizon: `all local history`
 
 ## Canonical Decision
@@ -12,13 +12,13 @@ Horizon: `all local history`
 
 ## Redacted Prompt Coverage
 
-Indexed `9706` app/session files, `2.5 GiB`, with `97985` prompt-like user events hashed into the private index.
+Indexed `9711` app/session files, `2.5 GiB`, with `98045` prompt-like user events hashed into the private index.
 
 | Source | Files | Prompt Events | Event Records | Size | Newest |
 |---|---:|---:|---:|---:|---|
-| `claude-projects` | 4977 | 91407 | 322302 | 1.4 GiB | `2026-06-29T21:21:49+00:00` |
-| `codex-sessions` | 983 | 5641 | 307772 | 1.0 GiB | `2026-06-29T21:23:34+00:00` |
-| `codex-history` | 1 | 804 | 804 | 623.3 KiB | `2026-06-29T21:21:37+00:00` |
+| `claude-projects` | 4979 | 91418 | 322331 | 1.4 GiB | `2026-06-29T21:27:16+00:00` |
+| `codex-sessions` | 986 | 5677 | 309024 | 1.0 GiB | `2026-06-29T21:59:16+00:00` |
+| `codex-history` | 1 | 817 | 817 | 639.5 KiB | `2026-06-29T21:59:07+00:00` |
 | `claude-tasks` | 188 | 133 | 133 | 57.7 KiB | `2026-06-26T00:08:52+00:00` |
 | `claude-file-history` | 3519 | 0 | 0 | 42.2 MiB | `2026-06-27T00:26:28+00:00` |
 | `claude-plans` | 34 | 0 | 0 | 289.3 KiB | `2026-06-25T03:22:45+00:00` |
@@ -38,7 +38,7 @@ Indexed `9706` app/session files, `2.5 GiB`, with `97985` prompt-like user event
 | `cifix-organvm-i-theoria-conversation-corpus-engine-f02e` | 3 | 79 | `remote-pr-open` |
 | `cifix-organvm-i-theoria-hierarchia-mundi-3145` | 1 | 71 | `remote-superseded` |
 | `discover-organvm-kerygma-profiles-6c74` | 1 | 24 | `remote-pr-open` |
-| `domus-quarantine-retire-20260629` | 6 | 53 | `active(<24h)` |
+| `domus-quarantine-retire-20260629` | 7 | 63 | `active(<24h)` |
 | `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38` | 1 | 3 | `documented-residue` |
 | `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2` | 1 | 4 | `documented-residue` |
 | `gen-organvm-universal-mail--automation-test-coverage-0625-151e` | 3 | 100 | `owner-blocker` |
@@ -52,7 +52,7 @@ Indexed `9706` app/session files, `2.5 GiB`, with `97985` prompt-like user event
 | `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b` | 1 | 94 | `documented-residue` |
 | `student-email-d2l-support-20260629` | 2 | 67 | `active(<24h)` |
 | `the-invisible-ledger` | 99 | 2919 | `remote-pr-open` |
-| `triptych-media-offload-20260629` | 3 | 109 | `active(<24h)` |
+| `triptych-media-offload-20260629` | 4 | 123 | `active(<24h)` |
 | `triptych-story` | 3 | 212 | `remote-superseded` |
 | `universal-entry-20260629` | 0 | 0 | `active(<24h)` |
 | `warp-agent-routing-20260629` | 2 | 15 | `active(<24h)` |
@@ -73,11 +73,17 @@ Indexed `9706` app/session files, `2.5 GiB`, with `97985` prompt-like user event
 
 ## Remote Receipts
 
-- Remote receipt collection disabled for this run.
+- GitHub worktree repos seen: `14`.
+- Git worktree roots with remote branch present: `15`; missing: `7`.
+- Branch-linked PR states: `OPEN` 5, `MERGED` 5, `CLOSED` 0.
+- Task-board GitHub PR refs seen: `713`; checked: `713`; states: `CLOSED` 50, `MERGED` 473, `OPEN` 190.
 
 ## Cloud Receipts
 
-- Cloud receipt collection disabled for this run.
+- Public site probed: `https://device-streaming-067d747a.web.app`; `4` / `4` probes passed.
+- Runtime URL configured: `False`; runtime health probe ok: `False`.
+- Cloudflare deploy auth present: `False`.
+- Cloud env flags: `CLOUDFLARE_API_TOKEN`=absent, `GOOGLE_APPLICATION_CREDENTIALS`=absent, `LIMEN_API_TOKEN`=absent, `LIMEN_CLIENT_TOKEN`=absent, `LIMEN_WORKER_URL`=absent, `NETLIFY_AUTH_TOKEN`=absent, `NEXT_PUBLIC_API_URL`=absent, `VERCEL_TOKEN`=absent.
 
 ## Roadblocks And Potholes
 

@@ -248,6 +248,19 @@ parameters:
     self_update: none
     owner: vltima
     note: "Max new organ-build tasks appended per run. Bounded output; id-deduped against existing tasks."
+  # --- CAPACITY FILL: keep paid lanes fed without operator memory ---
+  LIMEN_CAPACITY_FILL_MAX_NEW:
+    default: 40                 # cap new capacity-fill tasks appended per generator run
+    env: LIMEN_CAPACITY_FILL_MAX_NEW
+    self_update: none
+    owner: dispatch
+    note: "Max new daily capacity-fill packets appended per run. The generator round-robins across underfilled paid lanes before filling any one lane."
+  LIMEN_CAPACITY_FILL_PER_LANE:
+    default: 15                 # max active same-day packets per lane
+    env: LIMEN_CAPACITY_FILL_PER_LANE
+    self_update: none
+    owner: dispatch
+    note: "Per-lane cap for active CAPFILL packets on a given day. Claude's daily floor is 15; other lanes can refill as active packets land and close."
   # --- WALLS: keep the published walls (credential #320, his-hand #330) from drifting ---
   LIMEN_BEAT_WALLS:
     default: 12                 # cadence: regenerate the walls every 12 beats
