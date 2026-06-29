@@ -5,12 +5,14 @@ resumable surface instead of holding everything in the chat.
 
 ```bash
 /Users/4jp/Workspace/limen/scripts/start-worktree-session.sh --shell --prompt "short objective and constraints" limen my-workstream
+/Users/4jp/Workspace/limen/scripts/start-worktree-session.sh --agent claude --open --prompt "short objective and constraints" portvs triptych-story
 ```
 
 After `install.sh`, the shortcut is:
 
 ```bash
 workstream --prompt "short objective and constraints" limen my-workstream
+workstream --agent opencode --open --prompt "short objective and constraints" domus package-map
 ```
 
 The command works from Terminal, Kitty, Ghostty, Warp, or any normal shell. It creates or reuses
@@ -30,7 +32,12 @@ Run it from any terminal with:
 
 ```bash
 bash <repo>/.worktrees/<slug>/.limen-workstream/kickstart.sh
+bash <repo>/.worktrees/<slug>/.limen-workstream/kickstart.sh gemini
 ```
+
+Supported agents are `codex`, `claude`, `gemini`, `opencode`, `agy`, and `shell`. Shortcut flags
+such as `--codex`, `--claude`, `--gemini`, `--opencode`, `--agy`, and `--shell` create the packet
+and open that agent immediately.
 
 The README contains the repo path, branch, base ref, origin URL, status at kickoff, prompt packet,
 first-five-minute checklist, and closeout rules. The `.limen-workstream/` directory is locally

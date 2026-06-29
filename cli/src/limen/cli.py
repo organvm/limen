@@ -18,6 +18,8 @@ from limen.harvest import harvest_results
 from limen.io import load_limen_file
 from limen.status import print_status
 
+WORKSTREAM_AGENTS = ("codex", "claude", "gemini", "opencode", "agy", "shell")
+
 
 def resolve_root() -> Path:
     root = os.environ.get("LIMEN_ROOT")
@@ -194,21 +196,62 @@ def harvest(agent):
 @main.command("workstream")
 @click.option("--codex", "launch_codex", is_flag=True, help="Open Codex in the worktree after creating the packet.")
 @click.option("--shell", "launch_shell", is_flag=True, help="Open a login shell in the worktree after creating the packet.")
+@click.option("--claude", "launch_claude", is_flag=True, help="Open Claude in the worktree after creating the packet.")
+@click.option("--gemini", "launch_gemini", is_flag=True, help="Open Gemini in the worktree after creating the packet.")
+@click.option("--opencode", "launch_opencode", is_flag=True, help="Open OpenCode in the worktree after creating the packet.")
+@click.option("--agy", "launch_agy", is_flag=True, help="Open Agy in the worktree after creating the packet.")
+@click.option("--agent", type=click.Choice(WORKSTREAM_AGENTS), default=None, help="Default agent for the generated kickstart packet.")
+@click.option("--open", "open_session", is_flag=True, help="Open the selected/default agent after creating the packet.")
 @click.option("--from", "from_ref", default=None, help="Branch or ref to create the worktree branch from.")
 @click.option("--prompt", "prompt_text", default=None, help="Inline prompt packet for .limen-workstream/README.md.")
 @click.option("--prompt-file", default=None, type=click.Path(exists=True), help="Prompt packet file to embed in README.md.")
 @click.option("--no-readme", is_flag=True, help="Create/reuse the worktree without writing the private kickoff packet.")
 @click.argument("repo")
 @click.argument("slug")
-def workstream(launch_codex, launch_shell, from_ref, prompt_text, prompt_file, no_readme, repo, slug):
+def workstream(
+    launch_codex,
+    launch_shell,
+    launch_claude,
+    launch_gemini,
+    launch_opencode,
+    launch_agy,
+    agent,
+    open_session,
+    from_ref,
+    prompt_text,
+    prompt_file,
+    no_readme,
+    repo,
+    slug,
+):
     """Create/reuse a repo worktree plus a private kickoff README and kickstart command."""
+    shortcut_agents = [
+        name
+        for name, enabled in (
+            ("codex", launch_codex),
+            ("shell", launch_shell),
+            ("claude", launch_claude),
+            ("gemini", launch_gemini),
+            ("opencode", launch_opencode),
+            ("agy", launch_agy),
+        )
+        if enabled
+    ]
+    if len(shortcut_agents) > 1:
+        raise click.UsageError("choose only one launch shortcut")
+    if agent and shortcut_agents and agent != shortcut_agents[0]:
+        raise click.UsageError("--agent conflicts with launch shortcut")
+
+    selected_agent = shortcut_agents[0] if shortcut_agents else agent
+    launch_now = open_session or bool(shortcut_agents)
+
     root = resolve_limen_repo_root()
     script = root / "scripts" / "start-worktree-session.sh"
     args = ["bash", str(script)]
-    if launch_codex:
-        args.append("--codex")
-    if launch_shell:
-        args.append("--shell")
+    if selected_agent:
+        args.extend(["--agent", selected_agent])
+    if launch_now:
+        args.append("--open")
     if from_ref:
         args.extend(["--from", from_ref])
     if prompt_text:
@@ -218,7 +261,7 @@ def workstream(launch_codex, launch_shell, from_ref, prompt_text, prompt_file, n
     if no_readme:
         args.append("--no-readme")
     args.extend([repo, slug])
-    if launch_codex or launch_shell:
+    if launch_now:
         result = subprocess.run(args)
     else:
         result = subprocess.run(args, text=True, capture_output=True)

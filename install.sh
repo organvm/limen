@@ -80,3 +80,4 @@ fi
 echo "==> done"
 echo "  Run: source ${ZSHRC} && limen status"
 echo "  Start a workstream: workstream --prompt 'objective and constraints' limen my-workstream"
+echo "  Open one directly: workstream --agent claude --open --prompt 'objective and constraints' portvs my-workstream"

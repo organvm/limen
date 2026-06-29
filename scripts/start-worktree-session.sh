@@ -4,12 +4,15 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/start-worktree-session.sh [--codex] [--shell] [--from <branch-or-ref>] [--prompt <text>] [--prompt-file <path>] <repo-or-alias> <slug>
+  scripts/start-worktree-session.sh [--agent <agent>] [--open] [--codex] [--shell] [--claude] [--gemini] [--opencode] [--agy] [--from <branch-or-ref>] [--prompt <text>] [--prompt-file <path>] <repo-or-alias> <slug>
 
 Examples:
   scripts/start-worktree-session.sh portvs triptych-story
-  scripts/start-worktree-session.sh --codex portvs triptych-story
+  scripts/start-worktree-session.sh --agent claude --open portvs triptych-story
   scripts/start-worktree-session.sh --shell --prompt-file /tmp/prompt.md domus package-map
+
+Agents:
+  codex, claude, gemini, opencode, agy, shell
 
 Aliases:
   portvs, portus  /Users/4jp/Workspace/4444J99/portvs
@@ -26,21 +29,82 @@ workstream README never appear as Git noise.
 USAGE
 }
 
-launch_codex=0
-launch_shell=0
+agent="codex"
+open_session=0
 from_ref=""
 prompt_text=""
 prompt_file=""
 write_readme=1
 
+validate_agent() {
+  case "$1" in
+    codex|claude|gemini|opencode|agy|shell)
+      ;;
+    *)
+      echo "unsupported agent: $1" >&2
+      echo "supported agents: codex, claude, gemini, opencode, agy, shell" >&2
+      exit 2
+      ;;
+  esac
+}
+
+launch_agent() {
+  local selected="$1"
+  validate_agent "$selected"
+  if [[ "$selected" == "shell" ]]; then
+    exec "${SHELL:-/bin/zsh}" -l
+  fi
+  if ! command -v "$selected" >/dev/null 2>&1; then
+    echo "agent binary not found in PATH: $selected" >&2
+    exit 127
+  fi
+  exec "$selected"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --agent)
+      if [[ $# -lt 2 ]]; then
+        echo "missing value for --agent" >&2
+        usage >&2
+        exit 2
+      fi
+      agent="$2"
+      validate_agent "$agent"
+      shift 2
+      ;;
+    --open)
+      open_session=1
+      shift
+      ;;
     --codex)
-      launch_codex=1
+      agent="codex"
+      open_session=1
       shift
       ;;
     --shell)
-      launch_shell=1
+      agent="shell"
+      open_session=1
+      shift
+      ;;
+    --claude)
+      agent="claude"
+      open_session=1
+      shift
+      ;;
+    --gemini)
+      agent="gemini"
+      open_session=1
+      shift
+      ;;
+    --opencode)
+      agent="opencode"
+      open_session=1
+      shift
+      ;;
+    --agy)
+      agent="agy"
+      open_session=1
       shift
       ;;
     --from)
@@ -193,6 +257,7 @@ fi
 
 echo "$created worktree: $wt"
 echo "branch: $branch"
+echo "agent: $agent"
 
 if [[ "$write_readme" -eq 1 ]]; then
   readme_dir="$wt/.limen-workstream"
@@ -241,7 +306,19 @@ Created: $now_utc
 bash "$kickstart"
 \`\`\`
 
-That command works from Terminal, Kitty, Ghostty, Warp, or any normal shell. The expanded command is:
+That command works from Terminal, Kitty, Ghostty, Warp, or any normal shell. It defaults to \`$agent\`.
+You can also choose the agent explicitly:
+
+\`\`\`bash
+bash "$kickstart" codex
+bash "$kickstart" claude
+bash "$kickstart" gemini
+bash "$kickstart" opencode
+bash "$kickstart" agy
+bash "$kickstart" shell
+\`\`\`
+
+The expanded command is:
 
 \`\`\`bash
 cd "$wt"
@@ -249,14 +326,7 @@ if git remote get-url origin >/dev/null 2>&1; then
   git fetch --prune
 fi
 git status --short --branch
-codex
-\`\`\`
-
-For a plain shell instead of Codex:
-
-\`\`\`bash
-cd "$wt"
-\${SHELL:-/bin/zsh} -l
+\$agent
 \`\`\`
 
 ## Prompt Packet
@@ -284,14 +354,28 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$wt"
+agent="\${1:-$agent}"
+case "\$agent" in
+  codex|claude|gemini|opencode|agy|shell)
+    ;;
+  *)
+    echo "unsupported agent: \$agent" >&2
+    echo "supported agents: codex, claude, gemini, opencode, agy, shell" >&2
+    exit 2
+    ;;
+esac
 if git remote get-url origin >/dev/null 2>&1; then
   git fetch --prune
 fi
 git status --short --branch
-if command -v codex >/dev/null 2>&1; then
-  exec codex
+if [[ "\$agent" == "shell" ]]; then
+  exec "\${SHELL:-/bin/zsh}" -l
 fi
-exec "\${SHELL:-/bin/zsh}" -l
+if ! command -v "\$agent" >/dev/null 2>&1; then
+  echo "agent binary not found in PATH: \$agent" >&2
+  exit 127
+fi
+exec "\$agent"
 EOF
   chmod +x "$kickstart"
 
@@ -299,17 +383,12 @@ EOF
   echo "kickstart command: bash $kickstart"
 fi
 
-if [[ "$launch_codex" -eq 1 ]]; then
+if [[ "$open_session" -eq 1 ]]; then
   cd "$wt"
-  exec codex
-fi
-
-if [[ "$launch_shell" -eq 1 ]]; then
-  cd "$wt"
-  exec "${SHELL:-/bin/zsh}" -l
+  launch_agent "$agent"
 fi
 
 echo
 echo "Next:"
 echo "  cd $wt"
-echo "  codex"
+echo "  bash $kickstart"

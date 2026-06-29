@@ -47,6 +47,61 @@ def test_workstream_command_writes_private_kickstart_packet(tmp_path: Path, monk
     kickstart = wt / ".limen-workstream" / "kickstart.sh"
     assert readme.exists()
     assert kickstart.exists()
-    assert "Ship a bounded packet." in readme.read_text(encoding="utf-8")
+    readme_text = readme.read_text(encoding="utf-8")
+    assert "Ship a bounded packet." in readme_text
+    kickstart_text = kickstart.read_text(encoding="utf-8")
+    for agent in ("codex", "claude", "gemini", "opencode", "agy", "shell"):
+        assert f'bash "{kickstart}" {agent}' in readme_text
+        assert agent in kickstart_text
     assert "bash " in result.output and "kickstart.sh" in result.output
     assert ".limen-workstream" not in _git("status", "--short", cwd=wt).stdout
+
+
+def test_workstream_agent_open_wires_through_without_launching(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(args, **kwargs):  # noqa: ANN001, ANN202
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0)
+
+    monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
+    monkeypatch.setattr("limen.cli.subprocess.run", fake_run)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "workstream",
+            "--agent",
+            "claude",
+            "--open",
+            "limen",
+            "Claude Packet",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert calls
+    assert "--agent" in calls[0]
+    assert calls[0][calls[0].index("--agent") + 1] == "claude"
+    assert "--open" in calls[0]
+
+
+def test_workstream_legacy_launch_shortcuts_still_open_selected_agent(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(args, **kwargs):  # noqa: ANN001, ANN202
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0)
+
+    monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
+    monkeypatch.setattr("limen.cli.subprocess.run", fake_run)
+
+    for shortcut, agent in (("--codex", "codex"), ("--shell", "shell")):
+        result = CliRunner().invoke(main, ["workstream", shortcut, "limen", f"{agent} packet"])
+        assert result.exit_code == 0, result.output
+
+    assert len(calls) == 2
+    for call, agent in zip(calls, ("codex", "shell"), strict=True):
+        assert "--agent" in call
+        assert call[call.index("--agent") + 1] == agent
+        assert "--open" in call
