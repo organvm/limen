@@ -1,6 +1,6 @@
 # Session Lifecycle Blockers
 
-Generated: `2026-06-29T22:45:04+00:00`
+Generated: `2026-06-29T22:51:03+00:00`
 
 ## Canonical Handling
 
@@ -24,7 +24,7 @@ Generated: `2026-06-29T22:45:04+00:00`
 - Session pressure hook wired: `True`; last pressure snapshot present: `True`.
 - Local lifecycle footprint: `17.4 GiB`.
 - Capability substrate detected: `11` roots, `1370` skill files, `47` plugin/MCP manifests.
-- Capability resurfacing receipt present/current: `True`/`False`; activation candidates `30`.
+- Capability resurfacing receipt present/current: `True`/`True`; activation candidates `30`.
 - Local network substrate: status `healthy`, mode `observe`, route `en0` via `192.168.1.1`.
 - Dispatch substrate: status `blocked`, launchd `running`, live root `work/workstream-agent-launcher-20260629`, dirty entries `13`, async dry-run ok `True`.
 - Live root gate: status `blocked`, branch `work/workstream-agent-launcher-20260629`, unique commits `13`, dirty entries `9`, launchd env drift `0`.
@@ -32,8 +32,8 @@ Generated: `2026-06-29T22:45:04+00:00`
 
 ## Parked / Hung Workstreams
 
-- By category: `auth_credentials` 2, `capability_substrate` 1, `cloud_runtime` 1, `dispatch_lifecycle` 1, `github_app_identity` 1, `github_consolidation` 1, `local_lean` 1.
-- By status: `needs_human_gate` 3, `needs_refresh` 1, `parked` 4.
+- By category: `auth_credentials` 2, `cloud_runtime` 1, `dispatch_lifecycle` 1, `github_app_identity` 1, `github_consolidation` 1, `local_lean` 1.
+- By status: `needs_human_gate` 3, `parked` 4.
 
 | ID | Category | Status | Evidence | Owner | Route |
 |---|---|---|---|---|---|
@@ -41,7 +41,6 @@ Generated: `2026-06-29T22:45:04+00:00`
 | `cloud-credential-handles-unconfigured` | `auth_credentials` | `parked` | 6 credential/deploy handles absent; 0 present. No values inspected. | credential workstream | Do not repair inline; open a bounded credential/setup workstream only when a cloud action requires it. |
 | `cloud-runtime-endpoint-unconfigured` | `cloud_runtime` | `parked` | No runtime URL was configured for the last cloud receipt probe. | limen deployment workstream | Keep separate from session intake; configure/probe runtime only in a deploy/runtime task. |
 | `local-lifecycle-disk-pressure` | `local_lean` | `parked` | Local lifecycle stores use 17.4 GiB (12.7 GiB worktrees, 4.7 GiB private corpus). | local lifecycle | Drain only after remote/default preservation proof or non-source residue receipt; keep pressure visible in SessionStart. |
-| `capability-substrate-not-resurfaced` | `capability_substrate` | `needs_refresh` | Capability resurfacing receipt is stale; 11 local capability roots detected; 1370 skill files, 47 plugin/MCP manifests, 218 MCP/ACP markers counted. | agent capability substrate | Run `python3 scripts/capability-substrate-ledger.py --write` to index names/counts and choose activation order; do not read private skill bodies, install plugins, or repair MCP/ACP auth inside session lifecycle closeout. |
 | `dispatch-heartbeat-substrate-unhealthy` | `dispatch_lifecycle` | `needs_human_gate` | Dispatch-health receipt is `blocked` with 7 blocker(s): live-root-not-at-origin-main, live-root-dirty, lane-fill-jules, lane-fill-claude, lane-fill-opencode, lane-fill-agy, lane-fill-gemini. | dispatch heartbeat substrate | Use `docs/live-root-gate.md` to preserve/reconcile the live Limen root and reload launchd only under an explicit operator gate; stop before reset, branch switch, task-board edits, or async enablement. |
 | `github-consolidation-collisions` | `github_consolidation` | `needs_human_gate` | 34 source repos remain outside `organvm`; 13 name-collision groups block the transfer apply gate. | GitHub consolidation | Collision packet is complete; await an explicit human GitHub mutation gate to run `docs/consolidation/COLLISION-RENAMES.md`, then re-run the consolidation dry-run and require 0 collisions before transfer. |
 | `github-app-limen-bot-not-wired` | `github_app_identity` | `needs_human_gate` | `gh-app-token --which` resolves to `pat (GITHUB_TOKEN fallback)`; 4 org Apps are installed, and `limen[bot]` is not wired. | limen[bot] App identity | Create/install the org GitHub App and hydrate credentials via `scripts/set-credential.sh`; verify `bash scripts/gh-app-token.sh --which` reports the App path. |

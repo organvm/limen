@@ -1,6 +1,6 @@
 # Capability Substrate Ledger
 
-Generated: `2026-06-28T19:21:02+00:00`
+Generated: `2026-06-29T22:50:54+00:00`
 
 ## Canonical Decision
 
@@ -12,12 +12,12 @@ Generated: `2026-06-28T19:21:02+00:00`
 ## Coverage
 
 - Roots seen: `11`.
-- Scanned files: `20263`; truncated roots: `0`.
-- Skill files: `1317`; unique skill names: `374`.
-- Plugin/MCP manifests: `45`; MCP/ACP markers: `150`.
-- Capability bytes counted by metadata only: `739.6 MiB`.
+- Scanned files: `26813`; truncated roots: `0`.
+- Skill files: `1370`; unique skill names: `374`.
+- Plugin/MCP manifests: `47`; MCP/ACP markers: `218`.
+- Capability bytes counted by metadata only: `1008.7 MiB`.
 - Lanes: `claude-plugin-cache` 1, `codex-plugin-cache` 1, `codex-user-skills` 1, `domus-genoma-config` 1, `limen-local-skills` 2, `limen-mcp` 1, `organvm-agent-archive` 1, `organvm-ai-skills` 1, `organvm-runtime-tasks` 1, `workspace-mirror` 1.
-- Domains: `agent_orchestration` 85, `data_research` 58, `mcp_acp` 37, `other` 726, `product_frontend` 104, `repo_delivery` 73, `security_ops` 43, `session_corpus` 84, `verification_quality` 50, `writing_docs` 57.
+- Domains: `agent_orchestration` 87, `data_research` 58, `mcp_acp` 37, `other` 767, `product_frontend` 104, `repo_delivery` 77, `security_ops` 43, `session_corpus` 86, `verification_quality` 54, `writing_docs` 57.
 
 ## Roots
 
@@ -29,8 +29,8 @@ Generated: `2026-06-28T19:21:02+00:00`
 | `~/Workspace/organvm/_agent` | `organvm-agent-archive` | `custom-agent-archive` | 163 | 163 | 0 | 11 | 908 | Converge legacy global skills and MCP registry pieces into the current capability layer. |
 | `~/Workspace/organvm/claude-runtime-state` | `organvm-runtime-tasks` | `scheduled-runtime-archive` | 17 | 17 | 0 | 17 | 3908 | Convert scheduled-task skills into Limen packets or LaunchAgent receipts, not chat-only memory. |
 | `~/Workspace/organvm/a-i--skills` | `organvm-ai-skills` | `custom-skill-archive` | 907 | 183 | 4 | 32 | 5469 | Port selected high-signal skills into the current Codex skill registry after body review. |
-| `~/Workspace/domus-genoma` | `domus-genoma-config` | `config-mcp-wrapper-substrate` | 24 | 19 | 1 | 34 | 3153 | Keep as dotfile/config owner state; activate through chezmoi and MCP wrapper receipts. |
-| `~/Workspace/4444J99` | `workspace-mirror` | `mirror-candidate` | 19 | 19 | 1 | 36 | 4161 | Use only after checking the source owner; count it so duplicate capability copies are visible. |
+| `~/Workspace/domus-genoma` | `domus-genoma-config` | `config-mcp-wrapper-substrate` | 72 | 19 | 3 | 102 | 9520 | Keep as dotfile/config owner state; activate through chezmoi and MCP wrapper receipts. |
+| `~/Workspace/4444J99` | `workspace-mirror` | `mirror-candidate` | 24 | 19 | 1 | 36 | 4344 | Use only after checking the source owner; count it so duplicate capability copies are visible. |
 | `~/Workspace/limen/.agents` | `limen-local-skills` | `repo-local-active` | 1 | 1 | 0 | 0 | 1 | Keep mirrored local skills minimal and tested by Limen verification. |
 | `~/Workspace/limen/.claude/skills` | `limen-local-skills` | `repo-local-active` | 1 | 1 | 0 | 0 | 1 | Keep mirrored local skills minimal and tested by Limen verification. |
 | `~/Workspace/limen/mcp` | `limen-mcp` | `active-mcp-server` | 0 | 0 | 0 | 9 | 9 | Treat as Limen MCP implementation; verify through API/CLI and adapter predicates. |
@@ -81,7 +81,7 @@ Generated: `2026-06-28T19:21:02+00:00`
 
 ## Duplicate Names
 
-- `api-design-patterns` x8, `audio-engineering-patterns` x8, `closeout` x8, `creative-writing-craft` x8, `cv-resume-builder` x8, `evaluation-to-growth` x8, `github-repo-curator` x8, `grant-proposal-writer` x8, `portfolio-presentation` x8, `product-requirements-designer` x8, `project-orchestration` x8, `accessibility-patterns` x7.
+- `daily-orphan-plans` x9, `daily-pr-execute-by-tier` x9, `daily-pr-promote-and-triage` x9, `daily-push-feature-branches` x9, `daily-unpushed-commits` x9, `portal-router` x9, `api-design-patterns` x8, `audio-engineering-patterns` x8, `closeout` x8, `creative-writing-craft` x8, `cv-resume-builder` x8, `evaluation-to-growth` x8.
 
 ## Private Output
 
