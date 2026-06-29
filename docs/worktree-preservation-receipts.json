@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-06-29T23:10:00Z",
+  "generated_utc": "2026-06-29T23:17:00Z",
   "receipts": [
     {
       "branch": "limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e",
@@ -473,6 +473,40 @@
       "score_discount": 20,
       "status": "private_patch_preserved",
       "unique_commits_vs_origin_main": 1,
+      "worktree_ahead_behind_remote": "0/0"
+    },
+    {
+      "base_branch": "origin/master",
+      "base_head": "5699dd75194329e6d7b36f78091c39e08524ecba",
+      "branch": "work/domus-quarantine-retire-20260629",
+      "classification": "remote branch preserves committed head; origin/master range and dirty worktree private patches preserved",
+      "dirty_paths": [
+        "dot_config/ai-context/scripts/executable_storage-lifecycle-audit",
+        "dot_config/domus/manifest.yaml",
+        "dot_config/fish/conf.d/30-aliases.fish",
+        "dot_local/bin/executable_domus",
+        "dot_local/bin/executable_domus-packages",
+        "tests/test-domus-cli.bats",
+        "tests/test-domus-packages.bats"
+      ],
+      "dirty_patch": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T231700Z-domus-quarantine-retire-20260629/dirty-worktree.patch",
+      "dirty_patch_bytes": 31427,
+      "dirty_patch_sha256": "694992e08dfcba2a6fb656e49a88f269da6c1b23f68a6953da8483f8212f5157",
+      "evidence_updated_utc": "2026-06-29T23:17:00Z",
+      "head": "87bfed018219e72e26def90563ab7b5eff2a6097",
+      "lane": "owner-blocker",
+      "next_action": "Committed branch head is preserved on origin/work/domus-quarantine-retire-20260629 with ahead/behind 0/0. Private patches preserve both the origin/master..HEAD commit range and dirty worktree state. Create a new narrow owner packet for merge, supersession, or abandon; reclaim the local checkout only after operator acceptance.",
+      "private_patch": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T231700Z-domus-quarantine-retire-20260629/origin-master-range.patch",
+      "private_patch_bytes": 439413,
+      "private_patch_sha256": "cf7122858abbb3b283d8c2183917fd530844789b94977f30998f683abc240a64",
+      "private_receipt": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T231700Z-domus-quarantine-retire-20260629/receipt.json",
+      "repo": "organvm/domus-genoma",
+      "remote_branch": "origin/work/domus-quarantine-retire-20260629",
+      "remote_head": "87bfed018219e72e26def90563ab7b5eff2a6097",
+      "root": "domus-quarantine-retire-20260629",
+      "score_discount": 20,
+      "status": "private_patch_preserved",
+      "unique_commits_vs_origin_master": 8,
       "worktree_ahead_behind_remote": "0/0"
     }
   ],
