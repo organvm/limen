@@ -17,10 +17,17 @@ import os
 import plistlib
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(ROOT / "cli" / "src"))
+
+from limen.capacity import capacity_fill_snapshot  # noqa: E402
+from limen.dispatch import _down_lanes  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
+
 HOME = Path.home()
 PRIVATE_ROOT = Path(
     os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus")
@@ -237,6 +244,7 @@ def derive_blockers(snapshot: dict[str, Any]) -> list[dict[str, str]]:
     git = snapshot["live_root_git"]
     watchdog = snapshot["watchdog"]
     async_probe = snapshot["async_probe"]
+    capacity_fill = snapshot["capacity_fill"]
 
     if not plist.get("present"):
         blockers.append({"id": "heartbeat-plist-missing", "evidence": "LaunchAgent plist was not found."})
@@ -285,6 +293,14 @@ def derive_blockers(snapshot: dict[str, Any]) -> list[dict[str, str]]:
             }
         )
 
+    for blocker in capacity_fill.get("blockers") or []:
+        blockers.append(
+            {
+                "id": str(blocker.get("id") or "lane-fill-gap"),
+                "evidence": str(blocker.get("evidence") or "paid lane fill contract is not met."),
+            }
+        )
+
     return blockers
 
 
@@ -298,6 +314,16 @@ def build_snapshot(args: argparse.Namespace) -> dict[str, Any]:
         "watchdog": watchdog_snapshot(),
         "async_probe": async_probe_snapshot(bool(args.probe_async)),
     }
+    try:
+        board = load_limen_file(ROOT / "tasks.yaml")
+        snapshot["capacity_fill"] = capacity_fill_snapshot(board, down_lanes=_down_lanes())
+    except Exception as exc:
+        snapshot["capacity_fill"] = {
+            "generated_at": snapshot["generated_at"],
+            "status": "blocked",
+            "rows": [],
+            "blockers": [{"id": "capacity-fill-unreadable", "evidence": str(exc)[:200]}],
+        }
     blockers = derive_blockers(snapshot)
     snapshot["blockers"] = blockers
     snapshot["status"] = "healthy" if not blockers else "blocked"
@@ -311,6 +337,7 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
     verified = snapshot["verified_worktree"]
     watchdog = snapshot["watchdog"]
     async_probe = snapshot["async_probe"]
+    capacity_fill = snapshot["capacity_fill"]
     blockers = snapshot["blockers"]
     lines = [
         "# Dispatch Health",
@@ -341,6 +368,23 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         f"- Async dry-run requested: `{async_probe.get('requested')}`.",
         f"- Async dry-run ok: `{async_probe.get('ok')}`; timed out `{async_probe.get('timed_out', False)}`.",
         f"- Async dry-run summary: `{async_probe.get('last_line', '')}`.",
+        "",
+        "## Capacity Fill",
+        "",
+        f"- Capacity fill status: `{capacity_fill.get('status')}`.",
+        "- Productive means task-board spend/reservation. Attempts alone do not satisfy a lane's fill contract.",
+        "",
+        "| Lane | Status | Productive | Attempts | Expected now | Target | Open work | Active |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in capacity_fill.get("rows") or []:
+        lines.append(
+            "| "
+            f"`{row.get('agent')}` | `{row.get('status')}` | {row.get('productive')} | "
+            f"{row.get('attempts')} | {row.get('expected_now')} | {row.get('target')} | "
+            f"{row.get('open_work')} | {row.get('active_work')} |"
+        )
+    lines += [
         "",
         "## Live Root",
         "",
