@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-06-29T17:10:04Z",
+  "generated_utc": "2026-06-29T17:22:55Z",
   "receipts": [
     {
       "branch": "limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e",
@@ -227,27 +227,27 @@
     },
     {
       "branch": "work/mirror-mirror-avatar-types-20260629",
-      "classification": "open PR preserves local worktree head",
-      "evidence_updated_utc": "2026-06-29T17:01:50Z",
+      "classification": "merged PR preserves local worktree head",
+      "evidence_updated_utc": "2026-06-29T17:22:55Z",
       "head": "99fdd8d8b49e8a57022e6eec52b706655e973403",
-      "lane": "remote-pr-open",
+      "lane": "remote-merged",
       "local_verification": [
         "npm test (230 passed)",
         "npm run build",
         "npm run lint (0 errors; existing warnings remain)"
       ],
       "merge_state": "CLEAN",
-      "next_action": "No local-only source preservation remains. GitHub PR #87 is OPEN, its head OID equals the preserved worktree HEAD, local tests/build/lint passed, and GitHub CI Lint/build/test passed. Review and merge or supersede the PR; reclaim local checkout only after normal operator acceptance.",
+      "next_action": "No local-only source preservation remains. GitHub PR #87 is MERGED, its head OID equals the preserved worktree HEAD, local tests/build/lint passed, and GitHub CI Lint/build/test passed before merge. Reclaim local checkout only after normal operator acceptance.",
       "pr_draft": false,
       "pr_failed_checks": 0,
       "pr_number": 87,
-      "pr_state": "OPEN",
+      "pr_state": "MERGED",
       "pr_success_checks": 1,
       "pr_url": "https://github.com/organvm/mirror-mirror/pull/87",
       "repo": "organvm/mirror-mirror",
       "root": "mirror-mirror",
       "score_discount": 35,
-      "status": "open_pr_preserved"
+      "status": "merged_pr_preserved"
     },
     {
       "branch": "work/invisible-ledger-trial-followups-20260629",

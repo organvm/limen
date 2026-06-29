@@ -22,11 +22,12 @@ The unique work remains preserved on the remote branches and open draft PRs.
 
 2026-06-29 crash-resume scan:
 
-- `python3 scripts/worktree-debt.py --json`: 27 roots, 0 debt-bearing roots, cap 12.
-- Current class mix: 12 active roots inside the grace window, 6 open-PR remote-preserved
-  roots, 3 documented residues, 2 owner-blocker roots, 2 remote-merged roots, and
-  2 remote-superseded roots.
-- `mirror-mirror` is now preserved by open PR
+- `python3 scripts/worktree-debt.py --json`: 28 roots, 0 debt-bearing roots, cap 12.
+- Current class mix: 11 active roots inside the grace window, 5 open-PR remote-preserved
+  roots, 3 documented residues, 2 owner-blocker roots, 3 remote-merged roots,
+  2 remote-superseded roots, 1 clean merged idle root, and 1 newly active
+  generated worktree inside the 6-hour grace window.
+- `mirror-mirror` is now preserved by merged PR
   [#87](https://github.com/organvm/mirror-mirror/pull/87) at
   `99fdd8d8b49e8a57022e6eec52b706655e973403`; local `npm test`, `npm run build`,
   and `npm run lint` passed, and GitHub CI `Lint, build & test` passed.
@@ -125,7 +126,7 @@ That is not enough for a fully automatic lifecycle.
 
 | Root | Repo | State | Origin Receipt | Evidence | Disposition | Next Action |
 |---|---|---|---|---|---|---|
-| `mirror-mirror` | `organvm/mirror-mirror` | open PR remote-preserved | branch `work/mirror-mirror-avatar-types-20260629`; local dirty avatar typing cleanup from the crash-resume worktree | PR [#87](https://github.com/organvm/mirror-mirror/pull/87) is `OPEN`; local HEAD and PR head OID both `99fdd8d8b49e8a57022e6eec52b706655e973403`; `npm test` passed 230 tests; `npm run build` passed; `npm run lint` exited 0 with existing warnings; GitHub CI passed `Lint, build & test` | remote-pr-open receipt; no local-only source preservation remains | Review and merge PR #87, or supersede it with a named successor. Reclaim local checkout only after operator acceptance. |
+| `mirror-mirror` | `organvm/mirror-mirror` | merged PR preserved | branch `work/mirror-mirror-avatar-types-20260629`; local dirty avatar typing cleanup from the crash-resume worktree | PR [#87](https://github.com/organvm/mirror-mirror/pull/87) is `MERGED`; local HEAD and PR head OID both `99fdd8d8b49e8a57022e6eec52b706655e973403`; `npm test` passed 230 tests; `npm run build` passed; `npm run lint` exited 0 with existing warnings; GitHub CI passed `Lint, build & test` before merge | remote-merged receipt; no local-only source preservation remains | Reclaim local checkout only after operator acceptance; no code PR remains to merge. |
 | `the-invisible-ledger` | `organvm/the-invisible-ledger` | open PR remote-preserved | branch `work/invisible-ledger-trial-followups-20260629`; preserves the two unique follow-up commits left after old `feat/trial-signup-flow` PR #37 plus current-main clamp and typecheck fixes | PR [#76](https://github.com/organvm/the-invisible-ledger/pull/76) is `OPEN`; local HEAD and PR head OID both `fb131bd2cf3d8b0417ae690cbe287c0f3906597d`; `npm run typecheck` passed; `npm test` passed 159 tests after fixing webhook event limit clamping; `npm run build` passed; `npm run lint` exited 0 with existing warnings; GitHub CI docker, build/test/lint, and Node 20/22 matrix checks passed | remote-pr-open receipt; no local-only source preservation remains | Review and merge PR #76, or supersede it with a named successor. Reclaim local checkout only after operator acceptance. |
 | `triptych-story` | `organvm/portvs` | superseded by pushed successor branch | branch `work/triptych-story`; predecessor triptych incubator lane | local HEAD `0a922a9ac3c668ab8f1698649deb86dc82b17975` is an ancestor of `origin/work/triptych-media-offload-20260629` at `0f59f3a18cc32365cfee28e4df3b1e6e9e92eacf`; successor branch adds the visual media canon lineage receipts | remote-superseded receipt; no separate PR needed for this predecessor branch | Continue triptych work from `work/triptych-media-offload-20260629`. Reclaim `triptych-story` only after operator acceptance. |
 | `bld-domus-genoma-ci-23a9` | `organvm/domus-genoma` | local checkout removed; draft PR open | branch `limen/bld-domus-genoma-ci-23a9`; likely build/CI task; no exact task slug in board | clean before removal; local `HEAD` matched fetched PR head `c53a571`; PR [#144](https://github.com/organvm/domus-genoma/pull/144); untracked CI draft was rebased onto current `origin/master`; YAML parse passed; `git diff --check origin/master..HEAD` passed; `just --dry-run check-all` now shows `shfmt -d` and no `shfmt -w`; `just fmt-check` passed; full local `just check-all` exposed pre-existing BATS failures | remote PR preserved; no local debt root remains | Review PR CI and the known pre-existing BATS blockers, then merge or supersede by named branch/PR. Recreate a local worktree from the branch only if needed. |
