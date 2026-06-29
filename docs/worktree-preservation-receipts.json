@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-06-29T23:28:00Z",
+  "generated_utc": "2026-06-29T23:35:08Z",
   "receipts": [
     {
       "branch": "limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e",
@@ -112,6 +112,22 @@
       "untracked_roots": [
         "reports/"
       ]
+    },
+    {
+      "branch": "work/workstream-kickstart-20260629",
+      "classification": "remote branch head is clean and included in origin/main",
+      "default_branch": "origin/main",
+      "default_head": "7ecdd65a529802a581d173b4cb390d19bcb20e55",
+      "evidence_updated_utc": "2026-06-29T23:35:08Z",
+      "head": "9f7af24dcb7514acec86c377965fa8efa56932ce",
+      "lane": "remote-default-proof",
+      "next_action": "No local source preservation action remains. Local HEAD equals origin/work/workstream-kickstart-20260629 at 9f7af24dcb7514acec86c377965fa8efa56932ce; git merge-base --is-ancestor HEAD origin/main exited 0; git cherry origin/main HEAD, git diff --check origin/main..HEAD, and git status --porcelain are empty. Reclaim the local checkout only after normal operator acceptance.",
+      "repo": "organvm/limen",
+      "remote_branch": "origin/work/workstream-kickstart-20260629",
+      "remote_head": "9f7af24dcb7514acec86c377965fa8efa56932ce",
+      "root": "workstream-kickstart-20260629",
+      "score_discount": 35,
+      "status": "default_branch_preserved"
     },
     {
       "base_branch": "origin/master",

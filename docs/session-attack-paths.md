@@ -1,6 +1,6 @@
 # Session Attack Paths
 
-Generated: `2026-06-29T23:31:05+00:00`
+Generated: `2026-06-29T23:36:48+00:00`
 
 ## Canonical Decision
 
@@ -15,10 +15,10 @@ Generated: `2026-06-29T23:31:05+00:00`
 - Redacted prompt corpus: `9711` files, `98045` prompt-like events.
 - Codex classified sessions: `887`.
 - Worktree debt roots: `0`.
-- Worktree preservation receipts: `27`.
+- Worktree preservation receipts: `28`.
 - Parked blockers: `7`.
 - Local lifecycle footprint: `17.2 GiB`.
-- Candidate lanes: `family` 7, `human-gate` 28, `observe` 1, `parked` 5, `remote-proof` 1.
+- Candidate lanes: `family` 7, `human-gate` 28, `observe` 1, `parked` 5.
 
 ## Ordering Model
 
@@ -51,14 +51,14 @@ Generated: `2026-06-29T23:31:05+00:00`
 | 15 | `maddie-boundary-20260629` | `worktree` | `human-gate` | 32 | reason `owner-blocker`; prompts 68; remote `present`; open PRs 0; receipt `private_patch_preserved` | human/codex-prep | Committed branch head is preserved on origin/work/maddie-boundary-20260629 with ahead/behind 0/0. The private patch preserves the origin/main..HEAD commit range. Review, merge, supersede, or abandon under an owner packet; reclaim the local checkout only after operator acceptance. |
 | 16 | `student-email-d2l-support-20260629` | `worktree` | `human-gate` | 32 | reason `owner-blocker`; prompts 67; remote `present`; open PRs 0; receipt `private_patch_preserved` | human/codex-prep | Committed branch head is preserved on origin/work/student-email-d2l-support-20260629 with ahead/behind 0/0. The private patch preserves the origin/main..HEAD commit range. Review, merge, supersede, or abandon under an owner packet; reclaim the local checkout only after operator acceptance. |
 | 17 | `limen-network-substrate-20260628` | `worktree` | `human-gate` | 28 | reason `owner-blocker`; prompts 21; remote `present`; open PRs 0; receipt `private_patch_preserved` | human/codex-prep | Committed branch head is preserved on origin/codex/network-substrate-healing-20260628 with ahead/behind 0/0. The private patch preserves the origin/main..HEAD commit range. Review, merge, supersede, or abandon under an owner packet; reclaim the local checkout only after operator acceptance. |
-| 18 | `workstream-kickstart-20260629` | `worktree` | `remote-proof` | 28 | reason `active(<24h)`; prompts 0; remote `present`; open PRs 0 | codex first; opencode/jules after packetization | Verify remote/default preservation; reclaim local checkout only after exact proof. |
-| 19 | `limen-main-trench-20260628` | `worktree` | `human-gate` | 27 | reason `owner-blocker`; prompts 14; remote `present`; open PRs 0; receipt `private_patch_preserved` | human/codex-prep | Committed branch head is preserved on origin/codex/limen-main-trench-20260628 with ahead/behind 0/0. The private patch preserves the origin/main..HEAD commit range. Review, merge, supersede, or abandon under an owner packet; reclaim the local checkout only after operator acceptance. |
-| 20 | `warp-agent-routing-20260629` | `worktree` | `human-gate` | 27 | reason `owner-blocker`; prompts 15; remote `present`; open PRs 0; receipt `private_patch_preserved` | human/codex-prep | Committed branch head is preserved on origin/work/warp-agent-routing-20260629 with ahead/behind 0/0. The private patch preserves the origin/main..HEAD commit range. Review, merge, supersede, or abandon under an owner packet; reclaim the local checkout only after operator acceptance. |
-| 21 | `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f` | `worktree` | `human-gate` | 24 | reason `remote-merged`; prompts 79; remote `missing`; open PRs 0; receipt `merged_pr_preserved` | human/codex-prep | No local PR or branch preservation action remains. GitHub PR #328 is MERGED and its head OID equals the local worktree HEAD. Reclaim the local checkout only after normal operator acceptance. |
-| 22 | `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b` | `worktree` | `human-gate` | 24 | reason `documented-residue`; prompts 94; remote `not-a-git-dir`; open PRs 0; receipt `cache_only_residue` | human/codex-prep | No unique source to preserve; directory contains only Vite dependency-cache metadata. Reclaim only after normal operator acceptance. |
-| 23 | `triptych-story` | `worktree` | `human-gate` | 23 | reason `remote-superseded`; prompts 212; remote `present`; open PRs 0; receipt `superseded_by_successor_branch` | human/codex-prep | No separate PR needed for this branch. The local worktree head is an ancestor of the pushed successor branch origin/work/triptych-media-offload-20260629, which adds the visual media canon lineage receipts. Reclaim only after normal operator acceptance; use the successor branch for continued triptych work. |
-| 24 | `capfill-agy-20260629-09-3b18` | `worktree` | `observe` | 20 | reason `active(<6h)`; prompts 0; remote `unknown`; open PRs 0 | codex first; opencode/jules after packetization | Keep active work visible; do not interrupt unless it becomes stale. |
-| 25 | `cloud-runtime-endpoint-unconfigured` | `blocker` | `parked` | 18 | category `cloud_runtime`; status `parked` | codex | Keep separate from session intake; configure/probe runtime only in a deploy/runtime task. |
+| 18 | `limen-main-trench-20260628` | `worktree` | `human-gate` | 27 | reason `owner-blocker`; prompts 14; remote `present`; open PRs 0; receipt `private_patch_preserved` | human/codex-prep | Committed branch head is preserved on origin/codex/limen-main-trench-20260628 with ahead/behind 0/0. The private patch preserves the origin/main..HEAD commit range. Review, merge, supersede, or abandon under an owner packet; reclaim the local checkout only after operator acceptance. |
+| 19 | `warp-agent-routing-20260629` | `worktree` | `human-gate` | 27 | reason `owner-blocker`; prompts 15; remote `present`; open PRs 0; receipt `private_patch_preserved` | human/codex-prep | Committed branch head is preserved on origin/work/warp-agent-routing-20260629 with ahead/behind 0/0. The private patch preserves the origin/main..HEAD commit range. Review, merge, supersede, or abandon under an owner packet; reclaim the local checkout only after operator acceptance. |
+| 20 | `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f` | `worktree` | `human-gate` | 24 | reason `remote-merged`; prompts 79; remote `missing`; open PRs 0; receipt `merged_pr_preserved` | human/codex-prep | No local PR or branch preservation action remains. GitHub PR #328 is MERGED and its head OID equals the local worktree HEAD. Reclaim the local checkout only after normal operator acceptance. |
+| 21 | `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b` | `worktree` | `human-gate` | 24 | reason `documented-residue`; prompts 94; remote `not-a-git-dir`; open PRs 0; receipt `cache_only_residue` | human/codex-prep | No unique source to preserve; directory contains only Vite dependency-cache metadata. Reclaim only after normal operator acceptance. |
+| 22 | `triptych-story` | `worktree` | `human-gate` | 23 | reason `remote-superseded`; prompts 212; remote `present`; open PRs 0; receipt `superseded_by_successor_branch` | human/codex-prep | No separate PR needed for this branch. The local worktree head is an ancestor of the pushed successor branch origin/work/triptych-media-offload-20260629, which adds the visual media canon lineage receipts. Reclaim only after normal operator acceptance; use the successor branch for continued triptych work. |
+| 23 | `capfill-agy-20260629-09-3b18` | `worktree` | `observe` | 20 | reason `active(<6h)`; prompts 0; remote `unknown`; open PRs 0 | codex first; opencode/jules after packetization | Keep active work visible; do not interrupt unless it becomes stale. |
+| 24 | `cloud-runtime-endpoint-unconfigured` | `blocker` | `parked` | 18 | category `cloud_runtime`; status `parked` | codex | Keep separate from session intake; configure/probe runtime only in a deploy/runtime task. |
+| 25 | `uncategorized` | `family` | `family` | 18 | sessions 2; states STALLED 2; prompts 10 | codex | Inspect privately and add classifier/owner route. |
 
 ## Delegation Gate
 
