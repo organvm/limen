@@ -58,11 +58,16 @@ step "Run API and CLI tests"
 env -u LIMEN_API_TOKEN -u LIMEN_OWNER_TOKEN -u LIMEN_CLIENT_TOKEN \
   PYTHONPATH="$PYTHONPATH_VALUE" python3 -m pytest web/api/tests cli/tests -q
 
-step "Probe local runtime adapter over HTTP"
-PYTHONPATH="$PYTHONPATH_VALUE" scripts/probe-local-runtime.sh
+if [[ "${LIMEN_SKIP_LOCAL_HTTP_PROBES:-0}" == "1" ]]; then
+  step "Skip local HTTP probes"
+  printf 'Skipping local runtime and Worker probes because LIMEN_SKIP_LOCAL_HTTP_PROBES=1\n'
+else
+  step "Probe local runtime adapter over HTTP"
+  PYTHONPATH="$PYTHONPATH_VALUE" scripts/probe-local-runtime.sh
 
-step "Probe local Cloudflare Worker adapter over HTTP"
-scripts/probe-local-worker.sh
+  step "Probe local Cloudflare Worker adapter over HTTP"
+  scripts/probe-local-worker.sh
+fi
 
 step "Build static dashboard and validate exported surfaces"
 (
