@@ -131,11 +131,11 @@ parameters:
     owner: continuity
     note: "Ignored local raw/private session cartridge. Stores manifests and optional content-addressed object copies; never committed."
   LIMEN_CORPUS_MAX_SESSIONS:
-    default: 500
+    default: ""
     env: LIMEN_CORPUS_MAX_SESSIONS
     self_update: none
     owner: continuity
-    note: "Default session cap for the interactive Corpus Command Center snapshot. Use --all-sessions for an intentional full local corpus run."
+    note: "Optional debug cap for the interactive Corpus Command Center snapshot. Blank means index every local lifecycle session; --all-sessions ignores any cap."
   LIMEN_CORPUS_PUBLIC_UNIT_LIMIT:
     default: 2000
     env: LIMEN_CORPUS_PUBLIC_UNIT_LIMIT
