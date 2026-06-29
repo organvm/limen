@@ -1,6 +1,6 @@
 # GitHub Consolidation Gates
 
-Generated: `2026-06-28T16:39:20+00:00`
+Generated: `2026-06-29T00:02:49+00:00`
 
 ## Rule
 
@@ -21,7 +21,7 @@ Generated: `2026-06-28T16:39:20+00:00`
 | Rename target conflicts/unknown | `0` / `0` |
 | Transfer apply gate open | `False` |
 | `tasks.yaml` repo refs to rewrite post-transfer | `49` |
-| Local remotes to rewrite post-transfer | `8` |
+| Local remotes to rewrite post-transfer | `14` |
 | Deploy literal to fix post-transfer | `False` |
 | `gh-app-token --which` | `pat (GITHUB_TOKEN fallback)` |
 | `limen[bot]` App installed | `False` |
@@ -47,7 +47,7 @@ Generated: `2026-06-28T16:39:20+00:00`
 
 ## Collision Packet Check
 
-- Packet path: `~/Workspace/limen/docs/consolidation/COLLISION-RENAMES.md`.
+- Packet path: `~/Workspace/limen-network-substrate-20260628/docs/consolidation/COLLISION-RENAMES.md`.
 - Live collision groups parsed: `13` / `13`.
 - Missing keeper rows: `0`.
 - Invalid keeper rows: `0`.
@@ -74,5 +74,5 @@ Generated: `2026-06-28T16:39:20+00:00`
 
 ## Private Output
 
-- Private gate index: `~/Workspace/limen/.limen-private/session-corpus/lifecycle/consolidation-gates.json`.
+- Private gate index: `~/Workspace/limen-network-substrate-20260628/.limen-private/session-corpus/lifecycle/consolidation-gates.json`.
 - The private index keeps parsed counts and command metadata only; no secret values are read or stored.

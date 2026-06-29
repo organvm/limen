@@ -102,6 +102,12 @@ def current_worktree_report(prompt: dict[str, Any]) -> dict[str, Any]:
         live_names = {str(item.get("name") or "") for item in live_items}
         if prompt_names and live_names.isdisjoint(prompt_names):
             return prompt_report if isinstance(prompt_report, dict) else {}
+        merged_items = {str(item.get("name") or ""): item for item in prompt_items if item.get("name")}
+        merged_items.update({str(item.get("name") or ""): item for item in live_items if item.get("name")})
+        items = list(merged_items.values())
+        by_reason = Counter(str(item.get("reason") or "unknown") for item in items)
+        debt = sum(1 for item in items if item.get("debt"))
+        return {**prompt_report, "items": items, "total": len(items), "debt": debt, "by_reason": dict(by_reason)}
     if live_items:
         return live_report
     return prompt_report if isinstance(prompt_report, dict) else {}

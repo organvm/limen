@@ -225,3 +225,44 @@ def test_clean_git_root_still_classifies_without_receipt(tmp_path: Path, monkeyp
     assert report["items"][0]["name"] == "git-root"
     assert report["items"][0]["reason"] == "unpushed-commits"
     assert report["items"][0]["debt"] is True
+
+
+def test_recent_clean_root_merged_to_default_is_not_active_gap(tmp_path: Path, monkeypatch):
+    origin = tmp_path / "origin.git"
+    source = tmp_path / "source"
+    subprocess.run(["git", "init", "-q", str(source)], check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=source, check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=source, check=True)
+    (source / "README.md").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=source, check=True)
+    subprocess.run(["git", "commit", "-qm", "base"], cwd=source, check=True)
+    base_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=source,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "branch", "-M", "main"], cwd=source, check=True)
+    subprocess.run(["git", "init", "--bare", "-q", str(origin)], check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(origin)], cwd=source, check=True)
+    subprocess.run(["git", "push", "-q", "-u", "origin", "main"], cwd=source, check=True)
+    (source / "README.md").write_text("base\nupstream\n", encoding="utf-8")
+    subprocess.run(["git", "commit", "-qam", "upstream"], cwd=source, check=True)
+    subprocess.run(["git", "push", "-q", "origin", "main"], cwd=source, check=True)
+
+    worktrees = tmp_path / ".limen-worktrees"
+    root = worktrees / "recent-clean-root"
+    worktrees.mkdir()
+    subprocess.run(["git", "clone", "-q", str(origin), str(root)], check=True)
+    subprocess.run(["git", "checkout", "-q", "-b", "worktree-recent", base_head], cwd=root, check=True)
+    monkeypatch.setenv("LIMEN_WORKTREE_ROOT", str(worktrees))
+    monkeypatch.setenv("LIMEN_RECLAIM_CLAUDE_WT", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_MIN_AGE_H", "24")
+
+    report = worktree_debt_report(tmp_path)
+
+    assert report["items"][0]["name"] == "recent-clean-root"
+    assert report["items"][0]["reason"] == "clean+merged+idle"
+    assert report["items"][0]["debt"] is False
+    assert report["debt"] == 0

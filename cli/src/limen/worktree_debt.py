@@ -184,16 +184,20 @@ def _classify(
         return "owner-blocker"
     if _git(["rev-parse", "--is-inside-work-tree"], path).returncode != 0:
         return "not-a-git-dir"
+    status = _git(["status", "--porcelain"], path).stdout.strip()
+    head = _git(["rev-parse", "HEAD"], path).stdout.strip()
+    patch_equivalent = _patch_equivalent_to_default(path)
+    default_preserved = bool(head) and (_merged_into_default(path, head) or patch_equivalent)
+    if not status and default_preserved:
+        return "clean+merged+idle"
     age_h = (now - path.stat().st_mtime) / 3600.0
     if age_h < min_age_h:
         return f"active(<{min_age_h:g}h)"
-    if _git(["status", "--porcelain"], path).stdout.strip():
+    if status:
         return "dirty"
-    head = _git(["rev-parse", "HEAD"], path).stdout.strip()
-    patch_equivalent = _patch_equivalent_to_default(path)
     if not head or (not _reachable_from_remote(path, head) and not patch_equivalent):
         return "unpushed-commits"
-    if not (_merged_into_default(path, head) or patch_equivalent):
+    if not default_preserved:
         return "not-merged-to-default"
     return "clean+merged+idle"
 
