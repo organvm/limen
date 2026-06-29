@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-06-29T22:36:00Z",
+  "generated_utc": "2026-06-29T22:45:00Z",
   "receipts": [
     {
       "branch": "limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e",
@@ -352,6 +352,33 @@
       "score_discount": 20,
       "status": "private_patch_preserved",
       "unique_commits_vs_origin_main": 6,
+      "worktree_ahead_behind_remote": "0/0"
+    },
+    {
+      "base_branch": "origin/main",
+      "base_head": "8af7e2103c0526c6f4d120f729fc125a40a8a554",
+      "branch": "work/student-email-d2l-support-20260629",
+      "changed_paths": [
+        "docs/D2L-STUDENT-EMAIL-SUPPORT.md",
+        "student_email_support.py",
+        "tests/test_student_email_support.py"
+      ],
+      "classification": "remote branch preserves committed head; origin/main range private patch preserved",
+      "evidence_updated_utc": "2026-06-29T22:45:00Z",
+      "head": "01ff1af3a8d792200151b5b52a0634c618e0bdeb",
+      "lane": "owner-blocker",
+      "next_action": "Committed branch head is preserved on origin/work/student-email-d2l-support-20260629 with ahead/behind 0/0. The private patch preserves the origin/main..HEAD commit range. Review, merge, supersede, or abandon under an owner packet; reclaim the local checkout only after operator acceptance.",
+      "private_patch": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T224500Z-student-email-d2l-support-20260629/origin-main-range.patch",
+      "private_patch_bytes": 16724,
+      "private_patch_sha256": "95be3c4bed74349e283837afdaf344fef7cfee54633074ae9b589c00426a5c61",
+      "private_receipt": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T224500Z-student-email-d2l-support-20260629/receipt.json",
+      "repo": "organvm/relationship-pipeline",
+      "remote_branch": "origin/work/student-email-d2l-support-20260629",
+      "remote_head": "01ff1af3a8d792200151b5b52a0634c618e0bdeb",
+      "root": "student-email-d2l-support-20260629",
+      "score_discount": 20,
+      "status": "private_patch_preserved",
+      "unique_commits_vs_origin_main": 1,
       "worktree_ahead_behind_remote": "0/0"
     }
   ],
