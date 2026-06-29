@@ -1,6 +1,6 @@
 # Dispatch Health
 
-Generated: `2026-06-29T00:04:36+00:00`
+Generated: `2026-06-29T03:28:08+00:00`
 
 Status: `blocked`
 
@@ -16,10 +16,10 @@ Status: `blocked`
 - Plist KeepAlive: `True`; RunAtLoad: `True`.
 - Plist LIMEN_ROOT: `/Users/4jp/Workspace/limen`.
 - Plist LIMEN_DISPATCH_ASYNC: `0`.
-- Loaded launchd state: `running` pid `24368`.
+- Loaded launchd state: `running` pid `1656`.
 - Loaded LIMEN_ROOT: `/Users/4jp/Workspace/limen`.
-- Loaded LIMEN_DISPATCH_ASYNC: `None`.
-- Watchdog dry-run healthy: `True`; `[watchdog] 2026-06-29T00:04:36.418090+00:00 HEALTHY sig=healthy`.
+- Loaded LIMEN_DISPATCH_ASYNC: `0`.
+- Watchdog dry-run healthy: `True`; `[watchdog] 2026-06-29T03:28:08.871460+00:00 HEALTHY sig=healthy`.
 
 ## Async Dispatch
 
@@ -31,15 +31,14 @@ Status: `blocked`
 
 - Live root: `~/Workspace/limen`.
 - Branch: `feature/ORG-artist-organ-face-0628`; status `## feature/ORG-artist-organ-face-0628...origin/feature/ORG-artist-organ-face-0628`.
-- HEAD: `f347c4dacb08ece9670509dee49a9179eea74c48`.
-- origin/main: `dc320f2f98e7a326861783b145c18e272f1ac5dc`.
-- Matches origin/main: `False`; ahead `2` behind `16`.
-- Dirty entries: `5`.
-  - `container/launchd/com.user.netmeter.plist`
-  - `scripts/netmode.sh`
+- HEAD: `838af6a9468d406c79c5a4cf5976bbf64bfa9dbe`.
+- origin/main: `a6fcb51ffd9d4c1ffb0f165c6b76bf6b564fddbe`.
+- Matches origin/main: `False`; ahead `3` behind `17`.
+- Dirty entries: `4`.
+  - `ianva/scripts/ianva-serve.sh`
+  - `institutio/governance/parameters.yaml`
+  - `scripts/route.py`
   - `tasks.yaml`
-  - `organs/health/`
-  - `organs/media/`
 
 ## Verified Worktree
 
@@ -49,9 +48,8 @@ Status: `blocked`
 
 ## Blockers
 
-- `live-root-not-at-origin-main`: live root branch feature/ORG-artist-organ-face-0628 head f347c4dacb08 differs from origin/main dc320f2f98e7.
-- `live-root-dirty`: live root has 5 dirty entries.
-- `heartbeat-loaded-env-drift`: plist LIMEN_DISPATCH_ASYNC='0', loaded=None.
+- `live-root-not-at-origin-main`: live root branch feature/ORG-artist-organ-face-0628 head 838af6a9468d differs from origin/main a6fcb51ffd9d.
+- `live-root-dirty`: live root has 4 dirty entries.
 
 ## Commands
 
