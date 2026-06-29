@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-06-28T16:50:46Z",
+  "generated_utc": "2026-06-29T17:01:50Z",
   "receipts": [
     {
       "branch": "limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e",
@@ -224,6 +224,68 @@
       "root": "resolve-organvm-i-theoria-.github-459-1ade",
       "score_discount": 35,
       "status": "history_mismatch_patch_preserved"
+    },
+    {
+      "branch": "work/mirror-mirror-avatar-types-20260629",
+      "classification": "open PR preserves local worktree head",
+      "evidence_updated_utc": "2026-06-29T17:01:50Z",
+      "head": "99fdd8d8b49e8a57022e6eec52b706655e973403",
+      "lane": "remote-pr-open",
+      "local_verification": [
+        "npm test (230 passed)",
+        "npm run build",
+        "npm run lint (0 errors; existing warnings remain)"
+      ],
+      "merge_state": "CLEAN",
+      "next_action": "No local-only source preservation remains. GitHub PR #87 is OPEN, its head OID equals the preserved worktree HEAD, local tests/build/lint passed, and GitHub CI Lint/build/test passed. Review and merge or supersede the PR; reclaim local checkout only after normal operator acceptance.",
+      "pr_draft": false,
+      "pr_failed_checks": 0,
+      "pr_number": 87,
+      "pr_state": "OPEN",
+      "pr_success_checks": 1,
+      "pr_url": "https://github.com/organvm/mirror-mirror/pull/87",
+      "repo": "organvm/mirror-mirror",
+      "root": "mirror-mirror",
+      "score_discount": 35,
+      "status": "open_pr_preserved"
+    },
+    {
+      "branch": "work/invisible-ledger-trial-followups-20260629",
+      "classification": "open PR preserves local worktree head",
+      "evidence_updated_utc": "2026-06-29T17:01:50Z",
+      "head": "f027ffeb467cc951e27213f79107cd4ef0973795",
+      "lane": "remote-pr-open",
+      "local_verification": [
+        "npm test (159 passed)",
+        "npm run build",
+        "npm run lint (0 errors; existing warnings remain)"
+      ],
+      "merge_state": "UNSTABLE",
+      "next_action": "No local-only source preservation remains. GitHub PR #76 is OPEN and preserves the two unmerged follow-up commits from the old feat/trial-signup-flow worktree plus the current-main clamp fix. Local tests/build/lint passed; GitHub CI was still in progress when recorded. Review CI and merge or supersede the PR; reclaim local checkout only after normal operator acceptance.",
+      "pr_draft": false,
+      "pr_failed_checks": 0,
+      "pr_number": 76,
+      "pr_state": "OPEN",
+      "pr_success_checks": 0,
+      "pr_url": "https://github.com/organvm/the-invisible-ledger/pull/76",
+      "repo": "organvm/the-invisible-ledger",
+      "root": "the-invisible-ledger",
+      "score_discount": 35,
+      "status": "open_pr_preserved"
+    },
+    {
+      "branch": "work/triptych-story",
+      "classification": "superseded by successor branch",
+      "evidence_updated_utc": "2026-06-29T17:01:50Z",
+      "head": "0a922a9ac3c668ab8f1698649deb86dc82b17975",
+      "lane": "remote-superseded",
+      "next_action": "No separate PR needed for this branch. The local worktree head is an ancestor of the pushed successor branch origin/work/triptych-media-offload-20260629, which adds the visual media canon lineage receipts. Reclaim only after normal operator acceptance; use the successor branch for continued triptych work.",
+      "repo": "organvm/portvs",
+      "root": "triptych-story",
+      "score_discount": 35,
+      "status": "superseded_by_successor_branch",
+      "successor_branch": "origin/work/triptych-media-offload-20260629",
+      "successor_head": "0f59f3a18cc32365cfee28e4df3b1e6e9e92eacf"
     }
   ],
   "schema": 1
