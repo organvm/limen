@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-06-29T22:28:46Z",
+  "generated_utc": "2026-06-29T22:36:00Z",
   "receipts": [
     {
       "branch": "limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e",
@@ -314,6 +314,44 @@
       "root": "triptych-media-offload-20260629",
       "score_discount": 20,
       "status": "private_patch_preserved",
+      "worktree_ahead_behind_remote": "0/0"
+    },
+    {
+      "base_branch": "origin/main",
+      "base_head": "8af7e2103c0526c6f4d120f729fc125a40a8a554",
+      "branch": "work/maddie-boundary-20260629",
+      "changed_paths": [
+        "claim_evidence_pack.py",
+        "dialogue_persona.py",
+        "docs/BOUNDARY-VOICE-NOTE-PROCESS.md",
+        "docs/CLAIM-EVIDENCE-PACK.md",
+        "docs/DIALOGUE-PERSONA-PROCESS.md",
+        "docs/EXCHANGE-ARC-REVIEW-PROCESS.md",
+        "docs/VLTIMA-CROSS-REPO-INVENTORY.md",
+        "docs/VLTIMA-ENTITY-PROFILE.md",
+        "exchange_arc_review.py",
+        "tests/test_claim_evidence_pack.py",
+        "tests/test_dialogue_persona.py",
+        "tests/test_exchange_arc_review.py",
+        "tests/test_vltima_profile.py",
+        "vltima_profile.py"
+      ],
+      "classification": "remote branch preserves committed head; origin/main range private patch preserved",
+      "evidence_updated_utc": "2026-06-29T22:36:00Z",
+      "head": "c67c6272381eab73a1089d0329ada08fc20b4e44",
+      "lane": "owner-blocker",
+      "next_action": "Committed branch head is preserved on origin/work/maddie-boundary-20260629 with ahead/behind 0/0. The private patch preserves the origin/main..HEAD commit range. Review, merge, supersede, or abandon under an owner packet; reclaim the local checkout only after operator acceptance.",
+      "private_patch": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T223600Z-maddie-boundary-20260629/origin-main-range.patch",
+      "private_patch_bytes": 195734,
+      "private_patch_sha256": "d83c2ab0ffa3e9faa74ebc748f9a7fca47c66684b6cb753d723c73f23507c1e2",
+      "private_receipt": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T223600Z-maddie-boundary-20260629/receipt.json",
+      "repo": "organvm/relationship-pipeline",
+      "remote_branch": "origin/work/maddie-boundary-20260629",
+      "remote_head": "c67c6272381eab73a1089d0329ada08fc20b4e44",
+      "root": "maddie-boundary-20260629",
+      "score_discount": 20,
+      "status": "private_patch_preserved",
+      "unique_commits_vs_origin_main": 6,
       "worktree_ahead_behind_remote": "0/0"
     }
   ],
