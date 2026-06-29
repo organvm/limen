@@ -62957,7 +62957,7 @@ tasks:
   - timestamp: '2026-06-29T06:55:58.108874Z'
     agent: opencode
     session_id: reserve
-    status: dispatched
+    status: done
     output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-organvm-session-meta-docs-0629
   title: Real usage docs for organvm/session-meta
@@ -63123,12 +63123,12 @@ tasks:
   - timestamp: '2026-06-29T06:59:05Z'
     agent: opencode
     session_id: cli
-    status: done
-    output: 'CI already green (all 6 checks pass on HEAD). Wired scripts/verify-whole.sh
-      (the canonical repo predicate from AGENTS.md) as a new "verify" CI job in
-      .github/workflows/ci.yml — catches merge-policy regression, agent-doc/state
-      vocabulary drift, workflow YAML parse errors, and diff-hygiene violations
-      that no existing check covers.'
+    status: dispatched
+    output: "CI already green (all 6 checks pass on HEAD). Wired scripts/verify-whole.sh\
+      \ (the canonical repo predicate from AGENTS.md) as a new \"verify\" CI job in\
+      \ .github/workflows/ci.yml \u2014 catches merge-policy regression, agent-doc/state\
+      \ vocabulary drift, workflow YAML parse errors, and diff-hygiene violations\
+      \ that no existing check covers."
 - id: GEN-organvm-limen-docs-0629
   title: Real usage docs for organvm/limen
   repo: organvm/limen
