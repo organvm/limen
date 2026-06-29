@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/scripts/hooks/lint-edited-file.sh"
+            "command": "bash -lc 'ROOT=\"${CODEX_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; CLAUDE_PROJECT_DIR=\"$ROOT\" \"$ROOT/scripts/hooks/lint-edited-file.sh\"'"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/scripts/hooks/session-orient.sh"
+            "command": "bash -lc 'ROOT=\"${CODEX_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; CLAUDE_PROJECT_DIR=\"$ROOT\" \"$ROOT/scripts/hooks/session-orient.sh\"'"
           }
         ]
       }

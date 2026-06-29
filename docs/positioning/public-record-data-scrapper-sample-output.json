@@ -1,0 +1,79 @@
+{
+  "_doc": "Public-safe fictional sample for the August inbound proof page. No real debtor, contact, phone, email, premium-source row, or live prospect is included.",
+  "sample": true,
+  "generated_at": "2026-06-29T00:00:00Z",
+  "product": "50-State UCC Public-Records Intelligence Platform",
+  "records": [
+    {
+      "record_id": "sample-ucc-fl-001",
+      "state": "FL",
+      "filing_type": "UCC-1",
+      "filing_age_days": 3,
+      "debtor": {
+        "name": "REDACTED HVAC SERVICES LLC",
+        "city": "Tampa",
+        "state": "FL"
+      },
+      "secured_party": {
+        "type": "equipment_finance",
+        "name": "REDACTED CAPITAL PARTNER"
+      },
+      "public_signals": {
+        "filing_freshness": "current_week",
+        "entity_match": "high",
+        "industry_hint": "home_services",
+        "multi_source_enrichment": true
+      },
+      "score": {
+        "financing_likelihood": 87,
+        "health_grade": "B",
+        "confidence": "high"
+      },
+      "recommended_action": "same-day ISO review",
+      "delivery": {
+        "feed": "daily",
+        "formats": [
+          "dashboard",
+          "REST API",
+          "CSV"
+        ]
+      }
+    },
+    {
+      "record_id": "sample-ucc-tx-002",
+      "state": "TX",
+      "filing_type": "UCC-1",
+      "filing_age_days": 11,
+      "debtor": {
+        "name": "REDACTED LOGISTICS GROUP LLC",
+        "city": "Dallas",
+        "state": "TX"
+      },
+      "secured_party": {
+        "type": "working_capital",
+        "name": "REDACTED FUNDING COMPANY"
+      },
+      "public_signals": {
+        "filing_freshness": "recent",
+        "entity_match": "medium",
+        "industry_hint": "transportation",
+        "multi_source_enrichment": true
+      },
+      "score": {
+        "financing_likelihood": 74,
+        "health_grade": "C",
+        "confidence": "medium"
+      },
+      "recommended_action": "route to broker queue",
+      "delivery": {
+        "feed": "daily",
+        "formats": [
+          "dashboard",
+          "REST API",
+          "CSV"
+        ]
+      }
+    }
+  ]
+}
+

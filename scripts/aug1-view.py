@@ -31,6 +31,13 @@ DEADLINE = date(2026, 8, 1)
 WEEK_TARGET_CENTS = 1_000_000          # $10,000.00 / week
 LIFE_STALE_DAYS = 7                    # the life leg must be logged recently to count
 REVENUE_LEVER_IDS = ("L-REVENUE-ACCT", "L-PAYRAIL-INDIVIDUAL")
+PIPELINE_EVENT_TYPES = (
+    "visit",
+    "qualified_inbound",
+    "reply",
+    "call",
+    "paid_trial",
+)
 
 # PRIVACY BOUNDARY: this file is public. It reads ONLY booleans the private life file self-attests
 # (ev_in_progress, on_track) — never a streak count, never a date. No live recovery number or
@@ -52,10 +59,30 @@ def _parse_day(s):
         return None
 
 
+def build_pipeline(events, cash_cents):
+    counts = {key: 0 for key in PIPELINE_EVENT_TYPES}
+    for event in events if isinstance(events, list) else []:
+        if not isinstance(event, dict):
+            continue
+        kind = str(event.get("type") or "")
+        if kind in counts:
+            counts[kind] += 1
+    return {
+        "visits": counts["visit"],
+        "qualified_inbound": counts["qualified_inbound"],
+        "replies": counts["reply"],
+        "calls": counts["call"],
+        "paid_trials": counts["paid_trial"],
+        "cash_cents": cash_cents,
+        "event_count": sum(counts.values()),
+    }
+
+
 def build_view():
     today = date.today()
     received = _load(STATE / "revenue-received.json", {}).get("received", []) or []
     engagements = _load(STATE / "engagements.json", {}).get("engagements", []) or []
+    pipeline_events = _load(STATE / "pipeline-scoreboard.json", {}).get("events", []) or []
     open_levers = _load(LEVERS_FILE, {}).get("levers", []) or []
     life = _load(LIFE_FILE, None)
 
@@ -119,6 +146,7 @@ def build_view():
             "received_count": len(received),
             "engagements": len(engagements),
             "signed": len(signed),
+            "pipeline": build_pipeline(pipeline_events, total_cents),
         },
     }
 
@@ -144,6 +172,18 @@ def render_html(v):
                 f'code. Your hours go only to the two acts no machine can do: open a rail, talk to a '
                 f'buyer.</div></div>') if act and not is_true else ""
     led = v["ledger"]
+    pipe = led.get("pipeline", {})
+    pipeline_card = f"""<div class="card">
+   <div class="lab">August pipeline scoreboard</div>
+   <div class="score">
+    <div><span>{int(pipe.get('visits') or 0)}</span><b>visits</b></div>
+    <div><span>{int(pipe.get('qualified_inbound') or 0)}</span><b>qualified inbound</b></div>
+    <div><span>{int(pipe.get('replies') or 0)}</span><b>replies</b></div>
+    <div><span>{int(pipe.get('calls') or 0)}</span><b>calls</b></div>
+    <div><span>{int(pipe.get('paid_trials') or 0)}</span><b>paid trials</b></div>
+    <div><span>${int(pipe.get('cash_cents') or 0)/100:,.0f}</span><b>cash</b></div>
+   </div>
+  </div>"""
     return f"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="30"><title>LIMEN — Aug-1 gate</title>
@@ -162,6 +202,9 @@ def render_html(v):
  td.m{{width:22px;font-size:18px;font-weight:800;color:#8a93a6}}
  .d{{color:#8a93a6;font-size:12px;margin-top:2px}}
  .row{{display:flex;gap:26px;flex-wrap:wrap}} .stat .k{{color:#8a93a6;font-size:12px}} .stat .n{{font-size:24px;font-weight:700}}
+ .score{{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px}}
+ .score div{{border:1px solid #21262d;border-radius:8px;padding:10px;background:#0d1117}}
+ .score span{{display:block;font-size:23px;font-weight:800}} .score b{{display:block;color:#8a93a6;font-size:11px;font-weight:500}}
  .foot{{color:#6b7280;font-size:11px;margin-top:14px;text-align:center}}
 </style></head><body><div class="wrap">
  <h1>LIMEN — the Aug-1 gate</h1>
@@ -171,6 +214,7 @@ def render_html(v):
  {act_card}
  <div class="card"><div class="lab">the five legs</div>
    <table><tbody>{leg_rows}</tbody></table></div>
+ {pipeline_card}
  <div class="card row">
    <div class="stat"><div class="k">received to date</div><div class="n">${led['received_total_cents']/100:,.0f}</div></div>
    <div class="stat"><div class="k">this week</div><div class="n">${led['trailing7_cents']/100:,.0f}<span style="font-size:13px;color:#8a93a6">/10k</span></div></div>

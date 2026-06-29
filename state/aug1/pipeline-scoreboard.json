@@ -1,0 +1,16 @@
+{
+  "_doc": "August pipeline event ledger. Visits, qualified inbound, replies, calls, and paid trials are counted from events here. Cleared cash is counted only from state/aug1/revenue-received.json. Do not store personal contact data, private customer data, secrets, or raw emails in this file.",
+  "period": {
+    "name": "August pipeline",
+    "starts": "2026-06-29",
+    "deadline": "2026-08-01"
+  },
+  "event_types": {
+    "visit": "A real public proof-page or inbound-surface visit.",
+    "qualified_inbound": "A buyer message that meets the qualification gate.",
+    "reply": "A real human reply sent or received.",
+    "call": "A qualified buyer call scheduled or completed.",
+    "paid_trial": "A paid pilot, trial feed, audit, or scoped setup."
+  },
+  "events": []
+}
