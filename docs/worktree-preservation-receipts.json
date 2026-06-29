@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-06-29T22:45:00Z",
+  "generated_utc": "2026-06-29T22:55:00Z",
   "receipts": [
     {
       "branch": "limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e",
@@ -379,6 +379,38 @@
       "score_discount": 20,
       "status": "private_patch_preserved",
       "unique_commits_vs_origin_main": 1,
+      "worktree_ahead_behind_remote": "0/0"
+    },
+    {
+      "base_branch": "origin/main",
+      "base_head": "7ecdd65a529802a581d173b4cb390d19bcb20e55",
+      "branch": "codex/network-substrate-healing-20260628",
+      "changed_path_count": 51,
+      "classification": "remote branch preserves committed head; origin/main range private patch preserved",
+      "evidence_updated_utc": "2026-06-29T22:55:00Z",
+      "head": "5ba52e5d06c1dffc9f9adc3e717db1b5d29b6cbf",
+      "lane": "owner-blocker",
+      "next_action": "Committed branch head is preserved on origin/codex/network-substrate-healing-20260628 with ahead/behind 0/0. The private patch preserves the origin/main..HEAD commit range. Review, merge, supersede, or abandon under an owner packet; reclaim the local checkout only after operator acceptance.",
+      "notable_changed_paths": [
+        "tasks.yaml",
+        "cli/src/limen/worktree_debt.py",
+        "cli/src/limen/worktree_roots.py",
+        "scripts/session-lifecycle-pressure.py",
+        "scripts/start-worktree-session.sh",
+        "docs/lanes/network-substrate.md",
+        "docs/overnight-autonomy.md"
+      ],
+      "private_patch": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T225500Z-limen-network-substrate-20260628/origin-main-range.patch",
+      "private_patch_bytes": 94210,
+      "private_patch_sha256": "f4976fbcd2e9fe94fb6396c01813bdffd4f72567c92f9f510557f41b117b2d32",
+      "private_receipt": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T225500Z-limen-network-substrate-20260628/receipt.json",
+      "repo": "organvm/limen",
+      "remote_branch": "origin/codex/network-substrate-healing-20260628",
+      "remote_head": "5ba52e5d06c1dffc9f9adc3e717db1b5d29b6cbf",
+      "root": "limen-network-substrate-20260628",
+      "score_discount": 20,
+      "status": "private_patch_preserved",
+      "unique_commits_vs_origin_main": 3,
       "worktree_ahead_behind_remote": "0/0"
     }
   ],
