@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-06-29T17:22:55Z",
+  "generated_utc": "2026-06-29T22:28:46Z",
   "receipts": [
     {
       "branch": "limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e",
@@ -287,6 +287,34 @@
       "status": "superseded_by_successor_branch",
       "successor_branch": "origin/work/triptych-media-offload-20260629",
       "successor_head": "0f59f3a18cc32365cfee28e4df3b1e6e9e92eacf"
+    },
+    {
+      "branch": "work/triptych-media-offload-20260629",
+      "classification": "remote branch preserves committed head; dirty owner-state private patch preserved",
+      "dirty_paths": [
+        "incubator/triptych-video-canon/INCUBATION.md",
+        "incubator/triptych-video-canon/README.md",
+        "incubator/triptych-video-canon/UNIFICATION.md",
+        "incubator/triptych-video-canon/prompt_lineage.py",
+        "incubator/triptych-video-canon/IG_TODAY_2026-06-29.md",
+        "incubator/triptych-video-canon/VISUAL_FORM_CANON.md",
+        "incubator/triptych-video-canon/remote_repo_census.py"
+      ],
+      "evidence_updated_utc": "2026-06-29T22:28:46Z",
+      "head": "0f59f3a18cc32365cfee28e4df3b1e6e9e92eacf",
+      "lane": "owner-blocker",
+      "next_action": "Committed branch head is preserved on origin/work/triptych-media-offload-20260629 with ahead/behind 0/0. The private patch preserves the local dirty owner-state. Do not reclaim or delete this worktree yet; create a narrower owner packet if those local deltas should be committed, preserved elsewhere, or abandoned.",
+      "private_patch": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T222846Z-triptych-media-offload-20260629/patch.diff",
+      "private_patch_bytes": 54995,
+      "private_patch_sha256": "f57ab5cf27434dd17e1817e59fd525a7a0614581888ec8aad2f017e6e8965217",
+      "private_receipt": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T222846Z-triptych-media-offload-20260629/receipt.json",
+      "repo": "organvm/portvs",
+      "remote_branch": "origin/work/triptych-media-offload-20260629",
+      "remote_head": "0f59f3a18cc32365cfee28e4df3b1e6e9e92eacf",
+      "root": "triptych-media-offload-20260629",
+      "score_discount": 20,
+      "status": "private_patch_preserved",
+      "worktree_ahead_behind_remote": "0/0"
     }
   ],
   "schema": 1

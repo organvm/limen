@@ -22,10 +22,10 @@ The unique work remains preserved on the remote branches and open draft PRs.
 
 2026-06-29 crash-resume scan:
 
-- `python3 scripts/worktree-debt.py --json`: 26 roots, 0 debt-bearing roots, cap 12.
-- Current class mix: 11 active roots inside the grace window, 5 open-PR remote-preserved
-  roots, 3 documented residues, 2 owner-blocker roots, 3 remote-merged roots,
-  and 2 remote-superseded roots.
+- `python3 scripts/worktree-debt.py --json`: 34 roots, 0 debt-bearing roots, cap 12.
+- Current class mix: 18 active roots inside their grace windows, 5 open-PR
+  remote-preserved roots, 3 documented residues, 3 owner-blocker roots, 3
+  remote-merged roots, and 2 remote-superseded roots.
 - `mirror-mirror` is now preserved by merged PR
   [#87](https://github.com/organvm/mirror-mirror/pull/87) at
   `99fdd8d8b49e8a57022e6eec52b706655e973403`; local `npm test`, `npm run build`,
@@ -42,6 +42,11 @@ The unique work remains preserved on the remote branches and open draft PRs.
   `0a922a9ac3c668ab8f1698649deb86dc82b17975` is an ancestor of the pushed
   successor branch `origin/work/triptych-media-offload-20260629` at
   `0f59f3a18cc32365cfee28e4df3b1e6e9e92eacf`.
+- `triptych-media-offload-20260629` has its committed branch head preserved:
+  local `HEAD` and `origin/work/triptych-media-offload-20260629` both equal
+  `0f59f3a18cc32365cfee28e4df3b1e6e9e92eacf`, with ahead/behind `0/0`. Its
+  dirty incubator owner-state is preserved as a private patch receipt and is
+  therefore classified as an owner blocker, not reclaimable residue.
 - No local worktree reclaim or deletion was performed in this pass because active
   worktrees remain open by operator instruction. The pass only preserved or
   recorded owner state.
@@ -128,6 +133,7 @@ That is not enough for a fully automatic lifecycle.
 | `mirror-mirror` | `organvm/mirror-mirror` | merged PR preserved | branch `work/mirror-mirror-avatar-types-20260629`; local dirty avatar typing cleanup from the crash-resume worktree | PR [#87](https://github.com/organvm/mirror-mirror/pull/87) is `MERGED`; local HEAD and PR head OID both `99fdd8d8b49e8a57022e6eec52b706655e973403`; `npm test` passed 230 tests; `npm run build` passed; `npm run lint` exited 0 with existing warnings; GitHub CI passed `Lint, build & test` before merge | remote-merged receipt; no local-only source preservation remains | Reclaim local checkout only after operator acceptance; no code PR remains to merge. |
 | `the-invisible-ledger` | `organvm/the-invisible-ledger` | open PR remote-preserved | branch `work/invisible-ledger-trial-followups-20260629`; preserves the two unique follow-up commits left after old `feat/trial-signup-flow` PR #37 plus current-main clamp and typecheck fixes | PR [#76](https://github.com/organvm/the-invisible-ledger/pull/76) is `OPEN`; local HEAD and PR head OID both `fb131bd2cf3d8b0417ae690cbe287c0f3906597d`; `npm run typecheck` passed; `npm test` passed 159 tests after fixing webhook event limit clamping; `npm run build` passed; `npm run lint` exited 0 with existing warnings; GitHub CI docker, build/test/lint, and Node 20/22 matrix checks passed | remote-pr-open receipt; no local-only source preservation remains | Review and merge PR #76, or supersede it with a named successor. Reclaim local checkout only after operator acceptance. |
 | `triptych-story` | `organvm/portvs` | superseded by pushed successor branch | branch `work/triptych-story`; predecessor triptych incubator lane | local HEAD `0a922a9ac3c668ab8f1698649deb86dc82b17975` is an ancestor of `origin/work/triptych-media-offload-20260629` at `0f59f3a18cc32365cfee28e4df3b1e6e9e92eacf`; successor branch adds the visual media canon lineage receipts | remote-superseded receipt; no separate PR needed for this predecessor branch | Continue triptych work from `work/triptych-media-offload-20260629`. Reclaim `triptych-story` only after operator acceptance. |
+| `triptych-media-offload-20260629` | `organvm/portvs` | owner blocker; remote branch head preserved and dirty owner-state privately patched | branch `work/triptych-media-offload-20260629`; successor triptych media/offload lane | local HEAD and `origin/work/triptych-media-offload-20260629` both equal `0f59f3a18cc32365cfee28e4df3b1e6e9e92eacf`; ahead/behind `0/0`; dirty paths are `incubator/triptych-video-canon/INCUBATION.md`, `README.md`, `UNIFICATION.md`, `prompt_lineage.py`, `IG_TODAY_2026-06-29.md`, `VISUAL_FORM_CANON.md`, and `remote_repo_census.py`; private patch SHA-256 `f57ab5cf27434dd17e1817e59fd525a7a0614581888ec8aad2f017e6e8965217` | owner-blocker receipt; committed head is remote-preserved, but local dirty owner-state still needs an owner decision | Create a narrower Portvs packet to commit, patch-preserve elsewhere, or abandon the dirty incubator deltas. Reclaim only after operator acceptance. |
 | `bld-domus-genoma-ci-23a9` | `organvm/domus-genoma` | local checkout removed; draft PR open | branch `limen/bld-domus-genoma-ci-23a9`; likely build/CI task; no exact task slug in board | clean before removal; local `HEAD` matched fetched PR head `c53a571`; PR [#144](https://github.com/organvm/domus-genoma/pull/144); untracked CI draft was rebased onto current `origin/master`; YAML parse passed; `git diff --check origin/master..HEAD` passed; `just --dry-run check-all` now shows `shfmt -d` and no `shfmt -w`; `just fmt-check` passed; full local `just check-all` exposed pre-existing BATS failures | remote PR preserved; no local debt root remains | Review PR CI and the known pre-existing BATS blockers, then merge or supersede by named branch/PR. Recreate a local worktree from the branch only if needed. |
 | `bld-media-ark-tests-2698` | `organvm/media-ark` | local checkout removed; draft PR open | branch `limen/bld-media-ark-tests-2698`; likely tests task; no exact task slug in board | clean before removal; local `HEAD` matched fetched PR head `b7509dc`; PR [#50](https://github.com/organvm/media-ark/pull/50); stale untracked test draft was ported into `tests/test_process_captures_core.py`; `npm test` passed 98 tests; `npm run release:verify` passed | remote PR preserved; no local debt root remains | Review and merge the capture/platform test-contract PR, or supersede by a named successor that preserves this coverage. Recreate a local worktree from the branch only if needed. |
 | `bld-mirror-mirror-harden-350f` | `organvm/mirror-mirror` | merged PR preserved | branch `limen/bld-mirror-mirror-harden-350f`; likely hardening task; no exact task slug in board | clean; PR [#67](https://github.com/organvm/mirror-mirror/pull/67) is `MERGED`; live `headRefOid` `f44da8e936d6d77fe9869c433372a697408f8491` equals local HEAD; CI `Lint, build & test` passed before merge; exact merged receipt recorded in `docs/worktree-preservation-receipts.json` | remote-merged receipt; no local source debt remains | Reclaim the local checkout only after normal operator acceptance; no code PR remains to merge. |

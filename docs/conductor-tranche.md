@@ -1,8 +1,8 @@
 # Conductor Tranche
 
-Generated: `2026-06-29T22:17:40+00:00`
+Generated: `2026-06-29T22:32:15+00:00`
 
-Summary: `tranche-triptych-media-offload-20260629` -> `triptych-media-offload-20260629` (`remote-proof`); stop before: Stop before deletion, force-push, merge, or owner-repo source edits unless a narrower owner packet names the repo, branch, predicate, and receipt.
+Summary: `tranche-maddie-boundary-20260629` -> `maddie-boundary-20260629` (`remote-proof`); stop before: Stop before deletion, force-push, merge, or owner-repo source edits unless a narrower owner packet names the repo, branch, predicate, and receipt.
 
 ## Cadence Contract
 
@@ -16,21 +16,21 @@ Summary: `tranche-triptych-media-offload-20260629` -> `triptych-media-offload-20
 
 | Field | Value |
 |---|---|
-| Packet | `tranche-triptych-media-offload-20260629` |
-| Selected path | `triptych-media-offload-20260629` |
+| Packet | `tranche-maddie-boundary-20260629` |
+| Selected path | `maddie-boundary-20260629` |
 | Kind | `worktree` |
 | Lane | `remote-proof` |
-| Score | `58` |
+| Score | `52` |
 | Agent fit | `codex first; opencode/jules after packetization` |
-| Attack index generated | `2026-06-29T22:17:32+00:00` |
-| Ranked paths read | `41` |
-| Skipped family/human-gate/parked/observe/auth paths | `session_lifecycle`, `dispatch-heartbeat-substrate-unhealthy`, `worktree_lifecycle`, `github_review`, `github-app-limen-bot-not-wired`, `github-consolidation-collisions`, `agent_coordination`, `technical_debt_ci`, `mirror-mirror`, `the-invisible-ledger`, `local-lifecycle-disk-pressure`, `convergence_corpus`, `gen-organvm-universal-mail--automation-test-coverage-0625-151e`, `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f`, `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b`, `triptych-story`, `cloud-runtime-endpoint-unconfigured`, `uncategorized`, `cifix-organvm-i-theoria-hierarchia-mundi-3145`, `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2`, `bld-mirror-mirror-harden-350f`, `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38`, `cloud-credential-handles-unconfigured`, `credential-codex-auth-sessions`, `resolve-organvm-i-theoria-.github-459-1ade`, `auth_credentials`, `cifix-organvm-i-theoria-conversation-corpus-engine-f02e`, `discover-organvm-kerygma-profiles-6c74`, `bld-my--father-mother-harden-44b2`, `bld-promptscope-next-rev-3fde` |
+| Attack index generated | `2026-06-29T22:32:12+00:00` |
+| Ranked paths read | `46` |
+| Skipped family/human-gate/parked/observe/auth paths | `session_lifecycle`, `dispatch-heartbeat-substrate-unhealthy`, `worktree_lifecycle`, `github_review`, `github-app-limen-bot-not-wired`, `github-consolidation-collisions`, `agent_coordination`, `technical_debt_ci`, `mirror-mirror`, `the-invisible-ledger`, `local-lifecycle-disk-pressure`, `convergence_corpus`, `gen-organvm-universal-mail--automation-test-coverage-0625-151e`, `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f`, `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b`, `triptych-story`, `capfill-agy-20260629-08-f8b9`, `capfill-agy-20260629-09-3b18`, `capfill-agy-20260629-10-383d`, `capfill-agy-20260629-10-774f`, `cloud-runtime-endpoint-unconfigured`, `uncategorized`, `cifix-organvm-i-theoria-hierarchia-mundi-3145`, `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2`, `bld-mirror-mirror-harden-350f`, `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38`, `cloud-credential-handles-unconfigured`, `credential-codex-auth-sessions`, `resolve-organvm-i-theoria-.github-459-1ade`, `auth_credentials`, `cifix-organvm-i-theoria-conversation-corpus-engine-f02e`, `discover-organvm-kerygma-profiles-6c74`, `bld-my--father-mother-harden-44b2`, `bld-promptscope-next-rev-3fde` |
 
 ## Work Packet
 
-Purpose: Resolve `triptych-media-offload-20260629` to a preservation proof, owner blocker, remote/default proof, or documented non-source residue without deleting unique work.
+Purpose: Resolve `maddie-boundary-20260629` to a preservation proof, owner blocker, remote/default proof, or documented non-source residue without deleting unique work.
 
-Repo/worktree: Owner worktree `triptych-media-offload-20260629` under `~/Workspace/.limen-worktrees` plus Limen receipts.
+Repo/worktree: Owner worktree `maddie-boundary-20260629` under `~/Workspace/.limen-worktrees` plus Limen receipts.
 
 Allowed files:
 
