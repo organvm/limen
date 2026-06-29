@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-06-29T23:21:00Z",
+  "generated_utc": "2026-06-29T23:28:00Z",
   "receipts": [
     {
       "branch": "limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e",
@@ -112,6 +112,33 @@
       "untracked_roots": [
         "reports/"
       ]
+    },
+    {
+      "base_branch": "origin/master",
+      "base_head": "5699dd75194329e6d7b36f78091c39e08524ecba",
+      "branch": "work/universal-entry-20260629",
+      "classification": "remote branch preserves committed head; origin/master range private patch preserved",
+      "diff_check": {
+        "command": "git diff --check origin/master..HEAD",
+        "exit_code": 2,
+        "summary": "owner branch range has trailing whitespace in audit.py, dot_local/bin/executable_begin, and server/routes/api/install-script.ts"
+      },
+      "evidence_updated_utc": "2026-06-29T23:28:00Z",
+      "head": "b7c322609fb0443464620d235611f1946962477f",
+      "lane": "owner-blocker",
+      "next_action": "Committed branch head is preserved on origin/work/universal-entry-20260629 with ahead/behind 0/0. The private patch preserves the origin/master..HEAD commit range. Diff hygiene for the owner branch currently fails on trailing whitespace, so create a narrow owner packet to fix/retest, merge, supersede, or abandon; reclaim the local checkout only after operator acceptance.",
+      "private_patch": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T232800Z-universal-entry-20260629/origin-master-range.patch",
+      "private_patch_bytes": 40981,
+      "private_patch_sha256": "9b730eda46c32aeb54ee1c93dd7042b6d037e51d401625f5b9c5a5c171bf8e33",
+      "private_receipt": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T232800Z-universal-entry-20260629/receipt.json",
+      "repo": "organvm/domus-genoma",
+      "remote_branch": "origin/work/universal-entry-20260629",
+      "remote_head": "b7c322609fb0443464620d235611f1946962477f",
+      "root": "universal-entry-20260629",
+      "score_discount": 20,
+      "status": "private_patch_preserved",
+      "unique_commits_vs_origin_master": 3,
+      "worktree_ahead_behind_remote": "0/0"
     },
     {
       "branch": "limen/rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f",

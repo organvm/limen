@@ -1,8 +1,8 @@
 # Conductor Tranche
 
-Generated: `2026-06-29T23:26:29+00:00`
+Generated: `2026-06-29T23:31:08+00:00`
 
-Summary: `tranche-universal-entry-20260629` -> `universal-entry-20260629` (`remote-proof`); stop before: Stop before deletion, force-push, merge, or owner-repo source edits unless a narrower owner packet names the repo, branch, predicate, and receipt.
+Summary: `tranche-workstream-kickstart-20260629` -> `workstream-kickstart-20260629` (`remote-proof`); stop before: Stop before deletion, force-push, merge, or owner-repo source edits unless a narrower owner packet names the repo, branch, predicate, and receipt.
 
 ## Cadence Contract
 
@@ -16,21 +16,21 @@ Summary: `tranche-universal-entry-20260629` -> `universal-entry-20260629` (`remo
 
 | Field | Value |
 |---|---|
-| Packet | `tranche-universal-entry-20260629` |
-| Selected path | `universal-entry-20260629` |
+| Packet | `tranche-workstream-kickstart-20260629` |
+| Selected path | `workstream-kickstart-20260629` |
 | Kind | `worktree` |
 | Lane | `remote-proof` |
 | Score | `28` |
 | Agent fit | `codex first; opencode/jules after packetization` |
-| Attack index generated | `2026-06-29T23:26:24+00:00` |
-| Ranked paths read | `43` |
-| Skipped family/human-gate/parked/observe/auth paths | `session_lifecycle`, `dispatch-heartbeat-substrate-unhealthy`, `worktree_lifecycle`, `github_review`, `github-app-limen-bot-not-wired`, `github-consolidation-collisions`, `agent_coordination`, `technical_debt_ci`, `triptych-media-offload-20260629`, `mirror-mirror`, `the-invisible-ledger`, `local-lifecycle-disk-pressure`, `convergence_corpus`, `gen-organvm-universal-mail--automation-test-coverage-0625-151e`, `maddie-boundary-20260629`, `student-email-d2l-support-20260629`, `limen-network-substrate-20260628`, `limen-main-trench-20260628`, `warp-agent-routing-20260629`, `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f`, `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b`, `triptych-story`, `capfill-agy-20260629-09-3b18`, `capfill-agy-20260629-17-a911`, `cloud-runtime-endpoint-unconfigured`, `uncategorized`, `cifix-organvm-i-theoria-hierarchia-mundi-3145`, `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2`, `domus-quarantine-retire-20260629`, `bld-mirror-mirror-harden-350f`, `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38`, `photos-universe-20260629-182431`, `cloud-credential-handles-unconfigured`, `credential-codex-auth-sessions`, `resolve-organvm-i-theoria-.github-459-1ade`, `limen-rob-game-lane-20260628`, `auth_credentials`, `cifix-organvm-i-theoria-conversation-corpus-engine-f02e`, `discover-organvm-kerygma-profiles-6c74`, `bld-my--father-mother-harden-44b2`, `bld-promptscope-next-rev-3fde` |
+| Attack index generated | `2026-06-29T23:31:05+00:00` |
+| Ranked paths read | `42` |
+| Skipped family/human-gate/parked/observe/auth paths | `session_lifecycle`, `dispatch-heartbeat-substrate-unhealthy`, `worktree_lifecycle`, `github_review`, `github-app-limen-bot-not-wired`, `github-consolidation-collisions`, `agent_coordination`, `technical_debt_ci`, `triptych-media-offload-20260629`, `mirror-mirror`, `the-invisible-ledger`, `local-lifecycle-disk-pressure`, `convergence_corpus`, `gen-organvm-universal-mail--automation-test-coverage-0625-151e`, `maddie-boundary-20260629`, `student-email-d2l-support-20260629`, `limen-network-substrate-20260628`, `limen-main-trench-20260628`, `warp-agent-routing-20260629`, `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f`, `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b`, `triptych-story`, `capfill-agy-20260629-09-3b18`, `cloud-runtime-endpoint-unconfigured`, `uncategorized`, `cifix-organvm-i-theoria-hierarchia-mundi-3145`, `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2`, `domus-quarantine-retire-20260629`, `bld-mirror-mirror-harden-350f`, `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38`, `photos-universe-20260629-182431`, `universal-entry-20260629`, `cloud-credential-handles-unconfigured`, `credential-codex-auth-sessions`, `resolve-organvm-i-theoria-.github-459-1ade`, `limen-rob-game-lane-20260628`, `auth_credentials`, `cifix-organvm-i-theoria-conversation-corpus-engine-f02e`, `discover-organvm-kerygma-profiles-6c74`, `bld-my--father-mother-harden-44b2`, `bld-promptscope-next-rev-3fde` |
 
 ## Work Packet
 
-Purpose: Resolve `universal-entry-20260629` to a preservation proof, owner blocker, remote/default proof, or documented non-source residue without deleting unique work.
+Purpose: Resolve `workstream-kickstart-20260629` to a preservation proof, owner blocker, remote/default proof, or documented non-source residue without deleting unique work.
 
-Repo/worktree: Owner worktree `universal-entry-20260629` under `~/Workspace/.limen-worktrees` plus Limen receipts.
+Repo/worktree: Owner worktree `workstream-kickstart-20260629` under `~/Workspace/.limen-worktrees` plus Limen receipts.
 
 Allowed files:
 
