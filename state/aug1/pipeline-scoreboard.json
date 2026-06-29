@@ -12,5 +12,26 @@
     "call": "A qualified buyer call scheduled or completed.",
     "paid_trial": "A paid pilot, trial feed, audit, or scoped setup."
   },
+  "source_tags": {
+    "public-record-data-scrapper-proof": "Proof-page visits for the 50-state UCC public-records intelligence offer.",
+    "public-record-data-scrapper-sample": "Sample-output requests or views for the fictional/redacted UCC sample.",
+    "public-record-data-scrapper-contact": "Qualified inbound, replies, calls, or paid-trial events from the scraper contact path."
+  },
+  "scraper_inbound_contract": {
+    "proof_page": "docs/positioning/public-record-data-scrapper-proof-page.md",
+    "sample_output": "docs/positioning/public-record-data-scrapper-sample-output.json",
+    "case_study": "docs/positioning/public-record-data-scrapper-case-study.md",
+    "contact_path": "docs/positioning/public-record-data-scrapper-contact-path.md",
+    "cash_ledger": "state/aug1/revenue-received.json",
+    "do_not_count": [
+      "synthetic visits",
+      "draft replies",
+      "unpaid verbal interest",
+      "projected contract value",
+      "raw emails",
+      "private customer data",
+      "live prospect records"
+    ]
+  },
   "events": []
 }

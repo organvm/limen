@@ -1,6 +1,6 @@
 # Session Lifecycle Blockers
 
-Generated: `2026-06-28T20:12:39+00:00`
+Generated: `2026-06-29T21:26:21+00:00`
 
 ## Canonical Handling
 
@@ -17,31 +17,32 @@ Generated: `2026-06-28T20:12:39+00:00`
 - Network health receipt present: `True` at `~/Workspace/limen/.limen-private/session-corpus/lifecycle/network-health.json`.
 - Dispatch health receipt present: `True` at `~/Workspace/limen/.limen-private/session-corpus/lifecycle/dispatch-health.json`.
 - Live root gate receipt present: `True` at `~/Workspace/limen/.limen-private/session-corpus/lifecycle/live-root-gate.json`.
-- Redacted local prompt coverage: `9489` files, `92795` prompt-like events.
+- Redacted local prompt coverage: `9706` files, `97985` prompt-like events.
 - Codex classified sessions: `887`.
 - Worktree debt roots: `0`.
-- Remote receipts enabled: `True`; cloud receipts enabled: `True`.
+- Remote receipts enabled: `False`; cloud receipts enabled: `False`.
 - Session pressure hook wired: `True`; last pressure snapshot present: `True`.
-- Local lifecycle footprint: `5.4 GiB`.
-- Capability substrate detected: `11` roots, `1317` skill files, `45` plugin/MCP manifests.
-- Capability resurfacing receipt present/current: `True`/`True`; activation candidates `30`.
+- Local lifecycle footprint: `17.2 GiB`.
+- Capability substrate detected: `11` roots, `1370` skill files, `47` plugin/MCP manifests.
+- Capability resurfacing receipt present/current: `True`/`False`; activation candidates `30`.
 - Local network substrate: status `healthy`, mode `observe`, route `en0` via `192.168.1.1`.
-- Dispatch substrate: status `blocked`, launchd `running`, live root `feature/ORG-artist-organ-face-0628`, dirty entries `5`, async dry-run ok `True`.
-- Live root gate: status `blocked`, branch `feature/ORG-artist-organ-face-0628`, unique commits `1`, dirty entries `6`, launchd env drift `1`.
+- Dispatch substrate: status `blocked`, launchd `running`, live root `main`, dirty entries `2`, async dry-run ok `True`.
+- Live root gate: status `blocked`, branch `main`, unique commits `1`, dirty entries `2`, launchd env drift `0`.
 - GitHub consolidation gate: `34` source repos, `13` collision groups, collision packet complete `True`, App token wired `False`.
 
 ## Parked / Hung Workstreams
 
-- By category: `auth_credentials` 2, `cloud_runtime` 1, `dispatch_lifecycle` 1, `github_app_identity` 1, `github_consolidation` 1, `local_lean` 1.
-- By status: `needs_human_gate` 3, `parked` 4.
+- By category: `auth_credentials` 1, `capability_substrate` 1, `cloud_receipt` 1, `dispatch_lifecycle` 1, `github_app_identity` 1, `github_consolidation` 1, `local_lean` 1, `remote_receipt` 1.
+- By status: `needs_human_gate` 3, `needs_refresh` 3, `parked` 2.
 
 | ID | Category | Status | Evidence | Owner | Route |
 |---|---|---|---|---|---|
 | `credential-codex-auth-sessions` | `auth_credentials` | `parked` | 405 Codex sessions classified as auth/credential work; states: ALIVE 1, CLOSED 364, PARKED 40 | credential workstream | Keep parked unless a future scoped task explicitly requires the account action. |
-| `cloud-credential-handles-unconfigured` | `auth_credentials` | `parked` | 6 credential/deploy handles absent; 0 present. No values inspected. | credential workstream | Do not repair inline; open a bounded credential/setup workstream only when a cloud action requires it. |
-| `cloud-runtime-endpoint-unconfigured` | `cloud_runtime` | `parked` | No runtime URL was configured for the last cloud receipt probe. | limen deployment workstream | Keep separate from session intake; configure/probe runtime only in a deploy/runtime task. |
-| `local-lifecycle-disk-pressure` | `local_lean` | `parked` | Local lifecycle stores use 5.4 GiB (2.1 GiB worktrees, 3.3 GiB private corpus). | local lifecycle | Drain only after remote/default preservation proof or non-source residue receipt; keep pressure visible in SessionStart. |
-| `dispatch-heartbeat-substrate-unhealthy` | `dispatch_lifecycle` | `needs_human_gate` | Dispatch-health receipt is `blocked` with 3 blocker(s): live-root-not-at-origin-main, live-root-dirty, heartbeat-loaded-env-drift. | dispatch heartbeat substrate | Use `docs/live-root-gate.md` to preserve/reconcile the live Limen root and reload launchd only under an explicit operator gate; stop before reset, branch switch, task-board edits, or async enablement. |
+| `cloud-receipts-disabled` | `cloud_receipt` | `needs_refresh` | Cloud receipt collection was disabled on the last prompt lifecycle run. | limen control plane | Refresh `prompt-lifecycle-ledger.py --write --all` before treating cloud coverage as current. |
+| `remote-receipts-disabled` | `remote_receipt` | `needs_refresh` | Remote receipt collection was disabled on the last prompt lifecycle run. | limen control plane | Refresh with remote enabled before using GitHub state as closure proof. |
+| `local-lifecycle-disk-pressure` | `local_lean` | `parked` | Local lifecycle stores use 17.2 GiB (12.5 GiB worktrees, 4.7 GiB private corpus). | local lifecycle | Drain only after remote/default preservation proof or non-source residue receipt; keep pressure visible in SessionStart. |
+| `capability-substrate-not-resurfaced` | `capability_substrate` | `needs_refresh` | Capability resurfacing receipt is stale; 11 local capability roots detected; 1370 skill files, 47 plugin/MCP manifests, 218 MCP/ACP markers counted. | agent capability substrate | Run `python3 scripts/capability-substrate-ledger.py --write` to index names/counts and choose activation order; do not read private skill bodies, install plugins, or repair MCP/ACP auth inside session lifecycle closeout. |
+| `dispatch-heartbeat-substrate-unhealthy` | `dispatch_lifecycle` | `needs_human_gate` | Dispatch-health receipt is `blocked` with 2 blocker(s): live-root-not-at-origin-main, live-root-dirty. | dispatch heartbeat substrate | Use `docs/live-root-gate.md` to preserve/reconcile the live Limen root and reload launchd only under an explicit operator gate; stop before reset, branch switch, task-board edits, or async enablement. |
 | `github-consolidation-collisions` | `github_consolidation` | `needs_human_gate` | 34 source repos remain outside `organvm`; 13 name-collision groups block the transfer apply gate. | GitHub consolidation | Collision packet is complete; await an explicit human GitHub mutation gate to run `docs/consolidation/COLLISION-RENAMES.md`, then re-run the consolidation dry-run and require 0 collisions before transfer. |
 | `github-app-limen-bot-not-wired` | `github_app_identity` | `needs_human_gate` | `gh-app-token --which` resolves to `pat (GITHUB_TOKEN fallback)`; 4 org Apps are installed, and `limen[bot]` is not wired. | limen[bot] App identity | Create/install the org GitHub App and hydrate credentials via `scripts/set-credential.sh`; verify `bash scripts/gh-app-token.sh --which` reports the App path. |
 

@@ -68,3 +68,28 @@ def test_pipeline_scoreboard_counts_events_without_inflating_cash(tmp_path: Path
     }
     assert view["ledger"]["received_total_cents"] == 12300
     assert "August pipeline scoreboard" in aug1.render_html(view)
+
+
+def test_aug1_keeps_operational_checkpoint_and_late_august_runway(tmp_path: Path):
+    aug1 = _load()
+    state = tmp_path / "state" / "aug1"
+    state.mkdir(parents=True)
+    (state / "revenue-received.json").write_text(json.dumps({"received": []}), encoding="utf-8")
+    (state / "engagements.json").write_text(json.dumps({"engagements": []}), encoding="utf-8")
+    (state / "pipeline-scoreboard.json").write_text(json.dumps({"events": []}), encoding="utf-8")
+    levers = tmp_path / "his-hand-levers.json"
+    levers.write_text(json.dumps({"levers": []}), encoding="utf-8")
+    life = tmp_path / "aug1-life.json"
+    life.write_text(json.dumps({"ev_in_progress": False, "on_track": False}), encoding="utf-8")
+
+    aug1.STATE = state
+    aug1.LEVERS_FILE = levers
+    aug1.LIFE_FILE = life
+
+    view = aug1.build_view()
+
+    assert view["deadline"] == "2026-08-01"
+    assert view["runway"]["operational_checkpoint"] == "2026-08-01"
+    assert view["runway"]["hard_runway_premise"] == "late-August unemployment runway"
+    assert "Aug-1 remains the operational checkpoint" in view["runway"]["late_august_runway_note"]
+    assert "late-August unemployment" in aug1.render_html(view)

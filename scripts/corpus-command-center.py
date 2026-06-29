@@ -33,6 +33,7 @@ PRIVATE_ROOT = Path(
 LIFECYCLE_INDEX = PRIVATE_ROOT / "lifecycle" / "prompt-lifecycle-index.json"
 PRIORITY_INDEX = PRIVATE_ROOT / "lifecycle" / "prompt-priority-map.json"
 ATTACK_INDEX = PRIVATE_ROOT / "lifecycle" / "session-attack-paths.json"
+ACCEPTANCE_INDEX = PRIVATE_ROOT / "lifecycle" / "prompt-acceptance-ledger.json"
 PRIVATE_INDEX = PRIVATE_ROOT / "lifecycle" / "corpus-command-center.private.json"
 PUBLIC_INDEX = PRIVATE_ROOT / "lifecycle" / "corpus-command-center.public.json"
 PRIVATE_HTML = PRIVATE_ROOT / "lifecycle" / "corpus-command-center.private.html"
@@ -40,6 +41,7 @@ BODY_OBJECT_ROOT = PRIVATE_ROOT / "corpus-command-center" / "objects"
 DOC_PATH = ROOT / "docs" / "corpus-command-center.md"
 TASKS_PATH = ROOT / "tasks.yaml"
 AUG1_VIEW_PATH = ROOT / "logs" / "aug1-view.json"
+OUTWARD_RECIPROCITY_PATH = ROOT / "state" / "outward-reciprocity.json"
 VALUE_REPOS_PATH = ROOT / "value-repos.json"
 POSITIONING_SEEDS_PATH = ROOT / "positioning-seeds.json"
 POSITIONING_DIR = ROOT / "docs" / "positioning"
@@ -405,6 +407,8 @@ def doc_candidates() -> list[Path]:
         ROOT / "docs" / "prompt-lifecycle-ledger.md",
         ROOT / "docs" / "prompt-priority-map.md",
         ROOT / "docs" / "prompt-packet-ledger.md",
+        ROOT / "docs" / "prompt-acceptance-standard.md",
+        ROOT / "docs" / "prompt-acceptance-ledger.md",
         ROOT / "docs" / "AUG1-10K-GATE.md",
         ROOT / "docs" / "inbound-magnet-system.md",
         POSITIONING_DIR / "public-record-data-scrapper.md",
@@ -483,6 +487,42 @@ def aug1_panel() -> dict[str, Any]:
         "legs_met": sum(1 for leg in legs if isinstance(leg, dict) and leg.get("ok")),
         "next_act": view.get("next_act"),
         "ledger": view.get("ledger", {}),
+    }
+
+
+def acceptance_panel() -> dict[str, Any]:
+    acceptance = load_json(ACCEPTANCE_INDEX, {})
+    coverage = acceptance.get("coverage", {}) if isinstance(acceptance, dict) else {}
+    counts = acceptance.get("counts", {}) if isinstance(acceptance, dict) else {}
+    august = acceptance.get("august", {}) if isinstance(acceptance, dict) else {}
+    reciprocity_statuses = counts.get("reciprocity_statuses", {}) if isinstance(counts, dict) else {}
+    if not reciprocity_statuses:
+        reciprocity = load_json(OUTWARD_RECIPROCITY_PATH, {})
+        receipts = reciprocity.get("receipts", []) if isinstance(reciprocity, dict) else []
+        reciprocity_statuses = dict(
+            Counter(
+                str(receipt.get("status") or "not_applicable")
+                for receipt in receipts
+                if isinstance(receipt, dict)
+            ).most_common()
+        )
+    return {
+        "generated_at": acceptance.get("generated_at") if isinstance(acceptance, dict) else None,
+        "prompt_packets": {
+            "total": int(coverage.get("prompt_packets_total") or 0),
+            "open": int(coverage.get("prompt_packets_open") or 0),
+            "closed": int(coverage.get("prompt_packets_closed") or 0),
+        },
+        "acceptance_statuses": counts.get("acceptance_statuses", {}) if isinstance(counts, dict) else {},
+        "reciprocity_statuses": reciprocity_statuses,
+        "august": {
+            "operational_checkpoint": august.get("operational_checkpoint") or "2026-08-01",
+            "gate_pass": bool(august.get("gate_pass")),
+            "legs_total": int(august.get("legs_total") or 0),
+            "legs_met": int(august.get("legs_met") or 0),
+            "late_august_runway_note": august.get("late_august_runway_note")
+            or "Aug-1 remains the operational checkpoint; late-August unemployment remains the hard runway premise.",
+        },
     }
 
 
@@ -688,6 +728,7 @@ def build_snapshots(*, write_objects: bool = False, max_sessions: int | None = D
         "allusions": allusions,
         "comparisons": comparisons,
         "aug1": aug1_panel(),
+        "acceptance": acceptance_panel(),
         "inbound": inbound_panel(),
         "attack_paths": attack.get("ranked_paths", []) if isinstance(attack, dict) else [],
     }
@@ -724,6 +765,7 @@ def build_snapshots(*, write_objects: bool = False, max_sessions: int | None = D
             if row
         ],
         "aug1": private["aug1"],
+        "acceptance": private["acceptance"],
         "inbound": private["inbound"],
     }
     validate_public_redaction(public)
@@ -734,6 +776,7 @@ def build_snapshots(*, write_objects: bool = False, max_sessions: int | None = D
 def render_markdown(public: dict[str, Any]) -> str:
     coverage = public["coverage"]
     aug1 = public["aug1"]
+    acceptance = public["acceptance"]
     inbound = public["inbound"]
     lines = [
         "# Corpus Command Center",
@@ -767,6 +810,8 @@ def render_markdown(public: dict[str, Any]) -> str:
             "## Goal Panels",
             "",
             f"- Aug-1 gate: `{'pass' if aug1.get('gate_pass') else 'false'}`; legs `{aug1.get('legs_met')}` / `{aug1.get('legs_total')}`; deadline `{aug1.get('deadline')}`.",
+            f"- Acceptance panel: prompt packets `{acceptance.get('prompt_packets', {}).get('closed', 0)}` closed / `{acceptance.get('prompt_packets', {}).get('open', 0)}` open; Aug-1 gate `{'pass' if acceptance.get('august', {}).get('gate_pass') else 'false'}`; {acceptance.get('august', {}).get('late_august_runway_note')}",
+            f"- Outward reciprocity: {', '.join(f'`{key}` {value}' for key, value in (acceptance.get('reciprocity_statuses') or {}).items()) or 'none'}.",
             f"- Inbound magnet: value repos `{inbound.get('value_repo_count')}`, seeded repos `{inbound.get('seeded_repo_count')}`, scraper model present `{inbound.get('scraper_model_present')}`.",
             "",
             "## Private Outputs",

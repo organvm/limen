@@ -3,6 +3,20 @@
   "sample": true,
   "generated_at": "2026-06-29T00:00:00Z",
   "product": "50-State UCC Public-Records Intelligence Platform",
+  "buyer_filter": {
+    "states": ["FL", "TX"],
+    "filing_age_days_max": 14,
+    "minimum_financing_likelihood": 70,
+    "delivery_cadence": "daily",
+    "delivery_formats": ["dashboard", "REST API", "CSV"]
+  },
+  "cohort_summary": {
+    "records_returned": 2,
+    "fictional_records": true,
+    "same_day_review_count": 1,
+    "broker_queue_count": 1,
+    "excluded_low_confidence_rows": 0
+  },
   "records": [
     {
       "record_id": "sample-ucc-fl-001",
@@ -27,9 +41,11 @@
       "score": {
         "financing_likelihood": 87,
         "health_grade": "B",
-        "confidence": "high"
+        "confidence": "high",
+        "score_band": "same_day_review"
       },
       "recommended_action": "same-day ISO review",
+      "routing_reason": "Fresh filing, high entity match, home-services industry hint, and high financing-likelihood score.",
       "delivery": {
         "feed": "daily",
         "formats": [
@@ -62,9 +78,11 @@
       "score": {
         "financing_likelihood": 74,
         "health_grade": "C",
-        "confidence": "medium"
+        "confidence": "medium",
+        "score_band": "broker_queue"
       },
       "recommended_action": "route to broker queue",
+      "routing_reason": "Recent filing and medium entity match; useful for a broker queue after buyer-specific exclusions.",
       "delivery": {
         "feed": "daily",
         "formats": [
@@ -74,6 +92,11 @@
         ]
       }
     }
-  ]
+  ],
+  "redaction_contract": {
+    "real_debtors_included": false,
+    "personal_contact_data_included": false,
+    "premium_source_rows_included": false,
+    "live_prospect_records_included": false
+  }
 }
-

@@ -31,6 +31,8 @@ DEADLINE = date(2026, 8, 1)
 WEEK_TARGET_CENTS = 1_000_000          # $10,000.00 / week
 LIFE_STALE_DAYS = 7                    # the life leg must be logged recently to count
 REVENUE_LEVER_IDS = ("L-REVENUE-ACCT", "L-PAYRAIL-INDIVIDUAL")
+HARD_RUNWAY_PREMISE = "late-August unemployment runway"
+RUNWAY_NOTE = "Aug-1 remains the operational checkpoint; late-August unemployment remains the hard runway premise."
 PIPELINE_EVENT_TYPES = (
     "visit",
     "qualified_inbound",
@@ -140,6 +142,11 @@ def build_view():
         "days_left": (DEADLINE - today).days,
         "gate": {"pass": gate_pass, "legs": legs},
         "next_act": next_act,
+        "runway": {
+            "operational_checkpoint": DEADLINE.isoformat(),
+            "hard_runway_premise": HARD_RUNWAY_PREMISE,
+            "late_august_runway_note": RUNWAY_NOTE,
+        },
         "ledger": {
             "received_total_cents": total_cents,
             "trailing7_cents": trailing7,
@@ -209,6 +216,7 @@ def render_html(v):
 </style></head><body><div class="wrap">
  <h1>LIMEN — the Aug-1 gate</h1>
  <div class="sub">updated {_esc(v['generated_at'])} · {v['days_left']} days to {_esc(v['deadline'])} · auto-refresh 30s · the predicate decides, not the craving</div>
+ <div class="sub">{_esc(v.get('runway', {}).get('late_august_runway_note', RUNWAY_NOTE))}</div>
  <div class="card gate"><div class="lab">$10k/wk · in the EV · life progress</div>
    <div class="huge">GATE: {hero_word}</div></div>
  {act_card}

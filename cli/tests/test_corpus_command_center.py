@@ -23,6 +23,7 @@ def _wire_paths(ccc, tmp_path: Path):
     ccc.LIFECYCLE_INDEX = ccc.PRIVATE_ROOT / "lifecycle" / "prompt-lifecycle-index.json"
     ccc.PRIORITY_INDEX = ccc.PRIVATE_ROOT / "lifecycle" / "prompt-priority-map.json"
     ccc.ATTACK_INDEX = ccc.PRIVATE_ROOT / "lifecycle" / "session-attack-paths.json"
+    ccc.ACCEPTANCE_INDEX = ccc.PRIVATE_ROOT / "lifecycle" / "prompt-acceptance-ledger.json"
     ccc.PRIVATE_INDEX = ccc.PRIVATE_ROOT / "lifecycle" / "corpus-command-center.private.json"
     ccc.PUBLIC_INDEX = ccc.PRIVATE_ROOT / "lifecycle" / "corpus-command-center.public.json"
     ccc.PRIVATE_HTML = ccc.PRIVATE_ROOT / "lifecycle" / "corpus-command-center.private.html"
@@ -30,6 +31,7 @@ def _wire_paths(ccc, tmp_path: Path):
     ccc.DOC_PATH = tmp_path / "docs" / "corpus-command-center.md"
     ccc.TASKS_PATH = tmp_path / "tasks.yaml"
     ccc.AUG1_VIEW_PATH = tmp_path / "logs" / "aug1-view.json"
+    ccc.OUTWARD_RECIPROCITY_PATH = tmp_path / "state" / "outward-reciprocity.json"
     ccc.VALUE_REPOS_PATH = tmp_path / "value-repos.json"
     ccc.POSITIONING_SEEDS_PATH = tmp_path / "positioning-seeds.json"
     ccc.POSITIONING_DIR = tmp_path / "docs" / "positioning"
@@ -175,6 +177,31 @@ tasks:
         json.dumps({"frontdoor": {"contact": ""}, "repos": {"organvm/public-record-data-scrapper": {}}}),
         encoding="utf-8",
     )
+    ccc.ACCEPTANCE_INDEX.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-06-29T02:00:00Z",
+                "coverage": {
+                    "prompt_packets_total": 3,
+                    "prompt_packets_open": 1,
+                    "prompt_packets_closed": 2,
+                },
+                "counts": {
+                    "acceptance_statuses": {"closed": 2, "needs_owner_outcome": 1},
+                    "reciprocity_statuses": {"staged": 1},
+                },
+                "august": {
+                    "operational_checkpoint": "2026-08-01",
+                    "gate_pass": False,
+                    "legs_total": 5,
+                    "legs_met": 0,
+                    "late_august_runway_note": "Aug-1 remains the operational checkpoint; late-August unemployment remains the hard runway premise.",
+                },
+                "raw_prompt_text": "RAW_ACCEPTANCE_PROMPT_SHOULD_NOT_LEAK",
+            }
+        ),
+        encoding="utf-8",
+    )
 
     private, public, markdown = ccc.build_snapshots(write_objects=True)
     ccc.write_outputs(private, public, markdown)
@@ -188,6 +215,10 @@ tasks:
     assert private["comparisons"], "duplicate prompt should create a side-by-side comparison"
     assert any(row["absent_adjacent_atoms"] for row in private["allusions"])
     assert public["aug1"]["legs_met"] == 1
+    assert public["acceptance"]["prompt_packets"] == {"total": 3, "open": 1, "closed": 2}
+    assert public["acceptance"]["reciprocity_statuses"] == {"staged": 1}
+    assert "late-August unemployment" in public["acceptance"]["august"]["late_august_runway_note"]
+    assert "Acceptance panel" in markdown
     assert public["inbound"]["scraper_model_present"] is True
 
     public_text = json.dumps(public)
@@ -197,6 +228,7 @@ tasks:
         "RAW_ATTACHMENT_ARTIFACT",
         "RAW_TASK_CONTEXT",
         "SECRET_TOOL_ARG",
+        "RAW_ACCEPTANCE_PROMPT_SHOULD_NOT_LEAK",
         str(tmp_path),
         '"body_preview"',
         '"body_object"',

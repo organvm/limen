@@ -1,6 +1,6 @@
 # Prompt Lifecycle Ledger
 
-Generated: `2026-06-28T02:52:30+00:00`
+Generated: `2026-06-29T21:23:45+00:00`
 Horizon: `all local history`
 
 ## Canonical Decision
@@ -12,13 +12,13 @@ Horizon: `all local history`
 
 ## Redacted Prompt Coverage
 
-Indexed `9489` app/session files, `2.1 GiB`, with `92795` prompt-like user events hashed into the private index.
+Indexed `9706` app/session files, `2.5 GiB`, with `97985` prompt-like user events hashed into the private index.
 
 | Source | Files | Prompt Events | Event Records | Size | Newest |
 |---|---:|---:|---:|---:|---|
-| `claude-projects` | 4854 | 87828 | 313210 | 1.4 GiB | `2026-06-28T01:17:54+00:00` |
-| `codex-sessions` | 889 | 4394 | 234164 | 731.8 MiB | `2026-06-28T02:51:14+00:00` |
-| `codex-history` | 1 | 440 | 440 | 192.7 KiB | `2026-06-28T02:24:32+00:00` |
+| `claude-projects` | 4977 | 91407 | 322302 | 1.4 GiB | `2026-06-29T21:21:49+00:00` |
+| `codex-sessions` | 983 | 5641 | 307772 | 1.0 GiB | `2026-06-29T21:23:34+00:00` |
+| `codex-history` | 1 | 804 | 804 | 623.3 KiB | `2026-06-29T21:21:37+00:00` |
 | `claude-tasks` | 188 | 133 | 133 | 57.7 KiB | `2026-06-26T00:08:52+00:00` |
 | `claude-file-history` | 3519 | 0 | 0 | 42.2 MiB | `2026-06-27T00:26:28+00:00` |
 | `claude-plans` | 34 | 0 | 0 | 289.3 KiB | `2026-06-25T03:22:45+00:00` |
@@ -26,53 +26,58 @@ Indexed `9489` app/session files, `2.1 GiB`, with `92795` prompt-like user event
 
 ## Prompt To Worktree Crosswalk
 
-- Current `.limen-worktrees` roots scanned: `14`; debt roots: `8`.
-- Current worktree roots with at least one local session/prompt receipt: `14`.
-- Current worktree roots without a local session receipt in this index: `0`.
+- Current `.limen-worktrees` roots scanned: `25`; debt roots: `0`.
+- Current worktree roots with at least one local session/prompt receipt: `22`.
+- Current worktree roots without a local session receipt in this index: `3`.
 
 | Worktree Root | Session Files | Prompt Events | Debt Reason |
 |---|---:|---:|---|
-| `bld-mirror-mirror-harden-350f` | 1 | 5 | `unpushed-commits` |
-| `bld-my--father-mother-harden-44b2` | 1 | 5 | `active(<6h)` |
-| `bld-promptscope-next-rev-3fde` | 1 | 4 | `active(<6h)` |
-| `cifix-organvm-i-theoria-conversation-corpus-engine-f02e` | 3 | 79 | `unpushed-commits` |
-| `cifix-organvm-i-theoria-hierarchia-mundi-3145` | 1 | 71 | `active(<6h)` |
-| `discover-organvm-kerygma-profiles-6c74` | 1 | 24 | `not-merged-to-default` |
-| `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38` | 1 | 3 | `dirty` |
-| `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2` | 1 | 4 | `not-a-git-dir` |
-| `gen-organvm-universal-mail--automation-test-coverage-0625-151e` | 3 | 100 | `dirty` |
-| `gh-organvm-object-lessons-19-605a` | 1 | 73 | `clean+merged+idle` |
-| `resolve-a-organvm-the-invisible-ledger-4-f657` | 1 | 5 | `clean+merged+idle` |
-| `resolve-organvm-i-theoria-.github-459-1ade` | 1 | 5 | `unpushed-commits` |
-| `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f` | 1 | 79 | `active(<6h)` |
-| `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b` | 1 | 94 | `not-a-git-dir` |
+| `bld-mirror-mirror-harden-350f` | 1 | 5 | `remote-merged` |
+| `bld-my--father-mother-harden-44b2` | 1 | 5 | `remote-pr-open` |
+| `bld-promptscope-next-rev-3fde` | 1 | 4 | `remote-pr-open` |
+| `cifix-organvm-i-theoria-conversation-corpus-engine-f02e` | 3 | 79 | `remote-pr-open` |
+| `cifix-organvm-i-theoria-hierarchia-mundi-3145` | 1 | 71 | `remote-superseded` |
+| `discover-organvm-kerygma-profiles-6c74` | 1 | 24 | `remote-pr-open` |
+| `domus-quarantine-retire-20260629` | 6 | 53 | `active(<24h)` |
+| `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38` | 1 | 3 | `documented-residue` |
+| `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2` | 1 | 4 | `documented-residue` |
+| `gen-organvm-universal-mail--automation-test-coverage-0625-151e` | 3 | 100 | `owner-blocker` |
+| `limen-main-trench-20260628` | 1 | 14 | `active(<24h)` |
+| `limen-network-substrate-20260628` | 2 | 21 | `active(<24h)` |
+| `limen-rob-game-lane-20260628` | 0 | 0 | `active(<24h)` |
+| `maddie-boundary-20260629` | 2 | 68 | `active(<24h)` |
+| `mirror-mirror` | 85 | 2275 | `remote-merged` |
+| `resolve-organvm-i-theoria-.github-459-1ade` | 1 | 5 | `owner-blocker` |
+| `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f` | 1 | 79 | `remote-merged` |
+| `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b` | 1 | 94 | `documented-residue` |
+| `student-email-d2l-support-20260629` | 2 | 67 | `active(<24h)` |
+| `the-invisible-ledger` | 99 | 2919 | `remote-pr-open` |
+| `triptych-media-offload-20260629` | 3 | 109 | `active(<24h)` |
+| `triptych-story` | 3 | 212 | `remote-superseded` |
+| `universal-entry-20260629` | 0 | 0 | `active(<24h)` |
+| `warp-agent-routing-20260629` | 2 | 15 | `active(<24h)` |
+| `workstream-kickstart-20260629` | 0 | 0 | `active(<24h)` |
 
 ## Task Board Crosswalk
 
-- Task records: `1427`.
-- Status distribution: `archived` 438, `dispatched` 41, `done` 807, `in_progress` 1, `needs_human` 61, `open` 79.
+- Task records: `1500`.
+- Status distribution: `archived` 439, `dispatched` 34, `done` 869, `in_progress` 1, `needs_human` 78, `open` 79.
 - Invalid statuses outside canonical set: `0`.
-- Current worktree root slugs mentioned exactly in `tasks.yaml`: `0` / `14`.
+- Current worktree root slugs mentioned exactly in `tasks.yaml`: `2` / `25`.
 - Chronic reopen-loop candidates: `0`.
 - Dispatched tasks with PR receipt: `0`.
-- Dispatched Jules async tasks without PR yet: `41`.
+- Dispatched Jules async tasks without PR yet: `34`.
 - Dispatched local tasks still inside running grace/no-op guard: `0`.
 - Dispatched local tasks stranded without PR receipt: `0`.
-- Done tasks with PR receipt still visible in dispatch log/URLs: `636`.
+- Done tasks with PR receipt still visible in dispatch log/URLs: `690`.
 
 ## Remote Receipts
 
-- GitHub worktree repos seen: `11`.
-- Git worktree roots with remote branch present: `7`; missing: `4`.
-- Branch-linked PR states: `OPEN` 6, `MERGED` 1, `CLOSED` 1.
-- Task-board GitHub PR refs seen: `657`; checked: `657`; states: `CLOSED` 31, `MERGED` 447, `OPEN` 179.
+- Remote receipt collection disabled for this run.
 
 ## Cloud Receipts
 
-- Public site probed: `https://device-streaming-067d747a.web.app`; `4` / `4` probes passed.
-- Runtime URL configured: `False`; runtime health probe ok: `False`.
-- Cloudflare deploy auth present: `False`.
-- Cloud env flags: `CLOUDFLARE_API_TOKEN`=absent, `GOOGLE_APPLICATION_CREDENTIALS`=absent, `LIMEN_API_TOKEN`=absent, `LIMEN_CLIENT_TOKEN`=absent, `LIMEN_WORKER_URL`=absent, `NETLIFY_AUTH_TOKEN`=absent, `NEXT_PUBLIC_API_URL`=absent, `VERCEL_TOKEN`=absent.
+- Cloud receipt collection disabled for this run.
 
 ## Roadblocks And Potholes
 

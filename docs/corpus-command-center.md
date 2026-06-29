@@ -1,6 +1,6 @@
 # Corpus Command Center
 
-Generated: `2026-06-29T17:42:28+00:00`
+Generated: `2026-06-29T21:35:01+00:00`
 
 ## Canonical Decision
 
@@ -10,26 +10,28 @@ Generated: `2026-06-29T17:42:28+00:00`
 
 ## Coverage
 
-- Units indexed: `353277`.
-- Unique hashes: `219803`.
-- Clusters: `202168`.
+- Units indexed: `408766`.
+- Unique hashes: `250706`.
+- Clusters: `228966`.
 - Side-by-side comparisons: `24`.
-- Private body objects: `219803`.
+- Private body objects: `250706`.
 
 ## Kind Mix
 
 | Kind | Units |
 |---|---:|
-| `tool` | 165972 |
-| `prompt` | 93079 |
-| `response` | 86272 |
-| `system` | 3753 |
-| `artifact` | 2701 |
+| `tool` | 202567 |
+| `response` | 99303 |
+| `prompt` | 97863 |
+| `system` | 4658 |
+| `artifact` | 2875 |
 | `task` | 1500 |
 
 ## Goal Panels
 
 - Aug-1 gate: `false`; legs `0` / `5`; deadline `2026-08-01`.
+- Acceptance panel: prompt packets `9` closed / `0` open; Aug-1 gate `false`; Aug-1 remains the operational checkpoint; late-August unemployment remains the hard runway premise.
+- Outward reciprocity: `staged` 1.
 - Inbound magnet: value repos `12`, seeded repos `9`, scraper model present `True`.
 
 ## Private Outputs

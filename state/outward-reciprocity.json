@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "updated": "2026-06-29",
+  "status_values": [
+    "observed",
+    "absorbed",
+    "staged",
+    "gated",
+    "delivered",
+    "not_applicable"
+  ],
+  "receipts": [
+    {
+      "id": "warp-fullscreen-tab-transfer-crash-2026-06-29",
+      "status": "staged",
+      "observed_at": "2026-06-29",
+      "source": "Warp Stable macOS crash receipt",
+      "direction": "outward-contribution",
+      "related_families": [
+        "session_lifecycle"
+      ],
+      "public_safe_summary": "Warp Stable 0.2026.06.24.09.19.02 crashed during fullscreen tab/window transfer on 2026-06-29.",
+      "absorbed_lesson": "Use a plain window and avoid fullscreen tab transfer during sustained autonomous runs.",
+      "staged_contribution": "Bug-report receipt staged with the public-safe crash signature and recovery lesson.",
+      "human_gate_required": true,
+      "private_evidence_ref": "Local crash report stays outside tracked docs; no raw crash body is committed."
+    }
+  ]
+}

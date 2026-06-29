@@ -576,6 +576,99 @@
           "next_action": "No local root to preserve; do not delegate without a later explicit infrastructure diagnostic task."
         }
       ]
+    },
+    {
+      "packet": "packet-prompt-batch-critical-stalled-review-002-worktree_lifecycle",
+      "source_batch": "prompt-batch-critical-stalled-review-002",
+      "family": "worktree_lifecycle",
+      "status": "owner-recorded",
+      "classification": "current worktree state recorded for every root in the refreshed packet",
+      "evidence": [
+        "python3 scripts/worktree-debt.py --json on 2026-06-29 reported 0 debt roots",
+        "docs/worktree-lifecycle-ledger.md records bld-domus-genoma-ci-23a9 as preserved by PR #144",
+        "docs/worktree-lifecycle-ledger.md records mirror-mirror as preserved by merged PR #87 and gated for operator reclaim",
+        "the remaining refreshed packet roots are absent from the current worktree debt report and retained only as redacted historical references"
+      ],
+      "next_action": "No broad worktree cleanup or delegation remains for this refreshed packet. Rehydrate a root only if a later owner-repo review explicitly names the repo, branch, predicate, and expected receipt.",
+      "roots": [
+        {
+          "root": "bld-domus-genoma-ci-23a9",
+          "status": "remote_pr_preserved",
+          "repo": "organvm/domus-genoma",
+          "branch": "limen/bld-domus-genoma-ci-23a9",
+          "pr": "https://github.com/organvm/domus-genoma/pull/144",
+          "evidence": "docs/worktree-lifecycle-ledger.md records exact local/fetched PR head equality before local checkout removal.",
+          "next_action": "Review PR CI and the known pre-existing BATS blockers, then merge or supersede by named branch/PR."
+        },
+        {
+          "root": "bld-domus-genoma-ci-ec4f",
+          "status": "historical_absent_reference",
+          "repo_hint": "domus-genoma",
+          "evidence": "Absent from current worktree debt report; retained only as a redacted historical Codex cwd/session reference.",
+          "next_action": "No local root to preserve; do not delegate unless owner-repo review names a live branch or PR."
+        },
+        {
+          "root": "cifix-4444j99-domus-genoma-07e2",
+          "status": "historical_absent_reference",
+          "repo_hint": "4444j99/domus-genoma",
+          "evidence": "Absent from current worktree debt report; retained only as a redacted historical Codex cwd/session reference.",
+          "next_action": "No local root to preserve; do not delegate unless owner-repo review names a live branch or PR."
+        },
+        {
+          "root": "cifix-organvm-i-theoria-sovereign--ground-34de",
+          "status": "historical_absent_reference",
+          "repo_hint": "organvm-i-theoria/sovereign--ground",
+          "evidence": "Absent from current worktree debt report; retained only as a redacted historical Codex cwd/session reference.",
+          "next_action": "No local root to preserve; do not delegate unless owner-repo review names a live branch or PR."
+        },
+        {
+          "root": "gen-4444j99-media-ark-ci-green-0620-0bc1",
+          "status": "historical_absent_reference",
+          "repo_hint": "4444j99/media-ark",
+          "evidence": "Absent from current worktree debt report; retained only as a redacted historical Codex cwd/session reference.",
+          "next_action": "No local root to preserve; do not delegate unless owner-repo review names a live branch or PR."
+        },
+        {
+          "root": "gen-organvm-a-i-chat--exporter-ci-green-0622-4a4f",
+          "status": "historical_absent_reference",
+          "repo_hint": "organvm/a-i-chat--exporter",
+          "evidence": "Absent from current worktree debt report; retained only as a redacted historical Codex cwd/session reference.",
+          "next_action": "No local root to preserve; do not delegate unless owner-repo review names a live branch or PR."
+        },
+        {
+          "root": "mirror-mirror",
+          "status": "merged_pr_preserved",
+          "repo": "organvm/mirror-mirror",
+          "branch": "work/mirror-mirror-avatar-types-20260629",
+          "pr": "https://github.com/organvm/mirror-mirror/pull/87",
+          "evidence": "docs/worktree-lifecycle-ledger.md records PR #87 as MERGED with local HEAD equal to the PR head OID and local/GitHub checks passed.",
+          "next_action": "Reclaim local checkout only after normal operator acceptance; no code PR remains to merge."
+        }
+      ]
+    },
+    {
+      "packet": "packet-prompt-batch-critical-stalled-review-001-github_review",
+      "source_batch": "prompt-batch-critical-stalled-review-001",
+      "family": "github_review",
+      "status": "owner-recorded",
+      "classification": "single refreshed github-review root mapped to owner repo and absent branch receipt",
+      "evidence": [
+        "existing packet receipt for prompt-batch-critical-stalled-review-002 mapped bld-card-trade-social-harden-b07b to organvm/card-trade-social",
+        "existing receipt found no matching branch or PR for limen/bld-card-trade-social-harden-b07b",
+        "python3 scripts/worktree-debt.py --json on 2026-06-29 reported no current local debt root for bld-card-trade-social-harden-b07b"
+      ],
+      "next_action": "Do not delegate or rehydrate this broad historical GitHub-review root unless a later owner packet identifies the missing hardening delta, live branch or PR, predicate, and expected receipt.",
+      "roots": [
+        {
+          "root": "bld-card-trade-social-harden-b07b",
+          "status": "owner_repo_routed_absent_branch",
+          "repo": "organvm/card-trade-social",
+          "branch": "limen/bld-card-trade-social-harden-b07b",
+          "predicate": "owner repo tests/build after branch rehydration",
+          "evidence": "Owner repo was previously resolved; no matching remote branch or PR was found for limen/bld-card-trade-social-harden-b07b, and the root is absent from current local debt.",
+          "next_action": "Rehydrate only if an owner packet identifies the missing hardening delta or superseding PR."
+        }
+      ]
     }
   ]
 }

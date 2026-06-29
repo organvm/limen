@@ -1,8 +1,8 @@
 # Conductor Tranche
 
-Generated: `2026-06-28T20:12:57+00:00`
+Generated: `2026-06-29T21:26:55+00:00`
 
-Summary: `tranche-no-autonomous-actionable-path` -> `no-autonomous-actionable-path` (`n/a`); stop before: Stop before broad delegation, cleanup, GitHub mutation, credential work, or owner repo edits; resume only when a human opens a gate or a fresh actionable packet appears.
+Summary: `tranche-remote-receipts-disabled` -> `remote-receipts-disabled` (`blocker`); stop before: Stop before changing task states, launching live dispatch, or touching credentials unless the packet explicitly includes that gate.
 
 ## Cadence Contract
 
@@ -16,30 +16,30 @@ Summary: `tranche-no-autonomous-actionable-path` -> `no-autonomous-actionable-pa
 
 | Field | Value |
 |---|---|
-| Packet | `tranche-no-autonomous-actionable-path` |
-| Selected path | `no-autonomous-actionable-path` |
-| Kind | `n/a` |
-| Lane | `n/a` |
-| Score | `n/a` |
-| Agent fit | `n/a` |
-| Attack index generated | `2026-06-28T20:12:46+00:00` |
-| Ranked paths read | `31` |
-| Skipped family/human-gate/parked/observe/auth paths | `session_lifecycle`, `dispatch-heartbeat-substrate-unhealthy`, `worktree_lifecycle`, `github_review`, `github-app-limen-bot-not-wired`, `github-consolidation-collisions`, `agent_coordination`, `technical_debt_ci`, `local-lifecycle-disk-pressure`, `convergence_corpus`, `gen-organvm-universal-mail--automation-test-coverage-0625-151e`, `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b`, `org-artist-organ-face-0628-1291`, `org-financial-organ-deepen-0628-b1b3`, `cloud-runtime-endpoint-unconfigured`, `uncategorized`, `cifix-organvm-i-theoria-hierarchia-mundi-3145`, `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2`, `gh-organvm-object-lessons-19-605a`, `resolve-a-organvm-the-invisible-ledger-4-f657`, `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38`, `cloud-credential-handles-unconfigured`, `credential-codex-auth-sessions`, `auth_credentials`, `resolve-organvm-i-theoria-.github-459-1ade`, `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f`, `discover-organvm-kerygma-profiles-6c74`, `cifix-organvm-i-theoria-conversation-corpus-engine-f02e`, `bld-mirror-mirror-harden-350f`, `bld-my--father-mother-harden-44b2`, `bld-promptscope-next-rev-3fde` |
+| Packet | `tranche-remote-receipts-disabled` |
+| Selected path | `remote-receipts-disabled` |
+| Kind | `blocker` |
+| Lane | `blocker` |
+| Score | `72` |
+| Agent fit | `codex` |
+| Attack index generated | `2026-06-29T21:26:48+00:00` |
+| Ranked paths read | `41` |
+| Skipped family/human-gate/parked/observe/auth paths | `session_lifecycle`, `dispatch-heartbeat-substrate-unhealthy`, `worktree_lifecycle`, `github_review`, `github-app-limen-bot-not-wired`, `github-consolidation-collisions`, `agent_coordination`, `technical_debt_ci`, `local-lifecycle-disk-pressure`, `convergence_corpus`, `mirror-mirror`, `the-invisible-ledger`, `triptych-story`, `gen-organvm-universal-mail--automation-test-coverage-0625-151e`, `uncategorized`, `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b`, `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f`, `credential-codex-auth-sessions`, `cifix-organvm-i-theoria-conversation-corpus-engine-f02e`, `cifix-organvm-i-theoria-hierarchia-mundi-3145`, `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2`, `discover-organvm-kerygma-profiles-6c74`, `bld-mirror-mirror-harden-350f`, `bld-my--father-mother-harden-44b2`, `bld-promptscope-next-rev-3fde`, `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38`, `resolve-organvm-i-theoria-.github-459-1ade`, `auth_credentials` |
 
 ## Work Packet
 
-Purpose: Record that no ranked path is autonomously actionable after skipping parked, family, human-gated, observe, and auth-only lanes.
+Purpose: Repair dispatch/remote proof drift so the queue can distinguish healthy async work, stranded claims, merged PRs, and real blockers.
 
-Repo/worktree: `organvm/limen` conductor checkout.
+Repo/worktree: `organvm/limen` conductor checkout only.
 
 Allowed files:
 
-- `scripts/live-root-gate.py`
-- `docs/session-attack-paths.md`
-- `docs/session-lifecycle-blockers.md`
-- `docs/live-root-gate.md`
+- `scripts/dispatch*.py`
+- `scripts/verify-dispatch.py`
+- `scripts/heal-dispatch.py`
+- `cli/tests/test_async_dispatch.py`
+- `docs/DISPATCH-ARCHITECTURE.md`
 - `docs/conductor-tranche.md`
-- `.limen-private/session-corpus/lifecycle/**`
 
 Forbidden:
 
@@ -49,20 +49,19 @@ Forbidden:
 - `irreversible GitHub transfer/rename/App install/credential actions`
 - `task-board mutation unless the direct request explicitly requires it`
 
-Stop condition: Stop before broad delegation, cleanup, GitHub mutation, credential work, or owner repo edits; resume only when a human opens a gate or a fresh actionable packet appears.
+Stop condition: Stop before changing task states, launching live dispatch, or touching credentials unless the packet explicitly includes that gate.
 
-Receipt: docs/live-root-gate.md and docs/conductor-tranche.md record the human-gated stop state.
+Receipt: docs/DISPATCH-ARCHITECTURE.md and docs/conductor-tranche.md.
 
 Verification:
 
-- `python3 scripts/live-root-gate.py --write`
-- `python3 scripts/session-blockers-ledger.py --write`
-- `python3 scripts/session-attack-paths.py --write`
+- `pytest -q cli/tests/test_async_dispatch.py`
+- `python3 scripts/verify-dispatch.py`
 - `python3 scripts/conductor-tranche.py --write`
 
 ## Source Next Action
 
-Record that no ranked path is autonomously actionable after skipping parked, family, human-gated, observe, and auth-only lanes.
+Refresh with remote enabled before using GitHub state as closure proof.
 
 ## Refresh
 

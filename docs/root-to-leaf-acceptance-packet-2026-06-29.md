@@ -16,6 +16,23 @@ Evidence from the current generated surface:
 
 Acceptance rule: do not extend the Command Center until an operator acceptance pass has used it to decide, clean, and publish.
 
+## Recovered Prompt Acceptance
+
+Recovered prior prompt: the 2026-06-27 recurring-ideas prompt about ideas returning through
+different lenses, portals, mirrors, and reflections. Acceptance rule: older prompts carry lineage
+weight, but the newest evolved form wins when the idea has changed shape.
+
+The accepted 2026-06-29 form is not "index more prompts." It is the acceptance frame:
+
+- What did we prompt?
+- What got addressed in the newest evolved form?
+- What remains owner-recorded?
+- Does it help the Aug-1 operating checkpoint and the late-August unemployment runway?
+- What did we observe, absorb, stage, gate, deliver, or mark not applicable outward?
+
+The tracked standard is `docs/prompt-acceptance-standard.md`. The redacted public ledger is
+`docs/prompt-acceptance-ledger.md`; full hash/session evidence stays in the ignored private index.
+
 ## Warp Crash Triage
 
 Crash receipt: Warp Stable `0.2026.06.24.09.19.02` crashed on 2026-06-29 at 15:53:20 -0400 with `EXC_CRASH (SIGABRT)`.
@@ -27,6 +44,11 @@ The crash stack is native Warp/AppKit window handling, not a Limen shell predica
 - Background file watchers and code indexing were present, but the aborting path is the main-thread window transition.
 
 Recovery rule: continue from git state and logs, avoid dragging/transferring Warp tabs while in fullscreen during long runs, and use a plain window for sustained autonomous work. If this recurs, treat it as a Warp native crash receipt unless a shell process, hook, or Limen predicate is in the crashing stack.
+
+Outward reciprocity receipt: staged, not sent. `state/outward-reciprocity.json` records the
+public-safe crash signature and recovery lesson as `warp-fullscreen-tab-transfer-crash-2026-06-29`.
+No Warp bug report, GitHub issue, email, post, or other identity-bearing outbound action should be
+sent without an explicit human gate.
 
 ## First Work Clusters That Matter
 
@@ -73,3 +95,7 @@ Source of truth:
 - Board renderer: `scripts/aug1-view.py`
 
 The six visible metrics are fixed: visits, qualified inbound, replies, calls, paid trials, cash. Cash is cleared money only and comes from `state/aug1/revenue-received.json`; the other five come from `state/aug1/pipeline-scoreboard.json`.
+
+Acceptance framing: Aug-1 remains the operating checkpoint. Late-August unemployment remains the
+hard runway premise that makes the checkpoint matter; this packet should shorten the path to cash,
+booked calls, clean owner records, and fewer repeated prompt loops.
