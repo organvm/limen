@@ -54,7 +54,9 @@ def _matching_live_pids(token: str) -> list[str]:
     try:
         ps = subprocess.run(["ps", "-axo", "pid=,stat=,command="], capture_output=True, text=True, check=False)
     except PermissionError as exc:
-        pytest.skip(f"process listing is unavailable in this sandbox: {exc}")
+        pytest.skip(f"ps unavailable for orphan-process assertion: {exc}")
+    if ps.returncode != 0:
+        pytest.skip(f"ps unavailable for orphan-process assertion: {ps.stderr.strip() or ps.returncode}")
     matches: list[str] = []
     for line in ps.stdout.splitlines():
         if token not in line:

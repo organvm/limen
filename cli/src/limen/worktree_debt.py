@@ -5,7 +5,7 @@ import json
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TypedDict
 
 from limen.worktree_roots import iter_worktree_targets
 
@@ -40,6 +40,9 @@ GENERATED_LOG_SHELL_FILES = {
     "logs/session-lifecycle-pressure.json",
 }
 
+JsonObject = dict[str, object]
+PreservationReceipts = dict[str, JsonObject]
+
 
 class WorktreeDebtItem(TypedDict):
     name: str
@@ -56,6 +59,12 @@ class WorktreeDebtReport(TypedDict):
     by_reason: dict[str, int]
     by_reapable_reason: dict[str, int]
     items: list[WorktreeDebtItem]
+
+
+def _object_mapping(value: object) -> JsonObject | None:
+    if not isinstance(value, dict):
+        return None
+    return {str(key): item for key, item in value.items()}
 
 
 def _git(args: list[str], cwd: Path, timeout: int = 30) -> subprocess.CompletedProcess[str]:
@@ -114,13 +123,6 @@ def _git_toplevel(cwd: Path) -> Path | None:
         return Path(top.stdout.strip())
 
 
-def _flag(name: str, default: bool) -> bool:
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() not in {"", "0", "false", "no", "off"}
-
-
 def _int_env(name: str, default: int) -> int:
     try:
         return int(os.environ.get(name, str(default)))
@@ -128,27 +130,30 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
-def _load_preservation_receipts(limen_root: Path) -> dict[str, dict[str, Any]]:
+def _load_preservation_receipts(limen_root: Path) -> PreservationReceipts:
     path = limen_root / "docs" / "worktree-preservation-receipts.json"
     try:
-        data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+        data: object = json.loads(path.read_text(encoding="utf-8", errors="replace"))
     except (OSError, ValueError):
         return {}
-    if not isinstance(data, dict):
+    payload = _object_mapping(data)
+    if payload is None:
         return {}
-    receipts: dict[str, dict[str, object]] = {}
-    items = data.get("receipts")
-    if isinstance(items, list):
-        for receipt in items:
-            if not isinstance(receipt, dict):
-                continue
-            root = receipt.get("root")
-            if isinstance(root, str) and root:
-                receipts[root] = receipt
+    raw_receipts = payload.get("receipts")
+    if not isinstance(raw_receipts, list):
+        return {}
+    receipts: PreservationReceipts = {}
+    for raw_receipt in raw_receipts:
+        receipt = _object_mapping(raw_receipt)
+        if receipt is None:
+            continue
+        root = receipt.get("root")
+        if root:
+            receipts[str(root)] = receipt
     return receipts
 
 
-def _is_documented_residue(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
+def _is_documented_residue(path: Path, preservation_receipts: PreservationReceipts) -> bool:
     receipt = preservation_receipts.get(path.name)
     if not receipt:
         return False
@@ -162,7 +167,7 @@ def _is_documented_residue(path: Path, preservation_receipts: dict[str, dict[str
     )
 
 
-def _is_remote_superseded(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
+def _is_remote_superseded(path: Path, preservation_receipts: PreservationReceipts) -> bool:
     receipt = preservation_receipts.get(path.name)
     if not receipt:
         return False
@@ -171,7 +176,7 @@ def _is_remote_superseded(path: Path, preservation_receipts: dict[str, dict[str,
     return lane in REMOTE_SUPERSEDED_LANES or status in REMOTE_SUPERSEDED_STATUSES
 
 
-def _is_remote_merged(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
+def _is_remote_merged(path: Path, preservation_receipts: PreservationReceipts) -> bool:
     receipt = preservation_receipts.get(path.name)
     if not receipt:
         return False
@@ -180,7 +185,7 @@ def _is_remote_merged(path: Path, preservation_receipts: dict[str, dict[str, obj
     return lane in REMOTE_MERGED_LANES or status in REMOTE_MERGED_STATUSES
 
 
-def _is_remote_pr_open(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
+def _is_remote_pr_open(path: Path, preservation_receipts: PreservationReceipts) -> bool:
     receipt = preservation_receipts.get(path.name)
     if not receipt:
         return False
@@ -189,7 +194,7 @@ def _is_remote_pr_open(path: Path, preservation_receipts: dict[str, dict[str, ob
     return lane in REMOTE_PR_OPEN_LANES or status in REMOTE_PR_OPEN_STATUSES
 
 
-def _is_owner_blocker(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
+def _is_owner_blocker(path: Path, preservation_receipts: PreservationReceipts) -> bool:
     receipt = preservation_receipts.get(path.name)
     if not receipt:
         return False
@@ -228,7 +233,7 @@ def _classify(
     now: float,
     min_age_h: float,
     self_guard: set[Path],
-    preservation_receipts: dict[str, dict[str, object]],
+    preservation_receipts: PreservationReceipts,
 ) -> str:
     try:
         resolved = path.resolve()
