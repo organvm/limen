@@ -1,6 +1,6 @@
 # Live Root Gate
 
-Generated: `2026-06-29T00:03:27+00:00`
+Generated: `2026-06-29T03:16:10+00:00`
 
 Status: `blocked`
 
@@ -15,39 +15,34 @@ Status: `blocked`
 - Operator gate required: `True`.
 - Release reconcile allowed without human: `False`.
 - Launchd reload allowed without human: `False`.
-- Blocking gates: `live-root-not-release-branch`, `live-root-not-at-release`, `live-root-unique-commits`, `live-root-dirty`, `live-root-task-board-dirty`, `heartbeat-loaded-env-drift`.
+- Blocking gates: `live-root-not-release-branch`, `live-root-not-at-release`, `live-root-unique-commits`, `live-root-dirty`, `live-root-task-board-dirty`.
 
 ## Live Root
 
 - Path: `~/Workspace/limen`.
 - Branch: `feature/ORG-artist-organ-face-0628`; release branch `main`.
-- HEAD: `f347c4dacb08ece9670509dee49a9179eea74c48`.
-- Release head: `dc320f2f98e7a326861783b145c18e272f1ac5dc`.
-- Matches release: `False`; ahead `2` behind `16`.
-- Unique local commits: `2`; patch-equivalent commits: `0`.
-- Dirty entries: `5`.
+- HEAD: `838af6a9468d406c79c5a4cf5976bbf64bfa9dbe`.
+- Release head: `a6fcb51ffd9d4c1ffb0f165c6b76bf6b564fddbe`.
+- Matches release: `False`; ahead `3` behind `17`.
+- Unique local commits: `3`; patch-equivalent commits: `0`.
+- Dirty entries: `2`.
 
 ### Local Commits
 
+- `838af6a capture: autonomic off-disk sync 2026-06-29T01:55:56Z`
 - `f347c4d feat(artist): polish macro + micro face for A-MAVS-OLEVM`
 - `84a3288 feat(artist): author KERNEL and CHARTER for A-MAVS-OLEVM`
 
 ### Dirty Paths
 
-- `container/launchd/com.user.netmeter.plist`
-- `scripts/netmode.sh`
+- `ianva/scripts/ianva-serve.sh`
 - `tasks.yaml`
-- `organs/health/`
-- `organs/media/`
 
 ## Heartbeat
 
 - Plist: `~/Library/LaunchAgents/com.limen.heartbeat.plist` present `True`.
-- Loaded launchd state: `running` pid `24368`.
-
-### Loaded Env Drift
-
-- `LIMEN_DISPATCH_ASYNC`: plist `0`; loaded `None`.
+- Loaded launchd state: `running` pid `1656`.
+- Loaded env matches plist for tracked LIMEN_* keys.
 
 ## Verified Worktree
 

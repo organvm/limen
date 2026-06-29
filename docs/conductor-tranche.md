@@ -1,6 +1,6 @@
 # Conductor Tranche
 
-Generated: `2026-06-29T00:20:54+00:00`
+Generated: `2026-06-29T03:16:11+00:00`
 
 Summary: `tranche-no-autonomous-actionable-path` -> `no-autonomous-actionable-path` (`n/a`); stop before: Stop before broad delegation, cleanup, GitHub mutation, credential work, or owner repo edits; resume only when a human opens a gate or a fresh actionable packet appears.
 
@@ -22,7 +22,7 @@ Summary: `tranche-no-autonomous-actionable-path` -> `no-autonomous-actionable-pa
 | Lane | `n/a` |
 | Score | `n/a` |
 | Agent fit | `n/a` |
-| Attack index generated | `2026-06-29T00:20:54+00:00` |
+| Attack index generated | `2026-06-29T03:16:11+00:00` |
 | Ranked paths read | `20` |
 | Skipped family/human-gate/parked/observe/auth paths | `dispatch-heartbeat-substrate-unhealthy`, `github-app-limen-bot-not-wired`, `github-consolidation-collisions`, `local-lifecycle-disk-pressure`, `gen-organvm-universal-mail--automation-test-coverage-0625-151e`, `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f`, `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b`, `cloud-runtime-endpoint-unconfigured`, `cifix-organvm-i-theoria-hierarchia-mundi-3145`, `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2`, `gh-organvm-object-lessons-19-605a`, `resolve-a-organvm-the-invisible-ledger-4-f657`, `bld-mirror-mirror-harden-350f`, `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38`, `cloud-credential-handles-unconfigured`, `resolve-organvm-i-theoria-.github-459-1ade`, `discover-organvm-kerygma-profiles-6c74`, `cifix-organvm-i-theoria-conversation-corpus-engine-f02e`, `bld-my--father-mother-harden-44b2`, `bld-promptscope-next-rev-3fde` |
 

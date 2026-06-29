@@ -19,13 +19,13 @@ from limen.dispatch import dispatch_parallel, _down_lanes  # noqa: E402
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tasks", default=os.environ.get("LIMEN_TASKS"))
+    root = Path(os.environ.get("LIMEN_ROOT", str(Path(__file__).resolve().parents[1])))
+    ap.add_argument("--tasks", default=os.environ.get("LIMEN_TASKS", str(root / "tasks.yaml")))
     ap.add_argument("--lanes", default="codex,opencode,agy,claude,gemini,jules")
     ap.add_argument("--per-lane", type=int, default=int(os.environ.get("LIMEN_LOCAL_LIMIT", "3")))
     ap.add_argument("--workers", type=int, default=int(os.environ.get("LIMEN_WORKERS", "8")))
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
-    root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
     policy_path = root / "logs" / "autonomy-policy.json"
     if not args.dry_run and os.environ.get("LIMEN_FORCE_AUTONOMY") != "1":
         try:

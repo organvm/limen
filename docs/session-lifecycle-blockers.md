@@ -1,6 +1,6 @@
 # Session Lifecycle Blockers
 
-Generated: `2026-06-29T00:20:54+00:00`
+Generated: `2026-06-29T03:16:11+00:00`
 
 ## Canonical Handling
 
@@ -27,7 +27,7 @@ Generated: `2026-06-29T00:20:54+00:00`
 - Capability resurfacing receipt present/current: `True`/`True`; activation candidates `30`.
 - Local network substrate: status `healthy`, mode `observe`, route `en0` via `192.168.1.1`.
 - Dispatch substrate: status `blocked`, launchd `running`, live root `feature/ORG-artist-organ-face-0628`, dirty entries `5`, async dry-run ok `True`.
-- Live root gate: status `blocked`, branch `feature/ORG-artist-organ-face-0628`, unique commits `2`, dirty entries `5`, launchd env drift `1`.
+- Live root gate: status `blocked`, branch `feature/ORG-artist-organ-face-0628`, unique commits `3`, dirty entries `2`, launchd env drift `0`.
 - GitHub consolidation gate: `34` source repos, `13` collision groups, collision packet complete `True`, App token wired `False`.
 
 ## Parked / Hung Workstreams

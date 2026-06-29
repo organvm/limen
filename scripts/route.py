@@ -58,6 +58,59 @@ from limen.io import load_limen_file, queue_lock, save_limen_file  # noqa: E402
 from limen.dispatch import _down_lanes  # noqa: E402
 
 
+_GITHUB_ACTIONS_WORKFLOW_CACHE: dict[tuple[str, str], bool] = {}
+
+
+def _github_actions_workflow_exists(repo: str) -> bool:
+    """Return True only when the target repo exposes the configured dispatch workflow.
+
+    GitHub Actions capacity is repo-local: `gh` can be authenticated and the lane can be globally
+    reachable while a specific repo lacks `.github/workflows/limen-agent.yml`. Without this probe,
+    route sends open work to a guaranteed 404 and the overnight loop burns cycles on failed cascades.
+    """
+    workflow = os.environ.get("LIMEN_GITHUB_ACTIONS_WORKFLOW", "limen-agent.yml")
+    key = (repo, workflow)
+    if key in _GITHUB_ACTIONS_WORKFLOW_CACHE:
+        return _GITHUB_ACTIONS_WORKFLOW_CACHE[key]
+    gh = os.environ.get("LIMEN_GITHUB_ACTIONS_BIN", "gh")
+    try:
+        result = subprocess.run(
+            [gh, "workflow", "view", workflow, "--repo", repo],
+            capture_output=True,
+            text=True,
+            timeout=float(os.environ.get("LIMEN_GITHUB_ACTIONS_PROBE_TIMEOUT", "8")),
+        )
+        ok = result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        ok = False
+    _GITHUB_ACTIONS_WORKFLOW_CACHE[key] = ok
+    return ok
+
+
+def _parent_heartbeat_holds_queue_lock(tasks_path: Path) -> bool:
+    """True when route.py is running as a child of the heartbeat that already holds the queue lock."""
+    lockd = tasks_path.parent / "logs" / ".queue.lock.d"
+    if not lockd.exists():
+        return False
+    try:
+        heartbeat_pid = int((tasks_path.parent / "logs" / "heartbeat-loop.pid").read_text().strip())
+    except (OSError, ValueError):
+        return False
+    return heartbeat_pid == os.getppid()
+
+
+def _apply_assignments(tasks_path: Path, assignments: dict[str, str]) -> int:
+    lf = load_limen_file(tasks_path)
+    applied = 0
+    for task in lf.tasks:
+        v = assignments.get(task.id)
+        if v and task.status == "open":
+            task.target_agent = v
+            applied += 1
+    save_limen_file(tasks_path, lf)
+    return applied
+
+
 # Vendor health: which local lanes are usable right now. gemini needs an API key.
 def _vendor_health() -> dict[str, bool]:
     def has(bin_: str) -> bool:
@@ -361,10 +414,10 @@ def _capable_agents(
             agents.append(agent)
             reasons[agent] = "GitHub issue URL -> copilot-swe-agent assignment"
         elif agent == "github_actions":
-            if not has_repo:
+            if not has_repo or not _github_actions_workflow_exists(str(repo)):
                 continue
             agents.append(agent)
-            reasons[agent] = "repo workflow_dispatch via GitHub Actions runner"
+            reasons[agent] = "repo has configured GitHub Actions workflow_dispatch runner"
         elif agent == "jules":
             if not has_repo:
                 continue
@@ -507,18 +560,15 @@ def main() -> int:
     # mutate ONLY target_agent on tasks that are still open, then write through the validated
     # save_limen_file (never a raw dump). If the lock is busy, skip this pass — a missed routing
     # write is harmless and self-corrects next beat (never block the beat / never dead-stop).
-    with queue_lock(tasks_path) as got:
-        if not got:
-            print("queue busy — skipped applying target_agent this pass (self-corrects next beat).")
-            return 0
-        lf = load_limen_file(tasks_path)
-        applied = 0
-        for task in lf.tasks:
-            v = assignments.get(task.id)
-            if v and task.status == "open":
-                task.target_agent = v
-                applied += 1
-        save_limen_file(tasks_path, lf)
+    if _parent_heartbeat_holds_queue_lock(tasks_path):
+        applied = _apply_assignments(tasks_path, assignments)
+        print("parent heartbeat already holds queue lock; applied without reacquiring")
+    else:
+        with queue_lock(tasks_path) as got:
+            if not got:
+                print("queue busy — skipped applying target_agent this pass (self-corrects next beat).")
+                return 0
+            applied = _apply_assignments(tasks_path, assignments)
     print(f"applied target_agent assignments ({applied}) -> {tasks_path} "
           f"(dispatch separately, gated: limen dispatch --agent <v> --live)")
     return 0

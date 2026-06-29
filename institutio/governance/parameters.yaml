@@ -172,6 +172,42 @@ parameters:
     self_update: none
     owner: continuity
     note: "Seconds allowed for read-only GitHub consolidation gate probes. It bounds dry-run receipt refreshes only; irreversible rename/transfer/App/credential actions remain human-gated."
+  LIMEN_GITHUB_ACTIONS_PROBE_TIMEOUT:
+    default: 8
+    env: LIMEN_GITHUB_ACTIONS_PROBE_TIMEOUT
+    self_update: none
+    owner: continuity
+    note: "Seconds allowed for route.py to verify that a target repo exposes the configured GitHub Actions dispatch workflow before assigning work to github_actions."
+  LIMEN_OVERNIGHT_LANES:
+    default: "github_actions,jules,claude,opencode,agy"
+    env: LIMEN_OVERNIGHT_LANES
+    self_update: none
+    owner: continuity
+    note: "Lane allowlist for the dry-run overnight autonomy preflight. Excludes Codex by default when the live usage meter is already throttled; live dispatch still requires the autonomy governor spend gate."
+  LIMEN_OVERNIGHT_PER_LANE:
+    default: 1
+    env: LIMEN_OVERNIGHT_PER_LANE
+    self_update: none
+    owner: continuity
+    note: "Per-lane task cap used by scripts/overnight-autonomy-preflight.sh for dry-run sizing. It does not enable live dispatch."
+  LIMEN_OVERNIGHT_WORKERS:
+    default: 3
+    env: LIMEN_OVERNIGHT_WORKERS
+    self_update: none
+    owner: continuity
+    note: "Worker cap for the overnight autonomy preflight dry-run. Live heartbeat worker limits remain governed separately."
+  LIMEN_OVERNIGHT_PREFLIGHT_LOG:
+    default: logs/overnight-preflight.log
+    env: LIMEN_OVERNIGHT_PREFLIGHT_LOG
+    self_update: none
+    owner: continuity
+    note: "Append-only log path for scripts/overnight-autonomy-preflight.sh. It records dry-run receipt refreshes and checksum proof without enabling dispatch."
+  LIMEN_OVERNIGHT_OBSERVE_SLEEP:
+    default: 1800
+    env: LIMEN_OVERNIGHT_OBSERVE_SLEEP
+    self_update: none
+    owner: continuity
+    note: "Seconds between observe-only overnight preflight refreshes in the documented monitoring loop. It is not consumed by live dispatch."
 
   # --- HEALTH: the Executive Health Office (clinical loops + visit prep + monitoring) ---
   LIMEN_BEAT_HEALTH:
