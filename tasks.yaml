@@ -15,11 +15,11 @@ portal:
       claude: 100
     track:
       date: '2026-06-29'
-      spent: 57
+      spent: 58
       per_agent:
         jules: 51
         gemini: 0
-        codex: 0
+        codex: 1
         opencode: 1
         agy: 5
         claude: 0
@@ -62894,7 +62894,7 @@ tasks:
   target_agent: jules
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - simplify
   - generated
@@ -62907,7 +62907,7 @@ tasks:
     should not grow without cause. [auto-generated 2026-06-28 to keep the stream endless]
   depends_on: []
   created: '2026-06-28'
-  updated: '2026-06-29T16:35:44.732517Z'
+  updated: '2026-06-29T17:11:45.670573Z'
   dispatch_log:
   - timestamp: '2026-06-28T15:24:13.775957Z'
     agent: codex
@@ -62965,6 +62965,11 @@ tasks:
     agent: jules
     session_id: '10016698256651704508'
     status: dispatched
+  - timestamp: '2026-06-29T17:11:45.670573Z'
+    agent: jules
+    session_id: https://github.com/organvm/session-meta/pull/145
+    status: done
+    output: 'jules-land: landed session 10016698256651704508 as PR'
 - id: GEN-organvm-session-meta-test-coverage-0629
   title: Raise test coverage in organvm/session-meta
   repo: organvm/session-meta
@@ -64235,6 +64240,40 @@ tasks:
     session_id: https://github.com/organvm/limen/pull/404
     status: dispatched
   - timestamp: '2026-06-29T16:18:51.759899Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
+- id: GEN-organvm-session-meta-simplify-0629
+  title: Reduce complexity in organvm/session-meta
+  repo: organvm/session-meta
+  type: code
+  target_agent: any
+  priority: medium
+  budget_cost: 1
+  status: done
+  labels:
+  - simplify
+  - generated
+  - build-out
+  urls: []
+  context: Identify the most complex or most-duplicated module in organvm/session-meta
+    and refactor it for clarity, with tests proving behavior is unchanged. Net lines
+    should not grow without cause. [auto-generated 2026-06-29 to keep the stream endless]
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-29T17:36:10.783104Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T17:23:38.875543Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T17:23:38.875543Z'
+    agent: codex
+    session_id: https://github.com/organvm/session-meta/pull/146
+    status: dispatched
+  - timestamp: '2026-06-29T17:36:10.783104Z'
     agent: limen
     session_id: heal
     status: done
