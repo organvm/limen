@@ -1,6 +1,6 @@
 # Live Root Gate
 
-Generated: `2026-06-28T20:12:30+00:00`
+Generated: `2026-06-29T00:04:41+00:00`
 
 Status: `blocked`
 
@@ -21,20 +21,20 @@ Status: `blocked`
 
 - Path: `~/Workspace/limen`.
 - Branch: `feature/ORG-artist-organ-face-0628`; release branch `main`.
-- HEAD: `84a3288eaaf91de93428aa8eae9dafbead39ba42`.
-- Release head: `e3bc1927c0a419f968cb78d5b8267e7214c2cac1`.
-- Matches release: `False`; ahead `1` behind `10`.
-- Unique local commits: `1`; patch-equivalent commits: `0`.
-- Dirty entries: `6`.
+- HEAD: `f347c4dacb08ece9670509dee49a9179eea74c48`.
+- Release head: `dc320f2f98e7a326861783b145c18e272f1ac5dc`.
+- Matches release: `False`; ahead `2` behind `16`.
+- Unique local commits: `2`; patch-equivalent commits: `0`.
+- Dirty entries: `5`.
 
 ### Local Commits
 
+- `f347c4d feat(artist): polish macro + micro face for A-MAVS-OLEVM`
 - `84a3288 feat(artist): author KERNEL and CHARTER for A-MAVS-OLEVM`
 
 ### Dirty Paths
 
 - `container/launchd/com.user.netmeter.plist`
-- `organs/artist/KERNEL.md`
 - `scripts/netmode.sh`
 - `tasks.yaml`
 - `organs/health/`
@@ -51,9 +51,9 @@ Status: `blocked`
 
 ## Verified Worktree
 
-- Path: `~/Workspace/limen-conductor-owner-state-20260628`.
-- Branch: `codex/conductor-owner-state-20260628`.
-- Matches release: `True`.
+- Path: `~/Workspace/limen-main-trench-20260628`.
+- Branch: `codex/limen-main-trench-20260628`.
+- Matches release: `False`.
 
 ## Stop Conditions
 

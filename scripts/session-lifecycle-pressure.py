@@ -26,16 +26,6 @@ PROMPT_INDEX = PRIVATE_ROOT / "lifecycle" / "prompt-lifecycle-index.json"
 CORPUS_INVENTORY = PRIVATE_ROOT / "inventory" / "session-corpus-ledger.json"
 OUT_JSON = ROOT / "logs" / "session-lifecycle-pressure.json"
 OUT_MD = ROOT / "logs" / "session-lifecycle-pressure.md"
-REMOTE_MISSING_CLOSED_REASONS = {
-    "clean+merged+idle",
-    "documented-residue",
-    "owner-blocker",
-    "remote-merged",
-    "remote-pr-open",
-    "remote-superseded",
-}
-
-
 def fmt_bytes(n: int) -> str:
     units = ("B", "KiB", "MiB", "GiB", "TiB")
     value = float(n)
@@ -130,8 +120,7 @@ def remote_missing_counts(worktree_remote: dict[str, Any], wt_report: dict[str, 
     unresolved_roots: list[str] = []
     for root in missing_roots:
         item = by_name.get(root)
-        reason = str((item or {}).get("reason") or "")
-        if item and not item.get("debt") and reason in REMOTE_MISSING_CLOSED_REASONS:
+        if item and item.get("debt") is False:
             closed_roots.append(root)
         else:
             unresolved_roots.append(root)

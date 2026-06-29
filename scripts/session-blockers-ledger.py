@@ -43,14 +43,6 @@ NETWORK_HEALTH_INDEX = PRIVATE_ROOT / "lifecycle" / "network-health.json"
 DISPATCH_HEALTH_INDEX = PRIVATE_ROOT / "lifecycle" / "dispatch-health.json"
 LIVE_ROOT_GATE_INDEX = PRIVATE_ROOT / "lifecycle" / "live-root-gate.json"
 CAPABILITY_REPO_ROOT = Path(os.environ.get("LIMEN_CAPABILITY_REPO_ROOT", ROOT))
-REMOTE_MISSING_CLOSED_REASONS = {
-    "clean+merged+idle",
-    "documented-residue",
-    "owner-blocker",
-    "remote-merged",
-    "remote-pr-open",
-    "remote-superseded",
-}
 PROJECT_SETTINGS = ROOT / ".claude" / "settings.json"
 
 CLOUD_CREDENTIAL_FLAGS = (
@@ -92,7 +84,7 @@ def load_json(path: Path) -> dict[str, Any]:
 def current_worktree_report(prompt: dict[str, Any]) -> dict[str, Any]:
     prompt_report = prompt.get("worktree_report") or {}
     try:
-        live_report = worktree_debt_report(ROOT)
+        live_report = worktree_debt_report()
     except Exception:
         return prompt_report if isinstance(prompt_report, dict) else {}
     prompt_items = [item for item in (prompt_report.get("items") if isinstance(prompt_report, dict) else []) or []]
@@ -384,8 +376,7 @@ def unresolved_missing_remote_roots(prompt: dict[str, Any], worktree_report: dic
     closed: list[str] = []
     for root in raw_missing:
         item = by_name.get(root)
-        reason = str((item or {}).get("reason") or "")
-        if item and not item.get("debt") and reason in REMOTE_MISSING_CLOSED_REASONS:
+        if item and item.get("debt") is False:
             closed.append(root)
         else:
             unresolved.append(root)
@@ -433,7 +424,7 @@ def remote_blockers(prompt: dict[str, Any], worktree_report: dict[str, Any], blo
             category="worktree_lifecycle",
             evidence=(
                 f"{len(unresolved_missing)} git worktree roots still lack remote-branch preservation proof "
-                f"({raw_missing} raw missing; {len(closed_missing)} closed by live scanner receipts)."
+                f"({raw_missing} raw missing; {len(closed_missing)} resolved by live scanner)."
             ),
             owner="worktree lifecycle",
             route="Preserve each root by branch, PR, owner blocker, or documented non-source residue before cleanup.",

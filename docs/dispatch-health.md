@@ -1,6 +1,6 @@
 # Dispatch Health
 
-Generated: `2026-06-28T20:12:19+00:00`
+Generated: `2026-06-29T00:04:36+00:00`
 
 Status: `blocked`
 
@@ -19,7 +19,7 @@ Status: `blocked`
 - Loaded launchd state: `running` pid `24368`.
 - Loaded LIMEN_ROOT: `/Users/4jp/Workspace/limen`.
 - Loaded LIMEN_DISPATCH_ASYNC: `None`.
-- Watchdog dry-run healthy: `True`; `[watchdog] 2026-06-28T20:12:19.451146+00:00 HEALTHY sig=healthy`.
+- Watchdog dry-run healthy: `True`; `[watchdog] 2026-06-29T00:04:36.418090+00:00 HEALTHY sig=healthy`.
 
 ## Async Dispatch
 
@@ -31,9 +31,9 @@ Status: `blocked`
 
 - Live root: `~/Workspace/limen`.
 - Branch: `feature/ORG-artist-organ-face-0628`; status `## feature/ORG-artist-organ-face-0628...origin/feature/ORG-artist-organ-face-0628`.
-- HEAD: `84a3288eaaf91de93428aa8eae9dafbead39ba42`.
-- origin/main: `e3bc1927c0a419f968cb78d5b8267e7214c2cac1`.
-- Matches origin/main: `False`; ahead `1` behind `10`.
+- HEAD: `f347c4dacb08ece9670509dee49a9179eea74c48`.
+- origin/main: `dc320f2f98e7a326861783b145c18e272f1ac5dc`.
+- Matches origin/main: `False`; ahead `2` behind `16`.
 - Dirty entries: `5`.
   - `container/launchd/com.user.netmeter.plist`
   - `scripts/netmode.sh`
@@ -43,13 +43,13 @@ Status: `blocked`
 
 ## Verified Worktree
 
-- Verified worktree: `~/Workspace/limen-conductor-owner-state-20260628`.
-- Branch: `codex/conductor-owner-state-20260628`; status `## codex/conductor-owner-state-20260628...origin/codex/conductor-owner-state-20260628`.
-- HEAD matches origin/main: `True`.
+- Verified worktree: `~/Workspace/limen-main-trench-20260628`.
+- Branch: `codex/limen-main-trench-20260628`; status `## codex/limen-main-trench-20260628...origin/codex/limen-main-trench-20260628`.
+- HEAD matches origin/main: `False`.
 
 ## Blockers
 
-- `live-root-not-at-origin-main`: live root branch feature/ORG-artist-organ-face-0628 head 84a3288eaaf9 differs from origin/main e3bc1927c0a4.
+- `live-root-not-at-origin-main`: live root branch feature/ORG-artist-organ-face-0628 head f347c4dacb08 differs from origin/main dc320f2f98e7.
 - `live-root-dirty`: live root has 5 dirty entries.
 - `heartbeat-loaded-env-drift`: plist LIMEN_DISPATCH_ASYNC='0', loaded=None.
 

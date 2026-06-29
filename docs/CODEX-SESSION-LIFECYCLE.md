@@ -1,6 +1,6 @@
 # Codex Session Lifecycle
 
-Generated: `2026-06-27T21:42:32+00:00`
+Generated: `2026-06-29T00:01:47+00:00`
 Horizon: `all local history`
 
 ## Canonical Decision
@@ -12,20 +12,20 @@ Horizon: `all local history`
 
 ## State Summary
 
-- Codex session files classified: `887`.
-- Codex prompt history events indexed: `412` across `20` session ids.
-- States: `ALIVE` 1, `CLOSED` 783, `PARKED` 40, `STALLED` 63.
+- Codex session files classified: `931`.
+- Codex prompt history events indexed: `578` across `32` session ids.
+- States: `ALIVE` 4, `CLOSED` 822, `PARKED` 40, `STALLED` 65.
 
 ## Family Routes
 
 | Family | Sessions | States | Prompt Events | Owner | Route |
 |---|---:|---|---:|---|---|
-| `auth_credentials` | 405 | `ALIVE` 1, `CLOSED` 364, `PARKED` 40 | 2491 | credential workstream | park unless a scoped task explicitly requires the account action |
+| `auth_credentials` | 445 | `ALIVE` 4, `CLOSED` 400, `PARKED` 40, `STALLED` 1 | 2987 | credential workstream | park unless a scoped task explicitly requires the account action |
+| `github_review` | 161 | `CLOSED` 148, `STALLED` 13 | 624 | repo owner | map issue or PR to owner receipt before further review |
 | `session_lifecycle` | 159 | `CLOSED` 139, `STALLED` 20 | 636 | limen control plane | fold into session and prompt lifecycle ledgers |
-| `github_review` | 158 | `CLOSED` 145, `STALLED` 13 | 615 | repo owner | map issue or PR to owner receipt before further review |
 | `worktree_lifecycle` | 77 | `CLOSED` 62, `STALLED` 15 | 289 | worktree lifecycle | preserve branch or owner receipt before cleanup |
 | `agent_coordination` | 40 | `CLOSED` 30, `STALLED` 10 | 133 | agent router | packetize only bounded, non-secret work for other agents |
-| `technical_debt_ci` | 36 | `CLOSED` 33, `STALLED` 3 | 128 | repo predicate | run the narrow predicate and preserve failures as owner blockers |
+| `technical_debt_ci` | 37 | `CLOSED` 33, `STALLED` 4 | 135 | repo predicate | run the narrow predicate and preserve failures as owner blockers |
 | `convergence_corpus` | 10 | `CLOSED` 10 | 37 | corpus organs | route through session-meta, knowledge-corpus, and corpus-converge receipts |
 | `uncategorized` | 2 | `STALLED` 2 | 10 | needs classifier | inspect privately, then add a family or owner receipt |
 

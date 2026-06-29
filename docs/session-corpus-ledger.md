@@ -1,6 +1,6 @@
 # Session Corpus Ledger
 
-Generated: `2026-06-28T19:27:25+00:00`
+Generated: `2026-06-29T00:01:58+00:00`
 Horizon: `all local history`
 
 ## Canonical Decision
@@ -14,52 +14,53 @@ Horizon: `all local history`
 
 ## Local Session Sources
 
-Total seen: `9833` files, `2.2 GiB`.
+Total seen: `9855` files, `2.2 GiB`.
 
 | Source | Root | Files | Size | Newest |
 |---|---:|---:|---:|---|
-| `claude-projects` | `~/.claude/projects` | 4925 | 1.4 GiB | `2026-06-28T17:13:04+00:00` |
-| `codex-sessions` | `~/.codex/sessions` | 923 | 773.9 MiB | `2026-06-28T19:27:21+00:00` |
+| `claude-projects` | `~/.claude/projects` | 4937 | 1.4 GiB | `2026-06-28T23:32:04+00:00` |
+| `codex-sessions` | `~/.codex/sessions` | 931 | 793.4 MiB | `2026-06-29T00:01:51+00:00` |
 | `claude-file-history` | `~/.claude/file-history` | 3519 | 42.2 MiB | `2026-06-27T00:26:28+00:00` |
-| `codex-goals-state` | `~/.codex` | 6 | 12.1 MiB | `2026-06-28T19:27:21+00:00` |
+| `codex-goals-state` | `~/.codex` | 6 | 12.4 MiB | `2026-06-29T00:01:51+00:00` |
 | `claude-plans` | `~/.claude/plans` | 34 | 289.3 KiB | `2026-06-25T03:22:45+00:00` |
-| `codex-history` | `~/.codex` | 1 | 231.9 KiB | `2026-06-28T18:55:55+00:00` |
+| `codex-history` | `~/.codex` | 1 | 237.2 KiB | `2026-06-28T23:59:55+00:00` |
 | `claude-usage-session-meta` | `~/.claude/usage-data/session-meta` | 197 | 221.4 KiB | `2026-06-23T19:06:40+00:00` |
 | `codex-app-sqlite` | `~/.codex/sqlite` | 1 | 68.0 KiB | `2026-06-27T13:58:29+00:00` |
 | `claude-tasks` | `~/.claude/tasks` | 188 | 57.7 KiB | `2026-06-26T00:08:52+00:00` |
 | `claude-usage-facets` | `~/.claude/usage-data/facets` | 32 | 29.1 KiB | `2026-06-23T19:06:55+00:00` |
+| `codex-shell-snapshots` | `~/.codex/shell_snapshots` | 5 | 7.2 KiB | `2026-06-28T23:41:17+00:00` |
 | `codex-attachments` | `~/.codex/attachments` | 4 | 6.2 KiB | `2026-06-27T18:15:45+00:00` |
-| `codex-shell-snapshots` | `~/.codex/shell_snapshots` | 3 | 4.2 KiB | `2026-06-28T18:52:24+00:00` |
 
 ## Existing Organs
 
 | Organ | Role | Path | Git state |
 |---|---|---|---|
-| `session-meta` | producer: redacted, deduped multi-provider atoms | `~/Workspace/session-meta` | `## codex/preserve-session-meta-owner-state-20260627` |
-| `knowledge-corpus` | distillation target: collection, reduced faces, THE ONE | `~/Workspace/knowledge-corpus` | `## codex/preserve-knowledge-corpus-owner-state-20260627...origin/codex/preserve-knowledge-corpus-owner-state-20260627 [ahead 1]` |
+| `session-meta` | producer: redacted, deduped multi-provider atoms | `~/Workspace/session-meta` | `## codex/preserve-session-meta-owner-state-20260627; 17 dirty entries` |
+| `knowledge-corpus` | distillation target: collection, reduced faces, THE ONE | `~/Workspace/knowledge-corpus` | `## codex/preserve-knowledge-corpus-owner-state-20260627...origin/codex/preserve-knowledge-corpus-owner-state-20260627 [ahead 1]; 3 dirty entries` |
 | `conversation-corpus-engine` | product/research engine: provider import and corpus promotion | `~/Workspace/conversation-corpus-engine` | `## discover-latent-value-corpus-engine...origin/discover-latent-value-corpus-engine` |
 
 ## Substrate Counts
 
-- `session-meta/ingest/manifest.jsonl`: 23,646 records, mtime `2026-06-28T16:26:19+00:00`.
-- `session-meta/ingest/atoms.jsonl`: 114,526 atoms, mtime `2026-06-28T16:29:14+00:00`.
+- `session-meta/ingest/manifest.jsonl`: 23,657 records, mtime `2026-06-28T23:22:51+00:00`.
+- `session-meta/ingest/atoms.jsonl`: 116,399 atoms, mtime `2026-06-28T23:25:28+00:00`.
 - `knowledge-corpus`: `13` reduced faces; `00-THE-ONE.md` present: `True`.
-- Top manifest sources: `gemini` 4,592, `claude` 3,961, `chatgpt` 2,709, `claude-projects` 2,525, `cowork-sessions` 2,047, `antigravity` 1,893, `downloads` 1,717, `intake` 1,569.
+- Top manifest sources: `gemini` 4,592, `claude` 3,961, `chatgpt` 2,709, `claude-projects` 2,532, `cowork-sessions` 2,047, `antigravity` 1,893, `downloads` 1,717, `intake` 1,569.
 
 ## Session Lifecycle
 
 - No `quicken.py` journal found yet.
-- No `codex-quicken.py` journal found yet.
+- Last `codex-quicken.py` journal: `2026-06-29T00:01:47+00:00`.
+- Codex sessions classified: `931` total; `ALIVE` 4, `CLOSED` 822, `PARKED` 40, `STALLED` 65.
+- Top Codex lifecycle families: `auth_credentials` 445, `github_review` 161, `session_lifecycle` 159, `worktree_lifecycle` 77, `agent_coordination` 40, `technical_debt_ci` 37.
 
 ## Private Cartridge
 
-- Private root: `~/Workspace/limen/.limen-private/session-corpus`.
-- Private inventory: `~/Workspace/limen/.limen-private/session-corpus/inventory/session-corpus-ledger.json`.
+- Private root: `~/Workspace/limen-main-trench-20260628/.limen-private/session-corpus`.
+- Private inventory: `~/Workspace/limen-main-trench-20260628/.limen-private/session-corpus/inventory/session-corpus-ledger.json`.
 - `.limen-private/` is ignored by Git; it is the local raw/private landing zone.
-- Materialized objects this run: copied `117`, already present `9716`, bytes copied `79.4 MiB`.
-- Private object store now holds `7527` unique objects, `3.2 GiB`.
-- Private screenshot evidence: `14` PNG artifacts, `22.9 MiB`, newest `2026-06-27T13:41:25+00:00`.
-- Screenshot batches: `2026-06-27` 14.
+- Materialized objects this run: copied `7458`, already present `2397`, bytes copied `2.2 GiB`.
+- Private object store now holds `7458` unique objects, `2.2 GiB`.
+- Private screenshot evidence: none recorded yet.
 
 ## Tracked Intake Receipts
 
@@ -75,9 +76,10 @@ Total seen: `9833` files, `2.2 GiB`.
 
 ## Roadblocks And Potholes
 
+- session-meta is not clean/in-sync; do not mutate it from Limen until its existing dirty and divergent work is preserved or merged.
+- knowledge-corpus has 3 dirty entries; record or preserve that owner-state before treating the corpus substrate as fully clean.
 - Local Claude/Codex app stores are live private data; screenshots are only UI evidence. Canonical ingestion must come from the filesystem stores, not from the screenshots.
 - Claude has a lifecycle organ (`scripts/quicken.py`), but no recent journal was found; refresh it before treating Claude FleetView lifecycle as current.
-- Codex has a lifecycle classifier (`scripts/codex-quicken.py`), but no journal was found; run it before relying on Codex app history as typed lifecycle coverage.
 
 ## Commands
 
