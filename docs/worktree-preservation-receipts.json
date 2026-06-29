@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-06-29T23:02:00Z",
+  "generated_utc": "2026-06-29T23:10:00Z",
   "receipts": [
     {
       "branch": "limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e",
@@ -303,7 +303,7 @@
       "evidence_updated_utc": "2026-06-29T22:28:46Z",
       "head": "0f59f3a18cc32365cfee28e4df3b1e6e9e92eacf",
       "lane": "owner-blocker",
-      "next_action": "Committed branch head is preserved on origin/work/triptych-media-offload-20260629 with ahead/behind 0/0. The private patch preserves the local dirty owner-state. Do not reclaim or delete this worktree yet; create a narrower owner packet if those local deltas should be committed, preserved elsewhere, or abandoned.",
+      "next_action": "Committed branch head is preserved on origin/work/triptych-media-offload-20260629 with ahead/behind 0/0. The private patch preserves the local dirty owner-state. Create a new narrow owner packet if those local deltas should be committed, preserved elsewhere, or abandoned; reclaim the local checkout only after operator acceptance.",
       "private_patch": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T222846Z-triptych-media-offload-20260629/patch.diff",
       "private_patch_bytes": 54995,
       "private_patch_sha256": "f57ab5cf27434dd17e1817e59fd525a7a0614581888ec8aad2f017e6e8965217",
@@ -443,6 +443,36 @@
       "score_discount": 20,
       "status": "private_patch_preserved",
       "unique_commits_vs_origin_main": 3,
+      "worktree_ahead_behind_remote": "0/0"
+    },
+    {
+      "base_branch": "origin/main",
+      "base_head": "7ecdd65a529802a581d173b4cb390d19bcb20e55",
+      "branch": "work/warp-agent-routing-20260629",
+      "changed_paths": [
+        "cli/tests/test_warp_notification_provenance.py",
+        "docs/dispatch-health.md",
+        "docs/lanes/README.md",
+        "docs/live-root-gate.md",
+        "scripts/warp-notification-provenance.py",
+        "tasks.yaml"
+      ],
+      "classification": "remote branch preserves committed head; origin/main range private patch preserved",
+      "evidence_updated_utc": "2026-06-29T23:10:00Z",
+      "head": "6fb678e85d253274845136753ce670768b6c6f3d",
+      "lane": "owner-blocker",
+      "next_action": "Committed branch head is preserved on origin/work/warp-agent-routing-20260629 with ahead/behind 0/0. The private patch preserves the origin/main..HEAD commit range. Review, merge, supersede, or abandon under an owner packet; reclaim the local checkout only after operator acceptance.",
+      "private_patch": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T231000Z-warp-agent-routing-20260629/origin-main-range.patch",
+      "private_patch_bytes": 19716,
+      "private_patch_sha256": "6ac6a5b426c1f8d40d78ac6d19e5b113db23df26bcdbf71ea6876e7d911db6b1",
+      "private_receipt": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T231000Z-warp-agent-routing-20260629/receipt.json",
+      "repo": "organvm/limen",
+      "remote_branch": "origin/work/warp-agent-routing-20260629",
+      "remote_head": "6fb678e85d253274845136753ce670768b6c6f3d",
+      "root": "warp-agent-routing-20260629",
+      "score_discount": 20,
+      "status": "private_patch_preserved",
+      "unique_commits_vs_origin_main": 1,
       "worktree_ahead_behind_remote": "0/0"
     }
   ],
