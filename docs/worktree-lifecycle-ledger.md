@@ -22,11 +22,10 @@ The unique work remains preserved on the remote branches and open draft PRs.
 
 2026-06-29 crash-resume scan:
 
-- `python3 scripts/worktree-debt.py --json`: 28 roots, 0 debt-bearing roots, cap 12.
+- `python3 scripts/worktree-debt.py --json`: 26 roots, 0 debt-bearing roots, cap 12.
 - Current class mix: 11 active roots inside the grace window, 5 open-PR remote-preserved
   roots, 3 documented residues, 2 owner-blocker roots, 3 remote-merged roots,
-  2 remote-superseded roots, 1 clean merged idle root, and 1 newly active
-  generated worktree inside the 6-hour grace window.
+  and 2 remote-superseded roots.
 - `mirror-mirror` is now preserved by merged PR
   [#87](https://github.com/organvm/mirror-mirror/pull/87) at
   `99fdd8d8b49e8a57022e6eec52b706655e973403`; local `npm test`, `npm run build`,

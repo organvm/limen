@@ -28,7 +28,7 @@
         "additionalProperties": false,
         "required": ["id", "title", "route", "contract", "persona", "sanctioned_personas", "disclosure"],
         "properties": {
-          "id": { "type": "string", "enum": ["internal", "qa", "client", "public"] },
+          "id": { "type": "string", "enum": ["internal", "qa", "corpus", "client", "public"] },
           "title": { "type": "string" },
           "route": { "type": "string" },
           "contract": { "type": "string" },
@@ -49,7 +49,8 @@
         "client": { "$ref": "#/$defs/clientContract" },
         "public": { "$ref": "#/$defs/publicContract" },
         "qa": { "$ref": "#/$defs/qaContract" },
-        "readiness": { "$ref": "#/$defs/readinessContract" }
+        "readiness": { "$ref": "#/$defs/readinessContract" },
+        "corpus": { "$ref": "#/$defs/corpusContract" }
       }
     }
   },
@@ -112,6 +113,16 @@
         "path": { "type": "string" },
         "agent": { "type": "string" },
         "includes_dispatch_logs": { "type": "boolean" }
+      }
+    },
+    "corpusContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "includes_raw_text", "includes_private_paths"],
+      "properties": {
+        "path": { "type": "string" },
+        "includes_raw_text": { "type": "boolean" },
+        "includes_private_paths": { "type": "boolean" }
       }
     }
   }
