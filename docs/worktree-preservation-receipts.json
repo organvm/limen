@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-06-29T22:55:00Z",
+  "generated_utc": "2026-06-29T23:02:00Z",
   "receipts": [
     {
       "branch": "limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e",
@@ -408,6 +408,38 @@
       "remote_branch": "origin/codex/network-substrate-healing-20260628",
       "remote_head": "5ba52e5d06c1dffc9f9adc3e717db1b5d29b6cbf",
       "root": "limen-network-substrate-20260628",
+      "score_discount": 20,
+      "status": "private_patch_preserved",
+      "unique_commits_vs_origin_main": 3,
+      "worktree_ahead_behind_remote": "0/0"
+    },
+    {
+      "base_branch": "origin/main",
+      "base_head": "7ecdd65a529802a581d173b4cb390d19bcb20e55",
+      "branch": "codex/limen-main-trench-20260628",
+      "changed_path_count": 50,
+      "classification": "remote branch preserves committed head; origin/main range private patch preserved",
+      "evidence_updated_utc": "2026-06-29T23:02:00Z",
+      "head": "c5fb867f3044fb0ff60b253f8f8dc869c4002ac5",
+      "lane": "owner-blocker",
+      "next_action": "Committed branch head is preserved on origin/codex/limen-main-trench-20260628 with ahead/behind 0/0. The private patch preserves the origin/main..HEAD commit range. Review, merge, supersede, or abandon under an owner packet; reclaim the local checkout only after operator acceptance.",
+      "notable_changed_paths": [
+        "tasks.yaml",
+        "cli/src/limen/worktree_debt.py",
+        "cli/src/limen/worktree_roots.py",
+        "scripts/session-lifecycle-pressure.py",
+        "scripts/start-worktree-session.sh",
+        "docs/lanes/main-conductor-trench.md",
+        "docs/overnight-autonomous-work.md"
+      ],
+      "private_patch": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T230200Z-limen-main-trench-20260628/origin-main-range.patch",
+      "private_patch_bytes": 225062,
+      "private_patch_sha256": "bf6d144a213fbcaa84238f3076c355e5b3c22f3bf1e32061bb5ace67199a4902",
+      "private_receipt": ".limen-private/session-corpus/lifecycle/worktree-preserve/2026-06-29T230200Z-limen-main-trench-20260628/receipt.json",
+      "repo": "organvm/limen",
+      "remote_branch": "origin/codex/limen-main-trench-20260628",
+      "remote_head": "c5fb867f3044fb0ff60b253f8f8dc869c4002ac5",
+      "root": "limen-main-trench-20260628",
       "score_discount": 20,
       "status": "private_patch_preserved",
       "unique_commits_vs_origin_main": 3,
