@@ -126,9 +126,7 @@ def test_owner_packets_emit_executor_criteria_and_predicates(tmp_path: Path):
     for packet in snapshot["owner_packets"]:
         assert packet["executor_criteria"]
         assert packet["verification_predicates"]
-    planner = {
-        packet["packet_key"]: packet for packet in snapshot["owner_packets"]
-    }["current-session-fanout-planner"]
+    planner = {packet["packet_key"]: packet for packet in snapshot["owner_packets"]}["current-session-fanout-planner"]
     assert any("py_compile" in predicate for predicate in planner["verification_predicates"])
     assert snapshot["provenance"]["source_plan_hashes"]
 
