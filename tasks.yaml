@@ -65146,7 +65146,7 @@ tasks:
   target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: dispatched
+  status: in_progress
   labels:
   - simplify
   - generated
@@ -65823,7 +65823,7 @@ tasks:
   target_agent: opencode
   priority: critical
   budget_cost: 2
-  status: in_progress
+  status: done
   labels:
   - organ-kernel
   - pillar:health
@@ -65845,7 +65845,7 @@ tasks:
     \ into institutional weight (VLTIMA).]"
   depends_on: []
   created: '2026-06-30'
-  updated: '2026-06-30T16:10:00Z'
+  updated: '2026-06-30T16:25:00Z'
   dispatch_log:
   - timestamp: '2026-06-30T16:00:55.195999Z'
     agent: codex
@@ -65866,3 +65866,8 @@ tasks:
     session_id: current
     status: in_progress
     output: 'Rewriting KERNEL.md to match mature organ convention'
+  - timestamp: '2026-06-30T16:25:00Z'
+    agent: opencode
+    session_id: current
+    status: done
+    output: 'Rewrote organs/health/KERNEL.md: added Why this organ exists, expanded 5-primitive kernel map, deepened MACRO/MICRO deployment with explicit ADA tie-in, added hard guardrails. Unnamed per constraint. PR: <TBD>'
