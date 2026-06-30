@@ -48,9 +48,7 @@ def _write_session(path: Path) -> None:
                 "type": "function_call",
                 "name": "exec_command",
                 "arguments": json.dumps(
-                    {
-                        "cmd": "sed -n '1,220p' scripts/usage-telemetry.py cli/src/limen/dispatch.py"
-                    }
+                    {"cmd": "sed -n '1,220p' scripts/usage-telemetry.py cli/src/limen/dispatch.py"}
                 ),
             },
         },
@@ -62,9 +60,7 @@ def _write_session(path: Path) -> None:
         {
             "timestamp": "2026-06-30T10:10:01Z",
             "type": "event_msg",
-            "payload": {
-                "message": "Local work blocked by WARP_API_KEY permission and needs_human registry entry."
-            },
+            "payload": {"message": "Local work blocked by WARP_API_KEY permission and needs_human registry entry."},
         },
         {
             "timestamp": "2026-06-30T10:20:00Z",
@@ -80,8 +76,7 @@ def _write_session(path: Path) -> None:
                 "arguments": json.dumps(
                     {
                         "cmd": (
-                            "LIMEN_DISCOVER_REPOS=organvm/limen "
-                            "python3 scripts/discover-value.py --floor 1 --max-new 1"
+                            "LIMEN_DISCOVER_REPOS=organvm/limen python3 scripts/discover-value.py --floor 1 --max-new 1"
                         )
                     }
                 ),
