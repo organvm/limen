@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime, timezone
+import json
 import os
 import re
 import shlex
@@ -27,23 +30,97 @@ class CapacityRow(AgentStatus):
     remaining: int | None
 
 
-PAID_AGENT_ORDER: tuple[str, ...] = (
-    "codex",
-    "claude",
-    "opencode",
-    "agy",
-    "gemini",
-    # ollama: the LOCAL, UNMETERED floor of the cascade — the pilot light. It has no token
-    # budget and no rate-limit window, so when every metered/cloud vendor is spent (the exact
-    # "we didn't pace tokens perfectly between refreshes" case), the beat still has a lane that
-    # can produce. Self-activating: reachable only once a model is pulled (see agent_status).
-    "ollama",
-    "jules",
-    "copilot",
-    "warp",
-    "oz",
-    "github_actions",
-)
+class CapacityFillRow(TypedDict):
+    agent: str
+    target: int
+    expected_now: int
+    productive: int
+    attempts: int
+    observed: int
+    open_work: int
+    active_work: int
+    remaining: int
+    reachable: bool
+    status: str
+    evidence: str
+    action: str
+
+
+class CapacityFillSnapshot(TypedDict):
+    generated_at: str
+    status: str
+    rows: list[CapacityFillRow]
+    blockers: list[dict[str, str]]
+
+
+class LaneClassification(TypedDict):
+    agent: str
+    kind: str
+    status: str
+    reachable: bool
+    detail: str
+    command: list[str] | None
+
+
+@dataclass(frozen=True)
+class LaneAdapter:
+    agent: str
+    kind: str
+    binary: str
+    dispatch_surface: str
+    local_checkout: bool = False
+    issue_assignment: bool = False
+    non_blocking: bool = False
+    human_gate_when_unreachable: bool = False
+
+
+LANE_ADAPTERS: dict[str, LaneAdapter] = {
+    "codex": LaneAdapter("codex", "local-cli", "codex", "codex exec", local_checkout=True),
+    "claude": LaneAdapter("claude", "local-cli", "claude", "claude -p", local_checkout=True),
+    "opencode": LaneAdapter("opencode", "local-cli", "opencode", "opencode run", local_checkout=True),
+    "agy": LaneAdapter("agy", "local-cli", "agy", "agy --print", local_checkout=True, human_gate_when_unreachable=True),
+    "gemini": LaneAdapter("gemini", "local-cli", "gemini", "gemini -p", local_checkout=True, human_gate_when_unreachable=True),
+    # ollama: the LOCAL, UNMETERED floor of the cascade - the pilot light. It has no token
+    # budget and no rate-limit window, so when every metered/cloud vendor is spent, the beat
+    # still has a lane that can produce. Self-activating: reachable only once a model is pulled.
+    "ollama": LaneAdapter("ollama", "local-cli", "ollama", "ollama run", local_checkout=True),
+    "jules": LaneAdapter("jules", "cloud-cli", "jules", "jules remote new", non_blocking=True),
+    "copilot": LaneAdapter(
+        "copilot",
+        "github-issue",
+        "gh",
+        "GitHub issue assignment",
+        issue_assignment=True,
+        non_blocking=True,
+        human_gate_when_unreachable=True,
+    ),
+    "warp": LaneAdapter(
+        "warp",
+        "paid-service",
+        "warp",
+        "limen-warp-oz workflow_dispatch",
+        non_blocking=True,
+        human_gate_when_unreachable=True,
+    ),
+    "oz": LaneAdapter(
+        "oz",
+        "paid-service",
+        "oz",
+        "limen-warp-oz workflow_dispatch",
+        non_blocking=True,
+        human_gate_when_unreachable=True,
+    ),
+    "github_actions": LaneAdapter(
+        "github_actions",
+        "github-actions",
+        "gh",
+        "workflow_dispatch",
+        non_blocking=True,
+        human_gate_when_unreachable=True,
+    ),
+}
+
+PAID_AGENT_ORDER: tuple[str, ...] = tuple(LANE_ADAPTERS)
 
 AGENT_ALIASES: dict[str, str] = {
     "actions": "github_actions",
@@ -52,36 +129,25 @@ AGENT_ALIASES: dict[str, str] = {
     "antigravity": "agy",
 }
 
-LOCAL_CHECKOUT_AGENTS = frozenset({"codex", "claude", "opencode", "agy", "gemini", "ollama"})
-ISSUE_ASSIGNMENT_AGENTS = frozenset({"copilot"})
-
-_DEFAULT_BINARIES: dict[str, str] = {
-    "codex": "codex",
-    "claude": "claude",
-    "opencode": "opencode",
-    "agy": "agy",
-    "gemini": "gemini",
-    "ollama": "ollama",
-    "jules": "jules",
-    "copilot": "gh",
-    "warp": "warp",
-    "oz": "oz",
-    "github_actions": "gh",
+LOCAL_CHECKOUT_AGENTS = frozenset(agent for agent, adapter in LANE_ADAPTERS.items() if adapter.local_checkout)
+ISSUE_ASSIGNMENT_AGENTS = frozenset(agent for agent, adapter in LANE_ADAPTERS.items() if adapter.issue_assignment)
+NON_BLOCKING_AGENTS = frozenset(agent for agent, adapter in LANE_ADAPTERS.items() if adapter.non_blocking)
+DEFAULT_FILL_AGENTS: tuple[str, ...] = PAID_AGENT_ORDER
+DEFAULT_DAILY_TASK_TARGETS: dict[str, int] = {
+    # Human contract: Claude should get a deliberately programmed/check-up batch daily.
+    "claude": 15,
+    # Lanes without legacy per-agent budget caps still need a visible receipt. A target of one
+    # classifies them without flooding the board.
+    "ollama": 1,
+    "copilot": 1,
+    "warp": 1,
+    "oz": 1,
+    "github_actions": 1,
 }
+BAD_USAGE_HEALTH = {"exhausted", "rate-limited", "low", "throttle"}
 
-_KINDS: dict[str, str] = {
-    "codex": "local-cli",
-    "claude": "local-cli",
-    "opencode": "local-cli",
-    "agy": "local-cli",
-    "gemini": "local-cli",
-    "ollama": "local-cli",
-    "jules": "cloud-cli",
-    "copilot": "github-issue",
-    "warp": "paid-service",
-    "oz": "paid-service",
-    "github_actions": "github-actions",
-}
+_DEFAULT_BINARIES: dict[str, str] = {agent: adapter.binary for agent, adapter in LANE_ADAPTERS.items()}
+_KINDS: dict[str, str] = {agent: adapter.kind for agent, adapter in LANE_ADAPTERS.items()}
 
 _ISSUE_RE = re.compile(r"github\.com/([^/\s]+/[^/\s]+)/issues/(\d+)")
 
@@ -89,6 +155,90 @@ _ISSUE_RE = re.compile(r"github\.com/([^/\s]+/[^/\s]+)/issues/(\d+)")
 def canonical_agent(agent: str | None) -> str:
     value = (agent or "").strip()
     return AGENT_ALIASES.get(value, value)
+
+
+def registered_lanes() -> tuple[str, ...]:
+    return PAID_AGENT_ORDER
+
+
+def _dedupe_lanes(lanes: list[str]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in lanes:
+        lane = canonical_agent(raw)
+        if not lane or lane in seen:
+            continue
+        if lane not in PAID_AGENT_ORDER:
+            raise ValueError(f"unknown Limen lane {raw!r}; expected one of {', '.join(PAID_AGENT_ORDER)}")
+        seen.add(lane)
+        out.append(lane)
+    return tuple(out)
+
+
+def classify_lanes(board: object = None, down_lanes: set[str] | None = None) -> list[LaneClassification]:
+    """Classify every registered lane for overnight/fleet receipts.
+
+    Status vocabulary is intentionally small:
+      active      - reachable now and has budget/runway
+      down        - missing binary/process substrate or explicitly down by the live gate
+      depleted    - registered and healthy enough, but has no budget remaining
+      human-gated - auth/config/model enablement is the next gate
+    """
+    down = {canonical_agent(lane) for lane in (down_lanes or set())}
+    rows: list[LaneClassification] = []
+    for row in capacity_census(board):
+        agent = row["agent"]
+        detail = str(row["detail"])
+        adapter = LANE_ADAPTERS[agent]
+        if agent in down:
+            status = "down"
+            reachable = False
+            detail = f"live dispatch gate marked lane down; {detail}"
+        elif row["reachable"]:
+            status = "active"
+            reachable = True
+        elif row["remaining"] == 0:
+            status = "depleted"
+            reachable = False
+        elif adapter.human_gate_when_unreachable or re.search(
+            r"auth|api key|not set|not confirmed|no model pulled|credential", detail, re.IGNORECASE
+        ):
+            status = "human-gated"
+            reachable = False
+        else:
+            status = "down"
+            reachable = False
+        rows.append(
+            {
+                "agent": agent,
+                "kind": row["kind"],
+                "status": status,
+                "reachable": reachable,
+                "detail": detail,
+                "command": row["command"],
+            }
+        )
+    return rows
+
+
+def resolve_lane_selector(
+    selector: str | None = None,
+    *,
+    board: object = None,
+    down_lanes: set[str] | None = None,
+) -> tuple[str, ...]:
+    """Resolve LIMEN_LANES semantics.
+
+    auto       -> every active registered lane.
+    all        -> every registered lane, leaving downstream dispatch to report skips.
+    comma list -> explicit operator override, normalized through aliases.
+    """
+    raw = (selector or os.environ.get("LIMEN_LANES") or "auto").strip()
+    if not raw or raw == "auto":
+        return tuple(row["agent"] for row in classify_lanes(board, down_lanes) if row["status"] == "active")
+    if raw == "all":
+        return PAID_AGENT_ORDER
+    return _dedupe_lanes([part.strip() for part in raw.split(",") if part.strip()])
 
 
 def task_value(task: Task | dict[str, object], key: str, default: T | None = None) -> T | object | None:
@@ -247,16 +397,17 @@ def agent_status(agent: str) -> AgentStatus:
         }
 
     if agent in {"warp", "oz"}:
-        warp_key = os.environ.get("WARP_API_KEY")
+        api_key_env = f"{agent.upper()}_API_KEY"
+        api_key = os.environ.get(api_key_env)
         gh_path = shutil.which("gh")
         workflow = os.environ.get("LIMEN_WARP_OZ_WORKFLOW", "limen-warp-oz.yml")
         dispatch_repo = os.environ.get("LIMEN_WARP_OZ_REPO", "organvm/limen")
-        if not warp_key:
+        if not api_key:
             return {
                 "agent": agent,
                 "kind": _KINDS[agent],
                 "reachable": False,
-                "detail": "WARP_API_KEY not set (set env var + add as org/repo Actions secret)",
+                "detail": f"{api_key_env} not set (set env var + add as org/repo Actions secret)",
                 "command": None,
             }
         if not gh_path:
@@ -271,7 +422,7 @@ def agent_status(agent: str) -> AgentStatus:
             "agent": agent,
             "kind": _KINDS[agent],
             "reachable": True,
-            "detail": f"WARP_API_KEY set, gh at {gh_path}, workflow={workflow}@{dispatch_repo}",
+            "detail": f"{api_key_env} set, gh at {gh_path}, workflow={workflow}@{dispatch_repo}",
             "command": [gh_path, "workflow", "run", workflow, "--repo", dispatch_repo],
         }
 
@@ -381,3 +532,277 @@ def format_capacity_census(rows: list[CapacityRow]) -> str:
             f"  {state:4} {row['agent']:<14} {row['kind']:<14} remaining={remaining}/{limit} - {row['detail']}"
         )
     return "\n".join(lines)
+
+
+def _root() -> Path:
+    return Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+
+
+def _load_usage(root: Path | None = None) -> dict[str, object]:
+    try:
+        data = json.loads(((root or _root()) / "logs" / "usage.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _parse_dt(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _window_hours_from_usage(agent: str, usage: dict[str, object]) -> float:
+    vendors = usage.get("vendors") if isinstance(usage, dict) else {}
+    info = vendors.get(agent) if isinstance(vendors, dict) else {}
+    if isinstance(info, dict):
+        hours = info.get("window_hours")
+        if isinstance(hours, (int, float)) and hours > 0:
+            return float(hours)
+        window = str(info.get("window") or "")
+    else:
+        window = ""
+    match = re.search(r"(\d+(?:\.\d+)?)\s*h", window)
+    if match:
+        return float(match.group(1))
+    if "today" in window or "day" in window or "24" in window:
+        return 24.0
+    return 24.0
+
+
+def _progress_from_usage(agent: str, usage: dict[str, object], reset_at: datetime | None, now: datetime) -> float:
+    vendors = usage.get("vendors") if isinstance(usage, dict) else {}
+    info = vendors.get(agent) if isinstance(vendors, dict) else {}
+    if isinstance(info, dict):
+        time_left = info.get("time_left_frac")
+        if isinstance(time_left, (int, float)):
+            return max(0.0, min(1.0, 1.0 - float(time_left)))
+    if reset_at is None:
+        return 1.0
+    hours = _window_hours_from_usage(agent, usage)
+    elapsed = max(0.0, (now - reset_at).total_seconds() / 3600.0)
+    return max(0.0, min(1.0, elapsed / hours))
+
+
+def _daily_task_target(agent: str, board: object) -> int:
+    env_name = f"LIMEN_{agent.upper()}_DAILY_TASKS"
+    if os.environ.get(env_name):
+        return _int(os.environ.get(env_name), 0)
+    if agent in DEFAULT_DAILY_TASK_TARGETS:
+        return DEFAULT_DAILY_TASK_TARGETS[agent]
+    budget = _budget_from_board(board)
+    per_agent = _get(budget, "per_agent", {}) or {}
+    if isinstance(per_agent, dict) and agent in per_agent:
+        return _int(per_agent.get(agent), 0)
+    return 0
+
+
+def _task_agent(task: object) -> str:
+    return canonical_agent(str(task_value(task, "target_agent", "") or ""))
+
+
+def _task_status(task: object) -> str:
+    return str(task_value(task, "status", "") or "")
+
+
+def _task_cost_int(task: object) -> int:
+    return _int(task_value(task, "budget_cost", 1), 1)
+
+
+def _dispatch_event_attempts(board: object, agent: str, day: str) -> int:
+    tasks = _get(board, "tasks", []) or []
+    if not isinstance(tasks, list):
+        return 0
+    touched: set[str] = set()
+    for task in tasks:
+        task_id = str(task_value(task, "id", "") or "")
+        log = task_value(task, "dispatch_log", []) or []
+        if not isinstance(log, list):
+            continue
+        for event in log:
+            event_agent = canonical_agent(str(_get(event, "agent", "") or ""))
+            if event_agent != agent:
+                continue
+            timestamp = _get(event, "timestamp", "")
+            if day and not str(timestamp).startswith(day):
+                continue
+            status = str(_get(event, "status", "") or "")
+            if status == "open":
+                continue
+            if task_id:
+                touched.add(task_id)
+    return len(touched)
+
+
+def _usage_consumed_runs(agent: str, usage: dict[str, object]) -> int:
+    vendors = usage.get("vendors") if isinstance(usage, dict) else {}
+    info = vendors.get(agent) if isinstance(vendors, dict) else {}
+    if not isinstance(info, dict):
+        return 0
+    signal = str(info.get("signal") or "")
+    if signal in {"count", "dispatch-count", "runs"}:
+        return _int(info.get("consumed"), 0)
+    return 0
+
+
+def _usage_health(agent: str, usage: dict[str, object]) -> str:
+    vendors = usage.get("vendors") if isinstance(usage, dict) else {}
+    info = vendors.get(agent) if isinstance(vendors, dict) else {}
+    return str(info.get("health") or "") if isinstance(info, dict) else ""
+
+
+def _lane_work_counts(board: object, agent: str) -> tuple[int, int]:
+    tasks = _get(board, "tasks", []) or []
+    if not isinstance(tasks, list):
+        return 0, 0
+    open_work = 0
+    active_work = 0
+    for task in tasks:
+        status = _task_status(task)
+        task_agent = _task_agent(task)
+        cost = _task_cost_int(task)
+        if status == "open" and task_agent in {agent, "any"}:
+            open_work += cost
+        elif status in {"dispatched", "in_progress"} and task_agent == agent:
+            active_work += cost
+    return open_work, active_work
+
+
+def capacity_fill_snapshot(
+    board: object,
+    *,
+    now: datetime | None = None,
+    usage: dict[str, object] | None = None,
+    down_lanes: set[str] | None = None,
+    agents: tuple[str, ...] | None = None,
+) -> CapacityFillSnapshot:
+    """Compare paid-lane fill against each lane's current reset window.
+
+    The key distinction is productive board spend vs. attempted dispatches. Failed/rerouted
+    attempts prove the lane was touched, but they do not satisfy the daily fill contract.
+    """
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    usage = usage if usage is not None else _load_usage()
+    down_lanes = down_lanes or set()
+    budget = _budget_from_board(board)
+    track = _get(budget, "track", {}) or {}
+    day = str(_get(track, "date", "") or now.date().isoformat())
+    per_agent_spent = _get(track, "per_agent", {}) or {}
+    per_agent_reset = _get(track, "per_agent_reset", {}) or {}
+    if not isinstance(per_agent_spent, dict):
+        per_agent_spent = {}
+    if not isinstance(per_agent_reset, dict):
+        per_agent_reset = {}
+
+    census = {row["agent"]: row for row in capacity_census(board)}
+    rows: list[CapacityFillRow] = []
+    blockers: list[dict[str, str]] = []
+    for agent in agents or DEFAULT_FILL_AGENTS:
+        target = _daily_task_target(agent, board)
+        if target <= 0:
+            continue
+        reset_at = _parse_dt(per_agent_reset.get(agent))
+        progress = _progress_from_usage(agent, usage, reset_at, now)
+        expected_now = min(target, int(round(target * progress)))
+        if progress > 0 and expected_now == 0:
+            expected_now = 1
+        productive = _int(per_agent_spent.get(agent), 0)
+        attempts = max(_dispatch_event_attempts(board, agent, day), _usage_consumed_runs(agent, usage))
+        observed = max(productive, attempts)
+        open_work, active_work = _lane_work_counts(board, agent)
+        remaining = max(0, target - productive)
+        row_census = census.get(agent)
+        reachable = bool(row_census and row_census["reachable"]) and agent not in down_lanes
+        usage_health = _usage_health(agent, usage)
+
+        if agent in down_lanes:
+            status = "blocked"
+            evidence = "lane is down by the live dispatch gate"
+            action = "clear the lane-down/auth/rate-limit gate, then route and dispatch this lane"
+        elif usage_health in BAD_USAGE_HEALTH and observed > 0:
+            status = "depleted"
+            evidence = f"usage meter health={usage_health}; observed={observed}, productive={productive}"
+            action = "wait for this lane's meter to refresh or fail over before feeding it again"
+        elif expected_now > 0 and productive < expected_now:
+            if attempts >= expected_now:
+                status = "unproductive"
+                evidence = (
+                    f"attempted {attempts}/{expected_now}, but productive board spend is "
+                    f"{productive}/{expected_now}"
+                )
+                action = "heal failed/rerouted dispatches so attempts become done/dispatched work"
+            elif reachable and open_work > 0:
+                status = "underfilled"
+                evidence = f"productive {productive}/{expected_now}; attempts {attempts}/{expected_now}"
+                action = "route open work to this lane and dispatch before the window resets"
+            elif not reachable:
+                status = "blocked"
+                evidence = f"productive {productive}/{expected_now}, but the lane is not reachable"
+                action = "fix lane reachability/auth/budget before routing more work"
+            else:
+                status = "no_work"
+                evidence = f"productive {productive}/{expected_now}, but no open/any work is available"
+                action = "generate or route appropriate open work for this lane"
+        else:
+            status = "healthy"
+            evidence = f"productive {productive}/{expected_now}; attempts {attempts}/{expected_now}"
+            action = "keep pacing normally"
+
+        row: CapacityFillRow = {
+            "agent": agent,
+            "target": target,
+            "expected_now": expected_now,
+            "productive": productive,
+            "attempts": attempts,
+            "observed": observed,
+            "open_work": open_work,
+            "active_work": active_work,
+            "remaining": remaining,
+            "reachable": reachable,
+            "status": status,
+            "evidence": evidence,
+            "action": action,
+        }
+        rows.append(row)
+        if status in {"underfilled", "unproductive", "blocked", "no_work"}:
+            blockers.append({"id": f"lane-fill-{agent}", "evidence": f"{agent}: {evidence}"})
+
+    overall = "healthy" if not blockers else "blocked"
+    return {
+        "generated_at": now.isoformat(timespec="seconds"),
+        "status": overall,
+        "rows": rows,
+        "blockers": blockers,
+    }
+
+
+def format_capacity_fill(snapshot: CapacityFillSnapshot) -> str:
+    lines = [
+        "# Capacity Fill",
+        "",
+        f"Generated: `{snapshot['generated_at']}`",
+        "",
+        f"Status: `{snapshot['status']}`",
+        "",
+        "| Lane | Status | Productive | Attempts | Expected now | Target | Open work | Active | Action |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---|",
+    ]
+    for row in snapshot["rows"]:
+        lines.append(
+            "| "
+            f"`{row['agent']}` | `{row['status']}` | {row['productive']} | {row['attempts']} | "
+            f"{row['expected_now']} | {row['target']} | {row['open_work']} | {row['active_work']} | "
+            f"{row['action']} |"
+        )
+    lines.extend(["", "## Evidence", ""])
+    for row in snapshot["rows"]:
+        lines.append(f"- `{row['agent']}`: {row['evidence']}")
+    return "\n".join(lines) + "\n"
