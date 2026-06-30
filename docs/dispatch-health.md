@@ -1,6 +1,6 @@
 # Dispatch Health
 
-Generated: `2026-06-29T15:16:32+00:00`
+Generated: `2026-06-29T23:15:16+00:00`
 
 Status: `blocked`
 
@@ -19,35 +19,74 @@ Status: `blocked`
 - Loaded launchd state: `running` pid `1656`.
 - Loaded LIMEN_ROOT: `/Users/4jp/Workspace/limen`.
 - Loaded LIMEN_DISPATCH_ASYNC: `0`.
-- Watchdog dry-run healthy: `True`; `[watchdog] 2026-06-29T15:16:33.126703+00:00 HEALTHY sig=healthy`.
+- Watchdog dry-run healthy: `False`; `[watchdog] 2026-06-29T23:15:16.928156+00:00 UNHEALTHY sig=beating+daemon-up`.
 
 ## Async Dispatch
 
 - Async dry-run requested: `True`.
-- Async dry-run ok: `True`; timed out `False`.
-- Async dry-run summary: `-- async: reaped 0 dead ; harvested 0 ; 0 still running ; would launch 0 (cap 12) -> []`.
+- Async dry-run ok: `False`; timed out `False`.
+- Async dry-run summary: `PermissionError: [Errno 1] Operation not permitted: '/Users/4jp/Workspace/limen/logs/.queue.lock.d'`.
+
+## Capacity Fill
+
+- Capacity fill status: `blocked`.
+- Productive means task-board spend/reservation. Attempts alone do not satisfy a lane's fill contract.
+
+| Lane | Status | Productive | Attempts | Expected now | Target | Open work | Active |
+|---|---|---:|---:|---:|---:|---:|---:|
+| `jules` | `no_work` | 50 | 48 | 72 | 100 | 0 | 46 |
+| `claude` | `no_work` | 0 | 5 | 8 | 15 | 0 | 0 |
+| `opencode` | `no_work` | 1 | 6 | 72 | 100 | 0 | 1 |
+| `agy` | `blocked` | 5 | 6 | 72 | 100 | 0 | 0 |
+| `gemini` | `no_work` | 0 | 5 | 7 | 10 | 0 | 0 |
+| `codex` | `no_work` | 1 | 15 | 51 | 100 | 0 | 0 |
 
 ## Live Root
 
 - Live root: `~/Workspace/limen`.
-- Branch: `main`; status `## main...origin/main [ahead 1]`.
-- HEAD: `d6757d3d21fc02f7d849f1f680d5c4e74c68cf70`.
-- origin/main: `9f7af24dcb7514acec86c377965fa8efa56932ce`.
-- Matches origin/main: `False`; ahead `1` behind `0`.
-- Dirty entries: `2`.
+- Branch: `work/workstream-agent-launcher-20260629`; status `## work/workstream-agent-launcher-20260629...origin/work/workstream-agent-launcher-20260629 [ahead 10]`.
+- HEAD: `59b124f70b8694525d3100c87fe725b0d56276b9`.
+- origin/main: `7ecdd65a529802a581d173b4cb390d19bcb20e55`.
+- Matches origin/main: `False`; ahead `18` behind `0`.
+- Dirty entries: `19`.
+  - `cli/src/limen/dispatch.py`
+  - `cli/tests/test_dispatch_engine.py`
+  - `cli/tests/test_rebalance.py`
+  - `cli/tests/test_usage_gate.py`
+  - `docs/capacity-fill.md`
+  - `docs/conductor-tranche.md`
+  - `docs/consolidation/GATES.md`
   - `docs/dispatch-health.md`
   - `docs/live-root-gate.md`
+  - `docs/session-attack-paths.md`
+  - `docs/session-lifecycle-blockers.md`
+  - `docs/worktree-lifecycle-ledger.md`
+  - `docs/worktree-preservation-receipts.json`
+  - `scripts/generate-capacity-fill.py`
+  - `tasks.yaml`
+  - `docs/lane-checkups/`
+  - `output.txt`
+  - `photos-universe-bootstrap.sh`
+  - `test.txt`
 
 ## Verified Worktree
 
-- Verified worktree: `~/Workspace/limen`.
-- Branch: `main`; status `## main...origin/main [ahead 1]`.
-- HEAD matches origin/main: `False`.
+- Verified worktree: `~/Workspace/.limen-worktrees/capfill-agy-20260629-11-a3b7`.
+- Branch: `limen/capfill-agy-20260629-11-a3b7`; status `## limen/capfill-agy-20260629-11-a3b7...origin/main`.
+- HEAD matches origin/main: `True`.
 
 ## Blockers
 
-- `live-root-not-at-origin-main`: live root branch main head d6757d3d21fc differs from origin/main 9f7af24dcb75.
-- `live-root-dirty`: live root has 2 dirty entries.
+- `heartbeat-watchdog-unhealthy`:   ok  not-wedged: {"reason": "no PARALLEL beats in window", "recent_pr_counts": [], "max_fails_threshold": 3}
+- `live-root-not-at-origin-main`: live root branch work/workstream-agent-launcher-20260629 head 59b124f70b86 differs from origin/main 7ecdd65a5298.
+- `live-root-dirty`: live root has 19 dirty entries.
+- `async-dry-run-unhealthy`: PermissionError: [Errno 1] Operation not permitted: '/Users/4jp/Workspace/limen/logs/.queue.lock.d'
+- `lane-fill-jules`: jules: productive 50/72, but no open/any work is available
+- `lane-fill-claude`: claude: productive 0/8, but no open/any work is available
+- `lane-fill-opencode`: opencode: productive 1/72, but no open/any work is available
+- `lane-fill-agy`: agy: lane is down by the live dispatch gate
+- `lane-fill-gemini`: gemini: productive 0/7, but no open/any work is available
+- `lane-fill-codex`: codex: productive 1/51, but no open/any work is available
 
 ## Commands
 
