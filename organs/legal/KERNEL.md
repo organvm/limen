@@ -14,6 +14,9 @@ The under-resourced get a single overworked lawyer and a shoebox of documents. T
 person the institutional weight of that firm — the **Cochran standard** — as a coordinated set of AI
 roles working under a real attorney's direction.
 
+The organ's purpose is to serve as an **institutional prosthesis** for human weakness. It is **THE FLAGSHIP**
+he named — designed to convert idle fleet capacity into real institutional weight.
+
 ## The 5-primitive kernel, mapped to the legal domain
 
 | Primitive | Legal meaning | Concretely |
@@ -29,13 +32,15 @@ fractal: one structure, every pillar.
 
 ## Fractal deployment
 
+The system is generic and nameless underneath, with his instance running on top:
+
 - **MACRO** — a legal-institution platform any pro-se or under-resourced person (or a small firm) can
   hold: matter intake, an elements-of-the-claim checklist, an evidence/chain-of-custody index, a
   deadline calendar, and AI-drafted (attorney-reviewed) document skeletons. Institutional weight for the
   many.
 - **MICRO** — Anthony's active ADA failure-to-accommodate employment matter, run with that weight,
-  *augmenting* attorney Micah Longo: a single source of truth for the case posture, an indexed evidence
-  record, and draft work product the attorney reviews and owns.
+  *augmenting* attorney Micah Longo (never replacing counsel, never practicing law): a single source of
+  truth for the case posture, an indexed evidence record, and draft work product the attorney reviews and owns.
 
 ## What the fleet builds next here (from organ-ladder.json)
 
@@ -48,7 +53,7 @@ fractal: one structure, every pillar.
 ## Hard guardrails (every contributor + every dispatched task)
 
 - No legal advice, no UPL (unauthorized practice of law). Outputs are drafts, organization, and research
-  for a licensed attorney to review, correct, and adopt.
+  for a licensed attorney to review, correct, and adopt. Augments real counsel; does NOT give legal advice or practice law.
 - Nothing is filed, sent, or served by the system. The attorney/client decides and acts.
 - Privilege is sacred: privileged material is handled as privileged; nothing leaves the client/attorney
   channel. Real case facts are the client's to provide — placeholders until then.
