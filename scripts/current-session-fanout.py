@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build redacted owner/executor packets from a full current Codex session.
+"""Build redacted planner and executor packets from a Codex session JSONL.
 
-The planner reads the session JSONL as private input, hashes prompt/plan text,
-and writes only routing metadata. It does not launch agents, mutate credits,
-send outbound traffic, or copy raw prompt bodies into tracked files.
+The public receipt contains titles, hashes, line numbers, criteria, predicates,
+and blocker summaries. Raw prompt and plan bodies stay in the ignored private
+JSON snapshot only.
 """
 from __future__ import annotations
 
@@ -13,27 +13,11 @@ import hashlib
 import json
 import os
 import re
-from collections import Counter
-from dataclasses import dataclass
+import sys
 from pathlib import Path
 from typing import Any
 
-def repository_root() -> Path:
-    script_path = Path(__file__).resolve()
-    script_root = script_path.parents[1]
-    env_root = os.environ.get("LIMEN_ROOT")
-    if not env_root:
-        return script_root
-    candidate = Path(env_root).expanduser()
-    try:
-        if (candidate / "scripts" / script_path.name).resolve() == script_path:
-            return candidate
-    except OSError:
-        pass
-    return script_root
-
-
-ROOT = repository_root()
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 HOME = Path.home()
 PRIVATE_ROOT = Path(
     os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus")
@@ -41,274 +25,58 @@ PRIVATE_ROOT = Path(
 PRIVATE_INDEX = PRIVATE_ROOT / "lifecycle" / "current-session-fanout.json"
 DOC_PATH = ROOT / "docs" / "current-session-fanout.md"
 
+sys.path.insert(0, str(ROOT / "cli" / "src"))
 
-@dataclass(frozen=True)
-class Theme:
-    name: str
-    owner: str
-    category: str
-    agent_fit: str
-    dispatch_gate: str
-    keywords: tuple[str, ...]
-    route: str
-    executor_criteria: tuple[str, ...]
-    verification_predicates: tuple[str, ...]
-    blocked_local: bool = False
+try:
+    from limen.capacity import PAID_AGENT_ORDER, capacity_census, canonical_agent
+except Exception:  # pragma: no cover - hermetic fallback
+    PAID_AGENT_ORDER = ("codex",)
 
+    def capacity_census(board: object = None) -> list[dict[str, Any]]:
+        return [
+            {
+                "agent": "codex",
+                "kind": "local-cli",
+                "reachable": True,
+                "detail": "fallback",
+                "remaining": None,
+                "limit": None,
+                "spent": 0,
+            }
+        ]
 
-THEMES: tuple[Theme, ...] = (
-    Theme(
-        name="current-session-intake",
-        owner="organvm/limen session intake",
-        category="conductor",
-        agent_fit="codex",
-        dispatch_gate="ready",
-        keywords=("current-session", "this session", "beginning of this session", "hold everything"),
-        route=(
-            "Regenerate the redacted current-session fanout receipt from the full JSONL, then "
-            "keep downstream work bounded by owner packet, predicate, and receipt."
-        ),
-        executor_criteria=(
-            "Read every JSONL line and every turn_context before deriving packets.",
-            "Hash prompt and plan bodies; do not write raw prompt text to public files.",
-            "Emit owner packets with source turn spans, executor criteria, predicates, and stop gates.",
-        ),
-        verification_predicates=(
-            "python3 scripts/current-session-fanout.py --session <session.jsonl> --theme current-session-intake --write",
-            "python3 -m pytest cli/tests/test_current_session_fanout.py -q",
-        ),
-    ),
-    Theme(
-        name="alpha-omega-product-ledger",
-        owner="global product ledger",
-        category="product_selection",
-        agent_fit="codex -> opencode/jules after owner repo is explicit",
-        dispatch_gate="ready-after-predicate",
-        keywords=("1000", "alpha", "omega", "product", "shipped"),
-        route="Select product surfaces from measured repo/value evidence, not from the latest prompt alone.",
-        executor_criteria=(
-            "Candidate must name an owner repo or tracked owner ledger.",
-            "Candidate must expose one buyer/user-facing predicate before broad build-out.",
-            "Candidate must be reversible until a human opens deployment, spend, or outbound gates.",
-        ),
-        verification_predicates=(
-            "python3 scripts/generate-positioning.py --frontdoor --discoverability",
-            "python3 scripts/generate-revenue-backlog.py --floor 3 --max-new 0",
-        ),
-    ),
-    Theme(
-        name="money-inbound-seo",
-        owner="revenue and inbound discovery",
-        category="product_selection",
-        agent_fit="codex -> opencode/jules after repo and audience are explicit",
-        dispatch_gate="ready-after-predicate",
-        keywords=("money", "cash", "seo", "organic", "lead", "sell", "first-dollar", "revenue"),
-        route="Convert revenue intent into discoverability and first-dollar predicates for unblocked repos.",
-        executor_criteria=(
-            "Name the exact product/repo and the buyer/user query being served.",
-            "Prefer dry-run positioning and backlog generation before queue mutation.",
-            "Do not send email, publish pricing, or spend money without a human gate.",
-        ),
-        verification_predicates=(
-            "python3 scripts/generate-positioning.py --discoverability",
-            "python3 scripts/generate-revenue-backlog.py --floor 3 --max-new 0",
-        ),
-    ),
-    Theme(
-        name="repo-salvage-consolidation",
-        owner="repo surface consolidation",
-        category="product_selection",
-        agent_fit="codex first; cheaper lanes after repo/path narrowing",
-        dispatch_gate="ready-after-owner-route",
-        keywords=("400 repos", "repo", "consolidated", "same app", "salvage"),
-        route="Route repo sprawl into owner surfaces and receipts before executor fanout.",
-        executor_criteria=(
-            "Owner repo or workspace root must be explicit.",
-            "No deletion, transfer, force-push, or mass merge without a human gate.",
-            "Packet must say whether the output is product, preservation, or non-source residue.",
-        ),
-        verification_predicates=(
-            "python3 scripts/session-attack-paths.py --write",
-            "python3 scripts/conductor-tranche.py --write",
-        ),
-    ),
-    Theme(
-        name="contrib-mirror",
-        owner="external contribution mirror",
-        category="product_selection",
-        agent_fit="codex planning; opencode/jules only for named repo predicates",
-        dispatch_gate="ready-after-owner-route",
-        keywords=("contrib", "external", "community", "github contrib", "mirror"),
-        route="Separate external-contrib value from private corpus work before dispatch.",
-        executor_criteria=(
-            "Name the public repo or contribution target.",
-            "Separate private prompt/context evidence from public contribution text.",
-            "Require a local predicate or PR receipt before claiming completion.",
-        ),
-        verification_predicates=(
-            "python3 scripts/session-attack-paths.py --write",
-            "python3 scripts/conductor-tranche.py --write",
-        ),
-    ),
-    Theme(
-        name="full-fleet-overnight",
-        owner="fleet dispatch substrate",
-        category="dispatch",
-        agent_fit="codex conductor; active lanes only after usage gates",
-        dispatch_gate="ready-after-usage-census",
-        keywords=("fleet", "overnight", "all night", "lane", "jules"),
-        route="Keep dispatch work behind live lane health, usage ceilings, and bounded predicates.",
-        executor_criteria=(
-            "Lane must be reachable and not marked exhausted, rate-limited, or low.",
-            "Packet must include repo, branch/worktree, predicate, and expected receipt.",
-            "Local/free floor is fallback, not a reason for speculative fanout.",
-        ),
-        verification_predicates=(
-            "python3 scripts/usage-telemetry.py --write",
-            "python3 scripts/dispatch-health.py --write",
-            "python3 scripts/conductor-tranche.py --write",
-        ),
-    ),
-    Theme(
-        name="dynamic-substrate",
-        owner="storage and capability substrate",
-        category="substrate",
-        agent_fit="codex",
-        dispatch_gate="ready",
-        keywords=("drive", "mounted", "hard-coded", "archive", "substrate", "hardcoded"),
-        route="Derive roots and capability availability at use-time; record missing roots as substrate facts.",
-        executor_criteria=(
-            "Do not pin a stale drive/path/version when an env/config probe can derive it.",
-            "Record unavailable local roots as blockers, not global product stops.",
-            "Never copy secrets or private prompt bodies into public receipts.",
-        ),
-        verification_predicates=(
-            "python3 scripts/capability-substrate-ledger.py --write",
-            "python3 scripts/session-blockers-ledger.py --write",
-        ),
-    ),
-    Theme(
-        name="quota-reset-guard",
-        owner="usage and reset governance",
-        category="blocked_local",
-        agent_fit="codex/human-prep",
-        dispatch_gate="blocked-local-recorded",
-        keywords=("reset", "weekly limit", "free reset", "credits", "usage", "quota"),
-        route="Record reset/credit constraints as local spend guards; continue unblocked product selection.",
-        executor_criteria=(
-            "Do not consume resets, credits, top-ups, or paid overages from this packet.",
-            "Use live usage telemetry before expanding lane fanout.",
-            "Surface the cheapest human action once, then route other work around it.",
-        ),
-        verification_predicates=(
-            "python3 scripts/usage-telemetry.py --write",
-            "python3 scripts/session-blockers-ledger.py --write",
-        ),
-        blocked_local=True,
-    ),
-    Theme(
-        name="domus-preflight-noise",
-        owner="domus local preflight",
-        category="blocked_local",
-        agent_fit="codex/human-prep",
-        dispatch_gate="blocked-local-recorded",
-        keywords=("domus", "homebrew", "preflight", "atuin", "cursor position"),
-        route="Keep local Domus/preflight noise as a separate blocked-local packet.",
-        executor_criteria=(
-            "Stay in the Domus owner checkout named by the packet.",
-            "Do not turn shell noise into global product or revenue blocking.",
-            "Return a local predicate and blocker receipt if the environment is not repairable in-scope.",
-        ),
-        verification_predicates=(
-            "domus-packages review --json",
-            "storage-lifecycle-audit --quick",
-        ),
-        blocked_local=True,
-    ),
-    Theme(
-        name="private-sauce-boundary",
-        owner="private/public boundary",
-        category="governance",
-        agent_fit="codex",
-        dispatch_gate="ready",
-        keywords=("private", "secret", "sauce", "hide"),
-        route="Route private context through hashes and owner ledgers before public artifacts.",
-        executor_criteria=(
-            "Public files may contain hashes, paths, counts, criteria, and receipts only.",
-            "Raw private prompt or plan bodies stay out of commits, PRs, task logs, and outbound systems.",
-            "If public copy is needed, write a redacted derivation and keep the source hash lineage.",
-        ),
-        verification_predicates=(
-            "python3 scripts/censor.py --help",
-            "git diff --check",
-        ),
-    ),
-    Theme(
-        name="codex-planner-worktrees",
-        owner="codex planner worktree fanout",
-        category="planner",
-        agent_fit="codex",
-        dispatch_gate="ready-after-clean-worktree",
-        keywords=("10 worktrees", "codex only", "planner", "worktree"),
-        route="Keep planner worktrees as planning lanes until executor packets meet owner/predicate gates.",
-        executor_criteria=(
-            "Planner packet must have a unique worktree/branch and no dirty inherited state.",
-            "Executor handoff requires owner repo, criteria, predicate, and receipt target.",
-            "Do not broad-dispatch from a planner packet that only names a theme.",
-        ),
-        verification_predicates=(
-            "git status --short --branch",
-            "python3 scripts/current-session-fanout.py --session <session.jsonl> --theme current-session-intake",
-        ),
-    ),
-    Theme(
-        name="autopoietic-conductor",
-        owner="conductor governance",
-        category="governance",
-        agent_fit="codex",
-        dispatch_gate="ready-after-governor",
-        keywords=("autopoetic", "autopoietic", "forever", "tokens", "never stop"),
-        route="Keep the system breathing through bounded local work, not unbounded spend or broad fanout.",
-        executor_criteria=(
-            "Expand only after cheap local checks identify a real executor packet.",
-            "Stop outward/irreversible work at the human gate.",
-            "Record blockers and select the next unblocked owner/product packet.",
-        ),
-        verification_predicates=(
-            "python3 scripts/autonomy-governor.py explain",
-            "python3 scripts/session-value-review.py --gate --hours 1.5",
-        ),
-    ),
+    def canonical_agent(agent: str | None) -> str:
+        return str(agent or "")
+
+THEMES: list[tuple[str, tuple[str, ...]]] = [
+    ("alpha-omega-product-ledger", ("1000", "alpha", "omega", "product", "shipped")),
+    ("full-fleet-overnight", ("fleet", "overnight", "all night", "lane", "jules")),
+    ("dynamic-substrate", ("drive", "mounted", "hard-coded", "archive", "substrate")),
+    ("repo-salvage-consolidation", ("400 repos", "repo", "consolidated", "same app", "salvage")),
+    ("money-inbound-seo", ("money", "cash", "seo", "organic", "lead", "sell")),
+    ("contrib-mirror", ("contrib", "external", "community", "github contrib", "mirror")),
+    ("quota-reset-guard", ("reset", "weekly limit", "free reset", "credits", "usage")),
+    ("current-session-intake", ("this session", "beginning of this session", "hold everything")),
+    ("domus-preflight-noise", ("domus", "homebrew", "preflight", "atuin", "cursor position")),
+    ("private-sauce-boundary", ("private", "secret", "sauce", "hide")),
+    ("codex-planner-worktrees", ("10 worktrees", "codex only", "planner", "worktree")),
+    ("autopoietic-conductor", ("autopoetic", "autopoietic", "forever", "tokens")),
+]
+
+PROPOSED_PLAN_RE = re.compile(r"<proposed_plan>\s*(.*?)(?:\s*</proposed_plan>|$)", re.I | re.S)
+MARKDOWN_H1_RE = re.compile(r"(?m)^#\s+(.+?)\s*$")
+PRIOR_PLAN_MARKERS = (
+    "a previous agent produced the plan below",
+    "previous agent produced the plan below",
 )
-
-THEME_BY_NAME = {theme.name: theme for theme in THEMES}
-PRODUCT_SELECTION_THEMES = {theme.name for theme in THEMES if theme.category == "product_selection"}
 
 
 def now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
 
-def stable_hash(text: str, length: int = 24) -> str:
+def stable_hash(text: str, length: int = 18) -> str:
     return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:length]
-
-
-def sha256_file(path: Path) -> str | None:
-    try:
-        h = hashlib.sha256()
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                h.update(chunk)
-        return h.hexdigest()
-    except OSError:
-        return None
-
-
-def slugify(value: str) -> str:
-    value = value.lower()
-    value = re.sub(r"[^a-z0-9._-]+", "-", value)
-    value = re.sub(r"-{2,}", "-", value).strip("-")
-    return value or "packet"
 
 
 def text_from_content(value: Any) -> list[str]:
@@ -328,188 +96,169 @@ def text_from_content(value: Any) -> list[str]:
     return []
 
 
-def add_text_record(
-    records: list[dict[str, Any]],
-    *,
-    role: str,
-    text: str,
-    line: int,
-    timestamp: str | None,
-    turn_id: str | None,
-    turn_index: int | None,
-    source: str,
-) -> None:
-    if not text.strip():
-        return
-    records.append(
-        {
-            "role": role,
-            "hash": stable_hash(text, 24),
-            "bytes": len(text.encode("utf-8", errors="replace")),
-            "line": line,
-            "timestamp": timestamp,
-            "turn_id": turn_id,
-            "turn_index": turn_index,
-            "source": source,
-            "_text": text,
-        }
-    )
+def role_texts_from_obj(obj: dict[str, Any]) -> list[tuple[str, str]]:
+    payload = obj.get("payload")
+    if isinstance(payload, dict):
+        if payload.get("type") == "message" and payload.get("role") in {"user", "assistant"}:
+            return [
+                (str(payload["role"]), text)
+                for text in text_from_content(payload.get("content"))
+            ]
+        if payload.get("type") == "user_message":
+            return [("user", text) for text in text_from_content(payload.get("message"))]
+        if payload.get("type") == "agent_message":
+            return [("assistant", text) for text in text_from_content(payload.get("message"))]
+    if obj.get("role") in {"user", "assistant"}:
+        return [
+            (str(obj["role"]), text)
+            for text in text_from_content(obj.get("content") or obj.get("text"))
+        ]
+    return []
 
 
-def message_texts(payload: dict[str, Any]) -> tuple[str | None, list[str]]:
-    role = payload.get("role")
-    if role:
-        return str(role), text_from_content(payload.get("content") or payload.get("text"))
-    if payload.get("type") == "message":
-        role = payload.get("role")
-        if role:
-            return str(role), text_from_content(payload.get("content"))
-    if payload.get("type") == "user_message":
-        return "user", text_from_content(payload.get("message")) + text_from_content(payload.get("text_elements"))
-    return None, []
+def user_texts_from_obj(obj: dict[str, Any]) -> list[str]:
+    return [text for role, text in role_texts_from_obj(obj) if role == "user"]
 
 
-def parse_plan_hashes(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    if payload.get("name") != "update_plan":
-        return []
-    raw = payload.get("arguments")
-    try:
-        args = json.loads(raw or "{}") if isinstance(raw, str) else raw
-    except ValueError:
-        return []
-    if not isinstance(args, dict):
-        return []
-    rows: list[dict[str, Any]] = []
-    for idx, item in enumerate(args.get("plan") or [], start=1):
-        if not isinstance(item, dict):
-            continue
-        step = str(item.get("step") or "")
-        if not step:
-            continue
-        rows.append(
-            {
-                "hash": stable_hash(step, 12),
-                "status": str(item.get("status") or "unknown"),
-                "step_bytes": len(step.encode("utf-8", errors="replace")),
-                "index": idx,
-            }
-        )
-    return rows
-
-
-def read_session(path: Path) -> dict[str, Any]:
-    turns: list[dict[str, Any]] = []
-    turn_by_id: dict[str, int] = {}
-    text_records: list[dict[str, Any]] = []
-    plan_records: list[dict[str, Any]] = []
-    item_counts = Counter()
-    tool_counts = Counter()
-    parse_errors = 0
-    current_turn_index: int | None = None
-
+def read_jsonl(path: Path) -> list[tuple[int, dict[str, Any]]]:
     try:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError as exc:
-        return {
-            "path": str(path),
-            "present": False,
-            "error": str(exc),
-            "turns": [],
-            "text_records": [],
-            "plan_records": [],
-            "item_counts": {},
-            "tool_counts": {},
-            "line_count": 0,
-        }
-
-    for line_no, line in enumerate(lines, start=1):
+    except OSError:
+        return []
+    records: list[tuple[int, dict[str, Any]]] = []
+    for idx, line in enumerate(lines, start=1):
         if not line.strip():
             continue
         try:
             obj = json.loads(line)
         except ValueError:
-            parse_errors += 1
             continue
-        obj_type = str(obj.get("type") or "unknown")
-        item_counts[obj_type] += 1
-        payload = obj.get("payload") if isinstance(obj.get("payload"), dict) else {}
-        timestamp = obj.get("timestamp")
+        if isinstance(obj, dict):
+            records.append((idx, obj))
+    return records
 
-        if obj_type == "turn_context":
-            turn_id = str(payload.get("turn_id") or f"line-{line_no}")
-            current_turn_index = len(turns) + 1
-            turn_by_id[turn_id] = current_turn_index
-            turns.append(
+
+def read_session_messages(path: Path) -> list[dict[str, Any]]:
+    messages: list[dict[str, Any]] = []
+    for line, obj in read_jsonl(path):
+        timestamp = obj.get("timestamp")
+        for text in user_texts_from_obj(obj):
+            messages.append(
                 {
-                    "index": current_turn_index,
-                    "turn_id": turn_id,
+                    "line": line,
                     "timestamp": timestamp,
-                    "cwd_hash": stable_hash(str(payload.get("cwd") or ""), 12),
-                    "model": payload.get("model"),
+                    "hash": stable_hash(text, 24),
+                    "bytes": len(text.encode("utf-8", errors="replace")),
+                    "text": text,
                 }
             )
-            continue
+    return messages
 
-        if obj_type == "response_item":
-            meta = payload.get("internal_chat_message_metadata_passthrough")
-            meta = meta if isinstance(meta, dict) else {}
-            turn_id = meta.get("turn_id")
-            turn_index = turn_by_id.get(str(turn_id)) if turn_id else current_turn_index
-            payload_type = str(payload.get("type") or "unknown")
-            item_counts[f"response_item:{payload_type}"] += 1
-            if payload.get("name"):
-                tool_counts[str(payload["name"])] += 1
-            role, texts = message_texts(payload)
-            if role:
-                for text in texts:
-                    add_text_record(
-                        text_records,
-                        role=role,
-                        text=text,
-                        line=line_no,
-                        timestamp=timestamp,
-                        turn_id=str(turn_id) if turn_id else None,
-                        turn_index=turn_index,
-                        source="response_item",
-                    )
-            for plan in parse_plan_hashes(payload):
-                plan_records.append({**plan, "line": line_no, "turn_index": turn_index, "source": "update_plan"})
-            continue
 
-        if obj_type == "compacted":
-            replacement = payload.get("replacement_history") or []
-            if isinstance(replacement, list):
-                for item in replacement:
-                    if not isinstance(item, dict):
-                        continue
-                    role, texts = message_texts(item)
-                    if not role:
-                        continue
-                    for text in texts:
-                        add_text_record(
-                            text_records,
-                            role=role,
-                            text=text,
-                            line=line_no,
-                            timestamp=timestamp,
-                            turn_id=None,
-                            turn_index=current_turn_index,
-                            source="compacted",
-                        )
+def plan_title(text: str) -> str:
+    match = MARKDOWN_H1_RE.search(text)
+    return match.group(1).strip() if match else "Untitled Plan"
 
+
+def user_prior_plan_block(text: str) -> str | None:
+    lower_text = text.lower()
+    marker_index = min(
+        (idx for marker in PRIOR_PLAN_MARKERS if (idx := lower_text.find(marker)) != -1),
+        default=-1,
+    )
+    if marker_index == -1:
+        return None
+    match = MARKDOWN_H1_RE.search(text, marker_index)
+    return text[match.start() :] if match else None
+
+
+def plan_event(
+    *,
+    line: int,
+    timestamp: str | None,
+    role: str,
+    source_type: str,
+    text: str,
+    ordinal: int,
+) -> dict[str, Any]:
+    plan_hash = stable_hash(text, 12)
     return {
-        "path": str(path),
-        "present": True,
-        "content_sha256": sha256_file(path),
-        "path_hash": stable_hash(str(path), 24),
-        "line_count": len(lines),
-        "parse_errors": parse_errors,
-        "turns": turns,
-        "text_records": text_records,
-        "plan_records": plan_records,
-        "item_counts": dict(item_counts.most_common()),
-        "tool_counts": dict(tool_counts.most_common()),
+        "id": f"PLAN-SRC-{line}-{ordinal}-{plan_hash}",
+        "title": plan_title(text),
+        "timestamp": timestamp,
+        "line": line,
+        "role": role,
+        "source_type": source_type,
+        "hash": plan_hash,
+        "bytes": len(text.encode("utf-8", errors="replace")),
+        "duplicate": False,
+        "duplicate_of": None,
+        "included": False,
+        "text": text,
     }
+
+
+def read_session_plan_events(path: Path) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    seen_messages: set[tuple[str, str, str | None]] = set()
+    for line, obj in read_jsonl(path):
+        timestamp = obj.get("timestamp")
+        for role, text in role_texts_from_obj(obj):
+            if not text.strip():
+                continue
+            message_key = (role, text, str(timestamp) if timestamp is not None else None)
+            if message_key in seen_messages:
+                continue
+            seen_messages.add(message_key)
+            ordinal = 1
+            if role == "user":
+                block = user_prior_plan_block(text)
+                if block:
+                    events.append(
+                        plan_event(
+                            line=line,
+                            timestamp=timestamp,
+                            role=role,
+                            source_type="user_supplied_prior_plan",
+                            text=block,
+                            ordinal=ordinal,
+                        )
+                    )
+                    ordinal += 1
+            if role == "assistant":
+                for match in PROPOSED_PLAN_RE.finditer(text):
+                    block = match.group(1)
+                    if not MARKDOWN_H1_RE.search(block):
+                        continue
+                    events.append(
+                        plan_event(
+                            line=line,
+                            timestamp=timestamp,
+                            role=role,
+                            source_type="assistant_proposed_plan",
+                            text=block,
+                            ordinal=ordinal,
+                        )
+                    )
+                    ordinal += 1
+    return mark_plan_duplicates(events)
+
+
+def mark_plan_duplicates(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    newest_first = sorted(events, key=lambda event: (int(event["line"]), str(event["timestamp"] or "")), reverse=True)
+    seen: dict[str, str] = {}
+    for event in newest_first:
+        plan_hash = str(event["hash"])
+        if plan_hash in seen:
+            event["duplicate"] = True
+            event["duplicate_of"] = seen[plan_hash]
+        else:
+            seen[plan_hash] = str(event["id"])
+    return newest_first
+
+
+def unique_plan_sources(plan_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [event for event in plan_events if not event["duplicate"]]
 
 
 def latest_codex_session() -> Path | None:
@@ -528,328 +277,428 @@ def latest_codex_session() -> Path | None:
 
 
 def find_session(path_arg: str | None) -> Path:
-    if path_arg:
-        path = Path(path_arg).expanduser()
-    else:
-        path = latest_codex_session()
+    path = Path(path_arg).expanduser() if path_arg else latest_codex_session()
     if path is None or not path.exists():
         raise FileNotFoundError("no Codex session JSONL found; set LIMEN_CURRENT_SESSION_JSONL or pass --session")
     return path
 
 
-def unique_records(records: list[dict[str, Any]], role: str) -> list[dict[str, Any]]:
-    seen: set[str] = set()
-    out: list[dict[str, Any]] = []
-    for record in records:
-        if record.get("role") != role:
-            continue
-        h = str(record.get("hash") or "")
-        if not h or h in seen:
-            continue
-        seen.add(h)
-        out.append(record)
-    return out
+def matched_themes(messages: list[dict[str, Any]], plan_events: list[dict[str, Any]]) -> list[str]:
+    body = "\n".join(
+        [str(msg["text"]).lower() for msg in messages]
+        + [str(event.get("text") or "").lower() for event in plan_events]
+    )
+    found = [name for name, needles in THEMES if any(needle in body for needle in needles)]
+    return found or ["current-session-intake"]
 
 
-def matching_records(theme: Theme, user_records: list[dict[str, Any]], *, use_all: bool = False) -> list[dict[str, Any]]:
-    if use_all:
-        return list(user_records)
-    matches = []
-    for record in user_records:
-        text = str(record.get("_text") or "").lower()
-        if any(keyword.lower() in text for keyword in theme.keywords):
-            matches.append(record)
-    return matches
+def lane_rows() -> list[dict[str, Any]]:
+    try:
+        rows = list(capacity_census(None))
+    except Exception:
+        rows = []
+    normalized: list[dict[str, Any]] = []
+    for row in rows:
+        remaining = row.get("remaining")
+        detail = str(row.get("detail") or "")
+        if row.get("reachable"):
+            status = "active"
+        elif remaining == 0:
+            status = "depleted"
+        elif any(needle in detail.lower() for needle in ("not set", "auth", "assignable", "no model pulled")):
+            status = "human-gated"
+        else:
+            status = "down"
+        normalized.append(
+            {
+                "agent": str(row.get("agent") or ""),
+                "kind": str(row.get("kind") or ""),
+                "status": status,
+                "reachable": bool(row.get("reachable")),
+                "remaining": remaining,
+                "detail": detail,
+            }
+        )
+    if not normalized:
+        normalized.append(
+            {
+                "agent": "codex",
+                "kind": "local-cli",
+                "status": "active",
+                "reachable": True,
+                "remaining": None,
+                "detail": "fallback",
+            }
+        )
+    return normalized
 
 
-def matched_theme_names(user_records: list[dict[str, Any]], focus_theme: str | None) -> list[str]:
-    names: list[str] = []
-    for theme in THEMES:
-        if matching_records(theme, user_records):
-            names.append(theme.name)
-    if focus_theme and focus_theme not in names:
-        names.append(focus_theme)
-    if not names:
-        names.append("current-session-intake")
-    return sorted(dict.fromkeys(names), key=lambda name: [t.name for t in THEMES].index(name) if name in THEME_BY_NAME else 999)
+def lane_selection(selector: str, rows: list[dict[str, Any]]) -> list[str]:
+    value = (selector or "auto").strip()
+    by_agent = {row["agent"]: row for row in rows}
+    if value == "all":
+        return [str(agent) for agent in PAID_AGENT_ORDER]
+    if value == "auto":
+        active = [str(agent) for agent in PAID_AGENT_ORDER if by_agent.get(str(agent), {}).get("status") == "active"]
+        return active or ["codex"]
+    selected: list[str] = []
+    for raw in value.split(","):
+        agent = canonical_agent(raw.strip())
+        if agent and agent in PAID_AGENT_ORDER and agent not in selected:
+            selected.append(agent)
+    return selected or ["codex"]
 
 
-def packet_source(theme: Theme, user_records: list[dict[str, Any]], focus_theme: str | None) -> dict[str, Any]:
-    use_all = theme.name == focus_theme == "current-session-intake"
-    records = matching_records(theme, user_records, use_all=use_all)
-    if not records and theme.name == focus_theme:
-        records = list(user_records)
-    prompt_hashes = sorted({str(record["hash"]) for record in records})
-    turns = sorted({int(record["turn_index"]) for record in records if record.get("turn_index")})
-    lines = sorted({int(record["line"]) for record in records if record.get("line")})
+def packet_slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9._-]+", "-", value.lower()).strip("-") or "packet"
+
+
+def owner_packet_for_theme(theme: str) -> dict[str, Any]:
+    if theme == "full-fleet-overnight":
+        return {
+            "owner_repo": "organvm/limen",
+            "owner_ledger": "docs/current-session-fanout.md",
+            "criteria": [
+                "derive lane inventory from PAID_AGENT_ORDER, not hand-written local lists",
+                "`auto` selects active reachable lanes while down/depleted/human-gated lanes stay visible in receipts",
+                "`all` preserves every registered lane for audit without pretending down lanes are runnable",
+                "async dry-runs do not launch live dispatch or spend resets/credits",
+                "blocked local gates are recorded as local blockers while global product selection remains active",
+            ],
+            "verification_predicates": [
+                "LIMEN_ROOT=$PWD LIMEN_TASKS=$PWD/tasks.yaml python3 scripts/current-session-fanout.py --session <session.jsonl> --min-codex-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --dry-run",
+                "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q",
+                "PYTHONPATH=cli/src python3 -c \"from limen.capacity import PAID_AGENT_ORDER; required={'codex','claude','opencode','agy','gemini','ollama','jules','copilot','warp','oz','github_actions'}; assert required <= set(PAID_AGENT_ORDER)\"",
+                "LIMEN_ROOT=$PWD LIMEN_TASKS=$PWD/tasks.yaml PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes auto --dry-run",
+                "bash scripts/verify-whole.sh",
+            ],
+        }
     return {
-        "prompt_hashes": prompt_hashes,
-        "prompt_occurrences": len(records),
-        "turns": turns,
-        "line_span": [lines[0], lines[-1]] if lines else [],
+        "owner_repo": "organvm/limen",
+        "owner_ledger": "docs/current-session-fanout.md",
+        "criteria": [
+            "derive this owner packet from all user turns and all detected plan sources",
+            "include executor acceptance, blocker behavior, and at least one verification predicate",
+            "preserve raw private bodies outside tracked files",
+        ],
+        "verification_predicates": [
+            "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q",
+            "python3 -m py_compile scripts/current-session-fanout.py",
+        ],
     }
 
 
-def build_owner_packet(theme: Theme, source: dict[str, Any]) -> dict[str, Any]:
-    packet_kind = "blocked_local_work" if theme.blocked_local else "owner_packet"
-    return {
-        "id": f"{'BLOCKED' if theme.blocked_local else 'OWNER'}-{slugify(theme.name)}-{stable_hash(theme.name, 8)}",
-        "packet_kind": packet_kind,
-        "theme": theme.name,
-        "owner": theme.owner,
-        "category": theme.category,
-        "agent_fit": theme.agent_fit,
-        "dispatch_gate": theme.dispatch_gate,
-        "route": theme.route,
-        "executor_criteria": list(theme.executor_criteria),
-        "verification_predicates": list(theme.verification_predicates),
-        "blocked_local": theme.blocked_local,
-        "does_not_block": ["global-product-selection"] if theme.blocked_local else [],
-        "source": source,
-    }
+def planner_packets(
+    themes: list[str],
+    messages: list[dict[str, Any]],
+    min_codex: int,
+    no_reset_spend: bool,
+    source_plan_hashes: list[str],
+) -> list[dict[str, Any]]:
+    seed_themes = list(themes)
+    idx = 1
+    while len(seed_themes) < min_codex:
+        seed_themes.append(f"product-factory-{idx:02d}")
+        idx += 1
+    prompt_hashes = [msg["hash"] for msg in messages]
+    packets: list[dict[str, Any]] = []
+    for idx, theme in enumerate(seed_themes, start=1):
+        owner = owner_packet_for_theme(theme)
+        packets.append(
+            {
+                "id": f"PLAN-{idx:02d}-{stable_hash(theme, 8)}",
+                "packet_type": "planner_packet",
+                "target_agent": "codex",
+                "theme": theme,
+                "worktree_slug": packet_slug(f"planner-{idx:02d}-{theme}")[:80],
+                "spend_guard": "no-reset-spend" if no_reset_spend else "operator-allowed-reset-spend",
+                "source_prompt_hashes": prompt_hashes,
+                "source_plan_hashes": list(source_plan_hashes),
+                "owner_packet": owner,
+                "acceptance": [
+                    "derive owner packets from the full session, not just the latest turn",
+                    "emit executor criteria and verification predicates",
+                    "record blocked local work without stopping global product selection",
+                ],
+            }
+        )
+    return packets
 
 
-def executor_packet_for(owner_packet: dict[str, Any]) -> dict[str, Any]:
-    theme = str(owner_packet["theme"])
-    target = "codex"
-    if owner_packet["category"] == "product_selection":
-        target = "opencode/jules after codex narrows owner repo"
-    elif owner_packet["category"] == "dispatch":
-        target = "active lane selected by usage census"
-    return {
-        "id": f"EXEC-{slugify(theme)}-{stable_hash(theme, 8)}",
-        "source_owner_packet": owner_packet["id"],
-        "target_agent": target,
-        "dispatch_gate": owner_packet["dispatch_gate"],
-        "criteria": owner_packet["executor_criteria"],
-        "verification_predicates": owner_packet["verification_predicates"],
-    }
-
-
-def public_text_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def executor_packet_predicates(theme: str) -> list[str]:
+    if theme == "full-fleet-overnight":
+        return owner_packet_for_theme(theme)["verification_predicates"]
     return [
-        {key: value for key, value in record.items() if key != "_text"}
-        for record in records
+        "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q",
+        "python3 -m py_compile scripts/current-session-fanout.py",
     ]
+
+
+def executor_packets(
+    themes: list[str],
+    lanes: list[str],
+    include_contrib: bool,
+    no_reset_spend: bool,
+    source_plan_hashes: list[str],
+) -> list[dict[str, Any]]:
+    packets: list[dict[str, Any]] = []
+    work_themes = list(themes)
+    if include_contrib and "contrib-mirror" not in work_themes:
+        work_themes.append("contrib-mirror")
+    for lane in lanes:
+        if lane == "codex":
+            continue
+        theme = work_themes[len(packets) % len(work_themes)] if work_themes else "product-factory"
+        packets.append(
+            {
+                "id": f"EXEC-{lane}-{stable_hash(theme, 8)}",
+                "packet_type": "executor_packet",
+                "target_agent": lane,
+                "theme": theme,
+                "spend_guard": "no-reset-spend" if no_reset_spend and lane == "codex" else "lane-policy",
+                "source_plan_hashes": list(source_plan_hashes),
+                "executor_criteria": [
+                    "bounded reversible work only",
+                    "return changed paths, predicate result, PR/deploy/receipt, and blocker if any",
+                    "do not perform outbound sends, credential minting, purchases, deletes, or mass merges",
+                    "if this lane is blocked, record the blocker and continue global product selection",
+                ],
+                "verification_predicates": executor_packet_predicates(theme),
+            }
+        )
+    return packets
+
+
+def digest_blockers() -> list[dict[str, str]]:
+    path = ROOT / "docs" / "NEEDS-HUMAN-DIGEST.md"
+    if not path.exists():
+        return []
+    blockers: list[dict[str, str]] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        match = re.match(r"##\s+\d+\.\s+(.+?)(?:\s+—\s+(.+))?$", line)
+        if match:
+            blockers.append({"source": "docs/NEEDS-HUMAN-DIGEST.md", "item": match.group(1), "impact": match.group(2) or ""})
+        elif line.startswith("- ASK-"):
+            parts = line.removeprefix("- ").split("—", 1)
+            blockers.append({"source": "docs/NEEDS-HUMAN-DIGEST.md", "item": parts[0].strip(), "impact": parts[1].strip() if len(parts) > 1 else ""})
+    return blockers
+
+
+def blocked_local_work(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    blockers: list[dict[str, Any]] = []
+    blockers.extend(digest_blockers())
+    for row in rows:
+        if row["status"] != "active":
+            blockers.append(
+                {
+                    "source": "capacity_census",
+                    "item": f"{row['agent']} lane {row['status']}",
+                    "impact": row["detail"],
+                }
+            )
+    return blockers
+
+
+def packet_plan_hash_intersection(packets: list[dict[str, Any]]) -> set[str]:
+    if not packets:
+        return set()
+    covered = set(str(plan_hash) for plan_hash in packets[0].get("source_plan_hashes", []))
+    for packet in packets[1:]:
+        covered &= set(str(plan_hash) for plan_hash in packet.get("source_plan_hashes", []))
+    return covered
 
 
 def build_snapshot(args: argparse.Namespace) -> dict[str, Any]:
     session = find_session(args.session)
-    parsed = read_session(session)
-    if not parsed.get("present"):
-        return {
-            "generated_at": now_iso(),
-            "status": "blocked",
-            "error": parsed.get("error"),
-            "session": parsed,
-            "owner_packets": [],
-            "executor_packets": [],
-        }
-
-    unique_user = unique_records(parsed["text_records"], "user")
-    focus_theme = args.theme or "current-session-intake"
-    theme_names = matched_theme_names(unique_user, focus_theme)
-    owner_packets = []
-    for name in theme_names:
-        theme = THEME_BY_NAME.get(name)
-        if theme is None:
-            continue
-        source = packet_source(theme, unique_user, focus_theme)
-        owner_packets.append(build_owner_packet(theme, source))
-
-    blocked_local = [packet for packet in owner_packets if packet["blocked_local"]]
-    product_packets = [packet for packet in owner_packets if packet["category"] == "product_selection"]
-    executor_packets = [executor_packet_for(packet) for packet in owner_packets if not packet["blocked_local"]]
-    prompt_occurrences = [record for record in parsed["text_records"] if record.get("role") == "user"]
-    plan_hashes = sorted({str(record["hash"]) for record in parsed["plan_records"]})
-    turns = parsed["turns"]
-    first_turn = turns[0] if turns else {}
-    last_turn = turns[-1] if turns else {}
-    global_product_status = "active" if product_packets else "ready-for-selection"
-
-    return {
+    messages = read_session_messages(session)
+    plan_events = read_session_plan_events(session)
+    unique_sources = unique_plan_sources(plan_events)
+    source_plan_hashes = [str(event["hash"]) for event in unique_sources]
+    themes = matched_themes(messages, plan_events)
+    rows = lane_rows()
+    lanes = lane_selection(args.executor_lanes, rows)
+    no_reset_spend = not args.allow_reset_spend
+    planners = planner_packets(themes, messages, args.min_codex_planners, no_reset_spend, source_plan_hashes)
+    executors = executor_packets(themes, lanes, args.include_contrib, no_reset_spend, source_plan_hashes)
+    all_packets = planners + executors
+    packet_plan_hashes = packet_plan_hash_intersection(all_packets)
+    unconsolidated_plan_hashes = [
+        plan_hash for plan_hash in source_plan_hashes if plan_hash not in packet_plan_hashes
+    ]
+    for event in plan_events:
+        event["included"] = str(event["hash"]) in packet_plan_hashes
+    blockers = blocked_local_work(rows)
+    global_status = "active" if planners else "blocked"
+    snapshot = {
         "generated_at": now_iso(),
-        "status": "ready" if owner_packets else "blocked",
-        "packet_id": f"PLAN-08-{stable_hash('current-session-intake', 8)}",
-        "focus_theme": focus_theme,
-        "session": {
-            "path_hash": parsed["path_hash"],
-            "content_sha256": parsed["content_sha256"],
-            "line_count": parsed["line_count"],
-            "parse_errors": parsed["parse_errors"],
-            "turn_count": len(turns),
-            "first_turn": first_turn,
-            "last_turn": last_turn,
-            "item_counts": parsed["item_counts"],
-            "tool_counts": parsed["tool_counts"],
-        },
-        "coverage": {
-            "user_prompt_occurrences": len(prompt_occurrences),
-            "unique_user_prompt_hashes": len(unique_user),
-            "prompt_hashes": [record["hash"] for record in unique_user],
-            "plan_hashes": plan_hashes,
-            "plan_hash_count": len(plan_hashes),
-            "themes": theme_names,
-            "owner_packets": len(owner_packets),
-            "executor_packets": len(executor_packets),
-            "blocked_local_packets": len(blocked_local),
-        },
+        "session_path": str(session),
+        "session_hash": stable_hash(str(session), 24),
+        "user_messages": len(messages),
+        "prompt_bytes": sum(int(msg["bytes"]) for msg in messages),
+        "prompt_hashes": [msg["hash"] for msg in messages],
+        "plan_events": plan_events,
+        "unique_plan_sources": unique_sources,
+        "plan_event_count": len(plan_events),
+        "unique_plan_count": len(unique_sources),
+        "duplicate_plan_count": len(plan_events) - len(unique_sources),
+        "source_plan_hashes": source_plan_hashes,
+        "unconsolidated_plan_hashes": unconsolidated_plan_hashes,
+        "themes": themes,
+        "lane_classification": rows,
+        "executor_lanes": lanes,
+        "no_reset_spend": no_reset_spend,
+        "planner_packets": planners,
+        "executor_packets": executors,
+        "blocked_local_work": blockers,
         "global_product_selection": {
-            "status": global_product_status,
-            "reason": (
-                "blocked local work is recorded separately and does not stop product selection"
-                if blocked_local
-                else "no blocked local work in the derived packet set"
-            ),
-            "candidate_themes": [packet["theme"] for packet in product_packets],
-            "verification_predicates": sorted(
-                {
-                    predicate
-                    for packet in product_packets
-                    for predicate in packet["verification_predicates"]
-                }
-            ),
+            "status": global_status,
+            "reason": "local blockers are recorded per owner/lane; unblocked planner packets remain selectable",
         },
-        "owner_packets": owner_packets,
-        "executor_packets": executor_packets,
-        "blocked_local_work": blocked_local,
-        "redacted_sources": {
-            "text_records": public_text_records(parsed["text_records"]),
-            "plan_records": parsed["plan_records"],
-        },
-        "private_index": str(PRIVATE_INDEX),
-        "public_doc": str(DOC_PATH),
+        "status": "ready" if messages and planners and not unconsolidated_plan_hashes else "blocked",
     }
+    return snapshot
 
 
-def render_counts(counts: dict[str, int]) -> str:
-    return ", ".join(f"`{key}` {value}" for key, value in counts.items()) or "none"
+def public_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Drop raw private text fields before rendering/public tests inspect output."""
+    text_fields = {"text"}
+
+    def cleanse(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {k: cleanse(v) for k, v in value.items() if k not in text_fields}
+        if isinstance(value, list):
+            return [cleanse(item) for item in value]
+        return value
+
+    return cleanse(snapshot)
 
 
-def render_list(values: list[str], *, limit: int = 12) -> str:
-    if not values:
-        return "none"
-    shown = values[:limit]
-    suffix = f", ... +{len(values) - limit}" if len(values) > limit else ""
-    return ", ".join(f"`{value}`" for value in shown) + suffix
-
-
-def render_source(source: dict[str, Any]) -> str:
-    turns = source.get("turns") or []
-    if turns:
-        turn_text = f"turns {turns[0]}-{turns[-1]}" if len(turns) > 1 else f"turn {turns[0]}"
-    else:
-        turn_text = "turns n/a"
-    return f"{turn_text}; prompts {source.get('prompt_occurrences', 0)}"
+def markdown_cell(value: Any) -> str:
+    text = "" if value is None else str(value)
+    return text.replace("|", "\\|").replace("\n", " ")
 
 
 def render_markdown(snapshot: dict[str, Any]) -> str:
-    coverage = snapshot["coverage"]
-    product = snapshot["global_product_selection"]
-    session = snapshot["session"]
+    public = public_snapshot(snapshot)
     lines = [
         "# Current Session Fanout",
         "",
-        f"Generated: `{snapshot['generated_at']}`",
-        f"Packet: `{snapshot['packet_id']}`",
-        f"Focus theme: `{snapshot['focus_theme']}`",
-        f"Status: `{snapshot['status']}`",
+        f"Generated: `{public['generated_at']}`",
+        f"Status: `{public['status']}`",
+        f"User messages: `{public['user_messages']}`",
+        f"Prompt bytes: `{public['prompt_bytes']}`",
+        f"No reset spend: `{public['no_reset_spend']}`",
+        f"Global product selection: `{public['global_product_selection']['status']}`",
         "",
-        "## Canonical Decision",
+        "## Themes",
         "",
-        "- PLAN-08 is the current-session-intake planner: it routes the whole source session into owner packets before executor fanout.",
-        "- Packet derivation reads all parsed turns, not only the latest turn.",
-        "- Public output contains prompt/plan hashes, counts, criteria, predicates, and receipt targets only.",
-        "- Blocked local work is recorded as a local packet; it is not a global product-selection stop.",
-        "",
-        "## Coverage",
-        "",
-        f"- Source session hash: `{session.get('content_sha256')}`.",
-        f"- JSONL lines: `{session.get('line_count')}`; parse errors: `{session.get('parse_errors')}`.",
-        f"- Parsed turns: `{session.get('turn_count')}`.",
-        f"- First turn: `{(session.get('first_turn') or {}).get('timestamp', 'n/a')}`.",
-        f"- Last turn: `{(session.get('last_turn') or {}).get('timestamp', 'n/a')}`.",
-        f"- User prompt occurrences: `{coverage['user_prompt_occurrences']}`.",
-        f"- Unique user prompt hashes: `{coverage['unique_user_prompt_hashes']}`.",
-        f"- Plan hashes: `{coverage['plan_hash_count']}`.",
-        f"- Derived themes: {render_list(coverage['themes'], limit=20)}.",
-        f"- Item mix: {render_counts(session.get('item_counts') or {})}.",
-        f"- Tool mix: {render_counts(session.get('tool_counts') or {})}.",
-        "",
-        "## Full-Session Provenance",
-        "",
-        f"- Prompt hashes: {render_list(coverage['prompt_hashes'], limit=24)}.",
-        f"- Plan hashes: {render_list(coverage['plan_hashes'], limit=24)}.",
-        "",
-        "## Owner Packets",
-        "",
-        "| Packet | Owner | Gate | Agent Fit | Source | Primary Predicate |",
-        "|---|---|---|---|---|---|",
     ]
-    for packet in snapshot["owner_packets"]:
-        predicate = packet["verification_predicates"][0] if packet["verification_predicates"] else "n/a"
+    for theme in public["themes"]:
+        lines.append(f"- `{theme}`")
+    lines += [
+        "",
+        "## Plan Source Proof",
+        "",
+        f"Plan events: {public.get('plan_event_count', 0)}",
+        f"Unique plan sources: {public.get('unique_plan_count', 0)}",
+        f"Duplicate plan events: {public.get('duplicate_plan_count', 0)}",
+        f"Unconsolidated plan events: {len(public.get('unconsolidated_plan_hashes', []))}",
+        "",
+        "| Title | Timestamp | Transcript line | Hash | Duplicate | Included |",
+        "|---|---|---:|---|---|---|",
+    ]
+    for event in public.get("plan_events", []):
+        duplicate_status = "duplicate" if event.get("duplicate") else "unique"
+        included_status = "included" if event.get("included") else "missing"
         lines.append(
-            f"| `{packet['id']}` | {packet['owner']} | `{packet['dispatch_gate']}` | "
-            f"{packet['agent_fit']} | {render_source(packet['source'])} | `{predicate}` |"
+            "| "
+            f"{markdown_cell(event.get('title'))} | "
+            f"`{markdown_cell(event.get('timestamp'))}` | "
+            f"`{markdown_cell(event.get('line'))}` | "
+            f"`{markdown_cell(event.get('hash'))}` | "
+            f"{duplicate_status} | "
+            f"{included_status} |"
         )
-
     lines += [
         "",
-        "## Executor Criteria",
+        "## Planner Packets",
         "",
-    ]
-    for packet in snapshot["owner_packets"]:
-        lines.append(f"### `{packet['id']}`")
-        lines.append("")
-        lines.append(f"- Route: {packet['route']}")
-        lines.append("- Criteria:")
-        for criterion in packet["executor_criteria"]:
-            lines.append(f"  - {criterion}")
-        lines.append("- Verification predicates:")
-        for predicate in packet["verification_predicates"]:
-            lines.append(f"  - `{predicate}`")
-        if packet["blocked_local"]:
-            lines.append("- Local blocker: recorded here; does not block `global-product-selection`.")
-        lines.append("")
-
-    lines += [
-        "## Blocked Local Work",
-        "",
-        "| Packet | Owner | Gate | Does Not Block | Predicate |",
+        "| Packet | Agent | Worktree | Theme | Criteria |",
         "|---|---|---|---|---|",
     ]
-    if snapshot["blocked_local_work"]:
-        for packet in snapshot["blocked_local_work"]:
-            predicate = packet["verification_predicates"][0] if packet["verification_predicates"] else "n/a"
-            lines.append(
-                f"| `{packet['id']}` | {packet['owner']} | `{packet['dispatch_gate']}` | "
-                f"{render_list(packet['does_not_block'])} | `{predicate}` |"
-            )
-    else:
-        lines.append("| none | n/a | n/a | n/a | n/a |")
-
+    for packet in public["planner_packets"]:
+        criteria = "; ".join(packet["owner_packet"].get("criteria", [])[:2])
+        lines.append(
+            f"| `{packet['id']}` | `{packet['target_agent']}` | `{packet['worktree_slug']}` | "
+            f"`{packet['theme']}` | {markdown_cell(criteria)} |"
+        )
     lines += [
         "",
-        "## Product Selection Continuity",
+        "## Executor Packets",
         "",
-        f"- Status: `{product['status']}`.",
-        f"- Reason: {product['reason']}.",
-        f"- Candidate themes: {render_list(product['candidate_themes'], limit=20)}.",
-        f"- Predicates: {render_list(product['verification_predicates'], limit=20)}.",
-        "",
-        "## Private Output",
-        "",
-        f"- Private redacted index: `{PRIVATE_INDEX.relative_to(ROOT)}`.",
-        "- The private index stores hash lineage and packet membership only; it does not store raw prompt text.",
-        "",
-        "## Commands",
-        "",
-        "- Refresh this receipt: `python3 scripts/current-session-fanout.py --session <session.jsonl> --theme current-session-intake --write`",
-        "- Test this planner: `python3 -m pytest cli/tests/test_current_session_fanout.py -q`",
-        "- Whole gate: `bash scripts/verify-whole.sh`",
-        "",
+        "| Packet | Agent | Theme | Criteria | Predicate |",
+        "|---|---|---|---|---|",
     ]
-    return "\n".join(lines)
+    for packet in public["executor_packets"]:
+        criteria = "; ".join(packet.get("executor_criteria", [])[:2])
+        predicate = (packet.get("verification_predicates") or [""])[0]
+        lines.append(
+            f"| `{packet['id']}` | `{packet['target_agent']}` | `{packet['theme']}` | "
+            f"{markdown_cell(criteria)} | `{markdown_cell(predicate)}` |"
+        )
+    focused = [packet for packet in public["planner_packets"] if packet["theme"] == "full-fleet-overnight"]
+    if focused:
+        packet = focused[0]
+        lines += [
+            "",
+            "## Full-Fleet Overnight Owner Packet",
+            "",
+            f"Packet: `{packet['id']}`",
+            f"Owner repo: `{packet['owner_packet']['owner_repo']}`",
+            f"Owner ledger: `{packet['owner_packet']['owner_ledger']}`",
+            "",
+            "Executor criteria:",
+            "",
+        ]
+        lines.extend(f"- {item}" for item in packet["owner_packet"]["criteria"])
+        lines += ["", "Verification predicates:", ""]
+        lines.extend(f"- `{item}`" for item in packet["owner_packet"]["verification_predicates"])
+    lines += [
+        "",
+        "## Lane Classification",
+        "",
+        "| Agent | Kind | Status | Detail |",
+        "|---|---|---|---|",
+    ]
+    for row in public["lane_classification"]:
+        lines.append(
+            f"| `{row['agent']}` | `{row['kind']}` | `{row['status']}` | {markdown_cell(row['detail'])} |"
+        )
+    lines += [
+        "",
+        "## Blocked Local Work",
+        "",
+        f"Global product selection remains `{public['global_product_selection']['status']}`.",
+        "",
+        "| Source | Item | Impact |",
+        "|---|---|---|",
+    ]
+    for blocker in public["blocked_local_work"]:
+        lines.append(
+            f"| `{markdown_cell(blocker.get('source'))}` | {markdown_cell(blocker.get('item'))} | "
+            f"{markdown_cell(blocker.get('impact'))} |"
+        )
+    lines += [
+        "",
+        "## Contract",
+        "",
+        "- Planner packets are Codex conductor work; executor packets go to active fleet lanes.",
+        "- Down, depleted, or human-gated lanes are receipts, not a global stop condition.",
+        "- This command never applies Codex resets, credits, top-ups, or paid overages.",
+        "- Outbound identity-bearing actions remain human-gated.",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def write_outputs(snapshot: dict[str, Any], markdown: str) -> None:
@@ -860,25 +709,26 @@ def write_outputs(snapshot: dict[str, Any], markdown: str) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Create redacted current-session fanout owner packets.")
+    parser = argparse.ArgumentParser(description="Create current-session planner and executor fanout packets.")
     parser.add_argument("--session", help="Codex session JSONL path; defaults to latest session")
-    parser.add_argument("--theme", default="current-session-intake", help="focus planner theme")
-    parser.add_argument("--write", action="store_true", help="write tracked doc and ignored private index")
+    parser.add_argument("--min-codex-planners", type=int, default=int(os.environ.get("LIMEN_MIN_CODEX_PLANNERS", "10")))
+    parser.add_argument("--executor-lanes", default=os.environ.get("LIMEN_LANES", "auto"))
+    parser.add_argument("--include-contrib", action="store_true")
+    parser.add_argument("--no-reset-spend", dest="allow_reset_spend", action="store_false", default=False)
+    parser.add_argument("--allow-reset-spend", action="store_true", default=False)
+    parser.add_argument("--dry-run", action="store_true", help="print only; never write")
+    parser.add_argument("--write", action="store_true", help="write packet receipts")
     args = parser.parse_args()
 
     snapshot = build_snapshot(args)
-    markdown = render_markdown(snapshot) if snapshot.get("status") == "ready" else json.dumps(snapshot, indent=2)
-    if args.write and snapshot.get("status") == "ready":
+    markdown = render_markdown(snapshot)
+    if args.write and not args.dry_run:
         write_outputs(snapshot, markdown)
-        print(
-            "current-session-fanout: "
-            f"{snapshot['status']}; {snapshot['coverage']['owner_packets']} owner packets; "
-            f"wrote {DOC_PATH} and {PRIVATE_INDEX}"
-        )
+        print(f"current-session-fanout: {snapshot['status']}; wrote {DOC_PATH} and {PRIVATE_INDEX}")
     else:
-        print(markdown)
-        print(f"current-session-fanout: {snapshot.get('status', 'blocked')}; dry-run")
-    return 0 if snapshot.get("status") == "ready" else 1
+        print(markdown, end="")
+        print(f"current-session-fanout: {snapshot['status']}; dry-run")
+    return 0 if snapshot["status"] == "ready" else 1
 
 
 if __name__ == "__main__":
