@@ -168,13 +168,14 @@ def _task_cost(task: dict) -> int:
 
 
 # General local lanes that compete for non-deploy work, distributed by budget headroom + runway.
+# Includes every local checkout lane: codex, claude, agy, opencode, and gemini.
 # opencode is in the GENERAL rotation: its specialty (deploy/cloudflare) is blocked on Cloudflare
 # auth (those tasks are needs_human), so reserving it for deploy would leave a whole lane with
 # ~full budget IDLE — a "don't leave a lane with usage idle" violation. The 1800s lane timeout +
 # jules async-fallback bound its historical big-task timeouts. It still gets FIRST pick for genuine
 # deploy/infra work (the _DEPLOY_HINTS branch below) when that's unblocked.
 _DEPLOY_HINTS = ("deploy", "cloudflare", "worker", "wrangler", "infra", "hosting")
-_LOCAL_LANES = ("codex", "claude", "agy", "opencode")
+_LOCAL_LANES = ("codex", "claude", "agy", "opencode", "gemini")
 
 
 def _learned_weights() -> dict[str, float]:
