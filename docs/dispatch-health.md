@@ -1,6 +1,6 @@
 # Dispatch Health
 
-Generated: `2026-06-29T15:16:32+00:00`
+Generated: `2026-06-30T01:12:31+00:00`
 
 Status: `blocked`
 
@@ -16,38 +16,53 @@ Status: `blocked`
 - Plist KeepAlive: `True`; RunAtLoad: `True`.
 - Plist LIMEN_ROOT: `/Users/4jp/Workspace/limen`.
 - Plist LIMEN_DISPATCH_ASYNC: `0`.
-- Loaded launchd state: `running` pid `1656`.
+- Loaded launchd state: `running` pid `1591`.
 - Loaded LIMEN_ROOT: `/Users/4jp/Workspace/limen`.
 - Loaded LIMEN_DISPATCH_ASYNC: `0`.
-- Watchdog dry-run healthy: `True`; `[watchdog] 2026-06-29T15:16:33.126703+00:00 HEALTHY sig=healthy`.
+- Watchdog dry-run healthy: `False`; `[watchdog] 2026-06-30T01:12:32.180609+00:00 UNHEALTHY sig=beating+daemon-up`.
 
 ## Async Dispatch
 
 - Async dry-run requested: `True`.
-- Async dry-run ok: `True`; timed out `False`.
-- Async dry-run summary: `-- async: reaped 0 dead ; harvested 0 ; 0 still running ; would launch 0 (cap 12) -> []`.
+- Async dry-run ok: `False`; timed out `False`.
+- Async dry-run summary: `PermissionError: [Errno 1] Operation not permitted: '/Users/4jp/Workspace/limen/logs/.queue.lock.d'`.
 
 ## Live Root
 
 - Live root: `~/Workspace/limen`.
-- Branch: `main`; status `## main...origin/main [ahead 1]`.
-- HEAD: `d6757d3d21fc02f7d849f1f680d5c4e74c68cf70`.
-- origin/main: `9f7af24dcb7514acec86c377965fa8efa56932ce`.
-- Matches origin/main: `False`; ahead `1` behind `0`.
-- Dirty entries: `2`.
+- Branch: `work/workstream-agent-launcher-20260629`; status `## work/workstream-agent-launcher-20260629...origin/work/workstream-agent-launcher-20260629 [ahead 15]`.
+- HEAD: `3035140c1deab43a665eb2905a5e272cb3d16044`.
+- origin/main: `7ecdd65a529802a581d173b4cb390d19bcb20e55`.
+- Matches origin/main: `False`; ahead `23` behind `0`.
+- Dirty entries: `15`.
+  - `cli/src/limen/dispatch.py`
+  - `cli/tests/test_dispatch_engine.py`
+  - `cli/tests/test_rebalance.py`
+  - `cli/tests/test_usage_gate.py`
+  - `docs/capacity-fill.md`
+  - `docs/consolidation/GATES.md`
   - `docs/dispatch-health.md`
   - `docs/live-root-gate.md`
+  - `scripts/generate-capacity-fill.py`
+  - `tasks.yaml`
+  - `docs/lane-checkups/`
+  - `output.txt`
+  - `photos-universe-bootstrap.sh`
+  - `tasks.yaml.bak`
+  - `test.txt`
 
 ## Verified Worktree
 
-- Verified worktree: `~/Workspace/limen`.
-- Branch: `main`; status `## main...origin/main [ahead 1]`.
-- HEAD matches origin/main: `False`.
+- Verified worktree: `~/Workspace/.limen-worktrees/capfill-agy-20260629-22-9baa`.
+- Branch: `limen/capfill-agy-20260629-22-9baa`; status `## limen/capfill-agy-20260629-22-9baa...origin/main`.
+- HEAD matches origin/main: `True`.
 
 ## Blockers
 
-- `live-root-not-at-origin-main`: live root branch main head d6757d3d21fc differs from origin/main 9f7af24dcb75.
-- `live-root-dirty`: live root has 2 dirty entries.
+- `heartbeat-watchdog-unhealthy`:   ok  not-wedged: {"reason": "no PARALLEL beats in window", "recent_pr_counts": [], "max_fails_threshold": 3}
+- `live-root-not-at-origin-main`: live root branch work/workstream-agent-launcher-20260629 head 3035140c1dea differs from origin/main 7ecdd65a5298.
+- `live-root-dirty`: live root has 15 dirty entries.
+- `async-dry-run-unhealthy`: PermissionError: [Errno 1] Operation not permitted: '/Users/4jp/Workspace/limen/logs/.queue.lock.d'
 
 ## Commands
 
