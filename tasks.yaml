@@ -15,12 +15,12 @@ portal:
       claude: 100
     track:
       date: '2026-06-30'
-      spent: 65
+      spent: 67
       per_agent:
         jules: 50
         gemini: 0
         codex: 4
-        opencode: 3
+        opencode: 5
         agy: 8
         claude: 0
       per_agent_reset:
@@ -65774,7 +65774,7 @@ tasks:
   target_agent: opencode
   priority: critical
   budget_cost: 2
-  status: dispatched
+  status: done
   labels:
   - organ-kernel
   - pillar:social
@@ -65795,7 +65795,7 @@ tasks:
     \ into institutional weight (VLTIMA).]"
   depends_on: []
   created: '2026-06-30'
-  updated: '2026-06-30T16:01:22.835296Z'
+  updated: '2026-06-30T16:22:00Z'
   dispatch_log:
   - timestamp: '2026-06-30T16:00:55.195999Z'
     agent: codex
@@ -65811,6 +65811,11 @@ tasks:
     session_id: async-reserve
     status: dispatched
     output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-06-30T16:22:00Z'
+    agent: opencode
+    session_id: current
+    status: done
+    output: 'Verified organs/social/KERNEL.md committed in PR #489. Maps 5-primitive kernel to social domain (Member=person/contact, Mandate=relationship, Standing=tie strength, Standard=reciprocity norm, Governance=community rules). Purpose stated as institutional prosthesis. MACRO/MICRO deployment defined. Generic+nameless foundation, his instance on top. Named Koinonia, unscoped. No lorem.'
 - id: ORG-health-organ-kernel-0630
   title: Map the VLTIMA 5-primitive kernel to the health organ
   repo: organvm/limen
