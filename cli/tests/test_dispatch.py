@@ -12,7 +12,14 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import limen.dispatch as D
-from limen.capacity import PAID_AGENT_ORDER, capacity_census, format_capacity_census
+from limen.capacity import (
+    LOCAL_CHECKOUT_AGENTS,
+    PAID_AGENT_ORDER,
+    capacity_census,
+    classify_lanes,
+    format_capacity_census,
+    resolve_lane_selector,
+)
 from limen.dispatch import dispatch_parallel, dispatch_tasks, release_stale_tasks
 from limen.doctor import qa_report, readiness_report, stale_tasks
 from limen.io import load_limen_file
@@ -78,6 +85,29 @@ def test_capacity_census_lists_every_paid_lane(tmp_path: Path, monkeypatch) -> N
     assert "github_actions" in text
 
 
+def test_lane_selector_auto_all_and_manual_are_registry_derived(monkeypatch) -> None:
+    rows = [
+        {
+            "agent": lane,
+            "kind": "test",
+            "reachable": lane in {"codex", "github_actions", "ollama"},
+            "detail": "test",
+            "command": [lane],
+            "limit": 1,
+            "spent": 0,
+            "remaining": 1,
+        }
+        for lane in PAID_AGENT_ORDER
+    ]
+    monkeypatch.setattr("limen.capacity.capacity_census", lambda board=None: rows)
+
+    assert resolve_lane_selector("all") == PAID_AGENT_ORDER
+    assert resolve_lane_selector("auto") == ("codex", "ollama", "github_actions")
+    assert resolve_lane_selector("gha,codex,github-actions") == ("github_actions", "codex")
+    classified = {row["agent"]: row["status"] for row in classify_lanes()}
+    assert set(classified) == set(PAID_AGENT_ORDER)
+
+
 def test_route_distributes_local_work_and_reaches_extended_fleet(tmp_path: Path) -> None:
     """Ideal-form router (origin's local-first split + the extended-fleet graft): local-checkout
     work spreads across LOCAL lanes by budget+refresh-runway (no single-lane serialization), and a
@@ -106,7 +136,7 @@ def test_route_distributes_local_work_and_reaches_extended_fleet(tmp_path: Path)
         vendor, _ = route.route_task(task, health, workdir, assigned=tally, budget=budget)
         tally[vendor] = tally.get(vendor, 0) + 1
         picks.append(vendor)
-    assert set(picks) <= {"codex", "claude", "agy", "opencode"}, f"local work leaked to {set(picks)}"
+    assert set(picks) <= set(LOCAL_CHECKOUT_AGENTS), f"local work leaked to {set(picks)}"
     assert len(set(picks)) >= 2, f"work serialized onto {set(picks)}"
 
     # A repo with NO local checkout but a GitHub issue reaches the extended fleet, not 'unroutable'.

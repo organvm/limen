@@ -1957,6 +1957,67 @@ def test_conductor_tranche_records_no_autonomous_path_when_all_ranked_paths_skip
     assert "no ranked path is autonomously actionable" in markdown
 
 
+def test_conductor_tranche_uses_isolated_dispatch_before_no_action_stop(tmp_path: Path):
+    tranche = _load(TRANCHE_SCRIPT, "conductor_tranche_isolated_dispatch_fallback")
+    tranche.ROOT = tmp_path
+    tranche.HOME = tmp_path
+    tranche.PRIVATE_ROOT = tmp_path / ".limen-private" / "session-corpus"
+    tranche.ATTACK_INDEX = tranche.PRIVATE_ROOT / "lifecycle" / "session-attack-paths.json"
+    tranche.DOC_PATH = tmp_path / "docs" / "conductor-tranche.md"
+    tranche.PRIVATE_INDEX = tranche.PRIVATE_ROOT / "lifecycle" / "conductor-tranche.json"
+    tranche.PORTVS_PATH = tmp_path / "Workspace" / "4444J99" / "portvs"
+
+    tranche.ATTACK_INDEX.parent.mkdir(parents=True)
+    tranche.ATTACK_INDEX.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-06-28T12:00:00+00:00",
+                "ranked_paths": [
+                    {
+                        "id": "operator-gated-root",
+                        "kind": "worktree",
+                        "lane": "human-gate",
+                        "score": 80,
+                        "agent_fit": "human/codex-prep",
+                        "next_action": "Reclaim only after operator acceptance.",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "tasks.yaml").write_text(
+        json.dumps(
+            {
+                "version": "1.0",
+                "portal": {"name": "test", "budget": {"daily": 10, "unit": "runs", "per_agent": {}, "track": {"date": "2026-06-30", "spent": 0, "per_agent": {}}}},
+                "tasks": [
+                    {
+                        "id": "ISO-001",
+                        "title": "Isolated work exists",
+                        "repo": "organvm/limen",
+                        "target_agent": "any",
+                        "priority": "critical",
+                        "budget_cost": 1,
+                        "status": "open",
+                        "created": "2026-06-30",
+                        "dispatch_log": [],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    snapshot = tranche.build_snapshot()
+    markdown = tranche.render_markdown(snapshot)
+
+    assert snapshot["packet"]["selected_path_id"] == "isolated-dispatchable-work-iso-001"
+    assert snapshot["packet"]["id"] == "tranche-isolated-dispatchable-work-iso-001"
+    assert "no-autonomous-actionable-path" not in snapshot["packet"]["id"]
+    assert "isolated dispatch substrate" in markdown
+
+
 def test_conductor_tranche_emits_github_consolidation_packet(tmp_path: Path):
     tranche = _load(TRANCHE_SCRIPT, "conductor_tranche_github_consolidation")
     tranche.ROOT = tmp_path

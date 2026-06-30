@@ -10,7 +10,7 @@
 #
 # Every local dispatch is worktree-isolated -> produces a reviewable PR, never touches
 # a live checkout. Knobs: LIMEN_LOCAL_LIMIT (50) LIMEN_JULES_LIMIT (100)
-# LIMEN_LANES (codex,opencode,agy,claude — live lanes; gemini excluded until authed).
+# LIMEN_LANES (auto by default; all/comma-list supported by full-fleet-lanes.py).
 set -uo pipefail
 export LIMEN_ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
 export LIMEN_TASKS="${LIMEN_TASKS:-$LIMEN_ROOT/tasks.yaml}"
@@ -23,8 +23,8 @@ cd "$LIMEN_ROOT" || exit 1
 # load local secrets (gemini key, etc.) from the single un-committed secrets file
 [ -f "$HOME/.limen.env" ] && { set -a; . "$HOME/.limen.env"; set +a; }
 
-LANES="${LIMEN_LANES:-codex,opencode,agy,claude}"
-[ -n "${GEMINI_API_KEY:-}" ] && LANES="$LANES,gemini"
+LANES_SELECTOR="${LIMEN_LANES:-auto}"
+LANES="$(python3 "$LIMEN_ROOT/scripts/full-fleet-lanes.py" --lanes "$LANES_SELECTOR" --format csv 2>/dev/null || true)"
 LOCAL_LIMIT="${LIMEN_LOCAL_LIMIT:-50}"
 JULES_LIMIT="${LIMEN_JULES_LIMIT:-100}"
 mkdir -p "$LIMEN_ROOT/logs"
@@ -53,13 +53,13 @@ python3 -m limen release-stale --agent jules --hours 24 --apply 2>&1 | tail -3
 echo "── 1. rebalance open local work across live lanes ──"
 python3 "$LIMEN_ROOT/scripts/rebalance.py" --lanes "$LANES" --apply 2>&1 | tail -3
 
-echo "── 2. dispatch jules (async cloud, within budget) ──"
-python3 -m limen dispatch --agent jules --live --limit "$JULES_LIMIT" 2>&1 | tail -8
-
 IFS=',' read -ra LANE_ARR <<< "$LANES"
 for v in "${LANE_ARR[@]}"; do
-  echo "── 3. dispatch local lane: $v (worktree->PR, --live, limit $LOCAL_LIMIT) ──"
-  python3 -m limen dispatch --agent "$v" --live --limit "$LOCAL_LIMIT" 2>&1 | tail -12
+  [ -n "$v" ] || continue
+  limit="$LOCAL_LIMIT"
+  [ "$v" = "jules" ] && limit="$JULES_LIMIT"
+  echo "── 2. dispatch lane: $v (--live, limit $limit) ──"
+  python3 -m limen dispatch --agent "$v" --live --limit "$limit" 2>&1 | tail -12
 done
 
 echo "── 4. board ──"

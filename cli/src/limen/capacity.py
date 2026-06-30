@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import os
@@ -52,23 +53,74 @@ class CapacityFillSnapshot(TypedDict):
     blockers: list[dict[str, str]]
 
 
-PAID_AGENT_ORDER: tuple[str, ...] = (
-    "codex",
-    "claude",
-    "opencode",
-    "agy",
-    "gemini",
-    # ollama: the LOCAL, UNMETERED floor of the cascade — the pilot light. It has no token
-    # budget and no rate-limit window, so when every metered/cloud vendor is spent (the exact
-    # "we didn't pace tokens perfectly between refreshes" case), the beat still has a lane that
-    # can produce. Self-activating: reachable only once a model is pulled (see agent_status).
-    "ollama",
-    "jules",
-    "copilot",
-    "warp",
-    "oz",
-    "github_actions",
-)
+class LaneClassification(TypedDict):
+    agent: str
+    kind: str
+    status: str
+    reachable: bool
+    detail: str
+    command: list[str] | None
+
+
+@dataclass(frozen=True)
+class LaneAdapter:
+    agent: str
+    kind: str
+    binary: str
+    dispatch_surface: str
+    local_checkout: bool = False
+    issue_assignment: bool = False
+    non_blocking: bool = False
+    human_gate_when_unreachable: bool = False
+
+
+LANE_ADAPTERS: dict[str, LaneAdapter] = {
+    "codex": LaneAdapter("codex", "local-cli", "codex", "codex exec", local_checkout=True),
+    "claude": LaneAdapter("claude", "local-cli", "claude", "claude -p", local_checkout=True),
+    "opencode": LaneAdapter("opencode", "local-cli", "opencode", "opencode run", local_checkout=True),
+    "agy": LaneAdapter("agy", "local-cli", "agy", "agy --print", local_checkout=True, human_gate_when_unreachable=True),
+    "gemini": LaneAdapter("gemini", "local-cli", "gemini", "gemini -p", local_checkout=True, human_gate_when_unreachable=True),
+    # ollama: the LOCAL, UNMETERED floor of the cascade - the pilot light. It has no token
+    # budget and no rate-limit window, so when every metered/cloud vendor is spent, the beat
+    # still has a lane that can produce. Self-activating: reachable only once a model is pulled.
+    "ollama": LaneAdapter("ollama", "local-cli", "ollama", "ollama run", local_checkout=True),
+    "jules": LaneAdapter("jules", "cloud-cli", "jules", "jules remote new", non_blocking=True),
+    "copilot": LaneAdapter(
+        "copilot",
+        "github-issue",
+        "gh",
+        "GitHub issue assignment",
+        issue_assignment=True,
+        non_blocking=True,
+        human_gate_when_unreachable=True,
+    ),
+    "warp": LaneAdapter(
+        "warp",
+        "paid-service",
+        "warp",
+        "limen-warp-oz workflow_dispatch",
+        non_blocking=True,
+        human_gate_when_unreachable=True,
+    ),
+    "oz": LaneAdapter(
+        "oz",
+        "paid-service",
+        "oz",
+        "limen-warp-oz workflow_dispatch",
+        non_blocking=True,
+        human_gate_when_unreachable=True,
+    ),
+    "github_actions": LaneAdapter(
+        "github_actions",
+        "github-actions",
+        "gh",
+        "workflow_dispatch",
+        non_blocking=True,
+        human_gate_when_unreachable=True,
+    ),
+}
+
+PAID_AGENT_ORDER: tuple[str, ...] = tuple(LANE_ADAPTERS)
 
 AGENT_ALIASES: dict[str, str] = {
     "actions": "github_actions",
@@ -77,42 +129,25 @@ AGENT_ALIASES: dict[str, str] = {
     "antigravity": "agy",
 }
 
-LOCAL_CHECKOUT_AGENTS = frozenset({"codex", "claude", "opencode", "agy", "gemini", "ollama"})
-ISSUE_ASSIGNMENT_AGENTS = frozenset({"copilot"})
-DEFAULT_FILL_AGENTS: tuple[str, ...] = ("jules", "claude", "opencode", "agy", "gemini", "codex", "copilot")
+LOCAL_CHECKOUT_AGENTS = frozenset(agent for agent, adapter in LANE_ADAPTERS.items() if adapter.local_checkout)
+ISSUE_ASSIGNMENT_AGENTS = frozenset(agent for agent, adapter in LANE_ADAPTERS.items() if adapter.issue_assignment)
+NON_BLOCKING_AGENTS = frozenset(agent for agent, adapter in LANE_ADAPTERS.items() if adapter.non_blocking)
+DEFAULT_FILL_AGENTS: tuple[str, ...] = PAID_AGENT_ORDER
 DEFAULT_DAILY_TASK_TARGETS: dict[str, int] = {
     # Human contract: Claude should get a deliberately programmed/check-up batch daily.
     "claude": 15,
+    # Lanes without legacy per-agent budget caps still need a visible receipt. A target of one
+    # classifies them without flooding the board.
+    "ollama": 1,
+    "copilot": 1,
+    "warp": 1,
+    "oz": 1,
+    "github_actions": 1,
 }
 BAD_USAGE_HEALTH = {"exhausted", "rate-limited", "low", "throttle"}
 
-_DEFAULT_BINARIES: dict[str, str] = {
-    "codex": "codex",
-    "claude": "claude",
-    "opencode": "opencode",
-    "agy": "agy",
-    "gemini": "gemini",
-    "ollama": "ollama",
-    "jules": "jules",
-    "copilot": "gh",
-    "warp": "warp",
-    "oz": "oz",
-    "github_actions": "gh",
-}
-
-_KINDS: dict[str, str] = {
-    "codex": "local-cli",
-    "claude": "local-cli",
-    "opencode": "local-cli",
-    "agy": "local-cli",
-    "gemini": "local-cli",
-    "ollama": "local-cli",
-    "jules": "cloud-cli",
-    "copilot": "github-issue",
-    "warp": "paid-service",
-    "oz": "paid-service",
-    "github_actions": "github-actions",
-}
+_DEFAULT_BINARIES: dict[str, str] = {agent: adapter.binary for agent, adapter in LANE_ADAPTERS.items()}
+_KINDS: dict[str, str] = {agent: adapter.kind for agent, adapter in LANE_ADAPTERS.items()}
 
 _ISSUE_RE = re.compile(r"github\.com/([^/\s]+/[^/\s]+)/issues/(\d+)")
 
@@ -120,6 +155,90 @@ _ISSUE_RE = re.compile(r"github\.com/([^/\s]+/[^/\s]+)/issues/(\d+)")
 def canonical_agent(agent: str | None) -> str:
     value = (agent or "").strip()
     return AGENT_ALIASES.get(value, value)
+
+
+def registered_lanes() -> tuple[str, ...]:
+    return PAID_AGENT_ORDER
+
+
+def _dedupe_lanes(lanes: list[str]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in lanes:
+        lane = canonical_agent(raw)
+        if not lane or lane in seen:
+            continue
+        if lane not in PAID_AGENT_ORDER:
+            raise ValueError(f"unknown Limen lane {raw!r}; expected one of {', '.join(PAID_AGENT_ORDER)}")
+        seen.add(lane)
+        out.append(lane)
+    return tuple(out)
+
+
+def classify_lanes(board: object = None, down_lanes: set[str] | None = None) -> list[LaneClassification]:
+    """Classify every registered lane for overnight/fleet receipts.
+
+    Status vocabulary is intentionally small:
+      active      - reachable now and has budget/runway
+      down        - missing binary/process substrate or explicitly down by the live gate
+      depleted    - registered and healthy enough, but has no budget remaining
+      human-gated - auth/config/model enablement is the next gate
+    """
+    down = {canonical_agent(lane) for lane in (down_lanes or set())}
+    rows: list[LaneClassification] = []
+    for row in capacity_census(board):
+        agent = row["agent"]
+        detail = str(row["detail"])
+        adapter = LANE_ADAPTERS[agent]
+        if agent in down:
+            status = "down"
+            reachable = False
+            detail = f"live dispatch gate marked lane down; {detail}"
+        elif row["reachable"]:
+            status = "active"
+            reachable = True
+        elif row["remaining"] == 0:
+            status = "depleted"
+            reachable = False
+        elif adapter.human_gate_when_unreachable or re.search(
+            r"auth|api key|not set|not confirmed|no model pulled|credential", detail, re.IGNORECASE
+        ):
+            status = "human-gated"
+            reachable = False
+        else:
+            status = "down"
+            reachable = False
+        rows.append(
+            {
+                "agent": agent,
+                "kind": row["kind"],
+                "status": status,
+                "reachable": reachable,
+                "detail": detail,
+                "command": row["command"],
+            }
+        )
+    return rows
+
+
+def resolve_lane_selector(
+    selector: str | None = None,
+    *,
+    board: object = None,
+    down_lanes: set[str] | None = None,
+) -> tuple[str, ...]:
+    """Resolve LIMEN_LANES semantics.
+
+    auto       -> every active registered lane.
+    all        -> every registered lane, leaving downstream dispatch to report skips.
+    comma list -> explicit operator override, normalized through aliases.
+    """
+    raw = (selector or os.environ.get("LIMEN_LANES") or "auto").strip()
+    if not raw or raw == "auto":
+        return tuple(row["agent"] for row in classify_lanes(board, down_lanes) if row["status"] == "active")
+    if raw == "all":
+        return PAID_AGENT_ORDER
+    return _dedupe_lanes([part.strip() for part in raw.split(",") if part.strip()])
 
 
 def task_value(task: Task | dict[str, object], key: str, default: T | None = None) -> T | object | None:
@@ -623,14 +742,14 @@ def capacity_fill_snapshot(
                 status = "underfilled"
                 evidence = f"productive {productive}/{expected_now}; attempts {attempts}/{expected_now}"
                 action = "route open work to this lane and dispatch before the window resets"
-            elif open_work <= 0:
-                status = "no_work"
-                evidence = f"productive {productive}/{expected_now}, but no open/any work is available"
-                action = "generate or route appropriate open work for this lane"
-            else:
+            elif not reachable:
                 status = "blocked"
                 evidence = f"productive {productive}/{expected_now}, but the lane is not reachable"
                 action = "fix lane reachability/auth/budget before routing more work"
+            else:
+                status = "no_work"
+                evidence = f"productive {productive}/{expected_now}, but no open/any work is available"
+                action = "generate or route appropriate open work for this lane"
         else:
             status = "healthy"
             evidence = f"productive {productive}/{expected_now}; attempts {attempts}/{expected_now}"

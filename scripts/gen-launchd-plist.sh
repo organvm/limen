@@ -41,9 +41,9 @@ PY="${LIMEN_PYTHON:-$(command -v python3 || true)}"
 PY="$(resolve "$PY")"
 PYDIR="$(dirname "$PY")"
 PATH_VAL="$PYDIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-LANES="${LIMEN_LANES:-codex,opencode,agy,claude,gemini}"
+LANES="${LIMEN_LANES:-auto}"
 LOCAL_LIMIT="${LIMEN_LOCAL_LIMIT:-3}"
-DISPATCH_ASYNC="${LIMEN_DISPATCH_ASYNC:-0}"
+DISPATCH_ASYNC="${LIMEN_DISPATCH_ASYNC:-1}"
 
 render() {
   sed -e "s|@@HOME@@|$HOME_DIR|g" \

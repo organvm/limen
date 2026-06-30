@@ -52,6 +52,7 @@ from limen.capacity import (  # noqa: E402
     PAID_AGENT_ORDER,
     capacity_census,
     format_capacity_census,
+    resolve_lane_selector,
     task_has_github_issue,
 )
 from limen.io import load_limen_file, queue_lock, save_limen_file  # noqa: E402
@@ -84,7 +85,7 @@ def _vendor_health() -> dict[str, bool]:
 
 
 def _fleet_health(data) -> dict[str, bool]:
-    """One health map for the WHOLE PAID_AGENT_ORDER. Origin's local-CLI probe for the six vendor
+    """One health map for the WHOLE PAID_AGENT_ORDER. Origin's local-CLI probe for legacy local
     lanes, UNIONed with the capacity census's reachability for the extended paid fleet
     (copilot/github_actions/warp/oz) so fan-all coverage is REAL, not just declared — a remote-only
     repo with a GitHub issue can still route to copilot when no local lane can serve it."""
@@ -174,7 +175,7 @@ def _task_cost(task: dict) -> int:
 # jules async-fallback bound its historical big-task timeouts. It still gets FIRST pick for genuine
 # deploy/infra work (the _DEPLOY_HINTS branch below) when that's unblocked.
 _DEPLOY_HINTS = ("deploy", "cloudflare", "worker", "wrangler", "infra", "hosting")
-_LOCAL_LANES = ("codex", "claude", "agy", "opencode")
+_LOCAL_LANES = tuple(agent for agent in PAID_AGENT_ORDER if agent in LOCAL_CHECKOUT_AGENTS)
 
 
 def _learned_weights() -> dict[str, float]:
@@ -452,7 +453,10 @@ def main() -> int:
     # Remote/issue lanes (jules/copilot/github_actions/warp/oz) self-dispatch and aren't constrained.
     _lanes_env = os.environ.get("LIMEN_LANES")
     if _lanes_env:
-        _dispatchable = {ln.strip() for ln in _lanes_env.split(",") if ln.strip()} | {"jules"}
+        try:
+            _dispatchable = set(resolve_lane_selector(_lanes_env, board=data)) | {"jules"}
+        except ValueError:
+            _dispatchable = set()
         health = {
             k: (v and (k in _dispatchable or k not in LOCAL_CHECKOUT_AGENTS))
             for k, v in health.items()

@@ -33,6 +33,10 @@ def _agent_label(agent: str) -> str:
         "claude": "Claude",
         "codex": "Codex",
         "copilot": "Copilot",
+        "github_actions": "GitHub Actions",
+        "ollama": "Ollama",
+        "warp": "Warp",
+        "oz": "Oz",
     }.get(agent, agent)
 
 

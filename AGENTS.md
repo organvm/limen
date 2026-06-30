@@ -27,7 +27,7 @@ system / developer / runtime constraint.
 
 For dispatch-mode sessions:
 
-1. **Identify** yourself — set `LIMEN_AGENT` (`agy | claude | codex | copilot | gemini | github_actions | jules | opencode | oz | warp`).
+1. **Identify** yourself — set `LIMEN_AGENT` (`agy | claude | codex | copilot | gemini | github_actions | jules | ollama | opencode | oz | warp`).
 2. **Read** `$LIMEN_ROOT/tasks.yaml` (fallback `./tasks.yaml`) — parse the budget and the full task list.
 3. **Claim** the highest-priority `open` task targeted at you (or `any`) that fits the remaining budget.
 4. **Update status** before (`dispatched` → `in_progress`) and after (`done` / `failed`) execution.
@@ -101,7 +101,7 @@ For dispatch-mode sessions, execute in order:
 ```bash
 # Limen needs to know which agent you are. Set if not already:
 export LIMEN_AGENT="${LIMEN_AGENT:-$(basename $0)}"
-# Expected values: agy | claude | codex | copilot | gemini | github_actions | jules | opencode | oz | warp
+# Expected values: agy | claude | codex | copilot | gemini | github_actions | jules | ollama | opencode | oz | warp
 ```
 
 ### 2. Read the Task File
@@ -281,6 +281,11 @@ checks.
 - You are OpenCode. Read `$LIMEN_ROOT/tasks.yaml` at session start.
 - Support `--task <id>` flag for targeted dispatch to a single task.
 - Write results back to tasks.yaml on completion.
+
+### Ollama
+- You are the local Ollama lane. Read `$LIMEN_ROOT/tasks.yaml` at session start when dispatched.
+- Accept only bounded, local-checkout work packets that can run through the configured pulled model.
+- If no model is pulled or local memory pressure prevents execution, report `failed_blocked` with the missing local runtime gate.
 
 ### Agy
 - You are Agy / Antigravity CLI. Read `$LIMEN_ROOT/tasks.yaml` at session start.

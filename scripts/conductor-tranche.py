@@ -38,6 +38,7 @@ PORTVS_PATH = HOME / "Workspace" / "4444J99" / "portvs"
 
 SKIP_LANES = {"family", "human-gate", "observe", "parked"}
 SKIP_CATEGORIES = {"auth_credentials"}
+PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "backlog": 4}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -89,6 +90,48 @@ def select_path(paths: list[dict[str, Any]]) -> dict[str, Any] | None:
         if is_actionable(path):
             return path
     return None
+
+
+def isolated_dispatchable_path() -> dict[str, Any] | None:
+    """Fallback when broad ranked paths are blocked but isolated queue work exists.
+
+    The conductor should not emit a global no-action stop while an open machine task can be
+    handled through the existing isolated worktree dispatch surface.
+    """
+    try:
+        from limen.io import load_limen_file
+    except Exception:
+        return None
+    try:
+        board = load_limen_file(ROOT / "tasks.yaml")
+    except Exception:
+        return None
+    tasks = [
+        task
+        for task in board.tasks
+        if task.status == "open"
+        and task.target_agent != "human"
+        and "needs-human" not in (task.labels or [])
+        and bool(task.repo)
+    ]
+    if not tasks:
+        return None
+    tasks.sort(key=lambda task: (PRIORITY_ORDER.get(task.priority, 99), task.id))
+    task = tasks[0]
+    return {
+        "id": f"isolated-dispatchable-work-{slugify(task.id)}",
+        "category": "isolated_dispatch",
+        "kind": "task_board",
+        "lane": task.target_agent,
+        "score": 0,
+        "agent_fit": task.target_agent,
+        "task_id": task.id,
+        "repo": task.repo,
+        "next_action": (
+            f"Run isolated reversible dispatch for open task `{task.id}` in `{task.repo}` "
+            "instead of stopping at a broad live-root gate."
+        ),
+    }
 
 
 def worktree_packet(path: dict[str, Any]) -> dict[str, Any]:
@@ -222,6 +265,39 @@ def dispatch_packet(path: dict[str, Any]) -> dict[str, Any]:
             "python3 scripts/conductor-tranche.py --write",
         ],
         "receipt": "docs/DISPATCH-ARCHITECTURE.md and docs/conductor-tranche.md.",
+    }
+
+
+def isolated_dispatch_packet(path: dict[str, Any]) -> dict[str, Any]:
+    task_id = str(path.get("task_id") or "open-task")
+    repo = str(path.get("repo") or "task repo")
+    lane = str(path.get("lane") or "auto")
+    return {
+        "purpose": (
+            f"Use the isolated dispatch substrate to advance open task `{task_id}` in `{repo}` "
+            "without broad live-root mutation."
+        ),
+        "repo_worktree": (
+            f"`organvm/limen` conductor checkout plus an isolated disposable worktree for `{repo}` "
+            "created by dispatch."
+        ),
+        "allowed_files": [
+            "scripts/dispatch-async.py",
+            "scripts/dispatch-parallel.py",
+            "cli/src/limen/dispatch.py",
+            "docs/conductor-tranche.md",
+            f"isolated worktree for task {task_id}",
+        ],
+        "stop_condition": (
+            "Stop before editing the live Limen root, changing credentials, deleting worktrees, "
+            "force-pushing, or mutating task-board state outside the dispatch reserve/result path."
+        ),
+        "verification": [
+            "python3 scripts/full-fleet-lanes.py --format shell",
+            f"PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes {lane if lane != 'any' else 'auto'} --dry-run",
+            "python3 scripts/conductor-tranche.py --write",
+        ],
+        "receipt": "Dispatch log/PR/session receipt for the task plus refreshed docs/conductor-tranche.md.",
     }
 
 
@@ -566,6 +642,8 @@ def packet_for_path(path: dict[str, Any] | None) -> dict[str, Any]:
         return capability_substrate_packet(path)
     if category == "owner_state":
         return owner_state_packet(path)
+    if category == "isolated_dispatch":
+        return isolated_dispatch_packet(path)
     if category in {"remote_receipt", "dispatch_lifecycle", "task_board"} or lane == "remote-close":
         return dispatch_packet(path)
     return default_packet(path)
@@ -574,7 +652,7 @@ def packet_for_path(path: dict[str, Any] | None) -> dict[str, Any]:
 def build_snapshot() -> dict[str, Any]:
     attack = load_json(ATTACK_INDEX)
     ranked = as_list(attack.get("ranked_paths"))
-    selected = select_path(ranked)
+    selected = select_path(ranked) or isolated_dispatchable_path()
     packet = packet_for_path(selected)
     selected_id = str(
         (selected or {}).get("id")

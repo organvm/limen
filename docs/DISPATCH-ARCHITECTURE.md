@@ -1,11 +1,12 @@
 # Dispatch architecture — how the fleet turns tasks.yaml into PRs
 
-Update verified 2026-06-28:
+Update verified 2026-06-30:
 
 - Live launchd heartbeat is running and `python3 scripts/watchdog.py --dry-run` reports healthy.
-- Live heartbeat is still using SYNC dispatch. The installed plist now records `LIMEN_DISPATCH_ASYNC=0`; the currently loaded launchd job has not been reloaded since that file repair.
+- Full-fleet overnight defaults now resolve `LIMEN_LANES=auto` from the shared lane registry instead of a local-only list.
+- Async dispatch is the overnight default once the local policy/plist are opened by `scripts/open-full-fleet-overnight.sh --apply`.
 - Async orchestration is implemented and tested. `pytest -q cli/tests/test_async_dispatch.py` passes after fixing stale-worker reaping so async-reserved tasks reopen when their detached worker dies.
-- `PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes codex,opencode,agy,claude,gemini,jules --per-lane 3 --max 12 --dry-run` reports no current async workers and no launchable async tasks.
+- `PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes auto --per-lane 3 --max 12 --dry-run` probes every reachable registered lane.
 
 The heartbeat (`scripts/heartbeat-loop.sh`, launchd `com.limen.heartbeat`) runs one polyrhythmic
 beat repeatedly: drain → heal → feed (mine) → route/rebalance → **dispatch** → reconcile → web.
@@ -13,12 +14,12 @@ Dispatch is where open tasks become worktree→PR. There are two interchangeable
 
 ## The two engines
 
-### SYNC (default) — `scripts/dispatch-parallel.py` → `dispatch.dispatch_parallel()`
+### SYNC (fallback) — `scripts/dispatch-parallel.py` → `dispatch.dispatch_parallel()`
 RESERVE (mark open→dispatched, save once) → RUN all picked tasks concurrently in a thread pool →
 COMMIT (apply results, save once). **The beat blocks until the slowest agent finishes** — that is
 the throughput ceiling ("900s gates every beat"). Safe + simple; one process owns the two writes.
 
-### ASYNC (opt-in, `LIMEN_DISPATCH_ASYNC=1`) — `scripts/dispatch-async.py` + `scripts/async-run-one.py`
+### ASYNC (overnight default, `LIMEN_DISPATCH_ASYNC=1`) — `scripts/dispatch-async.py` + `scripts/async-run-one.py`
 Decouples agent runtime from the beat. Each beat: **reap** dead workers → **harvest** finished
 results → **reserve + launch** detached workers up to a global cap, then **return immediately**.
 - `async-run-one.py` (detached worker): runs ONE task's `call_agent_dispatch` and writes
@@ -29,8 +30,8 @@ results → **reserve + launch** detached workers up to a global cap, then **ret
   markers so budgets hold between reserve & harvest; `reap_stale` (LIMEN_ASYNC_MAX_AGE=1200s)
   reopens tasks whose worker died without a result (no leaked slots).
 - Beats stay fast; a slow/stuck agent can't gate the beat. CI-tested in `cli/tests/test_async_dispatch.py`.
-- TO ACTIVATE: set `LIMEN_DISPATCH_ASYNC=1` in the plist + restart **between beats** (no in-flight
-  dispatch, else reserved tasks strand as phantoms). Left OFF until a focused, monitored switch.
+- TO ACTIVATE: run `bash scripts/open-full-fleet-overnight.sh --apply` after
+  `python3 scripts/overnight-doctor.py` shows preservation/readiness blockers are clear.
 
 ## Cross-cutting keystones (apply to both engines)
 

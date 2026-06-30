@@ -1,23 +1,33 @@
 # Capacity Fill
 
-Generated: `2026-06-30T01:44:02+00:00`
+Generated: `2026-06-30T11:51:32+00:00`
 
 Status: `blocked`
 
 | Lane | Status | Productive | Attempts | Expected now | Target | Open work | Active | Action |
 |---|---|---:|---:|---:|---:|---:|---:|---|
-| `jules` | `underfilled` | 81 | 81 | 83 | 100 | 5 | 69 | route open work to this lane and dispatch before the window resets |
-| `claude` | `no_work` | 0 | 4 | 10 | 15 | 0 | 4 | generate or route appropriate open work for this lane |
-| `opencode` | `underfilled` | 1 | 12 | 89 | 100 | 2 | 4 | route open work to this lane and dispatch before the window resets |
-| `agy` | `blocked` | 5 | 19 | 89 | 100 | 0 | 0 | clear the lane-down/auth/rate-limit gate, then route and dispatch this lane |
-| `gemini` | `unproductive` | 0 | 19 | 8 | 10 | 0 | 4 | heal failed/rerouted dispatches so attempts become done/dispatched work |
-| `codex` | `depleted` | 16 | 15 | 67 | 100 | 0 | 6 | wait for this lane's meter to refresh or fail over before feeding it again |
+| `codex` | `no_work` | 0 | 29 | 61 | 100 | 0 | 0 | generate or route appropriate open work for this lane |
+| `claude` | `blocked` | 0 | 18 | 9 | 15 | 1 | 0 | clear the lane-down/auth/rate-limit gate, then route and dispatch this lane |
+| `opencode` | `no_work` | 0 | 40 | 46 | 100 | 0 | 1 | generate or route appropriate open work for this lane |
+| `agy` | `no_work` | 0 | 42 | 46 | 100 | 0 | 0 | generate or route appropriate open work for this lane |
+| `gemini` | `unproductive` | 0 | 46 | 2 | 10 | 0 | 0 | heal failed/rerouted dispatches so attempts become done/dispatched work |
+| `ollama` | `blocked` | 0 | 0 | 1 | 1 | 0 | 0 | fix lane reachability/auth/budget before routing more work |
+| `jules` | `blocked` | 88 | 106 | 24 | 100 | 15 | 71 | clear the lane-down/auth/rate-limit gate, then route and dispatch this lane |
+| `copilot` | `blocked` | 0 | 0 | 1 | 1 | 0 | 0 | fix lane reachability/auth/budget before routing more work |
+| `warp` | `blocked` | 0 | 0 | 1 | 1 | 0 | 0 | fix lane reachability/auth/budget before routing more work |
+| `oz` | `blocked` | 0 | 0 | 1 | 1 | 0 | 0 | fix lane reachability/auth/budget before routing more work |
+| `github_actions` | `underfilled` | 0 | 0 | 1 | 1 | 31 | 0 | route open work to this lane and dispatch before the window resets |
 
 ## Evidence
 
-- `jules`: productive 81/83; attempts 81/83
-- `claude`: productive 0/10, but no open/any work is available
-- `opencode`: productive 1/89; attempts 12/89
-- `agy`: lane is down by the live dispatch gate
-- `gemini`: attempted 19/8, but productive board spend is 0/8
-- `codex`: usage meter health=throttle; observed=16, productive=16
+- `codex`: productive 0/61, but no open/any work is available
+- `claude`: lane is down by the live dispatch gate
+- `opencode`: productive 0/46, but no open/any work is available
+- `agy`: productive 0/46, but no open/any work is available
+- `gemini`: attempted 46/2, but productive board spend is 0/2
+- `ollama`: productive 0/1, but the lane is not reachable
+- `jules`: lane is down by the live dispatch gate
+- `copilot`: productive 0/1, but the lane is not reachable
+- `warp`: productive 0/1, but the lane is not reachable
+- `oz`: productive 0/1, but the lane is not reachable
+- `github_actions`: productive 0/1; attempts 0/1

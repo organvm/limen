@@ -24,7 +24,7 @@ from typing import Any
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(ROOT / "cli" / "src"))
 
-from limen.capacity import capacity_fill_snapshot  # noqa: E402
+from limen.capacity import capacity_fill_snapshot, classify_lanes  # noqa: E402
 from limen.dispatch import _down_lanes  # noqa: E402
 from limen.io import load_limen_file  # noqa: E402
 
@@ -220,7 +220,7 @@ def async_probe_snapshot(enabled: bool) -> dict[str, Any]:
             "python3",
             "scripts/dispatch-async.py",
             "--lanes",
-            "codex,opencode,agy,claude,gemini,jules",
+            "auto",
             "--per-lane",
             "3",
             "--max",
@@ -317,6 +317,7 @@ def build_snapshot(args: argparse.Namespace) -> dict[str, Any]:
     try:
         board = load_limen_file(ROOT / "tasks.yaml")
         snapshot["capacity_fill"] = capacity_fill_snapshot(board, down_lanes=_down_lanes())
+        snapshot["lane_classification"] = classify_lanes(board, down_lanes=_down_lanes())
     except Exception as exc:
         snapshot["capacity_fill"] = {
             "generated_at": snapshot["generated_at"],
@@ -324,6 +325,7 @@ def build_snapshot(args: argparse.Namespace) -> dict[str, Any]:
             "rows": [],
             "blockers": [{"id": "capacity-fill-unreadable", "evidence": str(exc)[:200]}],
         }
+        snapshot["lane_classification"] = []
     blockers = derive_blockers(snapshot)
     snapshot["blockers"] = blockers
     snapshot["status"] = "healthy" if not blockers else "blocked"
@@ -338,6 +340,7 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
     watchdog = snapshot["watchdog"]
     async_probe = snapshot["async_probe"]
     capacity_fill = snapshot["capacity_fill"]
+    lane_classification = snapshot.get("lane_classification") or []
     blockers = snapshot["blockers"]
     lines = [
         "# Dispatch Health",
@@ -368,6 +371,18 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         f"- Async dry-run requested: `{async_probe.get('requested')}`.",
         f"- Async dry-run ok: `{async_probe.get('ok')}`; timed out `{async_probe.get('timed_out', False)}`.",
         f"- Async dry-run summary: `{async_probe.get('last_line', '')}`.",
+        "",
+        "## Fleet Classification",
+        "",
+        "| Lane | Kind | Status | Detail |",
+        "|---|---|---|---|",
+    ]
+    for row in lane_classification:
+        lines.append(
+            f"| `{row.get('agent')}` | `{row.get('kind')}` | `{row.get('status')}` | "
+            f"{receipt_line(str(row.get('detail') or ''))} |"
+        )
+    lines += [
         "",
         "## Capacity Fill",
         "",
@@ -425,7 +440,7 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         "- Refresh the operator gate: `python3 scripts/live-root-gate.py --write`",
         "- Verify async dispatch tests: `pytest -q cli/tests/test_async_dispatch.py`",
         "- Probe heartbeat: `python3 scripts/watchdog.py --dry-run`",
-        "- Probe async dry-run: `PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes codex,opencode,agy,claude,gemini,jules --per-lane 3 --max 12 --dry-run`",
+        "- Probe async dry-run: `PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes auto --per-lane 3 --max 12 --dry-run`",
         "",
     ]
     return "\n".join(lines)

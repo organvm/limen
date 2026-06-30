@@ -29,9 +29,8 @@ fi
 # load local secrets (gemini key, etc.) from the single un-committed secrets file
 [ -f "$HOME/.limen.env" ] && { set -a; . "$HOME/.limen.env"; set +a; }
 
-LANES="${LIMEN_LANES:-codex,opencode,agy,claude}"   # gemini auto-joins below iff its key is present
-[ -n "${GEMINI_API_KEY:-}" ] && LANES="$LANES,gemini"
-[ -n "${WARP_API_KEY:-}" ] && LANES="$LANES,warp,oz"
+LANES_SELECTOR="${LIMEN_LANES:-auto}"
+LANES="$(python3 "$LIMEN_ROOT/scripts/full-fleet-lanes.py" --lanes "$LANES_SELECTOR" --format csv 2>/dev/null || true)"
 LOCAL_LIMIT="${LIMEN_LOCAL_LIMIT:-50}"
 JULES_LIMIT="${LIMEN_JULES_LIMIT:-100}"
 MINE_LIMIT="${LIMEN_MINE_LIMIT:-25}"
@@ -61,11 +60,13 @@ python3 "$LIMEN_ROOT/scripts/mine-backlog.py" --limit "$MINE_LIMIT" --apply 2>&1
 python3 "$LIMEN_ROOT/scripts/route.py" --apply                    2>&1 | tail -3 || true
 python3 "$LIMEN_ROOT/scripts/rebalance.py" --lanes "$LANES" --apply 2>&1 | tail -2 || true
 python3 -m limen release-stale --agent jules --hours 24 --apply   2>&1 | tail -2 || true
-python3 -m limen dispatch --agent jules --live --limit "$JULES_LIMIT" 2>&1 | tail -4 || true
 IFS=',' read -ra A <<< "$LANES"
 for v in "${A[@]}"; do
+  [ -n "$v" ] || continue
+  limit="$LOCAL_LIMIT"
+  [ "$v" = "jules" ] && limit="$JULES_LIMIT"
   echo "── lane $v ──"
-  python3 -m limen dispatch --agent "$v" --live --limit "$LOCAL_LIMIT" 2>&1 | tail -4 || true
+  python3 -m limen dispatch --agent "$v" --live --limit "$limit" 2>&1 | tail -4 || true
 done
 echo "── clone lifecycle hygiene (worktree prune + gc --auto + reap-report) ──"
 bash "$LIMEN_ROOT/scripts/clone-maintenance.sh" 2>&1 | tail -6 || true

@@ -10,7 +10,7 @@
 # under a launchd KeepAlive daemon, NOT a StartInterval timer).
 #
 #   VOICE          cadence (beats)   what plays
-#   dispatch       every 1 (kick)    use idle capacity across all 6 lanes
+#   dispatch       every 1 (kick)    use idle capacity across the registered fleet
 #   tick           every 1           emit logs/ticks.jsonl (portal pulse)
 #   balance        every 2 (snare)   route + rebalance the queue across lanes
 #   feed           every 3           mine the GitHub backlog
@@ -105,9 +105,7 @@ fi
 echo $$ > "$DAEMON_LOCK"
 echo $$ > "$LIMEN_ROOT/logs/heartbeat-loop.pid"
 
-LANES="${LIMEN_LANES:-codex,opencode,agy,claude}"
-[ -n "${GEMINI_API_KEY:-}" ] && LANES="$LANES,gemini"
-[ -n "${WARP_API_KEY:-}" ] && LANES="$LANES,warp,oz"
+LANES="${LIMEN_LANES:-auto}"
 # per-lane tasks PER BEAT kept low so no single lane hogs a beat — lanes rotate fast
 # (the safe throughput fix; real braking is the rate-limit detector in dispatch.py).
 LOCAL_LIMIT="${LIMEN_LOCAL_LIMIT:-3}"; JULES_LIMIT="${LIMEN_JULES_LIMIT:-100}"
@@ -170,16 +168,27 @@ due_voice() {
 }
 healthy_lanes() {
   python3 - "$1" <<'PY'
+import os
 import sys
+from pathlib import Path
+
+from limen.capacity import resolve_lane_selector
 from limen.dispatch import _down_lanes
+from limen.io import load_limen_file
 
 down = _down_lanes()
-seen = []
-for lane in sys.argv[1].split(","):
-    lane = lane.strip()
-    if lane and lane not in down and lane not in seen:
-        seen.append(lane)
-print(",".join(seen))
+selector = sys.argv[1]
+root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+try:
+    board = load_limen_file(Path(os.environ.get("LIMEN_TASKS", root / "tasks.yaml")))
+except Exception:
+    board = None
+try:
+    lanes = resolve_lane_selector(selector, board=board, down_lanes=down)
+except ValueError as exc:
+    print(f"invalid-lanes:{exc}", file=sys.stderr)
+    lanes = ()
+print(",".join(lane for lane in lanes if lane not in down))
 PY
 }
 cleanup() {
@@ -294,7 +303,7 @@ while true; do
                                        if [ -n "$EFFECTIVE_LANES" ]; then
                                          python3 "$LIMEN_ROOT/scripts/rebalance.py" --lanes "$EFFECTIVE_LANES" --apply 2>&1 | tail -1 || true
                                        else
-                                         echo "no live local lanes available for rebalance"
+                                         echo "no live lanes available for rebalance"
                                        fi; }
       # proprioception stamps — record that these voices played this beat (route rides the balance voice)
       due_voice drain "$C_DRAIN"   && stamp drain
@@ -315,11 +324,11 @@ while true; do
         echo "── vitals-pressure: dispatch skipped; merge/heal/status organs already ran ──"
       else
         _dt0=$SECONDS
-        if [ "${LIMEN_DISPATCH_ASYNC:-0}" = "1" ]; then
-          out="$(dispatch_bounded python3 "$LIMEN_ROOT/scripts/dispatch-async.py" --lanes "$EFFECTIVE_LANES,jules" \
+        if [ "${LIMEN_DISPATCH_ASYNC:-1}" = "1" ]; then
+          out="$(dispatch_bounded python3 "$LIMEN_ROOT/scripts/dispatch-async.py" --lanes "$EFFECTIVE_LANES" \
                   --per-lane "$LOCAL_LIMIT" --max "${LIMEN_ASYNC_MAX:-12}" 2>&1)"; _drc=$?
         else
-          out="$(dispatch_bounded python3 "$LIMEN_ROOT/scripts/dispatch-parallel.py" --lanes "$EFFECTIVE_LANES,jules" \
+          out="$(dispatch_bounded python3 "$LIMEN_ROOT/scripts/dispatch-parallel.py" --lanes "$EFFECTIVE_LANES" \
                   --per-lane "$LOCAL_LIMIT" --workers "${LIMEN_WORKERS:-8}" 2>&1)"; _drc=$?
         fi
         # timeout(1) exits 124 (TERM) or 128+9=137 (our -s KILL) when the ceiling fires → a lane run

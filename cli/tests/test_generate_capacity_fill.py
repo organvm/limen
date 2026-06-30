@@ -66,6 +66,18 @@ def test_capacity_fill_generator_creates_lane_specific_packets(monkeypatch):
     assert info["lanes"][0]["deficit"] == 15
 
 
+def test_capacity_fill_generator_targets_extended_reachable_lane_to_itself(monkeypatch):
+    mod = _load_script("generate_capacity_fill_under_test_extended")
+    monkeypatch.setattr(mod, "_down_lanes", lambda: set())
+    monkeypatch.setattr(mod, "capacity_fill_snapshot", lambda lf, down_lanes: _snapshot("github_actions", 1, 0))
+
+    planned, info = mod.plan_capacity_fill_tasks(LimenFile(), max_new=1, per_lane_cap=1)
+
+    assert [task.target_agent for task in planned] == ["github_actions"]
+    assert all("lane:github_actions" in task.labels for task in planned)
+    assert info["lanes"][0]["target_agent"] == "github_actions"
+
+
 def test_capacity_fill_generator_is_idempotent_for_existing_daily_slots(monkeypatch):
     mod = _load_script("generate_capacity_fill_under_test_idempotent")
     monkeypatch.setattr(mod, "_down_lanes", lambda: set())

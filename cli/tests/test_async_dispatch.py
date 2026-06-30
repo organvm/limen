@@ -153,6 +153,28 @@ def test_main_dry_run_does_not_harvest_or_reap(tmp_path, monkeypatch, capsys):
     assert board["T0"].status == "open"
 
 
+def test_main_default_lanes_resolve_from_registry_selector(tmp_path, monkeypatch):
+    da = _load(tmp_path, n_open=0)
+    captured = {}
+
+    monkeypatch.setattr(da, "_down_lanes", lambda: set())
+    monkeypatch.setattr(
+        da,
+        "resolve_lane_selector",
+        lambda selector, board=None, down_lanes=None: ("github_actions", "copilot", "warp", "oz", "ollama"),
+    )
+
+    def fake_reserve(agents, per_agent, cap, dry):
+        captured["agents"] = list(agents)
+        return []
+
+    monkeypatch.setattr(da, "reserve_and_launch", fake_reserve)
+    monkeypatch.setattr(sys, "argv", ["dispatch-async.py", "--dry-run"])
+
+    assert da.main() == 0
+    assert captured["agents"] == ["github_actions", "copilot", "warp", "oz", "ollama"]
+
+
 def test_async_reserve_counts_inflight_against_budget(tmp_path):
     """In-flight .running markers count toward a lane's per-agent budget, so a lane already at its
     cap via in-flight runs reserves nothing more (prevents over-dispatch between reserve & harvest)."""

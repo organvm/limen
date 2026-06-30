@@ -4,7 +4,7 @@ const GITHUB_API = "https://api.github.com";
 const VERIFY_STATUSES = new Set(["done", "needs_human", "failed", "failed_blocked"]);
 const VALID_STATUSES = new Set(["open", "dispatched", "in_progress", "done", "failed", "failed_blocked", "needs_human", "archived"]);
 const VALID_PRIORITIES = new Set(["critical", "high", "medium", "low", "backlog"]);
-const VALID_AGENTS = new Set(["jules", "claude", "gemini", "opencode", "codex", "copilot", "agy", "warp", "oz", "github_actions", "any"]);
+const VALID_AGENTS = new Set(["jules", "claude", "gemini", "opencode", "codex", "copilot", "agy", "ollama", "warp", "oz", "github_actions", "any"]);
 const VALID_DISPATCH_AGENTS = new Set([...VALID_AGENTS].filter((agent) => agent !== "any"));
 const TASK_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 const SAFE_TEXT_RE = /^[^\x00-\x08\x0b\x0c\x0e-\x1f\x7f]*$/;

@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import TypedDict
 
 from limen.capacity import (
+    NON_BLOCKING_AGENTS,
+    PAID_AGENT_ORDER,
     canonical_agent,
     capacity_census,
     format_capacity_census,
@@ -681,7 +683,7 @@ def _agent_argv(agent: str, task: Task | None = None) -> list[str]:
 # Exhausting the list marks the task failed. Keep this order == heartbeat.sh LANES order.
 # agy/antigravity KEPT and HEALED: it writes to a scratch dir, so _bridge_agy_scratch carries
 # that work into the worktree after the run (see _isolated_local_run) — productive lane again.
-_LANE_CASCADE = ["codex", "opencode", "agy", "claude", "gemini", "jules", "ollama"]
+_LANE_CASCADE = list(PAID_AGENT_ORDER)
 _NOOP = "__noop__"  # agent ran but produced no diff
 
 
@@ -1095,6 +1097,8 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
     agent_args = _agent_argv(agent, task)
     if agent in ("agy", "antigravity"):
         agent_args = ["--add-dir", str(wt)] + agent_args
+    elif agent == "opencode":
+        agent_args = ["--dir", str(wt)] + agent_args
     agent_cmd = [binary, *agent_args, _build_prompt(task)]
     # 1800s (was 900): local lanes have ABUNDANT budget headroom (codex/claude/opencode ~60-92 left
     # per window) while jules is scarce (≈100/day). At 900s, big tasks — incl. the revenue/deploy
@@ -1359,7 +1363,7 @@ def _apply_result(task: Task, agent: str, result: bool | str, now: datetime, tra
 # is lane-AWARE — async/remote lanes (jules) absorb big bursts without blocking the beat, while local
 # SYNC lanes (codex/claude/agy) are wall-clock bound (the thread pool blocks the beat) so they stay at
 # base unless explicitly allowed. Env-gated LIMEN_ACCEL (default on); fail-open to base everywhere.
-_ASYNC_LANES = {"jules", "github_actions", "copilot", "warp", "oz"}  # remote dispatch — non-blocking
+_ASYNC_LANES = set(NON_BLOCKING_AGENTS)  # remote dispatch - non-blocking
 
 
 def _ledger_lanes() -> dict[str, dict[str, list[str]]]:

@@ -29,6 +29,7 @@ VALID_AGENTS = {
     "codex",
     "copilot",
     "agy",
+    "ollama",
     "warp",
     "oz",
     "github_actions",
