@@ -11,6 +11,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || exit 1
+export LIMEN_ROOT="$ROOT"
 GEN="scripts/session-orient.py"
 HOOK="scripts/hooks/session-orient.sh"
 PRESSURE_GEN="scripts/session-lifecycle-pressure.py"
