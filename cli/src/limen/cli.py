@@ -233,5 +233,15 @@ def workstream(launch_codex, launch_shell, from_ref, prompt_text, prompt_file, n
     raise SystemExit(result.returncode)
 
 
+@main.command()
+@click.option("--once", is_flag=True, help="One frame then exit")
+@click.option("--compact", is_flag=True, help="One-line compact mode")
+@click.option("-n", "--interval", default=2.0, type=float, help="Refresh interval in seconds")
+def watch(once, compact, interval):
+    """Show the real-time fleet dashboard (per-agent completion + active tasks)."""
+    from limen.watch import run
+    run(once=once, compact=compact, interval=interval)
+
+
 if __name__ == "__main__":
     main()
