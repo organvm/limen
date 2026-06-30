@@ -32,20 +32,14 @@ def test_current_session_fanout_extracts_full_plan_set_and_marks_duplicates(
     monkeypatch,
 ) -> None:
     session = tmp_path / "session.jsonl"
-    prior_plan = (
-        "# Prior Product Plan\n\n"
-        "## Summary\n"
-        "- Build 1000 alpha omega products from every prompt.\n"
-    )
+    prior_plan = "# Prior Product Plan\n\n## Summary\n- Build 1000 alpha omega products from every prompt.\n"
     assistant_plan = (
         "# Full-Fleet Overnight Plan\n\n"
         "## Summary\n"
         "- Use all fleet lanes, overnight dispatch, executor criteria, and no reset spend.\n"
     )
     newest_plan = (
-        "# Newest Revenue Plan\n\n"
-        "## Summary\n"
-        "- Route money, SEO, lead, and sell-ready work to reachable lanes.\n"
+        "# Newest Revenue Plan\n\n## Summary\n- Route money, SEO, lead, and sell-ready work to reachable lanes.\n"
     )
     session.write_text(
         "\n".join(
@@ -134,7 +128,9 @@ def test_current_session_fanout_extracts_full_plan_set_and_marks_duplicates(
             },
         ],
     )
-    monkeypatch.setattr(mod, "digest_blockers", lambda: [{"source": "digest", "item": "local gate", "impact": "does not stop global"}])
+    monkeypatch.setattr(
+        mod, "digest_blockers", lambda: [{"source": "digest", "item": "local gate", "impact": "does not stop global"}]
+    )
 
     snap = mod.build_snapshot(_args(session))
 
@@ -233,7 +229,10 @@ def test_current_session_fanout_emits_plan_02_executor_criteria_and_safe_markdow
     assert plan_02["id"] == "PLAN-02-ea38d4d8"
     assert plan_02["owner_packet"]["owner_repo"] == "organvm/limen"
     assert any("PAID_AGENT_ORDER" in item for item in plan_02["owner_packet"]["criteria"])
-    assert any("dispatch-async.py --lanes auto --dry-run" in item for item in plan_02["owner_packet"]["verification_predicates"])
+    assert any(
+        "dispatch-async.py --lanes auto --dry-run" in item
+        for item in plan_02["owner_packet"]["verification_predicates"]
+    )
     assert snap["executor_packets"][0]["target_agent"] == "agy"
     assert snap["executor_packets"][0]["verification_predicates"]
 
