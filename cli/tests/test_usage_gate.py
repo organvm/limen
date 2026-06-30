@@ -9,12 +9,20 @@ import json
 import pytest
 
 
-from limen.dispatch import _down_lanes, _usage_dead_lanes
+from limen.dispatch import _creds_lanes_down, _down_lanes, _usage_dead_lanes
 
 
 @pytest.fixture(autouse=True)
 def disable_oauth_preflight(monkeypatch):
     monkeypatch.setenv("LIMEN_OAUTH_PREFLIGHT", "0")
+
+
+@pytest.fixture(autouse=True)
+def set_claude_fleet_token(monkeypatch):
+    """Existing tests don't care about claude creds; set a dummy token so _creds_lanes_down
+    doesn't mark claude as down and break those assertions. Tests that DO test the creds gate
+    override this via monkeypatch.delenv."""
+    monkeypatch.setenv("LIMEN_CLAUDE_AUTH_TOKEN", "test-fleet-token")
 
 
 def _write_usage(root, vendors):
@@ -62,3 +70,32 @@ def test_missing_usage_json_is_safe(tmp_path, monkeypatch):
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
     assert _usage_dead_lanes() == set()
     assert _down_lanes() == set()
+
+
+def test_creds_lanes_down_gates_claude_without_auth_tokens(monkeypatch):
+    """claude is in _creds_lanes_down when neither fleet token nor API key is set."""
+    for key in ("LIMEN_CLAUDE_AUTH_TOKEN", "LIMEN_CLAUDE_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    assert "claude" in _creds_lanes_down()
+
+
+def test_creds_lanes_down_skips_claude_when_fleet_token_set(monkeypatch):
+    monkeypatch.setenv("LIMEN_CLAUDE_AUTH_TOKEN", "sk-abc123")
+    monkeypatch.delenv("LIMEN_CLAUDE_API_KEY", raising=False)
+    assert "claude" not in _creds_lanes_down()
+
+
+def test_creds_lanes_down_skips_claude_when_api_key_set(monkeypatch):
+    monkeypatch.delenv("LIMEN_CLAUDE_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv("LIMEN_CLAUDE_API_KEY", "sk-ant-xyz789")
+    assert "claude" not in _creds_lanes_down()
+
+
+def test_down_lanes_includes_claude_when_auth_missing(tmp_path, monkeypatch):
+    """Integration: _down_lanes includes claude when credentials AND usage are quiet."""
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    for key in ("LIMEN_CLAUDE_AUTH_TOKEN", "LIMEN_CLAUDE_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    (tmp_path / "logs").mkdir(parents=True)
+    (tmp_path / "usage.json").write_text('{"vendors": {}}')
+    assert "claude" in _down_lanes()

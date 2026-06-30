@@ -36,7 +36,7 @@ def _agent_label(agent: str) -> str:
     }.get(agent, agent)
 
 
-def _existing_daily(tasks: list[Task], agent: str, stamp: str) -> set[str]:
+def _existing_daily(tasks: list[Task], agent: str, stamp: str, target_agent: str) -> set[str]:
     prefix = f"CAPFILL-{agent}-{stamp.replace('-', '')}-"
     return {
         task.id
@@ -44,7 +44,15 @@ def _existing_daily(tasks: list[Task], agent: str, stamp: str) -> set[str]:
         if task.status in ACTIVE
         and task.id.startswith(prefix)
         and f"lane:{agent}" in (task.labels or [])
+        and task.target_agent == target_agent
     }
+
+
+def _packet_target(row: dict[str, object]) -> str:
+    agent = str(row["agent"])
+    if row.get("status") == "blocked" or not bool(row.get("reachable")):
+        return "any"
+    return agent
 
 
 def plan_capacity_fill_tasks(lf, *, max_new: int, per_lane_cap: int) -> tuple[list[Task], dict[str, object]]:
@@ -63,20 +71,31 @@ def plan_capacity_fill_tasks(lf, *, max_new: int, per_lane_cap: int) -> tuple[li
         deficit = max(0, int(row["expected_now"]) - int(row["productive"]))
         if deficit <= 0:
             continue
-        existing = _existing_daily(lf.tasks, agent, stamp)
+        target_agent = _packet_target(row)
+        existing = _existing_daily(lf.tasks, agent, stamp, target_agent)
         desired_active = min(deficit, per_lane_cap)
         need = max(0, desired_active - len(existing))
-        info["lanes"].append({"agent": agent, "deficit": deficit, "existing": len(existing), "need": need})
+        info["lanes"].append(
+            {
+                "agent": agent,
+                "deficit": deficit,
+                "existing": len(existing),
+                "need": need,
+                "target_agent": target_agent,
+                "status": row["status"],
+            }
+        )
         if need > 0:
-            demands.append({"agent": agent, "need": need, "existing": existing})
+            demands.append({"agent": agent, "need": need, "existing": existing, "target_agent": target_agent})
 
-    for slot in range(1, per_lane_cap + 1):
+    for slot in range(1, 1000):
         for demand in demands:
             if len(planned) >= max_new:
                 break
             if int(demand["need"]) <= 0:
                 continue
             agent = str(demand["agent"])
+            target_agent = str(demand["target_agent"])
             tid = f"CAPFILL-{agent}-{compact}-{slot:02d}"
             existing = demand["existing"]
             if tid in existing_ids or tid in existing:
@@ -90,7 +109,7 @@ def plan_capacity_fill_tasks(lf, *, max_new: int, per_lane_cap: int) -> tuple[li
                     title=f"{label} daily capacity-fill packet {slot:02d}",
                     repo="organvm/limen",
                     type="code",
-                    target_agent=agent,
+                    target_agent=target_agent,
                     priority="high",
                     budget_cost=1,
                     status="open",

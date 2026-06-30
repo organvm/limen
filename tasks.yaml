@@ -7,29 +7,29 @@ portal:
     daily: 600
     unit: runs
     per_agent:
-      jules: 100
-      gemini: 10
-      codex: 100
-      opencode: 100
       agy: 100
       claude: 100
+      codex: 100
+      gemini: 10
+      jules: 100
+      opencode: 100
     track:
-      date: '2026-06-29'
-      spent: 57
+      date: '2026-06-30'
+      spent: 98
       per_agent:
-        jules: 51
-        gemini: 0
-        codex: 0
-        opencode: 1
         agy: 5
         claude: 0
+        codex: 15
+        gemini: 0
+        jules: 77
+        opencode: 1
       per_agent_reset:
-        jules: '2026-06-29T05:54:07.312618+00:00'
-        gemini: '2026-06-29T05:54:07.312618+00:00'
-        codex: '2026-06-29T22:22:29.412423+00:00'
-        opencode: '2026-06-29T05:54:07.312618+00:00'
         agy: '2026-06-29T05:54:07.312618+00:00'
         claude: '2026-06-29T22:22:29.412423+00:00'
+        codex: '2026-06-29T22:22:29.412423+00:00'
+        gemini: '2026-06-29T05:54:07.312618+00:00'
+        jules: '2026-06-29T05:54:07.312618+00:00'
+        opencode: '2026-06-29T05:54:07.312618+00:00'
 tasks:
 - id: FORCE-route-all-services
   title: Router fans across ALL paid services, not just the 6 vendors
@@ -64308,19 +64308,24 @@ tasks:
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: jules
+    session_id: '14064699815792089677'
+    status: dispatched
 - id: CAPFILL-claude-20260629-01
   title: Claude daily capacity-fill packet 01
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - capacity-fill
   - lane:claude
   - daily-checkup
   - generated
+  - tried:claude
   urls: []
   context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64331,18 +64336,36 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T01:17:15.719782Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: claude
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: claude
+    session_id: cli
+    status: failed->gemini
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/407
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: CAPFILL-opencode-20260629-01
   title: OpenCode daily capacity-fill packet 01
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: codex
   priority: high
   budget_cost: 1
   status: dispatched
@@ -64351,6 +64374,7 @@ tasks:
   - lane:opencode
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64361,10 +64385,35 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T01:20:14.580787Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: codex
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
@@ -64375,7 +64424,7 @@ tasks:
   target_agent: agy
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - capacity-fill
   - lane:agy
@@ -64391,18 +64440,43 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T01:17:15.719782Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:32:02.504083Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-gemini-20260629-01
   title: Gemini daily capacity-fill packet 01
   repo: organvm/limen
   type: code
-  target_agent: gemini
+  target_agent: jules
   priority: high
   budget_cost: 1
   status: dispatched
@@ -64411,6 +64485,7 @@ tasks:
   - lane:gemini
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64421,13 +64496,26 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-29T22:40:55.041801Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: gemini
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: jules
+    session_id: '12037678952350353409'
+    status: dispatched
 - id: CAPFILL-jules-20260629-02
   title: Jules daily capacity-fill packet 02
   repo: organvm/limen
@@ -64435,7 +64523,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - capacity-fill
   - lane:jules
@@ -64451,26 +64539,63 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T00:20:09.870659Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: jules
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: jules
+    session_id: '10641026349115539187'
+    status: dispatched
+  - timestamp: '2026-06-29T23:34:53.610273Z'
+    agent: jules
+    session_id: '10641026349115539187'
+    status: done
+    output: 'diff --git a/docs/lane-checkups/jules/20260629-02.md b/docs/lane-checkups/jules/20260629-02.md
+
+      new file mode 100644
+
+      index 0000000..e3b35d1
+
+      --- /dev/null
+
+      +++ b/docs/lane-checkups/jules/20260629-02.md
+
+      @@ -0,0 +1,17 @@
+
+      +# 20260629-02 Receipt
+
+      +
+
+      +The missing `docs/capacity-fill.md` and `docs/dispatch-health.md` (which did
+      not contain the task blocker as assumed) show that `scripts/capacity-fill-ledger.py`
+      does not exist either.
+
+      +
+
+      +However, the instruction implies we need to implement something or wri'
+  - timestamp: '2026-06-30T00:20:09.870659Z'
+    agent: jules
+    session_id: https://github.com/organvm/limen/pull/419
+    status: done
+    output: 'jules-land: landed session 10641026349115539187 as PR'
 - id: CAPFILL-claude-20260629-02
   title: Claude daily capacity-fill packet 02
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: agy
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - capacity-fill
   - lane:claude
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64481,18 +64606,47 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T01:17:15.719782Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: claude
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: claude
+    session_id: cli
+    status: failed->gemini
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-opencode-20260629-02
   title: OpenCode daily capacity-fill packet 02
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: gemini
   priority: high
   budget_cost: 1
   status: dispatched
@@ -64501,6 +64655,7 @@ tasks:
   - lane:opencode
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64511,10 +64666,35 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T01:20:14.580787Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
@@ -64525,7 +64705,7 @@ tasks:
   target_agent: agy
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - capacity-fill
   - lane:agy
@@ -64541,26 +64721,47 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T01:17:15.719782Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-gemini-20260629-02
   title: Gemini daily capacity-fill packet 02
   repo: organvm/limen
   type: code
-  target_agent: gemini
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - capacity-fill
   - lane:gemini
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64571,13 +64772,31 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-29T23:33:30.494024Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: gemini
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: jules
+    session_id: '6143232745073798903'
+    status: dispatched
+  - timestamp: '2026-06-29T23:33:30.494024Z'
+    agent: jules
+    session_id: https://github.com/organvm/limen/pull/413
+    status: done
+    output: 'jules-land: landed session 6143232745073798903 as PR'
 - id: CAPFILL-jules-20260629-03
   title: Jules daily capacity-fill packet 03
   repo: organvm/limen
@@ -64608,11 +64827,15 @@ tasks:
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: jules
+    session_id: '12893103366326988281'
+    status: dispatched
 - id: CAPFILL-claude-20260629-03
   title: Claude daily capacity-fill packet 03
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: opencode
   priority: high
   budget_cost: 1
   status: dispatched
@@ -64621,6 +64844,7 @@ tasks:
   - lane:claude
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64631,10 +64855,44 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T01:20:14.580787Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: claude
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: claude
+    session_id: cli
+    status: failed->gemini
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: opencode
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
@@ -64642,15 +64900,16 @@ tasks:
   title: OpenCode daily capacity-fill packet 03
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: agy
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - capacity-fill
   - lane:opencode
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64661,13 +64920,33 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T01:17:15.719782Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: opencode
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-agy-20260629-03
   title: Agy daily capacity-fill packet 03
   repo: organvm/limen
@@ -64675,7 +64954,7 @@ tasks:
   target_agent: agy
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - capacity-fill
   - lane:agy
@@ -64691,18 +64970,38 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T01:17:15.719782Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-gemini-20260629-03
   title: Gemini daily capacity-fill packet 03
   repo: organvm/limen
   type: code
-  target_agent: gemini
+  target_agent: jules
   priority: high
   budget_cost: 1
   status: dispatched
@@ -64711,6 +65010,7 @@ tasks:
   - lane:gemini
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64721,13 +65021,26 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-29T22:40:55.041801Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: gemini
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: jules
+    session_id: '8710149802099311637'
+    status: dispatched
 - id: CAPFILL-jules-20260629-04
   title: Jules daily capacity-fill packet 04
   repo: organvm/limen
@@ -64735,7 +65048,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:jules
@@ -64751,20 +65064,31 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-29T23:09:36.943113Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: jules
+    session_id: '18251375076632263905'
+    status: dispatched
 - id: CAPFILL-claude-20260629-04
   title: Claude daily capacity-fill packet 04
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:claude
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64775,15 +65099,34 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-29T23:09:36.943113Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: jules
+    session_id: '7818224134695418842'
+    status: dispatched
 - id: CAPFILL-opencode-20260629-04
   title: OpenCode daily capacity-fill packet 04
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:opencode
@@ -64799,7 +65142,22 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/405
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: CAPFILL-agy-20260629-04
   title: Agy daily capacity-fill packet 04
   repo: organvm/limen
@@ -64807,7 +65165,7 @@ tasks:
   target_agent: agy
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - capacity-fill
   - lane:agy
@@ -64823,26 +65181,47 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T01:17:15.719782Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-gemini-20260629-04
   title: Gemini daily capacity-fill packet 04
   repo: organvm/limen
   type: code
-  target_agent: gemini
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - capacity-fill
   - lane:gemini
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64853,13 +65232,31 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-29T23:33:30.494024Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: gemini
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: jules
+    session_id: '925106998775964221'
+    status: dispatched
+  - timestamp: '2026-06-29T23:33:30.494024Z'
+    agent: jules
+    session_id: https://github.com/organvm/limen/pull/412
+    status: done
+    output: 'jules-land: landed session 925106998775964221 as PR'
 - id: CAPFILL-jules-20260629-05
   title: Jules daily capacity-fill packet 05
   repo: organvm/limen
@@ -64867,7 +65264,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:jules
@@ -64883,20 +65280,36 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T00:20:09.870659Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: jules
+    session_id: '6289947651861927241'
+    status: dispatched
+  - timestamp: '2026-06-30T00:20:09.870659Z'
+    agent: jules
+    session_id: https://github.com/organvm/limen/pull/418
+    status: done
+    output: 'jules-land: landed session 6289947651861927241 as PR'
 - id: CAPFILL-claude-20260629-05
   title: Claude daily capacity-fill packet 05
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: opencode
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:claude
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64907,12 +65320,43 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:20:14.580787Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-opencode-20260629-05
   title: OpenCode daily capacity-fill packet 05
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: agy
   priority: high
   budget_cost: 1
   status: open
@@ -64921,6 +65365,7 @@ tasks:
   - lane:opencode
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64931,7 +65376,33 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-agy-20260629-05
   title: Agy daily capacity-fill packet 05
   repo: organvm/limen
@@ -64939,7 +65410,7 @@ tasks:
   target_agent: agy
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - capacity-fill
   - lane:agy
@@ -64955,18 +65426,38 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T01:17:15.719782Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-gemini-20260629-05
   title: Gemini daily capacity-fill packet 05
   repo: organvm/limen
   type: code
-  target_agent: gemini
+  target_agent: jules
   priority: high
   budget_cost: 1
   status: dispatched
@@ -64975,6 +65466,7 @@ tasks:
   - lane:gemini
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64985,13 +65477,26 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-29T22:40:55.041801Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: gemini
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: jules
+    session_id: '235065585683702983'
+    status: dispatched
 - id: CAPFILL-jules-20260629-06
   title: Jules daily capacity-fill packet 06
   repo: organvm/limen
@@ -64999,7 +65504,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:jules
@@ -65015,20 +65520,27 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-29T23:42:12.856311Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-claude-20260629-06
   title: Claude daily capacity-fill packet 06
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:claude
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65039,15 +65551,39 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-29T23:33:30.494024Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: jules
+    session_id: '12964701425970420092'
+    status: dispatched
+  - timestamp: '2026-06-29T23:33:30.494024Z'
+    agent: jules
+    session_id: https://github.com/organvm/limen/pull/411
+    status: done
+    output: 'jules-land: landed session 12964701425970420092 as PR'
 - id: CAPFILL-opencode-20260629-06
   title: OpenCode daily capacity-fill packet 06
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:opencode
@@ -65063,7 +65599,22 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/406
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: CAPFILL-agy-20260629-06
   title: Agy daily capacity-fill packet 06
   repo: organvm/limen
@@ -65071,7 +65622,7 @@ tasks:
   target_agent: agy
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - capacity-fill
   - lane:agy
@@ -65087,18 +65638,38 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T01:17:15.719782Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-gemini-20260629-06
   title: Gemini daily capacity-fill packet 06
   repo: organvm/limen
   type: code
-  target_agent: gemini
+  target_agent: jules
   priority: high
   budget_cost: 1
   status: dispatched
@@ -65107,6 +65678,7 @@ tasks:
   - lane:gemini
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65117,10 +65689,19 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-29T23:42:12.856311Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: jules
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
@@ -65131,7 +65712,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:jules
@@ -65147,20 +65728,27 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-29T23:42:12.856311Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-claude-20260629-07
   title: Claude daily capacity-fill packet 07
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:claude
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65171,12 +65759,42 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/422
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: CAPFILL-opencode-20260629-07
   title: OpenCode daily capacity-fill packet 07
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: agy
   priority: high
   budget_cost: 1
   status: open
@@ -65185,6 +65803,7 @@ tasks:
   - lane:opencode
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65195,7 +65814,33 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-agy-20260629-07
   title: Agy daily capacity-fill packet 07
   repo: organvm/limen
@@ -65203,7 +65848,7 @@ tasks:
   target_agent: agy
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - capacity-fill
   - lane:agy
@@ -65219,18 +65864,38 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T01:17:15.719782Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-gemini-20260629-07
   title: Gemini daily capacity-fill packet 07
   repo: organvm/limen
   type: code
-  target_agent: gemini
+  target_agent: jules
   priority: high
   budget_cost: 1
   status: dispatched
@@ -65239,6 +65904,7 @@ tasks:
   - lane:gemini
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65249,10 +65915,19 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-29T23:42:12.856311Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: jules
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
@@ -65263,7 +65938,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:jules
@@ -65279,20 +65954,55 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:00:04.783105Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: jules
+    session_id: '17599658374970274040'
+    status: dispatched
+  - timestamp: '2026-06-30T01:00:04.783105Z'
+    agent: jules
+    session_id: '17599658374970274040'
+    status: done
+    output: 'diff --git a/docs/lane-checkups/jules/20260629-08.md b/docs/lane-checkups/jules/20260629-08.md
+
+      new file mode 100644
+
+      index 0000000..42486aa
+
+      --- /dev/null
+
+      +++ b/docs/lane-checkups/jules/20260629-08.md
+
+      @@ -0,0 +1,4 @@
+
+      +# Blocker for Jules daily capacity-fill packet 08
+
+      +
+
+      +- **Incident**: The referenced documents `docs/capacity-fill.md` and `scripts/capacity-fill-ledger.py`
+      do not exist in the repository.
+
+      +- **Evidence**: `find . -name "capacity-fill.md"` and `find . -name "capacity-fill-ledger.py"` '
 - id: CAPFILL-claude-20260629-08
   title: Claude daily capacity-fill packet 08
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:claude
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65303,15 +66013,34 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T00:31:13.560429Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: jules
+    session_id: '3213167805136291670'
+    status: dispatched
 - id: CAPFILL-opencode-20260629-08
   title: OpenCode daily capacity-fill packet 08
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:opencode
@@ -65327,20 +66056,36 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/409
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: CAPFILL-agy-20260629-08
   title: Agy daily capacity-fill packet 08
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - capacity-fill
   - lane:agy
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65351,13 +66096,57 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-29T22:22:29.412423Z'
+  updated: '2026-06-30T01:17:15.719782Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:22:29.412423Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: cli
+    status: dispatched
+    output: "Target agent fixed from opencode \u2192 agy"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-30T01:01:41.093860Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/431
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: CAPFILL-jules-20260629-09
   title: Jules daily capacity-fill packet 09
   repo: organvm/limen
@@ -65365,7 +66154,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:jules
@@ -65381,7 +66170,22 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T00:58:50.657358Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: jules
+    session_id: '14308363349963490440'
+    status: dispatched
+  - timestamp: '2026-06-30T00:58:50.657358Z'
+    agent: jules
+    session_id: https://github.com/organvm/limen/pull/428
+    status: done
+    output: 'jules-land: landed session 14308363349963490440 as PR'
 - id: CAPFILL-opencode-20260629-09
   title: OpenCode daily capacity-fill packet 09
   repo: organvm/limen
@@ -65389,12 +66193,13 @@ tasks:
   target_agent: opencode
   priority: high
   budget_cost: 1
-  status: open
+  status: failed
   labels:
   - capacity-fill
   - lane:opencode
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65405,7 +66210,48 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:09:20.810919Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-30T01:01:41.093860Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
 - id: CAPFILL-agy-20260629-09
   title: Agy daily capacity-fill packet 09
   repo: organvm/limen
@@ -65429,20 +66275,47 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:24:58.868847Z'
+    agent: agy
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-06-29T22:30:28.591404Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-opencode-20260629-10
   title: OpenCode daily capacity-fill packet 10
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: gemini
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:opencode
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65453,20 +66326,52 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:20:14.580787Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-agy-20260629-10
   title: Agy daily capacity-fill packet 10
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:agy
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65477,20 +66382,60 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T00:48:19.183269Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:30:57.039955Z'
+    agent: agy
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-06-29T22:41:30.193005Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: cli
+    status: dispatched
+    output: "Target agent fixed from opencode \u2192 agy"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: jules
+    session_id: '13398856170079549589'
+    status: dispatched
 - id: CAPFILL-opencode-20260629-11
   title: OpenCode daily capacity-fill packet 11
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:opencode
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65501,7 +66446,31 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T00:58:50.657358Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: jules
+    session_id: '439249080642383044'
+    status: dispatched
+  - timestamp: '2026-06-30T00:58:50.657358Z'
+    agent: jules
+    session_id: https://github.com/organvm/limen/pull/427
+    status: done
+    output: 'jules-land: landed session 439249080642383044 as PR'
 - id: CAPFILL-agy-20260629-11
   title: Agy daily capacity-fill packet 11
   repo: organvm/limen
@@ -65509,7 +66478,7 @@ tasks:
   target_agent: agy
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:agy
@@ -65525,20 +66494,36 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/410
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: CAPFILL-opencode-20260629-12
   title: OpenCode daily capacity-fill packet 12
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:opencode
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65549,7 +66534,49 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:13:28.638026Z'
+    agent: opencode
+    session_id: current
+    status: failed
+    output: "OpenCode capacity-fill patiently attempted to help the lane, but an archetypal\
+      \ human-and-agency barrier persisted. The lane remained underfilled (1/100 productive)\
+      \ despite clean reachability, runnable config, and the free north-mini-code-free\
+      \ coding model. A foreign mano-a-mano displacement blocked durable board spend\
+      \ \u2014 not a technical blocker, but a systemic misalignment not resolvable\
+      \ within the agent subagent perimeter. The orbit of productive work stalled;\
+      \ something essential remains in trust that this adjacency must be configured\
+      \ by a different authority."
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/424
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: CAPFILL-agy-20260629-12
   title: Agy daily capacity-fill packet 12
   repo: organvm/limen
@@ -65573,20 +66600,47 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-opencode-20260629-13
   title: OpenCode daily capacity-fill packet 13
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:opencode
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65597,7 +66651,26 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T00:31:13.560429Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: jules
+    session_id: '1774679690240937742'
+    status: dispatched
 - id: CAPFILL-agy-20260629-13
   title: Agy daily capacity-fill packet 13
   repo: organvm/limen
@@ -65605,7 +66678,7 @@ tasks:
   target_agent: agy
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:agy
@@ -65621,20 +66694,36 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/408
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: CAPFILL-opencode-20260629-14
   title: OpenCode daily capacity-fill packet 14
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: gemini
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:opencode
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65645,7 +66734,38 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:20:14.580787Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-agy-20260629-14
   title: Agy daily capacity-fill packet 14
   repo: organvm/limen
@@ -65653,12 +66773,13 @@ tasks:
   target_agent: agy
   priority: high
   budget_cost: 1
-  status: open
+  status: failed
   labels:
   - capacity-fill
   - lane:agy
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65669,20 +66790,67 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:09:20.810919Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: cli
+    status: dispatched
+    output: "Target agent fixed from opencode \u2192 agy"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-30T01:01:41.093860Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
 - id: CAPFILL-opencode-20260629-15
   title: OpenCode daily capacity-fill packet 15
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:opencode
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65693,20 +66861,43 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T00:58:50.657358Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: jules
+    session_id: '7006005743295186862'
+    status: dispatched
+  - timestamp: '2026-06-30T00:58:50.657358Z'
+    agent: jules
+    session_id: https://github.com/organvm/limen/pull/426
+    status: done
+    output: 'jules-land: landed session 7006005743295186862 as PR'
 - id: CAPFILL-agy-20260629-15
   title: Agy daily capacity-fill packet 15
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:agy
-  - daily-checkup
-  - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65717,12 +66908,42 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:20:14.580787Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-30T01:01:41.093860Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-claude-20260629-09
   title: Claude daily capacity-fill packet 09
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: agy
   priority: high
   budget_cost: 1
   status: open
@@ -65741,7 +66962,18 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-jules-20260629-10
   title: Jules daily capacity-fill packet 10
   repo: organvm/limen
@@ -65749,7 +66981,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:jules
@@ -65765,20 +66997,31 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T00:48:19.183269Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: jules
+    session_id: '15557060961600254376'
+    status: dispatched
 - id: CAPFILL-claude-20260629-10
   title: Claude daily capacity-fill packet 10
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: gemini
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:claude
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65789,7 +67032,38 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:20:14.580787Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-jules-20260629-11
   title: Jules daily capacity-fill packet 11
   repo: organvm/limen
@@ -65797,7 +67071,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:jules
@@ -65813,20 +67087,31 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:09:20.810919Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: jules
+    session_id: '7595709575548024085'
+    status: dispatched
 - id: CAPFILL-claude-20260629-11
   title: Claude daily capacity-fill packet 11
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:claude
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65837,7 +67122,26 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T00:48:19.183269Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: jules
+    session_id: '14134968903137175446'
+    status: dispatched
 - id: CAPFILL-jules-20260629-12
   title: Jules daily capacity-fill packet 12
   repo: organvm/limen
@@ -65845,7 +67149,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:jules
@@ -65861,20 +67165,31 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:09:20.810919Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: jules
+    session_id: '4577674965449846823'
+    status: dispatched
 - id: CAPFILL-claude-20260629-12
   title: Claude daily capacity-fill packet 12
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:claude
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65885,7 +67200,26 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T00:48:19.183269Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: jules
+    session_id: '9748127456103109285'
+    status: dispatched
 - id: CAPFILL-jules-20260629-13
   title: Jules daily capacity-fill packet 13
   repo: organvm/limen
@@ -65893,7 +67227,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:jules
@@ -65909,15 +67243,25 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:09:20.810919Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: jules
+    session_id: '9979027285648197513'
+    status: dispatched
 - id: CAPFILL-claude-20260629-13
   title: Claude daily capacity-fill packet 13
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:claude
@@ -65933,7 +67277,22 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/423
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: CAPFILL-jules-20260629-14
   title: Jules daily capacity-fill packet 14
   repo: organvm/limen
@@ -65941,7 +67300,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:jules
@@ -65957,12 +67316,18 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:20:14.580787Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-claude-20260629-14
   title: Claude daily capacity-fill packet 14
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: agy
   priority: high
   budget_cost: 1
   status: open
@@ -65971,6 +67336,7 @@ tasks:
   - lane:claude
   - daily-checkup
   - generated
+  - noop
   urls: []
   context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -65981,7 +67347,33 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
 - id: CAPFILL-jules-20260629-15
   title: Jules daily capacity-fill packet 15
   repo: organvm/limen
@@ -65989,7 +67381,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:jules
@@ -66005,20 +67397,27 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:20:14.580787Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-claude-20260629-15
   title: Claude daily capacity-fill packet 15
   repo: organvm/limen
   type: code
-  target_agent: claude
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:claude
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -66029,4 +67428,916 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  dispatch_log: []
+  updated: '2026-06-30T01:09:20.810919Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T22:40:55.041801Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: jules
+    session_id: '630940418341160853'
+    status: dispatched
+- id: CAPFILL-opencode-20260629-16
+  title: OpenCode daily capacity-fill packet 16
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-16.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T01:20:14.580787Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:42:12.856311Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-agy-20260629-16
+  title: Agy daily capacity-fill packet 16
+  repo: organvm/limen
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: done
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  - noop
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-16.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-29T23:55:00Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-30T01:01:41.093860Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/430
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
+- id: CAPFILL-opencode-20260629-17
+  title: OpenCode daily capacity-fill packet 17
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: failed
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  - noop
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-17.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T01:09:20.810919Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-30T01:01:41.093860Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+- id: CAPFILL-agy-20260629-17
+  title: Agy daily capacity-fill packet 17
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  - tried:gemini
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-17.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T00:31:13.560429Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: cli
+    status: dispatched
+    output: "Target agent fixed from opencode \u2192 agy"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+- id: CAPFILL-opencode-20260629-18
+  title: OpenCode daily capacity-fill packet 18
+  repo: organvm/limen
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: done
+  labels:
+  - capacity-fill
+  - lane:opencode
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/opencode/20260629-18.md with
+    the blocker and the exact command/evidence. Do not change credentials, launchd
+    state, task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/421
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
+- id: CAPFILL-agy-20260629-18
+  title: Agy daily capacity-fill packet 18
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: failed
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  - noop
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-18.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T01:09:20.810919Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: cli
+    status: dispatched
+    output: "Target agent fixed from opencode \u2192 agy"
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-30T01:01:41.093860Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+- id: CAPFILL-agy-20260629-19
+  title: Agy daily capacity-fill packet 19
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  - noop
+  - tried:gemini
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-19.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T01:20:14.580787Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-30T01:01:41.093860Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-agy-20260629-20
+  title: Agy daily capacity-fill packet 20
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  - tried:gemini
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-20.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T00:31:13.560429Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: cli
+    status: dispatched
+    output: "Target agent fixed from opencode \u2192 agy"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+- id: CAPFILL-agy-20260629-21
+  title: Agy daily capacity-fill packet 21
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: done
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-21.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: cli
+    status: dispatched
+    output: "Target agent fixed from opencode \u2192 agy"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/420
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
+- id: CAPFILL-agy-20260629-22
+  title: Agy daily capacity-fill packet 22
+  repo: organvm/limen
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: done
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  - noop
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-22.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: cli
+    status: dispatched
+    output: "Target agent fixed from opencode \u2192 agy"
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-30T01:01:41.093860Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/429
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
+- id: CAPFILL-agy-20260629-23
+  title: Agy daily capacity-fill packet 23
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: failed
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  - noop
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-23.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T01:09:20.810919Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-29T23:09:36.943113Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-29T23:36:25.582747Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-30T01:01:41.093860Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+- id: CAPFILL-agy-20260629-24
+  title: Agy daily capacity-fill packet 24
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: failed
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  - noop
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-24.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T01:09:20.810919Z'
+  dispatch_log:
+  - timestamp: '2026-06-29T23:11:22.562250Z'
+    agent: agy
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-06-30T00:18:28.256801Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-30T01:01:41.093860Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: agy
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+- id: CAPFILL-agy-20260629-25
+  title: Agy daily capacity-fill packet 25
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:agy
+  - daily-checkup
+  - generated
+  - tried:gemini
+  urls: []
+  context: 'Close one concrete Agy lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/agy/20260629-25.md with the blocker
+    and the exact command/evidence. Do not change credentials, launchd state, task
+    states, GitHub settings, or push. Verification: run the focused predicate for
+    the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T00:31:13.560429Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: agy
+    session_id: cli
+    status: dispatched
+    output: "Target agent fixed from opencode \u2192 agy"
+  - timestamp: '2026-06-30T00:31:13.560429Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+- id: CAPFILL-gemini-20260629-08
+  title: Gemini daily capacity-fill packet 08
+  repo: organvm/limen
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: done
+  labels:
+  - capacity-fill
+  - lane:gemini
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/gemini/20260629-08.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T01:17:15.719782Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/425
+    status: dispatched
+  - timestamp: '2026-06-30T01:17:15.719782Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
+- id: CAPFILL-gemini-20260629-09
+  title: Gemini daily capacity-fill packet 09
+  repo: organvm/limen
+  type: code
+  target_agent: jules
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - capacity-fill
+  - lane:gemini
+  - daily-checkup
+  - generated
+  - noop
+  - tried:gemini
+  urls: []
+  context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/gemini/20260629-09.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T01:09:20.810919Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T00:48:19.183269Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-06-30T01:01:41.093860Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:09:20.810919Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+- id: CAPFILL-gemini-20260629-10
+  title: Gemini daily capacity-fill packet 10
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:gemini
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/gemini/20260629-10.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T01:20:14.580787Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+- id: CAPFILL-gemini-20260629-11
+  title: Gemini daily capacity-fill packet 11
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: dispatched
+  labels:
+  - capacity-fill
+  - lane:gemini
+  - daily-checkup
+  - generated
+  urls: []
+  context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
+    and docs/dispatch-health.md. Make the smallest local, test-backed improvement
+    that helps this lane become productive, or, if the next step is human-gated, write
+    a lane-specific receipt under docs/lane-checkups/gemini/20260629-11.md with the
+    blocker and the exact command/evidence. Do not change credentials, launchd state,
+    task states, GitHub settings, or push. Verification: run the focused predicate
+    for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
+  depends_on: []
+  created: '2026-06-29'
+  updated: '2026-06-30T01:20:14.580787Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'

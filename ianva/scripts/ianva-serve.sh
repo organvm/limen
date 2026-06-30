@@ -23,7 +23,10 @@ export CLAUDE_CODE_OAUTH_TOKEN=""   # never let the backend inherit it (#37512);
 unset CLAUDE_CODE_OAUTH_TOKEN
 
 # Materialize settings and derive the exact backend command from config.
-mapfile -t ARGV < <(python3 - <<'PY'
+ARGV=()
+while IFS= read -r arg; do
+  ARGV+=("$arg")
+done < <(python3 - <<'PY'
 from ianva.config import load_config
 from ianva.upstreams import load_upstreams
 from ianva.mcphub import materialize_settings

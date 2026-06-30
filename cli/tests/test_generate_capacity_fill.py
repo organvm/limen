@@ -97,3 +97,18 @@ def test_capacity_fill_generator_round_robins_lanes_before_filling_one(monkeypat
     planned, _ = mod.plan_capacity_fill_tasks(LimenFile(), max_new=5, per_lane_cap=10)
 
     assert [task.target_agent for task in planned] == ["jules", "claude", "opencode", "agy", "gemini"]
+
+
+def test_capacity_fill_generator_routes_blocked_lane_diagnostics_to_any(monkeypatch):
+    mod = _load_script("generate_capacity_fill_under_test_blocked")
+    monkeypatch.setattr(mod, "_down_lanes", lambda: {"agy"})
+    blocked = _snapshot("agy", 10, 0)
+    blocked["rows"][0]["status"] = "blocked"
+    blocked["rows"][0]["reachable"] = False
+    monkeypatch.setattr(mod, "capacity_fill_snapshot", lambda lf, down_lanes: blocked)
+
+    planned, info = mod.plan_capacity_fill_tasks(LimenFile(), max_new=2, per_lane_cap=2)
+
+    assert [task.target_agent for task in planned] == ["any", "any"]
+    assert all("lane:agy" in task.labels for task in planned)
+    assert info["lanes"][0]["target_agent"] == "any"

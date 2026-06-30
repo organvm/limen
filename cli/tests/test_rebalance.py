@@ -10,8 +10,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "rebalance.py"
 
+import pytest
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.models import Budget, BudgetTrack, LimenFile, Portal, Task  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def set_claude_fleet_token(monkeypatch):
+    monkeypatch.setenv("LIMEN_CLAUDE_AUTH_TOKEN", "test-fleet-token")
 
 
 def test_rebalance_skips_down_lanes(tmp_path, monkeypatch):

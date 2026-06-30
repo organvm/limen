@@ -19,6 +19,11 @@ from limen import dispatch as D  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
+def set_claude_fleet_token(monkeypatch):
+    monkeypatch.setenv("LIMEN_CLAUDE_AUTH_TOKEN", "test-fleet-token")
+
+
+@pytest.fixture(autouse=True)
 def disable_oauth_preflight(monkeypatch):
     monkeypatch.setenv("LIMEN_OAUTH_PREFLIGHT", "0")
 

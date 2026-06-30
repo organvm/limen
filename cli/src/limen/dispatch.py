@@ -124,23 +124,37 @@ def _oauth_unreachable_lanes() -> set[str]:
     return down
 
 
+def _creds_lanes_down() -> set[str]:
+    """Lanes whose required credentials are absent from the dispatch environment.
+    Prevents wasting attempts on lanes that cannot authenticate in headless mode.
+    claude in fleet mode strips the interactive CLAUDE_CODE_OAUTH_TOKEN and needs
+    either LIMEN_CLAUDE_AUTH_TOKEN or LIMEN_CLAUDE_API_KEY to be set."""
+    down: set[str] = set()
+    if not os.environ.get("LIMEN_CLAUDE_AUTH_TOKEN") and not os.environ.get("LIMEN_CLAUDE_API_KEY"):
+        down.add("claude")
+    return down
+
+
 def _down_lanes() -> set[str]:
-    """Lanes currently DOWN/unproductive. Three sources, unioned:
-      1. logs/lanes-down.txt — a manual override file (one lane per line, '#' comments ok) for
-         lanes a human knows are dead (e.g. agy bin missing); NOT pinned in code.
-      2. the LIVE usage meter (_usage_dead_lanes) — lanes token-exhausted or rate-limited RIGHT NOW.
-      3. browser-OAuth lanes whose silent-auth endpoint is unreachable this beat (_oauth_unreachable_lanes)
-         — so agy/antigravity can't spawn a Google sign-in tab while the Mac is asleep/offline.
-    Rebalance + dispatch + route skip these so tasks aren't wasted on a lane that can't produce.
-    Sources 2 & 3 self-heal (a lane rejoins when its window refills / the network returns); remove a line
-    from source 1 when that lane is healthy again (e.g. a paid GEMINI_API_KEY)."""
+    """Lanes currently DOWN/unproductive. Four sources, unioned:
+       1. logs/lanes-down.txt — a manual override file (one lane per line, '#' comments ok) for
+          lanes a human knows are dead (e.g. agy bin missing); NOT pinned in code.
+       2. the LIVE usage meter (_usage_dead_lanes) — lanes token-exhausted or rate-limited RIGHT NOW.
+       3. browser-OAuth lanes whose silent-auth endpoint is unreachable this beat (_oauth_unreachable_lanes)
+          — so agy/antigravity can't spawn a Google sign-in tab while the Mac is asleep/offline.
+       4. missing dispatch credentials (_creds_lanes_down) — lanes whose fleet auth tokens are absent
+          from the environment, e.g. claude without LIMEN_CLAUDE_AUTH_TOKEN / LIMEN_CLAUDE_API_KEY.
+     Rebalance + dispatch + route skip these so tasks aren't wasted on a lane that can't produce.
+     Sources 2 & 3 self-heal (a lane rejoins when its window refills / the network returns); remove a line
+     from source 1 when that lane is healthy again (e.g. a paid GEMINI_API_KEY).  Source 4 resolves when
+     the missing credential is set in the dispatch environment."""
     f = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))) / "logs" / "lanes-down.txt"
     manual: set[str] = set()
     try:
         manual = {ln.split("#")[0].strip() for ln in f.read_text().splitlines() if ln.split("#")[0].strip()}
     except OSError:
         pass
-    return manual | _usage_dead_lanes() | _oauth_unreachable_lanes()
+    return manual | _usage_dead_lanes() | _oauth_unreachable_lanes() | _creds_lanes_down()
 
 
 def _run_capture(
@@ -335,11 +349,16 @@ def _run_cmd(cmd: list[str], task: Task, dry_run: bool, cwd: str | None = None) 
         loc = f" [cwd={cwd}]" if cwd else ""
         print(f"  would:{loc} {' '.join(cmd)}")
         return True
+
+    env = os.environ.copy()
+    env["CI"] = "true"
+
     try:
         result = _run_capture(
             cmd,
             cwd=cwd,
             timeout=int(os.environ.get("LIMEN_DISPATCH_TIMEOUT", "600")),
+            env=env,
         )  # own process group → timeout SIGKILLs grandchildren too (no beat-stall hang)
         if result.returncode == 0:
             print(f"  dispatched: {task.id}")
@@ -574,7 +593,7 @@ def _opencode_model() -> str:
         # LIMEN_OPENCODE_MODEL=<paid model> to use the paid tier.
         free = [m for m in models if "-free" in m]
         if free:
-            return next((m for m in free if "code" in m), free[0])
+            return next((m for m in free if "code" in m.split("/")[-1]), free[0])
         if models:
             return models[0]
     except Exception:
@@ -587,7 +606,8 @@ _LOCAL_AGENTS: dict[str, list[str]] = {
     # opencode: `run` with NO -m silently no-ops (no auth.json + no default model in
     # opencode.jsonc → 0 PRs). The model is injected LAZILY in _agent_argv() and DERIVED
     # from `opencode models` (never pinned, never resolved at import) — see _opencode_model().
-    "opencode": ["run"],
+    # Needs --dangerously-skip-permissions to write files and run commands headlessly without blocking.
+    "opencode": ["run", "--dangerously-skip-permissions"],
     # gemini: flags FIRST, then -p LAST so the appended prompt immediately follows -p
     # (gemini errors "Not enough arguments following: -p" otherwise). auto_edit = edits-only.
     "gemini": ["--approval-mode", "auto_edit", "-p"],
@@ -595,8 +615,8 @@ _LOCAL_AGENTS: dict[str, list[str]] = {
     # with the appended prompt immediately after it (same bug class as gemini). With -p not
     # last, it swallowed --dangerously-skip-permissions as the prompt → agent got no task
     # ("acknowledged, ready to assist") and wrote nothing. Flags first, -p last.
-    "agy": ["--dangerously-skip-permissions", "-p"],
-    "antigravity": ["--dangerously-skip-permissions", "-p"],
+    "agy": ["--dangerously-skip-permissions", "--print-timeout", "20m", "-p"],
+    "antigravity": ["--dangerously-skip-permissions", "--print-timeout", "20m", "-p"],
     "claude": ["-p", "--permission-mode", "acceptEdits"],
     # ollama: the local, unmetered floor. `ollama run <model> <prompt>` runs once,
     # non-interactively. The <model> is a POSITIONAL after `run` (not a -m flag), injected
@@ -912,6 +932,7 @@ def _bridge_agy_scratch(task: Task, wt: Path) -> None:
 
 def _lane_run_env(agent: str) -> dict[str, str]:
     run_env = os.environ.copy()
+    run_env["CI"] = "true"
     # gemini: API-key mode throttles hard under agentic use. If the user has done the
     # one-time Google sign-in, drop API keys for gemini only so it uses OAuth / Code-Assist.
     if agent == "gemini" and os.environ.get("LIMEN_GEMINI_OAUTH") == "1":
@@ -1072,6 +1093,8 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
     branch = f"limen/{slug}-{suffix}"
     wt = _ISOLATION_ROOT / (re.sub(r"[^a-zA-Z0-9._-]+", "-", task.id.lower()) + "-" + suffix)
     agent_args = _agent_argv(agent, task)
+    if agent in ("agy", "antigravity"):
+        agent_args = ["--add-dir", str(wt)] + agent_args
     agent_cmd = [binary, *agent_args, _build_prompt(task)]
     # 1800s (was 900): local lanes have ABUNDANT budget headroom (codex/claude/opencode ~60-92 left
     # per window) while jules is scarce (≈100/day). At 900s, big tasks — incl. the revenue/deploy

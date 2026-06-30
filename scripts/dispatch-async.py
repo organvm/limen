@@ -77,6 +77,44 @@ def harvest() -> int:
     return applied
 
 
+def inspect_harvest() -> int:
+    """Return how many finished background runs would be applied without mutating them."""
+    if not RUNS.exists():
+        return 0
+    try:
+        lf = load_limen_file(TASKS)
+    except Exception:
+        return 0
+    byid = {t.id: t for t in lf.tasks}
+    count = 0
+    for rf in sorted(RUNS.glob("*.result.json")):
+        try:
+            data = json.loads(rf.read_text())
+        except Exception:
+            continue
+        if byid.get(data.get("task_id")) is not None and data.get("result") != "__notask__":
+            count += 1
+    return count
+
+
+def inspect_stale(max_age_s: int) -> list[str]:
+    """Return task ids whose running markers would be reaped, without mutating files or tasks."""
+    if not RUNS.exists():
+        return []
+    now = _now()
+    stale: list[str] = []
+    for m in RUNS.glob("*__*.running"):
+        try:
+            age = (now - datetime.datetime.fromisoformat(m.read_text().strip())).total_seconds()
+        except Exception:
+            age = max_age_s + 1  # unreadable/empty marker -> stale
+        if age > max_age_s:
+            tid, _agent = m.name[: -len(".running")].rsplit("__", 1)
+            if not (RUNS / f"{tid}.result.json").exists():
+                stale.append(tid)
+    return stale
+
+
 def reap_stale(max_age_s: int):
     """Free slots from DEAD workers. A .running marker older than max_age with no result file means
     the detached worker crashed/was-killed before finishing (OOM, host sleep, SIGKILL). Remove the
@@ -85,17 +123,11 @@ def reap_stale(max_age_s: int):
     RUNS.mkdir(parents=True, exist_ok=True)
     now = _now()
     reaped = []
-    for m in RUNS.glob("*__*.running"):
-        try:
-            age = (now - datetime.datetime.fromisoformat(m.read_text().strip())).total_seconds()
-        except Exception:
-            age = max_age_s + 1  # unreadable/empty marker → treat as stale
-        if age > max_age_s:
-            tid, agent = m.name[:-len(".running")].rsplit("__", 1)
-            # if the worker DID finish (result file present), let harvest handle it; don't reap
-            if not (RUNS / f"{tid}.result.json").exists():
-                reaped.append((tid, agent))
-                m.unlink(missing_ok=True)
+    for tid in inspect_stale(max_age_s):
+        for m in RUNS.glob(f"{tid}__*.running"):
+            _tid, agent = m.name[: -len(".running")].rsplit("__", 1)
+            reaped.append((tid, agent))
+            m.unlink(missing_ok=True)
     if reaped:
         with _queue_lock(TASKS):
             lf = load_limen_file(TASKS)
@@ -192,12 +224,19 @@ def main() -> int:
     lanes = [x.strip() for x in a.lanes.split(",") if x.strip() and x.strip() not in down]
     if down:
         print(f"── skipping down lanes: {sorted(down)}")
-    reaped = reap_stale(int(os.environ.get("LIMEN_ASYNC_MAX_AGE", "1200")))
-    applied = harvest()
+    max_age = int(os.environ.get("LIMEN_ASYNC_MAX_AGE", "1200"))
+    if a.dry_run:
+        reaped = inspect_stale(max_age)
+        applied = inspect_harvest()
+    else:
+        reaped = reap_stale(max_age)
+        applied = harvest()
     running = _running_total()
     launched = reserve_and_launch(lanes, a.per_lane, a.max, a.dry_run)
     verb = "would launch" if a.dry_run else "launched"
-    print(f"── async: reaped {len(reaped)} dead · harvested {applied} · {running} still running · "
+    reap_verb = "would reap" if a.dry_run else "reaped"
+    harvest_verb = "would harvest" if a.dry_run else "harvested"
+    print(f"── async: {reap_verb} {len(reaped)} dead · {harvest_verb} {applied} · {running} still running · "
           f"{verb} {len(launched)} (cap {a.max}) → {[t for _, t in launched]}")
     return 0
 

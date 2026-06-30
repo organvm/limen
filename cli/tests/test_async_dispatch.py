@@ -126,6 +126,33 @@ def test_reaper_frees_dead_workers_not_live(tmp_path):
     assert board["DEAD"].dispatch_log[-1].session_id == "async-reap-stale"
 
 
+def test_main_dry_run_does_not_harvest_or_reap(tmp_path, monkeypatch, capsys):
+    da = _load(tmp_path, n_open=2)
+    today = datetime.date.today()
+    lf = load_limen_file(tmp_path / "tasks.yaml")
+    lf.tasks.append(Task(id="DEAD", title="t", repo="x/y", target_agent="codex", status="dispatched", created=today))
+    save_limen_file(tmp_path / "tasks.yaml", lf)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    (da.RUNS / "DEAD__codex.running").write_text((now - datetime.timedelta(seconds=3000)).isoformat())
+    (da.RUNS / "T0__codex.running").write_text(now.isoformat())
+    (da.RUNS / "T0.result.json").write_text(
+        json.dumps({"task_id": "T0", "agent": "codex", "result": "https://github.com/x/y/pull/9", "ts": "n"})
+    )
+    monkeypatch.setattr(da, "_down_lanes", lambda: set())
+    monkeypatch.setattr(sys, "argv", ["dispatch-async.py", "--lanes", "codex", "--per-lane", "1", "--max", "3", "--dry-run"])
+
+    assert da.main() == 0
+
+    out = capsys.readouterr().out
+    assert "would reap 1 dead" in out
+    assert "would harvest 1" in out
+    assert (da.RUNS / "DEAD__codex.running").exists()
+    assert (da.RUNS / "T0.result.json").exists()
+    board = _board(tmp_path)
+    assert board["DEAD"].status == "dispatched"
+    assert board["T0"].status == "open"
+
+
 def test_async_reserve_counts_inflight_against_budget(tmp_path):
     """In-flight .running markers count toward a lane's per-agent budget, so a lane already at its
     cap via in-flight runs reserves nothing more (prevents over-dispatch between reserve & harvest)."""
