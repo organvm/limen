@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build redacted owner packets from a full Codex session JSONL.
+"""Build redacted planner and executor packets from a Codex session JSONL.
 
-The planner reads the whole session stream and records hashes, paths, tool
-families, output markers, criteria, and predicates. It never stores raw prompt
-or plan bodies in either the public markdown or private JSON receipt.
+The public receipt contains titles, hashes, line numbers, criteria, predicates,
+and blocker summaries. Raw prompt and plan bodies stay in the ignored private
+JSON snapshot only.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import hashlib
 import json
 import os
 import re
-from collections import Counter, defaultdict
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -25,181 +25,49 @@ PRIVATE_ROOT = Path(
 PRIVATE_INDEX = PRIVATE_ROOT / "lifecycle" / "current-session-fanout.json"
 DOC_PATH = ROOT / "docs" / "current-session-fanout.md"
 
-HEX12_RE = re.compile(r"\b[0-9a-f]{12}\b")
-HEX24_RE = re.compile(r"\b[0-9a-f]{24}\b")
-PATH_RE = re.compile(r"[\w./~$-]+\.(?:py|md|json|yaml|yml|toml|js|ts|tsx|sh|rb|txt)")
-PATCH_FILE_RE = re.compile(r"\*\*\* (?:Add|Update|Delete) File: (.+)")
+sys.path.insert(0, str(ROOT / "cli" / "src"))
 
-OUTPUT_MARKERS = (
-    "blocked",
-    "failed",
-    "error",
-    "permission",
-    "not found",
-    "no such file",
-    "rate limit",
-    "warning",
-    "passed",
-    "success",
-)
+try:
+    from limen.capacity import PAID_AGENT_ORDER, capacity_census, canonical_agent
+except Exception:  # pragma: no cover - hermetic fallback
+    PAID_AGENT_ORDER = ("codex",)
 
-DOWN_USAGE_STATES = {"exhausted", "rate-limited", "low"}
-DEFAULT_EXECUTOR_LANES = ("codex", "opencode", "github_actions", "jules", "ollama")
+    def capacity_census(board: object = None) -> list[dict[str, Any]]:
+        return [
+            {
+                "agent": "codex",
+                "kind": "local-cli",
+                "reachable": True,
+                "detail": "fallback",
+                "remaining": None,
+                "limit": None,
+                "spent": 0,
+            }
+        ]
 
-PACKET_DEFS: tuple[dict[str, Any], ...] = (
-    {
-        "key": "current-session-fanout-planner",
-        "title": "Current-session fanout planner",
-        "owner": "limen control plane",
-        "agent_fit": "codex",
-        "keywords": (
-            "fanout",
-            "owner packet",
-            "executor criteria",
-            "verification predicate",
-            "current-session",
-            "planner",
-        ),
-        "paths": (
-            "current-session-fanout.py",
-            "current-session-fanout.md",
-            "test_current_session_fanout.py",
-            "test_substrate_repo_product_fanout.py",
-        ),
-        "executor_criteria": (
-            "derive packet evidence from every session record, not only the final turn",
-            "store only hashes, counts, paths, tool families, and markers",
-            "emit a public receipt plus an ignored private JSON index",
-        ),
-        "verification_predicates": (
-            "python3 -m py_compile scripts/current-session-fanout.py",
-            "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q",
-            "python3 scripts/current-session-fanout.py --session \"$LIMEN_CURRENT_SESSION_JSONL\" --packet-id \"$PACKET_ID\" --theme \"$PACKET_THEME\" --write",
-        ),
-    },
-    {
-        "key": "dynamic-substrate-control-plane",
-        "title": "Dynamic substrate control plane",
-        "owner": "limen dispatch and capacity routing",
-        "agent_fit": "codex first; opencode/jules only after a narrow predicate exists",
-        "keywords": (
-            "dynamic-substrate",
-            "substrate",
-            "dispatch",
-            "route",
-            "router",
-            "lane",
-            "usage",
-            "quota",
-            "rate",
-            "model",
-            "provider",
-            "capacity",
-            "heartbeat",
-        ),
-        "paths": (
-            "dispatch-async.py",
-            "dispatch-parallel.py",
-            "dispatch-health.py",
-            "heartbeat-loop.sh",
-            "heartbeat.sh",
-            "route.py",
-            "full-fleet-lanes.py",
-            "capacity.py",
-            "dispatch.py",
-            "model_selection.py",
-            "overnight-doctor.py",
-            "DISPATCH-ARCHITECTURE.md",
-        ),
-        "executor_criteria": (
-            "derive live substrate and lane health at run time",
-            "cap or skip exhausted/rate-limited lanes before fanout",
-            "never spend resets, credits, or overages without a fresh human gate",
-        ),
-        "verification_predicates": (
-            "python3 scripts/dispatch-health.py --write",
-            "python3 scripts/session-blockers-ledger.py --write",
-            "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_usage_gate.py cli/tests/test_dispatch.py -q",
-        ),
-    },
-    {
-        "key": "blocked-local-work",
-        "title": "Blocked local substrate work",
-        "owner": "local substrate owner",
-        "agent_fit": "codex records blocker; human or local owner clears gate",
-        "keywords": (
-            "blocked",
-            "blocker",
-            "permission",
-            "not found",
-            "no such file",
-            "domus",
-            "homebrew",
-            "atuin",
-            "cursor position",
-            "local",
-        ),
-        "paths": (
-            "/Users/4jp/.local",
-            "domus-genoma",
-            ".config/zsh",
-            "DOMUS_CLI.md",
-            "test-domus-cli.bats",
-        ),
-        "markers": ("blocked", "failed", "error", "permission", "not found", "no such file"),
-        "executor_criteria": (
-            "record exact local blocker class without copying private output",
-            "do not turn a local filesystem/auth/preflight failure into a global product stop",
-            "resume only after a scoped local owner packet or human gate clears the blocker",
-        ),
-        "verification_predicates": (
-            "python3 scripts/current-session-fanout.py --session \"$LIMEN_CURRENT_SESSION_JSONL\" --packet-id \"$PACKET_ID\" --theme \"$PACKET_THEME\" --write",
-            "rg -n \"blocked-local-work\" docs/current-session-fanout.md",
-            "rg -ni \"global product selection remains active\" docs/current-session-fanout.md",
-        ),
-        "local_blocker": True,
-    },
-    {
-        "key": "global-product-selection",
-        "title": "Global product selection",
-        "owner": "revenue/product selection",
-        "agent_fit": "codex packetization; executor lanes after owner repo and predicate are explicit",
-        "keywords": (
-            "product",
-            "selection",
-            "global",
-            "revenue",
-            "money",
-            "value",
-            "positioning",
-            "surface",
-            "seo",
-            "inbound",
-            "backlog",
-        ),
-        "paths": (
-            "value-repos.json",
-            "positioning-seeds.json",
-            "generate-revenue-backlog.py",
-            "generate-positioning.py",
-            "discover-value.py",
-            "product-ledger.py",
-            "repo-surface-ledger.py",
-            "aug1-view.py",
-            "august-pipeline-scoreboard.md",
-        ),
-        "executor_criteria": (
-            "rank product work from current evidence, not a stale allowlist",
-            "emit owner repo, acceptance predicate, and expected receipt before delegation",
-            "continue selection while unrelated local substrate blockers are recorded",
-        ),
-        "verification_predicates": (
-            "python3 scripts/generate-revenue-backlog.py",
-            "python3 scripts/generate-positioning.py",
-            "python3 scripts/current-session-fanout.py --session \"$LIMEN_CURRENT_SESSION_JSONL\" --packet-id \"$PACKET_ID\" --theme \"$PACKET_THEME\" --write",
-        ),
-        "global_product": True,
-    },
+    def canonical_agent(agent: str | None) -> str:
+        return str(agent or "")
+
+THEMES: list[tuple[str, tuple[str, ...]]] = [
+    ("alpha-omega-product-ledger", ("1000", "alpha", "omega", "product", "shipped")),
+    ("full-fleet-overnight", ("fleet", "overnight", "all night", "lane", "jules")),
+    ("dynamic-substrate", ("drive", "mounted", "hard-coded", "archive", "substrate")),
+    ("repo-salvage-consolidation", ("400 repos", "repo", "consolidated", "same app", "salvage")),
+    ("money-inbound-seo", ("money", "cash", "seo", "organic", "lead", "sell")),
+    ("contrib-mirror", ("contrib", "external", "community", "github contrib", "mirror")),
+    ("quota-reset-guard", ("reset", "weekly limit", "free reset", "credits", "usage")),
+    ("current-session-intake", ("this session", "beginning of this session", "hold everything")),
+    ("domus-preflight-noise", ("domus", "homebrew", "preflight", "atuin", "cursor position")),
+    ("private-sauce-boundary", ("private", "secret", "sauce", "hide")),
+    ("codex-planner-worktrees", ("10 worktrees", "codex only", "planner", "worktree")),
+    ("autopoietic-conductor", ("autopoetic", "autopoietic", "forever", "tokens")),
+]
+
+PROPOSED_PLAN_RE = re.compile(r"<proposed_plan>\s*(.*?)(?:\s*</proposed_plan>|$)", re.I | re.S)
+MARKDOWN_H1_RE = re.compile(r"(?m)^#\s+(.+?)\s*$")
+PRIOR_PLAN_MARKERS = (
+    "a previous agent produced the plan below",
+    "previous agent produced the plan below",
 )
 
 
@@ -207,17 +75,13 @@ def now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
 
-def stable_hash(text: str, length: int = 24) -> str:
+def stable_hash(text: str, length: int = 18) -> str:
     return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:length]
-
-
-def compact_counts(counter: Counter[str], limit: int = 8) -> dict[str, int]:
-    return dict(counter.most_common(limit))
 
 
 def text_from_content(value: Any) -> list[str]:
     if isinstance(value, str):
-        return [value] if value else []
+        return [value] if value.strip() else []
     if isinstance(value, list):
         out: list[str] = []
         for item in value:
@@ -232,66 +96,169 @@ def text_from_content(value: Any) -> list[str]:
     return []
 
 
-def message_texts(payload: dict[str, Any]) -> list[str]:
-    if payload.get("type") == "message":
-        return text_from_content(payload.get("content"))
-    if payload.get("type") == "user_message":
-        return text_from_content(payload.get("message")) + text_from_content(
-            payload.get("text_elements")
-        )
+def role_texts_from_obj(obj: dict[str, Any]) -> list[tuple[str, str]]:
+    payload = obj.get("payload")
+    if isinstance(payload, dict):
+        if payload.get("type") == "message" and payload.get("role") in {"user", "assistant"}:
+            return [
+                (str(payload["role"]), text)
+                for text in text_from_content(payload.get("content"))
+            ]
+        if payload.get("type") == "user_message":
+            return [("user", text) for text in text_from_content(payload.get("message"))]
+        if payload.get("type") == "agent_message":
+            return [("assistant", text) for text in text_from_content(payload.get("message"))]
+    if obj.get("role") in {"user", "assistant"}:
+        return [
+            (str(obj["role"]), text)
+            for text in text_from_content(obj.get("content") or obj.get("text"))
+        ]
     return []
 
 
-def parse_json(value: str) -> dict[str, Any]:
+def user_texts_from_obj(obj: dict[str, Any]) -> list[str]:
+    return [text for role, text in role_texts_from_obj(obj) if role == "user"]
+
+
+def read_jsonl(path: Path) -> list[tuple[int, dict[str, Any]]]:
     try:
-        data = json.loads(value)
-    except (TypeError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    records: list[tuple[int, dict[str, Any]]] = []
+    for idx, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        try:
+            obj = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(obj, dict):
+            records.append((idx, obj))
+    return records
 
 
-def path_refs_from_text(text: str) -> list[str]:
-    paths = {match.group(0) for match in PATH_RE.finditer(text)}
-    for match in PATCH_FILE_RE.finditer(text):
-        paths.add(match.group(1).strip())
-    return sorted(paths)
+def read_session_messages(path: Path) -> list[dict[str, Any]]:
+    messages: list[dict[str, Any]] = []
+    for line, obj in read_jsonl(path):
+        timestamp = obj.get("timestamp")
+        for text in user_texts_from_obj(obj):
+            messages.append(
+                {
+                    "line": line,
+                    "timestamp": timestamp,
+                    "hash": stable_hash(text, 24),
+                    "bytes": len(text.encode("utf-8", errors="replace")),
+                    "text": text,
+                }
+            )
+    return messages
 
 
-def event_packet_hits(blob: str, paths: list[str], markers: list[str]) -> list[str]:
-    haystack = " ".join([blob, *paths, *markers]).casefold()
-    hits: list[str] = []
-    for spec in PACKET_DEFS:
-        keyword_hit = any(str(keyword).casefold() in haystack for keyword in spec["keywords"])
-        path_hit = any(str(path).casefold() in haystack for path in spec["paths"])
-        marker_hit = any(str(marker).casefold() in haystack for marker in spec.get("markers", ()))
-        if keyword_hit or path_hit or marker_hit:
-            hits.append(str(spec["key"]))
-    return hits
+def plan_title(text: str) -> str:
+    match = MARKDOWN_H1_RE.search(text)
+    return match.group(1).strip() if match else "Untitled Plan"
 
 
-def safe_event_ref(
+def user_prior_plan_block(text: str) -> str | None:
+    lower_text = text.lower()
+    marker_index = min(
+        (idx for marker in PRIOR_PLAN_MARKERS if (idx := lower_text.find(marker)) != -1),
+        default=-1,
+    )
+    if marker_index == -1:
+        return None
+    match = MARKDOWN_H1_RE.search(text, marker_index)
+    return text[match.start() :] if match else None
+
+
+def plan_event(
     *,
     line: int,
-    kind: str,
-    digest: str,
-    packets: list[str],
-    role: str | None = None,
-    paths: list[str] | None = None,
-    markers: list[str] | None = None,
+    timestamp: str | None,
+    role: str,
+    source_type: str,
+    text: str,
+    ordinal: int,
 ) -> dict[str, Any]:
-    ref: dict[str, Any] = {
+    plan_hash = stable_hash(text, 12)
+    return {
+        "id": f"PLAN-SRC-{line}-{ordinal}-{plan_hash}",
+        "title": plan_title(text),
+        "timestamp": timestamp,
         "line": line,
-        "kind": kind,
-        "hash": digest,
-        "packets": packets,
+        "role": role,
+        "source_type": source_type,
+        "hash": plan_hash,
+        "bytes": len(text.encode("utf-8", errors="replace")),
+        "duplicate": False,
+        "duplicate_of": None,
+        "included": False,
+        "text": text,
     }
-    if role:
-        ref["role"] = role
-    if paths:
-        ref["paths"] = paths[:12]
-    if markers:
-        ref["markers"] = markers[:12]
-    return ref
+
+
+def read_session_plan_events(path: Path) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    seen_messages: set[tuple[str, str, str | None]] = set()
+    for line, obj in read_jsonl(path):
+        timestamp = obj.get("timestamp")
+        for role, text in role_texts_from_obj(obj):
+            if not text.strip():
+                continue
+            message_key = (role, text, str(timestamp) if timestamp is not None else None)
+            if message_key in seen_messages:
+                continue
+            seen_messages.add(message_key)
+            ordinal = 1
+            if role == "user":
+                block = user_prior_plan_block(text)
+                if block:
+                    events.append(
+                        plan_event(
+                            line=line,
+                            timestamp=timestamp,
+                            role=role,
+                            source_type="user_supplied_prior_plan",
+                            text=block,
+                            ordinal=ordinal,
+                        )
+                    )
+                    ordinal += 1
+            if role == "assistant":
+                for match in PROPOSED_PLAN_RE.finditer(text):
+                    block = match.group(1)
+                    if not MARKDOWN_H1_RE.search(block):
+                        continue
+                    events.append(
+                        plan_event(
+                            line=line,
+                            timestamp=timestamp,
+                            role=role,
+                            source_type="assistant_proposed_plan",
+                            text=block,
+                            ordinal=ordinal,
+                        )
+                    )
+                    ordinal += 1
+    return mark_plan_duplicates(events)
+
+
+def mark_plan_duplicates(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    newest_first = sorted(events, key=lambda event: (int(event["line"]), str(event["timestamp"] or "")), reverse=True)
+    seen: dict[str, str] = {}
+    for event in newest_first:
+        plan_hash = str(event["hash"])
+        if plan_hash in seen:
+            event["duplicate"] = True
+            event["duplicate_of"] = seen[plan_hash]
+        else:
+            seen[plan_hash] = str(event["id"])
+    return newest_first
+
+
+def unique_plan_sources(plan_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [event for event in plan_events if not event["duplicate"]]
 
 
 def latest_codex_session() -> Path | None:
@@ -312,474 +279,456 @@ def latest_codex_session() -> Path | None:
 def find_session(path_arg: str | None) -> Path:
     path = Path(path_arg).expanduser() if path_arg else latest_codex_session()
     if path is None or not path.exists():
-        raise FileNotFoundError(
-            "no Codex session JSONL found; set LIMEN_CURRENT_SESSION_JSONL or pass --session"
-        )
+        raise FileNotFoundError("no Codex session JSONL found; set LIMEN_CURRENT_SESSION_JSONL or pass --session")
     return path
 
 
-def scan_session(path: Path) -> dict[str, Any]:
-    records = 0
-    line_errors = 0
-    line_first: int | None = None
-    line_last = 0
-    payload_types: Counter[str] = Counter()
-    roles: Counter[str] = Counter()
-    tool_names: Counter[str] = Counter()
-    command_families: Counter[str] = Counter()
-    path_refs: Counter[str] = Counter()
-    output_markers: Counter[str] = Counter()
-    user_prompt_hashes: list[str] = []
-    referenced_plan_hashes: Counter[str] = Counter()
-    referenced_prompt_hashes: Counter[str] = Counter()
-    derived_plan_hashes: Counter[str] = Counter()
-    events: list[dict[str, Any]] = []
-    packet_events: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    turn_count = 0
+def matched_themes(messages: list[dict[str, Any]], plan_events: list[dict[str, Any]]) -> list[str]:
+    body = "\n".join(
+        [str(msg["text"]).lower() for msg in messages]
+        + [str(event.get("text") or "").lower() for event in plan_events]
+    )
+    found = [name for name, needles in THEMES if any(needle in body for needle in needles)]
+    return found or ["current-session-intake"]
 
-    with path.open("r", encoding="utf-8", errors="replace") as handle:
-        for line_no, raw_line in enumerate(handle, start=1):
-            if line_first is None:
-                line_first = line_no
-            line_last = line_no
-            records += 1
-            try:
-                record = json.loads(raw_line)
-            except ValueError:
-                line_errors += 1
-                continue
-            if record.get("type") == "turn_context":
-                turn_count += 1
-            payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
-            payload_type = str(payload.get("type") or record.get("type") or "unknown")
-            payload_types[payload_type] += 1
-            role = str(payload.get("role") or "")
-            if role:
-                roles[role] += 1
 
-            if payload_type in {"message", "user_message"}:
-                for text in message_texts(payload):
-                    digest = stable_hash(text)
-                    paths = path_refs_from_text(text)
-                    markers = [marker for marker in OUTPUT_MARKERS if marker in text.casefold()]
-                    packets = event_packet_hits(text, paths, markers)
-                    if role == "user" or payload_type == "user_message":
-                        user_prompt_hashes.append(digest)
-                    for value in HEX12_RE.findall(text.casefold()):
-                        referenced_plan_hashes[value] += 1
-                    for value in HEX24_RE.findall(text.casefold()):
-                        referenced_prompt_hashes[value] += 1
-                    for path_ref in paths:
-                        path_refs[path_ref] += 1
-                    event = safe_event_ref(
-                        line=line_no,
-                        kind="message",
-                        digest=digest,
-                        packets=packets,
-                        role=role or None,
-                        paths=paths,
-                        markers=markers,
-                    )
-                    events.append(event)
-                    for packet in packets:
-                        packet_events[packet].append(event)
+def lane_rows() -> list[dict[str, Any]]:
+    try:
+        rows = list(capacity_census(None))
+    except Exception:
+        rows = []
+    normalized: list[dict[str, Any]] = []
+    for row in rows:
+        remaining = row.get("remaining")
+        detail = str(row.get("detail") or "")
+        if row.get("reachable"):
+            status = "active"
+        elif remaining == 0:
+            status = "depleted"
+        elif any(needle in detail.lower() for needle in ("not set", "auth", "assignable", "no model pulled")):
+            status = "human-gated"
+        else:
+            status = "down"
+        normalized.append(
+            {
+                "agent": str(row.get("agent") or ""),
+                "kind": str(row.get("kind") or ""),
+                "status": status,
+                "reachable": bool(row.get("reachable")),
+                "remaining": remaining,
+                "detail": detail,
+            }
+        )
+    if not normalized:
+        normalized.append(
+            {
+                "agent": "codex",
+                "kind": "local-cli",
+                "status": "active",
+                "reachable": True,
+                "remaining": None,
+                "detail": "fallback",
+            }
+        )
+    return normalized
 
-            elif payload_type == "function_call":
-                name = str(payload.get("name") or "")
-                tool_names[name] += 1
-                arguments = str(payload.get("arguments") or "")
-                arg_hash = stable_hash(arguments, 18)
-                paths = path_refs_from_text(arguments)
-                blob = f"{name} {arguments}"
-                markers = [marker for marker in OUTPUT_MARKERS if marker in blob.casefold()]
-                command = parse_json(arguments).get("cmd") if name == "exec_command" else None
-                if isinstance(command, str) and command.strip():
-                    command_families[command.split()[0]] += 1
-                    paths.extend(path_refs_from_text(command))
-                if name == "update_plan":
-                    data = parse_json(arguments)
-                    for item in data.get("plan") or []:
-                        if isinstance(item, dict) and item.get("step"):
-                            derived_plan_hashes[stable_hash(str(item["step"]), 12)] += 1
-                for path_ref in paths:
-                    path_refs[path_ref] += 1
-                packets = event_packet_hits(blob, sorted(set(paths)), markers)
-                event = safe_event_ref(
-                    line=line_no,
-                    kind=f"function_call:{name}",
-                    digest=arg_hash,
-                    packets=packets,
-                    paths=sorted(set(paths)),
-                    markers=markers,
-                )
-                events.append(event)
-                for packet in packets:
-                    packet_events[packet].append(event)
 
-            elif payload_type == "custom_tool_call":
-                name = str(payload.get("name") or "")
-                tool_names[name] += 1
-                input_text = str(payload.get("input") or "")
-                paths = path_refs_from_text(input_text)
-                for path_ref in paths:
-                    path_refs[path_ref] += 1
-                packets = event_packet_hits(f"{name} {input_text}", paths, [])
-                event = safe_event_ref(
-                    line=line_no,
-                    kind=f"custom_tool_call:{name}",
-                    digest=stable_hash(input_text, 18),
-                    packets=packets,
-                    paths=paths,
-                )
-                events.append(event)
-                for packet in packets:
-                    packet_events[packet].append(event)
+def lane_selection(selector: str, rows: list[dict[str, Any]]) -> list[str]:
+    value = (selector or "auto").strip()
+    by_agent = {row["agent"]: row for row in rows}
+    if value == "all":
+        return [str(agent) for agent in PAID_AGENT_ORDER]
+    if value == "auto":
+        active = [str(agent) for agent in PAID_AGENT_ORDER if by_agent.get(str(agent), {}).get("status") == "active"]
+        return active or ["codex"]
+    selected: list[str] = []
+    for raw in value.split(","):
+        agent = canonical_agent(raw.strip())
+        if agent and agent in PAID_AGENT_ORDER and agent not in selected:
+            selected.append(agent)
+    return selected or ["codex"]
 
-            elif payload_type in {"function_call_output", "custom_tool_call_output"}:
-                output = str(payload.get("output") or "")
-                markers = [marker for marker in OUTPUT_MARKERS if marker in output.casefold()]
-                for marker in markers:
-                    output_markers[marker] += 1
-                paths = path_refs_from_text(output)
-                for path_ref in paths:
-                    path_refs[path_ref] += 1
-                packets = event_packet_hits(output, paths, markers)
-                event = safe_event_ref(
-                    line=line_no,
-                    kind=payload_type,
-                    digest=stable_hash(output, 18),
-                    packets=packets,
-                    paths=paths,
-                    markers=markers,
-                )
-                events.append(event)
-                for packet in packets:
-                    packet_events[packet].append(event)
 
+def packet_slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9._-]+", "-", value.lower()).strip("-") or "packet"
+
+
+def owner_packet_for_theme(theme: str) -> dict[str, Any]:
+    if theme == "full-fleet-overnight":
+        return {
+            "owner_repo": "organvm/limen",
+            "owner_ledger": "docs/current-session-fanout.md",
+            "criteria": [
+                "derive lane inventory from PAID_AGENT_ORDER, not hand-written local lists",
+                "`auto` selects active reachable lanes while down/depleted/human-gated lanes stay visible in receipts",
+                "`all` preserves every registered lane for audit without pretending down lanes are runnable",
+                "async dry-runs do not launch live dispatch or spend resets/credits",
+                "blocked local gates are recorded as local blockers while global product selection remains active",
+            ],
+            "verification_predicates": [
+                "LIMEN_ROOT=$PWD LIMEN_TASKS=$PWD/tasks.yaml python3 scripts/current-session-fanout.py --session <session.jsonl> --min-codex-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --dry-run",
+                "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q",
+                "PYTHONPATH=cli/src python3 -c \"from limen.capacity import PAID_AGENT_ORDER; required={'codex','claude','opencode','agy','gemini','ollama','jules','copilot','warp','oz','github_actions'}; assert required <= set(PAID_AGENT_ORDER)\"",
+                "LIMEN_ROOT=$PWD LIMEN_TASKS=$PWD/tasks.yaml PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes auto --dry-run",
+                "bash scripts/verify-whole.sh",
+            ],
+        }
     return {
-        "records_read": records,
-        "line_errors": line_errors,
-        "line_span": [line_first or 0, line_last],
-        "turn_count": turn_count,
-        "payload_types": compact_counts(payload_types, 16),
-        "roles": compact_counts(roles, 8),
-        "tool_names": compact_counts(tool_names, 12),
-        "command_families": compact_counts(command_families, 12),
-        "path_refs": compact_counts(path_refs, 30),
-        "output_markers": compact_counts(output_markers, 12),
-        "user_prompt_hashes": sorted(set(user_prompt_hashes)),
-        "referenced_plan_hashes": dict(referenced_plan_hashes.most_common(40)),
-        "referenced_prompt_hashes": dict(referenced_prompt_hashes.most_common(40)),
-        "derived_plan_hashes": dict(derived_plan_hashes.most_common(40)),
-        "events": events,
-        "packet_events": {key: value for key, value in packet_events.items()},
+        "owner_repo": "organvm/limen",
+        "owner_ledger": "docs/current-session-fanout.md",
+        "criteria": [
+            "derive this owner packet from all user turns and all detected plan sources",
+            "include executor acceptance, blocker behavior, and at least one verification predicate",
+            "preserve raw private bodies outside tracked files",
+        ],
+        "verification_predicates": [
+            "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q",
+            "python3 -m py_compile scripts/current-session-fanout.py",
+        ],
     }
 
 
-def read_down_lanes(root: Path) -> set[str]:
-    lanes: set[str] = set()
-    try:
-        for line in (root / "logs" / "lanes-down.txt").read_text().splitlines():
-            value = line.split("#", 1)[0].strip()
-            if value:
-                lanes.add(value)
-    except OSError:
-        pass
-    try:
-        vendors = json.loads((root / "logs" / "usage.json").read_text()).get("vendors", {})
-    except (OSError, ValueError, AttributeError):
-        vendors = {}
-    if isinstance(vendors, dict):
-        for lane, info in vendors.items():
-            if isinstance(info, dict) and info.get("health") in DOWN_USAGE_STATES:
-                lanes.add(str(lane))
-    return lanes
-
-
-def lane_selection(selector: str, root: Path | None = None) -> list[str]:
-    root = root or ROOT
-    if selector and selector != "auto":
-        lanes = [item.strip() for item in selector.split(",") if item.strip()]
-    else:
-        lanes = list(DEFAULT_EXECUTOR_LANES)
-    down = read_down_lanes(root)
-    active = [lane for lane in lanes if lane not in down]
-    return active or ["codex"]
-
-
-def env_predicate(value: str, packet_id: str, theme: str) -> str:
-    return value.replace("$PACKET_ID", packet_id).replace("$PACKET_THEME", theme)
-
-
-def build_owner_packets(
-    scan: dict[str, Any],
-    packet_id: str,
-    theme: str,
-    executor_lanes: list[str],
+def planner_packets(
+    themes: list[str],
+    messages: list[dict[str, Any]],
+    min_codex: int,
+    no_reset_spend: bool,
+    source_plan_hashes: list[str],
 ) -> list[dict[str, Any]]:
-    local_blockers_present = "blocked-local-work" in scan["packet_events"]
+    seed_themes = list(themes)
+    idx = 1
+    while len(seed_themes) < min_codex:
+        seed_themes.append(f"product-factory-{idx:02d}")
+        idx += 1
+    prompt_hashes = [msg["hash"] for msg in messages]
     packets: list[dict[str, Any]] = []
-    for spec in PACKET_DEFS:
-        key = str(spec["key"])
-        evidence = scan["packet_events"].get(key, [])
-        if not evidence and key != "global-product-selection":
-            continue
-        if key == "global-product-selection" and not evidence and theme != "global-product-selection":
-            continue
-        local_blocker = bool(spec.get("local_blocker"))
-        global_product = bool(spec.get("global_product"))
-        if local_blocker and evidence:
-            status = "blocked-local-recorded"
-            dispatchability = "blocked-until-local-owner-gate"
-        elif global_product:
-            status = "active"
-            dispatchability = "ready-for-owner-selection"
-        else:
-            status = "packetized"
-            dispatchability = "ready-for-codex-owner-work"
-        predicates = [
-            env_predicate(predicate, packet_id=packet_id, theme=theme)
-            for predicate in spec["verification_predicates"]
-        ]
+    for idx, theme in enumerate(seed_themes, start=1):
+        owner = owner_packet_for_theme(theme)
         packets.append(
             {
-                "id": f"{packet_id}-{key}",
-                "packet_key": key,
-                "title": spec["title"],
-                "status": status,
-                "owner": spec["owner"],
-                "agent_fit": spec["agent_fit"],
-                "executor_lanes": executor_lanes,
-                "dispatchability": dispatchability,
-                "executor_criteria": list(spec["executor_criteria"]),
-                "verification_predicates": predicates,
-                "evidence_count": len(evidence),
-                "evidence_line_span": [
-                    min((int(item["line"]) for item in evidence), default=0),
-                    max((int(item["line"]) for item in evidence), default=0),
+                "id": f"PLAN-{idx:02d}-{stable_hash(theme, 8)}",
+                "packet_type": "planner_packet",
+                "target_agent": "codex",
+                "theme": theme,
+                "worktree_slug": packet_slug(f"planner-{idx:02d}-{theme}")[:80],
+                "spend_guard": "no-reset-spend" if no_reset_spend else "operator-allowed-reset-spend",
+                "source_prompt_hashes": prompt_hashes,
+                "source_plan_hashes": list(source_plan_hashes),
+                "owner_packet": owner,
+                "acceptance": [
+                    "derive owner packets from the full session, not just the latest turn",
+                    "emit executor criteria and verification predicates",
+                    "record blocked local work without stopping global product selection",
                 ],
-                "evidence_hashes": sorted({str(item["hash"]) for item in evidence})[:24],
-                "evidence_paths": sorted(
-                    {path for item in evidence for path in item.get("paths", [])}
-                )[:30],
-                "evidence_markers": sorted(
-                    {marker for item in evidence for marker in item.get("markers", [])}
-                ),
-                "blocks_global_product_selection": False,
-                "continues_despite_local_blockers": bool(global_product and local_blockers_present),
             }
         )
     return packets
 
 
-def parse_hash_args(values: list[str] | None, expected_len: int) -> list[str]:
-    out: list[str] = []
-    for value in values or []:
-        for item in re.split(r"[\s,]+", value.strip()):
-            if len(item) == expected_len and re.fullmatch(r"[0-9a-f]+", item):
-                out.append(item)
-    return sorted(set(out))
+def executor_packet_predicates(theme: str) -> list[str]:
+    if theme == "full-fleet-overnight":
+        return owner_packet_for_theme(theme)["verification_predicates"]
+    return [
+        "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q",
+        "python3 -m py_compile scripts/current-session-fanout.py",
+    ]
+
+
+def executor_packets(
+    themes: list[str],
+    lanes: list[str],
+    include_contrib: bool,
+    no_reset_spend: bool,
+    source_plan_hashes: list[str],
+) -> list[dict[str, Any]]:
+    packets: list[dict[str, Any]] = []
+    work_themes = list(themes)
+    if include_contrib and "contrib-mirror" not in work_themes:
+        work_themes.append("contrib-mirror")
+    for lane in lanes:
+        if lane == "codex":
+            continue
+        theme = work_themes[len(packets) % len(work_themes)] if work_themes else "product-factory"
+        packets.append(
+            {
+                "id": f"EXEC-{lane}-{stable_hash(theme, 8)}",
+                "packet_type": "executor_packet",
+                "target_agent": lane,
+                "theme": theme,
+                "spend_guard": "no-reset-spend" if no_reset_spend and lane == "codex" else "lane-policy",
+                "source_plan_hashes": list(source_plan_hashes),
+                "executor_criteria": [
+                    "bounded reversible work only",
+                    "return changed paths, predicate result, PR/deploy/receipt, and blocker if any",
+                    "do not perform outbound sends, credential minting, purchases, deletes, or mass merges",
+                    "if this lane is blocked, record the blocker and continue global product selection",
+                ],
+                "verification_predicates": executor_packet_predicates(theme),
+            }
+        )
+    return packets
+
+
+def digest_blockers() -> list[dict[str, str]]:
+    path = ROOT / "docs" / "NEEDS-HUMAN-DIGEST.md"
+    if not path.exists():
+        return []
+    blockers: list[dict[str, str]] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        match = re.match(r"##\s+\d+\.\s+(.+?)(?:\s+—\s+(.+))?$", line)
+        if match:
+            blockers.append({"source": "docs/NEEDS-HUMAN-DIGEST.md", "item": match.group(1), "impact": match.group(2) or ""})
+        elif line.startswith("- ASK-"):
+            parts = line.removeprefix("- ").split("—", 1)
+            blockers.append({"source": "docs/NEEDS-HUMAN-DIGEST.md", "item": parts[0].strip(), "impact": parts[1].strip() if len(parts) > 1 else ""})
+    return blockers
+
+
+def blocked_local_work(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    blockers: list[dict[str, Any]] = []
+    blockers.extend(digest_blockers())
+    for row in rows:
+        if row["status"] != "active":
+            blockers.append(
+                {
+                    "source": "capacity_census",
+                    "item": f"{row['agent']} lane {row['status']}",
+                    "impact": row["detail"],
+                }
+            )
+    return blockers
+
+
+def packet_plan_hash_intersection(packets: list[dict[str, Any]]) -> set[str]:
+    if not packets:
+        return set()
+    covered = set(str(plan_hash) for plan_hash in packets[0].get("source_plan_hashes", []))
+    for packet in packets[1:]:
+        covered &= set(str(plan_hash) for plan_hash in packet.get("source_plan_hashes", []))
+    return covered
 
 
 def build_snapshot(args: argparse.Namespace) -> dict[str, Any]:
     session = find_session(args.session)
-    scan = scan_session(session)
-    executor_lanes = lane_selection(args.executor_lanes)
-    owner_packets = build_owner_packets(scan, args.packet_id, args.theme, executor_lanes)
-    local_blocker_ids = [
-        packet["id"] for packet in owner_packets if packet["status"] == "blocked-local-recorded"
+    messages = read_session_messages(session)
+    plan_events = read_session_plan_events(session)
+    unique_sources = unique_plan_sources(plan_events)
+    source_plan_hashes = [str(event["hash"]) for event in unique_sources]
+    themes = matched_themes(messages, plan_events)
+    rows = lane_rows()
+    lanes = lane_selection(args.executor_lanes, rows)
+    no_reset_spend = not args.allow_reset_spend
+    planners = planner_packets(themes, messages, args.min_codex_planners, no_reset_spend, source_plan_hashes)
+    executors = executor_packets(themes, lanes, args.include_contrib, no_reset_spend, source_plan_hashes)
+    all_packets = planners + executors
+    packet_plan_hashes = packet_plan_hash_intersection(all_packets)
+    unconsolidated_plan_hashes = [
+        plan_hash for plan_hash in source_plan_hashes if plan_hash not in packet_plan_hashes
     ]
-    global_packets = [
-        packet["id"] for packet in owner_packets if packet["packet_key"] == "global-product-selection"
-    ]
-    provided_plan_hashes = parse_hash_args(args.source_plan_hash, 12)
-    provided_prompt_hashes = parse_hash_args(args.source_prompt_hash, 24)
-    source_prompt_hashes = sorted(set(scan["user_prompt_hashes"]) | set(provided_prompt_hashes))
-    source_plan_hashes = sorted(
-        set(scan["referenced_plan_hashes"]) | set(scan["derived_plan_hashes"]) | set(provided_plan_hashes)
-    )
-    global_active = bool(global_packets)
-    status = "ready_with_local_blockers" if local_blocker_ids and global_active else "ready"
-    if not owner_packets:
-        status = "blocked"
-    return {
-        "version": 1,
+    for event in plan_events:
+        event["included"] = str(event["hash"]) in packet_plan_hashes
+    blockers = blocked_local_work(rows)
+    global_status = "active" if planners else "blocked"
+    snapshot = {
         "generated_at": now_iso(),
-        "packet_id": args.packet_id,
-        "theme": args.theme,
-        "source_session_path": str(session),
-        "source_session_hash": stable_hash(str(session), 24),
-        "privacy": {
-            "raw_prompt_bodies_stored": False,
-            "raw_plan_bodies_stored": False,
-            "public_receipt": str(DOC_PATH),
-            "private_index": str(PRIVATE_INDEX),
+        "session_path": str(session),
+        "session_hash": stable_hash(str(session), 24),
+        "user_messages": len(messages),
+        "prompt_bytes": sum(int(msg["bytes"]) for msg in messages),
+        "prompt_hashes": [msg["hash"] for msg in messages],
+        "plan_events": plan_events,
+        "unique_plan_sources": unique_sources,
+        "plan_event_count": len(plan_events),
+        "unique_plan_count": len(unique_sources),
+        "duplicate_plan_count": len(plan_events) - len(unique_sources),
+        "source_plan_hashes": source_plan_hashes,
+        "unconsolidated_plan_hashes": unconsolidated_plan_hashes,
+        "themes": themes,
+        "lane_classification": rows,
+        "executor_lanes": lanes,
+        "no_reset_spend": no_reset_spend,
+        "planner_packets": planners,
+        "executor_packets": executors,
+        "blocked_local_work": blockers,
+        "global_product_selection": {
+            "status": global_status,
+            "reason": "local blockers are recorded per owner/lane; unblocked planner packets remain selectable",
         },
-        "coverage": {
-            "records_read": scan["records_read"],
-            "line_errors": scan["line_errors"],
-            "line_span": scan["line_span"],
-            "turn_count": scan["turn_count"],
-            "payload_types": scan["payload_types"],
-            "roles": scan["roles"],
-            "tool_names": scan["tool_names"],
-            "command_families": scan["command_families"],
-            "path_refs": scan["path_refs"],
-            "output_markers": scan["output_markers"],
-            "source_prompt_hash_count": len(source_prompt_hashes),
-            "source_plan_hash_count": len(source_plan_hashes),
-        },
-        "provenance": {
-            "source_prompt_hashes": source_prompt_hashes,
-            "source_plan_hashes": source_plan_hashes,
-            "provided_source_prompt_hashes": provided_prompt_hashes,
-            "provided_source_plan_hashes": provided_plan_hashes,
-        },
-        "executor_lanes": executor_lanes,
-        "owner_packets": owner_packets,
-        "local_blocker_packet_ids": local_blocker_ids,
-        "global_product_packet_ids": global_packets,
-        "continuation_policy": {
-            "global_product_selection_remains_active": global_active,
-            "local_blockers_do_not_stop_global_selection": bool(local_blocker_ids and global_active),
-            "blocked_local_work_recorded": bool(local_blocker_ids),
-        },
-        "status": status,
-        "private_evidence": {
-            "events": scan["events"],
-            "packet_events": scan["packet_events"],
-        },
+        "status": "ready" if messages and planners and not unconsolidated_plan_hashes else "blocked",
     }
+    return snapshot
 
 
-def render_counts(counts: dict[str, int]) -> str:
-    return ", ".join(f"`{key}` {value}" for key, value in counts.items()) or "none"
+def public_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Drop raw private text fields before rendering/public tests inspect output."""
+    text_fields = {"text"}
+
+    def cleanse(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {k: cleanse(v) for k, v in value.items() if k not in text_fields}
+        if isinstance(value, list):
+            return [cleanse(item) for item in value]
+        return value
+
+    return cleanse(snapshot)
 
 
-def render_hashes(values: list[str], limit: int = 24) -> str:
-    shown = values[:limit]
-    suffix = f" (+{len(values) - limit} more)" if len(values) > limit else ""
-    return ", ".join(f"`{value}`" for value in shown) + suffix if shown else "none"
+def markdown_cell(value: Any) -> str:
+    text = "" if value is None else str(value)
+    return text.replace("|", "\\|").replace("\n", " ")
 
 
 def render_markdown(snapshot: dict[str, Any]) -> str:
-    coverage = snapshot["coverage"]
+    public = public_snapshot(snapshot)
     lines = [
         "# Current Session Fanout",
         "",
-        f"Generated: `{snapshot['generated_at']}`",
-        f"Packet id: `{snapshot['packet_id']}`",
-        f"Theme: `{snapshot['theme']}`",
-        f"Status: `{snapshot['status']}`",
-        f"Source session hash: `{snapshot['source_session_hash']}`",
+        f"Generated: `{public['generated_at']}`",
+        f"Status: `{public['status']}`",
+        f"User messages: `{public['user_messages']}`",
+        f"Prompt bytes: `{public['prompt_bytes']}`",
+        f"No reset spend: `{public['no_reset_spend']}`",
+        f"Global product selection: `{public['global_product_selection']['status']}`",
         "",
-        "## Canonical Decision",
+        "## Themes",
         "",
-        "- Owner packets are derived from the full session JSONL stream, not the latest turn.",
-        "- This receipt stores hashes, counts, paths, tool families, and markers only; it stores no raw prompt or plan bodies.",
-        "- Blocked local substrate work is recorded as its own packet; global product selection remains active when product evidence exists.",
-        "",
-        "## Coverage",
-        "",
-        f"- Records read: `{coverage['records_read']}` across line span `{coverage['line_span'][0]}-{coverage['line_span'][1]}`.",
-        f"- Turn contexts: `{coverage['turn_count']}`.",
-        f"- Source prompt hashes: `{coverage['source_prompt_hash_count']}`.",
-        f"- Source plan hashes: `{coverage['source_plan_hash_count']}`.",
-        f"- Payload mix: {render_counts(coverage['payload_types'])}.",
-        f"- Tool mix: {render_counts(coverage['tool_names'])}.",
-        f"- Command families: {render_counts(coverage['command_families'])}.",
-        f"- Output markers: {render_counts(coverage['output_markers'])}.",
-        "",
-        "## Provenance",
-        "",
-        f"- Source prompt hashes: {render_hashes(snapshot['provenance']['source_prompt_hashes'])}.",
-        f"- Source plan hashes: {render_hashes(snapshot['provenance']['source_plan_hashes'])}.",
-        "",
-        "## Owner Packets",
-        "",
-        "| Packet | Status | Owner | Agent Fit | Evidence | Verification |",
-        "|---|---|---|---|---:|---|",
     ]
-    for packet in snapshot["owner_packets"]:
-        predicate = packet["verification_predicates"][0] if packet["verification_predicates"] else "n/a"
-        lines.append(
-            f"| `{packet['id']}` | `{packet['status']}` | {packet['owner']} | "
-            f"{packet['agent_fit']} | {packet['evidence_count']} | `{predicate}` |"
-        )
-    if not snapshot["owner_packets"]:
-        lines.append("| none | n/a | n/a | n/a | 0 | n/a |")
-
+    for theme in public["themes"]:
+        lines.append(f"- `{theme}`")
     lines += [
         "",
-        "## Executor Criteria",
+        "## Plan Source Proof",
         "",
+        f"Plan events: {public.get('plan_event_count', 0)}",
+        f"Unique plan sources: {public.get('unique_plan_count', 0)}",
+        f"Duplicate plan events: {public.get('duplicate_plan_count', 0)}",
+        f"Unconsolidated plan events: {len(public.get('unconsolidated_plan_hashes', []))}",
+        "",
+        "| Title | Timestamp | Transcript line | Hash | Duplicate | Included |",
+        "|---|---|---:|---|---|---|",
     ]
-    for packet in snapshot["owner_packets"]:
-        lines.append(f"### `{packet['id']}`")
-        lines.append("")
-        for criterion in packet["executor_criteria"]:
-            lines.append(f"- Criteria: {criterion}.")
-        for predicate in packet["verification_predicates"]:
-            lines.append(f"- Predicate: `{predicate}`.")
-        if packet["evidence_paths"]:
-            lines.append(f"- Evidence paths: {render_hashes(packet['evidence_paths'], limit=10)}.")
-        if packet["evidence_markers"]:
-            lines.append(f"- Evidence markers: {render_hashes(packet['evidence_markers'], limit=10)}.")
+    for event in public.get("plan_events", []):
+        duplicate_status = "duplicate" if event.get("duplicate") else "unique"
+        included_status = "included" if event.get("included") else "missing"
         lines.append(
-            f"- Continuation: blocks global product selection = `{packet['blocks_global_product_selection']}`; "
-            f"continues despite local blockers = `{packet['continues_despite_local_blockers']}`."
+            "| "
+            f"{markdown_cell(event.get('title'))} | "
+            f"`{markdown_cell(event.get('timestamp'))}` | "
+            f"`{markdown_cell(event.get('line'))}` | "
+            f"`{markdown_cell(event.get('hash'))}` | "
+            f"{duplicate_status} | "
+            f"{included_status} |"
         )
-        lines.append("")
-
-    policy = snapshot["continuation_policy"]
     lines += [
-        "## Continuation Policy",
         "",
-        f"- Blocked local work recorded: `{policy['blocked_local_work_recorded']}`.",
-        f"- Global product selection remains active: `{policy['global_product_selection_remains_active']}`.",
-        f"- Local blockers do not stop global selection: `{policy['local_blockers_do_not_stop_global_selection']}`.",
+        "## Planner Packets",
         "",
-        "## Private Output",
-        "",
-        f"- Private fanout index: `{PRIVATE_INDEX.relative_to(ROOT)}`.",
-        "- The private index keeps redacted event hashes and packet membership only.",
-        "",
-        "## Commands",
-        "",
-        "- Refresh this receipt: `python3 scripts/current-session-fanout.py --session \"$LIMEN_CURRENT_SESSION_JSONL\" --packet-id \"$PACKET_ID\" --theme \"$PACKET_THEME\" --write`",
-        "- Test this planner: `PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q`",
-        "",
+        "| Packet | Agent | Worktree | Theme | Criteria |",
+        "|---|---|---|---|---|",
     ]
-    return "\n".join(lines)
+    for packet in public["planner_packets"]:
+        criteria = "; ".join(packet["owner_packet"].get("criteria", [])[:2])
+        lines.append(
+            f"| `{packet['id']}` | `{packet['target_agent']}` | `{packet['worktree_slug']}` | "
+            f"`{packet['theme']}` | {markdown_cell(criteria)} |"
+        )
+    lines += [
+        "",
+        "## Executor Packets",
+        "",
+        "| Packet | Agent | Theme | Criteria | Predicate |",
+        "|---|---|---|---|---|",
+    ]
+    for packet in public["executor_packets"]:
+        criteria = "; ".join(packet.get("executor_criteria", [])[:2])
+        predicate = (packet.get("verification_predicates") or [""])[0]
+        lines.append(
+            f"| `{packet['id']}` | `{packet['target_agent']}` | `{packet['theme']}` | "
+            f"{markdown_cell(criteria)} | `{markdown_cell(predicate)}` |"
+        )
+    focused = [packet for packet in public["planner_packets"] if packet["theme"] == "full-fleet-overnight"]
+    if focused:
+        packet = focused[0]
+        lines += [
+            "",
+            "## Full-Fleet Overnight Owner Packet",
+            "",
+            f"Packet: `{packet['id']}`",
+            f"Owner repo: `{packet['owner_packet']['owner_repo']}`",
+            f"Owner ledger: `{packet['owner_packet']['owner_ledger']}`",
+            "",
+            "Executor criteria:",
+            "",
+        ]
+        lines.extend(f"- {item}" for item in packet["owner_packet"]["criteria"])
+        lines += ["", "Verification predicates:", ""]
+        lines.extend(f"- `{item}`" for item in packet["owner_packet"]["verification_predicates"])
+    lines += [
+        "",
+        "## Lane Classification",
+        "",
+        "| Agent | Kind | Status | Detail |",
+        "|---|---|---|---|",
+    ]
+    for row in public["lane_classification"]:
+        lines.append(
+            f"| `{row['agent']}` | `{row['kind']}` | `{row['status']}` | {markdown_cell(row['detail'])} |"
+        )
+    lines += [
+        "",
+        "## Blocked Local Work",
+        "",
+        f"Global product selection remains `{public['global_product_selection']['status']}`.",
+        "",
+        "| Source | Item | Impact |",
+        "|---|---|---|",
+    ]
+    for blocker in public["blocked_local_work"]:
+        lines.append(
+            f"| `{markdown_cell(blocker.get('source'))}` | {markdown_cell(blocker.get('item'))} | "
+            f"{markdown_cell(blocker.get('impact'))} |"
+        )
+    lines += [
+        "",
+        "## Contract",
+        "",
+        "- Planner packets are Codex conductor work; executor packets go to active fleet lanes.",
+        "- Down, depleted, or human-gated lanes are receipts, not a global stop condition.",
+        "- This command never applies Codex resets, credits, top-ups, or paid overages.",
+        "- Outbound identity-bearing actions remain human-gated.",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def write_outputs(snapshot: dict[str, Any], markdown: str) -> None:
     DOC_PATH.parent.mkdir(parents=True, exist_ok=True)
     PRIVATE_INDEX.parent.mkdir(parents=True, exist_ok=True)
-    DOC_PATH.write_text(markdown + "\n", encoding="utf-8")
+    DOC_PATH.write_text(markdown, encoding="utf-8")
     PRIVATE_INDEX.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build redacted current-session fanout packets.")
+    parser = argparse.ArgumentParser(description="Create current-session planner and executor fanout packets.")
     parser.add_argument("--session", help="Codex session JSONL path; defaults to latest session")
-    parser.add_argument("--packet-id", default="PLAN-03-f0b8bc86")
-    parser.add_argument("--theme", default="dynamic-substrate")
+    parser.add_argument("--min-codex-planners", type=int, default=int(os.environ.get("LIMEN_MIN_CODEX_PLANNERS", "10")))
     parser.add_argument("--executor-lanes", default=os.environ.get("LIMEN_LANES", "auto"))
-    parser.add_argument("--source-plan-hash", action="append", default=[])
-    parser.add_argument("--source-prompt-hash", action="append", default=[])
-    parser.add_argument("--write", action="store_true", help="write tracked markdown and private JSON")
+    parser.add_argument("--include-contrib", action="store_true")
+    parser.add_argument("--no-reset-spend", dest="allow_reset_spend", action="store_false", default=False)
+    parser.add_argument("--allow-reset-spend", action="store_true", default=False)
+    parser.add_argument("--dry-run", action="store_true", help="print only; never write")
+    parser.add_argument("--write", action="store_true", help="write packet receipts")
     args = parser.parse_args()
 
     snapshot = build_snapshot(args)
     markdown = render_markdown(snapshot)
-    if args.write:
+    if args.write and not args.dry_run:
         write_outputs(snapshot, markdown)
         print(f"current-session-fanout: {snapshot['status']}; wrote {DOC_PATH} and {PRIVATE_INDEX}")
     else:
-        print(markdown)
+        print(markdown, end="")
         print(f"current-session-fanout: {snapshot['status']}; dry-run")
-    return 0 if snapshot["status"] != "blocked" else 1
+    return 0 if snapshot["status"] == "ready" else 1
 
 
 if __name__ == "__main__":

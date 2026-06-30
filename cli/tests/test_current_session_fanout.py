@@ -17,149 +17,231 @@ def _load():
     return mod
 
 
-def _write_session(path: Path, records: list[dict]) -> None:
-    path.write_text("\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8")
+def _args(session: Path, min_codex_planners: int = 10) -> Namespace:
+    return Namespace(
+        session=str(session),
+        min_codex_planners=min_codex_planners,
+        executor_lanes="auto",
+        include_contrib=True,
+        allow_reset_spend=False,
+    )
 
 
-def _args(session: Path, **kwargs):
-    defaults = {
-        "session": str(session),
-        "packet_id": "PLAN-03-f0b8bc86",
-        "theme": "dynamic-substrate",
-        "executor_lanes": "codex,opencode",
-        "source_plan_hash": [],
-        "source_prompt_hash": [],
-    }
-    defaults.update(kwargs)
-    return Namespace(**defaults)
-
-
-def test_full_session_derivation_records_local_blocker_without_stopping_product(tmp_path: Path):
-    mod = _load()
-    mod.ROOT = tmp_path
-    mod.PRIVATE_ROOT = tmp_path / ".limen-private" / "session-corpus"
-    mod.PRIVATE_INDEX = mod.PRIVATE_ROOT / "lifecycle" / "current-session-fanout.json"
-    mod.DOC_PATH = tmp_path / "docs" / "current-session-fanout.md"
+def test_current_session_fanout_extracts_full_plan_set_and_marks_duplicates(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     session = tmp_path / "session.jsonl"
-    early_prompt = "GLOBAL_PRODUCT_SECRET_TEXT product selection revenue value"
-    late_prompt = "local domus substrate blocker"
-    _write_session(
-        session,
-        [
-            {"timestamp": "2026-06-30T00:00:00Z", "type": "session_meta", "payload": {"type": "session_meta"}},
+    prior_plan = "# Prior Product Plan\n\n## Summary\n- Build 1000 alpha omega products from every prompt.\n"
+    assistant_plan = (
+        "# Full-Fleet Overnight Plan\n\n"
+        "## Summary\n"
+        "- Use all fleet lanes, overnight dispatch, executor criteria, and no reset spend.\n"
+    )
+    newest_plan = (
+        "# Newest Revenue Plan\n\n## Summary\n- Route money, SEO, lead, and sell-ready work to reachable lanes.\n"
+    )
+    session.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "timestamp": "2026-06-30T00:00:00Z",
+                        "payload": {
+                            "type": "message",
+                            "role": "user",
+                            "content": [
+                                {
+                                    "text": (
+                                        "A previous agent produced the plan below to accomplish "
+                                        "the user's task.\n\n"
+                                        f"{prior_plan}"
+                                    )
+                                }
+                            ],
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "timestamp": "2026-06-30T00:01:00Z",
+                        "payload": {
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [{"text": f"<proposed_plan>\n{assistant_plan}</proposed_plan>"}],
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "timestamp": "2026-06-30T00:02:00Z",
+                        "payload": {
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [{"text": f"<proposed_plan>\n{assistant_plan}</proposed_plan>"}],
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "timestamp": "2026-06-30T00:03:00Z",
+                        "payload": {
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [{"text": f"<proposed_plan>\n{newest_plan}</proposed_plan>"}],
+                        },
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    mod = _load()
+    monkeypatch.setattr(
+        mod,
+        "lane_rows",
+        lambda: [
             {
-                "timestamp": "2026-06-30T00:00:01Z",
-                "type": "response_item",
-                "payload": {"type": "message", "role": "user", "content": [{"text": early_prompt}]},
+                "agent": "codex",
+                "kind": "local-cli",
+                "status": "active",
+                "reachable": True,
+                "remaining": 10,
+                "detail": "test",
             },
             {
-                "timestamp": "2026-06-30T00:00:02Z",
-                "type": "turn_context",
-                "payload": {"turn_id": "t1"},
+                "agent": "opencode",
+                "kind": "local-cli",
+                "status": "active",
+                "reachable": True,
+                "remaining": 10,
+                "detail": "test",
             },
             {
-                "timestamp": "2026-06-30T00:00:03Z",
-                "type": "response_item",
-                "payload": {
-                    "type": "function_call_output",
-                    "output": "Permission denied while running domus preflight; local blocker recorded",
-                },
-            },
-            {
-                "timestamp": "2026-06-30T00:00:04Z",
-                "type": "response_item",
-                "payload": {"type": "message", "role": "user", "content": late_prompt},
+                "agent": "warp",
+                "kind": "paid-service",
+                "status": "human-gated",
+                "reachable": False,
+                "remaining": 10,
+                "detail": "WARP_API_KEY not set",
             },
         ],
     )
-
-    snapshot = mod.build_snapshot(_args(session))
-    markdown = mod.render_markdown(snapshot)
-
-    packets = {packet["packet_key"]: packet for packet in snapshot["owner_packets"]}
-    assert snapshot["coverage"]["records_read"] == 5
-    assert snapshot["coverage"]["turn_count"] == 1
-    assert "global-product-selection" in packets
-    assert "blocked-local-work" in packets
-    assert packets["blocked-local-work"]["status"] == "blocked-local-recorded"
-    assert packets["global-product-selection"]["status"] == "active"
-    assert packets["global-product-selection"]["continues_despite_local_blockers"] is True
-    assert snapshot["continuation_policy"]["local_blockers_do_not_stop_global_selection"] is True
-    assert mod.stable_hash(early_prompt) in snapshot["provenance"]["source_prompt_hashes"]
-    assert early_prompt not in json.dumps(snapshot)
-    assert early_prompt not in markdown
-
-
-def test_owner_packets_emit_executor_criteria_and_predicates(tmp_path: Path):
-    mod = _load()
-    mod.ROOT = tmp_path
-    session = tmp_path / "session.jsonl"
-    _write_session(
-        session,
-        [
-            {
-                "timestamp": "2026-06-30T00:00:01Z",
-                "type": "response_item",
-                "payload": {
-                    "type": "message",
-                    "role": "user",
-                    "content": [{"text": "dynamic-substrate fanout owner packet verification predicate"}],
-                },
-            },
-            {
-                "timestamp": "2026-06-30T00:00:02Z",
-                "type": "response_item",
-                "payload": {
-                    "type": "function_call",
-                    "name": "update_plan",
-                    "arguments": json.dumps(
-                        {"plan": [{"step": "plan current-session fanout stream", "status": "in_progress"}]}
-                    ),
-                },
-            },
-        ],
+    monkeypatch.setattr(
+        mod, "digest_blockers", lambda: [{"source": "digest", "item": "local gate", "impact": "does not stop global"}]
     )
 
-    snapshot = mod.build_snapshot(_args(session))
+    snap = mod.build_snapshot(_args(session))
 
-    assert snapshot["owner_packets"]
-    for packet in snapshot["owner_packets"]:
-        assert packet["executor_criteria"]
-        assert packet["verification_predicates"]
-    planner = {packet["packet_key"]: packet for packet in snapshot["owner_packets"]}["current-session-fanout-planner"]
-    assert any("py_compile" in predicate for predicate in planner["verification_predicates"])
-    assert snapshot["provenance"]["source_plan_hashes"]
+    assert snap["status"] == "ready"
+    assert snap["plan_event_count"] == 4
+    assert snap["unique_plan_count"] == 3
+    assert snap["duplicate_plan_count"] == 1
+    assert snap["unconsolidated_plan_hashes"] == []
+    assert [event["title"] for event in snap["plan_events"]] == [
+        "Newest Revenue Plan",
+        "Full-Fleet Overnight Plan",
+        "Full-Fleet Overnight Plan",
+        "Prior Product Plan",
+    ]
+    assert snap["plan_events"][2]["duplicate"] is True
+    assert "full-fleet-overnight" in snap["themes"]
+    expected_plan_hashes = [event["hash"] for event in snap["unique_plan_sources"]]
+    assert len(snap["planner_packets"]) >= 10
+    assert {packet["target_agent"] for packet in snap["planner_packets"]} == {"codex"}
+    assert {packet["target_agent"] for packet in snap["executor_packets"]} == {"opencode"}
+    assert all(
+        packet["source_plan_hashes"] == expected_plan_hashes
+        for packet in snap["planner_packets"] + snap["executor_packets"]
+    )
+    assert snap["global_product_selection"]["status"] == "active"
+    assert any(blocker["item"] == "warp lane human-gated" for blocker in snap["blocked_local_work"])
 
 
-def test_provided_hashes_are_preserved_without_raw_bodies(tmp_path: Path):
-    mod = _load()
-    mod.ROOT = tmp_path
+def test_current_session_fanout_emits_plan_02_executor_criteria_and_safe_markdown(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     session = tmp_path / "session.jsonl"
-    _write_session(
-        session,
-        [
+    raw_private = "RAW_PRIVATE_PLAN_BODY_SHOULD_NOT_APPEAR"
+    session.write_text(
+        json.dumps(
             {
-                "timestamp": "2026-06-30T00:00:01Z",
-                "type": "response_item",
+                "timestamp": "2026-06-30T00:00:00Z",
                 "payload": {
                     "type": "message",
                     "role": "user",
-                    "content": [{"text": "product selection"}],
+                    "content": [
+                        {
+                            "text": (
+                                "A previous agent produced the plan below to accomplish the user's task.\n\n"
+                                "# Full-Fleet Overnight Autonomy Fix\n\n"
+                                "## Summary\n"
+                                "- Build 1000 alpha omega products from the current session.\n"
+                                f"- {raw_private}\n"
+                                "- Everything means every fleet lane, all night, with local blockers recorded.\n"
+                            )
+                        }
+                    ],
                 },
             }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    mod = _load()
+    monkeypatch.setattr(
+        mod,
+        "lane_rows",
+        lambda: [
+            {
+                "agent": "codex",
+                "kind": "local-cli",
+                "status": "active",
+                "reachable": True,
+                "remaining": 10,
+                "detail": "test",
+            },
+            {
+                "agent": "agy",
+                "kind": "local-cli",
+                "status": "active",
+                "reachable": True,
+                "remaining": 10,
+                "detail": "test",
+            },
+            {
+                "agent": "gemini",
+                "kind": "local-cli",
+                "status": "human-gated",
+                "reachable": False,
+                "remaining": 10,
+                "detail": "gemini auth not configured",
+            },
         ],
     )
+    monkeypatch.setattr(mod, "digest_blockers", lambda: [])
 
-    snapshot = mod.build_snapshot(
-        _args(
-            session,
-            source_plan_hash=["7eb608baa99c,c93bc2c89ad8"],
-            source_prompt_hash=["4c72667b4d9a1d74b666b8e5"],
-        )
+    snap = mod.build_snapshot(_args(session, min_codex_planners=2))
+    plan_02 = next(packet for packet in snap["planner_packets"] if packet["theme"] == "full-fleet-overnight")
+
+    assert plan_02["id"] == "PLAN-02-ea38d4d8"
+    assert plan_02["owner_packet"]["owner_repo"] == "organvm/limen"
+    assert any("PAID_AGENT_ORDER" in item for item in plan_02["owner_packet"]["criteria"])
+    assert any(
+        "dispatch-async.py --lanes auto --dry-run" in item
+        for item in plan_02["owner_packet"]["verification_predicates"]
     )
+    assert snap["executor_packets"][0]["target_agent"] == "agy"
+    assert snap["executor_packets"][0]["verification_predicates"]
 
-    assert "7eb608baa99c" in snapshot["provenance"]["source_plan_hashes"]
-    assert "c93bc2c89ad8" in snapshot["provenance"]["source_plan_hashes"]
-    assert "4c72667b4d9a1d74b666b8e5" in snapshot["provenance"]["source_prompt_hashes"]
-    assert snapshot["privacy"]["raw_prompt_bodies_stored"] is False
-    assert snapshot["privacy"]["raw_plan_bodies_stored"] is False
+    markdown = mod.render_markdown(snap)
+    assert "## Plan Source Proof" in markdown
+    assert "## Full-Fleet Overnight Owner Packet" in markdown
+    assert "Executor criteria:" in markdown
+    assert "Verification predicates:" in markdown
+    assert "Global product selection remains `active`." in markdown
+    assert "gemini lane human-gated" in markdown
+    assert raw_private not in markdown
+    assert raw_private in json.dumps(snap)
