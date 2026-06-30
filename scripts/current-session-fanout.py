@@ -4,6 +4,7 @@
 This does not launch paid agents. It writes receipts/packet specs when asked,
 and defaults to dry-run so banked resets or credits cannot be consumed.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,9 +21,7 @@ from typing import Any
 CODE_ROOT = Path(__file__).resolve().parents[1]
 ROOT = Path(os.environ.get("LIMEN_ROOT", CODE_ROOT))
 HOME = Path.home()
-PRIVATE_ROOT = Path(
-    os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus")
-)
+PRIVATE_ROOT = Path(os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus"))
 PRIVATE_INDEX = PRIVATE_ROOT / "lifecycle" / "current-session-fanout.json"
 DOC_PATH = ROOT / "docs" / "current-session-fanout.md"
 sys.path.insert(0, str(CODE_ROOT / "cli" / "src"))
@@ -37,9 +36,12 @@ except Exception:  # pragma: no cover - import fallback for hermetic tests
     Task = None
 
 try:
-    from limen.capacity import resolve_lane_selector  # noqa: E402
+    from limen.capacity import PAID_AGENT_ORDER, canonical_agent, capacity_census, resolve_lane_selector  # noqa: E402
     from limen.dispatch import _down_lanes  # noqa: E402
 except Exception:  # pragma: no cover - lane-selection fallback
+    PAID_AGENT_ORDER = ("codex", "opencode", "agy", "gemini", "github_actions")
+    capacity_census = None
+    canonical_agent = lambda value: str(value).strip().replace("-", "_")  # noqa: E731
     resolve_lane_selector = None
     _down_lanes = None
 
@@ -310,13 +312,81 @@ def find_session(path_arg: str | None) -> Path:
     return path
 
 
-def matched_themes(messages: list[dict[str, Any]]) -> list[str]:
+def matched_themes(messages: list[dict[str, Any]], plan_events: list[dict[str, Any]] | None = None) -> list[str]:
     body = "\n".join(str(msg["text"]).lower() for msg in messages)
+    if plan_events:
+        body += "\n" + "\n".join(str(event.get("title", "")).lower() for event in plan_events)
     found = [name for name, needles in THEMES if any(needle in body for needle in needles)]
     return found or ["current-session-intake"]
 
 
-def lane_selection(selector: str) -> list[str]:
+def _row_value(row: Any, key: str, default: Any = None) -> Any:
+    if isinstance(row, dict):
+        return row.get(key, default)
+    return getattr(row, key, default)
+
+
+def _normalize_lane_rows(rows: list[Any]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for row in rows:
+        remaining = _row_value(row, "remaining")
+        detail = str(_row_value(row, "detail", "") or "")
+        reachable = bool(_row_value(row, "reachable", False))
+        if reachable:
+            status = "active"
+        elif remaining == 0:
+            status = "depleted"
+        elif any(needle in detail.lower() for needle in ("not set", "auth", "assignable", "no model pulled")):
+            status = "human-gated"
+        else:
+            status = str(_row_value(row, "status", "") or "down")
+        normalized.append(
+            {
+                "agent": str(_row_value(row, "agent", "") or ""),
+                "kind": str(_row_value(row, "kind", "") or ""),
+                "status": status,
+                "reachable": reachable,
+                "remaining": remaining,
+                "detail": detail,
+            }
+        )
+    if not normalized:
+        normalized.append(
+            {
+                "agent": "codex",
+                "kind": "local-cli",
+                "status": "active",
+                "reachable": True,
+                "remaining": None,
+                "detail": "fallback",
+            }
+        )
+    return normalized
+
+
+def lane_rows() -> list[dict[str, Any]]:
+    if capacity_census is None or load_limen_file is None:
+        return _normalize_lane_rows(
+            [
+                {
+                    "agent": agent,
+                    "kind": "fallback",
+                    "status": "active",
+                    "reachable": True,
+                    "remaining": None,
+                    "detail": "fallback",
+                }
+                for agent in FALLBACK_ALL_LANES
+            ]
+        )
+    try:
+        board = load_limen_file(ROOT / "tasks.yaml")
+        return _normalize_lane_rows(list(capacity_census(board)))
+    except Exception:
+        return _normalize_lane_rows([])
+
+
+def lane_selection(selector: str, rows: list[dict[str, Any]] | None = None) -> list[str]:
     if selector and selector not in {"auto", "all"}:
         lanes = [
             FALLBACK_LANE_ALIASES.get(item.strip(), item.strip())
@@ -325,6 +395,12 @@ def lane_selection(selector: str) -> list[str]:
         ]
         if lanes:
             return list(dict.fromkeys(lanes))
+    if rows is not None:
+        by_agent = {row["agent"]: row for row in rows}
+        if selector == "all":
+            return [str(agent) for agent in PAID_AGENT_ORDER]
+        active = [str(agent) for agent in PAID_AGENT_ORDER if by_agent.get(str(agent), {}).get("status") == "active"]
+        return active or ["codex"]
     if resolve_lane_selector is None or load_limen_file is None or _down_lanes is None:
         if selector == "all":
             return list(FALLBACK_ALL_LANES)
@@ -363,6 +439,41 @@ def origin_repo_slug() -> str:
     return f"{match.group(1)}/{match.group(2)}"
 
 
+def owner_packet_for_theme(theme: str) -> dict[str, Any]:
+    if theme == "full-fleet-overnight":
+        return {
+            "owner_repo": "organvm/limen",
+            "owner_ledger": "docs/current-session-fanout.md",
+            "criteria": [
+                "derive lane inventory from PAID_AGENT_ORDER, not hand-written local lists",
+                "`auto` selects active reachable lanes while down/depleted/human-gated lanes stay visible in receipts",
+                "`all` preserves every registered lane for audit without pretending down lanes are runnable",
+                "async dry-runs do not launch live dispatch or spend resets/credits",
+                "blocked local gates are recorded as local blockers while global product selection remains active",
+            ],
+            "verification_predicates": [
+                "LIMEN_ROOT=$PWD LIMEN_TASKS=$PWD/tasks.yaml python3 scripts/current-session-fanout.py --session <session.jsonl> --min-codex-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --dry-run",
+                "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q",
+                "PYTHONPATH=cli/src python3 -c \"from limen.capacity import PAID_AGENT_ORDER; required={'codex','claude','opencode','agy','gemini','ollama','jules','copilot','warp','oz','github_actions'}; assert required <= set(PAID_AGENT_ORDER)\"",
+                "LIMEN_ROOT=$PWD LIMEN_TASKS=$PWD/tasks.yaml PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes auto --dry-run",
+                "bash scripts/verify-whole.sh",
+            ],
+        }
+    return {
+        "owner_repo": "organvm/limen",
+        "owner_ledger": "docs/current-session-fanout.md",
+        "criteria": [
+            "derive this owner packet from all user turns and all detected plan sources",
+            "include executor acceptance, blocker behavior, and at least one verification predicate",
+            "preserve raw private bodies outside tracked files",
+        ],
+        "verification_predicates": [
+            "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q",
+            "python3 -m py_compile scripts/current-session-fanout.py",
+        ],
+    }
+
+
 def planner_packets(
     themes: list[str],
     messages: list[dict[str, Any]],
@@ -379,6 +490,7 @@ def planner_packets(
     plan_hashes = list(source_plan_hashes or [])
     packets: list[dict[str, Any]] = []
     for idx, theme in enumerate(seed_themes, start=1):
+        owner = owner_packet_for_theme(theme)
         packets.append(
             {
                 "id": f"PLAN-{idx:02d}-{stable_hash(theme, 8)}",
@@ -389,6 +501,7 @@ def planner_packets(
                 "spend_guard": "no-reset-spend" if no_reset_spend else "operator-allowed-reset-spend",
                 "source_prompt_hashes": prompt_hashes,
                 "source_plan_hashes": list(plan_hashes),
+                "owner_packet": owner,
                 "acceptance": [
                     "derive owner packets from the full session, not just the latest turn",
                     "emit executor criteria and verification predicates",
@@ -618,6 +731,49 @@ def apply_task_seed(snapshot: dict[str, Any], tasks_path: Path) -> dict[str, Any
     return {"status": "ready", "appended": appended, "skipped": skipped, "tasks_path": str(tasks_path)}
 
 
+def digest_blockers() -> list[dict[str, str]]:
+    path = ROOT / "docs" / "NEEDS-HUMAN-DIGEST.md"
+    if not path.exists():
+        return []
+    blockers: list[dict[str, str]] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        match = re.match(r"##\s+\d+\.\s+(.+?)(?:\s+—\s+(.+))?$", line)
+        if match:
+            blockers.append(
+                {
+                    "source": "docs/NEEDS-HUMAN-DIGEST.md",
+                    "item": match.group(1),
+                    "impact": match.group(2) or "",
+                }
+            )
+        elif line.startswith("- ASK-"):
+            parts = line.removeprefix("- ").split("—", 1)
+            blockers.append(
+                {
+                    "source": "docs/NEEDS-HUMAN-DIGEST.md",
+                    "item": parts[0].strip(),
+                    "impact": parts[1].strip() if len(parts) > 1 else "",
+                }
+            )
+    return blockers
+
+
+def blocked_local_work(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    blockers: list[dict[str, Any]] = []
+    blockers.extend(digest_blockers())
+    for row in rows:
+        if row["status"] != "active":
+            blockers.append(
+                {
+                    "source": "capacity_census",
+                    "item": f"{row['agent']} lane {row['status']}",
+                    "impact": row["detail"],
+                }
+            )
+    return blockers
+
+
 def packet_plan_hash_intersection(packets: list[dict[str, Any]]) -> set[str]:
     if not packets:
         return set()
@@ -681,8 +837,12 @@ def build_snapshot(args: argparse.Namespace) -> dict[str, Any]:
     plan_events = read_session_plan_events(session)
     unique_sources = unique_plan_sources(plan_events)
     source_plan_hashes = [str(event["hash"]) for event in unique_sources]
-    themes = matched_themes(messages)
-    lanes = lane_selection(args.executor_lanes)
+    themes = matched_themes(messages, plan_events)
+    rows = lane_rows()
+    try:
+        lanes = lane_selection(args.executor_lanes, rows)
+    except TypeError:
+        lanes = lane_selection(args.executor_lanes)
     no_reset_spend = not args.allow_reset_spend
     planners = planner_packets(
         themes,
@@ -700,13 +860,13 @@ def build_snapshot(args: argparse.Namespace) -> dict[str, Any]:
     )
     set_run_verification_predicate(planners, session=session, args=args, no_reset_spend=no_reset_spend)
     packet_plan_hashes = packet_plan_hash_intersection(planners + executors)
-    unconsolidated_plan_hashes = [
-        plan_hash for plan_hash in source_plan_hashes if plan_hash not in packet_plan_hashes
-    ]
+    unconsolidated_plan_hashes = [plan_hash for plan_hash in source_plan_hashes if plan_hash not in packet_plan_hashes]
     for event in plan_events:
         event["included"] = str(event["hash"]) in packet_plan_hashes
     for event in unique_sources:
         event["included"] = str(event["hash"]) in packet_plan_hashes
+    blockers = blocked_local_work(rows)
+    global_status = "active" if planners else "blocked"
     snapshot = {
         "generated_at": now_iso(),
         "session_path": str(session),
@@ -727,6 +887,11 @@ def build_snapshot(args: argparse.Namespace) -> dict[str, Any]:
         "no_reset_spend": no_reset_spend,
         "planner_packets": planners,
         "executor_packets": executors,
+        "blocked_local_work": blockers,
+        "global_product_selection": {
+            "status": global_status,
+            "reason": "planner packets remain eligible while local blockers are owner-recorded",
+        },
         "status": "ready" if messages and planners and not unconsolidated_plan_hashes else "blocked",
     }
     if getattr(args, "seed_tasks", False) or getattr(args, "apply_task_seed", False):
@@ -814,8 +979,39 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
     ]
     for packet in snapshot["planner_packets"] + snapshot["executor_packets"]:
         criteria = "<br>".join(markdown_cell(item) for item in packet.get("executor_criteria", [])) or "none"
-        predicates = "<br>".join(f"`{markdown_cell(item)}`" for item in packet.get("verification_predicates", [])) or "none"
+        predicates = (
+            "<br>".join(f"`{markdown_cell(item)}`" for item in packet.get("verification_predicates", [])) or "none"
+        )
         lines.append(f"| `{packet['id']}` | {criteria} | {predicates} |")
+    full_fleet = next(
+        (packet for packet in snapshot["planner_packets"] if packet.get("theme") == "full-fleet-overnight"),
+        None,
+    )
+    if full_fleet:
+        owner = full_fleet.get("owner_packet", {})
+        lines += [
+            "",
+            "## Full-Fleet Overnight Owner Packet",
+            "",
+            f"Owner repo: `{owner.get('owner_repo', 'unknown')}`",
+            f"Owner ledger: `{owner.get('owner_ledger', 'unknown')}`",
+            "",
+            "Executor criteria:",
+        ]
+        lines.extend(f"- {item}" for item in owner.get("criteria", []))
+        lines += ["", "Verification predicates:"]
+        lines.extend(f"- `{item}`" for item in owner.get("verification_predicates", []))
+    lines += [
+        "",
+        "## Global Product Selection",
+        "",
+        f"Global product selection remains `{snapshot['global_product_selection']['status']}`.",
+    ]
+    if snapshot.get("blocked_local_work"):
+        lines += ["", "Blocked local work:"]
+        for blocker in snapshot["blocked_local_work"]:
+            impact = blocker.get("impact") or "recorded"
+            lines.append(f"- {markdown_cell(blocker.get('item'))}: {markdown_cell(impact)}")
     if snapshot.get("task_seed"):
         lines += [
             "",

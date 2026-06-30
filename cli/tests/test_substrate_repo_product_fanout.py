@@ -114,11 +114,7 @@ def test_product_ledger_keeps_global_work_active_when_one_product_blocks(tmp_pat
 
 def test_current_session_fanout_creates_ten_codex_planners_and_executor_packets(tmp_path: Path, monkeypatch) -> None:
     session = tmp_path / "session.jsonl"
-    user_plan = (
-        "# Prior Product Plan\n\n"
-        "## Summary\n"
-        "- Build 1000 alpha omega products from every prompt.\n"
-    )
+    user_plan = "# Prior Product Plan\n\n## Summary\n- Build 1000 alpha omega products from every prompt.\n"
     assistant_plan = (
         "# Assistant Fanout Plan\n\n"
         "## Summary\n"
@@ -126,9 +122,7 @@ def test_current_session_fanout_creates_ten_codex_planners_and_executor_packets(
     )
     duplicate_plan = assistant_plan
     newest_plan = (
-        "# Newest Revenue Plan\n\n"
-        "## Summary\n"
-        "- Route money, SEO, lead, and sell-ready work to reachable lanes.\n"
+        "# Newest Revenue Plan\n\n## Summary\n- Route money, SEO, lead, and sell-ready work to reachable lanes.\n"
     )
     session.write_text(
         "\n".join(
