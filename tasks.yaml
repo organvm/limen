@@ -14,13 +14,13 @@ portal:
       agy: 100
       claude: 100
     track:
-      date: '2026-06-29'
-      spent: 57
+      date: '2026-06-30'
+      spent: 58
       per_agent:
         jules: 50
         gemini: 0
         codex: 1
-        opencode: 1
+        opencode: 2
         agy: 5
         claude: 0
       per_agent_reset:
@@ -30259,6 +30259,11 @@ tasks:
     session_id: heal
     status: done
     output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
+  - timestamp: '2026-06-30T15:10:00Z'
+    agent: opencode
+    session_id: https://github.com/organvm/limen/pull/486
+    status: done
+    output: "Recovery: PR closed unmerged, re-landed via organvm/limen#486"
 - id: ASK-1-drive-alpha-omega
   title: 'Drive the consolidation goal to omega: commit+push heal/conductor-restart
     branch, then drain the open/dispatched funnel to 0'
