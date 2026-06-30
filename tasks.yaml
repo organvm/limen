@@ -15,13 +15,13 @@ portal:
       opencode: 100
     track:
       date: '2026-06-30'
-      spent: 98
+      spent: 103
       per_agent:
         agy: 5
         claude: 0
-        codex: 15
+        codex: 16
         gemini: 0
-        jules: 77
+        jules: 81
         opencode: 1
       per_agent_reset:
         agy: '2026-06-29T05:54:07.312618+00:00'
@@ -31017,10 +31017,10 @@ tasks:
   title: "EV Activation Audit: ship-now \u2014 ORGAN-I landing page live (HTTP 200)"
   repo: organvm/organvm-i-theoria.github.io
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels: []
   urls:
   - https://github.com/organvm-i-theoria/organvm-i-theoria.github.io/issues/1
@@ -31033,7 +31033,7 @@ tasks:
     \ issue #1). \u2014 ESC"
   depends_on: []
   created: '2026-06-19'
-  updated: '2026-06-20T12:32:22.520757Z'
+  updated: '2026-06-30T01:48:12.356802Z'
   dispatch_log:
   - timestamp: '2026-06-20T09:14:24.968499Z'
     agent: limen
@@ -31049,6 +31049,11 @@ tasks:
     session_id: cli
     status: open
     output: Released stale claim after 3h
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GH-organvm-i-theoria-atomic-substrata-1
   title: "EV Activation Audit: ship-soon \u2014 UAKS pipeline operational but unreleased"
   repo: organvm/atomic-substrata
@@ -32574,10 +32579,10 @@ tasks:
   title: Raise test coverage in meta-organvm/visual-substrate-inquiry
   repo: organvm/visual-substrate-inquiry
   type: code
-  target_agent: oz
+  target_agent: codex
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - test-coverage
   - generated
@@ -32589,12 +32594,18 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  dispatch_log: []
+  updated: '2026-06-30T01:48:12.356802Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-meta-organvm-meta-organvm.github.io-test-coverage-0620
   title: Raise test coverage in meta-organvm/meta-organvm.github.io
   repo: organvm/meta-organvm.github.io
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -32614,10 +32625,10 @@ tasks:
   title: Raise test coverage in meta-organvm/digital-income-organism-inquiry
   repo: organvm/digital-income-organism-inquiry
   type: code
-  target_agent: oz
+  target_agent: opencode
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - test-coverage
   - generated
@@ -32629,7 +32640,13 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  dispatch_log: []
+  updated: '2026-06-30T01:48:12.356802Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-organvm-i-theoria-organvm-iii-ergon.github.io-test-coverage-0620
   title: Raise test coverage in organvm-i-theoria/organvm-iii-ergon.github.io
   repo: organvm/organvm-iii-ergon.github.io
@@ -32692,7 +32709,7 @@ tasks:
   title: Raise test coverage in organvm-i-theoria/organvm-v-logos.github.io
   repo: organvm/organvm-v-logos.github.io
   type: code
-  target_agent: oz
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -32732,7 +32749,7 @@ tasks:
   title: Raise test coverage in organvm-i-theoria/organvm-vii-kerygma.github.io
   repo: organvm/organvm-vii-kerygma.github.io
   type: code
-  target_agent: oz
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -32772,10 +32789,10 @@ tasks:
   title: Raise test coverage in organvm-i-theoria/4444J99.github.io
   repo: organvm/4444J99.github.io
   type: code
-  target_agent: oz
+  target_agent: agy
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - test-coverage
   - generated
@@ -32787,12 +32804,18 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  dispatch_log: []
+  updated: '2026-06-30T01:48:12.356802Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-organvm-i-theoria-organvm-i-theoria--superproject-test-coverage-0620
   title: Raise test coverage in organvm-i-theoria/organvm-i-theoria--superproject
   repo: organvm/organvm-i-theoria--superproject
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -32975,7 +32998,7 @@ tasks:
   title: Raise test coverage in organvm-i-theoria/organvm-ii-poiesis.github.io
   repo: organvm/organvm-ii-poiesis.github.io
   type: code
-  target_agent: oz
+  target_agent: github_actions
   priority: medium
   budget_cost: 1
   status: open
@@ -33058,7 +33081,7 @@ tasks:
   title: Raise test coverage in organvm-ii-poiesis/organvm-ii-poiesis.github.io
   repo: organvm/organvm-ii-poiesis.github.io
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -33088,10 +33111,10 @@ tasks:
   title: Raise test coverage in organvm-ii-poiesis/vigiles-aeternae--theatrum-mundi
   repo: organvm/vigiles-aeternae--theatrum-mundi
   type: code
-  target_agent: oz
+  target_agent: claude
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - test-coverage
   - generated
@@ -33103,7 +33126,13 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  dispatch_log: []
+  updated: '2026-06-30T01:48:12.356802Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: claude
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-organvm-ii-poiesis-styx-behavioral-art-test-coverage-0620
   title: Raise test coverage in organvm-ii-poiesis/styx-behavioral-art
   repo: organvm/styx-behavioral-art
@@ -33138,7 +33167,7 @@ tasks:
   title: Raise test coverage in organvm-iii-ergon/content-engine--asset-amplifier
   repo: organvm/content-engine--asset-amplifier
   type: code
-  target_agent: oz
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -33178,7 +33207,7 @@ tasks:
   title: Raise test coverage in a-organvm/public-process
   repo: organvm/public-process
   type: code
-  target_agent: oz
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -33218,10 +33247,10 @@ tasks:
   title: Raise test coverage in a-organvm/call-function--ontological
   repo: organvm/call-function--ontological
   type: code
-  target_agent: oz
+  target_agent: gemini
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - test-coverage
   - generated
@@ -33233,12 +33262,18 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  dispatch_log: []
+  updated: '2026-06-30T01:48:12.356802Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-a-organvm-metasystem-master-test-coverage-0620
   title: Raise test coverage in a-organvm/metasystem-master
   repo: organvm/metasystem-master
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -33258,10 +33293,10 @@ tasks:
   title: Raise test coverage in a-organvm/organvm-ontologia
   repo: organvm/organvm-ontologia
   type: code
-  target_agent: oz
+  target_agent: codex
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - test-coverage
   - generated
@@ -33273,7 +33308,13 @@ tasks:
     to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  dispatch_log: []
+  updated: '2026-06-30T01:48:12.356802Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-organvm-i-theoria-.github-test-coverage-0620
   title: Raise test coverage in organvm-i-theoria/.github
   repo: organvm/.github
@@ -33331,7 +33372,7 @@ tasks:
   title: Raise test coverage in a-organvm/4-ivi374-F0Rivi4
   repo: organvm/4-ivi374-F0Rivi4
   type: code
-  target_agent: oz
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -33609,7 +33650,7 @@ tasks:
   title: Raise test coverage in organvm-ii-poiesis/organvm-ii-poiesis--superproject
   repo: organvm/organvm-ii-poiesis--superproject
   type: code
-  target_agent: oz
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -33649,7 +33690,7 @@ tasks:
   title: Raise test coverage in organvm-iii-ergon/sign-signal--voice-synth
   repo: organvm/sign-signal--voice-synth
   type: code
-  target_agent: oz
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -33730,7 +33771,7 @@ tasks:
   title: Raise test coverage in organvm-v-logos/organvm-v-logos--superproject
   repo: organvm/organvm-v-logos--superproject
   type: code
-  target_agent: oz
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -33776,7 +33817,7 @@ tasks:
   title: Raise test coverage in organvm-vi-koinonia/organvm-vi-koinonia--superproject
   repo: organvm/organvm-vi-koinonia--superproject
   type: code
-  target_agent: oz
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -33828,7 +33869,7 @@ tasks:
   title: Raise test coverage in organvm-vii-kerygma/organvm-vii-kerygma.github.io
   repo: organvm/organvm-vii-kerygma.github.io
   type: code
-  target_agent: oz
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -34230,7 +34271,7 @@ tasks:
   title: Raise test coverage in organvm-i-theoria/atomic-substrata
   repo: organvm/atomic-substrata
   type: code
-  target_agent: oz
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -34392,7 +34433,7 @@ tasks:
   title: Raise test coverage in organvm-vii-kerygma/organvm-vii-kerygma--superproject
   repo: organvm/organvm-vii-kerygma--superproject
   type: code
-  target_agent: oz
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -34442,10 +34483,10 @@ tasks:
   title: Make a-organvm/my-knowledge-base CI green
   repo: organvm/my-knowledge-base
   type: code
-  target_agent: github_actions
+  target_agent: opencode
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - ci-green
   - generated
@@ -34458,7 +34499,7 @@ tasks:
     the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-20T17:06:38.365727Z'
+  updated: '2026-06-30T01:48:12.356802Z'
   dispatch_log:
   - timestamp: '2026-06-20T09:45:24.209649Z'
     agent: limen
@@ -34474,6 +34515,11 @@ tasks:
     session_id: cli
     status: open
     output: Released stale claim after 3h
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-a-organvm-organvm-corpvs-testamentvm-ci-green-0620
   title: Make a-organvm/organvm-corpvs-testamentvm CI green
   repo: organvm/organvm-corpvs-testamentvm
@@ -34654,10 +34700,10 @@ tasks:
   title: Make a-organvm/petasum-super-petasum CI green
   repo: organvm/petasum-super-petasum
   type: code
-  target_agent: oz
+  target_agent: agy
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - ci-green
   - generated
@@ -34671,7 +34717,7 @@ tasks:
     to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-20T17:06:38.365727Z'
+  updated: '2026-06-30T01:48:12.356802Z'
   dispatch_log:
   - timestamp: '2026-06-20T10:29:37.294033Z'
     agent: limen
@@ -34687,6 +34733,11 @@ tasks:
     session_id: cli
     status: open
     output: Released stale claim after 3h
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-a-organvm-orchestration-start-here-ci-green-0620
   title: Make a-organvm/orchestration-start-here CI green
   repo: organvm/orchestration-start-here
@@ -35554,10 +35605,10 @@ tasks:
   title: Make a-organvm/a-i-council--coliseum CI green
   repo: organvm/a-i-council--coliseum
   type: code
-  target_agent: oz
+  target_agent: claude
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - ci-green
   - generated
@@ -35570,21 +35621,26 @@ tasks:
     to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  updated: '2026-06-20T11:19:28.640967Z'
+  updated: '2026-06-30T01:48:12.356802Z'
   dispatch_log:
   - timestamp: '2026-06-20T11:19:28.640967Z'
     agent: limen
     session_id: cli
     status: open
     output: Released stale claim after 3h
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: claude
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-a-organvm-organon-noumenon--ontogenetic-morphe-ci-green-0620
   title: Make a-organvm/organon-noumenon--ontogenetic-morphe CI green
   repo: organvm/organon-noumenon--ontogenetic-morphe
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - ci-green
   - generated
@@ -35597,12 +35653,18 @@ tasks:
     to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  dispatch_log: []
+  updated: '2026-06-30T01:48:12.356802Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-a-organvm-example-theatre-dialogue-ci-green-0620
   title: Make a-organvm/example-theatre-dialogue CI green
   repo: organvm/example-theatre-dialogue
   type: code
-  target_agent: oz
+  target_agent: github_actions
   priority: high
   budget_cost: 1
   status: open
@@ -35623,10 +35685,10 @@ tasks:
   title: Make a-organvm/example-ai-collaboration CI green
   repo: organvm/example-ai-collaboration
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - ci-green
   - generated
@@ -35639,15 +35701,21 @@ tasks:
     to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  dispatch_log: []
+  updated: '2026-06-30T01:48:12.356802Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-a-organvm-your-fit-tailored-ci-green-0620
   title: Make a-organvm/your-fit-tailored CI green
   repo: organvm/your-fit-tailored
   type: code
-  target_agent: oz
+  target_agent: gemini
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - ci-green
   - generated
@@ -35660,7 +35728,13 @@ tasks:
     the stream endless]
   depends_on: []
   created: '2026-06-20'
-  dispatch_log: []
+  updated: '2026-06-30T01:48:12.356802Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-meta-organvm-_agent-health-ci-green-0620
   title: Make meta-organvm/_agent-health CI green
   repo: organvm/_agent-health
@@ -36689,10 +36763,10 @@ tasks:
   title: Raise test coverage in organvm/a-mavs-olevm
   repo: organvm/a-mavs-olevm
   type: code
-  target_agent: oz
+  target_agent: codex
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - test-coverage
   - generated
@@ -36704,12 +36778,18 @@ tasks:
     to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  dispatch_log: []
+  updated: '2026-06-30T01:48:12.356802Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-organvm-radix-recursiva-solve-coagula-redi-test-coverage-0620
   title: Raise test coverage in organvm/radix-recursiva-solve-coagula-redi
   repo: organvm/radix-recursiva-solve-coagula-redi
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -36729,7 +36809,7 @@ tasks:
   title: Raise test coverage in organvm/universal-node-network
   repo: organvm/universal-node-network
   type: code
-  target_agent: oz
+  target_agent: opencode
   priority: medium
   budget_cost: 1
   status: open
@@ -36769,10 +36849,10 @@ tasks:
   title: Raise test coverage in organvm/system-governance-framework
   repo: organvm/system-governance-framework
   type: code
-  target_agent: oz
+  target_agent: agy
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - test-coverage
   - generated
@@ -36784,12 +36864,18 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  dispatch_log: []
+  updated: '2026-06-30T01:48:12.356802Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-organvm-render-second-amendment-test-coverage-0620
   title: Raise test coverage in organvm/render-second-amendment
   repo: organvm/render-second-amendment
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -36809,10 +36895,10 @@ tasks:
   title: Raise test coverage in organvm/reverse-engine-recursive-run
   repo: organvm/reverse-engine-recursive-run
   type: code
-  target_agent: oz
+  target_agent: claude
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - test-coverage
   - generated
@@ -36824,7 +36910,13 @@ tasks:
     2026-06-20 to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  dispatch_log: []
+  updated: '2026-06-30T01:48:12.356802Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: claude
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-organvm-a-recursive-root-test-coverage-0620
   title: Raise test coverage in organvm/a-recursive-root
   repo: organvm/a-recursive-root
@@ -36849,7 +36941,7 @@ tasks:
   title: Raise test coverage in organvm/fetch-familiar-friends
   repo: organvm/fetch-familiar-friends
   type: code
-  target_agent: oz
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -37221,10 +37313,10 @@ tasks:
   title: Raise test coverage in organvm/classroom-rpg-aetheria
   repo: organvm/classroom-rpg-aetheria
   type: code
-  target_agent: oz
+  target_agent: gemini
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - test-coverage
   - generated
@@ -37236,12 +37328,18 @@ tasks:
     to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  dispatch_log: []
+  updated: '2026-06-30T01:48:12.356802Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-organvm-dot-github--poiesis-test-coverage-0620
   title: Raise test coverage in organvm/dot-github--poiesis
   repo: organvm/dot-github--poiesis
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -37261,10 +37359,10 @@ tasks:
   title: Raise test coverage in organvm/client-sdk
   repo: organvm/client-sdk
   type: code
-  target_agent: oz
+  target_agent: codex
   priority: medium
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - test-coverage
   - generated
@@ -37276,7 +37374,13 @@ tasks:
     to keep the stream endless]
   depends_on: []
   created: '2026-06-20'
-  dispatch_log: []
+  updated: '2026-06-30T01:48:12.356802Z'
+  dispatch_log:
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: GEN-organvm-audio-synthesis-bridge-test-coverage-0620
   title: Raise test coverage in organvm/audio-synthesis-bridge
   repo: organvm/audio-synthesis-bridge
@@ -37301,7 +37405,7 @@ tasks:
   title: Raise test coverage in organvm/sovereign-ecosystem--real-estate-luxury
   repo: organvm/sovereign-ecosystem--real-estate-luxury
   type: code
-  target_agent: oz
+  target_agent: opencode
   priority: medium
   budget_cost: 1
   status: open
@@ -37354,7 +37458,7 @@ tasks:
   title: Raise test coverage in organvm/enterprise-plugin
   repo: organvm/enterprise-plugin
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -38304,7 +38408,7 @@ tasks:
   title: '[STRANGER-TEST] Session 10: Security Researcher'
   repo: organvm/public-process
   type: code
-  target_agent: oz
+  target_agent: github_actions
   priority: medium
   budget_cost: 1
   status: open
@@ -38324,7 +38428,7 @@ tasks:
   title: '[STRANGER-TEST] Session 9: DevRel Manager'
   repo: organvm/public-process
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -38344,7 +38448,7 @@ tasks:
   title: '[STRANGER-TEST] Session 8: Data Scientist'
   repo: organvm/public-process
   type: code
-  target_agent: oz
+  target_agent: github_actions
   priority: medium
   budget_cost: 1
   status: open
@@ -38364,7 +38468,7 @@ tasks:
   title: '[STRANGER-TEST] Session 7: UX Designer'
   repo: organvm/public-process
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -38384,7 +38488,7 @@ tasks:
   title: '[STRANGER-TEST] Session 6: Student'
   repo: organvm/public-process
   type: code
-  target_agent: oz
+  target_agent: github_actions
   priority: medium
   budget_cost: 1
   status: open
@@ -38404,7 +38508,7 @@ tasks:
   title: '[STRANGER-TEST] Session 5: Product Manager'
   repo: organvm/public-process
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -38424,7 +38528,7 @@ tasks:
   title: '[STRANGER-TEST] Session 4: Open Source Contributor'
   repo: organvm/public-process
   type: code
-  target_agent: oz
+  target_agent: github_actions
   priority: medium
   budget_cost: 1
   status: open
@@ -38444,7 +38548,7 @@ tasks:
   title: '[STRANGER-TEST] Session 3: Senior Backend Engineer'
   repo: organvm/public-process
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -38464,7 +38568,7 @@ tasks:
   title: '[STRANGER-TEST] Session 2: Technical Writer'
   repo: organvm/public-process
   type: code
-  target_agent: oz
+  target_agent: github_actions
   priority: medium
   budget_cost: 1
   status: open
@@ -38484,7 +38588,7 @@ tasks:
   title: '[STRANGER-TEST] Session 1: Junior Developer'
   repo: organvm/public-process
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -38504,7 +38608,7 @@ tasks:
   title: Enable GitHub Discussions for community interaction
   repo: organvm/dot-github--logos
   type: code
-  target_agent: oz
+  target_agent: github_actions
   priority: medium
   budget_cost: 1
   status: open
@@ -38521,7 +38625,7 @@ tasks:
   title: Create a 'Quick Start' guide
   repo: organvm/dot-github--logos
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -38538,7 +38642,7 @@ tasks:
   title: Add an architecture overview map in the profile
   repo: organvm/dot-github--logos
   type: code
-  target_agent: oz
+  target_agent: github_actions
   priority: medium
   budget_cost: 1
   status: open
@@ -38555,7 +38659,7 @@ tasks:
   title: Simplify `CONTRIBUTING.md` to standard PR workflows
   repo: organvm/dot-github--logos
   type: code
-  target_agent: github_actions
+  target_agent: jules
   priority: medium
   budget_cost: 1
   status: open
@@ -38572,7 +38676,7 @@ tasks:
   title: Add 'Plain English' TL;DR to org profile README
   repo: organvm/dot-github--logos
   type: code
-  target_agent: oz
+  target_agent: github_actions
   priority: medium
   budget_cost: 1
   status: open
@@ -64417,14 +64521,18 @@ tasks:
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/432
+    status: dispatched
 - id: CAPFILL-agy-20260629-01
   title: Agy daily capacity-fill packet 01
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:agy
@@ -64440,7 +64548,7 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
@@ -64472,6 +64580,11 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-gemini-20260629-01
   title: Gemini daily capacity-fill packet 01
   repo: organvm/limen
@@ -64586,10 +64699,10 @@ tasks:
   title: Claude daily capacity-fill packet 02
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: opencode
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:claude
@@ -64606,7 +64719,7 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: claude
@@ -64642,11 +64755,16 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-opencode-20260629-02
   title: OpenCode daily capacity-fill packet 02
   repo: organvm/limen
   type: code
-  target_agent: gemini
+  target_agent: jules
   priority: high
   budget_cost: 1
   status: dispatched
@@ -64656,6 +64774,7 @@ tasks:
   - daily-checkup
   - generated
   - noop
+  - tried:gemini
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -64666,7 +64785,7 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:20:14.580787Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: opencode
@@ -64698,14 +64817,23 @@ tasks:
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: jules
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-agy-20260629-02
   title: Agy daily capacity-fill packet 02
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: claude
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:agy
@@ -64721,7 +64849,7 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
@@ -64748,6 +64876,11 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: claude
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-gemini-20260629-02
   title: Gemini daily capacity-fill packet 02
   repo: organvm/limen
@@ -64838,7 +64971,7 @@ tasks:
   target_agent: opencode
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: failed
   labels:
   - capacity-fill
   - lane:claude
@@ -64896,14 +65029,19 @@ tasks:
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
 - id: CAPFILL-opencode-20260629-03
   title: OpenCode daily capacity-fill packet 03
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: gemini
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:opencode
@@ -64920,7 +65058,7 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: opencode
@@ -64947,14 +65085,19 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-agy-20260629-03
   title: Agy daily capacity-fill packet 03
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:agy
@@ -64970,7 +65113,7 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
@@ -64997,6 +65140,11 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-gemini-20260629-03
   title: Gemini daily capacity-fill packet 03
   repo: organvm/limen
@@ -65162,10 +65310,10 @@ tasks:
   title: Agy daily capacity-fill packet 04
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: opencode
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:agy
@@ -65181,7 +65329,7 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
@@ -65208,6 +65356,11 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-gemini-20260629-04
   title: Gemini daily capacity-fill packet 04
   repo: organvm/limen
@@ -65303,7 +65456,7 @@ tasks:
   target_agent: opencode
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: failed
   labels:
   - capacity-fill
   - lane:claude
@@ -65352,14 +65505,19 @@ tasks:
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
 - id: CAPFILL-opencode-20260629-05
   title: OpenCode daily capacity-fill packet 05
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: claude
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:opencode
@@ -65376,7 +65534,7 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:40:55.041801Z'
     agent: agy
@@ -65403,14 +65561,19 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: claude
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-agy-20260629-05
   title: Agy daily capacity-fill packet 05
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: gemini
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:agy
@@ -65426,7 +65589,7 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
@@ -65453,6 +65616,11 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-gemini-20260629-05
   title: Gemini daily capacity-fill packet 05
   repo: organvm/limen
@@ -65619,10 +65787,10 @@ tasks:
   title: Agy daily capacity-fill packet 06
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:agy
@@ -65638,7 +65806,7 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
@@ -65665,6 +65833,11 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-gemini-20260629-06
   title: Gemini daily capacity-fill packet 06
   repo: organvm/limen
@@ -65794,10 +65967,10 @@ tasks:
   title: OpenCode daily capacity-fill packet 07
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: opencode
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - capacity-fill
   - lane:opencode
@@ -65814,7 +65987,7 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:43:00Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:40:55.041801Z'
     agent: agy
@@ -65841,14 +66014,26 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:43:00Z'
+    agent: limen
+    session_id: cli
+    status: done
+    output: 'Written lane-specific receipt under docs/lane-checkups/opencode/20260629-07.md
+      documenting human-gated blocker: OpenCode underfilled due to missing API credentials;
+      cheapest path is "opencode auth login --configure-api-key"'
 - id: CAPFILL-agy-20260629-07
   title: Agy daily capacity-fill packet 07
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: claude
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:agy
@@ -65864,7 +66049,7 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:22:29.412423Z'
     agent: agy
@@ -65891,6 +66076,11 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: claude
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-gemini-20260629-07
   title: Gemini daily capacity-fill packet 07
   repo: organvm/limen
@@ -66256,10 +66446,10 @@ tasks:
   title: Agy daily capacity-fill packet 09
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: gemini
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:agy
@@ -66275,7 +66465,7 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:24:58.868847Z'
     agent: agy
@@ -66302,11 +66492,16 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-opencode-20260629-10
   title: OpenCode daily capacity-fill packet 10
   repo: organvm/limen
   type: code
-  target_agent: gemini
+  target_agent: jules
   priority: high
   budget_cost: 1
   status: dispatched
@@ -66316,6 +66511,7 @@ tasks:
   - daily-checkup
   - generated
   - noop
+  - tried:gemini
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -66326,7 +66522,7 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:20:14.580787Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:40:55.041801Z'
     agent: agy
@@ -66355,6 +66551,15 @@ tasks:
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
   - timestamp: '2026-06-30T01:20:14.580787Z'
     agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: jules
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
@@ -66581,10 +66786,10 @@ tasks:
   title: Agy daily capacity-fill packet 12
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:agy
@@ -66600,7 +66805,7 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:40:55.041801Z'
     agent: agy
@@ -66627,6 +66832,11 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-opencode-20260629-13
   title: OpenCode daily capacity-fill packet 13
   repo: organvm/limen
@@ -66714,7 +66924,7 @@ tasks:
   title: OpenCode daily capacity-fill packet 14
   repo: organvm/limen
   type: code
-  target_agent: gemini
+  target_agent: jules
   priority: high
   budget_cost: 1
   status: dispatched
@@ -66724,6 +66934,7 @@ tasks:
   - daily-checkup
   - generated
   - noop
+  - tried:gemini
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -66734,7 +66945,7 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:20:14.580787Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T23:09:36.943113Z'
     agent: opencode
@@ -66763,6 +66974,15 @@ tasks:
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
   - timestamp: '2026-06-30T01:20:14.580787Z'
     agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: jules
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
@@ -66939,6 +67159,10 @@ tasks:
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: jules
+    session_id: '1613468701105782584'
+    status: dispatched
 - id: CAPFILL-claude-20260629-09
   title: Claude daily capacity-fill packet 09
   repo: organvm/limen
@@ -66946,7 +67170,7 @@ tasks:
   target_agent: agy
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:claude
@@ -66962,7 +67186,7 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:48:12.356802Z'
   dispatch_log:
   - timestamp: '2026-06-29T23:42:12.856311Z'
     agent: agy
@@ -66974,6 +67198,11 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: agy
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-jules-20260629-10
   title: Jules daily capacity-fill packet 10
   repo: organvm/limen
@@ -67012,7 +67241,7 @@ tasks:
   title: Claude daily capacity-fill packet 10
   repo: organvm/limen
   type: code
-  target_agent: gemini
+  target_agent: claude
   priority: high
   budget_cost: 1
   status: dispatched
@@ -67022,6 +67251,7 @@ tasks:
   - daily-checkup
   - generated
   - noop
+  - tried:gemini
   urls: []
   context: 'Close one concrete Claude lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -67032,7 +67262,7 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:20:14.580787Z'
+  updated: '2026-06-30T01:48:12.356802Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:40:55.041801Z'
     agent: agy
@@ -67061,6 +67291,15 @@ tasks:
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
   - timestamp: '2026-06-30T01:20:14.580787Z'
     agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: claude
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
@@ -67149,7 +67388,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - capacity-fill
   - lane:jules
@@ -67165,7 +67404,7 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:09:20.810919Z'
+  updated: '2026-06-30T01:33:51.853383Z'
   dispatch_log:
   - timestamp: '2026-06-30T01:09:20.810919Z'
     agent: jules
@@ -67176,6 +67415,11 @@ tasks:
     agent: jules
     session_id: '4577674965449846823'
     status: dispatched
+  - timestamp: '2026-06-30T01:33:51.853383Z'
+    agent: jules
+    session_id: https://github.com/organvm/limen/pull/435
+    status: done
+    output: 'jules-land: landed session 4577674965449846823 as PR'
 - id: CAPFILL-claude-20260629-12
   title: Claude daily capacity-fill packet 12
   repo: organvm/limen
@@ -67300,7 +67544,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - capacity-fill
   - lane:jules
@@ -67316,21 +67560,30 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:20:14.580787Z'
+  updated: '2026-06-30T01:33:51.853383Z'
   dispatch_log:
   - timestamp: '2026-06-30T01:20:14.580787Z'
     agent: jules
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: jules
+    session_id: '856658034057998182'
+    status: dispatched
+  - timestamp: '2026-06-30T01:33:51.853383Z'
+    agent: jules
+    session_id: https://github.com/organvm/limen/pull/434
+    status: done
+    output: 'jules-land: landed session 856658034057998182 as PR'
 - id: CAPFILL-claude-20260629-14
   title: Claude daily capacity-fill packet 14
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: claude
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:claude
@@ -67347,7 +67600,7 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:17:15.719782Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T22:40:55.041801Z'
     agent: agy
@@ -67374,6 +67627,11 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: claude
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-jules-20260629-15
   title: Jules daily capacity-fill packet 15
   repo: organvm/limen
@@ -67381,7 +67639,7 @@ tasks:
   target_agent: jules
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: done
   labels:
   - capacity-fill
   - lane:jules
@@ -67397,13 +67655,22 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:20:14.580787Z'
+  updated: '2026-06-30T01:33:51.853383Z'
   dispatch_log:
   - timestamp: '2026-06-30T01:20:14.580787Z'
     agent: jules
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: jules
+    session_id: '16555317438384740652'
+    status: dispatched
+  - timestamp: '2026-06-30T01:33:51.853383Z'
+    agent: jules
+    session_id: https://github.com/organvm/limen/pull/433
+    status: done
+    output: 'jules-land: landed session 16555317438384740652 as PR'
 - id: CAPFILL-claude-20260629-15
   title: Claude daily capacity-fill packet 15
   repo: organvm/limen
@@ -67461,6 +67728,7 @@ tasks:
   - lane:opencode
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete OpenCode lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -67471,7 +67739,7 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:20:14.580787Z'
+  updated: '2026-06-30T01:48:12.356802Z'
   dispatch_log:
   - timestamp: '2026-06-29T23:42:12.856311Z'
     agent: gemini
@@ -67484,6 +67752,15 @@ tasks:
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
   - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T01:48:12.356802Z'
     agent: gemini
     session_id: reserve
     status: dispatched
@@ -67613,10 +67890,10 @@ tasks:
   title: Agy daily capacity-fill packet 17
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: gemini
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:agy
@@ -67633,7 +67910,7 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T00:31:13.560429Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T23:09:36.943113Z'
     agent: agy
@@ -67664,6 +67941,11 @@ tasks:
     agent: gemini
     session_id: cli
     status: failed->jules
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-opencode-20260629-18
   title: OpenCode daily capacity-fill packet 18
   repo: organvm/limen
@@ -67845,14 +68127,18 @@ tasks:
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: jules
+    session_id: '11529276316347823114'
+    status: dispatched
 - id: CAPFILL-agy-20260629-20
   title: Agy daily capacity-fill packet 20
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:agy
@@ -67869,7 +68155,7 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T00:31:13.560429Z'
+  updated: '2026-06-30T01:41:13.284357Z'
   dispatch_log:
   - timestamp: '2026-06-29T23:09:36.943113Z'
     agent: agy
@@ -67900,6 +68186,11 @@ tasks:
     agent: gemini
     session_id: cli
     status: failed->jules
+  - timestamp: '2026-06-30T01:41:13.284357Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-agy-20260629-21
   title: Agy daily capacity-fill packet 21
   repo: organvm/limen
@@ -68155,10 +68446,10 @@ tasks:
   title: Agy daily capacity-fill packet 25
   repo: organvm/limen
   type: code
-  target_agent: agy
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:agy
@@ -68175,7 +68466,7 @@ tasks:
     the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T00:31:13.560429Z'
+  updated: '2026-06-30T01:48:12.356802Z'
   dispatch_log:
   - timestamp: '2026-06-30T00:31:13.560429Z'
     agent: gemini
@@ -68191,6 +68482,11 @@ tasks:
     agent: gemini
     session_id: cli
     status: failed->jules
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: codex
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-gemini-20260629-08
   title: Gemini daily capacity-fill packet 08
   repo: organvm/limen
@@ -68234,10 +68530,10 @@ tasks:
   title: Gemini daily capacity-fill packet 09
   repo: organvm/limen
   type: code
-  target_agent: jules
+  target_agent: opencode
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - capacity-fill
   - lane:gemini
@@ -68255,7 +68551,7 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:09:20.810919Z'
+  updated: '2026-06-30T01:48:12.356802Z'
   dispatch_log:
   - timestamp: '2026-06-30T00:48:19.183269Z'
     agent: opencode
@@ -68281,11 +68577,16 @@ tasks:
     agent: gemini
     session_id: cli
     status: failed->jules
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: opencode
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
 - id: CAPFILL-gemini-20260629-10
   title: Gemini daily capacity-fill packet 10
   repo: organvm/limen
   type: code
-  target_agent: gemini
+  target_agent: agy
   priority: high
   budget_cost: 1
   status: dispatched
@@ -68294,6 +68595,7 @@ tasks:
   - lane:gemini
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -68304,10 +68606,19 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:20:14.580787Z'
+  updated: '2026-06-30T01:48:12.356802Z'
   dispatch_log:
   - timestamp: '2026-06-30T01:20:14.580787Z'
     agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: agy
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
@@ -68315,7 +68626,7 @@ tasks:
   title: Gemini daily capacity-fill packet 11
   repo: organvm/limen
   type: code
-  target_agent: gemini
+  target_agent: claude
   priority: high
   budget_cost: 1
   status: dispatched
@@ -68324,6 +68635,7 @@ tasks:
   - lane:gemini
   - daily-checkup
   - generated
+  - tried:gemini
   urls: []
   context: 'Close one concrete Gemini lane-fill gap for 2026-06-29. Start from docs/capacity-fill.md
     and docs/dispatch-health.md. Make the smallest local, test-backed improvement
@@ -68334,10 +68646,19 @@ tasks:
     for the touched surface and `python3 scripts/capacity-fill-ledger.py --write`.'
   depends_on: []
   created: '2026-06-29'
-  updated: '2026-06-30T01:20:14.580787Z'
+  updated: '2026-06-30T01:48:12.356802Z'
   dispatch_log:
   - timestamp: '2026-06-30T01:20:14.580787Z'
     agent: gemini
+    session_id: reserve
+    status: dispatched
+    output: 'dispatch-parallel: reserved before agent execution'
+  - timestamp: '2026-06-30T01:20:14.580787Z'
+    agent: gemini
+    session_id: cli
+    status: failed->jules
+  - timestamp: '2026-06-30T01:48:12.356802Z'
+    agent: claude
     session_id: reserve
     status: dispatched
     output: 'dispatch-parallel: reserved before agent execution'
