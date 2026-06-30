@@ -10,7 +10,7 @@
 # under a launchd KeepAlive daemon, NOT a StartInterval timer).
 #
 #   VOICE          cadence (beats)   what plays
-#   dispatch       every 1 (kick)    use idle capacity across all 6 lanes
+#   dispatch       every 1 (kick)    use idle capacity across all reachable paid lanes
 #   tick           every 1           emit logs/ticks.jsonl (portal pulse)
 #   balance        every 2 (snare)   route + rebalance the queue across lanes
 #   feed           every 3           mine the GitHub backlog
@@ -315,10 +315,10 @@ while true; do
       else
         _dt0=$SECONDS
         if [ "${LIMEN_DISPATCH_ASYNC:-0}" = "1" ]; then
-          out="$(dispatch_bounded python3 "$LIMEN_ROOT/scripts/dispatch-async.py" --lanes "$EFFECTIVE_LANES,jules" \
+          out="$(dispatch_bounded python3 "$LIMEN_ROOT/scripts/dispatch-async.py" --lanes auto \
                   --per-lane "$LOCAL_LIMIT" --max "${LIMEN_ASYNC_MAX:-12}" 2>&1)"; _drc=$?
         else
-          out="$(dispatch_bounded python3 "$LIMEN_ROOT/scripts/dispatch-parallel.py" --lanes "$EFFECTIVE_LANES,jules" \
+          out="$(dispatch_bounded python3 "$LIMEN_ROOT/scripts/dispatch-parallel.py" --lanes auto \
                   --per-lane "$LOCAL_LIMIT" --workers "${LIMEN_WORKERS:-8}" 2>&1)"; _drc=$?
         fi
         # timeout(1) exits 124 (TERM) or 128+9=137 (our -s KILL) when the ceiling fires → a lane run

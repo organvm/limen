@@ -15,7 +15,7 @@ LIMEN_DISPATCH_ASYNC=1. The synchronous dispatch-parallel.py is left completely 
 Concurrency: at most LIMEN_ASYNC_MAX (default 12) background runs at once; per-agent in-flight count
 is tracked via <task-id>__<agent>.running markers so budgets aren't blown between reserve & harvest.
 
-Usage: dispatch-async.py --lanes codex,claude,opencode,jules --per-lane 8 --max 12 [--dry-run]
+Usage: dispatch-async.py --lanes auto --per-lane 8 --max 12 [--dry-run]
 """
 import argparse
 import datetime
@@ -26,7 +26,12 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.capacity import PAID_AGENT_ORDER, canonical_agent, capacity_census  # noqa: E402
+from limen.capacity import (  # noqa: E402
+    PAID_AGENT_ORDER,
+    canonical_agent,
+    capacity_census,
+    format_capacity_census,
+)
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.models import DispatchLogEntry  # noqa: E402
 from limen.dispatch import _queue_lock, _apply_result, _down_lanes, _PRIORITY_ORDER, _deps_met  # noqa: E402
@@ -182,16 +187,12 @@ def reserve_and_launch(agents, per_agent, cap, dry):
     return picked
 
 
-def resolve_lanes(selector: str, down: set[str]) -> list[str]:
+def resolve_lanes(selector: str, down: set[str], census=None) -> list[str]:
     raw = (selector or "auto").strip()
     if raw == "all":
         return [agent for agent in PAID_AGENT_ORDER if agent not in down]
     if raw == "auto":
-        try:
-            board = load_limen_file(TASKS)
-            rows = capacity_census(board)
-        except Exception:
-            rows = []
+        rows = census or []
         lanes = [
             str(row.get("agent"))
             for row in rows
@@ -213,8 +214,13 @@ def main() -> int:
     ap.add_argument("--max", type=int, default=int(os.environ.get("LIMEN_ASYNC_MAX", "12")))
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
+    try:
+        census = capacity_census(load_limen_file(TASKS))
+    except Exception:
+        census = []
+    print(format_capacity_census(census))
     down = _down_lanes()
-    lanes = resolve_lanes(a.lanes, down)
+    lanes = resolve_lanes(a.lanes, down, census)
     if down:
         print(f"── skipping down lanes: {sorted(down)}")
     reaped = reap_stale(int(os.environ.get("LIMEN_ASYNC_MAX_AGE", "1200")))
