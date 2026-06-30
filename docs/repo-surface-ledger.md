@@ -1,9 +1,9 @@
 # Repo Surface Ledger
 
-Generated: `2026-06-30T11:48:58+00:00`
-Repos discovered: `235`
-Dirty repos: `58`
-Worktrees: `33`
+Generated: `2026-06-30T14:29:06+00:00`
+Repos discovered: `249`
+Dirty repos: `56`
+Worktrees: `47`
 
 ## Scan Roots
 
@@ -21,7 +21,7 @@ Worktrees: `33`
 - `https://github.com/organvm/essay-pipeline.git`: 2
 - `https://github.com/organvm/hierarchia-mundi.git`: 2
 - `https://github.com/organvm/kerygma-profiles.git`: 2
-- `https://github.com/organvm/limen.git`: 6
+- `https://github.com/organvm/limen.git`: 20
 - `https://github.com/organvm/mirror-mirror.git`: 4
 - `https://github.com/organvm/my--father-mother.git`: 3
 - `https://github.com/organvm/narratological-algorithmic-lenses.git`: 2
@@ -45,14 +45,28 @@ Worktrees: `33`
 | Repo | Remote | Branch | Dirty | Surfaces |
 |---|---|---:|---:|---|
 | `~/Workspace/.home-cartridge/Code/organvm/universal-mail--automation` | `https://github.com/organvm/universal-mail--automation.git` | `feat/operator-dashboard-mail-endzone` | 0 | `pyproject.toml`, `Dockerfile`, `github-actions` |
+| `~/Workspace/.limen-repair/pr-463` | `https://github.com/organvm/limen.git` | `(detached)` | 0 | `firebase.json`, `github-actions` |
+| `~/Workspace/.limen-repair/pr-466` | `https://github.com/organvm/limen.git` | `(detached)` | 0 | `firebase.json`, `github-actions` |
+| `~/Workspace/.limen-repair/pr-467` | `https://github.com/organvm/limen.git` | `(detached)` | 0 | `firebase.json`, `github-actions` |
+| `~/Workspace/.limen-repair/pr-468` | `https://github.com/organvm/limen.git` | `(detached)` | 0 | `firebase.json`, `github-actions` |
+| `~/Workspace/.limen-repair/pr-471` | `https://github.com/organvm/limen.git` | `(detached)` | 0 | `firebase.json`, `github-actions` |
 | `~/Workspace/.limen-worktrees/bld-mirror-mirror-harden-350f` | `https://github.com/organvm/mirror-mirror.git` | `limen/bld-mirror-mirror-harden-350f` | 0 | `package.json`, `Dockerfile`, `github-actions`, `deploy-config` |
 | `~/Workspace/.limen-worktrees/bld-my--father-mother-harden-44b2` | `https://github.com/organvm/my--father-mother.git` | `limen/bld-my--father-mother-harden-44b2` | 0 | `pyproject.toml`, `github-actions` |
 | `~/Workspace/.limen-worktrees/bld-promptscope-next-rev-3fde` | `https://github.com/organvm/promptscope.git` | `limen/bld-promptscope-next-rev-3fde` | 0 | `package.json` |
+| `~/Workspace/.limen-worktrees/capfill-agy-20260630-03-562f` | `https://github.com/organvm/limen.git` | `limen/capfill-agy-20260630-03-562f` | 0 | `firebase.json`, `github-actions` |
+| `~/Workspace/.limen-worktrees/capfill-claude-20260630-01-b8af` | `https://github.com/organvm/limen.git` | `limen/capfill-claude-20260630-01-b8af` | 0 | `firebase.json`, `github-actions` |
+| `~/Workspace/.limen-worktrees/capfill-claude-20260630-06-0927` | `https://github.com/organvm/limen.git` | `limen/capfill-claude-20260630-06-0927` | 0 | `firebase.json`, `github-actions` |
+| `~/Workspace/.limen-worktrees/capfill-codex-20260630-01-3e0a` | `https://github.com/organvm/limen.git` | `limen/capfill-codex-20260630-01-3e0a` | 0 | `firebase.json`, `github-actions` |
+| `~/Workspace/.limen-worktrees/capfill-codex-20260630-05-02b5` | `https://github.com/organvm/limen.git` | `limen/capfill-codex-20260630-05-02b5` | 0 | `firebase.json`, `github-actions` |
+| `~/Workspace/.limen-worktrees/capfill-gemini-20260630-03-7416` | `https://github.com/organvm/limen.git` | `limen/capfill-gemini-20260630-03-7416` | 0 | `firebase.json`, `github-actions` |
+| `~/Workspace/.limen-worktrees/capfill-opencode-20260630-02-4d95` | `https://github.com/organvm/limen.git` | `limen/capfill-opencode-20260630-02-4d95` | 0 | `firebase.json`, `github-actions` |
 | `~/Workspace/.limen-worktrees/cifix-organvm-i-theoria-conversation-corpus-engine-f02e` | `https://github.com/organvm/conversation-corpus-engine.git` | `limen/cifix-organvm-i-theoria-conversation-corpus-engine-f02e` | 0 | `pyproject.toml`, `github-actions` |
 | `~/Workspace/.limen-worktrees/cifix-organvm-i-theoria-hierarchia-mundi-3145` | `https://github.com/organvm/hierarchia-mundi.git` | `limen/cifix-organvm-i-theoria-hierarchia-mundi-3145` | 7 | `pyproject.toml` |
+| `~/Workspace/.limen-worktrees/csf-caeb31d8-exec-gemini-f0b8bc86-fccd` | `https://github.com/organvm/limen.git` | `limen/csf-caeb31d8-exec-gemini-f0b8bc86-fccd` | 0 | `firebase.json`, `github-actions` |
 | `~/Workspace/.limen-worktrees/discover-organvm-kerygma-profiles-6c74` | `https://github.com/organvm/kerygma-profiles.git` | `limen/discover-organvm-kerygma-profiles-6c74` | 0 | `pyproject.toml`, `github-actions` |
 | `~/Workspace/.limen-worktrees/gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38` | `https://github.com/organvm/sovereign--ground.git` | `limen/gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38` | 11 | none |
 | `~/Workspace/.limen-worktrees/gen-organvm-universal-mail--automation-test-coverage-0625-151e` | `https://github.com/organvm/universal-mail--automation.git` | `limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e` | 171 | `github-actions` |
+| `~/Workspace/.limen-worktrees/org-legal-organ-kernel-0630-b148` | `https://github.com/organvm/limen.git` | `limen/org-legal-organ-kernel-0630-b148` | 0 | `firebase.json`, `github-actions` |
 | `~/Workspace/.limen-worktrees/resolve-organvm-i-theoria-.github-459-1ade` | `https://github.com/organvm/.github.git` | `limen/resolve-organvm-i-theoria-.github-459-1ade` | 0 | `package.json`, `pyproject.toml`, `github-actions` |
 | `~/Workspace/.limen-worktrees/rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f` | `https://github.com/organvm/public-record-data-scrapper.git` | `limen/rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f` | 0 | `package.json`, `Dockerfile`, `github-actions`, `deploy-config` |
 | `~/Workspace/.session-meta-worktrees/reanchor-multiprovider-ingest` | `https://github.com/organvm/session-meta.git` | `feat/reanchor-multiprovider-ingest` | 0 | none |
@@ -94,13 +108,13 @@ Worktrees: `33`
 | `~/Workspace/collaboratory` | `https://github.com/organvm-vi-koinonia/collaboratory.git` | `main` | 0 | none |
 | `~/Workspace/conversation-corpus-engine` | `https://github.com/organvm/conversation-corpus-engine.git` | `discover-latent-value-corpus-engine` | 0 | `pyproject.toml`, `github-actions` |
 | `~/Workspace/domus` | `https://github.com/organvm/domus.git` | `main` | 0 | `github-actions` |
-| `~/Workspace/domus-genoma` | `https://github.com/organvm/domus-genoma.git` | `security-hardening-genoma` | 73 | `package.json`, `github-actions` |
+| `~/Workspace/domus-genoma` | `https://github.com/organvm/domus-genoma.git` | `security-hardening-genoma` | 2 | `package.json`, `github-actions` |
 | `~/Workspace/domus-genoma/.worktrees/domus-quarantine-retire-20260629` | `https://github.com/organvm/domus-genoma.git` | `work/domus-quarantine-retire-20260629` | 15 | `package.json`, `github-actions` |
 | `~/Workspace/domus-genoma/.worktrees/universal-entry-20260629` | `https://github.com/organvm/domus-genoma.git` | `work/universal-entry-20260629` | 0 | `package.json`, `github-actions` |
 | `~/Workspace/edu-organism` | `https://github.com/organvm/edu-organism.git` | `fix/peer-review-phases` | 0 | none |
 | `~/Workspace/essay-pipeline` | `https://github.com/organvm/essay-pipeline.git` | `main` | 0 | `pyproject.toml`, `github-actions` |
-| `~/Workspace/knowledge-corpus` | `https://github.com/organvm/knowledge-corpus.git` | `codex/preserve-knowledge-corpus-owner-state-20260627` | 3 | none |
-| `~/Workspace/limen` | `https://github.com/organvm/limen.git` | `work/workstream-agent-launcher-20260629` | 40 | `firebase.json`, `github-actions` |
+| `~/Workspace/knowledge-corpus` | `https://github.com/organvm/knowledge-corpus.git` | `codex/preserve-knowledge-corpus-owner-state-20260627` | 0 | none |
+| `~/Workspace/limen` | `https://github.com/organvm/limen.git` | `work/workstream-agent-launcher-20260629` | 25 | `firebase.json`, `github-actions` |
 | `~/Workspace/limen-main-trench-20260628` | `https://github.com/organvm/limen.git` | `codex/limen-main-trench-20260628` | 0 | `firebase.json`, `github-actions` |
 | `~/Workspace/limen-network-substrate-20260628` | `https://github.com/organvm/limen.git` | `codex/network-substrate-healing-20260628` | 0 | `firebase.json`, `github-actions` |
 | `~/Workspace/limen/.worktrees/mirror-mirror` | `https://github.com/organvm/mirror-mirror.git` | `work/mirror-mirror-avatar-types-20260629` | 0 | `package.json`, `Dockerfile`, `github-actions`, `deploy-config` |
@@ -120,7 +134,7 @@ Worktrees: `33`
 | `~/Workspace/micro-tato/.lanes/rob-game-touch-combat` | `https://github.com/4444J99/micro-tato.git` | `exp/rob-game-touch-combat` | 0 | `github-actions` |
 | `~/Workspace/micro-tato/.lanes/rob-roadmap-implementation` | `https://github.com/4444J99/micro-tato.git` | `exp/rob-roadmap-implementation` | 0 | `github-actions` |
 | `~/Workspace/micro-tato/.lanes/rob-transcript-completion` | `https://github.com/4444J99/micro-tato.git` | `exp/rob-transcript-completion` | 0 | `github-actions` |
-| `~/Workspace/mirror-mirror` | `https://github.com/organvm/mirror-mirror.git` | `feature/revenue-readiness` | 1 | `package.json`, `Dockerfile`, `github-actions`, `deploy-config` |
+| `~/Workspace/mirror-mirror` | `https://github.com/organvm/mirror-mirror.git` | `feature/revenue-readiness` | 0 | `package.json`, `Dockerfile`, `github-actions`, `deploy-config` |
 | `~/Workspace/my--father-mother` | `https://github.com/organvm/my--father-mother.git` | `main` | 0 | `pyproject.toml`, `github-actions` |
 | `~/Workspace/narratological-algorithmic-lenses` | `https://github.com/organvm/narratological-algorithmic-lenses.git` | `main` | 0 | `package.json`, `pyproject.toml`, `github-actions` |
 | `~/Workspace/organvm-corpvs-testamentvm` | `https://github.com/organvm/organvm-corpvs-testamentvm.git` | `main` | 0 | `github-actions` |
@@ -230,18 +244,4 @@ Worktrees: `33`
 | `~/Workspace/organvm/portfolio` | `https://github.com/organvm/portfolio.git` | `main` | 4 | `package.json`, `github-actions` |
 | `~/Workspace/organvm/praxis-perpetua` | `https://github.com/organvm/praxis-perpetua.git` | `main` | 0 | `github-actions` |
 | `~/Workspace/organvm/prima` | `https://github.com/organvm/prima.git` | `main` | 0 | `package.json` |
-| `~/Workspace/organvm/process-environment-enactment-20260609173021` | `https://github.com/organvm/process-environment-enactment-20260609173021.git` | `main` | 0 | `github-actions` |
-| `~/Workspace/organvm/process-environment-enactment-public-20260609173432` | `https://github.com/organvm/process-environment-enactment-public-20260609173432.git` | `discover-value-2026-06-22` | 0 | `github-actions` |
-| `~/Workspace/organvm/prompt-registry-archive` | `https://github.com/organvm/prompt-registry-archive.git` | `main` | 0 | none |
-| `~/Workspace/organvm/public-record-data-scrapper` | `https://github.com/organvm/public-record-data-scrapper.git` | `security-hardening-0630` | 0 | `package.json`, `Dockerfile`, `github-actions`, `deploy-config` |
-| `~/Workspace/organvm/quick-fire--all-command` | `https://github.com/organvm/quick-fire--all-command.git` | `main` | 0 | none |
-| `~/Workspace/organvm/reading-group-curriculum` | `https://github.com/organvm/reading-group-curriculum.git` | `main` | 0 | `pyproject.toml`, `github-actions` |
-| `~/Workspace/organvm/reading-observatory` | `https://github.com/organvm/reading-observatory.git` | `main` | 0 | `pyproject.toml`, `github-actions` |
-| `~/Workspace/organvm/recursive-engine--generative-entity` | `https://github.com/organvm/recursive-engine--generative-entity.git` | `main` | 3 | `pyproject.toml`, `github-actions` |
-| `~/Workspace/organvm/reverse-engine-recursive-run` | `https://github.com/organvm/reverse-engine-recursive-run.git` | `main` | 0 | `pyproject.toml`, `github-actions` |
-| `~/Workspace/organvm/salon-archive` | `https://github.com/organvm/salon-archive.git` | `main` | 0 | `pyproject.toml`, `github-actions` |
-| `~/Workspace/organvm/scalable-lore-expert` | `https://github.com/organvm/scalable-lore-expert.git` | `main` | 0 | `pyproject.toml`, `github-actions` |
-| `~/Workspace/organvm/search-local--happy-hour` | `https://github.com/organvm/search-local--happy-hour.git` | `main` | 0 | `package.json`, `github-actions` |
-| `~/Workspace/organvm/select-or-left-or-right-or` | `https://github.com/organvm/select-or-left-or-right-or.git` | `main` | 0 | `package.json`, `github-actions` |
-| `~/Workspace/organvm/sema-metra--alchemica-mundi` | `https://github.com/organvm/sema-metra--alchemica-mundi.git` | `main` | 0 | `package.json`, `github-actions` |
-| ... | ... | ... | ... | 35 additional repos in private index |
+| ... | ... | ... | ... | 49 additional repos in private index |

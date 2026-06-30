@@ -1,16 +1,16 @@
 # Product Ledger
 
-Generated: `2026-06-30T11:49:05+00:00`
-Products: `11505`
-Blocked local: `111`
+Generated: `2026-06-30T14:29:05+00:00`
+Products: `11570`
+Blocked local: `113`
 Global status: `active`
 
 ## Counts
 
-- states: `alpha` 172, `build` 135, `idea` 9687, `omega` 550, `ship` 12, `verify` 949
-- dispositions: `build` 9920, `consolidate` 50, `human-gated` 111, `publish-stage` 24, `retire` 439, `sell-ready` 12, `verify` 949
-- source_kinds: `contrib` 24, `prompt` 9687, `repo` 12, `repo-surface` 172, `task` 1610
-- outward_paths: `contrib-mirror` 24, `not_applicable` 10925, `publish-stage` 3, `revenue-path` 372, `seo-proof` 181
+- states: `alpha` 172, `build` 182, `idea` 9687, `omega` 552, `ship` 12, `verify` 965
+- dispositions: `build` 9967, `consolidate` 50, `human-gated` 113, `publish-stage` 24, `retire` 439, `sell-ready` 12, `verify` 965
+- source_kinds: `contrib` 24, `prompt` 9687, `repo` 12, `repo-surface` 172, `task` 1675
+- outward_paths: `contrib-mirror` 24, `not_applicable` 10974, `publish-stage` 3, `revenue-path` 388, `seo-proof` 181
 
 ## Next Unblocked Products
 
@@ -38,9 +38,9 @@ Global status: `active`
 | `PROD-task-05ee1a61b60b9109` | `verify` | `verify` | `revenue-path` | `organvm/tab-bookmark-manager` |
 | `PROD-task-060e64fb455af9f9` | `verify` | `verify` | `revenue-path` | `organvm/universal-mail--automation` |
 | `PROD-task-06458b03b629865a` | `verify` | `verify` | `revenue-path` | `organvm/the-invisible-ledger` |
+| `PROD-task-065e01dbdf328cb0` | `verify` | `verify` | `revenue-path` | `organvm/limen` |
 | `PROD-task-06890b85dad170cc` | `verify` | `verify` | `revenue-path` | `organvm/media-ark` |
 | `PROD-task-071111cd15458ec3` | `verify` | `verify` | `revenue-path` | `organvm/universal-mail--automation` |
-| `PROD-task-087210cfd11ca46b` | `verify` | `verify` | `revenue-path` | `organvm/a-i-chat--exporter` |
 
 ## Contract
 
