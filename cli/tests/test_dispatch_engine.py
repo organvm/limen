@@ -28,41 +28,41 @@ def test_run_capture_fast_path():
     assert r.returncode == 0 and "ok" in r.stdout
 
 
-def test_run_capture_kills_grandchild_holding_pipe_on_timeout():
+def test_run_capture_kills_grandchild_holding_pipe_on_timeout(tmp_path):
     # The exact freeze shape: the direct child exits immediately but backgrounds a grandchild that
     # inherits the stdout pipe. Plain subprocess.run(timeout) would block ~30s on communicate();
     # _run_capture must SIGKILL the whole group and raise promptly.
     token = f"limen-run-capture-grandchild-{os.getpid()}-{time.time_ns()}"
+    marker_path = tmp_path / f"{token}.pid"
     grandchild = "import time; time.sleep(30)"
     launcher = (
-        f"import subprocess, sys; subprocess.Popen([sys.executable, '-c', {grandchild!r}, {token!r}]); print('started')"
+        "import pathlib, subprocess, sys; "
+        f"pid_file={str(marker_path)!r}; "
+        f"proc = subprocess.Popen([sys.executable, '-c', {grandchild!r}, {token!r}]); "
+        "pathlib.Path(pid_file).write_text(str(proc.pid)); "
+        "print('started')"
     )
     t0 = time.time()
     with pytest.raises(subprocess.TimeoutExpired):
         D._run_capture([sys.executable, "-c", launcher], timeout=2)
     assert time.time() - t0 < 15, "group-kill did not fire — grandchild hung the call"
+
     # and no orphaned sleep survived
-    leftover = _matching_live_pids(token)
+    leftover: list[str] = []
+    pid_str = marker_path.read_text(encoding="utf-8").strip() if marker_path.exists() else ""
+    if pid_str:
+        try:
+            os.kill(int(pid_str), 0)
+        except OSError:
+            pass
+        else:
+            leftover.append(pid_str)
+
     try:
         assert not leftover, f"orphan grandchild survived the group-kill: {leftover}"
     finally:
         for pid in leftover:
             subprocess.run(["kill", "-9", pid], check=False)
-
-
-def _matching_live_pids(token: str) -> list[str]:
-    ps = subprocess.run(["ps", "-axo", "pid=,stat=,command="], capture_output=True, text=True, check=False)
-    matches: list[str] = []
-    for line in ps.stdout.splitlines():
-        if token not in line:
-            continue
-        parts = line.strip().split(None, 2)
-        if len(parts) < 3:
-            continue
-        pid, stat, _command = parts
-        if pid != str(os.getpid()) and not stat.startswith("Z"):
-            matches.append(pid)
-    return matches
 
 
 def test_down_lanes_reads_file(tmp_path, monkeypatch):
