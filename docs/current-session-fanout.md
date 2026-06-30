@@ -1,155 +1,145 @@
-# Current Session Fanout
+# Current Session Fanout: PLAN-01 Alpha-Omega Product Ledger
 
-Generated: `2026-06-30T13:32:54Z`
-Packet: `PLAN-11-f3f5e6a4`
-Theme: `codex-planner-worktrees`
-Source session: `~/.codex/sessions/2026/06/30/rollout-2026-06-30T06-17-55-019f1809-13b4-7780-9b1f-d4584f872333.jsonl`
+Generated: `2026-06-30T13:01:28Z`
+Task: `CSF-CAEB31D8-PLAN-01-FF680CEA`
+Packet: `PLAN-01-ff680cea`
+Theme: `alpha-omega-product-ledger`
+Source session: `/Users/4jp/.codex/sessions/2026/06/30/rollout-2026-06-30T06-17-55-019f1809-13b4-7780-9b1f-d4584f872333.jsonl`
 
-## Safety
+This receipt is public-safe. It uses hashes, file paths, counts, and derived routing facts only; it does not publish raw prompt, plan, or transcript bodies.
 
-- This artifact contains no raw prompt bodies and no raw plan bodies.
-- Prompt and plan provenance is hash-only; private JSON keeps metadata only.
-- This is a planner receipt, not an external dispatch or spend action.
+## Source Derivation
 
-## Full Session Coverage
+- Full session read: `1452` JSONL records, `18` turn contexts, `23` user-role response items, `301` tool calls, `45` patch applications.
+- Source fanout summary captured in the session reported `33` user messages, `64173` prompt bytes, `12` planner themes, and executor packets for active non-Codex lanes.
+- The product-ledger summary captured in the session reported `11505` product records, `111` blocked-local records, and global status `active`.
+- Current checkout state: this branch starts from `origin/main` and does not contain the source-session generated `scripts/current-session-fanout.py`, `scripts/product-ledger.py`, `scripts/repo-surface-ledger.py`, `scripts/substrate-ledger.py`, or `cli/tests/test_substrate_repo_product_fanout.py`; this packet therefore emits the owner plan and predicates rather than claiming those scripts already exist here.
+- Local boot-state gap: `logs/organ-health.json` and `logs/usage.json` are absent in this worktree. That is a local planning blocker for runtime lane health, not a global product-selection blocker.
 
-- JSONL rows read: `1452`.
-- User message occurrences: `29`; unique prompt hashes: `19`.
-- Plan update calls: `2`; unique derived plan hashes: `10`.
-- Exec commands observed: `278`; patch calls observed: `45`.
-- Command mix: `read` 89, `search` 32, `python3` 28, `git` 21, `dispatch-dry-run` 13, `nl` 13, `find` 12, `tests` 10, `domus-preflight` 6, `current-session-fanout` 6, `ls` 5, `PYTHONPATH=cli/src` 5, `zsh` 5, `parameter-check` 4, `bash` 4, `whole-verify` 4, `substrate-ledger` 3, `pwd` 2, `atuin` 2, `printf` 2, `product-ledger` 2, `repo-surface-ledger` 2, `chmod` 1, `chezmoi` 1, `if` 1, `df` 1, `for` 1, `test` 1, `ps` 1, `kill` 1.
-- Patched owner mix: `limen-dispatch-control` 22, `limen-repo` 15, `domus-genoma` 11, `limen-current-session-fanout` 7, `domus-local-shell` 5.
+Source plan hash prefixes supplied by the dispatcher:
 
-## Provenance Hashes
+- `7eb608baa99c`
+- `c93bc2c89ad8`
+- `dbf49126308e`
+- `3cc93e1d8fbd`
+- `0cb1773e8fef`
+- `1a3fd7bbca9d`
+- `569ac3d1deea`
+- `b0f5c26d40a3`
+- `f15665fb9ad3`
+- `21e790435885`
 
-- Provided plan hashes: `0cb1773e8fef`, `1a3fd7bbca9d`, `21e790435885`, `3cc93e1d8fbd`, `569ac3d1deea`, `7eb608baa99c`, `b0f5c26d40a3`, `c93bc2c89ad8`, `dbf49126308e`, `f15665fb9ad3`.
-- Provided prompt hashes: `4c72667b4d9a1d74b666b8e5`, `51b4520a624f45dc78be0d98`, `5470f2595dfe3afd1fd6e53b`, `5cd8d801fb9ec350968507ad`, `e27388c5c8a724b1070d4aaf`, `f970b04af2b06193fcaf9ca4`.
-- Derived plan hashes: `03a697db638e`, `0ce879a73826`, `2c6be69d71ae`, `38ea38a751da`, `8417fc1c78ab`, `883161fabc81`, `9686931db1b7`, `ac4cde37fb23`, `b30b3bb81237`, `f4a0a56b05bd`.
-- Derived prompt hashes: `1248470c2fe5d16290415d70`, `32dc3a0ad79df1714ba8dac7`, `4a4262c9ee1090e71fe58087`, `4c72667b4d9a1d74b666b8e5`, `4f12b0433d4bddcb16fad634`, `51b4520a624f45dc78be0d98`, `5470f2595dfe3afd1fd6e53b`, `5cd8d801fb9ec350968507ad`, `683132d513a903ec64f73e79`, `71199f24c76641cb9237c6fd`, `8cbc3e9b54e33a9b39f34274`, `9b9de6c487547849c295892b`, ... +7.
-- First / last prompt hash: `4c72667b4d9a1d74b666b8e5` / `af8e636278936b8fe437e835`.
+Source prompt hash prefixes supplied by the dispatcher:
 
-## Themes
+- `4c72667b4d9a1d74b666b8e5`
+- `f970b04af2b06193fcaf9ca4`
+- `5cd8d801fb9ec350968507ad`
+- `51b4520a624f45dc78be0d98`
+- `e27388c5c8a724b1070d4aaf`
+- `5470f2595dfe3afd1fd6e53b`
 
-- `repo-salvage-consolidation`
-- `dynamic-substrate`
+## Fanout Boundary
+
+`PLAN-01-ff680cea` owns the alpha-to-omega product ledger. It must not collapse the other current-session streams into itself; it should keep them visible as inputs and route their executor packets through owner ledgers.
+
+Full-session theme set derived from the source receipt:
+
 - `alpha-omega-product-ledger`
-- `current-session-intake`
 - `full-fleet-overnight`
+- `dynamic-substrate`
+- `repo-salvage-consolidation`
+- `money-inbound-seo`
 - `contrib-mirror`
+- `quota-reset-guard`
+- `current-session-intake`
+- `domus-preflight-noise`
 - `private-sauce-boundary`
 - `codex-planner-worktrees`
 - `autopoietic-conductor`
-- `money-inbound-seo`
-- `quota-reset-guard`
-- `domus-preflight-noise`
 
 ## Owner Packets
 
-| Packet | Owner | Agent | Theme | Status | Receipt |
-|---|---|---|---|---|---|
-| `PLAN-11-f3f5e6a4` | limen current-session fanout | `codex` | `codex-planner-worktrees` | `ready` | docs/current-session-fanout.md plus .limen-private/session-corpus/lifecycle/current-session-fanout.json |
-| `OWNER-limen-dispatch-control` | limen dispatch control plane | `codex` | `full-fleet-overnight` | `ready` | dispatch dry-run output and focused predicate output |
-| `OWNER-product-selection` | limen product selection | `codex` | `dynamic-substrate` | `ready` | product/substrate ledger docs and private JSON indexes |
-| `OWNER-local-blockers` | blocking local owner ledgers | `codex` | `blocked-local-work` | `blocked-local-recorded` | Blocked Local Work section in docs/current-session-fanout.md |
+| Packet | Owner | Status | Executor Criteria | Verification Predicate |
+|---|---|---|---|---|
+| `OWNER-alpha-omega-product-ledger` | `organvm/limen` | `ready-to-implement` | Restore or implement the product ledger that classifies prompt, task, repo, repo-surface, and contrib records into `idea`, `alpha`, `build`, `verify`, `ship`, `omega`, or `blocked_local`; raw prompt bodies remain private. | `python3 scripts/product-ledger.py --refresh --private --redacted-summary` |
+| `OWNER-current-session-fanout` | `organvm/limen` | `ready-to-implement` | Restore or implement the fanout generator that emits at least `10` Codex planner packets and active-lane executor packets with `--no-reset-spend`; planner packets are conductor planning only. | `python3 scripts/current-session-fanout.py --min-codex-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --write` |
+| `OWNER-product-source-inputs` | `organvm/limen` | `ready-to-implement` | Pull product candidates from `tasks.yaml`, `value-repos.json`, `positioning-seeds.json`, prompt lifecycle indexes, repo-surface indexes, and contrib ledgers; never depend on one mounted drive name as identity. | `python3 scripts/substrate-ledger.py --write && python3 scripts/repo-surface-ledger.py --write --max-depth 4` |
+| `OWNER-executor-selection` | `organvm/limen` | `ready-to-implement` | Select executor packets only when a product has an owner repo or owner ledger, lineage hash, public/private boundary, outward path, and a narrow receipt target; prefer active cheaper lanes and avoid default expensive-model fanout. | `python3 scripts/current-session-fanout.py --min-codex-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --dry-run` |
+| `OWNER-blocked-local-records` | `organvm/limen` | `ready-to-implement` | A product-local blocker records the exact missing gate and then yields to the next unblocked product. It never sets global product selection to stopped while another product is actionable. | `python3 -m pytest cli/tests/test_substrate_repo_product_fanout.py -q -k blocked` |
+| `OWNER-contrib-mirror-input` | `organvm/contrib`, `a-organvm/orchestration-start-here`, `a-organvm/organvm-engine` | `delegate-to-PLAN-06` | Contribution targets are product candidates when they have upstream repo, seed/ledger status, mirror/backflow action, and verification receipt; PLAN-01 consumes their product rows, PLAN-06 owns detailed contrib machinery. | `python3 scripts/product-ledger.py --refresh --private --redacted-summary` |
+| `OWNER-domus-preflight-noise` | `organvm/domus-genoma` | `blocked-local-delegate-to-PLAN-09` | Domus shell/preflight work is outside this Limen worktree and had unrelated dirty state in the source session. Record it as local blocked/delegated work and continue product selection. | `domus up --dry-run` plus Domus CLI tests in the owner worktree |
 
-## PLAN-11-f3f5e6a4
+## Executor Acceptance Criteria
 
-Purpose: Turn the full current session into Codex planner worktree packets and downstream executor packets.
+An executor packet emitted from this stream is valid only when all of these are true:
 
-Executor Criteria:
-- Use every user-turn prompt hash and every update_plan step hash from the source session.
-- Keep planner packets Codex-only until an owner repo, allowed path set, predicate, and receipt are explicit.
-- Executor packets must name target_agent, owner, stop condition, expected receipt, and verification predicate.
-- Do not consume reset/credit spend, mutate credentials, send mail, deploy, force-push, or delete data.
-- Treat local blockers as owner-scoped records; they cannot halt unrelated product selection.
+- It names exactly one owner repo or one owner ledger.
+- It carries source lineage using product ids, prompt hashes, plan hashes, task ids, or session hash prefixes; it does not include raw prompt or plan text.
+- It identifies a public/private boundary before any outward surface is changed.
+- It includes one narrow predicate command or proof receipt.
+- It classifies the next state as one of `build`, `verify`, `publish-stage`, `sell-ready`, `contrib-mirror`, `blocked_local`, `human-gated`, `retire`, or `omega`.
+- It does not spend money, apply Codex resets, buy credits, send mail, deploy, force-push, merge broadly, or mutate identity-bearing outbound systems without a fresh human gate.
+- It records blockers locally and then selects the next unblocked product candidate.
 
-Verification Predicates:
-- `python3 scripts/current-session-fanout.py --session ~/.codex/sessions/2026/06/30/rollout-2026-06-30T06-17-55-019f1809-13b4-7780-9b1f-d4584f872333.jsonl --packet-id PLAN-11-f3f5e6a4 --theme codex-planner-worktrees --write`
-- `rg -n "PLAN\-11\-f3f5e6a4|codex\-planner\-worktrees|Executor Criteria|Verification Predicates" docs/current-session-fanout.md`
-- `python3 -m py_compile scripts/current-session-fanout.py`
+## Product Selection Rule
 
-Stop Before:
-- external dispatch
-- paid reset or credit mutation
-- outbound identity-bearing action
-- credential, deploy, delete, merge, or force-push action
+Global product selection remains `active` when:
 
-## OWNER-limen-dispatch-control
+- at least one product candidate is not `blocked_local`, `human-gated`, `retire`, or `omega`;
+- the candidate has an owner and a verification predicate; and
+- the next action is reversible local work, private indexing, verification, proof staging, positioning, repo surface mapping, or executor packetization.
 
-Purpose: Preserve the registry-derived lane cascade and dry-run fanout behavior before executor dispatch.
+Global product selection may stop only when every known product candidate is one of:
 
-Executor Criteria:
-- Lanes are derived from the canonical registry, not hardcoded per call site.
-- Down or metered-exhausted lanes are skipped before launch.
-- Dry-run shows planned launch count and lane mix without creating external work.
-
-Verification Predicates:
-- `PYTHONPATH=cli/src pytest -q cli/tests/test_dispatch.py cli/tests/test_async_dispatch.py`
-- `PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes auto --dry-run`
-- `python3 scripts/check-params.py`
-
-Stop Before:
-- live dispatch
-- credential work
-- spend escalation
-
-## OWNER-product-selection
-
-Purpose: Keep global product selection active while local substrate or product-specific blockers are recorded.
-
-Executor Criteria:
-- A blocked local product or storage root records an owner blocker instead of setting global_status blocked.
-- Selection prefers unblocked product/revenue/contrib paths with an explicit proof command.
-- Private product/session details stay in .limen-private; tracked docs keep counts and hashes.
-
-Verification Predicates:
-- `python3 scripts/current-session-fanout.py --write`
-- `python3 scripts/product-ledger.py --refresh --private --redacted-summary`
-- `python3 scripts/substrate-ledger.py --write`
-
-Stop Before:
-- deleting local roots
-- spending money
-- publishing private product/source data
-
-## OWNER-local-blockers
-
-Purpose: Route unresolved local blockers to their owners without stopping the global fanout stream.
-
-Executor Criteria:
-- Each blocker names its owner and cheapest next action.
-- Resolved transient test/doc failures are not treated as live blockers.
-- Whole-system verified is not claimed while task-board or storage blockers remain live.
-
-Verification Predicates:
-- `python3 scripts/validate-task-board.py`
-- `domus up --dry-run`
-- `bash scripts/verify-whole.sh`
-
-Stop Before:
-- global dead-stop
-- silent reopen of completed work
-- storage mutation without owner gate
+- `omega` with verification receipt;
+- `retire` with evidence;
+- `human-gated` with the cheapest durable human path; or
+- `blocked_local` and no other candidate is actionable.
 
 ## Blocked Local Work
 
-| Blocker | Owner | Status | Global Product Selection | Next Action | Evidence |
-|---|---|---|---|---|---|
-| `domus-storage-preflight-blocked` | domus-genoma/storage lifecycle | `blocked-local` | `continue` | Record in the Domus/storage owner lane; do not block unrelated product selection. | `065d6cf8a07a26e1`, `fd6f7137a4747c9a`, `3d410efe93a7c338`, `4b8c5df4a92eed60`, ... +7 |
-| `limen-task-board-reopened-after-done` | limen task board | `blocked-local` | `continue` | Fix or explicitly owner-record the reopened task before claiming whole-system verified. | `550d46fba9c45d9f`, `4c3899595913a4de`, `3a6e1601ad24e8f9`, `550d46fba9c45d9f` |
-| `local-disk-pressure` | domus-genoma/storage lifecycle | `blocked-local` | `continue` | Record in the Domus/storage owner lane; do not block unrelated product selection. | `065d6cf8a07a26e1`, `065d6cf8a07a26e1`, `065d6cf8a07a26e1`, `63020100ca42e563`, ... +2 |
-| `agent-doc-drift` | limen agent docs | `resolved-later` | `continue` | Keep AGENTS.md aligned with canonical agent/status vocabulary. | `550d46fba9c45d9f` |
-| `test-failure` | repo predicate | `resolved-later` | `continue` | Use later focused predicate output before treating the failure as live. | `b89eaa9f518c7c3f`, `02b7cd567071490a` |
-| `web-app-node-modules-missing` | limen web/app dependency install | `blocked-local` | `continue` | Run the web/app package install in this worktree before claiming whole-system verified. | `web-app-package-manifest` |
+These are recorded local blockers for this packet. They do not stop global product selection.
 
-## Global Product Selection
+| Blocker | Owner | Evidence | Next Action |
+|---|---|---|---|
+| Missing runtime health receipts | `organvm/limen` | `logs/organ-health.json` and `logs/usage.json` are absent in this checkout. | Recreate via the owning health/usage scripts when executor lane health is needed; meanwhile plan from source session and active repo state. |
+| Missing generated fanout/product scripts in this clean branch | `organvm/limen` | Source session patched `scripts/current-session-fanout.py`, `scripts/product-ledger.py`, `scripts/repo-surface-ledger.py`, `scripts/substrate-ledger.py`, and `cli/tests/test_substrate_repo_product_fanout.py`; they are absent here. | Implement or restore these in the executor branch before running the emitted predicates. |
+| Domus shell/preflight work lives outside this worktree | `organvm/domus-genoma` | Source session edited absolute Domus/live shell paths and noted unrelated dirty owner-worktree state. | Delegate to `PLAN-09-domus-preflight-noise`; do not block product ledger selection. |
 
-- Status: `active`.
-- Blocked local work stops global selection: `False`.
-- Product selection evidence command hashes: `19e0a58dd9f1cbd9`.
+## Close Predicate For This Packet
 
-## Outputs
+This packet is complete when the repository contains this receipt and it satisfies the acceptance checks:
 
-- Public fanout packet: `docs/current-session-fanout.md`.
-- Private metadata index: `~/Workspace/.limen-worktrees/csf-caeb31d8-plan-11-f3f5e6a4-d1e8/.limen-private/session-corpus/lifecycle/current-session-fanout.json`.
+```bash
+python3 - <<'PY'
+from pathlib import Path
 
+doc = Path("docs/current-session-fanout.md").read_text(encoding="utf-8")
+required = [
+    "PLAN-01-ff680cea",
+    "alpha-omega-product-ledger",
+    "Owner Packets",
+    "Executor Acceptance Criteria",
+    "Verification Predicate",
+    "Blocked Local Work",
+    "Global product selection remains `active`",
+    "does not publish raw prompt, plan, or transcript bodies",
+]
+missing = [item for item in required if item not in doc]
+if missing:
+    raise SystemExit(f"missing required fanout-plan markers: {missing}")
+print("current-session-fanout PLAN-01 receipt ok")
+PY
+```
+
+Follow-up implementation branches should then run:
+
+```bash
+python3 -m py_compile scripts/substrate-ledger.py scripts/repo-surface-ledger.py scripts/product-ledger.py scripts/current-session-fanout.py
+python3 -m pytest cli/tests/test_substrate_repo_product_fanout.py -q
+python3 scripts/substrate-ledger.py --write
+python3 scripts/repo-surface-ledger.py --write --max-depth 4
+python3 scripts/product-ledger.py --refresh --private --redacted-summary
+python3 scripts/current-session-fanout.py --min-codex-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --write
+bash scripts/verify-whole.sh
+```
