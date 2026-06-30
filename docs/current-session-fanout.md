@@ -1,22 +1,22 @@
-# Current Session Fanout: PLAN-05 Money Inbound SEO
+# Current Session Fanout: PLAN-01 Alpha-Omega Product Ledger
 
-Generated: `2026-06-30`
-Status: `ready`
-Packet: `PLAN-05-37b731f8`
-Task: `CSF-CAEB31D8-PLAN-05-37B731F8`
-Theme: `money-inbound-seo`
+Generated: `2026-06-30T13:01:28Z`
+Task: `CSF-CAEB31D8-PLAN-01-FF680CEA`
+Packet: `PLAN-01-ff680cea`
+Theme: `alpha-omega-product-ledger`
 Source session: `/Users/4jp/.codex/sessions/2026/06/30/rollout-2026-06-30T06-17-55-019f1809-13b4-7780-9b1f-d4584f872333.jsonl`
 
-This receipt plans the money-inbound SEO stream only. It does not paste raw
-prompt or plan text. Provenance is by hashes and repo-local ledgers.
+This receipt is public-safe. It uses hashes, file paths, counts, and derived routing facts only; it does not publish raw prompt, plan, or transcript bodies.
 
-## Full-Session Provenance
+## Source Derivation
 
-The source session contains `11` plan events, `10` unique plan sources, and `1`
-duplicate plan event. This packet is derived from the full unique plan set, not
-only from the latest turn.
+- Full session read: `1452` JSONL records, `18` turn contexts, `23` user-role response items, `301` tool calls, `45` patch applications.
+- Source fanout summary captured in the session reported `33` user messages, `64173` prompt bytes, `12` planner themes, and executor packets for active non-Codex lanes.
+- The product-ledger summary captured in the session reported `11505` product records, `111` blocked-local records, and global status `active`.
+- Current checkout state: this branch starts from `origin/main` and does not contain the source-session generated `scripts/current-session-fanout.py`, `scripts/product-ledger.py`, `scripts/repo-surface-ledger.py`, `scripts/substrate-ledger.py`, or `cli/tests/test_substrate_repo_product_fanout.py`; this packet therefore emits the owner plan and predicates rather than claiming those scripts already exist here.
+- Local boot-state gap: `logs/organ-health.json` and `logs/usage.json` are absent in this worktree. That is a local planning blocker for runtime lane health, not a global product-selection blocker.
 
-Source plan hashes:
+Source plan hash prefixes supplied by the dispatcher:
 
 - `7eb608baa99c`
 - `c93bc2c89ad8`
@@ -29,91 +29,117 @@ Source plan hashes:
 - `f15665fb9ad3`
 - `21e790435885`
 
-Source prompt refs: `44` hash refs, `19` unique. Full hash list is kept in the
-ignored private receipt:
-`.limen-private/session-corpus/lifecycle/plan-05-money-inbound-seo.json`.
+Source prompt hash prefixes supplied by the dispatcher:
 
-## Selection Inputs
+- `4c72667b4d9a1d74b666b8e5`
+- `f970b04af2b06193fcaf9ca4`
+- `5cd8d801fb9ec350968507ad`
+- `51b4520a624f45dc78be0d98`
+- `e27388c5c8a724b1070d4aaf`
+- `5470f2595dfe3afd1fd6e53b`
 
-- Value repo source: `value-repos.json` (`12` repos).
-- Positioning source: `positioning-seeds.json` (`9` seeded repos).
-- Revenue source: `revenue-ladder.json` (`6` ranked products).
-- Existing doctrine: `docs/inbound-magnet-system.md`.
-- Existing generator: `scripts/generate-positioning.py`.
-- Existing revenue queue feed: `scripts/generate-revenue-backlog.py`.
+## Fanout Boundary
 
-Global product selection order for this stream starts with the ranked revenue
-ladder, then falls through to seeded value repos when a higher-ranked product is
-blocked by a human or outward-facing gate.
+`PLAN-01-ff680cea` owns the alpha-to-omega product ledger. It must not collapse the other current-session streams into itself; it should keep them visible as inputs and route their executor packets through owner ledgers.
+
+Full-session theme set derived from the source receipt:
+
+- `alpha-omega-product-ledger`
+- `full-fleet-overnight`
+- `dynamic-substrate`
+- `repo-salvage-consolidation`
+- `money-inbound-seo`
+- `contrib-mirror`
+- `quota-reset-guard`
+- `current-session-intake`
+- `domus-preflight-noise`
+- `private-sauce-boundary`
+- `codex-planner-worktrees`
+- `autopoietic-conductor`
 
 ## Owner Packets
 
-| Packet | Owner | Route | Executor Criteria | Verification Predicate |
+| Packet | Owner | Status | Executor Criteria | Verification Predicate |
 |---|---|---|---|---|
-| `MIB-01-positioning-proof` | `organvm/limen` | Refresh public positioning for the first money surfaces already backed by seeds. Start with `organvm/public-record-data-scrapper` and `organvm/a-i-chat--exporter`. | Executor may edit only positioning seeds, generated public positioning docs, or generator tests. Public surfaces must contain no prices, raw prompts, or outbound sends. Internal anchors remain ignored. | `python3 scripts/generate-positioning.py --repo organvm/public-record-data-scrapper` and `python3 scripts/generate-positioning.py --repo organvm/a-i-chat--exporter`. |
-| `MIB-02-discoverability-map` | `organvm/limen` plus selected owner repo | Convert each seeded product into buyer-search vocabulary: repo topics, README terms, title/description, and front-door copy. Do not mutate GitHub topics until an executor has a repo-specific gate. | Executor must name the exact owner repo, changed files, buyer search terms, and rollback path. If GitHub topic mutation is needed, stage the command only. | Parse `value-repos.json`, `positioning-seeds.json`, and `revenue-ladder.json`; run `git diff --check` on any changed SEO docs/seeds. |
-| `MIB-03-frontdoor-capture` | `organvm/portfolio` and `organvm/limen` | Keep the two-door inbound surface current: client door and recruiter door. Capture remains tagged inbound only. | Executor may stage mailto or form copy, but cannot publish a personal contact address, send email, buy ads, deploy past a release gate, or expose a private repo. `frontdoor.contact` is a human gate while empty. | `python3 scripts/generate-positioning.py --apply` after a contact/publish gate, otherwise dry-run only and record the gate in the packet receipt. |
-| `MIB-04-selection-continuity` | `organvm/limen` | When a local product is blocked, record the blocker once and select the next unblocked product/repo for SEO or positioning work. | Executor must keep global selection active. A blocked local rail can end that rail, but not the stream. The next packet should pick the next repo with seed + public-safe verification. | `python3 scripts/generate-revenue-backlog.py --floor 1 --max-new 1` plus a receipt line naming any blocker and the next selected unblocked repo. |
+| `OWNER-alpha-omega-product-ledger` | `organvm/limen` | `ready-to-implement` | Restore or implement the product ledger that classifies prompt, task, repo, repo-surface, and contrib records into `idea`, `alpha`, `build`, `verify`, `ship`, `omega`, or `blocked_local`; raw prompt bodies remain private. | `python3 scripts/product-ledger.py --refresh --private --redacted-summary` |
+| `OWNER-current-session-fanout` | `organvm/limen` | `ready-to-implement` | Restore or implement the fanout generator that emits at least `10` Codex planner packets and active-lane executor packets with `--no-reset-spend`; planner packets are conductor planning only. | `python3 scripts/current-session-fanout.py --min-codex-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --write` |
+| `OWNER-product-source-inputs` | `organvm/limen` | `ready-to-implement` | Pull product candidates from `tasks.yaml`, `value-repos.json`, `positioning-seeds.json`, prompt lifecycle indexes, repo-surface indexes, and contrib ledgers; never depend on one mounted drive name as identity. | `python3 scripts/substrate-ledger.py --write && python3 scripts/repo-surface-ledger.py --write --max-depth 4` |
+| `OWNER-executor-selection` | `organvm/limen` | `ready-to-implement` | Select executor packets only when a product has an owner repo or owner ledger, lineage hash, public/private boundary, outward path, and a narrow receipt target; prefer active cheaper lanes and avoid default expensive-model fanout. | `python3 scripts/current-session-fanout.py --min-codex-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --dry-run` |
+| `OWNER-blocked-local-records` | `organvm/limen` | `ready-to-implement` | A product-local blocker records the exact missing gate and then yields to the next unblocked product. It never sets global product selection to stopped while another product is actionable. | `python3 -m pytest cli/tests/test_substrate_repo_product_fanout.py -q -k blocked` |
+| `OWNER-contrib-mirror-input` | `organvm/contrib`, `a-organvm/orchestration-start-here`, `a-organvm/organvm-engine` | `delegate-to-PLAN-06` | Contribution targets are product candidates when they have upstream repo, seed/ledger status, mirror/backflow action, and verification receipt; PLAN-01 consumes their product rows, PLAN-06 owns detailed contrib machinery. | `python3 scripts/product-ledger.py --refresh --private --redacted-summary` |
+| `OWNER-domus-preflight-noise` | `organvm/domus-genoma` | `blocked-local-delegate-to-PLAN-09` | Domus shell/preflight work is outside this Limen worktree and had unrelated dirty state in the source session. Record it as local blocked/delegated work and continue product selection. | `domus up --dry-run` plus Domus CLI tests in the owner worktree |
+
+## Executor Acceptance Criteria
+
+An executor packet emitted from this stream is valid only when all of these are true:
+
+- It names exactly one owner repo or one owner ledger.
+- It carries source lineage using product ids, prompt hashes, plan hashes, task ids, or session hash prefixes; it does not include raw prompt or plan text.
+- It identifies a public/private boundary before any outward surface is changed.
+- It includes one narrow predicate command or proof receipt.
+- It classifies the next state as one of `build`, `verify`, `publish-stage`, `sell-ready`, `contrib-mirror`, `blocked_local`, `human-gated`, `retire`, or `omega`.
+- It does not spend money, apply Codex resets, buy credits, send mail, deploy, force-push, merge broadly, or mutate identity-bearing outbound systems without a fresh human gate.
+- It records blockers locally and then selects the next unblocked product candidate.
+
+## Product Selection Rule
+
+Global product selection remains `active` when:
+
+- at least one product candidate is not `blocked_local`, `human-gated`, `retire`, or `omega`;
+- the candidate has an owner and a verification predicate; and
+- the next action is reversible local work, private indexing, verification, proof staging, positioning, repo surface mapping, or executor packetization.
+
+Global product selection may stop only when every known product candidate is one of:
+
+- `omega` with verification receipt;
+- `retire` with evidence;
+- `human-gated` with the cheapest durable human path; or
+- `blocked_local` and no other candidate is actionable.
 
 ## Blocked Local Work
 
-These are recorded blockers for this stream. They do not stop global product
-selection.
+These are recorded local blockers for this packet. They do not stop global product selection.
 
-- `frontdoor.contact` is empty in `positioning-seeds.json`; public CTAs remain
-  plain text until Anthony chooses an indexed inbound address or alias.
-- `docs/NEEDS-HUMAN-DIGEST.md` records Cloudflare auth, branch-protection,
-  launchd `gh` auth, PR security secrets, and release-gate actions. These gates
-  block deploys or identity-bearing actions, not local SEO planning.
-- `organvm/mirror-mirror` is marked `awaiting_publish` in `positioning-seeds.json`;
-  do not render it onto a public inbound surface until the repo visibility gate is
-  explicitly opened.
-- This task worktree does not contain live `logs/organ-health.json` or
-  `logs/usage.json`; lane health must be re-derived at dispatch time. Planning can
-  still continue from repo-local value, positioning, and revenue ledgers.
+| Blocker | Owner | Evidence | Next Action |
+|---|---|---|---|
+| Missing runtime health receipts | `organvm/limen` | `logs/organ-health.json` and `logs/usage.json` are absent in this checkout. | Recreate via the owning health/usage scripts when executor lane health is needed; meanwhile plan from source session and active repo state. |
+| Missing generated fanout/product scripts in this clean branch | `organvm/limen` | Source session patched `scripts/current-session-fanout.py`, `scripts/product-ledger.py`, `scripts/repo-surface-ledger.py`, `scripts/substrate-ledger.py`, and `cli/tests/test_substrate_repo_product_fanout.py`; they are absent here. | Implement or restore these in the executor branch before running the emitted predicates. |
+| Domus shell/preflight work lives outside this worktree | `organvm/domus-genoma` | Source session edited absolute Domus/live shell paths and noted unrelated dirty owner-worktree state. | Delegate to `PLAN-09-domus-preflight-noise`; do not block product ledger selection. |
 
-Fallback rule: if the current selected repo is blocked by one of the gates above,
-write the blocker to the owning receipt and move to the next ranked repo with a
-public-safe seed. Do not wait on account signup, deployment auth, or outbound
-contact setup before continuing local positioning/discoverability work.
+## Close Predicate For This Packet
 
-## Executor Contract
-
-Every executor packet spawned from this plan must return:
-
-- owner repo and branch/worktree;
-- exact changed paths or an explicit no-op reason;
-- predicate command and result;
-- public-safe receipt using source plan hashes above, not raw prompt text;
-- blocker receipt when a human/outward-facing gate is hit;
-- next unblocked repo/product when local work is blocked.
-
-Forbidden without a fresh human gate:
-
-- sending email or outbound messages;
-- publishing contact details not already configured;
-- changing repo visibility;
-- spending money, buying ads, or using reset/credit top-ups;
-- deploying past a release gate;
-- pasting source prompt or plan bodies into public files.
-
-## Verified Predicates
-
-The following predicates were run in this worktree while creating the packet:
+This packet is complete when the repository contains this receipt and it satisfies the acceptance checks:
 
 ```bash
-python3 scripts/generate-positioning.py --repo organvm/public-record-data-scrapper
-python3 scripts/generate-positioning.py --repo organvm/a-i-chat--exporter
-python3 scripts/generate-revenue-backlog.py --floor 1 --max-new 1
 python3 - <<'PY'
-import json
 from pathlib import Path
-for name in ['value-repos.json', 'positioning-seeds.json', 'revenue-ladder.json']:
-    json.loads(Path(name).read_text())
+
+doc = Path("docs/current-session-fanout.md").read_text(encoding="utf-8")
+required = [
+    "PLAN-01-ff680cea",
+    "alpha-omega-product-ledger",
+    "Owner Packets",
+    "Executor Acceptance Criteria",
+    "Verification Predicate",
+    "Blocked Local Work",
+    "Global product selection remains `active`",
+    "does not publish raw prompt, plan, or transcript bodies",
+]
+missing = [item for item in required if item not in doc]
+if missing:
+    raise SystemExit(f"missing required fanout-plan markers: {missing}")
+print("current-session-fanout PLAN-01 receipt ok")
 PY
 ```
 
-All passed. `generate-revenue-backlog.py` reported the revenue queue healthy
-instead of generating duplicate work, which is the desired continuity behavior:
-blocked rails are recorded, but product selection remains active.
+Follow-up implementation branches should then run:
 
+```bash
+python3 -m py_compile scripts/substrate-ledger.py scripts/repo-surface-ledger.py scripts/product-ledger.py scripts/current-session-fanout.py
+python3 -m pytest cli/tests/test_substrate_repo_product_fanout.py -q
+python3 scripts/substrate-ledger.py --write
+python3 scripts/repo-surface-ledger.py --write --max-depth 4
+python3 scripts/product-ledger.py --refresh --private --redacted-summary
+python3 scripts/current-session-fanout.py --min-codex-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --write
+bash scripts/verify-whole.sh
+```
