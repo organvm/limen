@@ -63,6 +63,10 @@ THEMES: list[tuple[str, tuple[str, ...]]] = [
     ("autopoietic-conductor", ("autopoetic", "autopoietic", "forever", "tokens")),
 ]
 
+PREFERRED_EXECUTOR_THEMES = {
+    "github_actions": "repo-salvage-consolidation",
+}
+
 PROPOSED_PLAN_RE = re.compile(r"<proposed_plan>\s*(.*?)(?:\s*</proposed_plan>|$)", re.I | re.S)
 MARKDOWN_H1_RE = re.compile(r"(?m)^#\s+(.+?)\s*$")
 PRIOR_PLAN_MARKERS = (
@@ -373,6 +377,26 @@ def owner_packet_for_theme(theme: str) -> dict[str, Any]:
                 "bash scripts/verify-whole.sh",
             ],
         }
+    if theme == "repo-salvage-consolidation":
+        return {
+            "owner_repo": "organvm/limen",
+            "owner_ledger": "docs/current-session-fanout/repo-salvage-consolidation-plan-04.md",
+            "criteria": [
+                "derive repo roots from configured substrate paths, not a fixed drive name or hand-maintained list",
+                "use scripts/repo-surface-ledger.py to record nested repos, duplicate remotes, dirty state, test/build/deploy surfaces, and hash-only product surfaces",
+                "use scripts/salvage-yard-map.py to collapse duplicate remotes/product surfaces into one canonical owner cluster with a disposition",
+                "use scripts/product-ledger.py to keep blocked_local work item-scoped while global product selection continues",
+                "preserve raw prompt and plan bodies outside tracked files; public packet provenance stays hash-only",
+                "stage GitHub/org/App/credential/deploy mutations as blockers unless a human gate is present",
+            ],
+            "verification_predicates": [
+                "python3 -m py_compile scripts/repo-surface-ledger.py scripts/salvage-yard-map.py scripts/product-ledger.py scripts/current-session-fanout.py",
+                "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_substrate_repo_product_fanout.py -q",
+                "python3 scripts/repo-surface-ledger.py --refresh --dry-run",
+                "python3 scripts/salvage-yard-map.py --dry-run",
+                "python3 scripts/product-ledger.py --dry-run",
+            ],
+        }
     return {
         "owner_repo": "organvm/limen",
         "owner_ledger": "docs/current-session-fanout.md",
@@ -426,12 +450,14 @@ def planner_packets(
 
 
 def executor_packet_predicates(theme: str) -> list[str]:
-    if theme == "full-fleet-overnight":
-        return owner_packet_for_theme(theme)["verification_predicates"]
-    return [
-        "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q",
-        "python3 -m py_compile scripts/current-session-fanout.py",
-    ]
+    owner = owner_packet_for_theme(theme)
+    return list(
+        owner.get("verification_predicates")
+        or [
+            "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q",
+            "python3 -m py_compile scripts/current-session-fanout.py",
+        ]
+    )
 
 
 def executor_packets(
@@ -445,10 +471,20 @@ def executor_packets(
     work_themes = list(themes)
     if include_contrib and "contrib-mirror" not in work_themes:
         work_themes.append("contrib-mirror")
+    reserved_themes = {
+        theme
+        for lane, theme in PREFERRED_EXECUTOR_THEMES.items()
+        if lane in lanes and theme in work_themes
+    }
     for lane in lanes:
         if lane == "codex":
             continue
-        theme = work_themes[len(packets) % len(work_themes)] if work_themes else "product-factory"
+        preferred_theme = PREFERRED_EXECUTOR_THEMES.get(lane)
+        if preferred_theme in work_themes:
+            theme = preferred_theme
+        else:
+            selectable_themes = [theme for theme in work_themes if theme not in reserved_themes] or work_themes
+            theme = selectable_themes[len(packets) % len(selectable_themes)] if selectable_themes else "product-factory"
         packets.append(
             {
                 "id": f"EXEC-{lane}-{stable_hash(theme, 8)}",
