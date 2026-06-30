@@ -130,6 +130,24 @@ parameters:
     self_update: none
     owner: continuity
     note: "Ignored local raw/private session cartridge. Stores manifests and optional content-addressed object copies; never committed."
+  LIMEN_PRIVATE_ROOT:
+    default: "$LIMEN_ROOT/.limen-private"
+    env: LIMEN_PRIVATE_ROOT
+    self_update: none
+    owner: continuity
+    note: "Ignored private owner root for local receipts, raw reports, and hash-proof state that must not enter Git."
+  LIMEN_PHOTOS_LIBRARY:
+    default: "~/Pictures/Photos Library.photoslibrary"
+    env: LIMEN_PHOTOS_LIBRARY
+    self_update: none
+    owner: continuity
+    note: "Local Photos library bundle read by media-atomize metadata mode. Read-only; never edit Photos internals."
+  LIMEN_PHOTOS_DB:
+    default: "$LIMEN_PHOTOS_LIBRARY/database/Photos.sqlite"
+    env: LIMEN_PHOTOS_DB
+    self_update: none
+    owner: continuity
+    note: "Optional direct Photos.sqlite override for metadata atomization tests and recovery runs. Read-only and fail-open."
   LIMEN_CORPUS_MAX_SESSIONS:
     default: ""
     env: LIMEN_CORPUS_MAX_SESSIONS
