@@ -65870,4 +65870,4 @@ tasks:
     agent: opencode
     session_id: current
     status: done
-    output: 'Rewrote organs/health/KERNEL.md: added Why this organ exists, expanded 5-primitive kernel map, deepened MACRO/MICRO deployment with explicit ADA tie-in, added hard guardrails. Unnamed per constraint. PR: <TBD>'
+    output: 'Rewrote organs/health/KERNEL.md: added Why this organ exists, expanded 5-primitive kernel map, deepened MACRO/MICRO deployment with explicit ADA tie-in, added hard guardrails. Unnamed per constraint. PR: https://github.com/organvm/limen/pull/492'
