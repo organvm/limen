@@ -283,9 +283,15 @@ def duplicate_remote_groups(repos: list[dict[str, Any]]) -> list[dict[str, Any]]
     ]
 
 
-def build_snapshot(scan_roots: list[Path] | None = None) -> dict[str, Any]:
+def build_snapshot(
+    scan_roots: list[Path] | None = None,
+    *,
+    max_depth: int | None = None,
+    limit: int = 300,
+) -> dict[str, Any]:
     roots = configured_scan_roots(scan_roots)
-    repos = [repo_record(path) for path in repo_roots_under(roots)]
+    depth = max_depth if max_depth is not None else int(os.environ.get("LIMEN_REPO_SCAN_DEPTH", "6"))
+    repos = [repo_record(path) for path in repo_roots_under(roots, max_depth=depth, limit=limit)]
     return {
         "generated_at": now_iso(),
         "scan_roots": [relpath(path) for path in roots],
@@ -379,10 +385,11 @@ def main() -> int:
     parser.add_argument("--write", action="store_true", help="write public docs and private index")
     parser.add_argument("--dry-run", action="store_true", help="print only; never write")
     parser.add_argument("--json", action="store_true", help="print public JSON instead of markdown")
+    parser.add_argument("--max-depth", type=int, default=int(os.environ.get("LIMEN_REPO_SCAN_DEPTH", "6")))
     args = parser.parse_args()
 
     roots = [Path(value).expanduser() for value in args.scan_root]
-    snapshot = build_snapshot(roots)
+    snapshot = build_snapshot(roots, max_depth=args.max_depth)
     markdown = render_markdown(snapshot)
     if args.write and not args.dry_run:
         write_outputs(snapshot, markdown)
