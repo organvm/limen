@@ -105,11 +105,57 @@ def _trust_of(entry: dict) -> str:
     return "unknown"
 
 
+def codex_live_rate_limits() -> dict:
+    """The TRUE Codex gauge — the vendor already reports it. Every codex token_count event
+    carries a `rate_limits` object: primary (the 5h rolling window) and secondary (the weekly
+    window), each with used_percent + window_minutes + resets_at, plus plan_type. We read the
+    newest session's last such event. This is a real, self-updating, two-window fuel gauge — no
+    fictional cap, no /status paste, never stale. Returns {} if none found (fail-open)."""
+    import glob
+    base = os.path.expanduser("~/.codex/sessions")
+    files = glob.glob(f"{base}/**/rollout-*.jsonl", recursive=True)
+    if not files:
+        return {}
+    newest = max(files, key=os.path.getmtime)
+    last: dict = {}
+    try:
+        for line in open(newest, encoding="utf-8", errors="ignore"):
+            if '"rate_limits"' not in line:
+                continue
+            try:
+                row = json.loads(line)
+            except Exception:
+                continue
+            payload = row.get("payload") or {}
+            rl = (payload.get("info") or {}).get("rate_limits") or payload.get("rate_limits")
+            if rl:
+                last = rl
+    except OSError:
+        return {}
+    return last
+
+
 def build_gauge() -> dict:
-    """Merge tracked defaults ← runtime override, the same precedence load_limits() uses."""
+    """Merge tracked defaults ← runtime override, the same precedence load_limits() uses, then
+    overlay the codex lane with its REAL vendor-reported gauge when available."""
     gauge = {k: dict(v) for k, v in _load_default_limits().items()}
     for k, v in _load_override().items():
         gauge.setdefault(k, {}).update(v)
+
+    rl = codex_live_rate_limits()
+    primary, secondary = rl.get("primary") or {}, rl.get("secondary") or {}
+    if primary or secondary:
+        c = gauge.setdefault("codex", {})
+        c["trust"] = "measured"  # vendor-reported, not an estimate
+        c["source"] = f"vendor rate_limits (plan={rl.get('plan_type')})"
+        c["pool_cap"] = 100  # the gauge is a percentage — 100% IS the cap, per window
+        c["unit"] = "percent"
+        if primary:
+            c["used_percent"] = primary.get("used_percent")
+            c["window"] = f"{int(primary.get('window_minutes', 0)) // 60}h"
+        if secondary:
+            c["weekly_used_percent"] = secondary.get("used_percent")
+            c["weekly_window"] = f"{int(secondary.get('window_minutes', 0)) // 60}h"
     return gauge
 
 
@@ -135,6 +181,8 @@ def audit() -> dict:
             "lane": lane, "unit": unit, "cap": cap, "window": window,
             "trust": trust, "plane": plane, "pool": pool,
             "board_cap": board.get(lane),
+            "used_percent": e.get("used_percent"),
+            "weekly_used_percent": e.get("weekly_used_percent"),
         })
 
         # --- FICTIONAL-CAP: a token lane whose cap the controller reads as infinite ---
@@ -212,7 +260,11 @@ def _print_human(report: dict) -> None:
     print("=== FLEET BUDGET GAUGE ===")
     print(f"{'lane':<12}{'plane':<8}{'unit':<8}{'cap':>16}  {'window':<12}{'trust':<10}{'pool':<12}{'board':>7}")
     for r in report["rows"]:
-        cap = f"{r['cap']:,}" if isinstance(r["cap"], (int, float)) else str(r["cap"])
+        if r.get("used_percent") is not None:  # real vendor gauge: show %-used, not a fake cap
+            wk = r.get("weekly_used_percent")
+            cap = f"{r['used_percent']:g}%" + (f"/{wk:g}%wk" if wk is not None else "")
+        else:
+            cap = f"{r['cap']:,}" if isinstance(r["cap"], (int, float)) else str(r["cap"])
         bc = "" if r["board_cap"] is None else str(r["board_cap"])
         print(f"{r['lane']:<12}{str(r['plane']):<8}{str(r['unit']):<8}{cap:>16}  "
               f"{str(r['window']):<12}{r['trust']:<10}{str(r['pool'] or ''):<12}{bc:>7}")
