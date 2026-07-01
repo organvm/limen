@@ -9,7 +9,7 @@
 | --- | --- | :--: | :--: | :--: | --- |
 | The Epic of Gilgamesh | mesopotamian | ✓ | 1/12 | ☐ | cuneiform ✓ |
 | The Iliad | greek | ✓ | 24/24 | ✓ | greek ✓ |
-| The Odyssey | greek | ✓ | 9/24 | ☐ | greek ✓ |
+| The Odyssey | greek | ✓ | 9/24 | ✓ | greek ✓ |
 | The Tanakh / Hebrew Bible (Torah · Nevi'im · Ketuvim) | hebrew | ✓ | 1/39 | ☐ | hebrew ✓ |
 | The Analects | chinese | ✓ | 1/20 | ☐ | chinese ✓ |
 | The Mahabharata (selections, incl. the Bhagavad Gita) | sanskrit | ✓ | 1/18 | ☐ | sanskrit ✓ |
