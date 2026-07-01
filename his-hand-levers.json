@@ -15,10 +15,10 @@
     },
     {
       "id": "L-CLOUDFLARE-DEPLOY",
-      "label": "Cloudflare deploy auth: run `wrangler login` (or export CLOUDFLARE_API_TOKEN into the lane env), then re-dispatch. Every BLD2-*-deploy fails because wrangler isn't authenticated.",
+      "label": "Cloudflare deploy auth is DEAD at the source: `creds-hydrate --verify` rejects it (401 Invalid API Token). Owned by the credential organ, NOT a `wrangler login` (there is no in-session login). Fix = a vendor RE-MINT into the EXISTING 1Password item op://Personal/Cloudflare API Token (a Cloudflare dashboard token with Pages:Edit + Workers Scripts:Edit), then `creds-hydrate --apply && --verify` self-heals the lane and every `wrangler deploy` runs headless via CLOUDFLARE_API_TOKEN. Same re-mint as L-FLEET-CAPACITY (#265). Every BLD2-*-deploy plus the Object Lessons Studio go-live (hub, writelens, script-doctor try-it) lights the moment it lands.",
       "owner": "yours",
-      "cost": "~2 min once, durable",
-      "unlocks": "16 BLD2 deploys \u2014 all 6 revenue products go live",
+      "cost": "~5 min: re-mint into the existing op:// item, then `creds-hydrate --apply && --verify` self-heals \u2014 no login, ever",
+      "unlocks": "16 BLD2 deploys (all 6 revenue products) + the Object Lessons Studio go-live (hub, writelens, script-doctor try-it)",
       "source_task": "BLD2-* (16 tasks)",
       "issue": 254
     },
