@@ -68,7 +68,7 @@ def fold(events: list[Event]) -> LimenFile:
         elif etype == EV_TASK_UPSERT:
             tasks[ev["task_id"]] = ev["data"]
         elif etype == EV_TASK_REMOVE:
-            tasks.pop(ev.get("task_id"), None)
+            tasks.pop(ev["task_id"], None)
         else:
             raise ValueError(f"unknown event type: {etype!r}")
 
