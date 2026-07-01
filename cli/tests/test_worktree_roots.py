@@ -33,16 +33,19 @@ def test_flag_default_false():
     assert _flag("UNSET_VAR_THAT_DOES_NOT_EXIST", False) is False
 
 
-@pytest.mark.parametrize("raw,expected", [
-    ("0", False),
-    ("false", False),
-    ("no", False),
-    ("off", False),
-    ("1", True),
-    ("true", True),
-    ("yes", True),
-    ("on", True),
-])
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("0", False),
+        ("false", False),
+        ("no", False),
+        ("off", False),
+        ("1", True),
+        ("true", True),
+        ("yes", True),
+        ("on", True),
+    ],
+)
 def test_flag_variants(monkeypatch, raw, expected):
     monkeypatch.setenv("TEST_FLAG", raw)
     assert _flag("TEST_FLAG", True) is expected
@@ -209,11 +212,13 @@ def test_git_worktree_paths_parses_porcelain(tmp_path):
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
     subprocess.run(
         ["git", "config", "user.email", "test@example.invalid"],
-        cwd=tmp_path, check=True,
+        cwd=tmp_path,
+        check=True,
     )
     subprocess.run(
         ["git", "config", "user.name", "Test User"],
-        cwd=tmp_path, check=True,
+        cwd=tmp_path,
+        check=True,
     )
     subprocess.run(["git", "commit", "-qm", "init", "--allow-empty"], cwd=tmp_path, check=True)
     wt = tmp_path / "worktree-dir"
@@ -226,17 +231,20 @@ def test_git_worktree_paths_includes_main_and_sibling(tmp_path):
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
     subprocess.run(
         ["git", "config", "user.email", "test@example.invalid"],
-        cwd=tmp_path, check=True,
+        cwd=tmp_path,
+        check=True,
     )
     subprocess.run(
         ["git", "config", "user.name", "Test User"],
-        cwd=tmp_path, check=True,
+        cwd=tmp_path,
+        check=True,
     )
     subprocess.run(["git", "commit", "-qm", "init", "--allow-empty"], cwd=tmp_path, check=True)
     sibling = tmp_path / "sibling-wt"
     subprocess.run(
         ["git", "worktree", "add", "-q", str(sibling), "-b", "work/sibling"],
-        cwd=tmp_path, check=True,
+        cwd=tmp_path,
+        check=True,
     )
     paths = _git_worktree_paths(tmp_path)
     assert tmp_path in paths
@@ -254,17 +262,20 @@ def test_registered_repo_roots_finds_sibling_worktrees(tmp_path, monkeypatch):
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=main, check=True)
     subprocess.run(
         ["git", "config", "user.email", "test@example.invalid"],
-        cwd=main, check=True,
+        cwd=main,
+        check=True,
     )
     subprocess.run(
         ["git", "config", "user.name", "Test User"],
-        cwd=main, check=True,
+        cwd=main,
+        check=True,
     )
     subprocess.run(["git", "commit", "-qm", "base", "--allow-empty"], cwd=main, check=True)
     sibling = tmp_path / "main-repo-feat"
     subprocess.run(
         ["git", "worktree", "add", "-q", str(sibling), "-b", "work/feat"],
-        cwd=main, check=True,
+        cwd=main,
+        check=True,
     )
     monkeypatch.setenv("LIMEN_RECLAIM_MAIN_REPOS", str(main))
     roots = _registered_repo_roots(tmp_path)
