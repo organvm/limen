@@ -34,10 +34,10 @@ from typing import Any
 from limen.models import LimenFile
 
 # --- event type tags -------------------------------------------------------------------------
-EV_BOARD_META = "board.meta"      # set version + portal (board-level metadata)
-EV_BOARD_ORDER = "board.order"    # set the task display order (an id sequence) — order is state too
-EV_TASK_UPSERT = "task.upsert"    # create-or-replace a task's full field-set, keyed by id
-EV_TASK_REMOVE = "task.remove"    # drop a task id from the board (prune/archive-out)
+EV_BOARD_META = "board.meta"  # set version + portal (board-level metadata)
+EV_BOARD_ORDER = "board.order"  # set the task display order (an id sequence) — order is state too
+EV_TASK_UPSERT = "task.upsert"  # create-or-replace a task's full field-set, keyed by id
+EV_TASK_REMOVE = "task.remove"  # drop a task id from the board (prune/archive-out)
 
 Event = dict[str, Any]
 
@@ -53,7 +53,7 @@ def fold(events: list[Event]) -> LimenFile:
     version = "1.0"
     portal: dict[str, Any] | None = None
     tasks: dict[str, dict[str, Any]] = {}  # id -> field-set; dict preserves first-seen order
-    order: list[str] | None = None         # explicit final task order, if the log ever set one
+    order: list[str] | None = None  # explicit final task order, if the log ever set one
 
     for ev in events:
         etype = ev.get("type")
@@ -118,9 +118,16 @@ def diff_boards(prev: LimenFile | None, cur: LimenFile) -> list[Event]:
     prev_data = prev.model_dump(mode="json", exclude_none=True) if prev is not None else {"tasks": []}
     cur_data = cur.model_dump(mode="json", exclude_none=True)
 
-    if prev is None or prev_data.get("version") != cur_data.get("version") or prev_data.get("portal") != cur_data.get("portal"):
+    if (
+        prev is None
+        or prev_data.get("version") != cur_data.get("version")
+        or prev_data.get("portal") != cur_data.get("portal")
+    ):
         events.append(
-            {"type": EV_BOARD_META, "data": {"version": cur_data.get("version", "1.0"), "portal": cur_data.get("portal")}}
+            {
+                "type": EV_BOARD_META,
+                "data": {"version": cur_data.get("version", "1.0"), "portal": cur_data.get("portal")},
+            }
         )
 
     prev_list = prev_data.get("tasks", [])

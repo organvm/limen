@@ -235,8 +235,12 @@ def workstream(launch_codex, launch_shell, from_ref, prompt_text, prompt_file, n
 
 @main.command()
 @click.option("--verify", is_flag=True, help="Prove the fold reproduces the board byte-for-byte (exit 1 if not).")
-@click.option("--emit-events", "emit_events", default=None,
-              help="Write the board's seed event stream (fold input) to this JSONL path.")
+@click.option(
+    "--emit-events",
+    "emit_events",
+    default=None,
+    help="Write the board's seed event stream (fold input) to this JSONL path.",
+)
 def materialize(verify, emit_events):
     """Derive the board from its event stream — step 1 of the event-sourced board.
 

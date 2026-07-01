@@ -34,11 +34,13 @@ def _canonical(board: LimenFile) -> str:
 
 
 def test_roundtrip_reproduces_board_bytes():
-    board = _board([
-        _task("A", status="open", labels=["x", "y"]),
-        _task("B", status="done", description="did a thing", priority="high"),
-        _task("C", status="in_progress", depends_on=["A"]),
-    ])
+    board = _board(
+        [
+            _task("A", status="open", labels=["x", "y"]),
+            _task("B", status="done", description="did a thing", priority="high"),
+            _task("C", status="in_progress", depends_on=["A"]),
+        ]
+    )
     rebuilt = fold(seed_events_from_board(board))
     assert _canonical(rebuilt) == _canonical(board)
 
