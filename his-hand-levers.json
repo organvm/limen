@@ -15,10 +15,10 @@
     },
     {
       "id": "L-CLOUDFLARE-DEPLOY",
-      "label": "Cloudflare deploy auth: run `wrangler login` (or export CLOUDFLARE_API_TOKEN into the lane env), then re-dispatch. Every BLD2-*-deploy fails because wrangler isn't authenticated.",
+      "label": "Cloudflare deploy auth is ORGAN-OWNED, NOT a session `wrangler login`. This is the SAME dead token as L-FLEET-CAPACITY #265: op://Personal/Cloudflare API Token is revoked (401 Invalid API Token), so wrangler/Pages deploys have no credential. Single action: mint a Pages-scoped token (dash.cloudflare.com -> My Profile -> API Tokens -> Custom token: Account > Cloudflare Pages > Edit), paste it into that op:// item, then `python3 scripts/creds-hydrate.py --apply && python3 scripts/creds-hydrate.py --verify` self-heals every Cloudflare lane. Do NOT run `wrangler login` (deploy auth is organ-owned, per Anthony 2026-07-01). See #265 for the full re-mint (gemini + cloudflare).",
       "owner": "yours",
       "cost": "~2 min once, durable",
-      "unlocks": "16 BLD2 deploys \u2014 all 6 revenue products go live",
+      "unlocks": "16 BLD2 revenue-product deploys + the speech-score-engine friend-share (apps/web/out -> Cloudflare Pages)",
       "source_task": "BLD2-* (16 tasks)",
       "issue": 254
     },
