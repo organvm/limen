@@ -113,9 +113,11 @@ def _read_jsonl(path: Path):
             ln = ln.strip()
             if ln:
                 try:
-                    yield json.loads(ln)
+                    obj = json.loads(ln)
                 except Exception:
                     continue
+                if isinstance(obj, dict):
+                    yield obj
     except OSError:
         return
 
