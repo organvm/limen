@@ -12,19 +12,21 @@ SCRIPT = ROOT / "scripts" / "claude-usage.py"
 
 def _run(root: Path, env_extra: dict | None = None) -> dict:
     import os
+
     env = {**os.environ, "LIMEN_ROOT": str(root), **(env_extra or {})}
     out = subprocess.run(
         [sys.executable, str(SCRIPT), "--json", "--no-write"],
-        text=True, capture_output=True, check=True, env=env,
+        text=True,
+        capture_output=True,
+        check=True,
+        env=env,
     )
     return json.loads(out.stdout)
 
 
 def _write_usage(root: Path, claude_entry: dict) -> None:
     (root / "logs").mkdir(parents=True, exist_ok=True)
-    (root / "logs" / "usage.json").write_text(
-        json.dumps({"generated": "x", "vendors": {"claude": claude_entry}})
-    )
+    (root / "logs" / "usage.json").write_text(json.dumps({"generated": "x", "vendors": {"claude": claude_entry}}))
 
 
 def test_all_avenues_dark_returns_unknown(tmp_path: Path) -> None:
@@ -39,22 +41,28 @@ def test_all_avenues_dark_returns_unknown(tmp_path: Path) -> None:
 
 
 def test_counts_avenue_uses_fleet_cap_not_a_fabricated_one(tmp_path: Path) -> None:
-    _write_usage(tmp_path, {
-        "consumed": 25_000_000, "possible": 100_000_000,
-        "limit_source": "ESTIMATE — tune to plan", "window": "5h rolling", "health": "ok",
-    })
+    _write_usage(
+        tmp_path,
+        {
+            "consumed": 25_000_000,
+            "possible": 100_000_000,
+            "limit_source": "ESTIMATE — tune to plan",
+            "window": "5h rolling",
+            "health": "ok",
+        },
+    )
     report = _run(tmp_path)
     assert report["avenue"] == "counts"
-    assert report["used_percent"] == 25.0            # 25M / 100M — the fleet's OWN cap
-    assert report["trust"] == "estimate"             # cap is an estimate → stays untrusted
+    assert report["used_percent"] == 25.0  # 25M / 100M — the fleet's OWN cap
+    assert report["trust"] == "estimate"  # cap is an estimate → stays untrusted
 
 
 def test_explicit_cap_raises_trust_to_proxy(tmp_path: Path) -> None:
     _write_usage(tmp_path, {"consumed": 25_000_000, "possible": 100_000_000, "health": "ok"})
     report = _run(tmp_path, {"LIMEN_CLAUDE_WEEKLY_TOKENS": "50000000"})
     assert report["avenue"] == "counts"
-    assert report["used_percent"] == 50.0            # 25M / 50M human cap
-    assert report["trust"] == "proxy"                # real numerator + human-set cap
+    assert report["used_percent"] == 50.0  # 25M / 50M human cap
+    assert report["trust"] == "proxy"  # real numerator + human-set cap
 
 
 def test_reactive_429_is_last_resort_hard_stop(tmp_path: Path) -> None:
