@@ -164,6 +164,28 @@ tasks:
     session_id: heal
     status: done
     output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
+- id: RECOVER-FORCE-copilot-lane
+  title: Recover closed PR task: Add GitHub Copilot coding agent as a Limen dispatch lane
+  repo: organvm/limen
+  type: code
+  target_agent: codex
+  priority: critical
+  budget_cost: 2
+  status: open
+  labels:
+  - full-agent-force
+  - infra
+  urls: []
+  context: "Re-execute FORCE-copilot-lane as a fresh task because the prior PR was closed without merge. Add GitHub Copilot as a Limen dispatch lane in scripts/route.py and cli/src/limen/dispatch.py using issue assignment to copilot-swe-agent, plus health-check support (suggestedActors / LIMEN_COPILOT_ENABLED gating)."
+  depends_on:
+  - FORCE-copilot-lane
+  created: '2026-06-30'
+  dispatch_log:
+  - timestamp: '2026-06-30T14:35:00Z'
+    agent: limen
+    session_id: recover-force-copilot-lane
+    status: open
+    output: 'Recovery lane created after closed PR on FORCE-copilot-lane.'
 - id: REV-exporter-unblock-stack
   title: 'Exporter Pro-tier: close stale #29-31, port ONLY the license-verify gap
     onto master'
