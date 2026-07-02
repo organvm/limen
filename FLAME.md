@@ -72,6 +72,7 @@ its system-of-record and how to reverse it. (Maintained by the EVOCATOR organ.)
 
 - **MPO = NPO (Non-Profit Organization)** — "MPO" = NPO; the nonprofit = Cind & Sol (organvm-vi-koinonia/cind-and-sol-foundation), its grant-finding engine + system-of-record = organvm-iii-ergon/quaestor. Resolved 2026-06-25; reversible via quaestor#4. (SoR: organvm-iii-ergon/quaestor; reversible: reopen quaestor issue #4 / its decisions card)
 - **"find" = build the portal** — When Anthony says "find X / find everything / find the answers", BUILD THE PORTAL that summons that context into every surface (every prompt, every session, every beat) — not a chat that searches & loses. This organ (EVOCATOR) IS that portal. (SoR: limen/spec/evocator; reversible: edit spec/evocator/canon.yaml)
+- **the-invisible-ledger scales from B2B CPA tool into personal family office** — The-invisible-ledger is the core accounting engine of the Financial Office (Aerarium) VLTIMA organ (rank 2, maturity 40%, building). CONSTRAINT: scale it from B2B CPA tool into a personal family office — one instance, two faces. KERNEL+CHARTER authored 2026-07-01 at organs/financial/. Self-feeds via generate-organ-backlog.py organ-selffeed lever. (SoR: organvm/limen/organs/financial/CHARTER.md; reversible: edit spec/evocator/canon.yaml)
 <!-- EVOCATOR:canon END -->
 
 *The substrate is rented. The flame is owned. Keep it lit.*

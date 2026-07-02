@@ -68,3 +68,34 @@ truths:
       flame: true
       corpus: true
       memory: find-means-build-the-portal
+
+  - id: EVO-003
+    claim: '"the-invisible-ledger" scales from B2B CPA tool into personal family office'
+    line: >-
+      The-invisible-ledger is the core accounting engine of the Financial Office (Aerarium)
+      VLTIMA organ (rank 2, maturity 40%, stage building). CONSTRAINT: scale it from a B2B
+      CPA tool into a personal family office — one instance, two faces. KERNEL+CHARTER
+      authored 2026-07-01 at organs/financial/. Phase 2 target: wire self-feeding loop via
+      generate-organ-backlog.py (organ-selffeed lever). Phase 3 target: dashboard + live
+      integration. Phase 4: self-running family office.
+    summons: >-
+      The Financial Office (Aerarium) is VLTIMA's institutional prosthesis for financial
+      life — a reusable family-office subsystem that gives one person the institutional
+      weight of a billionaire's financial apparatus. Its core accounting engine is
+      the-invisible-ledger, which must scale from its current B2B CPA tool form into a
+      personal family office that simultaneously serves as a multi-entity accounting product
+      (macro) and Anthony's own financial back-office (micro). The organ is seeded with
+      KERNEL.md and CHARTER.md at organs/financial/ as of 2026-07-01. Maturity: 40%
+      (building stage). The organ self-feeds via the existing generate-organ-backlog.py
+      organ-selffeed lever: every FEED beat (every 3 beats in heartbeat-loop.sh), the
+      generator reads organ-ladder.json, sees the financial organ at building stage, and
+      emits deepen/selffeed tasks when the organ-task floor drops. No additional beat hook
+      is needed — the generator IS the self-feeding mechanism, proven by revenue/studium.
+    source_of_record: "organvm/limen/organs/financial/CHARTER.md"
+    confidence: high
+    resolved: "2026-07-01"
+    reversible_via: "edit spec/evocator/canon.yaml — remove or update this entry"
+    channels:
+      flame: true
+      corpus: true
+      memory: financial-organ-invisible-ledger-scaling
