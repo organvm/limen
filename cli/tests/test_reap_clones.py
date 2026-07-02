@@ -5,6 +5,7 @@ real git repos (a bare 'origin' + clones) and assert the gate reaps ONLY a pure 
 KEEPS every clone with unpushed commits, untracked/dirty files, an active task, core status, no
 origin, or (absent disk pressure) a fresh mtime. This is the executable predicate for the organ.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -23,8 +24,7 @@ _spec.loader.exec_module(reap)
 
 # ---------------------------------------------------------------- git helpers
 def _git(cwd: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(cwd), *args], check=True,
-                   capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True)
 
 
 def _init_origin_and_clone(tmp: Path, name: str) -> Path:

@@ -32,6 +32,7 @@ Bounded per run (--max, default 50). Fails OPEN: any error on one clone is logge
 Env: LIMEN_WORKSPACE (~/Workspace), LIMEN_ROOT, LIMEN_REAP_CORE, LIMEN_REAP_IDLE_DAYS (2),
      LIMEN_DISK_HIGH_WATER (85), LIMEN_REAP_MAX (50), LIMEN_REAP_MAXDEPTH (3).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -152,8 +153,9 @@ def confirm_recloneable(repo: Path) -> bool:
     if not head:
         return False
     try:
-        res = subprocess.run(["git", "-C", str(repo), "ls-remote", "origin"],
-                             capture_output=True, text=True, timeout=30)
+        res = subprocess.run(
+            ["git", "-C", str(repo), "ls-remote", "origin"], capture_output=True, text=True, timeout=30
+        )
     except Exception:
         return False
     if res.returncode != 0 or not res.stdout.strip():
@@ -164,6 +166,7 @@ def confirm_recloneable(repo: Path) -> bool:
 def active_task_slugs(tasks_path: Path) -> set[str]:
     try:
         import yaml
+
         data = yaml.safe_load(tasks_path.read_text()) or {}
     except Exception:
         return set()
@@ -186,7 +189,9 @@ def discover_clones(workspace: Path, maxdepth: int) -> list[Path]:
     try:
         res = subprocess.run(
             ["find", ws, "-maxdepth", str(maxdepth), "-name", ".git"],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
     except Exception:
         return out
@@ -200,10 +205,14 @@ def discover_clones(workspace: Path, maxdepth: int) -> list[Path]:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Reap pure pushed-mirror clones (loss-free).")
     ap.add_argument("--apply", action="store_true", help="actually remove (default: dry-run)")
-    ap.add_argument("--pressure", dest="pressure", action="store_true", default=None,
-                    help="force disk-pressure mode (waive idle gate)")
-    ap.add_argument("--no-pressure", dest="pressure", action="store_false",
-                    help="force pressure OFF regardless of df")
+    ap.add_argument(
+        "--pressure",
+        dest="pressure",
+        action="store_true",
+        default=None,
+        help="force disk-pressure mode (waive idle gate)",
+    )
+    ap.add_argument("--no-pressure", dest="pressure", action="store_false", help="force pressure OFF regardless of df")
     ap.add_argument("--max", type=int, default=int(os.environ.get("LIMEN_REAP_MAX", "50")))
     args = ap.parse_args()
 
@@ -217,8 +226,10 @@ def main() -> int:
     now = time.time()
 
     mode = "APPLY" if args.apply else "dry-run"
-    print(f"[reap-clones] disk {pct:.0f}% used (high-water {high_water:.0f}%) → "
-          f"pressure={'ON' if pressure else 'off'}; mode={mode}; idle-gate={'waived' if pressure else f'{idle_days:g}d'}")
+    print(
+        f"[reap-clones] disk {pct:.0f}% used (high-water {high_water:.0f}%) → "
+        f"pressure={'ON' if pressure else 'off'}; mode={mode}; idle-gate={'waived' if pressure else f'{idle_days:g}d'}"
+    )
 
     reaped = kept = 0
     freed = 0
@@ -246,12 +257,11 @@ def main() -> int:
             except Exception:
                 sz = 0
             slug = origin_slug(repo)
-            print(f"  {'REAP' if args.apply else 'WOULD reap'}: {repo}  ({slug}, {sz/1e9:.2f} GB, {v.reason})")
+            print(f"  {'REAP' if args.apply else 'WOULD reap'}: {repo}  ({slug}, {sz / 1e9:.2f} GB, {v.reason})")
             if args.apply:
                 shutil.rmtree(repo, ignore_errors=True)
                 if logf:
-                    logf.write(json.dumps(
-                        {"repo": str(repo), "slug": slug, "bytes": sz, "reason": v.reason}) + "\n")
+                    logf.write(json.dumps({"repo": str(repo), "slug": slug, "bytes": sz, "reason": v.reason}) + "\n")
             reaped += 1
             freed += sz
     finally:
@@ -259,8 +269,10 @@ def main() -> int:
             logf.close()
 
     kr = ", ".join(f"{k}={n}" for k, n in sorted(kept_reasons.items())) or "none"
-    print(f"[reap-clones] {'reaped' if args.apply else 'would reap'} {reaped} clone(s), "
-          f"{freed/1e9:.2f} GB; kept {kept} ({kr}).")
+    print(
+        f"[reap-clones] {'reaped' if args.apply else 'would reap'} {reaped} clone(s), "
+        f"{freed / 1e9:.2f} GB; kept {kept} ({kr})."
+    )
     return 0
 
 
