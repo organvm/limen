@@ -62,6 +62,26 @@ _unstage_runtime() {  # keep the daemon-owned live queue out of capture commits 
   done
 }
 
+# GitHub HARD-rejects any non-LFS file over 100MB (pre-receive hook), so staging one guarantees the
+# push is refused — regardless of divergence — leaving a permanently un-pushable, un-reapable commit
+# that pins disk (e.g. a repo that doesn't .gitignore node_modules → a 116MB .node binary gets `git
+# add -A`'d and can never reach origin). An organ whose whole purpose is to PUSH must never stage what
+# GitHub will reject: drop over-limit files from the index (they stay on disk, untracked) so capture
+# always produces a pushable commit. Honours GIT_INDEX_FILE, so it serves both the in-place index and
+# the side-branch temp index. LFS repos are unaffected (their large blobs are small pointer files).
+GITHUB_FILE_LIMIT=$((100 * 1024 * 1024))
+_unstage_oversized() {
+  local f sz
+  while IFS= read -r -d '' f; do
+    [ -f "$f" ] || continue
+    sz="$(stat -f%z "$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null || echo 0)"
+    if [ "${sz:-0}" -ge "$GITHUB_FILE_LIMIT" ] 2>/dev/null; then
+      git reset -q -- "$f" >/dev/null 2>&1 || true
+      echo "[capture] ${name:-?}: skipped un-pushable $((sz / 1024 / 1024))MB file (exceeds GitHub 100MB limit): $f"
+    fi
+  done < <(git diff --cached --name-only -z --diff-filter=AM 2>/dev/null)
+}
+
 # When the current branch is BEHIND its upstream, an in-place capture commit creates UN-PUSHABLE
 # divergence: the push is rejected (non-ff) and the stranded local commit then blocks sync-release's
 # fast-forward, deadlocking the live checkout (the capture↔sync deadly-embrace that stranded 22 merged
@@ -78,6 +98,7 @@ _capture_side_branch() {
   GIT_INDEX_FILE="$tmpidx" git add -A 2>/dev/null || true   # stage the WORKING TREE into the throwaway index
   for pat in "${SECRET_GLOBS[@]}";  do GIT_INDEX_FILE="$tmpidx" git reset -q -- "$pat" >/dev/null 2>&1 || true; done
   for pat in "${RUNTIME_GLOBS[@]}"; do GIT_INDEX_FILE="$tmpidx" git reset -q -- "$pat" >/dev/null 2>&1 || true; done
+  GIT_INDEX_FILE="$tmpidx" _unstage_oversized
   tree="$(GIT_INDEX_FILE="$tmpidx" git write-tree 2>/dev/null)"
   rm -f "$tmpidx" 2>/dev/null || true
   [ -n "$tree" ] || return 1
@@ -142,6 +163,7 @@ _capture_repo() {
       git add -A >/dev/null 2>&1 || true
       _unstage_secrets
       _unstage_runtime
+      _unstage_oversized
       if ! git diff --cached --quiet 2>/dev/null; then
         git commit -q -m "capture: autonomic off-disk sync $STAMP" >/dev/null 2>&1 && did_commit=1
       fi

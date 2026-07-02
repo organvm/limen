@@ -115,3 +115,47 @@ def test_stale_tracking_ref_diverts_to_side_ref_not_stranded(tmp_path):
     assert "refs/heads/capture/main-" in ls, (
         f"expected a capture/main-* side ref on origin; got:\n{ls}\ncapture output:\n{res.stdout}"
     )
+
+
+@pytest.mark.skipif(not _has_git(), reason="git not available")
+@pytest.mark.skipif(not CAPTURE_SH.exists(), reason="capture.sh missing")
+def test_oversized_file_is_never_committed_so_push_succeeds(tmp_path):
+    """A file over GitHub's 100MB limit must be dropped from the capture commit — otherwise the
+    push is hard-rejected and the commit is stranded un-pushable forever (the node_modules/*.node
+    disk-floor bug). The small sibling change must still be captured and pushed."""
+    home = tmp_path / "home"
+    home.mkdir()
+    remote = tmp_path / "remote.git"
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    victim = ws / "victim"
+
+    _git("init", "--bare", "--initial-branch=main", str(remote), cwd=tmp_path)
+    seed = tmp_path / "seed"
+    _git("clone", str(remote), str(seed), cwd=tmp_path)
+    (seed / "seed.txt").write_text("seed\n")
+    _git("add", "-A", cwd=seed)
+    _git("commit", "-m", "seed", cwd=seed)
+    _git("push", "origin", "main", cwd=seed)
+
+    # victim is up to date (behind=0) → takes the in-place commit path.
+    _git("clone", str(remote), str(victim), cwd=tmp_path)
+    (victim / "small.txt").write_text("real captured work\n")
+    # 101MB of zeros — compresses to ~nothing on the wire, but exceeds the 100MB pre-receive limit.
+    (victim / "big.bin").write_bytes(b"\0" * (101 * 1024 * 1024))
+
+    env = {"HOME": str(home), "LIMEN_ROOT": str(tmp_path), "LIMEN_WORKSPACE": str(ws)}
+    res = subprocess.run(
+        ["bash", str(CAPTURE_SH)],
+        env={**_base_env(), **GIT_ENV, **env},
+        capture_output=True,
+        text=True,
+    )
+    assert res.returncode == 0, f"capture.sh failed: {res.stderr}\n{res.stdout}"
+
+    # The push must have SUCCEEDED — the pushed tree contains the small file, never the oversized one.
+    tree = _git("ls-tree", "-r", "--name-only", "origin/main", cwd=victim).stdout
+    assert "small.txt" in tree, f"real work was not pushed; tree=\n{tree}\n{res.stdout}"
+    assert "big.bin" not in tree, (
+        f"an oversized file was committed — push would be hard-rejected and stranded; tree=\n{tree}\n{res.stdout}"
+    )
