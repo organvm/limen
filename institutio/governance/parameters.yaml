@@ -250,6 +250,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "Heartbeat cadence for the bounded autonomous continuation voice."
+  LIMEN_SESSION_ID:
+    default: "manual-claim"
+    env: LIMEN_SESSION_ID
+    self_update: none
+    owner: continuity
+    note: "The opaque session ID recorded in the dispatch log during task claims."
   LIMEN_CONTINUATION:
     default: "1"
     env: LIMEN_CONTINUATION
