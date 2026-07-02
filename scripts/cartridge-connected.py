@@ -93,8 +93,10 @@ def main() -> int:
         remote = _run(["git", "-C", source, "remote", "get-url", first]) if first else None
 
     if not remote:
-        print(f"  cartridge-connected: FAIL — source {source} has no git remote "
-              f"(a local scratch source, not the {expected} cartridge)")
+        print(
+            f"  cartridge-connected: FAIL — source {source} has no git remote "
+            f"(a local scratch source, not the {expected} cartridge)"
+        )
         return 1
 
     actual = normalize_remote(remote)

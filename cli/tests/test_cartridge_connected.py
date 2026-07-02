@@ -30,6 +30,7 @@ def _cc():
 
 # ---- parser ---------------------------------------------------------------
 
+
 def test_normalize_remote_https_and_ssh():
     m = _cc()
     assert m.normalize_remote("https://github.com/organvm/domus-genoma.git") == "organvm/domus-genoma"
@@ -49,6 +50,7 @@ def test_normalize_remote_rejects_local_and_dummy():
 
 
 # ---- main() behavior ------------------------------------------------------
+
 
 def _wire(m, monkeypatch, *, chezmoi="/opt/homebrew/bin/chezmoi", source, remote_origin, remotes=None):
     """Stub chezmoi presence + _run() dispatch so main() runs hermetically."""
