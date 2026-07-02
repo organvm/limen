@@ -65,11 +65,15 @@ def _parse_ts(value) -> "datetime.datetime | None":
 # existing consumers (all use .get()); scripts/verify-budget-gauge.py audits them.
 _DEFAULT_LIMITS = {
     "jules":    {"limit": 100,        "unit": "runs",   "window": "24h",        "source": "known hard cap",                 "trust": "measured"},
-    "codex":    {"limit": 100_000_000, "unit": "tokens", "window": "5h rolling", "source": "ESTIMATE — tune to plan (/status)", "trust": "estimate", "pool": "openai-plan"},
-    "claude":   {"limit": 100_000_000, "unit": "tokens", "window": "5h rolling", "source": "ESTIMATE — tune to plan (/status)", "trust": "estimate", "pool": "claude-plan"},
-    "gemini":   {"limit": 1000,       "unit": "runs",   "window": "24h",        "source": "ESTIMATE — free-tier RPD",       "trust": "estimate"},
-    "opencode": {"limit": 200,        "unit": "runs",   "window": "today",      "source": "ESTIMATE — set $/run budget",    "trust": "estimate"},
-    "agy":      {"limit": 200,        "unit": "runs",   "window": "today",      "source": "ESTIMATE — credit budget",       "trust": "estimate"},
+    "codex":    {"limit": 100_000_000, "unit": "tokens", "window": "5h rolling", "source": "ESTIMATE - tune to plan (/status)", "trust": "estimate", "pool": "openai-plan"},
+    "claude":   {"limit": 100_000_000, "unit": "tokens", "window": "5h rolling", "source": "ESTIMATE - tune to plan (/status)", "trust": "estimate", "pool": "claude-plan"},
+    "gemini":   {"limit": 10,         "unit": "runs",   "window": "24h",        "source": "operator board cap until live vendor meter", "trust": "calibrated"},
+    "opencode": {"limit": 100,        "unit": "runs",   "window": "today",      "source": "operator board cap until live vendor meter", "trust": "calibrated"},
+    "agy":      {"limit": 100,        "unit": "runs",   "window": "today",      "source": "operator board cap until live vendor meter", "trust": "calibrated"},
+    # App-plane allotments share the same paid subscriptions as the CLI pools, but they are not
+    # dispatchable lanes. Model the plane explicitly so budget audits do not pretend it is absent.
+    "chatgpt-app": {"plane": "app", "unit": "app-runs", "window": "168h", "source": "modeled app-plane; cap unavailable locally", "trust": "modeled", "pool": "openai-plan"},
+    "claude-app":  {"plane": "app", "unit": "app-runs", "window": "168h", "source": "modeled app-plane; cap unavailable locally", "trust": "modeled", "pool": "claude-plan"},
 }
 
 
@@ -261,15 +265,17 @@ def claude_5h():
                         continue
                     # ONLY a structured API rate_limit error counts — never free-text that merely
                     # mentions "rate limit"/"429" (a transcript discussing limits is not a 429).
+                    ts = _parse_ts(row.get("timestamp"))
                     if row.get("error") == "rate_limit" or (
                             isinstance(row.get("error"), dict)
                             and row["error"].get("type") == "rate_limit_error"):
                         rate_limit_events += 1
-                        ts = _parse_ts(row.get("timestamp"))
                         if ts is None or ts >= RL_COOLDOWN:  # recent (or undated → treat as recent)
                             recent_rl = True
                     u = (row.get("message", {}) or {}).get("usage")
                     if not u:
+                        continue
+                    if ts is not None and ts < W5H:
                         continue
                     total += (u.get("input_tokens", 0) + u.get("output_tokens", 0)
                               + u.get("cache_creation_input_tokens", 0))  # billable; exclude cheap cache_read
