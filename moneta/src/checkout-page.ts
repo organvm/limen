@@ -143,7 +143,20 @@ export function renderCheckoutPage(): string {
     }
 
     if (o.status === 'paid') {
+      // Prefer the mint's server-configured return; else honor a ?return= the
+      // product passed (http(s) only — never redirect to a javascript: URI).
       if (o.returnUrl) { location.href = o.returnUrl; return; }
+      var back = qsParam('return');
+      if (back && o.license) {
+        try {
+          var bu = new URL(back);
+          if (bu.protocol === 'https:' || bu.protocol === 'http:') {
+            var sep = back.indexOf('?') === -1 ? '?' : '&';
+            location.href = back + sep + 'ce_license_key=' + encodeURIComponent(o.license);
+            return;
+          }
+        } catch (e) { /* fall through to inline display */ }
+      }
       body.appendChild(el('span', { 'class': 'pill paid' }, 'Paid — Pro unlocked'));
       body.appendChild(field('Your Pro licence key', String(o.license || '')));
       body.appendChild(el('p', { 'class': 'muted' }, 'Paste this into the product to activate Pro. It is signed offline — no server check needed.'));
