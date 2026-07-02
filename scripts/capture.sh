@@ -110,6 +110,18 @@ _capture_repo() {
   local branch dirty=0 did_commit=0 did_push=0 behind=0
   branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")"
   [ -n "$(git status --porcelain 2>/dev/null)" ] && dirty=1
+  # A busy fleet advances these remotes constantly, so the local tracking ref (@{u}) goes STALE between
+  # beats. The behind-check below is the sole guard that keeps an in-place commit off a diverged branch —
+  # but reading a stale @{u} makes it report behind=0 on a branch that is really behind, so we commit onto
+  # a stale base → non-ff push rejection → a stranded in-place commit that blocks reap AND sync-release
+  # (the capture↔sync deadly-embrace this guard exists to prevent). FRESHEN the ref first. Fetch only when
+  # dirty (i.e. about to commit) so clean/in-sync repos stay a cheap no-op; low-speed limits bound a
+  # stalled fetch without an external `timeout` dependency (matches the push path's own network calls).
+  # A fetch mutates only the remote-tracking ref (never the working tree), so it is safe in DRY too and
+  # makes the dry-run preview accurate.
+  if [ -n "$branch" ] && [ "$dirty" = 1 ]; then
+    git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=15 fetch --quiet origin "$branch" >/dev/null 2>&1 || true
+  fi
   # behind its upstream? committing in place here would strand the checkout (see _capture_side_branch).
   # 0 when detached, no upstream, up-to-date, or ahead — i.e. exactly the safe-to-commit-in-place cases.
   if [ -n "$branch" ]; then behind="$(git rev-list --count "HEAD..@{u}" 2>/dev/null || echo 0)"; fi
