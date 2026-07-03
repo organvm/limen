@@ -1,15 +1,8 @@
 # Financial Office — Rolling Cash-Flow Projection
 
-> Generated: 2026-07-03T10:44:27Z
+> Generated: 2026-07-03T11:43:04Z
 > *Forward-looking estimate based on known revenue stages and obligations.
-> Confidence increases as more balances are confirmed.*
-
-## Assumptions
-
-- No revenue is yet flowing (all products pre-revenue or deploy-ready)
-- First revenue projected: ChatGPT Exporter (rank 1, deploy-ready)
-- Current obligations are drawn from `obligations-ledger.json`
-- All amounts are estimates until principal confirms
+> Confidence increases as more balances and obligation amounts are confirmed.*
 
 ## Revenue Pipeline
 
@@ -26,22 +19,22 @@
 
 | Week | Starting | Known Inflows | Known Outflows | Net | Cumulative | Note |
 |---|---|---|---|---|---|---|
-| W1 | 2026-07-03 | — | — | $+0.00 | $+0.00 | Pre-revenue — deploy Exporter to start pipeline |
+| W1 | 2026-07-03 | — | — | $+0.00 | $+0.00 |  |
 | W2 | 2026-07-10 | — | — | $+0.00 | $+0.00 |  |
-| W3 | 2026-07-17 | — | — | $+0.00 | $+0.00 |  |
-| W4 | 2026-07-24 | — | — | $+0.00 | $+0.00 |  |
-| W5 | 2026-07-31 | — | — | $+0.00 | $+0.00 |  |
-| W6 | 2026-08-07 | — | — | $+0.00 | $+0.00 |  |
-| W7 | 2026-08-14 | — | — | $+0.00 | $+0.00 |  |
-| W8 | 2026-08-21 | — | — | $+0.00 | $+0.00 |  |
-| W9 | 2026-08-28 | — | — | $+0.00 | $+0.00 |  |
-| W10 | 2026-09-04 | — | — | $+0.00 | $+0.00 |  |
-| W11 | 2026-09-11 | — | — | $+0.00 | $+0.00 |  |
-| W12 | 2026-09-18 | — | — | $+0.00 | $+0.00 |  |
+| W3 | 2026-07-17 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W4 | 2026-07-24 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W5 | 2026-07-31 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W6 | 2026-08-07 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W7 | 2026-08-14 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W8 | 2026-08-21 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W9 | 2026-08-28 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W10 | 2026-09-04 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W11 | 2026-09-11 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W12 | 2026-09-18 | — | — | $+0.00 | $+0.00 | post-deploy |
 
-### Runway alert
+### Runway
 
-- **Current runway:** Unknown (no balance data). Set balances in `entities.yaml` to enable runway calculation.
+- **Current net position:** Unknown — set balances in `entities.yaml` to enable runway calculation.
 - **Threshold:** < 4 weeks of obligations = alert principal.
 
 ## Obligations (financial-material)
