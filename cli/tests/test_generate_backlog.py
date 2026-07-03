@@ -84,6 +84,7 @@ def _run(
             "LIMEN_VALUE_REPOS_FILE": str(path.parent / "no-such-tier.json"),
             "LIMEN_WORKTREE_ROOT": str(worktree_root or path.parent / "empty-worktrees"),
             "LIMEN_WORKTREE_DEBT_MAX": debt_cap,
+            "LIMEN_TICKETS_PRODUCE": "0",
         },
     )
     assert p.returncode == 0, p.stderr
