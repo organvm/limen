@@ -1,6 +1,6 @@
 # Financial Office — Rolling Cash-Flow Projection
 
-> Generated: 2026-07-03T08:14:31Z
+> Generated: 2026-07-03T10:44:27Z
 > *Forward-looking estimate based on known revenue stages and obligations.
 > Confidence increases as more balances are confirmed.*
 

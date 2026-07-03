@@ -1,6 +1,6 @@
 # Financial Office — Consolidated Balance Sheet (MACRO template)
 
-> Generated: 2026-07-03T08:14:31Z
+> Generated: 2026-07-03T10:44:27Z
 > *This is an advisory estimate. Balances marked `unknown` need principal input.
 
 ## Net Position by Entity
