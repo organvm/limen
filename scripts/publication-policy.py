@@ -29,7 +29,7 @@ CLI:
   disposition --visibility V --class C     -> the one disposition + autonomy
   redact <path> [--apply]                  -> owner-identifier-only redaction (dry by default)
   audit <ledger.json> [--json]             -> run the matrix over a ledger of items
-  --verify                                 -> self-test predicate (exit 0 <=> engine sound)
+  --verify                                 -> self-test + maturity self-feed (exit 0 <=> engine sound)
   --check                                  -> cheap stamp/presence check
 
 Fractal: OWNER identity is a NAMED config (macro form works for anyone); the default
@@ -43,12 +43,16 @@ import json
 import os
 import re
 import sys
-from datetime import datetime
+import tempfile
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 LOGS = ROOT / "logs"
 STAMP = LOGS / "publication-policy-state.json"
+LADDER = ROOT / "organ-ladder.json"
+PUBPOLICY_ORGAN_PREFIX = "Publication Policy"
 
 # ---------------------------------------------------------------------------
 # OWNER identity (the only thing the redactor is scoped to). Generic underneath,
@@ -181,6 +185,277 @@ DISPOSITION_DOC = {
     "LEAVE": "Product content (source, product contacts, UI placeholders, synthetic 555/example fixtures) — never touch.",
     "PUBLISH": "Public-safe — publishing / flipping visibility is HIS hand (the media-pillar boundary).",
 }
+
+
+# ---------------------------------------------------------------------------
+# Maturity assessment + ladder advancement.
+#
+# The rank-10 Publication Policy organ shares pillar="governance" with the
+# rank-5 Aerarium organ, so selection is by organ identity, not pillar.
+# ---------------------------------------------------------------------------
+_MATURITY_CRITERIA: list[tuple[str, str, int]] = [
+    # Foundation + first artifact: current self-feed slice can earn 80%.
+    ("engine_exists", "scripts/publication-policy.py exists", 8),
+    ("self_test_passes", "publication-policy.py --verify predicate is sound", 12),
+    ("rule_doc_exists", "PUBLICATION-POLICY.md rule table exists", 8),
+    ("cli_tests_exist", "publication policy test suite exists", 6),
+    ("beat_wired", "C_PUBPOLICY heartbeat beat runs the verifier", 10),
+    ("health_rung_wired", "PUBPOLICY proprioception rung is registered", 8),
+    ("parameters_registered", "PUBPOLICY cadence/gate parameters are registered", 6),
+    ("convergence_authority_referenced", "scattered gates reference the rule table", 12),
+    ("ladder_entry_registered", "Publication Policy organ is registered in organ-ladder.json", 4),
+    ("auto_advance_wired", "publication-policy.py advances its own ladder maturity", 6),
+    # Remaining estate cleanup: future slices can close the last 20%.
+    ("auto_remediation_backlog_closed", "confirmed public HEAD remediation backlog is closed", 10),
+    ("inferred_cases_verified", "all inferred disclosure-audit cases are verified", 5),
+    ("external_his_levers_resolved", "third-party/external publication-policy levers are resolved", 5),
+]
+
+
+def _exists(rel: str) -> bool:
+    return (ROOT / rel).exists()
+
+
+def _contains(rel: str, *needles: str) -> bool:
+    try:
+        text = (ROOT / rel).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    return all(n in text for n in needles)
+
+
+def _publication_policy_entry(data: dict) -> dict | None:
+    organs = data.get("organs") or []
+    for organ in organs:
+        if str(organ.get("organ", "")).startswith(PUBPOLICY_ORGAN_PREFIX):
+            return organ
+    for organ in organs:
+        if (
+            organ.get("pillar") == "governance"
+            and organ.get("rank") == 10
+            and "C_PUBPOLICY" in str(organ.get("note", ""))
+        ):
+            return organ
+    return None
+
+
+def _ladder_has_pubpolicy() -> bool:
+    try:
+        data = json.loads(LADDER.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return _publication_policy_entry(data) is not None
+
+
+def _convergence_refs_present() -> bool:
+    refs = {
+        "scripts/creds-hydrate.py": "PUBLICATION-POLICY.md",
+        "scripts/scan-legacy-session-batch.py": "PUBLICATION-POLICY.md",
+        "scripts/generate-positioning.py": "PUBLICATION-POLICY.md",
+        "spec/contracts/surface-manifest.schema.json": "PUBLICATION-POLICY.md",
+    }
+    return all(_contains(path, needle) for path, needle in refs.items())
+
+
+def _audit_text() -> str:
+    try:
+        return (ROOT / "organs" / "governance" / "DISCLOSURE-AUDIT.md").read_text(
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError:
+        return ""
+
+
+def _assess_maturity(self_test_fails: list[str] | None = None) -> dict:
+    """Objective publication-policy maturity. Future cleanup work can only bump up."""
+    passed = []
+    failed = []
+    total_weight = sum(w for _, _, w in _MATURITY_CRITERIA)
+    audit = _audit_text()
+    self_test_fails = _self_test() if self_test_fails is None else self_test_fails
+
+    for key, _label, _weight in _MATURITY_CRITERIA:
+        ok = False
+        if key == "engine_exists":
+            ok = _exists("scripts/publication-policy.py")
+        elif key == "self_test_passes":
+            ok = not self_test_fails
+        elif key == "rule_doc_exists":
+            ok = _contains(
+                "organs/governance/PUBLICATION-POLICY.md",
+                "The disposition matrix",
+                "Convergence table",
+            )
+        elif key == "cli_tests_exist":
+            ok = _exists("cli/tests/test_publication_policy.py")
+        elif key == "beat_wired":
+            ok = _contains(
+                "scripts/heartbeat-loop.sh",
+                "C_PUBPOLICY",
+                "scripts/publication-policy.py",
+                "--verify",
+                "LIMEN_PUBPOLICY",
+            )
+        elif key == "health_rung_wired":
+            ok = _contains(
+                "scripts/organ-health.py",
+                'rung="PUBPOLICY"',
+                "publication-policy-state.json",
+            )
+        elif key == "parameters_registered":
+            ok = _contains(
+                "institutio/governance/parameters.yaml",
+                "LIMEN_BEAT_PUBPOLICY",
+                "LIMEN_PUBPOLICY",
+                "owner: pubpolicy",
+            )
+        elif key == "convergence_authority_referenced":
+            ok = _convergence_refs_present()
+        elif key == "ladder_entry_registered":
+            ok = _ladder_has_pubpolicy()
+        elif key == "auto_advance_wired":
+            ok = "_advance_maturity" in Path(__file__).read_text(encoding="utf-8", errors="replace")
+        elif key == "auto_remediation_backlog_closed":
+            ok = bool(audit) and "Backlog (auto, reversible)" not in audit and "verify-then-strip" not in audit
+        elif key == "inferred_cases_verified":
+            ok = bool(audit) and "class inferred" not in audit and "verify per-PR" not in audit
+        elif key == "external_his_levers_resolved":
+            ok = bool(audit) and "His lever:" not in audit and "third-party-data review" not in audit
+
+        (passed if ok else failed).append(key)
+
+    earned = sum(w for k, _, w in _MATURITY_CRITERIA if k in passed)
+    maturity = round(earned / total_weight * 100) if total_weight else 0
+    return {
+        "maturity_pct": maturity,
+        "earned_weight": earned,
+        "total_weight": total_weight,
+        "passed": passed,
+        "failed": failed,
+    }
+
+
+def _queue_lock(path: Path, timeout: float = 5.0) -> bool:
+    lock_dir = path.with_name(path.name + ".lock")
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            lock_dir.mkdir()
+            return True
+        except FileExistsError:
+            time.sleep(0.1)
+    return False
+
+
+def _queue_unlock(path: Path) -> None:
+    lock_dir = path.with_name(path.name + ".lock")
+    try:
+        lock_dir.rmdir()
+    except OSError:
+        pass
+
+
+def _derive_stage(maturity: int | float) -> str:
+    if maturity < 30:
+        return "scaffold"
+    if maturity < 60:
+        return "building"
+    if maturity < 90:
+        return "maturing"
+    return "mature"
+
+
+def _append_advancement_note(existing: str, old: int | float, new: int | float) -> str:
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    receipt = f"Maturity {old}%->{new}% auto-advanced by publication-policy.py beat ({stamp})."
+    existing = (existing or "").strip()
+    if receipt in existing:
+        return existing
+    return f"{existing} {receipt}".strip()
+
+
+def _advance_maturity(assessment: dict) -> dict:
+    assessed = assessment["maturity_pct"]
+    try:
+        data = json.loads(LADDER.read_text(encoding="utf-8")) if LADDER.exists() else {}
+    except (json.JSONDecodeError, OSError) as exc:
+        return {"bumped": False, "old": None, "new": assessed, "reason": f"cannot read ladder: {exc}"}
+
+    entry = _publication_policy_entry(data)
+    if entry is None:
+        return {"bumped": False, "old": None, "new": assessed, "reason": "Publication Policy entry not found"}
+
+    stored = entry.get("maturity", 0)
+    if not isinstance(stored, (int, float)):
+        stored = 0
+    correct_stage = _derive_stage(stored)
+    stage_mismatch = entry.get("stage") != correct_stage
+
+    if assessed <= stored and not stage_mismatch:
+        return {
+            "bumped": False,
+            "old": stored,
+            "new": assessed,
+            "reason": f"assessed ({assessed}%) <= stored ({stored}%)",
+        }
+
+    if not _queue_lock(LADDER, timeout=5.0):
+        return {"bumped": False, "old": stored, "new": assessed, "reason": "queue lock busy — try next beat"}
+
+    try:
+        data = json.loads(LADDER.read_text(encoding="utf-8"))
+        entry = _publication_policy_entry(data)
+        if entry is None:
+            return {"bumped": False, "old": stored, "new": assessed, "reason": "Publication Policy entry disappeared"}
+
+        stored = entry.get("maturity", stored)
+        if not isinstance(stored, (int, float)):
+            stored = 0
+        should_write = False
+        if assessed > stored:
+            entry["maturity"] = assessed
+            entry["note"] = _append_advancement_note(str(entry.get("note", "")), stored, assessed)
+            should_write = True
+        derived_stage = _derive_stage(entry.get("maturity", stored))
+        if entry.get("stage") != derived_stage:
+            entry["stage"] = derived_stage
+            should_write = True
+        if not should_write:
+            return {"bumped": False, "old": stored, "new": assessed, "reason": "no change needed"}
+
+        new_value = entry.get("maturity", stored)
+        fd, tmp = tempfile.mkstemp(dir=LADDER.parent, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+                f.write("\n")
+            os.replace(tmp, LADDER)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+
+        if assessed > stored:
+            return {
+                "bumped": True,
+                "old": stored,
+                "new": new_value,
+                "reason": f"advanced from {stored}% to {new_value}%",
+            }
+        return {
+            "bumped": False,
+            "changed": True,
+            "old": stored,
+            "new": new_value,
+            "reason": f"corrected stage to {_derive_stage(new_value)}",
+        }
+    except (json.JSONDecodeError, OSError) as exc:
+        return {"bumped": False, "old": stored, "new": assessed, "reason": f"write error: {exc}"}
+    finally:
+        _queue_unlock(LADDER)
 
 
 def disposition(visibility: str, cls: str) -> tuple[str, str]:
@@ -409,7 +684,7 @@ def _self_test() -> list[str]:
     return fails
 
 
-def _stamp(ok: bool, note: str = "") -> None:
+def _stamp(ok: bool, note: str = "", assessment: dict | None = None, advancement: dict | None = None) -> None:
     try:
         LOGS.mkdir(exist_ok=True)
         STAMP.write_text(
@@ -419,6 +694,8 @@ def _stamp(ok: bool, note: str = "") -> None:
                     "sound": ok,
                     "classes": list(CLASSES),
                     "note": note,
+                    "assessment": assessment or {},
+                    "advancement": advancement or {},
                 },
                 indent=2,
             )
@@ -432,13 +709,24 @@ def _stamp(ok: bool, note: str = "") -> None:
 
 def cmd_verify(_args) -> int:
     fails = _self_test()
-    _stamp(not fails, "verify")
+    assessment = _assess_maturity(fails)
+    if fails:
+        advancement = {"bumped": False, "old": None, "new": assessment["maturity_pct"], "reason": "self-test failed"}
+    else:
+        advancement = _advance_maturity(assessment)
+    _stamp(not fails, "verify", assessment, advancement)
     if fails:
         print("publication-policy UNSOUND:")
         for f in fails:
             print(f"  - {f}")
         return 1
-    print("publication-policy sound: redactor owner-scoped, matrix + classifier verified")
+    parts = [
+        "publication-policy sound: redactor owner-scoped, matrix + classifier verified",
+        f"maturity={assessment['maturity_pct']}%",
+    ]
+    if advancement.get("bumped"):
+        parts.append(f"ADVANCED:{advancement['old']}->{advancement['new']}%")
+    print(" | ".join(parts))
     return 0
 
 
@@ -450,7 +738,7 @@ def cmd_check(_args) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="publication-policy — the disposition engine")
-    ap.add_argument("--verify", action="store_true", help="self-test predicate (exit 0 <=> sound)")
+    ap.add_argument("--verify", action="store_true", help="self-test predicate + maturity self-feed")
     ap.add_argument("--check", action="store_true", help="cheap stamp presence check")
     sub = ap.add_subparsers(dest="cmd")
 

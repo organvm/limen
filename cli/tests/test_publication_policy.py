@@ -7,6 +7,7 @@ disposition matrix must be deterministic so "the answer is clear" per repo.
 """
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,18 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("publication_policy", ROOT / "scripts" / "publication-policy.py")
 pp = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pp)
+
+
+def load_publication_policy(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    spec = importlib.util.spec_from_file_location(
+        "publication_policy_under_test",
+        ROOT / "scripts" / "publication-policy.py",
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
 
 
 # --- the redactor scrubs OWNER identifiers -----------------------------------
@@ -123,3 +136,59 @@ def test_self_test_passes():
 def test_residual_pii_detects_and_clears():
     assert pp._residual_pii("Anthony Padavano here") is not None
     assert pp._residual_pii(pp.redact("Anthony Padavano here")) is None
+
+
+def test_maturity_assessment_includes_converged_gate_refs():
+    assessment = pp._assess_maturity([])
+    assert "convergence_authority_referenced" in assessment["passed"]
+    assert assessment["maturity_pct"] >= 80
+
+
+def test_publication_policy_maturity_advance_selects_rank10_entry(tmp_path: Path, monkeypatch):
+    module = load_publication_policy(tmp_path, monkeypatch)
+    ladder = tmp_path / "organ-ladder.json"
+    ladder.write_text(
+        json.dumps(
+            {
+                "organs": [
+                    {
+                        "rank": 5,
+                        "pillar": "governance",
+                        "organ": "Aerarium / Cvrsvs Honorvm",
+                        "maturity": 75,
+                        "stage": "maturing",
+                        "note": "cursus honorum — already wired",
+                    },
+                    {
+                        "rank": 10,
+                        "pillar": "governance",
+                        "organ": "Publication Policy (the disclosure court)",
+                        "maturity": 60,
+                        "stage": "building",
+                        "note": "converges gates; beat C_PUBPOLICY, rung PUBPOLICY",
+                    },
+                ]
+            },
+            ensure_ascii=False,
+        )
+    )
+
+    result = module._advance_maturity({"maturity_pct": 80})
+
+    assert result["bumped"] is True
+    text = ladder.read_text()
+    assert "cursus honorum — already wired" in text
+    assert "\\u2014" not in text
+    data = json.loads(text)
+    aerarium, pubpolicy = data["organs"]
+    assert aerarium["maturity"] == 75
+    assert aerarium["stage"] == "maturing"
+    assert "publication-policy.py" not in aerarium["note"]
+    assert pubpolicy["maturity"] == 80
+    assert pubpolicy["stage"] == "maturing"
+    assert "Maturity 60%->80% auto-advanced by publication-policy.py beat" in pubpolicy["note"]
+
+    second = module._advance_maturity({"maturity_pct": 80})
+
+    assert second["bumped"] is False
+    assert ladder.read_text().count("Maturity 60%->80% auto-advanced by publication-policy.py beat") == 1

@@ -156,7 +156,7 @@ C_HEALTH="${LIMEN_BEAT_HEALTH:-6}"       # CARE (refresh the personal health off
 C_LIFE="${LIMEN_BEAT_LIFE:-6}"           # STEWARD (refresh the digital-life office: accounts/assets/subscription purge clock; PII off-repo)
 C_GOVERNANCE="${LIMEN_BEAT_GOVERNANCE:-8}" # GOVERN (run the cursus honorum seed validator + governance standing report)
 C_FINANCIAL="${LIMEN_BEAT_FINANCIAL:-8}"   # FINANCE (run the financial-office consolidator + advance maturity)
-C_PUBPOLICY="${LIMEN_BEAT_PUBPOLICY:-8}" # DISCLOSE (verify the content-disposition engine: redactor owner-scoped, matrix + classifier intact)
+C_PUBPOLICY="${LIMEN_BEAT_PUBPOLICY:-8}" # DISCLOSE (verify the content-disposition engine + advance Publication Policy maturity)
 C_WALLS="${LIMEN_BEAT_WALLS:-12}"        # WALLS (regenerate the credential Wall #320 + his-hand Wall #330 so they never drift)
 C_CVSTOS="${LIMEN_BEAT_CVSTOS:-24}"      # KEEP (CVSTOS — host stays factory: chat-app/local debt census + factory-invariant + reaper proprioception; filesystem walk ⇒ rare)
 C_VVLTVS="${LIMEN_BEAT_VVLTVS:-24}"      # FACE (VVLTVS — verify the public face reflects the live SSOT: profile/portfolio drift + contribution-mix radar; offline read ⇒ cheap)
@@ -501,8 +501,9 @@ while true; do
     { python3 "$LIMEN_ROOT/scripts/financial-organ.py" 2>&1 | tail -1 || true; stamp financial; }
   # DISCLOSE — verify the publication-policy engine (the ONE content-disposition decision) stays sound
   # every C_PUBPOLICY beats: redactor owner-scoped (never eats product emails / placeholders / 555
-  # fixtures), disposition matrix + classifier intact. Read-only self-test, stamps the pubpolicy voice.
-  # Idempotent, fail-open — never gates the beat. Gate off with LIMEN_PUBPOLICY=0.
+  # fixtures), disposition matrix + classifier intact. Also assesses and advances the rank-10
+  # Publication Policy maturity in organ-ladder.json when objective checks grow. Idempotent,
+  # fail-open — never gates the beat. Gate off with LIMEN_PUBPOLICY=0.
   due_voice pubpolicy "$C_PUBPOLICY" && [ "${LIMEN_PUBPOLICY:-1}" = "1" ] && \
     { python3 "$LIMEN_ROOT/scripts/publication-policy.py" --verify 2>&1 | tail -1 || true; stamp pubpolicy; }
   # CVSTOS — the keeper of the host. Every C_CVSTOS beats: census the chat-app/local debt (all

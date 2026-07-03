@@ -7,7 +7,7 @@ clear and never re-litigated.
 
 - **Engine:** [`scripts/publication-policy.py`](../../scripts/publication-policy.py)
 - **Tests / predicate:** [`cli/tests/test_publication_policy.py`](../../cli/tests/test_publication_policy.py) + `publication-policy.py --verify`
-- **Beat:** `C_PUBPOLICY` (heartbeat) → `--verify` each cycle → stamps `logs/publication-policy-state.json` → proprioception rung `PUBPOLICY`.
+- **Beat:** `C_PUBPOLICY` (heartbeat) → `--verify` each cycle → stamps `logs/publication-policy-state.json` → proprioception rung `PUBPOLICY` → advances this organ's `organ-ladder.json` maturity when objective checks pass.
 
 ## The decision
 
@@ -85,3 +85,17 @@ python3 scripts/publication-policy.py --verify                    # is the engin
 
 The 2026-07-02 PII-sweep re-audit was resolved *by this engine* — see
 [`DISCLOSURE-AUDIT.md`](DISCLOSURE-AUDIT.md) for the per-repo disposition ledger it produced.
+
+## Self-feed
+
+The publication-policy beat is not just a smoke test. `scripts/publication-policy.py --verify`
+assesses the rank-10 `Publication Policy` organ from repo-local criteria: engine soundness,
+test coverage, heartbeat wiring, proprioception wiring, parameter registration, and whether the
+legacy gates above all point back to this rule table. When the assessed maturity exceeds the
+stored maturity, it updates only the `Publication Policy` entry in `organ-ladder.json` through a
+mkdir lock plus atomic replace. It never touches `tasks.yaml`, never dispatches work, and never
+lowers maturity.
+
+The remaining 20% is intentionally held behind the estate cleanup in
+[`DISCLOSURE-AUDIT.md`](DISCLOSURE-AUDIT.md): verified/stripped public-HEAD residuals, resolved
+inferred cases, and external/his-hand residues.
