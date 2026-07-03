@@ -158,7 +158,7 @@
       "organ": "Health / Body",
       "repo": "organvm/limen",
       "home": "organs/health/",
-      "maturity": 10,
+      "maturity": 15,
       "stage": "scaffold",
       "whose_hand": "mine (medical acts + appointments are his)",
       "rival": "a concierge medical / recovery team",
