@@ -971,6 +971,13 @@ parameters:
     note: "The purpose channel a scoped conductor is pinned to (the one-worker-one-workstream invariant). cells.sh filters the cell board to this channel via `limen channels --emit`, so the conductor structurally sees only its lane. Unset ⇒ the cell sees the full board. See docs/lanes/ and limen.workstream."
 
   # --- BOARD INTEGRITY — the SSOT can never collapse, and self-heals if it somehow does ---
+
+  LIMEN_QUEUE_LOCK_HELD:
+    default: null              # unset normally; the heartbeat parent exports it for the span of a beat where it already holds the queue lock
+    env: LIMEN_QUEUE_LOCK_HELD
+    self_update: "exported as 1 by scripts/heartbeat-loop.sh around the beat window where the parent already holds the queue lock (unset again afterward), so heartbeat child mutators reenter instead of dead-locking on the parent's lock"
+    owner: limen-daemon
+    note: "Reentrancy escape hatch for io.queue_lock: when set to 1 and the lockdir already exists, queue_lock yields True immediately (the parent beat holds it) instead of blocking then timing out — preventing a heartbeat child write from dead-locking against the parent. See scripts/heartbeat-loop.sh and cli/src/limen/io.py."
   # (limen.io.save_limen_file collapse-guard + scripts/heal-board.py). Root-caused 2026-06-26:
   # a writer atomically replaced the live 1449-task queue with one freshly-built task (missing
   # `created`), so every beat's load threw and the whole institution idled for hours.

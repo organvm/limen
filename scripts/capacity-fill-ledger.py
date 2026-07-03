@@ -342,15 +342,22 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         "|---|---|---|---|---|",
     ]
     signals = snapshot.get("signals") or {}
+
+    def _cell(value: object) -> str:
+        # Escape pipes for the markdown table. The backslash lives in this plain string literal, NOT
+        # inside an f-string expression — a backslash in an f-string {expr} is a SyntaxError on
+        # Python 3.11 (only allowed from 3.12 / PEP 701), and CI runs 3.11.
+        return str(value).replace("|", "\\|")
+
     for row in census:
         signal = signals.get(row["agent"]) or {}
         lines.append(
             "| "
             f"`{row['agent']}` | "
-            f"{str(signal.get('signal', 'unknown')).replace('|', '\\|')} | "
-            f"{str(signal.get('trust', 'unknown')).replace('|', '\\|')} | "
-            f"{str(signal.get('use', '')).replace('|', '\\|')} | "
-            f"{str(signal.get('next_build', '')).replace('|', '\\|')} |"
+            f"{_cell(signal.get('signal', 'unknown'))} | "
+            f"{_cell(signal.get('trust', 'unknown'))} | "
+            f"{_cell(signal.get('use', ''))} | "
+            f"{_cell(signal.get('next_build', ''))} |"
         )
 
     lines += [
