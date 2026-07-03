@@ -507,8 +507,8 @@
         "2 deploy workflows (Firebase + Cloud Run)",
         "CLI + REST API + SaaS dashboard",
         "Multi-repo, multi-agent orchestration",
-        "MCP-accessible — exposes the task system over the Model Context Protocol (server + ianva doorway/aggregator)",
-        "Self-* organ ladder — self-sustaining, self-routing, self-feeding, self-healing, all live"
+        "MCP-accessible \u2014 exposes the task system over the Model Context Protocol (server + ianva doorway/aggregator)",
+        "Self-* organ ladder \u2014 self-sustaining, self-routing, self-feeding, self-healing, all live"
       ],
       "buyer": "AI engineering teams running multiple agents across multiple repos; organizations scaling from single-agent to fleet orchestration.",
       "expensive_problem": "Managing task routing across agents and repos is ad hoc \u2014 each agent has its own intake, routing is hardcoded, scaling to 5+ agents becomes coordination hell, and visibility into what's being worked is absent.",
@@ -626,6 +626,72 @@
         "observability",
         "history",
         "tracking"
+      ]
+    },
+    "organvm/ianva": {
+      "display_name": "Single Gateway for MCP Across All Agents",
+      "what_it_is": "A unified MCP doorway that sits between your agents (Claude Code, Codex, Gemini, opencode, etc.) and every MCP server (Gmail, Sentry, Notion, GitHub, etc.). Each agent connects once; ianva handles all OAuth, auto-refresh, and server aggregation. Built on MCPHub with auto-refresh, Docker-optional, local + cloud faces.",
+      "proof_signals": [
+        "Wraps MCPHub with full OAuth 2.1 (PKCE, DCR, resource indicators)",
+        "Single-writer refresh + flock serialization (no race conditions)",
+        "4 faces: local HTTP, stdio via mcp-proxy, cloud HTTPS tunnel, discipline layer",
+        "Every MCP server authed once, forever \u2014 no re-prompts per agent",
+        "Tested with Claude Code, Codex, Gemini, agy, opencode, Copilot, Cline"
+      ],
+      "buyer": "Development teams and individual builders running multiple AI agents who need consistent MCP server access without re-authenticating per agent.",
+      "expensive_problem": "Every agent that touches MCP requires independent OAuth setup. With 6+ agents, you're authorizing the same servers 6+ times. Each agent has its own credential storage, refresh logic, and re-prompt on expiry \u2014 hours burned on auth flaps instead of building.",
+      "cost_of_not_having_it": "3\u20135 hours per agent per month wasted on MCP re-authorization, OAuth expiry surprises, and per-agent credential sync. For teams: per-agent divergence creates support burden. Build velocity drops 10\u201315% when half your energy goes to 'why won't this MCP server respond' instead of shipping.",
+      "public_face": "the full ianva stack \u2014 the MCPHub wrapper, the 4 faces, the auto-refresh logic, the flock serialization, the configuration system, the doctor + quickstart. Read every line; run `ianva doctor` and see it work.",
+      "private_operation": "your agents all talking to one ianva endpoint; token refresh silent in the background; new MCP servers added once and available to every agent immediately; no more per-agent re-auth dances. The engine that makes your toolchain feel cohesive instead of fragmented.",
+      "ladder": [
+        {
+          "level": 1,
+          "name": "Unified MCP access across my agents",
+          "kind": "Standalone gateway",
+          "what_they_get": "Deploy ianva on your machine; configure once per MCP server; every agent auto-connects. OAuth, refresh, aggregation, all handled. One endpoint, infinite agents.",
+          "internal_anchor": "Self-hosted (free / sweat), or managed via us (optional retainer for ops)",
+          "cadence": "Deploy once, refresh automatic"
+        },
+        {
+          "level": 2,
+          "name": "Integrate ianva into my agent platform",
+          "kind": "Embedded gateway",
+          "what_they_get": "ianva as a library in your platform; agents register, ianva coordinates OAuth and server aggregation. You own the endpoint, ianva owns the mechanics.",
+          "internal_anchor": "$5k\u2013$15k integration + $1k\u2013$3k / mo ops",
+          "cadence": "Integration + recurring"
+        },
+        {
+          "level": 3,
+          "name": "Build my own agent fleet on ianva",
+          "kind": "White-label fleet operator",
+          "what_they_get": "ianva powers your end-to-end agent platform \u2014 credential management, MCP routing, auth, auto-refresh. You brand it, sell it, operate it.",
+          "internal_anchor": "$25k\u2013$75k platform build + $3k\u2013$10k / mo managed",
+          "cadence": "Build + recurring"
+        },
+        {
+          "level": 4,
+          "name": "Be our MCP infrastructure engine",
+          "kind": "Strategic partnership",
+          "what_they_get": "We build your MCP backbone \u2014 standardize auth across your org's N agents, handle the refresh/expiry/retry layer, own the compliance + audit trail. You focus on agent capability.",
+          "internal_anchor": "$10k\u2013$30k / mo retainer",
+          "cadence": "Ongoing partnership"
+        }
+      ],
+      "cta_client": "Unify your agents' MCP access",
+      "cta_recruiter": "Work with the team that built this",
+      "recruiter_bridge_level": 4,
+      "seo_description": "Unified MCP gateway for multiple AI agents \u2014 single OAuth per server, auto-refresh, no re-prompts. Gateway for Claude Code, Codex, Gemini, opencode, Copilot, and Cline.",
+      "search_topics": [
+        "mcp",
+        "model-context-protocol",
+        "agent-tools",
+        "agent-orchestration",
+        "oauth-gateway",
+        "credential-management",
+        "mcp-server",
+        "multi-agent",
+        "ai-tools",
+        "api-gateway"
       ]
     }
   }
