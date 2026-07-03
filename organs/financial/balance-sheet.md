@@ -1,27 +1,36 @@
-# Financial Office — Consolidated Balance Sheet (MACRO template)
+# Financial Office — Consolidated Balance Sheet
 
-> Generated: 2026-07-03T10:44:27Z
-> *This is an advisory estimate. Balances marked `unknown` need principal input.
+> Generated: 2026-07-03T11:42:37Z
+> *Advisory estimate. Balances marked `-` need principal entry.
 
-## Net Position by Entity
+## Net Worth
 
-| Entity | Type | Accounts | Known Balance | Status |
-|---|---|---|---|---|
-| **Anthony J. Padavano** | individual | 4 | *(needs entry)* | unconfirmed |
-| **Sovereign Systems LLC** | llc | 2 | *(needs entry)* | unconfirmed |
-| **Cind & Sol Foundation** | nonprofit | 0 | *(needs entry)* | unconfirmed |
-| **ChatGPT Exporter (product revenue)** | individual | 3 | *(needs entry)* | unconfirmed |
-| **Public Record Data Scraper (product revenue)** | individual | 1 | *(needs entry)* | unconfirmed |
-| **The Invisible Ledger (product revenue)** | individual | 1 | *(needs entry)* | unconfirmed |
+- **Net worth:** *(no known balances — enter data in entities.yaml)*
 
-### Totals
+## Assets
 
-- **Known balances:** — (no known balances)
-- **Entities with unconfirmed balances:** 6
-- **As of:** 2026-07-03
+| Account | Type | Balance | Status |
+|---|---|---|---|
+| anthony-personal:ach-checking | checking | - | (needs entry) |
+| anthony-personal:icloud-email | receivable | - | (needs entry) |
+| anthony-personal:gmail-email | receivable | - | (needs entry) |
+| anthony-personal:apple-developer | receivable | - | (needs entry) |
+| sovereign-systems-llc:stripe-merchant | receivable | - | (needs entry) |
+| sovereign-systems-llc:llc-checking | checking | - | (needs entry) |
+| product-exporter:ko-fi | receivable | - | (needs entry) |
+| product-exporter:lemon-squeezy | receivable | - | (needs entry) |
+| product-exporter:moneta-mint | receivable | - | (needs entry) |
+| product-public-records:tbd-payments | receivable | - | (needs entry) |
+| product-invisible-ledger:tbd-payments | receivable | - | (needs entry) |
+| **Total Assets** | | **$0.00** | 0 known |
 
-### Action items
+## Liabilities
 
-1. Enter current balances for each account in `entities.yaml` (field: `balance`)
-2. Set `balance_known: true` and `as_of: <date>` for each confirmed balance
-3. Re-run `consolidate.py` to refresh this sheet
+| Account | Type | Balance | Status |
+|---|---|---|---|
+| **Total Liabilities** | | **$0.00** | 0 known |
+
+### Balance History (snapshots)
+- **Snapshots recorded:** 1
+- **Latest:** 2026-07-03
+- **First snapshot recorded** — trend data will appear after the next beat
