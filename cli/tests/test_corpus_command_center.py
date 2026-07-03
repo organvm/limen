@@ -70,7 +70,7 @@ def test_corpus_command_center_indexes_all_unit_shapes_and_redacts_public(tmp_pa
                         "payload": {
                             "type": "function_call",
                             "name": "read_file",
-                            "arguments": "{\"path\":\"SECRET_TOOL_ARG\"}",
+                            "arguments": '{"path":"SECRET_TOOL_ARG"}',
                         },
                     }
                 ),
@@ -153,9 +153,7 @@ tasks:
     (tmp_path / "docs" / "positioning").mkdir(parents=True)
     (tmp_path / "docs" / "inbound-magnet-system.md").write_text("RAW_INBOUND_DOC", encoding="utf-8")
     (tmp_path / "docs" / "AUG1-10K-GATE.md").write_text("RAW_AUG_DOC", encoding="utf-8")
-    (tmp_path / "docs" / "positioning" / "public-record-data-scrapper.md").write_text(
-        "scraper model", encoding="utf-8"
-    )
+    (tmp_path / "docs" / "positioning" / "public-record-data-scrapper.md").write_text("scraper model", encoding="utf-8")
     (tmp_path / "logs").mkdir()
     ccc.AUG1_VIEW_PATH.write_text(
         json.dumps(
