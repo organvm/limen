@@ -50,6 +50,7 @@ def _run(path: Path, *args: str, org_repos: str = "", ranked: str = "", headroom
         "LIMEN_DISCOVER_REPOS": org_repos,
         "LIMEN_VALUE_REPOS": ranked,
         "LIMEN_VALUE_REPOS_FILE": str(path.parent / "no-such-tier.json"),
+        "LIMEN_TICKETS_PRODUCE": "0",
     }
     if headroom is not None:
         (path.parent / "logs").mkdir(exist_ok=True)
