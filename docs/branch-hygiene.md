@@ -23,7 +23,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `worktree-ianva-doorway` — f4c0c07 fix(ianva): never echo bearer to stdout; untrack generated/ golden files
 - `worktree-linear-conjuring-bear` — 92c21f2 chore(gitignore): ignore .wrangler/ cache at any depth, not just web/worker
 
-## Live-work branches (99) — decide each
+## Live-work branches (100) — decide each
 
 - `_pr198` — 4cd0dba fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `capture/main-2026-07-02T01-03-35Z` — 71b4885 capture: off-disk sync 2026-07-02T01:03:35Z (main behind origin → side ref, HEAD untouched)
@@ -47,6 +47,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `feature/ORG-education-organ-face-0630` — 9d17479 feat(education): author polished macro and micro face for education organ
 - `feature/tale-of-genji-chapters-2-5` — 50a31de studium: author Tale of Genji chapters 2-5
 - `fix/heartbeat-refresh-web-wedge` — 0a51202 fix(heartbeat): stop refresh-web piping into tail — it wedges the daemon (regression reintroduced in loop refactor)
+- `heal/608-declare-param` — a63e6db chore(governance): declare LIMEN_WORKSPACE_UNIT_TIMEOUT_SEC for preserve_workspace()
 - `heal/ci-ruff-semicolons` — 04b0509 fix(ci): clear ruff E702/E703 in test_sync_reclaim.py — unjams the merge backlog
 - `heal/health-office-staged-0625` — ff43850 health office — the executive health office (autopoietic; PII strictly off-repo)
 - `heal/marker-and-tcc-registry-2026-06-24` — e6248bd heal: swallow Claude Code's benign install_failed update marker (false ⚠ on /doctor)
