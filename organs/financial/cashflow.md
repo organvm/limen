@@ -1,6 +1,6 @@
 # Financial Office — Rolling Cash-Flow Projection
 
-> Generated: 2026-07-03T11:43:04Z
+> Generated: 2026-07-03T18:47:02Z
 > *Forward-looking estimate based on known revenue stages and obligations.
 > Confidence increases as more balances and obligation amounts are confirmed.*
 
@@ -39,9 +39,9 @@
 
 ## Obligations (financial-material)
 
-Sourced from `obligations-ledger.json` — 2 protocol-class obligations:
+Sourced from `entities.yaml registry fallback` — 2 protocol-class obligations:
 
 | Priority | Title | Owner | Next Step |
 |---|---|---|---|
-| 88 | Student loan — default risk — U.S. Department of Education | yours | Log in at nelnet.studentaid.gov: check default status, recertify the income-driven repayment plan, and set the lowest viable payment. |
-| 78 | KYC / identity verification — Stripe | yours | Provide the exact info requested. Note: Stripe KYC is blocked on the dead LLC — prefer the individual monetization rail (Ko-fi/Lemon Squeezy). |
+| 88 | Student loan — default risk — U.S. Department of Education | anthony-personal | Log in at nelnet.studentaid.gov: check default status, recertify IDR plan |
+| 78 | KYC / identity verification — Stripe | sovereign-systems-llc | Prefer individual monetization rail (Ko-fi/Lemon Squeezy/MONETA) — dead LLC blocks Stripe KYC |
