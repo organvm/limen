@@ -107,10 +107,12 @@ def test_financial_dashboard_surfaces_macro_and_micro_faces(tmp_path: Path, monk
 
     assert "| Macro Face | `MACRO.md` | Deepened" in dashboard
     assert "| Micro Instance Face | `MICRO.md` | Deepened" in dashboard
+    assert "| Standing Census | `standing-census.md` | Live" in dashboard
     faces = {face["id"]: face for face in web_face["faces"]}
     assert faces["macro"]["path"] == "organs/financial/MACRO.md"
     assert faces["micro"]["status"] == "deepened"
     assert "MONETA intakes value" in web_face["rail_boundary"]
+    assert "standing_census" in web_face
 
 
 def test_public_census_is_counts_only(tmp_path: Path, monkeypatch) -> None:
@@ -165,5 +167,128 @@ def test_cashflow_uses_registry_obligation_fallback(tmp_path: Path, monkeypatch)
     assert "1 protocol-class obligations" in cashflow
     assert "entities.yaml registry fallback" in cashflow
     assert "Student loan default risk" in cashflow
+    assert "1 obligations unquantified" in cashflow
     assert "1 financial-material (registry fallback)" in dashboard
     assert "using `entities.yaml` fallback" in dashboard
+
+
+def test_standing_census_surfaces_reliability_gates(tmp_path: Path, monkeypatch) -> None:
+    module = load_consolidate(tmp_path, monkeypatch)
+    entities = {
+        "account_classification": {"checking": "asset", "credit": "liability"},
+        "entities": [
+            {
+                "id": "anthony-personal",
+                "accounts": [
+                    {
+                        "id": "ach-checking",
+                        "type": "checking",
+                        "balance_known": False,
+                    },
+                    {
+                        "id": "santander-card-0186",
+                        "type": "credit",
+                        "balance_known": False,
+                    },
+                ],
+            }
+        ],
+        "obligation_sources": [
+            {
+                "financial_obligations": [
+                    {
+                        "priority": 90,
+                        "title": "Card hold",
+                        "entity": "anthony-personal",
+                        "amount_unknown": True,
+                    }
+                ]
+            }
+        ],
+    }
+    revenue = {
+        "products": [
+            {
+                "rank": 1,
+                "product": "ChatGPT Exporter",
+                "stage": "deploy-ready",
+                "first_dollar_path": "MONETA",
+            }
+        ]
+    }
+
+    census = module.build_standing_census(entities, revenue, {}, {"net_worth": None, "snapshot_count": 0})
+    markdown = module.build_standing_census_markdown(census)
+
+    assert census["missing_balance_count"] == 2
+    assert census["liability_account_count"] == 1
+    assert census["unknown_obligation_amount_count"] == 1
+    assert "enter_cash_balance" in {item["id"] for item in census["next_principal_inputs"]}
+    assert "net worth or solvency amount" in census["not_yet_reliable_for"]
+    assert "Reliance Posture" in markdown
+    assert "MINT_BTC_ADDRESS" in markdown
+
+
+def test_financial_organ_preserves_rich_web_dashboard(tmp_path: Path, monkeypatch) -> None:
+    module = load_financial_organ(tmp_path, monkeypatch)
+    face = tmp_path / "web" / "app" / "public" / "financial-standing.json"
+    face.parent.mkdir(parents=True)
+    face.write_text(
+        json.dumps(
+            {
+                "standing_census": {"can_rely_on": ["entity/account inventory"]},
+                "net_worth": None,
+            }
+        )
+    )
+
+    module._write_web_face(
+        {
+            "ts": "2026-07-03T00:00:00Z",
+            "consolidation": {"status": "pass"},
+        },
+        {"maturity_pct": 70, "passed": ["entity_registry"], "failed": ["entity_balances"]},
+        {"stage": "maturing"},
+    )
+
+    data = json.loads(face.read_text())
+    assert data["standing_census"]["can_rely_on"] == ["entity/account inventory"]
+    assert data["beat"]["consolidator"] == "pass"
+    assert data["beat"]["next_slices"] == ["entity_balances"]
+
+
+def test_financial_maturity_counts_current_successful_beat(tmp_path: Path, monkeypatch) -> None:
+    module = load_financial_organ(tmp_path, monkeypatch)
+
+    assessment = module._assess_maturity({"status": "pass"}, current_beat=True)
+
+    assert "voice_fresh" in assessment["passed"]
+    assert "consolidator_passes_beat" in assessment["passed"]
+
+
+def test_financial_maturity_requires_obligation_amounts(tmp_path: Path, monkeypatch) -> None:
+    module = load_financial_organ(tmp_path, monkeypatch)
+    fin = tmp_path / "organs" / "financial"
+    fin.mkdir(parents=True)
+    entities = fin / "entities.yaml"
+    entities.write_text(
+        """
+obligation_sources:
+  - financial_obligations:
+      - title: Card hold
+        amount_unknown: true
+"""
+    )
+
+    assert module._has_quantified_obligations() is False
+
+    entities.write_text(
+        """
+obligation_sources:
+  - financial_obligations:
+      - title: Card hold
+        amount: 25
+"""
+    )
+
+    assert module._has_quantified_obligations() is True
