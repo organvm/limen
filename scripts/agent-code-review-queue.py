@@ -26,11 +26,15 @@ PRIVATE_ROOT = Path(
 FULL_STACK_REVIEW = PRIVATE_ROOT / "full-stack-review" / "agent-session-review.json"
 PRIVATE_QUEUE = PRIVATE_ROOT / "full-stack-review" / "agent-code-review-queue.json"
 DOC_PATH = ROOT / "docs" / "agent-code-review-queue.md"
+REVIEW_LEDGER_PATH = ROOT / "docs" / "agent-code-diff-review.md"
 SELF_OUTPUT_PATHS = {
     "docs/agent-code-review-queue.md",
     "scripts/agent-code-review-queue.py",
 }
 BACKTICKED_TOKEN_RE = re.compile(r"`([^`]+)`")
+SESSION_TOKEN_RE = re.compile(
+    r"\b(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|ses_[A-Za-z0-9]+)\b"
+)
 
 
 def now_iso() -> str:
@@ -430,15 +434,18 @@ def render_markdown(queue: dict[str, Any]) -> str:
 
 
 def reviewed_tokens_from_doc(text: str) -> set[str]:
-    """Return backticked public tokens from the tracked review ledger.
+    """Return public row/session tokens from the tracked review ledger.
 
     The review ledger intentionally keeps prompt bodies private, but session ids
-    are public row keys. Matching queue session ids against all backticked
-    ledger tokens keeps this predicate robust across table labels such as
-    ``changed 147`` and ``refreshed 35``.
+    are public row keys. Matching queue session ids against explicit
+    session-shaped tokens keeps this predicate robust even when fenced code
+    blocks make naive Markdown backtick parsing ambiguous. Backticked tokens are
+    still included for table labels such as ``changed 147`` and ``refreshed 35``.
     """
 
-    return {match.group(1) for match in BACKTICKED_TOKEN_RE.finditer(text)}
+    return {match.group(1) for match in BACKTICKED_TOKEN_RE.finditer(text)} | {
+        match.group(0) for match in SESSION_TOKEN_RE.finditer(text)
+    }
 
 
 def depth_queue_rows(queue: dict[str, Any]) -> list[dict[str, Any]]:
@@ -536,7 +543,9 @@ def main() -> int:
             return 2
         status = depth_stop_status(
             queue,
-            DOC_PATH.read_text(encoding="utf-8", errors="replace") if DOC_PATH.exists() else "",
+            REVIEW_LEDGER_PATH.read_text(encoding="utf-8", errors="replace")
+            if REVIEW_LEDGER_PATH.exists()
+            else "",
             review_score_floor=args.review_score_floor,
             max_open=args.max_open,
         )
