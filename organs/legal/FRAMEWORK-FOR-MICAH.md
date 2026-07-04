@@ -39,6 +39,26 @@ strategy and advocacy instead of document wrangling.
 5. **Reviewable draft skeletons** — starting points you correct and own. Nothing is ever filed or sent
    by the system.
 
+## The first live proof packet
+
+The first vertical slice now exists for Anthony's ADA employment/accommodation matter:
+
+`matters/anthony-ada-employment/`
+
+It is deliberately narrow and review-first:
+
+- `posture.md` — a current case-posture brief for attorney correction;
+- `evidence-index.csv` — the evidence and chain-of-custody index, with repository artifacts separated
+  from private records that still need privileged-channel intake;
+- `chain-of-custody.md` — the custody rule and current chain table;
+- `deadlines.md` — an honest "no attorney-confirmed deadlines yet" posture, not guessed dates;
+- `ethics-log.md` — the UPL, privilege, and conflict guardrail check;
+- `MICAH-FRAMEWORK-DECK.md` — the matter-specific deck wrapper.
+
+The packet does not claim the private case record has been ingested. It shows the institution working:
+known material is indexed, missing material is named, custody is explicit, and every legal judgment is
+reserved for you.
+
 ## The boundaries we hold (so this helps, never harms)
 
 - **No legal advice, no UPL.** Drafts and organization only; you provide the law and the judgment.
@@ -59,5 +79,7 @@ line, tell me and I'll cut them. You're in charge of all of it.
 
 ---
 
-*Structure v0.1 — `organs/legal/` in the VLTIMA system. Companion docs: [KERNEL.md](KERNEL.md) (the
-domain model), [CHARTER.md](CHARTER.md) (the full org-chart + workflows).*
+*Structure v0.2 — `organs/legal/` in the VLTIMA system. Companion docs: [KERNEL.md](KERNEL.md) (the
+domain model), [CHARTER.md](CHARTER.md) (the full org-chart + workflows), and
+[`matters/anthony-ada-employment/MICAH-FRAMEWORK-DECK.md`](matters/anthony-ada-employment/MICAH-FRAMEWORK-DECK.md)
+(the first live proof packet).*

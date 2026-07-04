@@ -14,15 +14,15 @@
       "organ": "Legal Organism",
       "repo": "organvm/limen",
       "home": "organs/legal/",
-      "maturity": 20,
-      "stage": "scaffold",
+      "maturity": 30,
+      "stage": "building",
       "whose_hand": "mine (privileged/filing acts stay with counsel)",
       "rival": "a top-tier litigation firm (the Cochran standard)",
       "domain_map": "Member=client/party; Mandate=claim/matter; Standing=case posture; Standard=statute/precedent/rubric; Governance=the firm's process + ethics wall",
       "macro": "a legal-institution platform any pro-se or under-resourced person can hold",
       "micro": "Anthony's active ADA employment matter run with a top-firm's institutional weight, AUGMENTING attorney Micah Longo (never replacing counsel, never practicing law)",
       "first_artifact": "a case-posture brief + evidence/chain-of-custody index for the live matter, packaged as a framework deck to show Micah",
-      "note": "THE FLAGSHIP he named. Augments real counsel; does NOT give legal advice or practice law."
+      "note": "THE FLAGSHIP he named. Augments real counsel; does NOT give legal advice or practice law. First vertical slice landed 2026-07-03: matters/anthony-ada-employment/ posture brief, evidence-index.csv, chain-of-custody.md, deadlines.md, ethics-log.md, Micah framework deck, and validate-legal.py. Maturity 20%->30%."
     },
     {
       "rank": 2,
