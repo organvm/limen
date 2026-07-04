@@ -11,6 +11,9 @@
 #     history or a blocked tree it logs the cheapest path and returns 0 so the beat never stops
 #     (the "never a silent no" invariant). It NEVER exits or re-execs the daemon (KeepAlive=false:
 #     an exit would not respawn — that is the documented dead-daemon failure mode).
+#   • HEAD RESTS ON THE RELEASE BRANCH — a checkout parked on a work branch is UNPARKED back to
+#     the release, but only when provably loss-free (branch tip safe on origin + no tracked dirt
+#     beyond the daemon-owned tasks.yaml); see the unpark valve below.
 #
 # Untracked runtime state (logs/autonomy-policy.json governor gate, usage.json, caches) is SAFE:
 # a fast-forward only advances committed history and leaves untracked files untouched. This organ
@@ -50,6 +53,46 @@ git fetch --quiet origin "$BRANCH" 2>/dev/null || { echo "sync-release: fetch fa
 LOCAL="$(git rev-parse HEAD 2>/dev/null || echo)"
 REMOTE="$(git rev-parse "origin/$BRANCH" 2>/dev/null || echo)"
 [ -n "$REMOTE" ] || { echo "sync-release: no origin/$BRANCH — fail open"; exit 0; }
+
+# ── UNPARK valve — the live checkout must REST ON THE RELEASE BRANCH. A session that leaves HEAD
+# parked on a work branch strands the daemon on stale code with no way home (observed
+# 2026-06-29 → 07-04: five days pinned to a jules-capfill branch, 65 behind release, every
+# autonomic capture entangling runtime state into that branch). Unparking is loss-free ⟺ BOTH:
+#   • every committed local commit is already safe on origin's copy of the branch
+#     (tip == origin/<cur> after a freshen), AND
+#   • no tracked modification beyond the daemon-owned live queue (tasks.yaml — preserved across
+#     the switch; capture.sh commits+pushes any other dirt onto the branch on its own beat, after
+#     which THIS valve fires — so a parked-dirty checkout self-heals within two beats).
+# Anything less provable fails open LOUDLY with the cheapest path. Detached HEAD is left alone.
+CUR="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo)"
+if [ -n "$CUR" ] && [ "$CUR" != "$BRANCH" ]; then
+  git fetch --quiet origin "$CUR" 2>/dev/null || true
+  RCUR="$(git rev-parse "origin/$CUR" 2>/dev/null || echo)"
+  dirt="$( { git diff --name-only HEAD 2>/dev/null; git diff --cached --name-only 2>/dev/null; } | grep -vxF 'tasks.yaml' | sort -u)"
+  if [ -z "$RCUR" ] || [ "$RCUR" != "$LOCAL" ]; then
+    echo "sync-release: parked on '$CUR' with commit(s) not safe on origin/$CUR — fail open (cheapest path: push the branch; the valve unparks next beat)"
+    exit 0
+  fi
+  if [ -n "$dirt" ]; then
+    echo "sync-release: parked on '$CUR' with tracked dirt beyond tasks.yaml — fail open (capture.sh lands it next beat, then the valve unparks)"
+    exit 0
+  fi
+  TMP="$(mktemp 2>/dev/null || echo "$ROOT/logs/.tasks.unpark.$$")"
+  [ -f tasks.yaml ] && cp -f tasks.yaml "$TMP" 2>/dev/null || true
+  git checkout --quiet HEAD -- tasks.yaml 2>/dev/null || true   # clean the queue for the switch; live copy restored below
+  if git switch --quiet "$BRANCH" 2>/dev/null || git checkout --quiet "$BRANCH" 2>/dev/null; then
+    [ -f "$TMP" ] && cp -f "$TMP" tasks.yaml 2>/dev/null || true
+    rm -f "$TMP" 2>/dev/null || true
+    LOCAL="$(git rev-parse HEAD 2>/dev/null || echo)"
+    echo "sync-release: UNPARKED '$CUR' → '$BRANCH' (branch tip safe on origin/$CUR) ✓"
+  else
+    [ -f "$TMP" ] && cp -f "$TMP" tasks.yaml 2>/dev/null || true
+    rm -f "$TMP" 2>/dev/null || true
+    echo "sync-release: switch '$CUR' → '$BRANCH' refused — fail open (reconcile by hand)"
+    exit 0
+  fi
+fi
+
 [ "$LOCAL" = "$REMOTE" ] && { echo "sync-release: at release ${REMOTE:0:7} ✓"; exit 0; }
 
 # fast-forward ONLY — never touch a diverged or rewound history…

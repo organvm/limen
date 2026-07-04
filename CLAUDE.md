@@ -215,6 +215,8 @@ Authoritative and permanent. Claude **owns the branch cadence and the merge deci
 
 One PR per branch → `main`. Squash-merge, delete the branch. `main` is the trunk **and** the live deploy source.
 
+**Chunking.** A branch is **one concern, not one session.** When a session produces multiple concerns, cut a fresh branch per concern off `origin/main` — finish → push → PR → next branch — never accumulate heterogeneous commits on a single session branch. And the **live checkout rests on `main`**: parking it on a work branch pins the running fleet to stale code and entangles every autonomic capture into that branch (the 2026-06-29 jules-capfill park: 5 days, 65 behind, a feature slice + daemon receipts fused onto one ref). `scripts/sync-release.sh` auto-unparks a fully-pushed, clean park each beat and fails open loudly otherwise — do session work in a worktree, never in the live checkout.
+
 **Merge authority (standing grant).** Claude merges its own PRs into `main` *without asking*, the moment they are green and mergeable. Do not defer routine merges to the human operator. The grant has exactly one guardrail.
 
 **The website guardrail.** A merge to `main` **auto-deploys** the live public site/API — but *only* when the diff touches a deploy-trigger path:
