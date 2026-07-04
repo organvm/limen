@@ -1,6 +1,6 @@
 # Canonical Worktree Lifecycle Ledger
 
-Last audited: 2026-07-02 from `/Users/4jp/Workspace/limen`.
+Last audited: 2026-07-04 from `/Users/4jp/Workspace/limen`.
 
 This is the canonical working ledger for roots under
 `/Users/4jp/Workspace/.limen-worktrees`. A root exits this ledger only through a
@@ -19,6 +19,37 @@ only after their local `HEAD` matched the fetched remote PR head exactly:
 The unique work remains preserved on the remote branches and open draft PRs.
 
 ## Current Scan
+
+2026-07-04 residue and remote-receipt pass:
+
+- `python3 scripts/worktree-debt.py --json`: 78 roots, 4 debt-bearing roots, cap 12.
+- Current class mix: 34 documented residue roots, 15 open-PR remote-preserved roots,
+  7 remote-merged/default-preserved roots, 5 owner-blocker roots, 13 active roots under grace windows,
+  and 4 unpushed-commit roots.
+- Classified 34 `not-a-git-dir` roots as documented non-source residue after read-only inspection.
+  Every classified path contains exactly two files, `logs/session-lifecycle-pressure.json` and
+  `logs/session-lifecycle-pressure.md`, and no Git metadata or source files. Exact byte counts and
+  SHA-256 hashes are recorded in `docs/worktree-preservation-receipts.json`.
+- Classified `feat+workstream-channels` as remote-preserved by draft PR
+  [#634](https://github.com/organvm/limen/pull/634). Local `HEAD`
+  `dc0498d192c2aa76bf98d1b7fa0dda496baf3c8b` equals `origin/heal/revive-self-heal-beat`
+  and the PR `headRefOid`; the scanner now reports this root as `remote-pr-open`.
+- Classified `agent-aefc63d95daa3131b` as an owner blocker, not reclaimable lifecycle residue.
+  Local `HEAD` `d45b030d1427826c1c0c54b3cb54d552b94104a0` equals
+  `origin/work/photos-universe-20260629-182431`; PR
+  [#497](https://github.com/organvm/limen/pull/497) is closed unmerged. The private proof receipt
+  is recorded under
+  `.limen-private/session-corpus/lifecycle/worktree-preserve/2026-07-04T184224Z-agent-aefc63d95daa3131b/receipt.json`.
+- Classified `gh-organvm-domus-genoma-170-bbbc` as default-branch-preserved. Local `HEAD`
+  `24a251c550c438f90d8e495fdb2b5e62b34a0d22` is an ancestor of `origin/master`
+  `97b3f2c6169b83a20e0d1a61ef95b6621d0e1533`; the only dirty item is untracked
+  `logs/agents/opencode.json` (293 bytes, SHA-256
+  `d476defb235606087f3a33c53eba2fb039086e0c3f91318b335cc7e658a460ff`).
+- Refreshed the prompt lifecycle ledger with remote/cloud receipts enabled:
+  `python3 scripts/prompt-lifecycle-ledger.py --write --all`. The private index now has
+  `remote.enabled: true` and checked 1000 task PR refs.
+- No local reclaim, deletion, force-push, merge, task-board mutation, or owner-repo source edit was
+  performed in this pass.
 
 2026-07-02 live-root reconciliation scan:
 
