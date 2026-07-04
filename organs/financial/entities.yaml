@@ -185,13 +185,55 @@ obligation_sources:
   - source: "$LIMEN_ROOT/obligations-ledger.json"
     feed: "mail organ — every 6 beats"
     financial_obligations:
+      - id: ed-security-change
+        entity: anthony-personal
+        title: "Security — credential change — U.S. Department of Education"
+        amount_unknown: true
+        frequency: "one-time"
+        priority: 95
+        next_step: "VERIFY you made this change. If NOT you: secure the account immediately (change password, revoke sessions/third-party access)."
+      - id: stripe-fraud-alert
+        entity: anthony-personal
+        title: "Fraud alert — verify first — Stripe"
+        amount_unknown: true
+        frequency: "one-time"
+        priority: 90
+        next_step: "VERIFY the sender is genuine (fraud notices are heavily spoofed — do NOT click links). If real, call the number on the back of the card."
+      - id: santander-fraud-alert
+        entity: anthony-personal
+        title: "Fraud alert — verify first — Santander Bank"
+        amount_unknown: true
+        frequency: "one-time"
+        priority: 90
+        next_step: "VERIFY the sender is genuine (fraud notices are heavily spoofed — do NOT click links). If real, call the number on the back of the card."
       - id: student-loan-default
         entity: anthony-personal
         title: "Student loan — default risk — U.S. Department of Education"
         amount_unknown: true
         frequency: "monthly"
         priority: 88
-        next_step: "Log in at nelnet.studentaid.gov: check default status, recertify IDR plan"
+        next_step: "Log in at nelnet.studentaid.gov: check default status, recertify the income-driven repayment plan, and set the lowest viable payment."
+      - id: nelnet-student-loan-default
+        entity: anthony-personal
+        title: "Student loan — default risk — Nelnet"
+        amount_unknown: true
+        frequency: "monthly"
+        priority: 88
+        next_step: "Log in at nelnet.studentaid.gov: check default status, recertify the income-driven repayment plan, and set the lowest viable payment."
+      - id: anthropic-billing-failed
+        entity: anthony-personal
+        title: "Billing — payment failed — Anthropic"
+        amount_unknown: true
+        frequency: "monthly"
+        priority: 82
+        next_step: "Root cause is the card-0186 hold — resolve THAT first, then update the payment method here. (Cascades to Anthropic / Google Cloud / GitHub.)"
+      - id: gcp-billing-failed
+        entity: anthony-personal
+        title: "Billing — payment failed — Google Cloud Platform"
+        amount_unknown: true
+        frequency: "monthly"
+        priority: 82
+        next_step: "Root cause is the card-0186 hold — resolve THAT first, then update the payment method here. (Cascades to Anthropic / Google Cloud / GitHub.)"
       - id: stripe-kyc
         entity: sovereign-systems-llc
         title: "KYC / identity verification — Stripe"
@@ -199,6 +241,27 @@ obligation_sources:
         frequency: "one-time"
         priority: 78
         next_step: "Prefer individual monetization rail (Ko-fi/Lemon Squeezy/MONETA) — dead LLC blocks Stripe KYC"
+      - id: hostinger-domain-renewal
+        entity: anthony-personal
+        title: "Domain renewal — Hostinger"
+        amount_unknown: true
+        frequency: "annual"
+        priority: 48
+        next_step: "Decide which domains are worth keeping; renew those, let the rest lapse."
+      - id: mail-anthropic-infra-alarm
+        entity: limen
+        title: "Infra alarm (self) — mail.anthropic.com"
+        amount_unknown: true
+        frequency: "event"
+        priority: 32
+        next_step: "Your own infra signal — the system self-heals. No action unless you want to raise the limit / preserve the resource."
+      - id: chatgpt-app-update
+        entity: anthony-personal
+        title: "App update — ChatGPT"
+        amount_unknown: true
+        frequency: "event"
+        priority: 28
+        next_step: "Update the app if still in use; otherwise ignore (low risk, often past deadline)."
 
 # ── Revenue sources (synced from root revenue-ladder.json) ────────────
 # Full detail in $LIMEN_ROOT/revenue-ladder.json.
