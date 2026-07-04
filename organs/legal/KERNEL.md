@@ -12,7 +12,7 @@ weight for people who otherwise face procedure, evidence management, and legal p
 capacity. It does that by making legal operations repeatable: intake, posture tracking, evidence indexing,
 rule application, ethics controls, and reviewable draft production.
 
-This organ was named by Anthony as **Cochran**. It is deliberately generic at the base and instance-first
+This organ was named by Anthony as **THE FLAGSHIP**. It is deliberately generic at the base and instance-first
 atop that base: **generic + nameless underneath, his instance on top**.
 
 ## The 5-primitive kernel, mapped to law
