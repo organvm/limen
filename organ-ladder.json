@@ -14,7 +14,7 @@
       "organ": "Legal Organism",
       "repo": "organvm/limen",
       "home": "organs/legal/",
-      "maturity": 20,
+      "maturity": 25,
       "stage": "scaffold",
       "whose_hand": "mine (privileged/filing acts stay with counsel)",
       "rival": "a top-tier litigation firm (the Cochran standard)",
@@ -22,7 +22,7 @@
       "macro": "a legal-institution platform any pro-se or under-resourced person can hold",
       "micro": "Anthony's active ADA employment matter run with a top-firm's institutional weight, AUGMENTING attorney Micah Longo (never replacing counsel, never practicing law)",
       "first_artifact": "a case-posture brief + evidence/chain-of-custody index for the live matter, packaged as a framework deck to show Micah",
-      "note": "THE FLAGSHIP he named. Augments real counsel; does NOT give legal advice or practice law."
+      "note": "THE FLAGSHIP he named. Augments real counsel; does NOT give legal advice or practice law. KERNEL.md authored. Maturity 20%→25%."
     },
     {
       "rank": 2,
