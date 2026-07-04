@@ -11,8 +11,9 @@ Cost model (the "tiering", one level up from model-tiering):
     (don't dump all on one lane) and refresh-window RUNWAY from the usage meter
     (don't feed a lane pacing toward its reserve) — so load steers to the FRESHEST
     window and no lane is burned to 0 while another sits idle.
-  - Jules is the only lane that clones a remote repo on demand, and runs async in
-    parallel. RESERVE it for repos with no local checkout, and for large batches.
+  - Local lanes can clone a repo on demand through dispatch.py, so they are capable
+    for any task with a repo. Jules remains the async cloud lane for large batches
+    and as a remote fallback, not the only no-checkout escape hatch.
   - Copilot assigns an existing GitHub issue to copilot-swe-agent.
   - GitHub Actions triggers a configured workflow_dispatch workflow.
   - Warp/Oz are configurable paid-service lanes via LIMEN_WARP_DISPATCH_CMD and
@@ -33,6 +34,7 @@ stays a separate, explicitly-gated step (`limen dispatch --agent X --live`).
 Usage:
   python3 route.py [--tasks tasks.yaml] [--apply] [--workdir ~/Workspace]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -46,20 +48,28 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "cli" / "src"))
 
+from limen import census  # noqa: E402
 from limen.capacity import (  # noqa: E402
     ISSUE_ASSIGNMENT_AGENTS,
     LOCAL_CHECKOUT_AGENTS,
     PAID_AGENT_ORDER,
     capacity_census,
     format_capacity_census,
+    select_lanes,
     task_has_github_issue,
 )
 from limen.io import load_limen_file, queue_lock, save_limen_file  # noqa: E402
 from limen.dispatch import _down_lanes  # noqa: E402
+from limen.workstream import UNASSIGNED, assign_channel  # noqa: E402
 
 
 # Vendor health: which local lanes are usable right now. gemini needs an API key.
 def _vendor_health() -> dict[str, bool]:
+    """Fallback health map (used only when capacity_census raises). Lane names + binaries DERIVE
+    from the census register (the single vendor umbrella) — the earned local rotation
+    (census.lane_cascade()) with each vendor's binary — so this fallback can never drift to a
+    different vendor set than the census-backed main path. gemini additionally needs an API key."""
+
     def has(bin_: str) -> bool:
         return subprocess.run(["which", bin_], capture_output=True).returncode == 0
 
@@ -73,30 +83,22 @@ def _vendor_health() -> dict[str, bool]:
             return False
 
     gemini_auth = bool(os.environ.get("GEMINI_API_KEY")) or _gemini_settings_has_auth()
-    return {
-        "jules": has("jules"),
-        "codex": has("codex"),
-        "opencode": has("opencode"),
-        "agy": has("agy"),
-        "claude": has("claude"),
-        "gemini": has("gemini") and bool(gemini_auth),
-    }
+    binaries = census.default_binaries()
+    health: dict[str, bool] = {}
+    for name in census.lane_cascade():  # the local rotation — each lane with a binary to probe
+        ok = has(binaries.get(name, name))
+        if name == "gemini":
+            ok = ok and bool(gemini_auth)
+        health[name] = ok
+    return health
 
 
 def _fleet_health(data) -> dict[str, bool]:
-    """One health map for the WHOLE PAID_AGENT_ORDER. Origin's local-CLI probe for the six vendor
-    lanes, UNIONed with the capacity census's reachability for the extended paid fleet
-    (copilot/github_actions/warp/oz) so fan-all coverage is REAL, not just declared — a remote-only
-    repo with a GitHub issue can still route to copilot when no local lane can serve it."""
-    health = _vendor_health()
+    """One health map for the whole capacity registry."""
     try:
-        for row in capacity_census(data):
-            a = row["agent"]
-            if a not in health:
-                health[a] = bool(row["reachable"])
+        return {str(row["agent"]): bool(row["reachable"]) for row in capacity_census(data)}
     except Exception:
-        pass
-    return health
+        return _vendor_health()
 
 
 def _read_usage_vendors() -> dict:
@@ -110,6 +112,17 @@ def _read_usage_vendors() -> dict:
         return {}
 
 
+def _float_or_default(raw: object, default: float) -> float:
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    return _float_or_default(os.environ.get(name), default)
+
+
 def _vendor_runway() -> dict[str, float]:
     """Per-vendor hours-of-runway from the LIVE usage meter (logs/usage.json, written by
     usage-telemetry.py). This is the refresh-vs-remaining input to the split decision: how long
@@ -121,7 +134,7 @@ def _vendor_runway() -> dict[str, float]:
         if not isinstance(info, dict):
             continue
         r = info.get("runway_h")
-        out[name] = float("inf") if r is None else float(r)
+        out[name] = float("inf") if r is None else _float_or_default(r, float("inf"))
     return out
 
 
@@ -149,8 +162,7 @@ def _local_checkout(repo: str | None, workdir: Path) -> Path | None:
         return None
     org, _, name = repo.partition("/")
     cart = Path.home() / "Workspace" / ".home-cartridge" / "Code"
-    for cand in (workdir / repo, workdir / org / name, workdir / name,
-                 cart / org / name, cart / name):
+    for cand in (workdir / repo, workdir / org / name, workdir / name, cart / org / name, cart / name):
         if (cand / ".git").exists():
             return cand
     for root in (workdir, cart):
@@ -174,7 +186,7 @@ def _task_cost(task: dict) -> int:
 # jules async-fallback bound its historical big-task timeouts. It still gets FIRST pick for genuine
 # deploy/infra work (the _DEPLOY_HINTS branch below) when that's unblocked.
 _DEPLOY_HINTS = ("deploy", "cloudflare", "worker", "wrangler", "infra", "hosting")
-_LOCAL_LANES = ("codex", "claude", "agy", "opencode")
+_LOCAL_LANES = tuple(agent for agent in PAID_AGENT_ORDER if agent in LOCAL_CHECKOUT_AGENTS)
 
 
 def _learned_weights() -> dict[str, float]:
@@ -184,12 +196,14 @@ def _learned_weights() -> dict[str, float]:
     split by default now that the ladder is closed — set LIMEN_SI_APPLY=0 to disable (clean rollback).
     Still a no-op until a proposal exists (fail-open below), so the flip is safe before the first run.
 
-    A down-weighted lane gets a proportionally higher effective load (picked less), but every weight
-    is floored (LIMEN_SI_WEIGHT_FLOOR, default 0.25) so no lane is ever fully STARVED — it can still
-    win work and recover as its later tries succeed. Missing lane -> 1.0 (no effect). Derive-not-pin."""
+    A down-weighted lane gets a proportionally higher effective load (picked less), while a
+    boost-underused lane gets a lower effective load (picked more). We clamp to a floor
+    (LIMEN_SI_WEIGHT_FLOOR, default 0.25) and ceiling (LIMEN_SI_WEIGHT_CEILING, default 2.0) so no lane
+    is ever fully STARVED or allowed to swamp the fleet. Missing lane -> 1.0 (no effect). Derive-not-pin."""
     if os.environ.get("LIMEN_SI_APPLY", "1") != "1":
         return {}
-    floor = float(os.environ.get("LIMEN_SI_WEIGHT_FLOOR", "0.25"))
+    floor = max(0.001, _env_float("LIMEN_SI_WEIGHT_FLOOR", 0.25))
+    ceiling = max(floor, _env_float("LIMEN_SI_WEIGHT_CEILING", 2.0))
     try:
         data = json.loads((ROOT / "logs" / "self-improve-proposal.json").read_text())
     except Exception:
@@ -198,7 +212,7 @@ def _learned_weights() -> dict[str, float]:
     for adj in data.get("lane_adjustments", []):
         lane, w = adj.get("lane"), adj.get("target_weight")
         if lane and isinstance(w, (int, float)):
-            weights[lane] = max(floor, min(1.0, float(w)))
+            weights[lane] = max(floor, min(ceiling, float(w)))
     return weights
 
 
@@ -222,7 +236,7 @@ def _refresh_self_improve_proposal() -> None:
     if os.environ.get("LIMEN_SI_APPLY", "1") != "1":
         return
     try:
-        cadence_h = float(os.environ.get("LIMEN_SI_CADENCE", "10"))
+        cadence_h = _env_float("LIMEN_SI_CADENCE", 10.0)
         proposal = ROOT / "logs" / "self-improve-proposal.json"
         if proposal.exists() and (time.time() - proposal.stat().st_mtime) / 3600.0 < cadence_h:
             return  # fresh enough — skip the producer this beat
@@ -230,8 +244,10 @@ def _refresh_self_improve_proposal() -> None:
         if not script.exists():
             return
         subprocess.run(
-            ["python3", str(script)], cwd=str(ROOT),
-            timeout=float(os.environ.get("LIMEN_SI_TIMEOUT", "120")), capture_output=True,
+            ["python3", str(script)],
+            cwd=str(ROOT),
+            timeout=_env_float("LIMEN_SI_TIMEOUT", 120.0),
+            capture_output=True,
         )
     except Exception:
         return  # fail-open: a stale/absent proposal just means _learned_weights -> {} (no effect)
@@ -254,7 +270,7 @@ def _ledger_bias(task: dict) -> dict[str, float]:
     routing) on any missing/torn ledger."""
     if os.environ.get("LIMEN_LEDGER_BIAS", "1") != "1":
         return {}
-    floor = float(os.environ.get("LIMEN_LEDGER_BIAS_FLOOR", "0.2"))
+    floor = max(0.001, _env_float("LIMEN_LEDGER_BIAS_FLOOR", 0.2))
     try:
         lanes = json.loads((ROOT / "logs" / "ledger.json").read_text()).get("lanes", {})
     except Exception:
@@ -291,7 +307,7 @@ def _pick_local(
     its reserve sheds new work before it trips the gate. Both signals are live + derived, not pinned.
     """
     runway = runway or {}
-    text = f"{task.get('type','')} {task.get('title','')} {task.get('context','')}".lower()
+    text = f"{task.get('type', '')} {task.get('title', '')} {task.get('context', '')}".lower()
     if any(h in text for h in _DEPLOY_HINTS) and health.get("opencode"):
         return "opencode"
     candidates = [v for v in _LOCAL_LANES if health.get(v)]
@@ -324,8 +340,7 @@ def _pick_local(
 
     # least-loaded by budget ratio; then HIGHEST cliff-urgency (drain expiring budget before reset);
     # then MOST refresh runway (freshest window); then higher-budget lane; then name (stable).
-    return min(candidates,
-               key=lambda v: (load(v), -urgency_of(v), -runway_of(v), -budget.get(v, 0), v))
+    return min(candidates, key=lambda v: (load(v), -urgency_of(v), -runway_of(v), -budget.get(v, 0), v))
 
 
 def _capable_agents(
@@ -334,9 +349,7 @@ def _capable_agents(
     planned_remaining: dict[str, int],
     workdir: Path,
 ) -> tuple[list[str], dict[str, str]]:
-    """The full paid-fleet capability map for one task — kept so the conductor can reach the
-    EXTENDED lanes (copilot/github_actions/warp/oz) when no local lane can serve a repo, instead of
-    stranding it. Local lanes here are still subject to the budget+runway split via _pick_local."""
+    """The full paid-fleet capability map for one task."""
     repo = task.get("repo")
     checkout = _local_checkout(repo, workdir)
     has_repo = bool(repo)
@@ -351,10 +364,13 @@ def _capable_agents(
         if planned_remaining.get(agent, 0) < cost:
             continue
         if agent in LOCAL_CHECKOUT_AGENTS:
-            if checkout is None:
+            if not has_repo:
                 continue
             agents.append(agent)
-            reasons[agent] = f"local checkout at {checkout}"
+            if checkout is not None:
+                reasons[agent] = f"local checkout at {checkout}"
+            else:
+                reasons[agent] = "repo set -> local clone-on-demand"
         elif agent in ISSUE_ASSIGNMENT_AGENTS:
             if not has_issue:
                 continue
@@ -389,18 +405,30 @@ def route_task(
 ) -> tuple[str, str]:
     """Return (vendor, reason) for one open task.
 
-    Local-first: if a local checkout exists, split across the healthy local lanes by budget + refresh
-    runway. Otherwise extend to the full paid fleet (copilot for issues, github_actions, warp/oz),
-    and fall back to Jules' remote clone — so a repo with no local copy is never stranded."""
+    Local-first: if a repo exists, split across the healthy local lanes by budget + refresh runway.
+    dispatch.py clones on demand when no checkout exists. If no local lane is available, extend to
+    the full paid fleet (copilot for issues, github_actions, warp/oz, Jules)."""
     assigned = assigned if assigned is not None else {}
     budget = budget if budget is not None else {}
     repo = task.get("repo")
     checkout = _local_checkout(repo, workdir)
-    if checkout is not None:
+    # ASYNC SIGNAL first: a task that already TIMED OUT on a wall-clock-bound sync local lane carries
+    # the "slow" label (dispatch.py's timeout->jules path, which also sets target_agent=jules). A local
+    # sync lane BLOCKS the beat and would just time it out AGAIN, then retarget it back to jules — an
+    # infinite loop where jules never actually runs (verified: a slow, jules-pinned task cycled
+    # agy->opencode->codex with ZERO `jules remote` sessions launched, because this local-first router
+    # stole the jules retarget every beat). Honor the signal: send a slow task straight to the async
+    # remote lane (jules, no wall-clock cap) whenever it is healthy; only fall through to a local lane
+    # if jules is down (never strand — [[no-never-happens-again]]).
+    if repo and "slow" in set(task.get("labels") or []) and health.get("jules"):
+        return "jules", "slow (timed out on a sync local lane) -> jules async remote (no wall-clock cap)"
+    if repo:
         local = _pick_local(task, health, assigned, budget, runway)
         if local:
-            return local, f"local checkout at {checkout} -> {local} (split by budget+refresh runway)"
-        # local exists but no healthy local lane -> fall through to the extended fleet / jules
+            if checkout is not None:
+                return local, f"local checkout at {checkout} -> {local} (split by budget+refresh runway)"
+            return local, f"repo set -> {local} clone-on-demand (split by budget+refresh runway)"
+        # repo exists but no healthy local lane -> fall through to the extended fleet / jules
 
     # No (healthy) local lane: reach the extended paid fleet (jules/copilot/github_actions/warp/oz)
     # for whatever it can serve — DISTRIBUTING across the capable extended lanes by least-assigned-
@@ -415,8 +443,9 @@ def route_task(
         # capable lane (the penalty only reorders — min() still picks it when it's the sole option, so
         # a no-local-checkout repo is never stranded). [[no-never-happens-again]]
         bias = _ledger_bias(task)
-        pick = min(extended, key=lambda a: (1 if bias.get(a, 1.0) < 1.0 else 0,
-                                            assigned.get(a, 0), PAID_AGENT_ORDER.index(a)))
+        pick = min(
+            extended, key=lambda a: (1 if bias.get(a, 1.0) < 1.0 else 0, assigned.get(a, 0), PAID_AGENT_ORDER.index(a))
+        )
         return pick, reasons[pick]
     return "unroutable", "no reachable capable paid lane"
 
@@ -424,10 +453,10 @@ def route_task(
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", default=os.environ.get("LIMEN_TASKS", "tasks.yaml"))
-    ap.add_argument("--workdir", default=os.environ.get(
-        "LIMEN_WORKDIR", str(Path.home() / "Workspace")))
-    ap.add_argument("--apply", action="store_true",
-                    help="rewrite target_agent in tasks.yaml (reversible); never dispatches")
+    ap.add_argument("--workdir", default=os.environ.get("LIMEN_WORKDIR", str(Path.home() / "Workspace")))
+    ap.add_argument(
+        "--apply", action="store_true", help="rewrite target_agent in tasks.yaml (reversible); never dispatches"
+    )
     args = ap.parse_args()
 
     # PRODUCE the self-improve proposal (low cadence) before we CONSUME it in routing below — this is
@@ -446,18 +475,6 @@ def main() -> int:
     census = capacity_census(data)
     health = _fleet_health(data)
 
-    # Only route LOCAL lanes the daemon can actually DISPATCH. The dispatchable set is DERIVED from
-    # LIMEN_LANES (the same env the heartbeat uses) + jules. This stops stranding tasks on a local
-    # lane that's healthy but not in the dispatch rotation (e.g. agy when the launchd plist drops it).
-    # Remote/issue lanes (jules/copilot/github_actions/warp/oz) self-dispatch and aren't constrained.
-    _lanes_env = os.environ.get("LIMEN_LANES")
-    if _lanes_env:
-        _dispatchable = {ln.strip() for ln in _lanes_env.split(",") if ln.strip()} | {"jules"}
-        health = {
-            k: (v and (k in _dispatchable or k not in LOCAL_CHECKOUT_AGENTS))
-            for k, v in health.items()
-        }
-
     # Honest routing: never assign work to a lane the LIVE usage meter says is dead — token-exhausted,
     # rate-limited, or at/below the pacing reserve (stop BEFORE 0). Same _down_lanes() the dispatcher
     # skips on, so route and dispatch agree. Self-heals as each lane's window refills.
@@ -465,16 +482,17 @@ def main() -> int:
     if _dead:
         health = {k: (v and k not in _dead) for k, v in health.items()}
 
+    selector = os.environ.get("LIMEN_DISPATCH_LANES", "auto")
+    dispatchable = set(select_lanes(selector, data, down_lanes=_dead))
+    health = {k: (v and k in dispatchable) for k, v in health.items()}
+
     # The refresh-vs-remaining split signal: hours of runway per lane (live, derived).
     runway = _vendor_runway()
 
     up = [k for k, v in health.items() if v]
     down = [k for k, v in health.items() if not v]
     print(format_capacity_census(census))
-    print(
-        f"\n# Router plan  (agents up: {', '.join(up) or 'none'}; "
-        f"down: {', '.join(down) or 'none'})\n"
-    )
+    print(f"\n# Router plan  (agents up: {', '.join(up) or 'none'}; down: {', '.join(down) or 'none'})\n")
 
     opens = [t for t in data["tasks"] if t.get("status") == "open"]
     if not opens:
@@ -484,6 +502,7 @@ def main() -> int:
     print("| task | repo | -> vendor | reason |")
     print("|---|---|---|---|")
     from collections import Counter
+
     # per-agent daily budget drives the distribution (derived from tasks.yaml, never pinned).
     budget = (data.get("portal", {}).get("budget", {}) or {}).get("per_agent", {}) or {}
     tally: Counter = Counter()
@@ -493,7 +512,7 @@ def main() -> int:
         # and the live runway so the split steers toward the freshest refresh window.
         vendor, reason = route_task(t, health, workdir, assigned=tally, budget=budget, runway=runway)
         tally[vendor] += 1
-        print(f"| {t['id']} | {t.get('repo','-')} | {vendor} | {reason} |")
+        print(f"| {t['id']} | {t.get('repo', '-')} | {vendor} | {reason} |")
         if vendor not in ("unroutable",):
             assignments[t["id"]] = vendor
 
@@ -513,14 +532,30 @@ def main() -> int:
             return 0
         lf = load_limen_file(tasks_path)
         applied = 0
+        ws_applied = 0
         for task in lf.tasks:
+            if task.status != "open":
+                continue
             v = assignments.get(task.id)
-            if v and task.status == "open":
+            if v:
                 task.target_agent = v
                 applied += 1
+            # PURPOSE partition (workstream) — the axis ABOVE target_agent, without which the
+            # channels organ's scoped `cell conduct --workstream <handle>` conductors draw an empty
+            # lane. Stamp only when EMPTY (honor explicit intent) and only a RESOLVED channel (leave
+            # UNASSIGNED as None so it re-derives next beat when new signal appears). Same lock, same
+            # fresh re-read, same validated save — a sibling of the vendor assignment above.
+            if not task.workstream:
+                handle = assign_channel(task, ROOT)
+                if handle != UNASSIGNED:
+                    task.workstream = handle
+                    ws_applied += 1
         save_limen_file(tasks_path, lf)
-    print(f"applied target_agent assignments ({applied}) -> {tasks_path} "
-          f"(dispatch separately, gated: limen dispatch --agent <v> --live)")
+    print(
+        f"applied target_agent assignments ({applied}) -> {tasks_path} "
+        f"(dispatch separately, gated: limen dispatch --agent <v> --live)"
+    )
+    print(f"applied workstream assignments ({ws_applied}) -> {tasks_path} (purpose partition)")
     return 0
 
 
@@ -530,9 +565,7 @@ def _stamp_health() -> None:
     try:
         logs = ROOT / "logs"
         logs.mkdir(exist_ok=True)
-        (logs / "route-health.json").write_text(
-            json.dumps({"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S")}) + "\n"
-        )
+        (logs / "route-health.json").write_text(json.dumps({"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S")}) + "\n")
     except OSError:
         pass
 

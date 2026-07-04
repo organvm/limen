@@ -1,6 +1,6 @@
 # Conductor Tranche
 
-Generated: `2026-06-28T20:12:57+00:00`
+Generated: `2026-07-03T10:25:43+00:00`
 
 Summary: `tranche-no-autonomous-actionable-path` -> `no-autonomous-actionable-path` (`n/a`); stop before: Stop before broad delegation, cleanup, GitHub mutation, credential work, or owner repo edits; resume only when a human opens a gate or a fresh actionable packet appears.
 
@@ -22,13 +22,13 @@ Summary: `tranche-no-autonomous-actionable-path` -> `no-autonomous-actionable-pa
 | Lane | `n/a` |
 | Score | `n/a` |
 | Agent fit | `n/a` |
-| Attack index generated | `2026-06-28T20:12:46+00:00` |
-| Ranked paths read | `31` |
-| Skipped family/human-gate/parked/observe/auth paths | `session_lifecycle`, `dispatch-heartbeat-substrate-unhealthy`, `worktree_lifecycle`, `github_review`, `github-app-limen-bot-not-wired`, `github-consolidation-collisions`, `agent_coordination`, `technical_debt_ci`, `local-lifecycle-disk-pressure`, `convergence_corpus`, `gen-organvm-universal-mail--automation-test-coverage-0625-151e`, `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b`, `org-artist-organ-face-0628-1291`, `org-financial-organ-deepen-0628-b1b3`, `cloud-runtime-endpoint-unconfigured`, `uncategorized`, `cifix-organvm-i-theoria-hierarchia-mundi-3145`, `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2`, `gh-organvm-object-lessons-19-605a`, `resolve-a-organvm-the-invisible-ledger-4-f657`, `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38`, `cloud-credential-handles-unconfigured`, `credential-codex-auth-sessions`, `auth_credentials`, `resolve-organvm-i-theoria-.github-459-1ade`, `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f`, `discover-organvm-kerygma-profiles-6c74`, `cifix-organvm-i-theoria-conversation-corpus-engine-f02e`, `bld-mirror-mirror-harden-350f`, `bld-my--father-mother-harden-44b2`, `bld-promptscope-next-rev-3fde` |
+| Attack index generated | `2026-07-03T10:25:43+00:00` |
+| Ranked paths read | `46` |
+| Skipped unactionable paths | `session_lifecycle`, `github-app-limen-bot-not-wired`, `worktree_lifecycle`, `github_review`, `github-consolidation-collisions`, `agent_coordination`, `local-lifecycle-disk-pressure`, `technical_debt_ci`, `the-invisible-ledger`, `GEN-organvm-limen-ci-green-0702`, `feat+cvstos-vvltvs-organs`, `feat+workstream-channels`, `feat-codex-skill-slim`, `feat-tabularius-record-keeper`, `linear-conjuring-bear`, `ticklish-bubbling-robin`, `convergence_corpus`, `gen-organvm-universal-mail--automation-test-coverage-0625-151e`, `org-media-organ-deepen-0630-0571`, `cloud-runtime-endpoint-unconfigured`, `uncategorized`, `triptych-story`, `maddie-boundary-20260629`, `student-email-d2l-support-20260629`, `limen-network-substrate-20260628`, `cloud-credential-handles-unconfigured`, `credential-codex-auth-sessions`, `limen-main-trench-20260628`, `warp-agent-routing-20260629`, `resolve-organvm-i-theoria-.github-459-1ade`, `feat-gcp-sa-organ`, `auth_credentials`, `domus-quarantine-retire-20260629`, `gen-a-organvm-a-i-council--coliseum-ci-green-0620-29ec`, `photos-universe-20260629-182431`, `pr-463`, `pr-466`, `pr-467`, `pr-468`, `pr-471`, `pr-475`, `universal-entry-20260629`, `cifix-organvm-i-theoria-conversation-corpus-engine-f02e`, `discover-organvm-kerygma-profiles-6c74`, `bld-my--father-mother-harden-44b2`, `bld-promptscope-next-rev-3fde` |
 
 ## Work Packet
 
-Purpose: Record that no ranked path is autonomously actionable after skipping parked, family, human-gated, observe, and auth-only lanes.
+Purpose: Record that no ranked path is autonomously actionable after skipping parked, family, human-gated, observe, auth-only, already-preserved PR, owner-blocked, active, and live-checkout paths.
 
 Repo/worktree: `organvm/limen` conductor checkout.
 
@@ -62,7 +62,7 @@ Verification:
 
 ## Source Next Action
 
-Record that no ranked path is autonomously actionable after skipping parked, family, human-gated, observe, and auth-only lanes.
+Record that no ranked path is autonomously actionable after skipping parked, family, human-gated, observe, auth-only, already-preserved PR, owner-blocked, active, and live-checkout paths.
 
 ## Refresh
 

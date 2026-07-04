@@ -33,7 +33,12 @@ Env: LIMEN_WORKTREE_ROOT, LIMEN_RECLAIM_MIN_AGE_H (6), LIMEN_RECLAIM_CLAUDE_WT (
      LIMEN_RECLAIM_WORKSPACE_ROOTS, LIMEN_RECLAIM_MAX (50), LIMEN_RECLAIM_EVERY_MIN (30).
 """
 from __future__ import annotations
-import json, os, shutil, subprocess, sys, time
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 SCRIPT_ROOT = Path(__file__).resolve().parents[1]
@@ -42,8 +47,24 @@ sys.path.insert(0, str(SCRIPT_ROOT / "cli" / "src"))
 from limen.worktree_roots import iter_worktree_targets  # noqa: E402
 
 HOME = os.environ.get("HOME", "/Users/4jp")
-MAX_REMOVE = int(os.environ.get("LIMEN_RECLAIM_MAX", "50"))
-EVERY_MIN = float(os.environ.get("LIMEN_RECLAIM_EVERY_MIN", "30"))
+
+
+def _int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _float_env(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+MAX_REMOVE = _int_env("LIMEN_RECLAIM_MAX", 50)
+EVERY_MIN = _float_env("LIMEN_RECLAIM_EVERY_MIN", 30)
 LIMEN_ROOT = Path(os.environ.get("LIMEN_ROOT", f"{HOME}/Workspace/limen"))
 LOG = LIMEN_ROOT / "logs" / "reclaim-worktrees.jsonl"
 MARKER = LIMEN_ROOT / "logs" / ".reclaim-last"

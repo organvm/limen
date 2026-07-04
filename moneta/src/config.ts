@@ -1,8 +1,9 @@
 /**
  * Environment-driven configuration. Every value is optional: with nothing set
- * the mint boots and reports `configured:false`, refusing checkouts exactly like
- * the product's empty-checkout-URL gate. The code is done regardless of config;
- * these values are the operate step.
+ * the mint boots and reports `configured:false` — but it no longer refuses
+ * business. Checkouts pool as reserved orders (see `MintService`) and open into
+ * payable ones the instant a receive address is set. The code is done regardless
+ * of config; the receive address is the one sovereign value only the owner holds.
  */
 
 export interface MintConfig {
@@ -17,6 +18,7 @@ export interface MintConfig {
     returnUrlBase: string | null
     privateJwk: JsonWebKey | null
     keyFile: string | null
+    ordersFile: string
 }
 
 type Env = Record<string, string | undefined>
@@ -51,6 +53,7 @@ export function loadConfigFromEnv(env: Env = process.env): MintConfig {
         returnUrlBase: env.MINT_RETURN_URL_BASE?.trim() || null,
         privateJwk,
         keyFile: privateJwk ? null : (env.MINT_KEY_FILE?.trim() || '.data/mint.key.json'),
+        ordersFile: env.MINT_ORDERS_FILE?.trim() || '.data/orders.json',
     }
 }
 

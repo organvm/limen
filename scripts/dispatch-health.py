@@ -8,9 +8,11 @@ async-dispatch probes healthy enough to trust?
 It is read-only. It does not restart launchd, edit plist files, touch
 tasks.yaml, switch branches, or repair credentials.
 """
+
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime as dt
 import json
 import os
@@ -22,9 +24,7 @@ from typing import Any
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 HOME = Path.home()
-PRIVATE_ROOT = Path(
-    os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus")
-)
+PRIVATE_ROOT = Path(os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus"))
 PRIVATE_INDEX = PRIVATE_ROOT / "lifecycle" / "dispatch-health.json"
 DOC_PATH = ROOT / "docs" / "dispatch-health.md"
 LIVE_ROOT = Path(os.environ.get("LIMEN_LIVE_ROOT", HOME / "Workspace" / "limen"))
@@ -32,6 +32,7 @@ HEARTBEAT_PLIST = Path(
     os.environ.get("LIMEN_HEARTBEAT_PLIST", HOME / "Library" / "LaunchAgents" / "com.limen.heartbeat.plist")
 )
 LAUNCHD_LABEL = os.environ.get("LIMEN_HEARTBEAT_LABEL", "com.limen.heartbeat")
+IGNORED_GENERATED_RECEIPTS = {"docs/dispatch-health.md", "docs/live-root-gate.md"}
 
 
 def run_command(
@@ -90,6 +91,102 @@ def command_summary(result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def parse_async_skipped_down_lanes(output: str) -> list[str]:
+    for line in output.splitlines():
+        if "skipping down lanes:" not in line:
+            continue
+        _, _, raw = line.partition("skipping down lanes:")
+        try:
+            value = ast.literal_eval(raw.strip())
+        except (SyntaxError, ValueError):
+            return []
+        if not isinstance(value, list):
+            return []
+        return [str(item) for item in value if str(item).strip()]
+    return []
+
+
+def read_manual_down_lanes(root: Path) -> dict[str, str]:
+    down_file = root / "logs" / "lanes-down.txt"
+    reasons: dict[str, str] = {}
+    try:
+        lines = down_file.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return reasons
+    for line in lines:
+        lane_part, sep, comment = line.partition("#")
+        lane = lane_part.strip()
+        if not lane:
+            continue
+        reasons[lane] = comment.strip() if sep else ""
+    return reasons
+
+
+def read_usage_vendors(root: Path) -> dict[str, dict[str, Any]]:
+    try:
+        data = json.loads((root / "logs" / "usage.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return {}
+    vendors = data.get("vendors") if isinstance(data, dict) else {}
+    if not isinstance(vendors, dict):
+        return {}
+    return {str(name): info for name, info in vendors.items() if isinstance(info, dict)}
+
+
+def skipped_down_lane_reasons(lanes: list[str], root: Path) -> dict[str, dict[str, Any]]:
+    manual = read_manual_down_lanes(root)
+    usage = read_usage_vendors(root)
+    reasons: dict[str, dict[str, Any]] = {}
+    for lane in lanes:
+        lane_name = str(lane)
+        if lane_name in manual:
+            reasons[lane_name] = {
+                "source": "manual",
+                "path": "logs/lanes-down.txt",
+                "note": manual[lane_name],
+            }
+            continue
+        info = usage.get(lane_name)
+        if info:
+            reasons[lane_name] = {
+                "source": "usage",
+                "health": info.get("health"),
+                "signal": info.get("signal"),
+                "unit": info.get("unit"),
+                "remaining": info.get("remaining"),
+                "possible": info.get("possible"),
+                "headroom_pct": info.get("headroom_pct"),
+                "limit_source": info.get("limit_source"),
+            }
+            continue
+        reasons[lane_name] = {"source": "unknown"}
+    return reasons
+
+
+def render_skipped_lane_reason(lane: str, reason: dict[str, Any]) -> str:
+    source = reason.get("source")
+    if source == "manual":
+        note = str(reason.get("note") or "").strip()
+        suffix = f"; {receipt_line(note)}" if note else ""
+        return f"`{lane}`: manual down file `{reason.get('path')}`{suffix}."
+    if source == "usage":
+        details = [
+            f"usage health `{reason.get('health')}`",
+            f"signal `{reason.get('signal')}`",
+        ]
+        remaining = reason.get("remaining")
+        possible = reason.get("possible")
+        if remaining is not None and possible is not None:
+            details.append(f"remaining `{remaining}` of `{possible}`")
+        elif remaining is not None:
+            details.append(f"remaining `{remaining}`")
+        headroom = reason.get("headroom_pct")
+        if headroom is not None:
+            details.append(f"headroom `{headroom}%`")
+        return f"`{lane}`: " + "; ".join(details) + "."
+    return f"`{lane}`: down source unknown from async dry-run output."
+
+
 def receipt_line(line: str) -> str:
     replacements = {
         "\u2500": "-",
@@ -121,6 +218,7 @@ def read_plist(path: Path) -> dict[str, Any]:
             "LIMEN_ROOT": env.get("LIMEN_ROOT"),
             "LIMEN_DISPATCH_ASYNC": env.get("LIMEN_DISPATCH_ASYNC"),
             "LIMEN_LANES": env.get("LIMEN_LANES"),
+            "LIMEN_DISPATCH_LANES": env.get("LIMEN_DISPATCH_LANES"),
             "LIMEN_LOCAL_LIMIT": env.get("LIMEN_LOCAL_LIMIT"),
         },
     }
@@ -166,10 +264,34 @@ def git_output(root: Path, args: list[str], timeout: int = 12) -> str | None:
     return None
 
 
+def parse_dirty(status_text: str, ignored_paths: set[str] | None = None) -> dict[str, Any]:
+    ignored_paths = ignored_paths or set()
+    tracked: list[str] = []
+    untracked: list[str] = []
+    ignored: list[str] = []
+    for line in [line for line in status_text.splitlines() if line and not line.startswith("## ")]:
+        path = line[3:] if len(line) > 3 else line
+        if path in ignored_paths:
+            ignored.append(path)
+            continue
+        if line.startswith("?? "):
+            untracked.append(path)
+        else:
+            tracked.append(path)
+    dirty_paths = tracked + untracked
+    return {
+        "dirty_entries": len(dirty_paths),
+        "dirty_paths": dirty_paths[:30],
+        "dirty_truncated": len(dirty_paths) > 30,
+        "ignored_dirty_entries": len(ignored),
+        "ignored_dirty_paths": ignored,
+    }
+
+
 def git_snapshot(root: Path) -> dict[str, Any]:
     status_text = git_output(root, ["status", "--porcelain=v1", "--branch"]) or ""
     lines = status_text.splitlines()
-    dirty = [line for line in lines if line and not line.startswith("## ")]
+    dirty = parse_dirty(status_text, IGNORED_GENERATED_RECEIPTS)
     ahead_behind = git_output(root, ["rev-list", "--left-right", "--count", "HEAD...origin/main"])
     ahead = behind = None
     if ahead_behind:
@@ -189,9 +311,7 @@ def git_snapshot(root: Path) -> dict[str, Any]:
         "ahead_origin_main": ahead,
         "behind_origin_main": behind,
         "status_summary": lines[0] if lines else "",
-        "dirty_entries": len(dirty),
-        "dirty_paths": [line[3:] if len(line) > 3 else line for line in dirty[:30]],
-        "dirty_truncated": len(dirty) > 30,
+        **dirty,
     }
 
 
@@ -213,7 +333,7 @@ def async_probe_snapshot(enabled: bool) -> dict[str, Any]:
             "python3",
             "scripts/dispatch-async.py",
             "--lanes",
-            "codex,opencode,agy,claude,gemini,jules",
+            "auto",
             "--per-lane",
             "3",
             "--max",
@@ -225,8 +345,11 @@ def async_probe_snapshot(enabled: bool) -> dict[str, Any]:
         timeout=120,
     )
     summary = command_summary(result)
+    output = f"{result.get('stdout') or ''}\n{result.get('stderr') or ''}"
     summary["requested"] = True
     summary["ok"] = result.get("returncode") == 0 and not result.get("timed_out")
+    summary["skipped_down_lanes"] = parse_async_skipped_down_lanes(output)
+    summary["skipped_down_reasons"] = skipped_down_lane_reasons(summary["skipped_down_lanes"], ROOT)
     return summary
 
 
@@ -247,7 +370,12 @@ def derive_blockers(snapshot: dict[str, Any]) -> list[dict[str, str]]:
         blockers.append({"id": "heartbeat-launchd-not-running", "evidence": f"launchd state is {loaded.get('state')}."})
 
     if not watchdog.get("healthy"):
-        blockers.append({"id": "heartbeat-watchdog-unhealthy", "evidence": watchdog.get("last_line") or "watchdog did not report healthy."})
+        blockers.append(
+            {
+                "id": "heartbeat-watchdog-unhealthy",
+                "evidence": watchdog.get("last_line") or "watchdog did not report healthy.",
+            }
+        )
 
     if git.get("present") and not git.get("matches_origin_main"):
         blockers.append(
@@ -274,6 +402,16 @@ def derive_blockers(snapshot: dict[str, Any]) -> list[dict[str, str]]:
             {
                 "id": "heartbeat-loaded-env-drift",
                 "evidence": f"plist LIMEN_DISPATCH_ASYNC={plist_async!r}, loaded={loaded_async!r}.",
+            }
+        )
+
+    plist_dispatch_lanes = (plist.get("env") or {}).get("LIMEN_DISPATCH_LANES")
+    loaded_dispatch_lanes = (loaded.get("env") or {}).get("LIMEN_DISPATCH_LANES")
+    if plist_dispatch_lanes != loaded_dispatch_lanes:
+        blockers.append(
+            {
+                "id": "heartbeat-dispatch-lanes-env-drift",
+                "evidence": (f"plist LIMEN_DISPATCH_LANES={plist_dispatch_lanes!r}, loaded={loaded_dispatch_lanes!r}."),
             }
         )
 
@@ -331,9 +469,13 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         f"- Plist KeepAlive: `{plist.get('keep_alive')}`; RunAtLoad: `{plist.get('run_at_load')}`.",
         f"- Plist LIMEN_ROOT: `{(plist.get('env') or {}).get('LIMEN_ROOT')}`.",
         f"- Plist LIMEN_DISPATCH_ASYNC: `{(plist.get('env') or {}).get('LIMEN_DISPATCH_ASYNC')}`.",
+        f"- Plist LIMEN_DISPATCH_LANES: `{(plist.get('env') or {}).get('LIMEN_DISPATCH_LANES')}`.",
+        f"- Plist LIMEN_LANES: `{(plist.get('env') or {}).get('LIMEN_LANES')}`.",
         f"- Loaded launchd state: `{loaded.get('state')}` pid `{loaded.get('pid')}`.",
         f"- Loaded LIMEN_ROOT: `{(loaded.get('env') or {}).get('LIMEN_ROOT')}`.",
         f"- Loaded LIMEN_DISPATCH_ASYNC: `{(loaded.get('env') or {}).get('LIMEN_DISPATCH_ASYNC')}`.",
+        f"- Loaded LIMEN_DISPATCH_LANES: `{(loaded.get('env') or {}).get('LIMEN_DISPATCH_LANES')}`.",
+        f"- Loaded LIMEN_LANES: `{(loaded.get('env') or {}).get('LIMEN_LANES')}`.",
         f"- Watchdog dry-run healthy: `{watchdog.get('healthy')}`; `{watchdog.get('first_line')}`.",
         "",
         "## Async Dispatch",
@@ -341,6 +483,18 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         f"- Async dry-run requested: `{async_probe.get('requested')}`.",
         f"- Async dry-run ok: `{async_probe.get('ok')}`; timed out `{async_probe.get('timed_out', False)}`.",
         f"- Async dry-run summary: `{async_probe.get('last_line', '')}`.",
+    ]
+    skipped_down_lanes = async_probe.get("skipped_down_lanes") or []
+    if skipped_down_lanes:
+        lines.append(f"- Async skipped down lanes: `{', '.join(str(lane) for lane in skipped_down_lanes)}`.")
+        skipped_down_reasons = async_probe.get("skipped_down_reasons") or {}
+        for lane in skipped_down_lanes:
+            lane_name = str(lane)
+            reason = skipped_down_reasons.get(lane_name)
+            if isinstance(reason, dict):
+                lines.append(f"  - {render_skipped_lane_reason(lane_name, reason)}")
+
+    lines += [
         "",
         "## Live Root",
         "",
@@ -351,6 +505,10 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         f"- Matches origin/main: `{live.get('matches_origin_main')}`; ahead `{live.get('ahead_origin_main')}` behind `{live.get('behind_origin_main')}`.",
         f"- Dirty entries: `{live.get('dirty_entries')}`.",
     ]
+    if live.get("ignored_dirty_entries"):
+        lines.append(f"- Ignored generated receipt dirty entries: `{live.get('ignored_dirty_entries')}`.")
+        for path in live.get("ignored_dirty_paths") or []:
+            lines.append(f"  - `{path}`")
     for path in live.get("dirty_paths") or []:
         lines.append(f"  - `{path}`")
     if live.get("dirty_truncated"):
@@ -381,7 +539,7 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         "- Refresh the operator gate: `python3 scripts/live-root-gate.py --write`",
         "- Verify async dispatch tests: `pytest -q cli/tests/test_async_dispatch.py`",
         "- Probe heartbeat: `python3 scripts/watchdog.py --dry-run`",
-        "- Probe async dry-run: `PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes codex,opencode,agy,claude,gemini,jules --per-lane 3 --max 12 --dry-run`",
+        "- Probe async dry-run: `PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes auto --per-lane 3 --max 12 --dry-run`",
         "",
     ]
     return "\n".join(lines)

@@ -12,6 +12,7 @@ BLOCKERS_SCRIPT = ROOT / "scripts" / "session-blockers-ledger.py"
 ATTACK_PATHS_SCRIPT = ROOT / "scripts" / "session-attack-paths.py"
 TRANCHE_SCRIPT = ROOT / "scripts" / "conductor-tranche.py"
 ORIENT_SCRIPT = ROOT / "scripts" / "session-orient.py"
+DONE_ORIENT_SCRIPT = ROOT / "scripts" / "done-session-orient.sh"
 CONSOLIDATION_GATES_SCRIPT = ROOT / "scripts" / "consolidation-gates.py"
 NETWORK_HEALTH_SCRIPT = ROOT / "scripts" / "network-health.py"
 DISPATCH_HEALTH_SCRIPT = ROOT / "scripts" / "dispatch-health.py"
@@ -570,6 +571,23 @@ def test_dispatch_health_records_live_root_and_async_drift(tmp_path: Path):
         "ok": True,
         "timed_out": False,
         "last_line": "would launch 0",
+        "skipped_down_lanes": ["gemini", "jules"],
+        "skipped_down_reasons": {
+            "gemini": {
+                "source": "usage",
+                "health": "exhausted",
+                "signal": "dispatch-count",
+                "remaining": 0,
+                "possible": 10,
+            },
+            "jules": {
+                "source": "usage",
+                "health": "exhausted",
+                "signal": "count",
+                "remaining": 0,
+                "possible": 100,
+            },
+        },
     }
 
     snapshot = dispatch.build_snapshot(type("Args", (), {"probe_async": True})())
@@ -582,8 +600,80 @@ def test_dispatch_health_records_live_root_and_async_drift(tmp_path: Path):
     assert "live-root-dirty" in blocker_ids
     assert "heartbeat-loaded-env-drift" in blocker_ids
     assert "Dispatch/heartbeat health is not proven by tests in a detached worktree alone." in markdown
+    assert "Async skipped down lanes: `gemini, jules`" in markdown
+    assert "`gemini`: usage health `exhausted`; signal `dispatch-count`; remaining `0` of `10`." in markdown
+    assert "`jules`: usage health `exhausted`; signal `count`; remaining `0` of `100`." in markdown
     assert dispatch.DOC_PATH.exists()
     assert dispatch.PRIVATE_INDEX.exists()
+
+
+def test_dispatch_health_parses_async_skipped_down_lanes():
+    dispatch = _load(DISPATCH_HEALTH_SCRIPT, "dispatch_health_async_skips")
+
+    output = "── skipping down lanes: ['gemini', 'jules']\n── async: would launch 0"
+
+    assert dispatch.parse_async_skipped_down_lanes(output) == ["gemini", "jules"]
+
+
+def test_dispatch_health_explains_skipped_down_lanes_from_live_artifacts(tmp_path: Path):
+    dispatch = _load(DISPATCH_HEALTH_SCRIPT, "dispatch_health_async_skip_reasons")
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    (logs / "lanes-down.txt").write_text("agy  # oauth browser preflight\n", encoding="utf-8")
+    (logs / "usage.json").write_text(
+        json.dumps(
+            {
+                "vendors": {
+                    "gemini": {
+                        "health": "exhausted",
+                        "signal": "dispatch-count",
+                        "unit": "runs",
+                        "remaining": 0,
+                        "possible": 10,
+                    },
+                    "codex": {
+                        "health": "ok",
+                        "signal": "vendor-rate-limit",
+                        "remaining": 85,
+                        "possible": 100,
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    reasons = dispatch.skipped_down_lane_reasons(["agy", "gemini", "jules"], tmp_path)
+
+    assert reasons["agy"] == {
+        "source": "manual",
+        "path": "logs/lanes-down.txt",
+        "note": "oauth browser preflight",
+    }
+    assert reasons["gemini"]["source"] == "usage"
+    assert reasons["gemini"]["health"] == "exhausted"
+    assert reasons["gemini"]["remaining"] == 0
+    assert reasons["jules"] == {"source": "unknown"}
+
+
+def test_dispatch_health_ignores_generated_receipt_dirty_paths():
+    dispatch = _load(DISPATCH_HEALTH_SCRIPT, "dispatch_health_receipt_dirty_filter")
+
+    dirty = dispatch.parse_dirty(
+        "\n".join(
+            [
+                "## main...origin/main",
+                " M docs/dispatch-health.md",
+                " M docs/live-root-gate.md",
+                " M tasks.yaml",
+            ]
+        ),
+        dispatch.IGNORED_GENERATED_RECEIPTS,
+    )
+
+    assert dirty["dirty_entries"] == 1
+    assert dirty["dirty_paths"] == ["tasks.yaml"]
+    assert dirty["ignored_dirty_entries"] == 2
 
 
 def test_live_root_gate_records_operator_stop_conditions(tmp_path: Path):
@@ -647,6 +737,26 @@ def test_live_root_gate_records_operator_stop_conditions(tmp_path: Path):
     assert "Human-Gated Command Packet" in markdown
     assert gate.DOC_PATH.exists()
     assert gate.PRIVATE_INDEX.exists()
+
+
+def test_live_root_gate_ignores_generated_receipt_dirty_paths():
+    gate = _load(LIVE_ROOT_GATE_SCRIPT, "live_root_gate_receipt_dirty_filter")
+
+    dirty = gate.parse_dirty(
+        "\n".join(
+            [
+                "## main...origin/main",
+                " M docs/dispatch-health.md",
+                " M docs/live-root-gate.md",
+                " M tasks.yaml",
+            ]
+        ),
+        gate.IGNORED_GENERATED_RECEIPTS,
+    )
+
+    assert dirty["dirty_entries"] == 1
+    assert dirty["tracked_dirty"] == ["tasks.yaml"]
+    assert dirty["ignored_dirty_entries"] == 2
 
 
 def test_session_blockers_records_hooks_disk_and_credentials_without_values(tmp_path: Path):
@@ -799,6 +909,76 @@ def test_session_blockers_filter_remote_missing_branches_with_live_scanner_recei
     assert blocker["details"]["raw_remote_branches_missing"] == 2
     assert blocker["details"]["closed_by_live_scanner"] == ["owner-blocked-root"]
     assert blocker["details"]["unresolved_roots"] == ["dirty-root"]
+
+
+def test_session_blockers_filter_remote_missing_branches_with_preservation_receipts(tmp_path: Path):
+    blockers = _load(BLOCKERS_SCRIPT, "session_blockers_remote_missing_preservation_receipt")
+    blockers.ROOT = tmp_path
+    blockers.PRIVATE_ROOT = tmp_path / ".limen-private" / "session-corpus"
+    blockers.PRIVATE_INDEX = blockers.PRIVATE_ROOT / "lifecycle" / "session-lifecycle-blockers.json"
+    blockers.CAPABILITY_INDEX = blockers.PRIVATE_ROOT / "lifecycle" / "capability-substrate-index.json"
+    blockers.PROMPT_INDEX = blockers.PRIVATE_ROOT / "lifecycle" / "prompt-lifecycle-index.json"
+    blockers.CODEX_INDEX = blockers.PRIVATE_ROOT / "lifecycle" / "codex-session-lifecycle.json"
+    blockers.CORPUS_INVENTORY = blockers.PRIVATE_ROOT / "inventory" / "session-corpus-ledger.json"
+    blockers.PRESERVATION_RECEIPTS = tmp_path / "docs" / "worktree-preservation-receipts.json"
+    blockers.PRESSURE_INDEX = tmp_path / "logs" / "session-lifecycle-pressure.json"
+    blockers.PROJECT_SETTINGS = tmp_path / ".claude" / "settings.json"
+    blockers.DOC_PATH = tmp_path / "docs" / "session-lifecycle-blockers.md"
+    blockers.DEFAULT_CAPABILITY_ROOTS = ()
+    blockers.worktree_debt_report = lambda root: {
+        "total": 0,
+        "debt": 0,
+        "items": [],
+    }
+
+    blockers.PROMPT_INDEX.parent.mkdir(parents=True)
+    blockers.PROMPT_INDEX.write_text(
+        json.dumps(
+            {
+                "sources": [],
+                "worktree_report": {"debt": 0, "total": 0},
+                "remote": {
+                    "enabled": True,
+                    "worktrees": {
+                        "remote_branches_missing": 1,
+                        "receipts": [{"name": "reclaimed-root", "remote_branch": "missing"}],
+                    },
+                    "task_prs": {"counts": {}},
+                },
+                "cloud": {"enabled": True, "runtime_url_configured": True, "env_flags": {}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    blockers.PRESERVATION_RECEIPTS.parent.mkdir(parents=True)
+    blockers.PRESERVATION_RECEIPTS.write_text(
+        json.dumps(
+            {
+                "receipts": [
+                    {
+                        "root": "reclaimed-root",
+                        "lane": "remote-default-proof",
+                        "status": "default_branch_preserved",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    blockers.CODEX_INDEX.write_text(json.dumps({"session_count": 0, "families": []}), encoding="utf-8")
+    blockers.CORPUS_INVENTORY.parent.mkdir(parents=True)
+    blockers.CORPUS_INVENTORY.write_text(json.dumps({"organs": [], "materialization": {"copied": 0}}), encoding="utf-8")
+    blockers.PRESSURE_INDEX.parent.mkdir(parents=True)
+    blockers.PRESSURE_INDEX.write_text(
+        json.dumps({"worktrees": {"bytes": 0}, "private_corpus": {"bytes": 0}}), encoding="utf-8"
+    )
+    blockers.PROJECT_SETTINGS.parent.mkdir(parents=True)
+    blockers.PROJECT_SETTINGS.write_text("session-lifecycle-pressure.sh", encoding="utf-8")
+
+    snapshot = blockers.build_snapshot()
+    ids = {item["id"] for item in snapshot["blockers"]}
+
+    assert "worktree-remote-branches-missing" not in ids
 
 
 def test_session_blockers_clears_capability_blocker_with_current_receipt(tmp_path: Path):
@@ -1898,6 +2078,74 @@ def test_conductor_tranche_skips_operator_gated_worktree(tmp_path: Path):
     assert "operator-gated-root" in snapshot["skipped_unactionable_path_ids"]
 
 
+def test_conductor_tranche_skips_preserved_active_and_owner_blocker_worktrees(tmp_path: Path):
+    tranche = _load(TRANCHE_SCRIPT, "conductor_tranche_skips_preserved_worktrees")
+    tranche.ROOT = tmp_path
+    tranche.HOME = tmp_path
+    tranche.PRIVATE_ROOT = tmp_path / ".limen-private" / "session-corpus"
+    tranche.ATTACK_INDEX = tranche.PRIVATE_ROOT / "lifecycle" / "session-attack-paths.json"
+    tranche.DOC_PATH = tmp_path / "docs" / "conductor-tranche.md"
+    tranche.PRIVATE_INDEX = tranche.PRIVATE_ROOT / "lifecycle" / "conductor-tranche.json"
+    tranche.PORTVS_PATH = tmp_path / "Workspace" / "4444J99" / "portvs"
+
+    tranche.ATTACK_INDEX.parent.mkdir(parents=True)
+    tranche.ATTACK_INDEX.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-06-28T12:00:00+00:00",
+                "ranked_paths": [
+                    {
+                        "id": "preserved-pr-root",
+                        "kind": "worktree",
+                        "lane": "remote-pr-open",
+                        "reason": "remote-pr-open",
+                        "score": 90,
+                        "agent_fit": "codex first",
+                        "next_action": "Review and merge PR only after owner approval.",
+                    },
+                    {
+                        "id": "active-claude-root",
+                        "kind": "worktree",
+                        "lane": "remote-proof",
+                        "reason": "active(<24h)",
+                        "score": 80,
+                        "agent_fit": "codex first",
+                        "next_action": "Verify later after the active agent window closes.",
+                    },
+                    {
+                        "id": "owner-blocked-root",
+                        "kind": "worktree",
+                        "lane": "owner-blocker",
+                        "reason": "owner-blocker",
+                        "score": 70,
+                        "agent_fit": "human/codex-prep",
+                        "next_action": "Do not auto-port without a named owner packet.",
+                    },
+                    {
+                        "id": "default-proof-root",
+                        "kind": "worktree",
+                        "lane": "remote-proof",
+                        "reason": "remote-default-proof",
+                        "score": 60,
+                        "agent_fit": "codex first",
+                        "next_action": "Verify remote/default preservation.",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    snapshot = tranche.build_snapshot()
+
+    assert snapshot["packet"]["selected_path_id"] == "default-proof-root"
+    assert snapshot["skipped_unactionable_path_ids"] == [
+        "preserved-pr-root",
+        "active-claude-root",
+        "owner-blocked-root",
+    ]
+
+
 def test_conductor_tranche_records_no_autonomous_path_when_all_ranked_paths_skipped(tmp_path: Path):
     tranche = _load(TRANCHE_SCRIPT, "conductor_tranche_no_autonomous_path")
     tranche.ROOT = tmp_path
@@ -2119,3 +2367,10 @@ tasks:
     board = orient.section_board()
 
     assert board == "**Board** — 1 open · 1 in_progress · 1 done"
+
+
+def test_done_session_orient_pins_generators_to_checkout_root():
+    script = DONE_ORIENT_SCRIPT.read_text(encoding="utf-8")
+
+    assert 'LIMEN_ROOT="$ROOT" python3 "$PRESSURE_GEN" --write' in script
+    assert 'LIMEN_ROOT="$ROOT" python3 "$GEN")' in script

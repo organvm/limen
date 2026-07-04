@@ -37,7 +37,17 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-WALL_ISSUE = int(os.environ.get("LIMEN_CRED_WALL_ISSUE", "320"))
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    try:
+        value = int(os.environ.get(name, ""))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+WALL_ISSUE = _positive_int_env("LIMEN_CRED_WALL_ISSUE", 320)
 WALL_MARKER = "<!-- wall:credentials -->"
 
 
@@ -56,7 +66,8 @@ def _load_default_map() -> list[dict]:
 LANE_META: dict[str, dict] = {
     "gemini": {"issue": "#265", "hand": "his — account-gated re-mint (downstream of #182)"},
     "gh/copilot/jules": {"issue": "—", "hand": "none — keyring-derived, self-heals every beat (#251)"},
-    "cloudflare (wrangler deploy)": {"issue": "#254 · #265", "hand": "his — account-gated regen"},
+    "cloudflare (wrangler deploy)": {"issue": "—", "hand": "none — token valid + headless via cf-wrangler.sh (#518); phantom re-mint lever retired 2026-07-01"},
+    "cloudflare (a-i-chat--exporter CI secret)": {"issue": "—", "hand": "none — organ-owned gh_secret sink; lands once op can read (gated on the non-blocking SA vault-grant on #320)"},
     "gmail (C_MAIL app-password)": {"issue": "#261", "hand": "reroutable — `op read … | gh secret set`"},
     "ianva (cloud connector bearer)": {"issue": "#263", "hand": "his — claude.ai account edit"},
     "claude": {"issue": "—", "hand": "none — owned by the Rung-0 credential-race self-heal"},
@@ -99,9 +110,9 @@ CI_SECRETS: list[dict] = [
     },
     {
         "name": "OP_SERVICE_ACCOUNT_TOKEN",
-        "home": "file `~/.config/op/service-account-token` (1Password service account)",
-        "used": "`creds-hydrate.py` headless `op read` (no Touch-ID)",
-        "hand": "optional — #288 (closed); set ⇒ unattended hydration without a fingerprint",
+        "home": "file `~/.config/op/service-account-token` (1Password service account) + `~/.zshenv` export",
+        "used": "`creds-hydrate.py` headless `op read` + `--sweep-all` (fleet); `~/.zshenv` exports it so every shell's `op` is promptless too (no Touch-ID anywhere)",
+        "hand": "INSTALLED ✓ — op is promptless forever (fleet + every shell), verified via `op whoami`. Scope residual: the saved SA token carries zero vault grants, so op *re-reads* return nothing — the fleet runs off the already-valid `~/.limen.env` (see `creds-hydrate.py --verify`). For op itself to re-read/rotate secrets (true full sweep), grant the SA read access to the vault(s) holding them in the 1Password console (service accounts read shared vaults; personal-vault items may need moving into one). Non-blocking.",
         "issue": "#288",
     },
 ]

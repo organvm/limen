@@ -44,6 +44,7 @@ authoritative rule.
 | `web/app/` | Next.js dashboard (static export → Firebase Hosting). Surfaces `/` (owner), `/qa`, `/client`, `/public`. | `npm run dev`; `npm run build` (prebuild generates static data + validates surfaces) |
 | `mcp/` | MCP server exposing limen over the Model Context Protocol (`mcp/src/limen_mcp/server.py`). | `pip install -e mcp/` |
 | `ianva/` | MCP doorway/aggregator package. | `pip install -e ianva/` |
+| `moneta/` | **MONETA** — the sovereign cash organ (sibling of `quaestor`: quaestor *finds* money, MONETA *intakes* it). Self-hosted Bitcoin licence mint: takes BTC to an owner-controlled address, confirms against a **keyless** public explorer (mempool.space/Esplora), and signs each product's own offline ECDSA-P256 Pro licence — **no processor in the path**. Unconfigured, it *pools* demand as `reserved` orders (the valve) and auto-opens them the moment a receive address is set. `Dockerfile`-ready for a $0 deploy. | `cd moneta && npm test` (vitest + `tsc`); tests in `moneta/src/__tests__/` |
 | `spec/contracts/` + `spec/*.schema.json` | Portable JSON Schemas the generated surface contracts must satisfy. | `node scripts/validate-contract-schemas.mjs` |
 | `scripts/` (~120 files) | The operational fleet: `metabolize.sh`/`heartbeat-loop.sh` (the beat), `verify-whole.sh` (whole-system predicate), `merge-policy.sh` (merge decision), `organ-health.py` (liveness), `creds-hydrate.py` (credential organ), plus per-organ generators. | run directly |
 | `organs/`, `organ-ladder.json`, `pillars.yaml`, `his-hand-levers.json` | Declarative registries: the self-* organ ladder, platform pillars, and the owned human-gated lever registry. | data files |
@@ -69,9 +70,9 @@ A *closeout* means **ZERO open or dangling items introduced by this task/session
 2. **An idempotent fixed point is reached** — re-running the full verification produces **no changes** (see [Definition of Done](#definition-of-done)). If a re-run still mutates state, you are not done.
 3. **All loose work you introduced or touched is committed across every affected repo** — no uncommitted diffs, no stranded branches; `git status` is clean wherever you touched.
 
-If gaps remain, **close them first**, then archive and hand off. Surface genuinely human-gated items in *their owner's* record with the cheapest path to resolution — do not stop the closeout for them. Run `/closeout` to execute this discipline.
+If gaps remain, **close them first**, then archive and hand off. A genuinely human-gated item is **filed in its own git-tracked owner** — a lever in `his-hand-levers.json`, or (for any token/secret/login/env atom) the credential organ + Wall #320 — **never recited back to the operator in a closeout, and never appended as a "but also this" tail.** The relay cites the registry and the green predicate; it does **not** enumerate his atoms. He reads owed work in the registry on his own cadence — **a closeout that hands him a list has failed, even when every item is technically homed.** If an atom is *already* filed, that is DONE: do not re-surface it. Run `/closeout` to execute this discipline.
 
-Point 1 has a shipped predicate — **`scripts/no-tasks-on-me.sh`** (exit `0` ⟺ nothing hangs on the ephemeral session). It proves every human-gated item lives in the git-tracked registry with a real owner (recall-only memory at `~/.claude/…` is **not** a durable home), that no preserved work is stranded on a local-only `*-staged-*` ref (each must be merged or cited by a lever), and that the registry stays PII-clean (it publishes). Run it instead of re-auditing ownership by hand each session; a chat audit you have to repeat next session *is* leaving the discipline hanging on you.
+Point 1 has a shipped predicate — **`scripts/no-tasks-on-me.sh`** (exit `0` ⟺ nothing hangs on the ephemeral session). It proves every human-gated item lives in the git-tracked registry with a real owner (recall-only memory at `~/.claude/…` is **not** a durable home), that no preserved work is stranded on a local-only `*-staged-*` ref (each must be merged or cited by a lever), and that the registry stays PII-clean (it publishes). Credential/secret atoms live in a **separate** git-tracked home (the credential organ), so the closeout gate is **both** `scripts/no-tasks-on-me.sh` **and** `scripts/credential-wall.py --check` (exit `0` ⟺ every secret in use is homed). Both green ⟺ nothing hangs, and the relay then names the registry, never the atoms. Run them instead of re-auditing ownership by hand each session; a chat audit you have to repeat next session — or a "here's what's still open" list handed to the operator — *is* leaving the discipline hanging on him.
 
 ## Definition of Done
 
@@ -121,6 +122,8 @@ For any search or recon whose scope spans multiple domains, **fan out parallel r
 - Give each worker a **strict read-only scope** and require a **structured packet**: `{ found: [...], not_found: [...], confidence }`.
 - **Wait for ALL workers**, then **merge into one ground-truth report that flags conflicts** between packets.
 - **Never park the search early, and never guess a timeframe** — verify every location and timeframe explicitly before reporting. Default to ~3 parallel explorers for non-trivial recon.
+- **Tier every fan-out agent by job — never let it inherit.** In-harness subagents (the Task tool *and* Workflow `agent()`) default to **the session model**, so a fan-out of trivial workers silently rides the session's Opus (the `verify-studio-launch` incident: six broken-link/typo checks on Opus 4.8). Pick each agent's tier by its job: choose an `agentType` from `.claude/agents/` (`verify`/`scan` → haiku, `synth` → opus) or pass an explicit `model` + `effort`. The frontmatter pin is a **floor, not a cap** — a per-call `model` still escalates a genuinely hard job upward. The class→tier authority is `cli/src/limen/model_selection.py` plus `dispatch._claude_tier_for` (do **not** restate the ladder here); an untiered expensive-tier fan-out is surfaced every session by the `scripts/claude-workflow-guard.py` audit wired into `SessionEnd`.
+- **Fable is a reserved tier above Opus, not the new default.** Use it only under [`docs/fable-allotment.md`](docs/fable-allotment.md): a Fable run needs a written `scripts/fable-allotment.py accept ...` command/receipt before it starts, `LIMEN_FABLE_ACCEPTANCE=<receipt>` in the run environment, and a single bounded objective. Retry bumping caps at Opus unless `LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE=1` and that acceptance is present. Untiered Fable/Opus fan-out is blocked by `scripts/claude-workflow-guard.py`.
 
 ## Worktree Isolation & CI Gate Matrix
 
@@ -128,8 +131,10 @@ Isolate work in a **git worktree so the live fleet is untouched** (see `GEMINI.m
 
 | Gate | Command |
 |------|---------|
-| Lint | `python -m ruff check cli/src cli/tests web/api mcp` |
-| Compile | `python -m py_compile web/api/main.py cli/src/limen/*.py` |
+| Lint | `python -m ruff check cli/src cli/tests web/api mcp ianva` |
+| Format | `python -m ruff format --check cli/src cli/tests web/api mcp ianva` |
+| Type-check | `python -m mypy src/limen/` (from `cli/`) and `python -m mypy --ignore-missing-imports mcp/src/limen_mcp/ ianva/src/ianva/` |
+| Compile | `python -m py_compile web/api/main.py cli/src/limen/*.py mcp/src/limen_mcp/server.py ianva/src/ianva/*.py` |
 | Tests | `python -m pytest web/api/tests cli/tests -q` |
 | Contracts / surfaces | `node scripts/validate-contract-schemas.mjs` |
 | Worker | `npm run check` (in `web/worker`) |
@@ -159,6 +164,12 @@ Concretely, from precedent:
 - **`settings.json` / hook-arming blocked** (self-modification boundary) → stage the exact
   validated file, hand the human the one required copy-paste, and do the surrounding branch,
   commit, rebase, push, PR, and merge work yourself.
+- **A permission prompt recurs** → broaden the allow rule to the whole class of command
+  (root-to-leaf), never re-approve the same literal string one prompt at a time. (Insights
+  lineage: a too-narrow allowlist caused 10+ repeat prompts in one session.)
+- **A bridge / connectivity / auth check reports blocked** → attempt the documented bootstrap or
+  reconnection path once before reporting; a passive re-report of a known-blocked status is a
+  parked blocker, not a finding.
 
 Never present a reroutable gate as human work. Reduce every blocker to its single irreducible atom
 (if any), clear the rest through compliant mechanisms, and report what was done. The

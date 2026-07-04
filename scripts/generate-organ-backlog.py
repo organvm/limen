@@ -27,8 +27,10 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
+from limen.capacity import select_lanes  # noqa: E402
 from limen.io import load_limen_file, queue_lock, save_limen_file  # noqa: E402
 from limen.models import Task  # noqa: E402
+from limen.tabularius import submit_task_upsert  # noqa: E402
 
 # Maturity bands that still have build work. mature(>=90) is self-running — no generated tasks.
 _BUILD_STAGES = {"scaffold", "building", "maturing"}
@@ -38,9 +40,6 @@ _ORGAN_LABELS = {"organ", "institution", "vltima"}
 
 # statuses that mean a (repo,lever) is already being worked — never duplicate those.
 _ACTIVE = {"open", "dispatched", "in_progress", "needs_human"}
-
-# routable-by-the-fleet lanes (mirror generate-revenue-backlog) — only these count toward the floor.
-_DISPATCH_LANES = {"codex", "opencode", "agy", "claude", "gemini", "jules", "any"}
 
 # Per-band institution levers. {pillar}/{organ}/{rival}/{macro}/{micro}/{domain_map}/{first_artifact}/
 # {home}/{repo} are filled per organ from organ-ladder.json. key = labels[0] (the per-(repo,lever)
@@ -144,17 +143,18 @@ def _fmt(o: dict) -> dict:
     }
 
 
-def _plan(tasks: list[Task], floor_base: int, max_new: int) -> tuple[list[Task], dict]:
+def _plan(tasks: list[Task], floor_base: int, max_new: int, board: object | None = None) -> tuple[list[Task], dict]:
     """Compute the organ tasks to add. Pure (no I/O side effects). Returns (new_tasks, info)."""
     try:
         from limen.dispatch import _down_lanes
         dead = _down_lanes()
     except Exception:
         dead = set()
+    dispatch_lanes = set(select_lanes(os.environ.get("LIMEN_DISPATCH_LANES", "auto"), board, down_lanes=dead)) | {"any"}
 
     def routable(t: Task) -> bool:
         lane = t.target_agent or "any"
-        return lane in _DISPATCH_LANES and lane not in dead
+        return lane in dispatch_lanes and lane not in dead
 
     open_org = sum(
         1 for t in tasks
@@ -240,7 +240,7 @@ def main() -> int:
 
     path = Path(args.tasks)
     lf = load_limen_file(path)
-    new, info = _plan(lf.tasks, args.floor, args.max_new)
+    new, info = _plan(lf.tasks, args.floor, args.max_new, lf)
 
     hr = info.get("avg_hr")
     print(f"# generate-organ-backlog: open-organ={info['open_org']} floor={info['floor']} "
@@ -279,6 +279,15 @@ def main() -> int:
         to_add = [t for t in new if t.id not in have]
         if not to_add:
             print("\n(all planned tasks already present after fresh re-read — nothing applied.)")
+            return 0
+        # TABVLARIVS producer path (Step 2.1). LIMEN_TICKETS_PRODUCE=1 → submit each fresh-deduped task
+        # as an upsert ticket instead of writing tasks.yaml directly; the keeper folds them next beat.
+        # Default OFF keeps the legacy validated append. submit_ticket is itself lock-free (os.link).
+        if os.environ.get("LIMEN_TICKETS_PRODUCE") == "1":
+            session_id = os.environ.get("LIMEN_SESSION_ID", "generate-organ-backlog")
+            for t in to_add:
+                submit_task_upsert(path, t, agent="generate-organ-backlog", session_id=session_id)
+            print(f"\nsubmitted {len(to_add)} organ upsert tickets to the keeper's inbox (folds onto {path} next beat).")
             return 0
         fresh.tasks.extend(to_add)
         save_limen_file(path, fresh)

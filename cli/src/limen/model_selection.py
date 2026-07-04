@@ -18,15 +18,28 @@ package, so the shim can ``importlib``-load it by file path without triggering `
 
 from __future__ import annotations
 
+import datetime as dt
+import json
 import os
 
-# The ladder rungs, cheapest-first. Shared with dispatch's earned-tier ladder.
-_CLAUDE_TIER_ORDER = ("haiku", "sonnet", "opus")
+# The ladder rungs, cheapest-first. Shared with dispatch's earned-tier ladder. Fable is a
+# reserved top tier above Opus, not a new default escalation target.
+_CLAUDE_TIER_ORDER = ("haiku", "sonnet", "opus", "fable")
 
 # Reserved-Opus classes: the doctrine's small principled set whose failure is BOTH undetectable
 # AND high-stakes (final/canon synthesis, irreversible go-live reasoning, kernel abstraction). A
 # stated principle, env-overridable (comma-separated LIMEN_CLAUDE_OPUS_CLASSES) — not inherited config.
 _CLAUDE_OPUS_CLASSES_DEFAULT = ("canon", "synthesis", "kernel", "go-live", "irreversible")
+
+# Fable classes are narrower than reserved-Opus classes and still require an explicit acceptance
+# receipt before model selection is allowed to return the Fable rung.
+_CLAUDE_FABLE_CLASSES_DEFAULT = (
+    "fable",
+    "long-horizon",
+    "huge-context",
+    "ambiguous-root-cause",
+    "final-canonical-decision",
+)
 
 
 def _claude_opus_classes() -> set[str]:
@@ -38,11 +51,58 @@ def _claude_opus_classes() -> set[str]:
     return set(_CLAUDE_OPUS_CLASSES_DEFAULT)
 
 
+def _claude_fable_classes() -> set[str]:
+    """The reserved-Fable class set — env override (LIMEN_CLAUDE_FABLE_CLASSES,
+    comma-separated) wins, else the stated default. A class match alone is not enough;
+    :func:`_claude_fable_acceptance_present` must also pass."""
+    raw = os.environ.get("LIMEN_CLAUDE_FABLE_CLASSES")
+    if raw is not None:
+        return {c.strip() for c in raw.split(",") if c.strip()}
+    return set(_CLAUDE_FABLE_CLASSES_DEFAULT)
+
+
+def _claude_fable_acceptance_present() -> bool:
+    """True only when the operator has provided a written Fable acceptance artifact.
+
+    The expected value is a path to a receipt produced by ``scripts/fable-allotment.py accept``.
+    Test processes may set ``1``; real runs must point at a current-week receipt so an old shell
+    export or arbitrary existing path cannot become a standing Fable grant.
+    """
+    raw = os.environ.get("LIMEN_FABLE_ACCEPTANCE", "").strip()
+    if not raw:
+        return False
+    if raw == "1":
+        return "PYTEST_CURRENT_TEST" in os.environ
+    try:
+        path = os.path.expanduser(raw)
+        with open(path) as fh:
+            receipt = json.load(fh)
+        now = dt.datetime.now(dt.timezone.utc)
+        monday = (now - dt.timedelta(days=now.weekday())).date().isoformat()
+        return receipt.get("schema") == "limen.fable_acceptance.v1" and receipt.get("week") == monday
+    except Exception:
+        return False
+
+
+def _claude_model_is_fable(model: str | None) -> bool:
+    return bool(model and "fable" in str(model).lower())
+
+
 def _resolve_claude_model(tier: str) -> str:
     """tier → the ``claude --model`` value. Env pin wins (LIMEN_CLAUDE_<TIER>_MODEL); else the
     bare CLI tier alias, which the ``claude`` CLI resolves to the current dated model itself
     (nothing pinned, survives renames). ([[derive-never-pin-hardcodes]])"""
-    return os.environ.get(f"LIMEN_CLAUDE_{tier.upper()}_MODEL") or tier
+    model = os.environ.get(f"LIMEN_CLAUDE_{tier.upper()}_MODEL") or tier
+    if _claude_model_is_fable(model) and not _claude_fable_acceptance_present():
+        return "opus" if tier == "fable" else tier
+    return model
+
+
+def _guard_fable_model_pin(model: str | None) -> str | None:
+    """Prevent model-name pins from routing Fable without the receipt-backed tier gate."""
+    if _claude_model_is_fable(model) and not _claude_fable_acceptance_present():
+        return _resolve_claude_model("opus")
+    return model
 
 
 # ── The non-bypassable shim's per-spawn floor sort ──────────────────────────────────────────
@@ -67,6 +127,8 @@ def _shim_floor_tier() -> str:
     """The floor tier for an unclassed fleet spawn. LIMEN_CLAUDE_SHIM_FLOOR tunes it; defaults to
     "haiku" to match dispatch._claude_tier_for(None). Guarded to a real rung."""
     tier = os.environ.get("LIMEN_CLAUDE_SHIM_FLOOR", "haiku")
+    if tier == "fable":
+        return "opus"
     return tier if tier in _CLAUDE_TIER_ORDER else "haiku"
 
 
@@ -81,13 +143,13 @@ def model_for_argv(args: list[str]) -> str | None:
     ``dispatch._claude_model``: explicit pin > feature gate > derived floor.
     """
     try:
-        if "--model" in args:
+        if any(arg == "--model" or arg.startswith("--model=") for arg in args):
             return None  # the declaration site already sorted this spawn — respect it
         if not ("-p" in args or "--print" in args):
             return None  # interactive / `claude mcp …` / any non-print — never re-tier
         pin = os.environ.get("LIMEN_CLAUDE_MODEL")
         if pin:
-            return pin  # a manual pin always wins (mirrors dispatch._claude_model)
+            return _guard_fable_model_pin(pin)  # a manual pin wins only inside the Fable gate
         if os.environ.get("LIMEN_CLAUDE_TIER_SELECT", "1") != "1":
             return None  # tiering deliberately disabled → bare invocation (account default)
         return _resolve_claude_model(_shim_floor_tier())

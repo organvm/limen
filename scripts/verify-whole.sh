@@ -10,14 +10,53 @@ step() {
   printf '\n==> %s\n' "$*"
 }
 
+ensure_web_app_deps() {
+  # A fresh worktree (or clone) has no web/app/node_modules, so the surface-contract generation and
+  # the dashboard build below fail with ERR_MODULE_NOT_FOUND (e.g. the 'yaml' package) — a local
+  # false-red that looks like a code regression but is only missing deps. Install once, idempotently,
+  # mirroring the MONETA step's `npm ci || npm install`. CI already runs `npm ci` first, so there the
+  # node_modules dir exists and this is a no-op.
+  [[ -d "$ROOT/web/app/node_modules" ]] && return 0
+  if ! command -v npm >/dev/null; then
+    printf 'npm not found on PATH — cannot install web/app dependencies for the surface/build steps\n' >&2
+    return 1
+  fi
+  printf 'Installing web/app dependencies (node_modules missing in this checkout)…\n'
+  ( cd "$ROOT/web/app" && npm ci --silent >/dev/null 2>&1 || npm install --silent >/dev/null 2>&1 )
+}
+
 step "Compile Python modules and validate shell syntax"
 cd "$ROOT"
-python3 -m py_compile web/api/main.py cli/src/limen/*.py scripts/probe-runtime-adapter.py scripts/validate-lifecycle-adapters.py scripts/validate-task-board.py scripts/worktree-debt.py scripts/session-corpus-ledger.py scripts/prompt-lifecycle-ledger.py scripts/prompt-priority-map.py scripts/prompt-batch-review-ledger.py scripts/prompt-packet-ledger.py scripts/capability-substrate-ledger.py scripts/consolidation-gates.py scripts/network-health.py scripts/dispatch-health.py scripts/live-root-gate.py scripts/session-blockers-ledger.py scripts/session-lifecycle-pressure.py scripts/session-attack-paths.py scripts/conductor-tranche.py scripts/session-value-review.py
-bash -n scripts/preflight-cloud-run.sh scripts/probe-local-runtime.sh scripts/probe-local-worker.sh scripts/verify-whole.sh scripts/merge-policy.sh scripts/tests/merge-policy.test.sh scripts/hooks/session-lifecycle-pressure.sh scripts/netmode.sh
-plutil -lint container/launchd/com.user.netmeter.plist
+python3 -m py_compile web/api/main.py cli/src/limen/*.py scripts/probe-runtime-adapter.py scripts/validate-lifecycle-adapters.py scripts/validate-task-board.py scripts/worktree-debt.py scripts/worktree-pr-receipts.py scripts/continuation-beat.py scripts/codex-token-accounting.py scripts/overnight-watch.py scripts/session-corpus-ledger.py scripts/prompt-lifecycle-ledger.py scripts/prompt-priority-map.py scripts/prompt-batch-review-ledger.py scripts/prompt-packet-ledger.py scripts/current-session-fanout-plan.py scripts/capability-substrate-ledger.py scripts/consolidation-gates.py scripts/network-health.py scripts/dispatch-health.py scripts/live-root-gate.py scripts/session-blockers-ledger.py scripts/session-lifecycle-pressure.py scripts/session-attack-paths.py scripts/conductor-tranche.py scripts/session-value-review.py scripts/enactment-audit.py
+bash -n scripts/preflight-cloud-run.sh scripts/probe-local-runtime.sh scripts/probe-local-worker.sh scripts/heartbeat-loop.sh scripts/verify-whole.sh scripts/merge-policy.sh scripts/tests/merge-policy.test.sh scripts/tests/enactment-audit.test.sh scripts/hooks/session-lifecycle-pressure.sh scripts/netmode.sh
+if command -v plutil >/dev/null; then
+  plutil -lint container/launchd/com.user.netmeter.plist
+  plutil -lint container/launchd/com.limen.overnight-watch.plist
+fi
+
+step "Validate Cvrsvs Honorvm seed contracts"
+CVRSV_SEED="${LIMEN_WORKSPACE_ROOT:-$HOME/Workspace}/organvm/cvrsvs-honorvm/seed.yaml"
+if [[ -f "$CVRSV_SEED" ]]; then
+  python3 organs/governance/validate-seed.py "$CVRSV_SEED" --strict-graph --quiet
+fi
+
+step "Validate Sovereign Systems consulting engagement records"
+python3 organs/consulting/validate-consulting.py --fleet --quiet
+
+step "Validate A-MAVS-OLEVM artist chamber governance records"
+python3 organs/artist/validate-artist.py --fleet --quiet
+
+step "Validate Koinonia social organ relationship-posture briefs"
+python3 organs/social/validate-social.py --fleet --quiet
 
 step "Verify the merge-policy predicate (verdict matrix regression test)"
 bash scripts/tests/merge-policy.test.sh
+
+step "Verify the enactment predicate (declared-ON fleet flags are actually wired live, not just merged)"
+bash scripts/tests/enactment-audit.test.sh
+# The wiring rung is the code contract (CI-safe, deterministic); the liveness rung reads live-host
+# daemon state and is surfaced in the beat log by metabolize.sh, so it is not a hard gate here.
+python3 scripts/enactment-audit.py --check --wiring-only
 
 step "Verify session orientation and lifecycle-pressure hooks"
 bash scripts/done-session-orient.sh
@@ -42,6 +81,7 @@ for path in sorted(Path(".github/workflows").glob("*.yml")) + sorted(Path(".gith
 PY
 
 step "Generate static and private surface contracts"
+ensure_web_app_deps
 (
   cd "$ROOT/web/app"
   npm run generate:data
@@ -57,6 +97,17 @@ node scripts/validate-contract-schemas.mjs
 step "Run API and CLI tests"
 env -u LIMEN_API_TOKEN -u LIMEN_OWNER_TOKEN -u LIMEN_CLIENT_TOKEN \
   PYTHONPATH="$PYTHONPATH_VALUE" python3 -m pytest web/api/tests cli/tests -q
+
+step "Verify MONETA sovereign-mint licence tests (vitest + tsc)"
+if command -v npm >/dev/null; then
+  (
+    cd "$ROOT/moneta"
+    npm ci --silent >/dev/null 2>&1 || npm install --silent >/dev/null 2>&1
+    npm test
+  )
+else
+  printf 'Skipping MONETA tests — npm not found on PATH.\n'
+fi
 
 step "Probe local runtime adapter over HTTP"
 PYTHONPATH="$PYTHONPATH_VALUE" scripts/probe-local-runtime.sh

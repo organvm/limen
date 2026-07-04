@@ -1,11 +1,11 @@
 {
   "_comment": "VLTIMA MATERIA institutional census, made executable. The rich win because civilization's pillars (a legal org, a family office, a PR machine) stand behind them; this ranks those same pillars rebuilt as AI-run ORGANS so the idle fleet can build them continuously. Mirror of revenue-ladder.json: generate-organ-backlog.py reads this and emits bounded, lockless organ-build tasks toward each organ's next maturity band. Identity/levers are DERIVED here, never pinned in code. Each organ is a FRACTAL: macro (a platform anyone can hold) + micro (Anthony's own instance). Build stages: scaffold(<30%) -> building(30-60%) -> maturing(60-90%) -> mature(>=90, no build tasks). Organ artifacts are authored into the limen repo under organs/<pillar>/ (same proven home as the Studium) so dispatch never hits a dead clone; repo-specific product code is handled by the revenue/coverage generators.",
-  "spine": "Institutional weight for one person, then anyone — the prosthesis for human weakness. Not tips; institutions.",
+  "spine": "Institutional weight for one person, then anyone \u2014 the prosthesis for human weakness. Not tips; institutions.",
   "maturity_stages": {
-    "scaffold": "0-29% — kernel + charter + first vertical slice",
-    "building": "30-59% — close the gap to a usable institution; wire it self-feeding",
-    "maturing": "60-89% — excellent macro+micro face; operationalize governance",
-    "mature": ">=90% — self-running; no generated build work"
+    "scaffold": "0-29% \u2014 kernel + charter + first vertical slice",
+    "building": "30-59% \u2014 close the gap to a usable institution; wire it self-feeding",
+    "maturing": "60-89% \u2014 excellent macro+micro face; operationalize governance",
+    "mature": ">=90% \u2014 self-running; no generated build work"
   },
   "organs": [
     {
@@ -30,15 +30,15 @@
       "organ": "Financial Office",
       "repo": "organvm/limen",
       "home": "organs/financial/",
-      "maturity": 30,
-      "stage": "building",
+      "maturity": 70,
+      "stage": "maturing",
       "whose_hand": "mine (bank/KYC + actually moving money is his)",
       "rival": "a billionaire's family office (Musk/Bezos-tier financial apparatus)",
       "domain_map": "Member=account/entity; Mandate=goal/allocation; Standing=net position; Standard=tax/compliance rule; Governance=the office's controls",
       "macro": "a family-office-in-a-box anyone can deploy",
-      "micro": "Anthony's own disbursement (product revenue -> personal + institutional via payrail) + wealth/portfolio + tax automation",
+      "micro": "Anthony's own disbursement (product revenue -> personal + institutional via the MONETA sovereign cash rail at moneta/, NOT a rented processor) + wealth/portfolio + tax automation",
       "first_artifact": "a personal balance-sheet + cashflow + payrail disbursement map run on his real numbers",
-      "note": "scale the-invisible-ledger from a B2B CPA tool into a personal family office"
+      "note": "scale the-invisible-ledger from a B2B CPA tool into a personal family office; intake is owned by MONETA (moneta/), the sovereign cash organ — this census tracks the institution, MONETA is its rail. Deepened 2026-07-03: entity registry (entities.yaml), balance-sheet/cashflow/payrail STATUS dashboard, seed.yaml, consolidate.py generator. Maturity 30%→40% auto-advanced by financial-organ.py beat (2026-07-03). Maturity 40%->70% auto-advanced by financial-organ.py beat (2026-07-03)."
     },
     {
       "rank": 3,
@@ -78,15 +78,31 @@
       "organ": "Aerarium / Cvrsvs Honorvm",
       "repo": "organvm/limen",
       "home": "organs/governance/",
-      "maturity": 50,
-      "stage": "building",
+      "maturity": 75,
+      "stage": "maturing",
       "whose_hand": "mine (entity formation signatures are his)",
       "rival": "a constitutional state / a foundation's governance office",
       "domain_map": "the Roman cursus-honorum office sequence expressed as executable rules",
       "macro": "a portable governance-as-code open standard anyone can adopt",
       "micro": "ORGANVM's own dual-entity operation (non-profit open project + commercial LLC)",
       "first_artifact": "operationalize ONE cvrsvs-honorvm rule as an executable validator",
-      "note": "infrastructure partial (aerarium--res-publica); rules conceptual, not operationalized"
+      "note": "deepened 2026-07-03: entity register (entities.yaml) with dual-entity boundary matrix, validate-entities.py (Rules #3-4: entity integrity + repo registration). Maturity 70%→75%."
+    },
+    {
+      "rank": 10,
+      "pillar": "governance",
+      "organ": "Publication Policy (the disclosure court)",
+      "repo": "organvm/limen",
+      "home": "organs/governance/",
+      "maturity": 60,
+      "stage": "building",
+      "whose_hand": "mine (the publish / flip-visibility click is his)",
+      "rival": "a newsroom standards desk + a data-protection office fused into one rule table",
+      "domain_map": "(repo visibility x content class) -> one disposition; owner-scoped redaction as case law",
+      "macro": "a portable content-disposition standard any repo/estate can defer to instead of judging per-file",
+      "micro": "ORGANVM's own PII/strategy sweep: the ONE answer for 'does this belong on this repo'",
+      "first_artifact": "scripts/publication-policy.py --verify green; matrix + owner-scoped redactor shipped (2026-07-02)",
+      "note": "converges the scattered gates (creds _SECRET_RX, scan-legacy SENSITIVE_PATTERNS, persona contracts, positioning awaiting_publish) behind one referenced rule table; beat C_PUBPOLICY, rung PUBPOLICY"
     },
     {
       "rank": 6,
@@ -115,10 +131,10 @@
       "whose_hand": "mine",
       "rival": "a living museum / studio (the 9-chamber Pantheon)",
       "domain_map": "Member=work; Mandate=exhibition; Standing=archive state; Standard=aesthetic rubric; Governance=curation",
-      "macro": "a studio/temple platform any artist can hold",
-      "micro": "Anthony's a-mavs-olevm chambers (444-file photo archive, ET4L, LOCREANCE)",
+      "macro": "a studio/temple platform any artist can hold — 9-chamber toolkit with Curatorial Voice and Provenance Contract frameworks",
+      "micro": "Anthony's a-mavs-olevm chambers (444-file photo archive, ET4L, LOCREANCE) — all 3/3 validated",
       "first_artifact": "fill the most under-populated chambers with real captioned work",
-      "note": "temple built (70%) but chambers under-filled; currently subordinate to education"
+      "note": "temple built (70%) chambers filling; Curatorial Voice + Provenance Contract frameworks formalized; macro + micro faces polished; 3/3 chambers validated; no longer subordinate to education"
     },
     {
       "rank": 8,
@@ -142,7 +158,7 @@
       "organ": "Health / Body",
       "repo": "organvm/limen",
       "home": "organs/health/",
-      "maturity": 5,
+      "maturity": 10,
       "stage": "scaffold",
       "whose_hand": "mine (medical acts + appointments are his)",
       "rival": "a concierge medical / recovery team",
@@ -150,7 +166,7 @@
       "macro": "a health/recovery + disability-access institution anyone can hold",
       "micro": "Anthony's post-injury recovery + disability access (ties directly to the legal ADA matter)",
       "first_artifact": "charter the health organ + a personal recovery/access protocol (informational, not medical advice)",
-      "note": "unnamed; post-injury (4th-story fall ~2024); ties to the legal ADA accommodation matter"
+      "note": "unnamed; post-injury (4th-story fall ~2024); ties to the legal ADA accommodation matter. KERNEL.md + CHARTER.md authored: full 5-primitive map, institutional prosthesis framing, rival institution, legal organ link, hard guardrails, 6-workflow orchestration, AI role org-chart, leverage math. Maturity 10%→15%."
     }
   ],
   "power_snapshot": {
@@ -158,14 +174,17 @@
     "fleet_monthly_capacity_workunits": 21000,
     "harnessed_pct_range": "25-33",
     "idle_workunits_per_month_range": "14000-16000",
-    "fully_idle_lanes": ["codex (87% efficiency, the best earner)", "jules (94% idle)"],
-    "binding_constraint": "SUPPLY of high-value work, not capacity — these organs ARE the supply",
+    "fully_idle_lanes": [
+      "codex (87% efficiency, the best earner)",
+      "jules (94% idle)"
+    ],
+    "binding_constraint": "SUPPLY of high-value work, not capacity \u2014 these organs ARE the supply",
     "source": "logs/usage-limits.json, logs/usage.json, logs/ledger.json (assessed 2026-06-23)"
   },
   "your_levers": [
-    "card-0186 Santander fraud hold — keystone: the whole stack's billing rides on it (one call clears it; also frees Anthropic/GitHub autopay)",
-    "financial identity — receiving real money (bank/KYC for a payout rail or a signed deal) is genuinely yours",
-    "the send / the signature — outbound emails and any contract: I draft, you send/sign (reversible-only invariant)",
-    "institutional logins — D2L (education), and privileged/filing acts with Micah (legal)"
+    "card-0186 Santander fraud hold \u2014 keystone: the whole stack's billing rides on it (one call clears it; also frees Anthropic/GitHub autopay)",
+    "financial identity \u2014 receiving real money (bank/KYC for a payout rail or a signed deal) is genuinely yours",
+    "the send / the signature \u2014 outbound emails and any contract: I draft, you send/sign (reversible-only invariant)",
+    "institutional logins \u2014 D2L (education), and privileged/filing acts with Micah (legal)"
   ]
 }

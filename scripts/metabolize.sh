@@ -37,8 +37,65 @@ fi
 # Source the cred cache so THIS shell + every child (route.py, the agent CLIs) inherit the keys.
 if [ -f "$HOME/.limen.env" ]; then set -a; . "$HOME/.limen.env"; set +a; fi
 
+echo "── 0b. verify MCP connector consent (Lane B — surface lapsed claude.ai connectors in the log, never in chat) ──"
+# The op:// lane (0a) has a validity probe; this is the missing one for the OTHER credential lane —
+# the claude.ai hosted MCP connectors whose OAuth lives SERVER-SIDE (no local token to refresh). A
+# lapsed connector surfaces HERE in the beat log with its one-lever cure (L-IANVA-CLOUD), not as a
+# recurring /mcp chat nag. Non-fatal + fail-open offline (exit 0 unless a REQUIRED connector lapses).
+if [ "${LIMEN_MCP_VERIFY:-1}" = "1" ]; then
+  python3 "$LIMEN_ROOT/scripts/mcp-auth-verify.py" || echo "  ↑ REQUIRED MCP connector(s) unauthenticated — pull L-IANVA-CLOUD (#263) to end the class"
+fi
+
+echo "── 0c. verify the cartridge is plugged into the real source (host-is-factory invariant) ──"
+# The factory/cartridge law (memory: host-is-factory-system-is-cartridge) needs one check
+# nothing else performs: is chezmoi pointed at the REAL cartridge (organvm/domus-genoma), or at
+# a scratch/dummy source? chezmoi verify/status/health only validate WHATEVER source is wired, so
+# a disconnected cartridge returns a meaningless green. This runs regardless of chezmoi's state and
+# surfaces an unplugged cartridge HERE in the beat log — not months later by accident. Fail-open:
+# exit 0 when connected OR chezmoi absent; non-zero only on a genuine disconnection.
+if [ "${LIMEN_CARTRIDGE_CHECK:-1}" = "1" ]; then
+  python3 "$LIMEN_ROOT/scripts/cartridge-connected.py" || echo "  ↑ cartridge UNPLUGGED (above) — bring domus-genoma current, then re-point chezmoi at it"
+fi
+
+echo "── 0d. verify enactment — every declared-ON fleet flag is actually LIVE (not just merged) ──"
+# The gap this closes (memory: enacted-not-declared): a flag can be declared ON in parameters.yaml
+# and merged, yet be dark in the RUNNING beat — either wired nowhere (TABVLARIVS #576 shipped its
+# producers OFF while the note claimed the fleet enabled them) or wired-but-the-daemon-never-
+# kickstarted (a `while true` loop never re-sources itself). verify-whole enforces the wiring
+# contract; THIS surfaces the live-host liveness truth in the beat log — a stale daemon or an
+# un-enacted switch shows up HERE, not by the operator asking five times. Fail-open, never fatal.
+if [ "${LIMEN_ENACTMENT_CHECK:-1}" = "1" ]; then
+  python3 "$LIMEN_ROOT/scripts/enactment-audit.py" --check || echo "  ↑ un-enacted fleet flag above — wire it in heartbeat-loop.sh, or kickstart the daemon (launchctl kickstart -k gui/\$(id -u)/com.limen.heartbeat)"
+fi
+
 echo "── 0. refresh usage telemetry / lane health ──"
 python3 "$LIMEN_ROOT/scripts/usage-telemetry.py" || echo "  (usage telemetry skipped)"
+
+# DEAD-LINK HYGIENE: a 404 on a public identity surface is silent demand-loss — it repels the exact
+# visitor the front door pulls, and nobody reports it. Probe the tracked surfaces (link-surfaces.json)
+# for broken links; self-throttled to ~6h so the beat never floods the network. Fail-open, never fatal.
+if [ "${LIMEN_LINK_HEALTH:-1}" = "1" ]; then
+  python3 "$LIMEN_ROOT/scripts/link-health.py" --verify --throttle 21600 || echo "  ↑ DEAD link(s) on a public surface above — fix at the source or add a remap in link-surfaces.json"
+  # SELF-HEAL: when a dead link has a verified-live replacement, the organ OPENS a reviewable
+  # fix-PR (reversible — never a merge; publishing stays the human's hand). Idempotent +
+  # self-limiting: one PR per distinct fix-set, skipped once a PR for it exists, so once merged
+  # the link resolves and no PR re-opens. Reuses the throttled probe above (near-zero extra work).
+  # Set LIMEN_LINK_HEAL=0 to keep detection but disable auto-opening PRs.
+  if [ "${LIMEN_LINK_HEAL:-1}" = "1" ]; then
+    python3 "$LIMEN_ROOT/scripts/link-health.py" --heal --apply --throttle 21600 || echo "  (link-health heal skipped/failed — non-fatal)"
+  fi
+fi
+
+# CODEX SKILL BUDGET HYGIENE (memory: distillation-not-reduction). Codex shortens skill
+# descriptions past its ~2% skills budget every session; the session-noise-containment doctrine
+# (Rule 1) BANS the disable-to-silence "fix" (that reduces capability). Instead distill every
+# plugin/skill description to a thin, meaning-preserving lead — keeping EVERY skill. The
+# marketplace cache reverts on refresh, so re-running each beat self-heals it. Idempotent +
+# reversible (--restore); silent when already thin, logs the re-heal when a refresh grew it
+# back — surfaced HERE, never hidden. Set LIMEN_CODEX_SLIM=0 to disable.
+if [ "${LIMEN_CODEX_SLIM:-1}" = "1" ]; then
+  python3 "$LIMEN_ROOT/scripts/codex-skill-slim.py" --apply --quiet || echo "  (codex-skill-slim skipped — no codex config/cache)"
+fi
 
 echo "── 1. drain (close completed Jules) ──"
 bash "$LIMEN_ROOT/scripts/drain.sh" || echo "  (drain skipped/failed — continuing)"
@@ -74,6 +131,11 @@ echo "── 5b. insight-cadence (proposal-only auto-reporting) ──"
 # elapsed wall-clock time internally, but --once forces it to run if due.
 if [ "${LIMEN_INSIGHT_CADENCE:-1}" = "1" ]; then
   python3 "$LIMEN_ROOT/scripts/insight-cadence.py" --once || echo "  (insight-cadence skipped)"
+  # Route the latest report per tier to its durable owner (his-hand levers / keeper upsert
+  # tickets / organ residual inboxes). Armed by the same default as the heartbeat
+  # (LIMEN_INSIGHT_ROUTE_APPLY=1); board echoes are skipped, new tasks capped per pass.
+  LIMEN_INSIGHT_ROUTE_APPLY="${LIMEN_INSIGHT_ROUTE_APPLY:-1}" \
+    python3 "$LIMEN_ROOT/scripts/insight-route.py" | tail -3 || echo "  (insight-route skipped)"
 fi
 
 # ── 6. self-improve (LOW cadence) — the last rung of the self-* ladder ──
