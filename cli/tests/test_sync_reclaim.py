@@ -206,6 +206,43 @@ def test_parked_unpark_preserves_live_tasks_yaml(checkout, tmp_path):
     assert (clone / "tasks.yaml").read_text() == "queue: LIVE\n"  # live queue won end-to-end
 
 
+def test_parked_unpark_clears_untracked_release_collision(checkout, tmp_path):
+    """An UNTRACKED local file that the release now TRACKS blocks the switch exactly like the ff
+    (censor/precedents.jsonl on the 2026-07-04 live heal): release-owned, so it is backed up and
+    the released version wins — the unpark must still complete."""
+    clone, bare = checkout
+    _git("switch", "-q", "-c", "work", cwd=clone)
+    _commit(clone, "work.txt", "w\n", "work on branch")
+    _git("push", "-q", "-u", "origin", "work", cwd=clone)
+    release = _origin_advance(bare, tmp_path, "conf.json", "RELEASE\n", "release adds conf.json")
+    (clone / "conf.json").write_text("LOCAL-STALE\n")  # untracked here, tracked by the release
+    (clone / "usage.json").write_text("{}\n")  # untracked runtime the release does NOT track
+    r = _run_sync(clone)
+    assert r.returncode == 0
+    assert "UNPARKED" in r.stdout, r.stdout + r.stderr
+    assert _git("rev-parse", "HEAD", cwd=clone).stdout.strip() == release
+    assert (clone / "conf.json").read_text() == "RELEASE\n"  # released version won
+    backup = clone / "logs" / ".sync-collision" / "conf.json"
+    assert backup.exists() and backup.read_text() == "LOCAL-STALE\n"  # backed up, never lost
+    assert (clone / "usage.json").exists()  # non-release runtime untouched
+
+
+def test_parked_on_branch_held_elsewhere_fails_open(checkout, tmp_path):
+    """If the release branch is checked out in ANOTHER worktree, git refuses the switch; the valve
+    must fail open (loudly) and leave the parked checkout intact."""
+    clone, bare = checkout
+    _git("switch", "-q", "-c", "work", cwd=clone)
+    work_sha = _commit(clone, "work.txt", "w\n", "work on branch")
+    _git("push", "-q", "-u", "origin", "work", cwd=clone)
+    _origin_advance(bare, tmp_path, "rel.txt", "r\n", "release advances")
+    _git("worktree", "add", "-q", str(tmp_path / "holder"), "main", cwd=clone)  # holds main hostage
+    r = _run_sync(clone)
+    assert r.returncode == 0
+    assert "refused" in r.stdout, r.stdout + r.stderr
+    assert _git("rev-parse", "--abbrev-ref", "HEAD", cwd=clone).stdout.strip() == "work"
+    assert _git("rev-parse", "HEAD", cwd=clone).stdout.strip() == work_sha
+
+
 # ---------------- reclaim-worktrees.py ----------------
 
 

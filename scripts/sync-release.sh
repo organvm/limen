@@ -79,16 +79,39 @@ if [ -n "$CUR" ] && [ "$CUR" != "$BRANCH" ]; then
   fi
   TMP="$(mktemp 2>/dev/null || echo "$ROOT/logs/.tasks.unpark.$$")"
   [ -f tasks.yaml ] && cp -f tasks.yaml "$TMP" 2>/dev/null || true
-  git checkout --quiet HEAD -- tasks.yaml 2>/dev/null || true   # clean the queue for the switch; live copy restored below
-  if git switch --quiet "$BRANCH" 2>/dev/null || git checkout --quiet "$BRANCH" 2>/dev/null; then
-    [ -f "$TMP" ] && cp -f "$TMP" tasks.yaml 2>/dev/null || true
-    rm -f "$TMP" 2>/dev/null || true
+  # A switch is blocked by exactly what blocks the ff below (observed on the 2026-07-04 live heal):
+  # (a) an UNTRACKED file the release now TRACKS (censor/precedents.jsonl that day) — release-owned,
+  # so back it up to logs/.sync-collision and remove it, the same invariant as the ff collision
+  # valve; and (b) the daemon-owned tasks.yaml differing between the branches — cleaned here (live
+  # copy restored below), with ONE retry because a beat can rewrite it mid-valve. A branch already
+  # checked out in another worktree also refuses; that stays fail-open (surfaced in the message).
+  release_tracked="$(git ls-tree -r --name-only "origin/$BRANCH" 2>/dev/null || echo)"
+  untracked="$(git ls-files --others --exclude-standard 2>/dev/null || echo)"
+  BK="$ROOT/logs/.sync-collision"
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    printf '%s\n' "$release_tracked" | grep -qxF "$f" || continue   # only paths the release tracks
+    mkdir -p "$BK/$(dirname "$f")" 2>/dev/null || true
+    cp -f "$f" "$BK/$f" 2>/dev/null || true                         # back up (never delete) before removing
+    rm -f "$f" 2>/dev/null || true
+  done <<UNPARK_EOF
+$untracked
+UNPARK_EOF
+  unparked=0
+  git checkout --quiet HEAD -- tasks.yaml 2>/dev/null || true       # clean the queue for the switch
+  why="$(git switch --quiet "$BRANCH" 2>&1)" && unparked=1
+  if [ "$unparked" = 0 ]; then
+    git checkout --quiet HEAD -- tasks.yaml 2>/dev/null || true     # a beat re-wrote it mid-valve — once more
+    why="$(git switch --quiet "$BRANCH" 2>&1)" && unparked=1
+  fi
+  [ -f "$TMP" ] && cp -f "$TMP" tasks.yaml 2>/dev/null || true
+  rm -f "$TMP" 2>/dev/null || true
+  if [ "$unparked" = 1 ]; then
     LOCAL="$(git rev-parse HEAD 2>/dev/null || echo)"
     echo "sync-release: UNPARKED '$CUR' → '$BRANCH' (branch tip safe on origin/$CUR) ✓"
   else
-    [ -f "$TMP" ] && cp -f "$TMP" tasks.yaml 2>/dev/null || true
-    rm -f "$TMP" 2>/dev/null || true
-    echo "sync-release: switch '$CUR' → '$BRANCH' refused — fail open (reconcile by hand)"
+    why="$(printf '%s' "$why" | head -2 | tr '\n' ' ' | cut -c1-200)"
+    echo "sync-release: switch '$CUR' → '$BRANCH' refused (${why}) — fail open (reconcile by hand)"
     exit 0
   fi
 fi
