@@ -17,8 +17,8 @@
 
 | Artifact | File | Status |
 |---|---|---|
-| Macro Face | `MACRO.md` | Deepened — deployable-in-5-minutes, fleet-capacity-mapped |
-| Micro Instance Face | `MICRO.md` | Deepened — wealth/portfolio/tax-automation workflow, MONETA interaction, priority gates |
+| Macro Face | `MACRO.md` | Excellent — problem framing, what-this-is-NOT, governance layer, validation commands, deployable-in-5-minutes |
+| Micro Instance Face | `MICRO.md` | Excellent — fleet standing, sovereign intake, wealth/portfolio/tax-automation workflow, governance layer, priority gates |
 | Entity Registry | `entities.yaml` | Live — 6 entities registered |
 | Balance Sheet | `balance-sheet.md` | Generated — needs principal balance entry |
 | Cash-Flow Projection | `cashflow.md` | Generated — pre-revenue baseline |
@@ -30,7 +30,7 @@
 
 ## Next deepen steps
 
-1. ✅ **Macro/micro faces deepened** — excellent, showable, polished (2026-07-03 beat)
+1. ✅ **Macro/micro faces excellent** — governance-layer table, what-this-is-NOT, validation commands, fleet standing, authority contract (2026-07-04 beat)
 2. **P0: Clear card-0186 fraud hold** — one call to Santander; keystone for 3+ cascaded billing failures
 3. **P1: Enter balances** — principal fills `balance` + `as_of` in `entities.yaml` (unlocks real position tracking)
 4. **P2: Deploy MONETA** — `docker build + docker run` on $0 host; set `MINT_BTC_ADDRESS`
