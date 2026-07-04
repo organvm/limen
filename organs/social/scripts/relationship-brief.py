@@ -27,6 +27,12 @@ except ImportError:
 FMT = "%Y-%m-%dT%H:%M:%SZ"
 
 
+def _generated_at(explicit: str | None = None) -> str:
+    if explicit:
+        return explicit
+    return datetime.now(timezone.utc).strftime(FMT)
+
+
 def _fmt_val(v: Any) -> str:
     if v is None:
         return ""
@@ -39,7 +45,7 @@ def _fmt_val(v: Any) -> str:
     return str(v)
 
 
-def generate_brief(doc: dict[str, Any], path: Path) -> str:
+def generate_brief(doc: dict[str, Any], path: Path, generated_at: str | None = None) -> str:
     member = doc.get("member", {})
     mandate = doc.get("mandate", {})
     standing = doc.get("standing", {})
@@ -50,9 +56,9 @@ def generate_brief(doc: dict[str, Any], path: Path) -> str:
     lines: list[str] = []
     lines.append("# Relationship-Posture Brief")
     lines.append("")
-    lines.append(f"**Person:** {member.get('name', '(unnamed)')}  ")
-    lines.append(f"**Identifier:** `{member.get('identifier', '—')}`  ")
-    lines.append(f"**Generated:** {datetime.now(timezone.utc).strftime(FMT)}  ")
+    lines.append(f"**Person:** {member.get('name', '(unnamed)')}")
+    lines.append(f"**Identifier:** `{member.get('identifier', '—')}`")
+    lines.append(f"**Generated:** {_generated_at(generated_at)}")
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -120,7 +126,7 @@ def generate_brief(doc: dict[str, Any], path: Path) -> str:
 
     lines.append("## 5. Governance (authority and consent)")
     lines.append("")
-    lines.append(f"**Manual mode:** {'yes' if governance.get('manual_mode') else 'NO — WARNING'}  ")
+    lines.append(f"**Manual mode:** {'yes' if governance.get('manual_mode') else 'NO — WARNING'}")
     lines.append(f"**Human:** {governance.get('human', '(not set)')}")
     consent = governance.get("consent", [])
     if consent:
@@ -163,6 +169,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Generate a relationship-posture brief")
     parser.add_argument("path", type=Path, help="Path to engagement YAML")
     parser.add_argument("--out", type=Path, help="Write output to file instead of stdout")
+    parser.add_argument(
+        "--generated-at",
+        help="Use an explicit ISO-8601 UTC timestamp for reproducible committed artifacts",
+    )
     args = parser.parse_args()
 
     if not args.path.exists():
@@ -179,7 +189,7 @@ def main() -> int:
         print(f"ERROR: {args.path} is not a YAML mapping", file=sys.stderr)
         return 1
 
-    brief = generate_brief(doc, args.path)
+    brief = generate_brief(doc, args.path, generated_at=args.generated_at)
 
     if args.out:
         args.out.write_text(brief, encoding="utf-8")

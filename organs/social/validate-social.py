@@ -50,6 +50,18 @@ def _standing(doc: dict[str, Any]) -> str:
     return str(raw or "").upper()
 
 
+def _claim_doc(doc: dict[str, Any]) -> dict[str, Any]:
+    claim = {k: v for k, v in doc.items() if k != "governance"}
+    governance = doc.get("governance")
+    if isinstance(governance, dict):
+        claim["governance"] = {
+            k: v
+            for k, v in governance.items()
+            if k not in {"forbidden_acts", "never_autonomous"}
+        }
+    return claim
+
+
 def _validate_one(path: Path) -> list[str]:
     try:
         doc = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -96,7 +108,6 @@ def _validate_one(path: Path) -> list[str]:
             "Rule #2 violation: governance.never_autonomous must list forbidden autonomous acts"
         )
 
-    standard = doc.get("standard")
     evidence = doc.get("artifacts", {}).get("evidence") if isinstance(doc.get("artifacts"), dict) else None
     if not isinstance(evidence, list) or not evidence:
         violations.append("Rule #4 violation: artifacts.evidence must list at least one evidence item")
@@ -109,12 +120,7 @@ def _validate_one(path: Path) -> list[str]:
                         f"Rule #4 violation: evidence item {item!r} contains placeholder {pattern!r}"
                     )
 
-    claim_doc = {k: v for k, v in doc.items() if k != "governance"}
-    if isinstance(governance, dict):
-        claim_doc["governance"] = {
-            k: v for k, v in governance.items() if k != "forbidden_acts"
-        }
-    blob = _text(claim_doc).lower()
+    blob = _text(_claim_doc(doc)).lower()
     for pattern in OVERREACH_PATTERNS:
         if pattern in blob:
             violations.append(f"Rule #5 violation: overreach pattern present: {pattern!r}")

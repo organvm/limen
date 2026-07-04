@@ -62,6 +62,7 @@ Checked by:
 ```bash
 python organs/social/validate-social.py --fleet
 python organs/social/scripts/relationship-brief.py organs/social/engagements/derek.yaml
+python organs/social/scripts/triage-dashboard.py
 ```
 
 The validator enforces the first six social organ rules:

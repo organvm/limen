@@ -28,7 +28,7 @@ The first engagement is Derek. It proves the brief. The next engagements prove t
 
 | Person | Relationship | Standing | Next gate | Owner of gate |
 |---|---|---|---|---|
-| Derek | Collaborator, client, creative partner | ACTIVE | Brief review and confirmation | Anthony |
+| Derek | Collaborator, client, creative partner | ACTIVE | Dashboard review and brief confirmation | Anthony |
 
 No engagement has autonomous outbound action open. No messages, invitations, care
 actions, or relationship changes move without human review.
@@ -50,6 +50,8 @@ collaboration).
 **What exists now:**
 
 - Complete Relationship-Posture Brief in `engagements/derek.yaml`
+- Generated brief in `engagements/derek-brief.md`
+- Generated triage view in `engagements/triage-dashboard.md`
 - ACTIVE standing with strong warmth — high-care tie
 - Reciprocity norm: reply within 24h on active threads; weekly check-in cadence
   during active projects; annual gratitude/reflection note
@@ -61,7 +63,7 @@ collaboration).
 
 **Next proof step:**
 
-Produce the relationship-posture report from the brief and review with Anthony.
+Review the relationship-posture report and triage dashboard with Anthony.
 Then add the next engagement (family tie) to prove the fleet.
 
 ---
@@ -89,10 +91,11 @@ Run:
 ```bash
 python organs/social/validate-social.py --fleet
 python organs/social/scripts/relationship-brief.py organs/social/engagements/derek.yaml
+python organs/social/scripts/triage-dashboard.py
 ```
 
-Expected result: the engagement passes all six social organ rules and produces a
-relationship-posture report.
+Expected result: the engagement passes all six social organ rules, produces a
+relationship-posture report, and generates a fleet-wide triage dashboard.
 
 ---
 
