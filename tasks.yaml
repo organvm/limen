@@ -15,12 +15,12 @@ portal:
       claude: 100
     track:
       date: '2026-07-03'
-      spent: 228
+      spent: 238
       per_agent:
         jules: 100
         gemini: 0
-        codex: 83
-        opencode: 27
+        codex: 91
+        opencode: 29
         agy: 18
         claude: 0
       per_agent_reset:
@@ -34238,7 +34238,7 @@ tasks:
   title: Raise test coverage in meta-organvm/meta-organvm.github.io
   repo: organvm/meta-organvm.github.io
   type: code
-  target_agent: claude
+  target_agent: gemini
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -35236,7 +35236,7 @@ tasks:
   title: Raise test coverage in organvm-i-theoria/organvm-iv-taxis.github.io
   repo: organvm/organvm-iv-taxis.github.io
   type: code
-  target_agent: codex
+  target_agent: agy
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -35978,7 +35978,7 @@ tasks:
   title: Raise test coverage in organvm-i-theoria/organvm-v-logos.github.io
   repo: organvm/organvm-v-logos.github.io
   type: code
-  target_agent: agy
+  target_agent: claude
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -36070,7 +36070,7 @@ tasks:
   title: Raise test coverage in organvm-i-theoria/organvm-vi-koinonia.github.io
   repo: organvm/organvm-vi-koinonia.github.io
   type: code
-  target_agent: opencode
+  target_agent: codex
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -36142,7 +36142,7 @@ tasks:
   title: Raise test coverage in organvm-i-theoria/organvm-vii-kerygma.github.io
   repo: organvm/organvm-vii-kerygma.github.io
   type: code
-  target_agent: claude
+  target_agent: opencode
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -36224,7 +36224,7 @@ tasks:
   title: Raise test coverage in organvm-i-theoria/meta-organvm.github.io
   repo: organvm/meta-organvm.github.io
   type: code
-  target_agent: codex
+  target_agent: agy
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -36540,7 +36540,7 @@ tasks:
   title: Raise test coverage in organvm-i-theoria/organvm-ii-poiesis.github.io
   repo: organvm/organvm-ii-poiesis.github.io
   type: code
-  target_agent: agy
+  target_agent: claude
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -36645,7 +36645,7 @@ tasks:
   title: Raise test coverage in organvm-ii-poiesis/organvm-ii-poiesis.github.io
   repo: organvm/organvm-ii-poiesis.github.io
   type: code
-  target_agent: claude
+  target_agent: codex
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -36811,7 +36811,7 @@ tasks:
   title: Raise test coverage in organvm-iii-ergon/content-engine--asset-amplifier
   repo: organvm/content-engine--asset-amplifier
   type: code
-  target_agent: codex
+  target_agent: agy
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -36908,7 +36908,7 @@ tasks:
   title: Raise test coverage in a-organvm/public-process
   repo: organvm/public-process
   type: code
-  target_agent: agy
+  target_agent: claude
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -37870,7 +37870,7 @@ tasks:
   title: Raise test coverage in organvm-iv-taxis/organvm-iv-taxis.github.io
   repo: organvm/organvm-iv-taxis.github.io
   type: code
-  target_agent: codex
+  target_agent: agy
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -37967,7 +37967,7 @@ tasks:
   title: Raise test coverage in organvm-v-logos/organvm-v-logos.github.io
   repo: organvm/organvm-v-logos.github.io
   type: code
-  target_agent: agy
+  target_agent: claude
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -38063,7 +38063,7 @@ tasks:
   title: Raise test coverage in organvm-vi-koinonia/organvm-vi-koinonia.github.io
   repo: organvm/organvm-vi-koinonia.github.io
   type: code
-  target_agent: claude
+  target_agent: codex
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -38139,7 +38139,7 @@ tasks:
   title: Raise test coverage in organvm-vii-kerygma/organvm-vii-kerygma.github.io
   repo: organvm/organvm-vii-kerygma.github.io
   type: code
-  target_agent: codex
+  target_agent: agy
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -38771,7 +38771,7 @@ tasks:
   title: Raise test coverage in organvm-iv-taxis/organvm-iv-taxis--superproject
   repo: organvm/organvm-iv-taxis--superproject
   type: code
-  target_agent: agy
+  target_agent: claude
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -41592,7 +41592,7 @@ tasks:
   title: Raise test coverage in organvm/collective-persona-operations
   repo: organvm/collective-persona-operations
   type: code
-  target_agent: claude
+  target_agent: codex
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -42380,7 +42380,7 @@ tasks:
   title: Raise test coverage in organvm/classroom-rpg-aetheria
   repo: organvm/classroom-rpg-aetheria
   type: code
-  target_agent: opencode
+  target_agent: codex
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -62633,7 +62633,7 @@ tasks:
     \ (finish-not-park); refreshes each beat until you act."
   depends_on: []
   created: '2026-06-26'
-  updated: '2026-07-03T22:19:28.955399Z'
+  updated: '2026-07-04T13:06:00.495050Z'
   dispatch_log: []
 - id: ASK-quicken-d2l
   title: the D2L go-live click + cadence confirm (your login + judgment)
@@ -71237,7 +71237,7 @@ tasks:
   title: Real usage docs for organvm/a-i-chat--exporter
   repo: organvm/a-i-chat--exporter
   type: code
-  target_agent: codex
+  target_agent: gemini
   workstream: contributions
   priority: low
   budget_cost: 1
@@ -71292,7 +71292,7 @@ tasks:
   title: Real usage docs for organvm/limen
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: codex
   workstream: contributions
   priority: low
   budget_cost: 1
@@ -71742,7 +71742,7 @@ tasks:
   title: Reduce complexity in organvm/mirror-mirror
   repo: organvm/mirror-mirror
   type: code
-  target_agent: agy
+  target_agent: opencode
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -72685,11 +72685,11 @@ tasks:
   title: Deepen the media organ toward a usable institution
   repo: organvm/limen
   type: content
-  target_agent: claude
+  target_agent: gemini
   workstream: media
   priority: high
   budget_cost: 2
-  status: open
+  status: needs_human
   labels:
   - organ-deepen
   - pillar:media
@@ -72709,7 +72709,7 @@ tasks:
     \ (VLTIMA).]"
   depends_on: []
   created: '2026-06-30'
-  updated: '2026-07-03T22:12:00.130791Z'
+  updated: '2026-07-04T08:48:13.121401Z'
   dispatch_log:
   - timestamp: '2026-06-30T16:00:55.195999Z'
     agent: claude
@@ -72776,6 +72776,12 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-07-04T08:48:13.121401Z'
+    agent: limen
+    session_id: heal
+    status: needs_human
+    output: "heal-dispatch: chronic (reopened \u22653\xD7, never a PR) \u2192 escalated,\
+      \ stop re-looping"
 - id: ORG-governance-organ-deepen-0630
   title: Deepen the governance organ toward a usable institution
   repo: organvm/limen
@@ -73444,7 +73450,7 @@ tasks:
   title: Discover the latent value of organvm/the-actual-news
   repo: organvm/the-actual-news
   type: research
-  target_agent: codex
+  target_agent: agy
   workstream: conductor
   priority: medium
   budget_cost: 1
@@ -74410,7 +74416,7 @@ tasks:
   title: Discover the latent value of organvm/sovereign-systems--layer-above-hokage
   repo: organvm/sovereign-systems--layer-above-hokage
   type: research
-  target_agent: opencode
+  target_agent: claude
   workstream: conductor
   priority: medium
   budget_cost: 1
@@ -76109,7 +76115,7 @@ tasks:
   title: Operationalize education governance (rules as checks)
   repo: organvm/limen
   type: content
-  target_agent: agy
+  target_agent: gemini
   workstream: education
   priority: medium
   budget_cost: 2
@@ -76331,7 +76337,7 @@ tasks:
   title: Discover the latent value of organvm/styx-behavioral-art
   repo: organvm/styx-behavioral-art
   type: research
-  target_agent: claude
+  target_agent: codex
   workstream: conductor
   priority: medium
   budget_cost: 1
@@ -76525,7 +76531,7 @@ tasks:
   title: Raise test coverage in organvm/domus-genoma
   repo: organvm/domus-genoma
   type: code
-  target_agent: codex
+  target_agent: opencode
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -76567,7 +76573,7 @@ tasks:
   title: Raise test coverage in organvm/limen
   repo: organvm/limen
   type: code
-  target_agent: opencode
+  target_agent: agy
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -76683,7 +76689,7 @@ tasks:
   title: Make organvm/mirror-mirror CI green
   repo: organvm/mirror-mirror
   type: code
-  target_agent: agy
+  target_agent: claude
   workstream: contributions
   priority: high
   budget_cost: 1
@@ -77021,7 +77027,7 @@ tasks:
   title: Tighten types in organvm/session-meta
   repo: organvm/session-meta
   type: code
-  target_agent: claude
+  target_agent: gemini
   workstream: contributions
   priority: medium
   budget_cost: 1
@@ -77722,6 +77728,7 @@ tasks:
   - vltima
   - generated
   - noop
+  - tried:agy
   urls: []
   context: "In organvm/limen organs/financial/ (and reference its product repo where\
     \ relevant), close the single highest-leverage gap between the current scaffold\
@@ -77736,7 +77743,7 @@ tasks:
     \ idle fleet capacity into institutional weight (VLTIMA).]"
   depends_on: []
   created: '2026-07-03'
-  updated: '2026-07-03T22:12:00.130791Z'
+  updated: '2026-07-04T09:33:05.181240Z'
   dispatch_log:
   - timestamp: '2026-07-03T09:51:22.009019Z'
     agent: agy
@@ -77763,6 +77770,15 @@ tasks:
     session_id: heal
     status: open
     output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-07-04T08:47:41.292852Z'
+    agent: agy
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T09:33:05.181240Z'
+    agent: agy
+    session_id: cli
+    status: failed->gemini
 - id: ORG-governance-organ-face-0703
   title: Make the governance organ's macro + micro face excellent
   repo: organvm/limen
@@ -77961,11 +77977,11 @@ tasks:
   title: Deepen the governance organ toward a usable institution
   repo: organvm/limen
   type: content
-  target_agent: codex
+  target_agent: agy
   workstream: governance
   priority: high
   budget_cost: 2
-  status: failed
+  status: needs_human
   labels:
   - organ-deepen
   - pillar:governance
@@ -77986,7 +78002,7 @@ tasks:
     \ \u2014 convert idle fleet capacity into institutional weight (VLTIMA).]"
   depends_on: []
   created: '2026-07-03'
-  updated: '2026-07-03T22:44:17.651574Z'
+  updated: '2026-07-04T10:09:42.494083Z'
   dispatch_log:
   - timestamp: '2026-07-03T10:36:36.527923Z'
     agent: agy
@@ -78028,6 +78044,17 @@ tasks:
     session_id: cli
     status: failed
     output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T10:06:14.660263Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T10:09:42.494083Z'
+    agent: limen
+    session_id: heal
+    status: needs_human
+    output: "heal-dispatch: chronic (reopened \u22653\xD7, never a PR) \u2192 escalated,\
+      \ stop re-looping"
 - id: ORG-education-organ-face-0703
   title: Make the education organ's macro + micro face excellent
   repo: organvm/limen
@@ -78134,11 +78161,11 @@ tasks:
     firm (the Cochran standard)
   repo: organvm/limen
   type: content
-  target_agent: claude
+  target_agent: opencode
   workstream: legal
   priority: critical
   budget_cost: 2
-  status: open
+  status: dispatched
   labels:
   - organ-charter
   - pillar:legal
@@ -78158,7 +78185,7 @@ tasks:
     \ scaffold \u2014 convert idle fleet capacity into institutional weight (VLTIMA).]"
   depends_on: []
   created: '2026-07-03'
-  updated: '2026-07-03T22:32:08.168231Z'
+  updated: '2026-07-04T12:58:00.338934Z'
   dispatch_log:
   - timestamp: '2026-07-03T09:30:25.724513Z'
     agent: agy
@@ -78199,6 +78226,89 @@ tasks:
     agent: claude
     session_id: cli
     status: failed->opencode
+  - timestamp: '2026-07-04T09:47:59.286135Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T09:52:50.670752Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T10:38:04.849307Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:43:02.874138Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T10:56:22.634326Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:04:47.483962Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T11:09:47.492015Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:18:26.653186Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T11:23:22.072974Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:37:23.082503Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T11:37:50.311125Z'
+    agent: opencode
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:46:40.956262Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T12:23:48.156139Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T12:26:38.309710Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:43:30.220510Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T12:48:32.802545Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:57:44.462577Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T12:58:00.338934Z'
+    agent: opencode
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
 - id: ORG-health-organ-charter-0703
   title: Charter the health organ as an institution rivaling a concierge medical /
     recovery team
@@ -78292,7 +78402,7 @@ tasks:
   title: Operationalize governance governance (rules as checks)
   repo: organvm/limen
   type: content
-  target_agent: codex
+  target_agent: claude
   workstream: governance
   priority: medium
   budget_cost: 2
@@ -78319,7 +78429,7 @@ tasks:
   title: Operationalize consulting governance (rules as checks)
   repo: organvm/limen
   type: content
-  target_agent: opencode
+  target_agent: gemini
   workstream: consulting
   priority: medium
   budget_cost: 2
@@ -78345,7 +78455,7 @@ tasks:
   title: Operationalize artist governance (rules as checks)
   repo: organvm/limen
   type: content
-  target_agent: agy
+  target_agent: codex
   workstream: artist
   priority: medium
   budget_cost: 2
@@ -78371,11 +78481,11 @@ tasks:
     + relationship support ('relationship gurus')
   repo: organvm/limen
   type: content
-  target_agent: claude
+  target_agent: agy
   workstream: social
   priority: critical
   budget_cost: 2
-  status: open
+  status: needs_human
   labels:
   - organ-charter
   - pillar:social
@@ -78394,7 +78504,7 @@ tasks:
     \ into institutional weight (VLTIMA).]"
   depends_on: []
   created: '2026-07-03'
-  updated: '2026-07-03T22:10:09.654904Z'
+  updated: '2026-07-04T12:27:04.266157Z'
   dispatch_log:
   - timestamp: '2026-07-03T09:40:51.375628Z'
     agent: agy
@@ -78426,15 +78536,45 @@ tasks:
     session_id: heal
     status: open
     output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T10:09:05.968896Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:14:08.642542Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T11:46:55.548647Z'
+    agent: opencode
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:52:06.256465Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T12:23:48.156139Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T12:27:04.266157Z'
+    agent: limen
+    session_id: heal
+    status: needs_human
+    output: "heal-dispatch: chronic (reopened \u22653\xD7, never a PR) \u2192 escalated,\
+      \ stop re-looping"
 - id: ORG-governance-organ-selffeed-0703
   title: Wire the governance organ to advance autonomously
   repo: organvm/limen
   type: content
-  target_agent: codex
+  target_agent: opencode
   workstream: governance
   priority: high
   budget_cost: 2
-  status: dispatched
+  status: open
   labels:
   - organ-selffeed
   - pillar:governance
@@ -78443,6 +78583,7 @@ tasks:
   - vltima
   - generated
   - noop
+  - tried:claude
   urls: []
   context: "Make the governance organ self-feeding like the revenue/studium voices:\
     \ bump its maturity in organ-ladder.json as slices land, and add/extend a beat\
@@ -78454,7 +78595,7 @@ tasks:
     \ into institutional weight (VLTIMA).]"
   depends_on: []
   created: '2026-07-03'
-  updated: '2026-07-03T22:44:29.407570Z'
+  updated: '2026-07-04T11:46:40.956262Z'
   dispatch_log:
   - timestamp: '2026-07-03T11:39:08.194857Z'
     agent: agy
@@ -78476,15 +78617,38 @@ tasks:
     session_id: async-reserve
     status: dispatched
     output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T08:48:13.121401Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-07-04T11:05:03.500427Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:09:32.324014Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T11:37:50.311125Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:46:40.956262Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
 - id: ORG-legal-organ-firstslice-0703
   title: Build the first working vertical slice of the legal organ
   repo: organvm/limen
   type: content
-  target_agent: codex
+  target_agent: gemini
   workstream: legal
   priority: high
   budget_cost: 2
-  status: dispatched
+  status: needs_human
   labels:
   - organ-firstslice
   - pillar:legal
@@ -78504,7 +78668,7 @@ tasks:
     \ idle fleet capacity into institutional weight (VLTIMA).]"
   depends_on: []
   created: '2026-07-03'
-  updated: '2026-07-03T22:32:18.347866Z'
+  updated: '2026-07-04T10:56:59.052740Z'
   dispatch_log:
   - timestamp: '2026-07-03T11:28:15.889335Z'
     agent: agy
@@ -78526,6 +78690,32 @@ tasks:
     session_id: async-reserve
     status: dispatched
     output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T08:48:13.121401Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-07-04T10:09:05.968896Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:37:53.160483Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T10:53:31.596500Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T10:56:59.052740Z'
+    agent: limen
+    session_id: heal
+    status: needs_human
+    output: "heal-dispatch: chronic (reopened \u22653\xD7, never a PR) \u2192 escalated,\
+      \ stop re-looping"
 - id: ORG-health-organ-firstslice-0703
   title: Build the first working vertical slice of the health organ
   repo: organvm/limen
@@ -78534,7 +78724,7 @@ tasks:
   workstream: health
   priority: high
   budget_cost: 2
-  status: dispatched
+  status: done
   labels:
   - organ-firstslice
   - pillar:health
@@ -78556,7 +78746,7 @@ tasks:
     \ (VLTIMA).]"
   depends_on: []
   created: '2026-07-03'
-  updated: '2026-07-03T22:28:07.700691Z'
+  updated: '2026-07-04T08:48:13.121401Z'
   dispatch_log:
   - timestamp: '2026-07-03T22:02:53.496023Z'
     agent: codex
@@ -78567,6 +78757,11 @@ tasks:
     agent: codex
     session_id: https://github.com/organvm/limen/pull/621
     status: dispatched
+  - timestamp: '2026-07-04T08:48:13.121401Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: ORG-financial-organ-face-0703
   title: Make the financial organ's macro + micro face excellent
   repo: organvm/limen
@@ -78575,7 +78770,7 @@ tasks:
   workstream: financial
   priority: high
   budget_cost: 2
-  status: open
+  status: done
   labels:
   - organ-face
   - pillar:financial
@@ -78601,7 +78796,7 @@ tasks:
     \ \u2014 convert idle fleet capacity into institutional weight (VLTIMA).]"
   depends_on: []
   created: '2026-07-03'
-  updated: '2026-07-03T22:39:32.661793Z'
+  updated: '2026-07-04T10:09:42.494083Z'
   dispatch_log:
   - timestamp: '2026-07-03T22:02:53.496023Z'
     agent: opencode
@@ -78612,6 +78807,20 @@ tasks:
     agent: opencode
     session_id: cli
     status: timeout->jules
+  - timestamp: '2026-07-04T08:47:41.292852Z'
+    agent: opencode
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T09:33:05.181240Z'
+    agent: opencode
+    session_id: https://github.com/organvm/limen/pull/630
+    status: dispatched
+  - timestamp: '2026-07-04T10:09:42.494083Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: ORG-financial-organ-operationalize-0703
   title: Operationalize financial governance (rules as checks)
   repo: organvm/limen
@@ -78659,6 +78868,8 @@ tasks:
   - institution
   - vltima
   - generated
+  - noop
+  - tried:codex
   - tried:claude
   urls: []
   context: "In organvm/limen organs/social/, deliver one real end-to-end artifact\
@@ -78670,7 +78881,7 @@ tasks:
     \ into institutional weight (VLTIMA).]"
   depends_on: []
   created: '2026-07-03'
-  updated: '2026-07-03T22:28:07.700691Z'
+  updated: '2026-07-04T12:26:28.198444Z'
   dispatch_log:
   - timestamp: '2026-07-03T22:02:53.496023Z'
     agent: claude
@@ -78678,6 +78889,72 @@ tasks:
     status: dispatched
     output: 'dispatch-async: reserved before detached worker launch'
   - timestamp: '2026-07-03T22:28:07.700691Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T08:47:41.292852Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T09:33:05.181240Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T09:33:21.379781Z'
+    agent: opencode
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T09:47:43.344981Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T10:06:14.660263Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T10:17:57.535635Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:37:53.160483Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T10:53:31.596500Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T11:23:22.072974Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:37:23.082503Z'
+    agent: codex
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-07-04T11:46:55.548647Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:52:06.256465Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T12:17:34.252932Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:26:28.198444Z'
     agent: claude
     session_id: cli
     status: failed->opencode
@@ -78689,7 +78966,7 @@ tasks:
   workstream: financial
   priority: high
   budget_cost: 2
-  status: open
+  status: done
   labels:
   - revenue-ship
   - revenue
@@ -78704,12 +78981,27 @@ tasks:
     \ stage building \u2014 spend tokens on income, not busywork]"
   depends_on: []
   created: '2026-07-03'
-  dispatch_log: []
+  updated: '2026-07-04T11:47:32.323509Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T11:09:47.492015Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:23:07.105347Z'
+    agent: codex
+    session_id: https://github.com/organvm/mirror-mirror/pull/105
+    status: dispatched
+  - timestamp: '2026-07-04T11:47:32.323509Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: GH-organvm-domus-genoma-171
   title: 'security-hardening-0630 cannot push: GH001 large file in unpushed commits'
   repo: organvm/domus-genoma
   type: code
-  target_agent: opencode
+  target_agent: gemini
   priority: medium
   budget_cost: 1
   status: open
@@ -78730,7 +79022,7 @@ tasks:
   title: 'chezmoi apply globally broken: allowed_signers.tmpl wants missing ssh_signing_key_literal'
   repo: organvm/domus-genoma
   type: code
-  target_agent: agy
+  target_agent: codex
   priority: medium
   budget_cost: 1
   status: open
@@ -78751,15 +79043,15 @@ tasks:
   title: fix failing CI on organvm/peer-audited--behavioral-blockchain#714
   repo: organvm/peer-audited--behavioral-blockchain
   type: code
-  target_agent: codex
+  target_agent: opencode
   priority: high
   budget_cost: 1
-  status: dispatched
+  status: open
   labels:
   - cifix
   - self-heal
   - ci-red
-  - tried:github_actions
+  - noop
   urls:
   - https://github.com/organvm/peer-audited--behavioral-blockchain/pull/714
   context: "PR organvm/peer-audited--behavioral-blockchain#714 has FAILING CI checks\
@@ -78770,7 +79062,7 @@ tasks:
     \ [auto-emitted 2026-07-03 by self-heal so merge-drain can land it]"
   depends_on: []
   created: '2026-07-03'
-  updated: '2026-07-03T22:39:44.542160Z'
+  updated: '2026-07-04T11:43:55.660492Z'
   dispatch_log:
   - timestamp: '2026-07-03T22:28:18.406449Z'
     agent: github_actions
@@ -78787,14 +79079,34 @@ tasks:
     session_id: async-reserve
     status: dispatched
     output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T08:48:13.121401Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "heal-dispatch: dispatched but no PR (silent no-op) \u2192 reopened"
+  - timestamp: '2026-07-04T10:56:22.634326Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:09:32.324014Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T11:43:55.660492Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
 - id: HEAL-cifix-organvm-peer-audited--behavioral-blockchain-719
   title: fix failing CI on organvm/peer-audited--behavioral-blockchain#719
   repo: organvm/peer-audited--behavioral-blockchain
   type: code
-  target_agent: claude
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - cifix
   - self-heal
@@ -78809,12 +79121,27 @@ tasks:
     \ [auto-emitted 2026-07-03 by self-heal so merge-drain can land it]"
   depends_on: []
   created: '2026-07-03'
-  dispatch_log: []
+  updated: '2026-07-04T10:09:42.494083Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T09:37:56.717641Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:08:50.890502Z'
+    agent: codex
+    session_id: https://github.com/organvm/peer-audited--behavioral-blockchain/pull/765
+    status: dispatched
+  - timestamp: '2026-07-04T10:09:42.494083Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR merged \u2192 done"
 - id: HEAL-rebase-organvm-peer-audited--behavioral-blockchain-721
   title: rebase/resolve conflicts on organvm/peer-audited--behavioral-blockchain#721
   repo: organvm/peer-audited--behavioral-blockchain
   type: code
-  target_agent: codex
+  target_agent: agy
   priority: high
   budget_cost: 1
   status: open
@@ -78822,6 +79149,8 @@ tasks:
   - rebase
   - self-heal
   - conflict
+  - noop
+  - tried:claude
   urls:
   - https://github.com/organvm/peer-audited--behavioral-blockchain/pull/721
   context: 'PR organvm/peer-audited--behavioral-blockchain#721 is CONFLICTING with
@@ -78832,12 +79161,37 @@ tasks:
     [auto-emitted 2026-07-03 by self-heal so merge-drain can land it]'
   depends_on: []
   created: '2026-07-03'
-  dispatch_log: []
+  updated: '2026-07-04T11:23:07.105347Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T10:38:04.849307Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:46:57.724828Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T10:53:31.596500Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T11:18:42.722232Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:23:07.105347Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
 - id: HEAL-rebase-organvm-peer-audited--behavioral-blockchain-725
   title: rebase/resolve conflicts on organvm/peer-audited--behavioral-blockchain#725
   repo: organvm/peer-audited--behavioral-blockchain
   type: code
-  target_agent: opencode
+  target_agent: claude
   priority: high
   budget_cost: 1
   status: open
@@ -78845,6 +79199,7 @@ tasks:
   - rebase
   - self-heal
   - conflict
+  - tried:claude
   urls:
   - https://github.com/organvm/peer-audited--behavioral-blockchain/pull/725
   context: 'PR organvm/peer-audited--behavioral-blockchain#725 is CONFLICTING with
@@ -78855,19 +79210,39 @@ tasks:
     [auto-emitted 2026-07-03 by self-heal so merge-drain can land it]'
   depends_on: []
   created: '2026-07-03'
-  dispatch_log: []
+  updated: '2026-07-04T12:08:58.548939Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T10:43:17.912844Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:46:57.724828Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T11:52:21.295273Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:08:58.548939Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
 - id: HEAL-cifix-organvm-peer-audited--behavioral-blockchain-727
   title: fix failing CI on organvm/peer-audited--behavioral-blockchain#727
   repo: organvm/peer-audited--behavioral-blockchain
   type: code
-  target_agent: agy
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: failed
   labels:
   - cifix
   - self-heal
   - ci-red
+  - noop
   urls:
   - https://github.com/organvm/peer-audited--behavioral-blockchain/pull/727
   context: "PR organvm/peer-audited--behavioral-blockchain#727 has FAILING CI checks\
@@ -78878,15 +79253,41 @@ tasks:
     \ [auto-emitted 2026-07-03 by self-heal so merge-drain can land it]"
   depends_on: []
   created: '2026-07-03'
-  dispatch_log: []
+  updated: '2026-07-04T12:48:12.994193Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T11:18:42.722232Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:37:23.082503Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T11:43:55.660492Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T12:26:38.309710Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:48:12.994193Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
 - id: HEAL-cifix-organvm-peer-audited--behavioral-blockchain-728
   title: fix failing CI on organvm/peer-audited--behavioral-blockchain#728
   repo: organvm/peer-audited--behavioral-blockchain
   type: code
-  target_agent: claude
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - cifix
   - self-heal
@@ -78901,7 +79302,22 @@ tasks:
     \ [auto-emitted 2026-07-03 by self-heal so merge-drain can land it]"
   depends_on: []
   created: '2026-07-03'
-  dispatch_log: []
+  updated: '2026-07-04T10:56:59.052740Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T10:14:23.421837Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:37:53.160483Z'
+    agent: codex
+    session_id: https://github.com/organvm/peer-audited--behavioral-blockchain/pull/766
+    status: dispatched
+  - timestamp: '2026-07-04T10:56:59.052740Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR merged \u2192 done"
 - id: HEAL-cifix-organvm-peer-audited--behavioral-blockchain-729
   title: fix failing CI on organvm/peer-audited--behavioral-blockchain#729
   repo: organvm/peer-audited--behavioral-blockchain
@@ -78909,11 +79325,12 @@ tasks:
   target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - cifix
   - self-heal
   - ci-red
+  - noop
   urls:
   - https://github.com/organvm/peer-audited--behavioral-blockchain/pull/729
   context: "PR organvm/peer-audited--behavioral-blockchain#729 has FAILING CI checks\
@@ -78924,19 +79341,50 @@ tasks:
     \ [auto-emitted 2026-07-03 by self-heal so merge-drain can land it]"
   depends_on: []
   created: '2026-07-03'
-  dispatch_log: []
+  updated: '2026-07-04T12:27:04.266157Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T09:47:59.286135Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:08:50.890502Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T10:53:31.596500Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T11:46:55.548647Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:08:58.548939Z'
+    agent: codex
+    session_id: https://github.com/organvm/peer-audited--behavioral-blockchain/pull/768
+    status: dispatched
+  - timestamp: '2026-07-04T12:27:04.266157Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR merged \u2192 done"
 - id: HEAL-cifix-organvm-peer-audited--behavioral-blockchain-730
   title: fix failing CI on organvm/peer-audited--behavioral-blockchain#730
   repo: organvm/peer-audited--behavioral-blockchain
   type: code
-  target_agent: opencode
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: failed
   labels:
   - cifix
   - self-heal
   - ci-red
+  - noop
   urls:
   - https://github.com/organvm/peer-audited--behavioral-blockchain/pull/730
   context: "PR organvm/peer-audited--behavioral-blockchain#730 has FAILING CI checks\
@@ -78947,15 +79395,41 @@ tasks:
     \ [auto-emitted 2026-07-03 by self-heal so merge-drain can land it]"
   depends_on: []
   created: '2026-07-03'
-  dispatch_log: []
+  updated: '2026-07-04T12:57:44.462577Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T10:43:17.912844Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:56:07.406446Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T11:43:55.660492Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T12:48:32.802545Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:57:44.462577Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
 - id: HEAL-cifix-organvm-peer-audited--behavioral-blockchain-731
   title: fix failing CI on organvm/peer-audited--behavioral-blockchain#731
   repo: organvm/peer-audited--behavioral-blockchain
   type: code
-  target_agent: agy
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: done
   labels:
   - cifix
   - self-heal
@@ -78970,12 +79444,27 @@ tasks:
     \ [auto-emitted 2026-07-03 by self-heal so merge-drain can land it]"
   depends_on: []
   created: '2026-07-03'
-  dispatch_log: []
+  updated: '2026-07-04T11:47:32.323509Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T11:05:03.500427Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:23:07.105347Z'
+    agent: codex
+    session_id: https://github.com/organvm/peer-audited--behavioral-blockchain/pull/767
+    status: dispatched
+  - timestamp: '2026-07-04T11:47:32.323509Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR open (awaiting merge) \u2192 done"
 - id: HEAL-cifix-organvm-peer-audited--behavioral-blockchain-733
   title: fix failing CI on organvm/peer-audited--behavioral-blockchain#733
   repo: organvm/peer-audited--behavioral-blockchain
   type: code
-  target_agent: claude
+  target_agent: gemini
   priority: high
   budget_cost: 1
   status: open
@@ -78983,6 +79472,7 @@ tasks:
   - cifix
   - self-heal
   - ci-red
+  - noop
   urls:
   - https://github.com/organvm/peer-audited--behavioral-blockchain/pull/733
   context: "PR organvm/peer-audited--behavioral-blockchain#733 has FAILING CI checks\
@@ -78993,7 +79483,23 @@ tasks:
     \ [auto-emitted 2026-07-03 by self-heal so merge-drain can land it]"
   depends_on: []
   created: '2026-07-03'
-  dispatch_log: []
+  updated: '2026-07-04T12:23:48.156139Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T11:37:50.311125Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:52:06.256465Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T12:23:48.156139Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
 - id: HEAL-cifix-organvm-peer-audited--behavioral-blockchain-744
   title: fix failing CI on organvm/peer-audited--behavioral-blockchain#744
   repo: organvm/peer-audited--behavioral-blockchain
@@ -79006,6 +79512,7 @@ tasks:
   - cifix
   - self-heal
   - ci-red
+  - noop
   urls:
   - https://github.com/organvm/peer-audited--behavioral-blockchain/pull/744
   context: "PR organvm/peer-audited--behavioral-blockchain#744 has FAILING CI checks\
@@ -79016,7 +79523,32 @@ tasks:
     \ [auto-emitted 2026-07-03 by self-heal so merge-drain can land it]"
   depends_on: []
   created: '2026-07-03'
-  dispatch_log: []
+  updated: '2026-07-04T12:23:48.156139Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T10:47:12.481099Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:56:07.406446Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T12:09:14.782285Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:17:18.924748Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T12:23:48.156139Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
 - id: HEAL-cifix-organvm-peer-audited--behavioral-blockchain-752
   title: fix failing CI on organvm/peer-audited--behavioral-blockchain#752
   repo: organvm/peer-audited--behavioral-blockchain
@@ -79044,14 +79576,15 @@ tasks:
   title: fix failing CI on organvm/petasum-super-petasum#148
   repo: organvm/petasum-super-petasum
   type: code
-  target_agent: agy
+  target_agent: codex
   priority: high
   budget_cost: 1
-  status: open
+  status: failed
   labels:
   - cifix
   - self-heal
   - ci-red
+  - noop
   urls:
   - https://github.com/organvm/petasum-super-petasum/pull/148
   context: "PR organvm/petasum-super-petasum#148 has FAILING CI checks and merge-drain\
@@ -79062,12 +79595,38 @@ tasks:
     \ [auto-emitted 2026-07-03 by self-heal so merge-drain can land it]"
   depends_on: []
   created: '2026-07-03'
-  dispatch_log: []
+  updated: '2026-07-04T12:57:44.462577Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T10:47:12.481099Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:04:47.483962Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T11:43:55.660492Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T12:43:41.982615Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:57:44.462577Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
 - id: HEAL-cifix-organvm-petasum-super-petasum-149
   title: fix failing CI on organvm/petasum-super-petasum#149
   repo: organvm/petasum-super-petasum
   type: code
-  target_agent: claude
+  target_agent: agy
   priority: high
   budget_cost: 1
   status: open
@@ -79075,6 +79634,7 @@ tasks:
   - cifix
   - self-heal
   - ci-red
+  - noop
   urls:
   - https://github.com/organvm/petasum-super-petasum/pull/149
   context: "PR organvm/petasum-super-petasum#149 has FAILING CI checks and merge-drain\
@@ -79085,14 +79645,30 @@ tasks:
     \ [auto-emitted 2026-07-03 by self-heal so merge-drain can land it]"
   depends_on: []
   created: '2026-07-03'
-  dispatch_log: []
+  updated: '2026-07-04T12:23:48.156139Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T11:52:21.295273Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:08:58.548939Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T12:23:48.156139Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
 - id: TASK-LED-strategic-rollup
   title: 'Heal insight: strategic rollup: net WORTH IT (shipped=605, spent=1465, sunk=176)'
   description: 'Over 1269 tasks: 48% success rate, 176 sunk runs worth organvm/organvm-engine.
     Cost per shipped: 2.42.'
   repo: organvm/limen
   type: code
-  target_agent: codex
+  target_agent: claude
   priority: medium
   budget_cost: 1
   status: open
@@ -79113,7 +79689,7 @@ tasks:
   description: Product 'Public Record Data Scraper' spent 50 with 20 wasted (20 shipped).
   repo: organvm/public-record-data-scrapper
   type: code
-  target_agent: opencode
+  target_agent: gemini
   workstream: financial
   priority: medium
   budget_cost: 1
@@ -79134,7 +79710,7 @@ tasks:
   description: Product 'Universal Mail Automation' spent 36 with 18 wasted (23 shipped).
   repo: organvm/universal-mail--automation
   type: code
-  target_agent: agy
+  target_agent: codex
   workstream: financial
   priority: medium
   budget_cost: 1
@@ -79155,7 +79731,7 @@ tasks:
   description: Product 'ChatGPT Exporter' spent 35 with 24 wasted (29 shipped).
   repo: organvm/a-i-chat--exporter
   type: code
-  target_agent: claude
+  target_agent: opencode
   workstream: financial
   priority: medium
   budget_cost: 1
@@ -79176,7 +79752,7 @@ tasks:
   description: Product 'The Invisible Ledger' spent 35 with 16 wasted (29 shipped).
   repo: organvm/the-invisible-ledger
   type: code
-  target_agent: codex
+  target_agent: agy
   workstream: financial
   priority: medium
   budget_cost: 1
@@ -79196,11 +79772,11 @@ tasks:
   title: Make organvm/portfolio CI green
   repo: organvm/portfolio
   type: code
-  target_agent: opencode
+  target_agent: codex
   workstream: contributions
   priority: high
   budget_cost: 1
-  status: open
+  status: dispatched
   labels:
   - ci-green
   - generated
@@ -79213,5 +79789,3273 @@ tasks:
     endless]
   depends_on: []
   created: '2026-07-03'
-  updated: '2026-07-03T22:39:02.446671Z'
+  updated: '2026-07-04T12:58:00.338934Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T12:58:00.338934Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+- id: HEAL-cifix-organvm-dot-github--theoria-461
+  title: fix failing CI on organvm/dot-github--theoria#461
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  - tried:github_actions
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/461
+  context: "PR organvm/dot-github--theoria#461 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/461\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T09:37:44.379517Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T09:33:21.379781Z'
+    agent: github_actions
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T09:37:44.379517Z'
+    agent: github_actions
+    session_id: cli
+    status: failed->codex
+    output: remote/service lane failed; reopened to healthy fleet cascade
+- id: HEAL-cifix-organvm-dot-github--theoria-462
+  title: fix failing CI on organvm/dot-github--theoria#462
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/462
+  context: "PR organvm/dot-github--theoria#462 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/462\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-dot-github--theoria-463
+  title: fix failing CI on organvm/dot-github--theoria#463
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/463
+  context: "PR organvm/dot-github--theoria#463 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/463\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-dot-github--theoria-464
+  title: fix failing CI on organvm/dot-github--theoria#464
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/464
+  context: "PR organvm/dot-github--theoria#464 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/464\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-dot-github--theoria-465
+  title: fix failing CI on organvm/dot-github--theoria#465
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/465
+  context: "PR organvm/dot-github--theoria#465 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/465\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-dot-github--theoria-468
+  title: fix failing CI on organvm/dot-github--theoria#468
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/468
+  context: "PR organvm/dot-github--theoria#468 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/468\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-dot-github--theoria-470
+  title: fix failing CI on organvm/dot-github--theoria#470
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/470
+  context: "PR organvm/dot-github--theoria#470 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/470\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-dot-github--theoria-471
+  title: fix failing CI on organvm/dot-github--theoria#471
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/471
+  context: "PR organvm/dot-github--theoria#471 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/471\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-dot-github--theoria-472
+  title: fix failing CI on organvm/dot-github--theoria#472
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/472
+  context: "PR organvm/dot-github--theoria#472 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/472\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-dot-github--theoria-473
+  title: fix failing CI on organvm/dot-github--theoria#473
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/473
+  context: "PR organvm/dot-github--theoria#473 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/473\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-dot-github--theoria-476
+  title: fix failing CI on organvm/dot-github--theoria#476
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/476
+  context: "PR organvm/dot-github--theoria#476 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/476\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-dot-github--theoria-477
+  title: fix failing CI on organvm/dot-github--theoria#477
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/477
+  context: "PR organvm/dot-github--theoria#477 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/477\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-dot-github--theoria-478
+  title: fix failing CI on organvm/dot-github--theoria#478
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/478
+  context: "PR organvm/dot-github--theoria#478 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/478\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-dot-github--theoria-479
+  title: fix failing CI on organvm/dot-github--theoria#479
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/479
+  context: "PR organvm/dot-github--theoria#479 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/479\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-dot-github--theoria-483
+  title: fix failing CI on organvm/dot-github--theoria#483
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/483
+  context: "PR organvm/dot-github--theoria#483 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/483\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-dot-github--theoria-484
+  title: fix failing CI on organvm/dot-github--theoria#484
+  repo: organvm/dot-github--theoria
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/dot-github--theoria/pull/484
+  context: "PR organvm/dot-github--theoria#484 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/dot-github--theoria/pull/484\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-essay-pipeline-14
+  title: rebase/resolve conflicts on organvm/essay-pipeline#14
+  repo: organvm/essay-pipeline
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/organvm/essay-pipeline/pull/14
+  context: 'PR organvm/essay-pipeline#14 is CONFLICTING with its base branch and merge-drain
+    correctly refuses to merge it. Check out the PR branch, rebase it onto the current
+    base (or merge base in), resolve every conflict preserving the PR''s intent, push
+    to the SAME PR branch, and confirm it reports MERGEABLE with green CI. Do not
+    open a new PR. PR: https://github.com/organvm/essay-pipeline/pull/14 [auto-emitted
+    2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: ORG-consulting-organ-face-0704
+  title: Make the consulting organ's macro + micro face excellent
+  repo: organvm/limen
+  type: content
+  target_agent: codex
+  workstream: consulting
+  priority: high
+  budget_cost: 2
+  status: open
+  labels:
+  - organ-face
+  - pillar:consulting
+  - organ
+  - institution
+  - vltima
+  - generated
+  urls: []
+  context: "In organvm/limen organs/consulting/, author the polished MACRO face (ORGANVM-as-a-service:\
+    \ the institutional toolkit offered to clients \u2014 the platform anyone can\
+    \ hold) AND the MICRO instance (the Maddie / Rob / Derek client deployments \u2014\
+    \ his own), grounded in what the organ actually does. Real copy, ready to show.\
+    \ One PR. CONSTRAINT: working manual prototypes; not yet autonomic or scaled back\
+    \ to self. [organ-backlog 2026-07-04: rank 6, maturity 60% stage maturing \u2014\
+    \ convert idle fleet capacity into institutional weight (VLTIMA).]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T08:45:49.287152Z'
+  dispatch_log: []
+- id: ORG-artist-organ-face-0704
+  title: Make the artist organ's macro + micro face excellent
+  repo: organvm/limen
+  type: content
+  target_agent: opencode
+  workstream: artist
+  priority: high
+  budget_cost: 2
+  status: open
+  labels:
+  - organ-face
+  - pillar:artist
+  - organ
+  - institution
+  - vltima
+  - generated
+  urls: []
+  context: "In organvm/limen organs/artist/, author the polished MACRO face (a studio/temple\
+    \ platform any artist can hold \u2014 9-chamber toolkit with Curatorial Voice\
+    \ and Provenance Contract frameworks \u2014 the platform anyone can hold) AND\
+    \ the MICRO instance (Anthony's a-mavs-olevm chambers (444-file photo archive,\
+    \ ET4L, LOCREANCE) \u2014 all 3/3 validated \u2014 his own), grounded in what\
+    \ the organ actually does. Real copy, ready to show. One PR. CONSTRAINT: temple\
+    \ built (70%) chambers filling; Curatorial Voice + Provenance Contract frameworks\
+    \ formalized; macro + micro faces polished; 3/3 chambers validated; no longer\
+    \ subordinate to education. [organ-backlog 2026-07-04: rank 7, maturity 70% stage\
+    \ maturing \u2014 convert idle fleet capacity into institutional weight (VLTIMA).]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T08:45:49.290864Z'
+  dispatch_log: []
+- id: ORG-health-organ-kernel-0704
+  title: Map the VLTIMA 5-primitive kernel to the health organ
+  repo: organvm/limen
+  type: content
+  target_agent: agy
+  workstream: health
+  priority: critical
+  budget_cost: 2
+  status: open
+  labels:
+  - organ-kernel
+  - pillar:health
+  - organ
+  - institution
+  - vltima
+  - generated
+  - noop
+  - tried:claude
+  - slow
+  urls: []
+  context: "In organvm/limen, author organs/health/KERNEL.md: map the domain-neutral\
+    \ kernel (Member - Mandate - Standing - Standard - Governance) onto the health\
+    \ domain (Member=body/patient; Mandate=protocol; Standing=health state; Standard=clinical\
+    \ guideline; Governance=care plan). State the organ's purpose as an institutional\
+    \ prosthesis, its MACRO deployment (a health/recovery + disability-access institution\
+    \ anyone can hold) and its MICRO deployment (Anthony's post-injury recovery +\
+    \ disability access (ties directly to the legal ADA matter)). Generic + nameless\
+    \ underneath, his instance on top. One PR, no lorem. CONSTRAINT: unnamed; post-injury\
+    \ (4th-story fall ~2024); ties to the legal ADA accommodation matter. KERNEL.md\
+    \ + CHARTER.md authored: full 5-primitive map, institutional prosthesis framing,\
+    \ rival institution, legal organ link, hard guardrails, 6-workflow orchestration,\
+    \ AI role org-chart, leverage math. Maturity 10%\u219215%.. [organ-backlog 2026-07-04:\
+    \ rank 9, maturity 10% stage scaffold \u2014 convert idle fleet capacity into\
+    \ institutional weight (VLTIMA).]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T12:48:12.994193Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T09:33:21.379781Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T09:47:43.344981Z'
+    agent: codex
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T10:06:14.660263Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T10:14:23.421837Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:17:48.140092Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T10:38:04.849307Z'
+    agent: opencode
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:43:02.874138Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T10:53:31.596500Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T12:09:14.782285Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:17:18.924748Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T12:17:34.252932Z'
+    agent: opencode
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:48:12.994193Z'
+    agent: opencode
+    session_id: cli
+    status: timeout->jules
+- id: ORG-legal-organ-kernel-0704
+  title: Map the VLTIMA 5-primitive kernel to the legal organ
+  repo: organvm/limen
+  type: content
+  target_agent: codex
+  workstream: legal
+  priority: critical
+  budget_cost: 2
+  status: done
+  labels:
+  - organ-kernel
+  - pillar:legal
+  - organ
+  - institution
+  - vltima
+  - generated
+  - tried:claude
+  urls: []
+  context: "In organvm/limen, author organs/legal/KERNEL.md: map the domain-neutral\
+    \ kernel (Member - Mandate - Standing - Standard - Governance) onto the legal\
+    \ domain (Member=client/party; Mandate=claim/matter; Standing=case posture; Standard=statute/precedent/rubric;\
+    \ Governance=the firm's process + ethics wall). State the organ's purpose as an\
+    \ institutional prosthesis, its MACRO deployment (a legal-institution platform\
+    \ any pro-se or under-resourced person can hold) and its MICRO deployment (Anthony's\
+    \ active ADA employment matter run with a top-firm's institutional weight, AUGMENTING\
+    \ attorney Micah Longo (never replacing counsel, never practicing law)). Generic\
+    \ + nameless underneath, his instance on top. One PR, no lorem. CONSTRAINT: THE\
+    \ FLAGSHIP he named. Augments real counsel; does NOT give legal advice or practice\
+    \ law.. [organ-backlog 2026-07-04: rank 1, maturity 20% stage scaffold \u2014\
+    \ convert idle fleet capacity into institutional weight (VLTIMA).]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T10:09:42.494083Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T09:33:21.379781Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T09:37:44.379517Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+  - timestamp: '2026-07-04T09:53:04.153852Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:08:50.890502Z'
+    agent: codex
+    session_id: https://github.com/organvm/limen/pull/631
+    status: dispatched
+  - timestamp: '2026-07-04T10:09:42.494083Z'
+    agent: limen
+    session_id: heal
+    status: done
+    output: "heal-dispatch: PR merged \u2192 done"
+- id: ORG-governance-organ-face-0704
+  title: Make the governance organ's macro + micro face excellent
+  repo: organvm/limen
+  type: content
+  target_agent: claude
+  workstream: governance
+  priority: high
+  budget_cost: 2
+  status: open
+  labels:
+  - organ-face
+  - pillar:governance
+  - organ
+  - institution
+  - vltima
+  - generated
+  urls: []
+  context: "In organvm/limen organs/governance/, author the polished MACRO face (a\
+    \ portable governance-as-code open standard anyone can adopt \u2014 the platform\
+    \ anyone can hold) AND the MICRO instance (ORGANVM's own dual-entity operation\
+    \ (non-profit open project + commercial LLC) \u2014 his own), grounded in what\
+    \ the organ actually does. Real copy, ready to show. One PR. CONSTRAINT: deepened\
+    \ 2026-07-03: entity register (entities.yaml) with dual-entity boundary matrix,\
+    \ validate-entities.py (Rules #3-4: entity integrity + repo registration). Maturity\
+    \ 70%\u219275%.. [organ-backlog 2026-07-04: rank 5, maturity 75% stage maturing\
+    \ \u2014 convert idle fleet capacity into institutional weight (VLTIMA).]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T08:45:49.296915Z'
+  dispatch_log: []
+- id: ORG-governance-organ-deepen-0704
+  title: Deepen the governance organ toward a usable institution
+  repo: organvm/limen
+  type: content
+  target_agent: gemini
+  workstream: governance
+  priority: high
+  budget_cost: 2
+  status: open
+  labels:
+  - organ-deepen
+  - pillar:governance
+  - organ
+  - institution
+  - vltima
+  - generated
+  urls: []
+  context: "In organvm/limen organs/governance/ (and reference its product repo where\
+    \ relevant), close the single highest-leverage gap between the current scaffold\
+    \ and something a real person could RELY ON for governance. Ship scripts/publication-policy.py\
+    \ --verify green; matrix + owner-scoped redactor shipped (2026-07-02) if not yet\
+    \ done, else the next gap. One focused PR. CONSTRAINT: converges the scattered\
+    \ gates (creds _SECRET_RX, scan-legacy SENSITIVE_PATTERNS, persona contracts,\
+    \ positioning awaiting_publish) behind one referenced rule table; beat C_PUBPOLICY,\
+    \ rung PUBPOLICY. [organ-backlog 2026-07-04: rank 10, maturity 60% stage building\
+    \ \u2014 convert idle fleet capacity into institutional weight (VLTIMA).]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T08:45:49.298639Z'
+  dispatch_log: []
+- id: ORG-health-organ-charter-0704
+  title: Charter the health organ as an institution rivaling a concierge medical /
+    recovery team
+  repo: organvm/limen
+  type: content
+  target_agent: codex
+  workstream: health
+  priority: critical
+  budget_cost: 2
+  status: dispatched
+  labels:
+  - organ-charter
+  - pillar:health
+  - organ
+  - institution
+  - vltima
+  - generated
+  - noop
+  urls: []
+  context: "In organvm/limen organs/health/, write CHARTER.md: the org-chart of AI\
+    \ roles (the 'virtual firm/team'), the workflows it runs, its inputs/outputs,\
+    \ and exactly how it gives one person the institutional weight of a concierge\
+    \ medical / recovery team. Concrete and buildable. No invented capabilities. CONSTRAINT:\
+    \ unnamed; post-injury (4th-story fall ~2024); ties to the legal ADA accommodation\
+    \ matter. KERNEL.md + CHARTER.md authored: full 5-primitive map, institutional\
+    \ prosthesis framing, rival institution, legal organ link, hard guardrails, 6-workflow\
+    \ orchestration, AI role org-chart, leverage math. Maturity 10%\u219215%.. [organ-backlog\
+    \ 2026-07-04: rank 9, maturity 10% stage scaffold \u2014 convert idle fleet capacity\
+    \ into institutional weight (VLTIMA).]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T13:02:52.069184Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T10:09:05.968896Z'
+    agent: opencode
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:14:08.642542Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T10:53:31.596500Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T12:09:14.782285Z'
+    agent: opencode
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:17:18.924748Z'
+    agent: opencode
+    session_id: cli
+    status: failed
+    output: No-op result; failed for recovery instead of archived.
+  - timestamp: '2026-07-04T12:23:48.156139Z'
+    agent: limen
+    session_id: heal
+    status: open
+    output: "recover: reopened failed \u2192 fresh cascade"
+  - timestamp: '2026-07-04T13:02:52.069184Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+- id: ORG-health-organ-firstslice-0704
+  title: Build the first working vertical slice of the health organ
+  repo: organvm/limen
+  type: content
+  target_agent: opencode
+  workstream: health
+  priority: high
+  budget_cost: 2
+  status: open
+  labels:
+  - organ-firstslice
+  - pillar:health
+  - organ
+  - institution
+  - vltima
+  - generated
+  urls: []
+  context: "In organvm/limen organs/health/, deliver one real end-to-end artifact\
+    \ the organ produces: charter the health organ + a personal recovery/access protocol\
+    \ (informational, not medical advice). A tangible proof the institution works\
+    \ for ONE real case. One PR; tested where it is code; drafts only for anything\
+    \ outbound (his hand on send/sign). CONSTRAINT: unnamed; post-injury (4th-story\
+    \ fall ~2024); ties to the legal ADA accommodation matter. KERNEL.md + CHARTER.md\
+    \ authored: full 5-primitive map, institutional prosthesis framing, rival institution,\
+    \ legal organ link, hard guardrails, 6-workflow orchestration, AI role org-chart,\
+    \ leverage math. Maturity 10%\u219215%.. [organ-backlog 2026-07-04: rank 9, maturity\
+    \ 10% stage scaffold \u2014 convert idle fleet capacity into institutional weight\
+    \ (VLTIMA).]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T09:46:41.104482Z'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-115
+  title: fix failing CI on organvm/organvm-engine#115
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  - tried:github_actions
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/115
+  context: "PR organvm/organvm-engine#115 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/115\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T10:17:48.140092Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T10:14:23.421837Z'
+    agent: github_actions
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T10:17:48.140092Z'
+    agent: github_actions
+    session_id: cli
+    status: failed->codex
+    output: remote/service lane failed; reopened to healthy fleet cascade
+- id: HEAL-cifix-organvm-organvm-engine-121
+  title: fix failing CI on organvm/organvm-engine#121
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/121
+  context: "PR organvm/organvm-engine#121 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/121\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-124
+  title: fix failing CI on organvm/organvm-engine#124
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/124
+  context: "PR organvm/organvm-engine#124 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/124\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-125
+  title: fix failing CI on organvm/organvm-engine#125
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/125
+  context: "PR organvm/organvm-engine#125 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/125\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-126
+  title: fix failing CI on organvm/organvm-engine#126
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/126
+  context: "PR organvm/organvm-engine#126 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/126\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-127
+  title: fix failing CI on organvm/organvm-engine#127
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/127
+  context: "PR organvm/organvm-engine#127 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/127\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-128
+  title: fix failing CI on organvm/organvm-engine#128
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/128
+  context: "PR organvm/organvm-engine#128 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/128\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-129
+  title: fix failing CI on organvm/organvm-engine#129
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/129
+  context: "PR organvm/organvm-engine#129 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/129\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-130
+  title: fix failing CI on organvm/organvm-engine#130
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/130
+  context: "PR organvm/organvm-engine#130 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/130\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-131
+  title: fix failing CI on organvm/organvm-engine#131
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/131
+  context: "PR organvm/organvm-engine#131 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/131\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-132
+  title: fix failing CI on organvm/organvm-engine#132
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/132
+  context: "PR organvm/organvm-engine#132 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/132\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-135
+  title: fix failing CI on organvm/organvm-engine#135
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/135
+  context: "PR organvm/organvm-engine#135 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/135\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-136
+  title: fix failing CI on organvm/organvm-engine#136
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/136
+  context: "PR organvm/organvm-engine#136 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/136\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-137
+  title: fix failing CI on organvm/organvm-engine#137
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/137
+  context: "PR organvm/organvm-engine#137 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/137\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-139
+  title: fix failing CI on organvm/organvm-engine#139
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/139
+  context: "PR organvm/organvm-engine#139 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/139\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-140
+  title: fix failing CI on organvm/organvm-engine#140
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/140
+  context: "PR organvm/organvm-engine#140 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/140\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-143
+  title: fix failing CI on organvm/organvm-engine#143
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/143
+  context: "PR organvm/organvm-engine#143 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/143\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-engine-144
+  title: fix failing CI on organvm/organvm-engine#144
+  repo: organvm/organvm-engine
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-engine/pull/144
+  context: "PR organvm/organvm-engine#144 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/organvm-engine/pull/144\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-ontologia-10
+  title: fix failing CI on organvm/organvm-ontologia#10
+  repo: organvm/organvm-ontologia
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-ontologia/pull/10
+  context: "PR organvm/organvm-ontologia#10 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/organvm-ontologia/pull/10\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-ontologia-11
+  title: fix failing CI on organvm/organvm-ontologia#11
+  repo: organvm/organvm-ontologia
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-ontologia/pull/11
+  context: "PR organvm/organvm-ontologia#11 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/organvm-ontologia/pull/11\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-ontologia-12
+  title: fix failing CI on organvm/organvm-ontologia#12
+  repo: organvm/organvm-ontologia
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-ontologia/pull/12
+  context: "PR organvm/organvm-ontologia#12 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/organvm-ontologia/pull/12\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-organvm-ontologia-13
+  title: fix failing CI on organvm/organvm-ontologia#13
+  repo: organvm/organvm-ontologia
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/organvm-ontologia/pull/13
+  context: "PR organvm/organvm-ontologia#13 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/organvm-ontologia/pull/13\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-payrail-4
+  title: rebase/resolve conflicts on organvm/payrail#4
+  repo: organvm/payrail
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/organvm/payrail/pull/4
+  context: 'PR organvm/payrail#4 is CONFLICTING with its base branch and merge-drain
+    correctly refuses to merge it. Check out the PR branch, rebase it onto the current
+    base (or merge base in), resolve every conflict preserving the PR''s intent, push
+    to the SAME PR branch, and confirm it reports MERGEABLE with green CI. Do not
+    open a new PR. PR: https://github.com/organvm/payrail/pull/4 [auto-emitted 2026-07-04
+    by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: ORG-financial-organ-face-0704
+  title: Make the financial organ's macro + micro face excellent
+  repo: organvm/limen
+  type: content
+  target_agent: codex
+  workstream: financial
+  priority: high
+  budget_cost: 2
+  status: open
+  labels:
+  - organ-face
+  - pillar:financial
+  - organ
+  - institution
+  - vltima
+  - generated
+  urls: []
+  context: "In organvm/limen organs/financial/, author the polished MACRO face (a\
+    \ family-office-in-a-box anyone can deploy \u2014 the platform anyone can hold)\
+    \ AND the MICRO instance (Anthony's own disbursement (product revenue -> personal\
+    \ + institutional via the MONETA sovereign cash rail at moneta/, NOT a rented\
+    \ processor) + wealth/portfolio + tax automation \u2014 his own), grounded in\
+    \ what the organ actually does. Real copy, ready to show. One PR. CONSTRAINT:\
+    \ scale the-invisible-ledger from a B2B CPA tool into a personal family office;\
+    \ intake is owned by MONETA (moneta/), the sovereign cash organ \u2014 this census\
+    \ tracks the institution, MONETA is its rail. Deepened 2026-07-03: entity registry\
+    \ (entities.yaml), balance-sheet/cashflow/payrail STATUS dashboard, seed.yaml,\
+    \ consolidate.py generator. Maturity 30%\u219240% auto-advanced by financial-organ.py\
+    \ beat (2026-07-03). Maturity 40%->70% auto-advanced by financial-organ.py beat\
+    \ (2026-07-03).. [organ-backlog 2026-07-04: rank 2, maturity 70% stage maturing\
+    \ \u2014 convert idle fleet capacity into institutional weight (VLTIMA).]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T10:36:53.523787Z'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-your-fit-tailored-15
+  title: rebase/resolve conflicts on organvm/your-fit-tailored#15
+  repo: organvm/your-fit-tailored
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  - tried:github_actions
+  urls:
+  - https://github.com/organvm/your-fit-tailored/pull/15
+  context: 'PR organvm/your-fit-tailored#15 is CONFLICTING with its base branch and
+    merge-drain correctly refuses to merge it. Check out the PR branch, rebase it
+    onto the current base (or merge base in), resolve every conflict preserving the
+    PR''s intent, push to the SAME PR branch, and confirm it reports MERGEABLE with
+    green CI. Do not open a new PR. PR: https://github.com/organvm/your-fit-tailored/pull/15
+    [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T11:09:32.324014Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T11:05:03.500427Z'
+    agent: github_actions
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T11:09:32.324014Z'
+    agent: github_actions
+    session_id: cli
+    status: failed->codex
+    output: remote/service lane failed; reopened to healthy fleet cascade
+- id: HEAL-rebase-4444j99-hokage-chess-85
+  title: rebase/resolve conflicts on 4444J99/hokage-chess#85
+  repo: 4444J99/hokage-chess
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/4444J99/hokage-chess/pull/85
+  context: 'PR 4444J99/hokage-chess#85 is CONFLICTING with its base branch and merge-drain
+    correctly refuses to merge it. Check out the PR branch, rebase it onto the current
+    base (or merge base in), resolve every conflict preserving the PR''s intent, push
+    to the SAME PR branch, and confirm it reports MERGEABLE with green CI. Do not
+    open a new PR. PR: https://github.com/4444J99/hokage-chess/pull/85 [auto-emitted
+    2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-4444j99-hokage-chess-89
+  title: rebase/resolve conflicts on 4444J99/hokage-chess#89
+  repo: 4444J99/hokage-chess
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/4444J99/hokage-chess/pull/89
+  context: 'PR 4444J99/hokage-chess#89 is CONFLICTING with its base branch and merge-drain
+    correctly refuses to merge it. Check out the PR branch, rebase it onto the current
+    base (or merge base in), resolve every conflict preserving the PR''s intent, push
+    to the SAME PR branch, and confirm it reports MERGEABLE with green CI. Do not
+    open a new PR. PR: https://github.com/4444J99/hokage-chess/pull/89 [auto-emitted
+    2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-4444j99-hokage-chess-94
+  title: rebase/resolve conflicts on 4444J99/hokage-chess#94
+  repo: 4444J99/hokage-chess
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/4444J99/hokage-chess/pull/94
+  context: 'PR 4444J99/hokage-chess#94 is CONFLICTING with its base branch and merge-drain
+    correctly refuses to merge it. Check out the PR branch, rebase it onto the current
+    base (or merge base in), resolve every conflict preserving the PR''s intent, push
+    to the SAME PR branch, and confirm it reports MERGEABLE with green CI. Do not
+    open a new PR. PR: https://github.com/4444J99/hokage-chess/pull/94 [auto-emitted
+    2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-stale-4444j99-hokage-chess-101
+  title: "rebase 4444J99/hokage-chess#101 onto current base \u2014 branched far behind"
+  repo: 4444J99/hokage-chess
+  type: code
+  target_agent: codex
+  priority: normal
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - stale-base
+  urls:
+  - https://github.com/4444J99/hokage-chess/pull/101
+  context: "PR 4444J99/hokage-chess#101 is MERGEABLE + green but branched well behind\
+    \ its current base \u2014 the structural condition for a stale-base silent revert.\
+    \ Check out the branch, REBASE it onto the current base, KEEP all of the PR's\
+    \ genuine changes and DROP any hunk that merely reverts base files it didn't mean\
+    \ to touch, push --force-with-lease to the SAME branch, and confirm MERGEABLE\
+    \ + current + green. Do NOT open a new PR; preserve all unique work. PR: https://github.com/4444J99/hokage-chess/pull/101\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-stale-4444j99-hokage-chess-102
+  title: "rebase 4444J99/hokage-chess#102 onto current base \u2014 branched far behind"
+  repo: 4444J99/hokage-chess
+  type: code
+  target_agent: opencode
+  priority: normal
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - stale-base
+  urls:
+  - https://github.com/4444J99/hokage-chess/pull/102
+  context: "PR 4444J99/hokage-chess#102 is MERGEABLE + green but branched well behind\
+    \ its current base \u2014 the structural condition for a stale-base silent revert.\
+    \ Check out the branch, REBASE it onto the current base, KEEP all of the PR's\
+    \ genuine changes and DROP any hunk that merely reverts base files it didn't mean\
+    \ to touch, push --force-with-lease to the SAME branch, and confirm MERGEABLE\
+    \ + current + green. Do NOT open a new PR; preserve all unique work. PR: https://github.com/4444J99/hokage-chess/pull/102\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-4444j99-hokage-chess-103
+  title: rebase/resolve conflicts on 4444J99/hokage-chess#103
+  repo: 4444J99/hokage-chess
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/4444J99/hokage-chess/pull/103
+  context: 'PR 4444J99/hokage-chess#103 is CONFLICTING with its base branch and merge-drain
+    correctly refuses to merge it. Check out the PR branch, rebase it onto the current
+    base (or merge base in), resolve every conflict preserving the PR''s intent, push
+    to the SAME PR branch, and confirm it reports MERGEABLE with green CI. Do not
+    open a new PR. PR: https://github.com/4444J99/hokage-chess/pull/103 [auto-emitted
+    2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-4444j99-hokage-chess-107
+  title: rebase/resolve conflicts on 4444J99/hokage-chess#107
+  repo: 4444J99/hokage-chess
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/4444J99/hokage-chess/pull/107
+  context: 'PR 4444J99/hokage-chess#107 is CONFLICTING with its base branch and merge-drain
+    correctly refuses to merge it. Check out the PR branch, rebase it onto the current
+    base (or merge base in), resolve every conflict preserving the PR''s intent, push
+    to the SAME PR branch, and confirm it reports MERGEABLE with green CI. Do not
+    open a new PR. PR: https://github.com/4444J99/hokage-chess/pull/107 [auto-emitted
+    2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-4444j99-hokage-chess-108
+  title: rebase/resolve conflicts on 4444J99/hokage-chess#108
+  repo: 4444J99/hokage-chess
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/4444J99/hokage-chess/pull/108
+  context: 'PR 4444J99/hokage-chess#108 is CONFLICTING with its base branch and merge-drain
+    correctly refuses to merge it. Check out the PR branch, rebase it onto the current
+    base (or merge base in), resolve every conflict preserving the PR''s intent, push
+    to the SAME PR branch, and confirm it reports MERGEABLE with green CI. Do not
+    open a new PR. PR: https://github.com/4444J99/hokage-chess/pull/108 [auto-emitted
+    2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-4444j99-hokage-chess-114
+  title: rebase/resolve conflicts on 4444J99/hokage-chess#114
+  repo: 4444J99/hokage-chess
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/4444J99/hokage-chess/pull/114
+  context: 'PR 4444J99/hokage-chess#114 is CONFLICTING with its base branch and merge-drain
+    correctly refuses to merge it. Check out the PR branch, rebase it onto the current
+    base (or merge base in), resolve every conflict preserving the PR''s intent, push
+    to the SAME PR branch, and confirm it reports MERGEABLE with green CI. Do not
+    open a new PR. PR: https://github.com/4444J99/hokage-chess/pull/114 [auto-emitted
+    2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-4444j99-hokage-chess-121
+  title: rebase/resolve conflicts on 4444J99/hokage-chess#121
+  repo: 4444J99/hokage-chess
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/4444J99/hokage-chess/pull/121
+  context: 'PR 4444J99/hokage-chess#121 is CONFLICTING with its base branch and merge-drain
+    correctly refuses to merge it. Check out the PR branch, rebase it onto the current
+    base (or merge base in), resolve every conflict preserving the PR''s intent, push
+    to the SAME PR branch, and confirm it reports MERGEABLE with green CI. Do not
+    open a new PR. PR: https://github.com/4444J99/hokage-chess/pull/121 [auto-emitted
+    2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-stale-4444j99-hokage-chess-122
+  title: "rebase 4444J99/hokage-chess#122 onto current base \u2014 branched far behind"
+  repo: 4444J99/hokage-chess
+  type: code
+  target_agent: agy
+  priority: normal
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - stale-base
+  urls:
+  - https://github.com/4444J99/hokage-chess/pull/122
+  context: "PR 4444J99/hokage-chess#122 is MERGEABLE + green but branched well behind\
+    \ its current base \u2014 the structural condition for a stale-base silent revert.\
+    \ Check out the branch, REBASE it onto the current base, KEEP all of the PR's\
+    \ genuine changes and DROP any hunk that merely reverts base files it didn't mean\
+    \ to touch, push --force-with-lease to the SAME branch, and confirm MERGEABLE\
+    \ + current + green. Do NOT open a new PR; preserve all unique work. PR: https://github.com/4444J99/hokage-chess/pull/122\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-4444j99-hokage-chess-136
+  title: rebase/resolve conflicts on 4444J99/hokage-chess#136
+  repo: 4444J99/hokage-chess
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/4444J99/hokage-chess/pull/136
+  context: 'PR 4444J99/hokage-chess#136 is CONFLICTING with its base branch and merge-drain
+    correctly refuses to merge it. Check out the PR branch, rebase it onto the current
+    base (or merge base in), resolve every conflict preserving the PR''s intent, push
+    to the SAME PR branch, and confirm it reports MERGEABLE with green CI. Do not
+    open a new PR. PR: https://github.com/4444J99/hokage-chess/pull/136 [auto-emitted
+    2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-4444j99-hokage-chess-139
+  title: rebase/resolve conflicts on 4444J99/hokage-chess#139
+  repo: 4444J99/hokage-chess
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/4444J99/hokage-chess/pull/139
+  context: 'PR 4444J99/hokage-chess#139 is CONFLICTING with its base branch and merge-drain
+    correctly refuses to merge it. Check out the PR branch, rebase it onto the current
+    base (or merge base in), resolve every conflict preserving the PR''s intent, push
+    to the SAME PR branch, and confirm it reports MERGEABLE with green CI. Do not
+    open a new PR. PR: https://github.com/4444J99/hokage-chess/pull/139 [auto-emitted
+    2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-4444j99.github.io-9
+  title: rebase/resolve conflicts on organvm/4444J99.github.io#9
+  repo: organvm/4444J99.github.io
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/organvm/4444J99.github.io/pull/9
+  context: 'PR organvm/4444J99.github.io#9 is CONFLICTING with its base branch and
+    merge-drain correctly refuses to merge it. Check out the PR branch, rebase it
+    onto the current base (or merge base in), resolve every conflict preserving the
+    PR''s intent, push to the SAME PR branch, and confirm it reports MERGEABLE with
+    green CI. Do not open a new PR. PR: https://github.com/organvm/4444J99.github.io/pull/9
+    [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-a-i--skills-26
+  title: fix failing CI on organvm/a-i--skills#26
+  repo: organvm/a-i--skills
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/a-i--skills/pull/26
+  context: "PR organvm/a-i--skills#26 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/a-i--skills/pull/26\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-a-i--skills-27
+  title: fix failing CI on organvm/a-i--skills#27
+  repo: organvm/a-i--skills
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/a-i--skills/pull/27
+  context: "PR organvm/a-i--skills#27 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/a-i--skills/pull/27\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-a-i--skills-28
+  title: fix failing CI on organvm/a-i--skills#28
+  repo: organvm/a-i--skills
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/a-i--skills/pull/28
+  context: "PR organvm/a-i--skills#28 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/a-i--skills/pull/28\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-a-i--skills-29
+  title: fix failing CI on organvm/a-i--skills#29
+  repo: organvm/a-i--skills
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/a-i--skills/pull/29
+  context: "PR organvm/a-i--skills#29 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/a-i--skills/pull/29\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-a-i-chat--exporter-29
+  title: rebase/resolve conflicts on organvm/a-i-chat--exporter#29
+  repo: organvm/a-i-chat--exporter
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/organvm/a-i-chat--exporter/pull/29
+  context: 'PR organvm/a-i-chat--exporter#29 is CONFLICTING with its base branch and
+    merge-drain correctly refuses to merge it. Check out the PR branch, rebase it
+    onto the current base (or merge base in), resolve every conflict preserving the
+    PR''s intent, push to the SAME PR branch, and confirm it reports MERGEABLE with
+    green CI. Do not open a new PR. PR: https://github.com/organvm/a-i-chat--exporter/pull/29
+    [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-a-i-chat--exporter-30
+  title: rebase/resolve conflicts on organvm/a-i-chat--exporter#30
+  repo: organvm/a-i-chat--exporter
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/organvm/a-i-chat--exporter/pull/30
+  context: 'PR organvm/a-i-chat--exporter#30 is CONFLICTING with its base branch and
+    merge-drain correctly refuses to merge it. Check out the PR branch, rebase it
+    onto the current base (or merge base in), resolve every conflict preserving the
+    PR''s intent, push to the SAME PR branch, and confirm it reports MERGEABLE with
+    green CI. Do not open a new PR. PR: https://github.com/organvm/a-i-chat--exporter/pull/30
+    [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-a-i-chat--exporter-31
+  title: rebase/resolve conflicts on organvm/a-i-chat--exporter#31
+  repo: organvm/a-i-chat--exporter
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/organvm/a-i-chat--exporter/pull/31
+  context: 'PR organvm/a-i-chat--exporter#31 is CONFLICTING with its base branch and
+    merge-drain correctly refuses to merge it. Check out the PR branch, rebase it
+    onto the current base (or merge base in), resolve every conflict preserving the
+    PR''s intent, push to the SAME PR branch, and confirm it reports MERGEABLE with
+    green CI. Do not open a new PR. PR: https://github.com/organvm/a-i-chat--exporter/pull/31
+    [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-a-i-chat--exporter-49
+  title: fix failing CI on organvm/a-i-chat--exporter#49
+  repo: organvm/a-i-chat--exporter
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/a-i-chat--exporter/pull/49
+  context: "PR organvm/a-i-chat--exporter#49 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/a-i-chat--exporter/pull/49\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-a-i-chat--exporter-54
+  title: fix failing CI on organvm/a-i-chat--exporter#54
+  repo: organvm/a-i-chat--exporter
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/a-i-chat--exporter/pull/54
+  context: "PR organvm/a-i-chat--exporter#54 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/a-i-chat--exporter/pull/54\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-a-i-chat--exporter-61
+  title: rebase/resolve conflicts on organvm/a-i-chat--exporter#61
+  repo: organvm/a-i-chat--exporter
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/organvm/a-i-chat--exporter/pull/61
+  context: 'PR organvm/a-i-chat--exporter#61 is CONFLICTING with its base branch and
+    merge-drain correctly refuses to merge it. Check out the PR branch, rebase it
+    onto the current base (or merge base in), resolve every conflict preserving the
+    PR''s intent, push to the SAME PR branch, and confirm it reports MERGEABLE with
+    green CI. Do not open a new PR. PR: https://github.com/organvm/a-i-chat--exporter/pull/61
+    [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-a-i-chat--exporter-66
+  title: rebase/resolve conflicts on organvm/a-i-chat--exporter#66
+  repo: organvm/a-i-chat--exporter
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/organvm/a-i-chat--exporter/pull/66
+  context: 'PR organvm/a-i-chat--exporter#66 is CONFLICTING with its base branch and
+    merge-drain correctly refuses to merge it. Check out the PR branch, rebase it
+    onto the current base (or merge base in), resolve every conflict preserving the
+    PR''s intent, push to the SAME PR branch, and confirm it reports MERGEABLE with
+    green CI. Do not open a new PR. PR: https://github.com/organvm/a-i-chat--exporter/pull/66
+    [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-421
+  title: fix failing CI on organvm/limen#421
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  - tried:github_actions
+  urls:
+  - https://github.com/organvm/limen/pull/421
+  context: "PR organvm/limen#421 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/421 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T12:08:58.548939Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T11:52:21.295273Z'
+    agent: github_actions
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:08:58.548939Z'
+    agent: github_actions
+    session_id: cli
+    status: failed->codex
+    output: remote/service lane failed; reopened to healthy fleet cascade
+- id: HEAL-cifix-organvm-limen-422
+  title: fix failing CI on organvm/limen#422
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/422
+  context: "PR organvm/limen#422 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/422 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-423
+  title: fix failing CI on organvm/limen#423
+  repo: organvm/limen
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/423
+  context: "PR organvm/limen#423 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/423 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-424
+  title: fix failing CI on organvm/limen#424
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/424
+  context: "PR organvm/limen#424 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/424 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-425
+  title: fix failing CI on organvm/limen#425
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/425
+  context: "PR organvm/limen#425 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/425 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-426
+  title: fix failing CI on organvm/limen#426
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/426
+  context: "PR organvm/limen#426 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/426 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-427
+  title: fix failing CI on organvm/limen#427
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/427
+  context: "PR organvm/limen#427 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/427 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-428
+  title: fix failing CI on organvm/limen#428
+  repo: organvm/limen
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/428
+  context: "PR organvm/limen#428 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/428 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-429
+  title: fix failing CI on organvm/limen#429
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/429
+  context: "PR organvm/limen#429 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/429 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-430
+  title: fix failing CI on organvm/limen#430
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/430
+  context: "PR organvm/limen#430 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/430 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-431
+  title: fix failing CI on organvm/limen#431
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/431
+  context: "PR organvm/limen#431 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/431 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-432
+  title: fix failing CI on organvm/limen#432
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/432
+  context: "PR organvm/limen#432 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/432 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-433
+  title: fix failing CI on organvm/limen#433
+  repo: organvm/limen
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/433
+  context: "PR organvm/limen#433 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/433 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-434
+  title: fix failing CI on organvm/limen#434
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/434
+  context: "PR organvm/limen#434 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/434 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-435
+  title: fix failing CI on organvm/limen#435
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/435
+  context: "PR organvm/limen#435 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/435 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-436
+  title: fix failing CI on organvm/limen#436
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/436
+  context: "PR organvm/limen#436 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/436 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-437
+  title: fix failing CI on organvm/limen#437
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/437
+  context: "PR organvm/limen#437 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/437 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-438
+  title: fix failing CI on organvm/limen#438
+  repo: organvm/limen
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/438
+  context: "PR organvm/limen#438 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/438 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-439
+  title: fix failing CI on organvm/limen#439
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/439
+  context: "PR organvm/limen#439 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/439 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-440
+  title: fix failing CI on organvm/limen#440
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/440
+  context: "PR organvm/limen#440 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/440 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-441
+  title: fix failing CI on organvm/limen#441
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/441
+  context: "PR organvm/limen#441 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/441 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-442
+  title: fix failing CI on organvm/limen#442
+  repo: organvm/limen
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/442
+  context: "PR organvm/limen#442 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/442 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-443
+  title: fix failing CI on organvm/limen#443
+  repo: organvm/limen
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/443
+  context: "PR organvm/limen#443 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/443 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-444
+  title: fix failing CI on organvm/limen#444
+  repo: organvm/limen
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/444
+  context: "PR organvm/limen#444 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/444 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-445
+  title: fix failing CI on organvm/limen#445
+  repo: organvm/limen
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/445
+  context: "PR organvm/limen#445 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/445 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-limen-446
+  title: fix failing CI on organvm/limen#446
+  repo: organvm/limen
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/limen/pull/446
+  context: "PR organvm/limen#446 has FAILING CI checks and merge-drain correctly refuses\
+    \ to merge it. Check out the PR branch, find the root cause of the red checks\
+    \ (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/limen/pull/446 [auto-emitted\
+    \ 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: REV-organvm-mirror-mirror-revenue-ship-0704
+  title: Drive Mirror Mirror to deploy-ready
+  repo: organvm/mirror-mirror
+  type: code
+  target_agent: gemini
+  workstream: financial
+  priority: high
+  budget_cost: 2
+  status: open
+  labels:
+  - revenue-ship
+  - revenue
+  - product
+  - ship-order
+  - generated
+  urls: []
+  context: "In organvm/mirror-mirror, clear the concrete blockers between the current\
+    \ state and a DEPLOYABLE product: get open PRs green + merged, fix the critical\
+    \ path, confirm the app runs end-to-end. Output: a deploy-ready build + a short\
+    \ DEPLOY.md listing exactly what remains. [revenue-backlog 2026-07-04: rank 5,\
+    \ stage building \u2014 spend tokens on income, not busywork]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T12:07:43.519020Z'
+  dispatch_log: []
+- id: ORG-legal-organ-charter-0704
+  title: Charter the legal organ as an institution rivaling a top-tier litigation
+    firm (the Cochran standard)
+  repo: organvm/limen
+  type: content
+  target_agent: codex
+  workstream: legal
+  priority: critical
+  budget_cost: 2
+  status: open
+  labels:
+  - organ-charter
+  - pillar:legal
+  - organ
+  - institution
+  - vltima
+  - generated
+  urls: []
+  context: "In organvm/limen organs/legal/, write CHARTER.md: the org-chart of AI\
+    \ roles (the 'virtual firm/team'), the workflows it runs, its inputs/outputs,\
+    \ and exactly how it gives one person the institutional weight of a top-tier litigation\
+    \ firm (the Cochran standard). Concrete and buildable. No invented capabilities.\
+    \ CONSTRAINT: THE FLAGSHIP he named. Augments real counsel; does NOT give legal\
+    \ advice or practice law.. [organ-backlog 2026-07-04: rank 1, maturity 20% stage\
+    \ scaffold \u2014 convert idle fleet capacity into institutional weight (VLTIMA).]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T12:08:02.751157Z'
+  dispatch_log: []
+- id: ORG-social-organ-charter-0704
+  title: Charter the social organ as an institution rivaling a civic/community institution
+    + relationship support ('relationship gurus')
+  repo: organvm/limen
+  type: content
+  target_agent: opencode
+  workstream: social
+  priority: critical
+  budget_cost: 2
+  status: open
+  labels:
+  - organ-charter
+  - pillar:social
+  - organ
+  - institution
+  - vltima
+  - generated
+  - tried:codex
+  - tried:claude
+  urls: []
+  context: "In organvm/limen organs/social/, write CHARTER.md: the org-chart of AI\
+    \ roles (the 'virtual firm/team'), the workflows it runs, its inputs/outputs,\
+    \ and exactly how it gives one person the institutional weight of a civic/community\
+    \ institution + relationship support ('relationship gurus'). Concrete and buildable.\
+    \ No invented capabilities. CONSTRAINT: named by him, unscoped. [organ-backlog\
+    \ 2026-07-04: rank 8, maturity 15% stage scaffold \u2014 convert idle fleet capacity\
+    \ into institutional weight (VLTIMA).]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T13:02:35.732101Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T12:17:34.252932Z'
+    agent: codex
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:26:28.198444Z'
+    agent: codex
+    session_id: cli
+    status: failed->claude
+  - timestamp: '2026-07-04T12:58:00.338934Z'
+    agent: claude
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T13:02:35.732101Z'
+    agent: claude
+    session_id: cli
+    status: failed->opencode
+- id: HEAL-cifix-organvm-public-process-27
+  title: fix failing CI on organvm/public-process#27
+  repo: organvm/public-process
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  - tried:github_actions
+  urls:
+  - https://github.com/organvm/public-process/pull/27
+  context: "PR organvm/public-process#27 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/public-process/pull/27\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  updated: '2026-07-04T12:48:12.994193Z'
+  dispatch_log:
+  - timestamp: '2026-07-04T12:43:41.982615Z'
+    agent: github_actions
+    session_id: async-reserve
+    status: dispatched
+    output: 'dispatch-async: reserved before detached worker launch'
+  - timestamp: '2026-07-04T12:48:12.994193Z'
+    agent: github_actions
+    session_id: cli
+    status: failed->codex
+    output: remote/service lane failed; reopened to healthy fleet cascade
+- id: HEAL-cifix-organvm-public-process-28
+  title: fix failing CI on organvm/public-process#28
+  repo: organvm/public-process
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/public-process/pull/28
+  context: "PR organvm/public-process#28 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/public-process/pull/28\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-public-process-29
+  title: fix failing CI on organvm/public-process#29
+  repo: organvm/public-process
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/public-process/pull/29
+  context: "PR organvm/public-process#29 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/public-process/pull/29\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-public-process-30
+  title: fix failing CI on organvm/public-process#30
+  repo: organvm/public-process
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/public-process/pull/30
+  context: "PR organvm/public-process#30 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/public-process/pull/30\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-public-process-31
+  title: fix failing CI on organvm/public-process#31
+  repo: organvm/public-process
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/public-process/pull/31
+  context: "PR organvm/public-process#31 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/public-process/pull/31\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-public-process-32
+  title: fix failing CI on organvm/public-process#32
+  repo: organvm/public-process
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/public-process/pull/32
+  context: "PR organvm/public-process#32 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/public-process/pull/32\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-public-process-33
+  title: fix failing CI on organvm/public-process#33
+  repo: organvm/public-process
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/public-process/pull/33
+  context: "PR organvm/public-process#33 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/public-process/pull/33\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-public-process-34
+  title: fix failing CI on organvm/public-process#34
+  repo: organvm/public-process
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/public-process/pull/34
+  context: "PR organvm/public-process#34 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/public-process/pull/34\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-public-process-35
+  title: fix failing CI on organvm/public-process#35
+  repo: organvm/public-process
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/public-process/pull/35
+  context: "PR organvm/public-process#35 has FAILING CI checks and merge-drain correctly\
+    \ refuses to merge it. Check out the PR branch, find the root cause of the red\
+    \ checks (lint / types / failing test / config), fix it, push to the SAME PR branch,\
+    \ and confirm every check goes green. Do not open a new PR \u2014 repair the existing\
+    \ one so merge-drain lands it. PR: https://github.com/organvm/public-process/pull/35\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-public-record-data-scrapper-315
+  title: fix failing CI on organvm/public-record-data-scrapper#315
+  repo: organvm/public-record-data-scrapper
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/public-record-data-scrapper/pull/315
+  context: "PR organvm/public-record-data-scrapper#315 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/public-record-data-scrapper/pull/315\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-public-record-data-scrapper-335
+  title: rebase/resolve conflicts on organvm/public-record-data-scrapper#335
+  repo: organvm/public-record-data-scrapper
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/organvm/public-record-data-scrapper/pull/335
+  context: 'PR organvm/public-record-data-scrapper#335 is CONFLICTING with its base
+    branch and merge-drain correctly refuses to merge it. Check out the PR branch,
+    rebase it onto the current base (or merge base in), resolve every conflict preserving
+    the PR''s intent, push to the SAME PR branch, and confirm it reports MERGEABLE
+    with green CI. Do not open a new PR. PR: https://github.com/organvm/public-record-data-scrapper/pull/335
+    [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-public-record-data-scrapper-336
+  title: fix failing CI on organvm/public-record-data-scrapper#336
+  repo: organvm/public-record-data-scrapper
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/public-record-data-scrapper/pull/336
+  context: "PR organvm/public-record-data-scrapper#336 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/public-record-data-scrapper/pull/336\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-public-record-data-scrapper-337
+  title: fix failing CI on organvm/public-record-data-scrapper#337
+  repo: organvm/public-record-data-scrapper
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/public-record-data-scrapper/pull/337
+  context: "PR organvm/public-record-data-scrapper#337 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/public-record-data-scrapper/pull/337\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-public-record-data-scrapper-338
+  title: fix failing CI on organvm/public-record-data-scrapper#338
+  repo: organvm/public-record-data-scrapper
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/public-record-data-scrapper/pull/338
+  context: "PR organvm/public-record-data-scrapper#338 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/public-record-data-scrapper/pull/338\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-recursive-engine--generative-entity-15
+  title: fix failing CI on organvm/recursive-engine--generative-entity#15
+  repo: organvm/recursive-engine--generative-entity
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/recursive-engine--generative-entity/pull/15
+  context: "PR organvm/recursive-engine--generative-entity#15 has FAILING CI checks\
+    \ and merge-drain correctly refuses to merge it. Check out the PR branch, find\
+    \ the root cause of the red checks (lint / types / failing test / config), fix\
+    \ it, push to the SAME PR branch, and confirm every check goes green. Do not open\
+    \ a new PR \u2014 repair the existing one so merge-drain lands it. PR: https://github.com/organvm/recursive-engine--generative-entity/pull/15\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-recursive-engine--generative-entity-18
+  title: fix failing CI on organvm/recursive-engine--generative-entity#18
+  repo: organvm/recursive-engine--generative-entity
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/recursive-engine--generative-entity/pull/18
+  context: "PR organvm/recursive-engine--generative-entity#18 has FAILING CI checks\
+    \ and merge-drain correctly refuses to merge it. Check out the PR branch, find\
+    \ the root cause of the red checks (lint / types / failing test / config), fix\
+    \ it, push to the SAME PR branch, and confirm every check goes green. Do not open\
+    \ a new PR \u2014 repair the existing one so merge-drain lands it. PR: https://github.com/organvm/recursive-engine--generative-entity/pull/18\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-relationship-pipeline-6
+  title: fix failing CI on organvm/relationship-pipeline#6
+  repo: organvm/relationship-pipeline
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/relationship-pipeline/pull/6
+  context: "PR organvm/relationship-pipeline#6 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/relationship-pipeline/pull/6\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-relationship-pipeline-9
+  title: fix failing CI on organvm/relationship-pipeline#9
+  repo: organvm/relationship-pipeline
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/relationship-pipeline/pull/9
+  context: "PR organvm/relationship-pipeline#9 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/relationship-pipeline/pull/9\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-rules-system-bound-5
+  title: rebase/resolve conflicts on organvm/rules-system-bound#5
+  repo: organvm/rules-system-bound
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/organvm/rules-system-bound/pull/5
+  context: 'PR organvm/rules-system-bound#5 is CONFLICTING with its base branch and
+    merge-drain correctly refuses to merge it. Check out the PR branch, rebase it
+    onto the current base (or merge base in), resolve every conflict preserving the
+    PR''s intent, push to the SAME PR branch, and confirm it reports MERGEABLE with
+    green CI. Do not open a new PR. PR: https://github.com/organvm/rules-system-bound/pull/5
+    [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-rules-system-bound-6
+  title: rebase/resolve conflicts on organvm/rules-system-bound#6
+  repo: organvm/rules-system-bound
+  type: code
+  target_agent: opencode
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/organvm/rules-system-bound/pull/6
+  context: 'PR organvm/rules-system-bound#6 is CONFLICTING with its base branch and
+    merge-drain correctly refuses to merge it. Check out the PR branch, rebase it
+    onto the current base (or merge base in), resolve every conflict preserving the
+    PR''s intent, push to the SAME PR branch, and confirm it reports MERGEABLE with
+    green CI. Do not open a new PR. PR: https://github.com/organvm/rules-system-bound/pull/6
+    [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-rules-system-bound-9
+  title: rebase/resolve conflicts on organvm/rules-system-bound#9
+  repo: organvm/rules-system-bound
+  type: code
+  target_agent: agy
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/organvm/rules-system-bound/pull/9
+  context: 'PR organvm/rules-system-bound#9 is CONFLICTING with its base branch and
+    merge-drain correctly refuses to merge it. Check out the PR branch, rebase it
+    onto the current base (or merge base in), resolve every conflict preserving the
+    PR''s intent, push to the SAME PR branch, and confirm it reports MERGEABLE with
+    green CI. Do not open a new PR. PR: https://github.com/organvm/rules-system-bound/pull/9
+    [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-rules-system-bound-10
+  title: rebase/resolve conflicts on organvm/rules-system-bound#10
+  repo: organvm/rules-system-bound
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/organvm/rules-system-bound/pull/10
+  context: 'PR organvm/rules-system-bound#10 is CONFLICTING with its base branch and
+    merge-drain correctly refuses to merge it. Check out the PR branch, rebase it
+    onto the current base (or merge base in), resolve every conflict preserving the
+    PR''s intent, push to the SAME PR branch, and confirm it reports MERGEABLE with
+    green CI. Do not open a new PR. PR: https://github.com/organvm/rules-system-bound/pull/10
+    [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-scale-threshold-emergence-4
+  title: fix failing CI on organvm/scale-threshold-emergence#4
+  repo: organvm/scale-threshold-emergence
+  type: code
+  target_agent: gemini
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/scale-threshold-emergence/pull/4
+  context: "PR organvm/scale-threshold-emergence#4 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/scale-threshold-emergence/pull/4\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-rebase-organvm-scale-threshold-emergence-6
+  title: rebase/resolve conflicts on organvm/scale-threshold-emergence#6
+  repo: organvm/scale-threshold-emergence
+  type: code
+  target_agent: codex
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - rebase
+  - self-heal
+  - conflict
+  urls:
+  - https://github.com/organvm/scale-threshold-emergence/pull/6
+  context: 'PR organvm/scale-threshold-emergence#6 is CONFLICTING with its base branch
+    and merge-drain correctly refuses to merge it. Check out the PR branch, rebase
+    it onto the current base (or merge base in), resolve every conflict preserving
+    the PR''s intent, push to the SAME PR branch, and confirm it reports MERGEABLE
+    with green CI. Do not open a new PR. PR: https://github.com/organvm/scale-threshold-emergence/pull/6
+    [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]'
+  depends_on: []
+  created: '2026-07-04'
+  dispatch_log: []
+- id: HEAL-cifix-organvm-schema-definitions-7
+  title: fix failing CI on organvm/schema-definitions#7
+  repo: organvm/schema-definitions
+  type: code
+  target_agent: claude
+  priority: high
+  budget_cost: 1
+  status: open
+  labels:
+  - cifix
+  - self-heal
+  - ci-red
+  urls:
+  - https://github.com/organvm/schema-definitions/pull/7
+  context: "PR organvm/schema-definitions#7 has FAILING CI checks and merge-drain\
+    \ correctly refuses to merge it. Check out the PR branch, find the root cause\
+    \ of the red checks (lint / types / failing test / config), fix it, push to the\
+    \ SAME PR branch, and confirm every check goes green. Do not open a new PR \u2014\
+    \ repair the existing one so merge-drain lands it. PR: https://github.com/organvm/schema-definitions/pull/7\
+    \ [auto-emitted 2026-07-04 by self-heal so merge-drain can land it]"
+  depends_on: []
+  created: '2026-07-04'
   dispatch_log: []

@@ -253,7 +253,7 @@
     {
       "branch": "work/triptych-story",
       "classification": "open draft PR preserves local worktree head",
-      "evidence_updated_utc": "2026-07-03T22:17:48Z",
+      "evidence_updated_utc": "2026-07-04T14:54:55Z",
       "head": "7325b8bab0cb885759797bfdbcf23f0005400bcf",
       "lane": "remote-pr-open",
       "next_action": "Review draft PR #1, then merge, supersede, or archive this lane. Local checkout is no longer the only review surface.",
@@ -548,6 +548,38 @@
       "score_discount": 35,
       "status": "merged_pr_preserved",
       "worktree": "/Users/4jp/Workspace/limen/.worktrees/mirror-mirror"
+    },
+    {
+      "branch": "heal/revive-self-heal-beat",
+      "classification": "open draft PR preserves local worktree head",
+      "evidence_updated_utc": "2026-07-04T14:54:52Z",
+      "head": "dc0498d192c2aa76bf98d1b7fa0dda496baf3c8b",
+      "lane": "remote-pr-open",
+      "next_action": "Review draft PR #634, then merge, supersede, or archive this lane. Local checkout is no longer the only review surface.",
+      "pr_draft": true,
+      "pr_number": 634,
+      "pr_state": "OPEN",
+      "pr_url": "https://github.com/organvm/limen/pull/634",
+      "repo": "organvm/limen",
+      "root": "feat+workstream-channels",
+      "score_discount": 35,
+      "status": "open_pr_preserved"
+    },
+    {
+      "branch": "session/post-moneta-durability",
+      "classification": "open draft PR preserves local worktree head",
+      "evidence_updated_utc": "2026-07-04T14:54:52Z",
+      "head": "df3f209ec4ba3745d0aa9b288d21e82dbf0f4199",
+      "lane": "remote-pr-open",
+      "next_action": "Review draft PR #635, then merge, supersede, or archive this lane. Local checkout is no longer the only review surface.",
+      "pr_draft": true,
+      "pr_number": 635,
+      "pr_state": "OPEN",
+      "pr_url": "https://github.com/organvm/limen/pull/635",
+      "repo": "organvm/limen",
+      "root": "linear-conjuring-bear",
+      "score_discount": 35,
+      "status": "open_pr_preserved"
     }
   ],
   "schema": 1
