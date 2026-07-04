@@ -107,6 +107,7 @@ def test_financial_dashboard_surfaces_macro_and_micro_faces(tmp_path: Path, monk
 
     assert "| Macro Face | `MACRO.md` | Deepened" in dashboard
     assert "| Micro Instance Face | `MICRO.md` | Deepened" in dashboard
+    assert "| Obligation Action Plan | `obligation-action-plan.md` | Generated" in dashboard
     faces = {face["id"]: face for face in web_face["faces"]}
     assert faces["macro"]["path"] == "organs/financial/MACRO.md"
     assert faces["micro"]["status"] == "deepened"
@@ -139,3 +140,45 @@ def test_cashflow_uses_registry_obligation_fallback(tmp_path: Path, monkeypatch)
     assert "Student loan default risk" in cashflow
     assert "1 financial-material (registry fallback)" in dashboard
     assert "using `entities.yaml` fallback" in dashboard
+
+
+def test_obligation_action_plan_ranks_gates_and_receipts(tmp_path: Path, monkeypatch) -> None:
+    module = load_consolidate(tmp_path, monkeypatch)
+    entities = {
+        "obligation_sources": [
+            {
+                "source": "$LIMEN_ROOT/obligations-ledger.json",
+                "financial_obligations": [
+                    {
+                        "id": "card-fraud",
+                        "priority": 90,
+                        "title": "Fraud alert — verify first — Santander Bank",
+                        "entity": "anthony-personal",
+                        "amount_unknown": True,
+                        "frequency": "one-time",
+                        "next_step": "Call the number on the back of the card.",
+                    },
+                    {
+                        "id": "infra-self",
+                        "priority": 32,
+                        "title": "Infra alarm (self)",
+                        "entity": "limen",
+                        "next_step": "System self-heals. No action unless the threshold changes.",
+                    },
+                ],
+            }
+        ]
+    }
+
+    queue = module.normalize_obligation_queue(entities, {})
+    plan = module.build_obligation_action_plan(entities, {})
+    web_face = module.build_web_dashboard(entities, {"snapshot_count": 0}, {})
+
+    assert queue[0]["id"] == "card-fraud"
+    assert queue[0]["band"] == "P0"
+    assert queue[0]["gate"] == "principal-hand"
+    assert "same-day verification" in plan
+    assert "Record receipt" in plan
+    assert "daemon-monitor" in plan
+    assert web_face["obligation_action_count"] == 2
+    assert web_face["obligation_p0_count"] == 1

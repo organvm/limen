@@ -10,6 +10,7 @@ Writes (to organs/financial/):
   - balances-history.json  Append-only balance snapshot journal
   - balance-sheet.md       Consolidated net position with asset/liability breakdown
   - cashflow.md            Rolling cash-flow projection (12-week horizon)
+  - obligation-action-plan.md Principal-safe queue of financial obligations
   - STATUS.md              One-page dashboard
 
 Writes (to web/app/public/):
@@ -55,6 +56,16 @@ ACCOUNT_CLASSIFICATION = {
     "mortgage": "liability",
     "retirement": "asset",
 }
+
+
+def _slug(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return slug or "obligation"
+
+
+def _cell(value) -> str:
+    text = "?" if value is None else str(value)
+    return text.replace("|", "/").replace("\n", " ").strip()
 
 
 def load_json(path: Path) -> dict:
@@ -456,14 +467,128 @@ def financial_obligations(entities: dict, obligations: dict) -> list[dict]:
         for item in source.get("financial_obligations", []) or []:
             embedded.append(
                 {
+                    "id": item.get("id"),
                     "priority": item.get("priority", "?"),
                     "title": item.get("title", "?"),
-                    "owner": item.get("entity", "?"),
+                    "entity": item.get("entity", "?"),
+                    "owner": item.get("owner") or item.get("entity", "?"),
+                    "amount": item.get("amount"),
+                    "amount_unknown": item.get("amount_unknown", True),
+                    "frequency": item.get("frequency", "unknown"),
                     "next_step": item.get("next_step", "Review"),
                     "source": source.get("source", "entities.yaml"),
                 }
             )
     return embedded
+
+
+def _obligation_priority_band(priority) -> tuple[str, str]:
+    try:
+        p = int(priority)
+    except (TypeError, ValueError):
+        p = 50
+    if p >= 90:
+        return "P0", "same-day verification"
+    if p >= 80:
+        return "P1", "this week"
+    if p >= 60:
+        return "P2", "next 30 days"
+    return "P3", "watchlist"
+
+
+def _obligation_gate(obligation: dict) -> tuple[str, str]:
+    title = str(obligation.get("title", ""))
+    step = str(obligation.get("next_step", ""))
+    text = f"{title} {step}".lower()
+    if "self-heal" in text or "no action unless" in text:
+        return "daemon-monitor", "System watches; principal acts only if threshold changes."
+    if "deploy" in text or "wrangler" in text or "mint_btc_address" in text:
+        return "principal-deploy", "Principal runs deploy or sets the required rail variable."
+    if any(word in text for word in ("verify", "fraud", "call", "login", "log in", "provide", "decide", "renew")):
+        return "principal-hand", "Requires the principal in an external portal or phone channel."
+    return "principal-review", "Principal reviews and either records receipt or delegates."
+
+
+def normalize_obligation_queue(entities: dict, obligations: dict) -> list[dict]:
+    queue = []
+    for raw in financial_obligations(entities, obligations):
+        title = raw.get("title", "?")
+        priority = raw.get("priority", 50)
+        band, due_window = _obligation_priority_band(priority)
+        gate, gate_note = _obligation_gate(raw)
+        oid = raw.get("id") or _slug(title)
+        queue.append(
+            {
+                "id": oid,
+                "band": band,
+                "priority": priority,
+                "due_window": due_window,
+                "title": title,
+                "entity": raw.get("entity") or raw.get("owner", "?"),
+                "amount": raw.get("amount") or ("unknown" if raw.get("amount_unknown", True) else "?"),
+                "frequency": raw.get("frequency", "unknown"),
+                "gate": gate,
+                "gate_note": gate_note,
+                "next_step": raw.get("next_step", "Review and record a receipt."),
+                "receipt": f"Record receipt in entities.yaml or obligations ledger under `{oid}`.",
+                "source": raw.get("source", "obligations-ledger.json"),
+            }
+        )
+    return sorted(queue, key=lambda item: (str(item["band"]), -int(item.get("priority") or 0), str(item["id"])))
+
+
+def build_obligation_action_plan(entities: dict, obligations: dict) -> str:
+    queue = normalize_obligation_queue(entities, obligations)
+    source_label = (
+        "obligations-ledger.json"
+        if obligations.get("obligations")
+        else "entities.yaml registry fallback"
+    )
+
+    lines = []
+    lines.append("# Financial Office — Obligation Action Plan")
+    lines.append("")
+    lines.append(f"> Generated: {now_iso()}")
+    lines.append("> *Principal-safe operating queue. This stages work; it does not move money, file forms, or click external portals.*")
+    lines.append("")
+    lines.append("## Operating Rule")
+    lines.append("")
+    lines.append("1. Work top-down by band, then priority.")
+    lines.append("2. External portals, phone calls, payments, filings, and irreversible account changes stay principal-gated.")
+    lines.append("3. Each closed row needs a receipt: confirmation number, screenshot path, ledger entry, or explicit principal note.")
+    lines.append("")
+    lines.append("## Queue")
+    lines.append("")
+    lines.append(f"Sourced from `{source_label}` — {len(queue)} financial-material obligations.")
+    lines.append("")
+    lines.append("| Band | Priority | Due Window | Obligation | Entity/Owner | Amount | Gate | Next Step | Receipt |")
+    lines.append("|---|---:|---|---|---|---|---|---|---|")
+    for item in queue:
+        lines.append(
+            "| {band} | {priority} | {due_window} | {title} | {entity} | {amount} | {gate} | {next_step} | {receipt} |".format(
+                band=_cell(item["band"]),
+                priority=_cell(item["priority"]),
+                due_window=_cell(item["due_window"]),
+                title=_cell(item["title"]),
+                entity=_cell(item["entity"]),
+                amount=_cell(item["amount"]),
+                gate=_cell(item["gate"]),
+                next_step=_cell(item["next_step"]),
+                receipt=_cell(item["receipt"]),
+            )
+        )
+    lines.append("")
+    lines.append("## Gate Notes")
+    lines.append("")
+    seen = set()
+    for item in queue:
+        key = item["gate"]
+        if key in seen:
+            continue
+        seen.add(key)
+        lines.append(f"- **{key}:** {item['gate_note']}")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def build_dashboard(
@@ -542,6 +667,7 @@ def build_dashboard(
     )
     lines.append(f"| Balance Sheet | `balance-sheet.md` | {bs_status} |")
     lines.append("| Cash-Flow Projection | `cashflow.md` | Generated — pre-revenue baseline |")
+    lines.append("| Obligation Action Plan | `obligation-action-plan.md` | Generated — principal-safe queue with gates and receipts |")
     lines.append("| Payrail Disbursement Map | `payrail.md` | Authored — all 4 hops mapped |")
     lines.append(
         "| Balance History | `balances-history.json` | {} snapshot(s) recorded |".format(sc)
@@ -566,39 +692,43 @@ def build_dashboard(
         "1. ✅ **Macro/micro faces deepened** — excellent, showable, polished (2026-07-03 beat)"
     )
     lines.append(
-        "2. **P0: Clear card-0186 fraud hold** — one call to Santander; keystone for 3+ cascaded billing failures"
+        "2. ✅ **Obligation action queue** — principal-safe gates + receipts generated from the obligations feed"
     )
     lines.append(
-        "3. **P1: Enter balances** — principal fills `balance` + `as_of` in `entities.yaml` (unlocks real position tracking)"
+        "3. **P0: Clear card-0186 fraud hold** — one call to Santander; keystone for 3+ cascaded billing failures"
     )
     lines.append(
-        "4. **P2: Deploy MONETA** — `docker build + docker run` on $0 host; set `MINT_BTC_ADDRESS`"
+        "4. **P1: Enter balances** — principal fills `balance` + `as_of` in `entities.yaml` (unlocks real position tracking)"
     )
     lines.append(
-        "5. **P3: Deploy Exporter** — 'git push' + 'wrangler deploy'; first dollar via MONETA or Ko-fi"
+        "5. **P2: Deploy MONETA** — `docker build + docker run` on $0 host; set `MINT_BTC_ADDRESS`"
     )
     lines.append(
-        "6. ✅ **Self-feed wired** — `financial-organ.py` runs every 8 beats; auto-advances maturity as slices land"
+        "6. **P3: Deploy Exporter** — 'git push' + 'wrangler deploy'; first dollar via MONETA or Ko-fi"
     )
     lines.append(
-        "7. ✅ **Web JSON dashboard** — `financial-standing.json` written to web face each beat"
+        "7. ✅ **Self-feed wired** — `financial-organ.py` runs every 8 beats; auto-advances maturity as slices land"
     )
     lines.append(
-        "8. ✅ **Balance journal** — `balances-history.json` persists time-series of snapshots"
+        "8. ✅ **Web JSON dashboard** — `financial-standing.json` written to web face each beat"
     )
     lines.append(
-        "9. **P4: Decide entity route** — revive LLC / dissolve / individual-only; sets tax structure"
+        "9. ✅ **Balance journal** — `balances-history.json` persists time-series of snapshots"
     )
     lines.append(
-        "10. **P5: Register investment accounts** — brokerage, retirement, crypto, credit accounts"
+        "10. **P4: Decide entity route** — revive LLC / dissolve / individual-only; sets tax structure"
+    )
+    lines.append(
+        "11. **P5: Register investment accounts** — brokerage, retirement, crypto, credit accounts"
     )
     lines.append("")
 
     return "\n".join(lines)
 
 
-def build_web_dashboard(entities: dict, classified: dict) -> dict:
+def build_web_dashboard(entities: dict, classified: dict, obligations: dict | None = None) -> dict:
     entity_list = entities.get("entities", [])
+    obligation_queue = normalize_obligation_queue(entities, obligations or {})
     return {
         "ts": now_iso(),
         "date": today_str(),
@@ -612,6 +742,9 @@ def build_web_dashboard(entities: dict, classified: dict) -> dict:
         "entity_count": len(entity_list),
         "snapshot_count": classified.get("snapshot_count", 0),
         "latest_snapshot_date": classified.get("latest_date"),
+        "obligation_action_count": len(obligation_queue),
+        "obligation_p0_count": len([item for item in obligation_queue if item["band"] == "P0"]),
+        "top_obligation_actions": obligation_queue[:5],
         "maturity": _maturity_from_ladder(),
         "faces": [
             {
@@ -689,6 +822,9 @@ def main() -> int:
         "cashflow.md": build_cashflow(
             entities, revenue, obligations, classified
         ),
+        "obligation-action-plan.md": build_obligation_action_plan(
+            entities, obligations
+        ),
         "STATUS.md": build_dashboard(
             entities, revenue, obligations, classified
         ),
@@ -701,7 +837,7 @@ def main() -> int:
         else:
             print(f"[consolidate] unchanged {path.relative_to(ROOT)}")
 
-    dashboard_json = build_web_dashboard(entities, classified)
+    dashboard_json = build_web_dashboard(entities, classified, obligations)
     web_path = WEB_FACE / "financial-standing.json"
     WEB_FACE.mkdir(parents=True, exist_ok=True)
     if write_json_if_changed(web_path, dashboard_json):

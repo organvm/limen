@@ -4,7 +4,7 @@
 The institutional force a billionaire's family office provides — CPO, CFO, reconciliation clerk,
 tax strategist, treasury analyst, compliance sentinel — rebuilt as an autonomic organ. It runs
 the consolidate.py generator every beat to regenerate the balance sheet, cash-flow projection,
-and STATUS dashboard from live entity data; assesses financial-organ maturity from objective
+obligation action plan, and STATUS dashboard from live entity data; assesses financial-organ maturity from objective
 criteria; advances organ-ladder.json as slices land; and stamps the financial voice for
 proprioception.
 
@@ -51,6 +51,7 @@ _MATURITY_CRITERIA: list[tuple[str, str, int]] = [
     # Building — usable artifacts on disk (building: 30-59%)
     ("balance_sheet_generated", "balance-sheet.md generated with real content", 4),
     ("cashflow_generated", "cashflow.md generated with revenue pipeline", 4),
+    ("obligation_action_plan_generated", "obligation-action-plan.md generated with gates and receipts", 4),
     ("payrail_authored", "payrail.md authored with all 4 hops mapped", 4),
     ("status_dashboard", "STATUS.md auto-generated from consolidation", 4),
     ("moneta_rail_integrated", "MONETA sovereign cash rail wired (moneta/)", 4),
@@ -163,6 +164,8 @@ def _assess_maturity() -> dict:
             ok = _has_content("organs/financial/balance-sheet.md")
         elif key == "cashflow_generated":
             ok = _has_content("organs/financial/cashflow.md")
+        elif key == "obligation_action_plan_generated":
+            ok = _has_content("organs/financial/obligation-action-plan.md")
         elif key == "payrail_authored":
             ok = _has_content("organs/financial/payrail.md")
         elif key == "status_dashboard":
