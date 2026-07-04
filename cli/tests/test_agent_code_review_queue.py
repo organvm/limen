@@ -110,10 +110,7 @@ def test_reviewed_tokens_include_session_ids_after_fenced_blocks() -> None:
     sid = "019f0678-bb8c-7110-a61e-d9b6fc5c253a"
 
     tokens = queue_mod.reviewed_tokens_from_doc(
-        "```bash\n"
-        "echo before\n"
-        "```\n"
-        f"- Codex session `{sid}` covered a broad control-plane tranche.\n"
+        f"```bash\necho before\n```\n- Codex session `{sid}` covered a broad control-plane tranche.\n"
     )
 
     assert sid in tokens
