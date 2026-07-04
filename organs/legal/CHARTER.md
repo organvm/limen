@@ -3,8 +3,9 @@
 > **Boundary:** an AI-run legal *operations* firm that works under and for a licensed attorney. It does
 > not practice law or give legal advice. The attorney of record directs it and owns every output. See
 > [KERNEL.md](KERNEL.md) for the full guardrails and [FRAMEWORK-FOR-MICAH.md](FRAMEWORK-FOR-MICAH.md) for
-> the client-facing deck. **Current maturity:** scaffold. This charter defines buildable workflows and
-> reviewable artifacts; it does not claim an autonomous law practice or a deployed production firm.
+> the client-facing deck. **Current maturity:** first vertical slice. This charter defines buildable
+> workflows and reviewable artifacts; it does not claim an autonomous law practice or a deployed
+> production firm.
 
 ## What it rivals — the Cochran standard
 
@@ -82,9 +83,10 @@ organs/legal/
     ethics-log.md            # sentinel checks and human approvals
 ```
 
-Only the first three files exist in the scaffold today. The `matters/<matter-id>/` surface is the
-next build target, not a claim that live case records have already been ingested. Until counsel supplies
-or approves real matter facts, all examples stay structural.
+The first matter surface now exists at `matters/anthony-ada-employment/`. It is a review packet for the
+live ADA employment/accommodation matter, not a claim that private case records have already been
+ingested. Until counsel supplies or approves real matter facts, private evidence rows remain explicitly
+marked as missing inputs.
 
 ## The firm-wide workflows it runs
 
@@ -301,6 +303,16 @@ The first acceptable live artifact set is:
 - `evidence-index.csv` — every supplied record logged with source and chain-of-custody notes.
 - `deadlines.md` — all known dates, explicitly marked "attorney-confirmed" or "unconfirmed".
 - `FRAMEWORK-FOR-MICAH.md` — the presentation wrapper, not a substitute for counsel's direction.
+
+Implemented first slice:
+
+- `matters/anthony-ada-employment/posture.md`
+- `matters/anthony-ada-employment/evidence-index.csv`
+- `matters/anthony-ada-employment/chain-of-custody.md`
+- `matters/anthony-ada-employment/deadlines.md`
+- `matters/anthony-ada-employment/ethics-log.md`
+- `matters/anthony-ada-employment/MICAH-FRAMEWORK-DECK.md`
+- `validate-legal.py`
 
 ## Future scaling (non-blocking, noted for later maturity bands)
 
