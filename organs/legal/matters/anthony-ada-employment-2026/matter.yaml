@@ -1,0 +1,67 @@
+schema_version: legal-matter-v1
+id: anthony-ada-employment-2026
+name: Anthony ADA employment matter - first counsel review packet
+as_of: 2026-07-04
+
+member:
+  client: Anthony J. Padavano
+  role: client / employee-party
+  identity_scope: Named only because the existing legal-organ deck and organ census already name the live matter.
+  accessibility_context: Post-injury recovery and disability-access record tied to the legal ADA matter.
+
+mandate:
+  matter_type: ADA employment / accommodation matter
+  counsel: Micah Longo
+  purpose: Build a source-backed posture brief, evidence index, custody register, and review deck for counsel.
+  exclusions:
+    - legal advice
+    - legal judgment
+    - filing
+    - service
+    - external communication
+    - settlement authority
+
+standing:
+  current: COUNSEL_REVIEW
+  stage: first_vertical_slice
+  posture_summary: Real matter identity and operating boundaries are source-backed; primary legal evidence still requires privileged client/counsel intake.
+  next_review: Micah confirms scope, corrects posture, and names the first privileged evidence intake path.
+
+standard:
+  authority_status: Not researched in this slice; controlling law and legal element wording require counsel verification.
+  source_records:
+    - organ-ladder.json
+    - organs/legal/KERNEL.md
+    - organs/legal/CHARTER.md
+    - organs/legal/FRAMEWORK-FOR-MICAH.md
+    - organs/health/KERNEL.md
+    - organs/health/CHARTER.md
+
+governance:
+  counsel_review_required: true
+  draft_only: true
+  no_autonomous_external_action: true
+  no_independent_attorney_client_relationship: true
+  privilege_boundary: Primary matter documents remain in attorney/client-approved channels; this packet only indexes repo-held institutional source records.
+  forbidden_acts:
+    - legal advice
+    - filing
+    - service
+    - sending external communications
+    - settlement authority
+    - legal judgment
+
+human_gates:
+  - Micah Longo confirms the matter scope, posture, and any legal element wording before reliance.
+  - Anthony confirms which primary records may enter the evidence room and through what privileged channel.
+  - Counsel or Anthony performs every send, sign, filing, service, negotiation, or disclosure act.
+
+artifacts:
+  posture: posture.md
+  evidence_index: evidence-index.csv
+  chain_of_custody: chain-of-custody.md
+  elements_map: elements-map.md
+  deadlines: deadlines.md
+  ethics_log: ethics-log.md
+  review_note: drafts/micah-review-cover-note.md
+  framework_deck: ../../FRAMEWORK-FOR-MICAH.md

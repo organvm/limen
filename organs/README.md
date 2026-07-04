@@ -16,7 +16,7 @@ AI roles + workflows + what real institution it rivals), then the organ's workin
 
 | organ | pillar | home |
 |---|---|---|
-| [legal/](legal/) | Legal Organism — a litigation firm at the Cochran standard | the flagship |
+| [legal/](legal/) | Legal Organism — a litigation firm at the Cochran standard | building — first counsel-review slice live |
 | financial/ | Financial Office — a billionaire's family office | seeded |
 | education/ | Education Organism — an academy + the alt-ed thesis | seeded (edu-organism is 60–80%) |
 | media/ | Carrier-Wave Media — a cross-platform empire | seeded |

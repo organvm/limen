@@ -73,18 +73,24 @@ organs/legal/
   CHARTER.md                 # this virtual-firm operating charter
   FRAMEWORK-FOR-MICAH.md     # first attorney-facing deck
   matters/<matter-id>/
+    matter.yaml              # structured matter contract + gates
     intake.md                # attorney/client supplied facts, scope, and exclusions
     posture.md               # living case-posture brief
     evidence-index.csv       # document/source/elements/chain-of-custody table
+    chain-of-custody.md      # custody ledger + primary evidence intake protocol
     elements-map.md          # attorney-verified law-to-proof matrix
     deadlines.md             # advisory deadline calendar
     drafts/                  # review-only skeletons, never final filings
     ethics-log.md            # sentinel checks and human approvals
+  validate-legal.py          # executable guardrail/presence validator
 ```
 
-Only the first three files exist in the scaffold today. The `matters/<matter-id>/` surface is the
-next build target, not a claim that live case records have already been ingested. Until counsel supplies
-or approves real matter facts, all examples stay structural.
+The first live matter packet now exists at
+[`matters/anthony-ada-employment-2026/`](matters/anthony-ada-employment-2026/). It is deliberately
+source-backed and conservative: real matter identity and counsel boundary are indexed from existing
+organ records; primary employer, medical, agency, court, and privileged attorney-client records remain
+outside the repo until counsel/client approve an intake path. Until counsel supplies or approves real
+matter facts, the packet surfaces gaps instead of inventing specifics.
 
 ## The firm-wide workflows it runs
 
@@ -287,19 +293,25 @@ find, organize, track, draft, and verify.
 ## First proof: the micro instance
 
 The micro instance — Anthony's ADA employment matter — is the first deployment, packaged as
-[FRAMEWORK-FOR-MICAH.md](FRAMEWORK-FOR-MICAH.md): a deck attorney Micah Longo can look at and
-immediately see what an AI-augmented firm does for his client. Real case facts are placeholders
-until the client/attorney supply them; the *structure* is the deliverable.
+[FRAMEWORK-FOR-MICAH.md](FRAMEWORK-FOR-MICAH.md) and the live matter packet at
+[`matters/anthony-ada-employment-2026/`](matters/anthony-ada-employment-2026/): a deck and evidence
+room attorney Micah Longo can inspect immediately. Source-backed facts are separated from counsel/client
+intake gaps; the system refuses to populate employer, medical, agency, court, or legal-deadline
+specifics without authorized records.
 
 The SCRUM: run workflow 1 (intake → posture) and workflow 2 (evidence → index) against the real
 matter facts once Micah provides them. Workflow 4 (deadlines → calendar) runs as soon as dates
 are known. Workflows 3 and 5 build on the index output.
 
-The first acceptable live artifact set is:
+The first live artifact set is:
 
-- `posture.md` — one-page matter posture, approved/corrected by Micah.
-- `evidence-index.csv` — every supplied record logged with source and chain-of-custody notes.
-- `deadlines.md` — all known dates, explicitly marked "attorney-confirmed" or "unconfirmed".
+- `matter.yaml` — structured matter contract, gates, artifacts, and forbidden acts.
+- `posture.md` — one-page matter posture, source-backed and awaiting Micah's correction.
+- `evidence-index.csv` — every current source record logged with source and chain-of-custody notes.
+- `chain-of-custody.md` — custody entries and the primary evidence intake protocol.
+- `elements-map.md` — proof-bucket matrix for counsel verification, with no invented authority.
+- `deadlines.md` — all known dates and unknowns, explicitly marked for counsel confirmation.
+- `ethics-log.md` — UPL, privilege, authority, custody, and outbound-action sentinel checks.
 - `FRAMEWORK-FOR-MICAH.md` — the presentation wrapper, not a substitute for counsel's direction.
 
 ## Future scaling (non-blocking, noted for later maturity bands)

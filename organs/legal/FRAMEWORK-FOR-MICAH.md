@@ -10,6 +10,24 @@
 
 ---
 
+## The live packet now exists
+
+The first vertical slice is no longer just a model. It is a counsel-review packet for the live ADA
+employment matter:
+
+| Artifact | Path | What it gives you |
+|---|---|---|
+| Case-posture brief | [`matters/anthony-ada-employment-2026/posture.md`](matters/anthony-ada-employment-2026/posture.md) | one-page posture, known facts, and source-backed gaps |
+| Evidence/custody index | [`matters/anthony-ada-employment-2026/evidence-index.csv`](matters/anthony-ada-employment-2026/evidence-index.csv) | every current source record with provenance, custody ID, and review status |
+| Chain-of-custody register | [`matters/anthony-ada-employment-2026/chain-of-custody.md`](matters/anthony-ada-employment-2026/chain-of-custody.md) | current custody entries plus intake protocol for primary records |
+| Counsel-verification matrix | [`matters/anthony-ada-employment-2026/elements-map.md`](matters/anthony-ada-employment-2026/elements-map.md) | proof buckets for you to confirm, rewrite, or discard |
+| Deadline/open-item register | [`matters/anthony-ada-employment-2026/deadlines.md`](matters/anthony-ada-employment-2026/deadlines.md) | no invented dates; every unknown deadline is surfaced as a counsel gate |
+| Ethics log | [`matters/anthony-ada-employment-2026/ethics-log.md`](matters/anthony-ada-employment-2026/ethics-log.md) | UPL, privilege, authority, custody, and outbound-action checks |
+
+Important distinction: the current index contains institutional source records from this repository,
+not employer, medical, agency, court, or privileged attorney-client records. Those enter only through
+a channel you and Anthony approve.
+
 ## The problem it solves
 
 A well-resourced opponent has a *firm* behind them — associates indexing every document, paralegals
@@ -59,5 +77,6 @@ line, tell me and I'll cut them. You're in charge of all of it.
 
 ---
 
-*Structure v0.1 — `organs/legal/` in the VLTIMA system. Companion docs: [KERNEL.md](KERNEL.md) (the
-domain model), [CHARTER.md](CHARTER.md) (the full org-chart + workflows).*
+*Structure v0.2 — `organs/legal/` in the VLTIMA system. Companion docs: [KERNEL.md](KERNEL.md) (the
+domain model), [CHARTER.md](CHARTER.md) (the full org-chart + workflows), and
+[`validate-legal.py`](validate-legal.py) (the executable boundary check).*

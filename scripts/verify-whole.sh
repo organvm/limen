@@ -49,6 +49,9 @@ python3 organs/artist/validate-artist.py --fleet --quiet
 step "Validate Koinonia social organ relationship-posture briefs"
 python3 organs/social/validate-social.py --fleet --quiet
 
+step "Validate Cochran legal organ matter packets"
+python3 organs/legal/validate-legal.py --fleet --quiet
+
 step "Verify the merge-policy predicate (verdict matrix regression test)"
 bash scripts/tests/merge-policy.test.sh
 
