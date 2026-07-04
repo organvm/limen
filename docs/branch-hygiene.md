@@ -23,7 +23,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `worktree-ianva-doorway` — f4c0c07 fix(ianva): never echo bearer to stdout; untrack generated/ golden files
 - `worktree-linear-conjuring-bear` — 92c21f2 chore(gitignore): ignore .wrangler/ cache at any depth, not just web/worker
 
-## Live-work branches (110) — decide each
+## Live-work branches (112) — decide each
 
 - `_pr198` — 4cd0dba fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `capture/main-2026-07-02T01-03-35Z` — 71b4885 capture: off-disk sync 2026-07-02T01:03:35Z (main behind origin → side ref, HEAD untouched)
@@ -77,8 +77,10 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `limen/org-governance-organ-selffeed-0701-ba0f` — 3b9baf0 limen: close governance organ self-feed task
 - `limen/org-health-organ-kernel-0630-e4e0` — 2564cd7 Add health organ kernel
 - `limen/org-health-organ-kernel-0704-59fd` — c3d9167 health: sync KERNEL.md to completed scaffold (authority contract + posture sequence + build plan)
+- `limen/org-health-organ-kernel-0704-decb` — 74a158a docs: advance health organ kernel
 - `limen/org-health-organ-kernel-0704-e61b` — b08caed health: complete organ kernel scaffold sync
 - `limen/org-legal-organ-charter-0703-0899` — b8eb571 limen: complete legal organ charter
+- `limen/org-legal-organ-charter-0704-0b2a` — 5dbc0e8 docs: harden legal organ charter
 - `limen/org-legal-organ-firstslice-0703-c244` — 05cad7d legal: add first counsel-review matter slice
 - `limen/org-legal-organ-kernel-0630-a5e5` — 6c301f3 limen: map legal organ kernel
 - `limen/org-legal-organ-kernel-0701-e535` — 3dcb37c organs: refine legal kernel flagship
