@@ -466,6 +466,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "Retry count for transient GitHub CLI/API failures while collecting prompt lifecycle PR receipts. Keeps network blips out of durable blocker ledgers."
+  LIMEN_CONSOLIDATION_GATE:
+    default: ""
+    env: LIMEN_CONSOLIDATION_GATE
+    self_update: none
+    owner: continuity
+    note: "Safety gate for irreversible consolidation scripts (renames, owner rewrites, transfers). Must be set to 'consolidation-gate-open' to allow mutation; defaults closed (blocking)."
   LIMEN_CONSOLIDATION_GATE_TIMEOUT:
     default: 180
     env: LIMEN_CONSOLIDATION_GATE_TIMEOUT

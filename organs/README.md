@@ -17,7 +17,7 @@ AI roles + workflows + what real institution it rivals), then the organ's workin
 | organ | pillar | home |
 |---|---|---|
 | [legal/](legal/) | Legal Organism — a litigation firm at the Cochran standard | the flagship |
-| financial/ | Financial Office — a billionaire's family office | seeded |
+| [financial/](financial/) | Aerarium — Financial Office: a billionaire's family office, deployable in 5 minutes | excellent — macro + micro faces |
 | education/ | Education Organism — an academy + the alt-ed thesis | seeded (edu-organism is 60–80%) |
 | media/ | Carrier-Wave Media — a cross-platform empire | seeded |
 | governance/ | Aerarium / Cvrsvs Honorvm — governance-as-code | seeded |

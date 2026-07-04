@@ -521,12 +521,12 @@ def build_dashboard(
     lines.append("|---|---|---|")
     lines.append(
         "| Macro Face | `MACRO.md` | {} |".format(
-            "Deepened — deployable-in-5-minutes, fleet-capacity-mapped" if MACRO_FACE.exists() else "Missing"
+            "Excellent — problem framing, what-this-is-NOT, governance layer, validation commands, deployable-in-5-minutes" if MACRO_FACE.exists() else "Missing"
         )
     )
     lines.append(
         "| Micro Instance Face | `MICRO.md` | {} |".format(
-            "Deepened — wealth/portfolio/tax-automation workflow, MONETA interaction, priority gates" if MICRO_FACE.exists() else "Missing"
+            "Excellent — fleet standing, sovereign intake, wealth/portfolio/tax-automation workflow, governance layer, priority gates" if MICRO_FACE.exists() else "Missing"
         )
     )
     lines.append(
@@ -563,7 +563,7 @@ def build_dashboard(
     lines.append("## Next deepen steps")
     lines.append("")
     lines.append(
-        "1. ✅ **Macro/micro faces deepened** — excellent, showable, polished (2026-07-03 beat)"
+        "1. ✅ **Macro/micro faces excellent** — governance-layer table, what-this-is-NOT, validation commands, fleet standing, authority contract (2026-07-04 beat)"
     )
     lines.append(
         "2. **P0: Clear card-0186 fraud hold** — one call to Santander; keystone for 3+ cascaded billing failures"
@@ -618,15 +618,15 @@ def build_web_dashboard(entities: dict, classified: dict) -> dict:
                 "id": "macro",
                 "title": "Aerarium MACRO Face",
                 "path": "organs/financial/MACRO.md",
-                "status": "deepened" if MACRO_FACE.exists() else "missing",
-                "promise": "deployable-in-5-minutes family office — fleet-capacity-mapped, self-sovereign, institutional weight for one person",
+                "status": "excellent" if MACRO_FACE.exists() else "missing",
+                "promise": "deployable-in-5-minutes family office — problem framing, what-this-is-NOT, governance layer, validation commands, fleet-capacity-mapped, institutional weight for one person",
             },
             {
                 "id": "micro",
                 "title": "Aerarium MICRO Face",
                 "path": "organs/financial/MICRO.md",
-                "status": "deepened" if MICRO_FACE.exists() else "missing",
-                "promise": "Anthony's real instance — MONETA sovereign intake, wealth/portfolio/tax-automation workflow, priority-ranked principal gates",
+                "status": "excellent" if MICRO_FACE.exists() else "missing",
+                "promise": "Anthony's real instance — fleet standing table, MONETA sovereign intake, wealth/portfolio/tax-automation workflow, governance layer, priority-ranked principal gates",
             },
         ],
         "rail_boundary": "MONETA intakes value; Aerarium tracks, projects, allocates, and governs the institution around it.",

@@ -23,7 +23,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `worktree-ianva-doorway` — f4c0c07 fix(ianva): never echo bearer to stdout; untrack generated/ golden files
 - `worktree-linear-conjuring-bear` — 92c21f2 chore(gitignore): ignore .wrangler/ cache at any depth, not just web/worker
 
-## Live-work branches (104) — decide each
+## Live-work branches (107) — decide each
 
 - `_pr198` — 4cd0dba fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `capture/main-2026-07-02T01-03-35Z` — 71b4885 capture: off-disk sync 2026-07-02T01:03:35Z (main behind origin → side ref, HEAD untouched)
@@ -76,9 +76,12 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `limen/org-governance-organ-deepen-0703-9f8e` — 6d48601 governance: enforce publication-policy convergence
 - `limen/org-governance-organ-selffeed-0701-ba0f` — 3b9baf0 limen: close governance organ self-feed task
 - `limen/org-health-organ-kernel-0630-e4e0` — 2564cd7 Add health organ kernel
+- `limen/org-health-organ-kernel-0704-59fd` — c3d9167 health: sync KERNEL.md to completed scaffold (authority contract + posture sequence + build plan)
 - `limen/org-legal-organ-charter-0703-0899` — b8eb571 limen: complete legal organ charter
 - `limen/org-legal-organ-kernel-0630-a5e5` — 6c301f3 limen: map legal organ kernel
 - `limen/org-legal-organ-kernel-0701-e535` — 3dcb37c organs: refine legal kernel flagship
+- `limen/org-legal-organ-kernel-0704-a80b` — 1800caa chore(legal): bump legal organ maturity to 25% (KERNEL.md authored)
+- `limen/org-legal-organ-kernel-0704-c763` — ac60fff legal: author KERNEL.md mapping domain-neutral kernel to legal domain
 - `limen/org-social-organ-firstslice-0703-1c71` — a2fa6ad organs/social: ship first slice
 - `limen/org-social-organ-firstslice-0703-6fb5` — 4e69933 feat(social): add first koinonia slice
 - `limen/studium-deepen-aeneid-e6cf` — fcee5d4 feat(studium): Aeneid Books 4-8 arcs and essays (desire/sacrifice/revelation/war)

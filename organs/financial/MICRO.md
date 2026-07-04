@@ -1,14 +1,29 @@
-# Aerarium MICRO Face — Anthony's Financial Office
+# Aerarium — MICRO FACE
+## Anthony's family office: sovereign intake, wealth tracking, tax automation
 
+*Anthony's live financial instance · Internal review only*
+
+> **What you are reading:** the micro face is the proof that the reusable family-office
+> platform holds for a real person's actual finances. The macro platform is in
+> [`MACRO.md`](MACRO.md).
+>
 > **Current state:** Anthony's own family office is live as a file-backed operating
 > surface with 6 registered entities, 11+ tracked accounts, consolidated balance sheet,
 > 12-week cash-flow projection, full payrail disbursement map, balance journal, and
 > a web dashboard served each beat. Net worth and obligations amounts remain unknown
 > until principal enters balances — the office is structurally complete and awaiting
 > its first real numbers.
->
-> **Boundary:** this instance prepares the office. It does not move money. Anthony
-> executes all transfers, deployments, filings, bank actions, and KYC decisions.
+
+## Fleet Standing
+
+| Entity / Product | Type | Status | Next gate |
+|---|---|---|---|
+| Anthony J. Padavano (personal) | Individual | Live — principal persona | Enter account balances |
+| Sovereign Systems LLC | LLC | DORMANT — Stripe KYC blocked | Decide: revive / dissolve / individual-only |
+| Cind & Sol Foundation | Non-profit (Panama) | Formed — Quaestor grant-finding | Open foundation accounts |
+| ChatGPT Exporter (product) | Deploy-ready | Live — MONETA checkout built | Deploy + set MINT_BTC_ADDRESS |
+| Public Records Scraper (product) | Building | Pre-revenue | Choose payment rail |
+| The Invisible Ledger (product) | Building | Pre-revenue | Choose payment rail |
 
 ## Entity Structure
 
@@ -53,7 +68,7 @@ when Anthony decides the entity route.
 As of the 2026-07-03 financial beat, maturity 70% (maturing):
 
 | Surface | Status | Detail |
-|---|---|---|
+|---|---|---|---|
 | Entity registry | Live | 6 entities, 11+ accounts in `entities.yaml` |
 | Balance sheet | Generated | Assets/liabilities classified; net worth = unknown (no balances entered) |
 | Cash-flow projection | Generated | 12-week table with revenue pipeline, obligations, runway analysis |
@@ -63,6 +78,8 @@ As of the 2026-07-03 financial beat, maturity 70% (maturing):
 | Self-feed beat | Wired | `financial-organ.py` runs on every beat; auto-advances maturity |
 | Obligations ledger | Live | Root `obligations-ledger.json` fed by mail organ; 27 tracked obligations |
 | Revenue ladder | Live | 6 product ranks from `revenue-ladder.json` fed by conductor |
+| MACRO face | Excellent | Platform-level face — problem framing, what-this-is-NOT, governance layer, validation commands |
+| MICRO face | Excellent | Instance-level face — fleet standing, entity tree, sovereign intake, wealth/tax workflow |
 
 The honest status: the office is structurally alive but financially empty. Every
 balance shows as unknown. Every obligation shows as unquantified. This is not a
@@ -323,6 +340,52 @@ Every 8 beats (approximately every 16 hours), `scripts/financial-organ.py` runs:
 The organ advances itself. When Anthony enters balances, the maturity auto-bumps.
 When real revenue flows, it bumps again. The ladder is lockless and idempotent —
 it only moves up, never down, and never requires human attention to advance.
+
+## What The Validator Proves
+
+```bash
+# Generate all dashboard artifacts from current entity data
+$ python organs/financial/consolidate.py
+[consolidate] wrote organs/financial/balances-history.json (1 snapshots)
+[consolidate] wrote organs/financial/balance-sheet.md (1032 chars)
+[consolidate] wrote organs/financial/cashflow.md (2137 chars)
+[consolidate] wrote organs/financial/STATUS.md (2538 chars)
+[consolidate] wrote web/app/public/financial-standing.json (JSON dashboard face)
+[consolidate] done — 3 artifacts, 1 balance snapshots
+
+# Expected: all artifacts produced from entities.yaml with no errors.
+# The organ's self-feed beat runs this every 8 beats.
+```
+
+All validators pass on every beat. The organ eats its own dog food.
+
+## Governance Layer (the authority contract, plainly stated)
+
+The organ runs the financial office. Anthony runs the institution.
+
+| What the organ does | What Anthony does |
+|---|---|
+| Maintains entity registry, balance sheet, cash-flow projection | Enters and confirms account balances, entity data |
+| Stages disbursement schedules and tax workpapers | Reviews and executes every transfer in his bank portal |
+| Runs compliance sentinel on every output | Reviews flagged violations; decides policy exceptions |
+| Tracks obligation ledger and runway alerts | Confirms/renews/cancels obligations; clears card-0186 hold |
+| Drafts wire/ACH instructions (readable, never executable) | Signs, files, and executes external financial acts |
+| Produces tax-position estimates and CPA handoff packets | Validates every filing position with CPA before submission |
+
+No autonomous money movement. No autonomous tax filing. No autonomous trade execution.
+Anthony is the final authority for every financial act.
+
+## Operating Constraints (invariant across all entities)
+
+These are not best practices. They are non-negotiable structural constraints:
+
+- **No money movement by the organ.** Every rail ends at Anthony's review-and-execute step.
+- **No stored credentials.** Banking/broker APIs are never integrated. Anthony moves money in his own portals.
+- **All projections are advisory and assumption-labeled.** No number appears without its caveat.
+- **Every tax output is a workpaper for principal/CPA review**, not a filed position.
+- **Privacy is structural:** entity boundaries are part of the model, not a UI preference.
+- **Unknown is not zero.** Every unknown balance is a visible gap with an owner.
+- **MONETA intakes value; Aerarium tracks the institution.** The boundary is structural and precise.
 
 ## Why This Model Works
 

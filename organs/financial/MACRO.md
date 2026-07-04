@@ -1,13 +1,38 @@
-# Aerarium MACRO Face — Family Office in a Box
+# Aerarium — MACRO FACE
+## The deployable family office: institutional weight for one person, zero staff
 
-> **Promise:** deploy the operating system a billionaire's family office runs on —
+*The platform form of the financial organ · Available to any principal, family, or small institution*
+
+> **What you are reading:** the macro face is what an outside operator holds — the
+> portable, reusable body of this organ before any entity name or balance is in it.
+> The micro instance (Anthony's own family office) proves it on real finances. That
+> proof is in [`MICRO.md`](MICRO.md).
+
+---
+
+## The problem this platform solves
+
+A billionaire's family office does not have a smarter principal; it has **more bench**.
+Behind every ultra-high-net-worth individual stands a coordinated team — CPAs, tax
+strategists, investment analysts, bill-pay clerks, estate planners, insurance brokers,
+and a CFO who connects the pieces. The numbers are always current, the tax position is
+always modeled, the bills are always paid, and opportunities are always surfaced — not
+because the principal is a financial genius, but because the institutional bench never
+sleeps.
+
+Everyone else runs their financial life from a personal checking account, a shoebox of
+receipts, a QuickBooks file updated quarterly, and a panicked April 14th. The difference
+between those modes is not intelligence — it is **institutional weight**.
+
+This organ gives one person the infrastructure of a billionaire's family office: a
+continuously reconciled, always-current, projection-capable view of their entire financial
+position, with AI roles that do what a CPO, tax strategist, analyst, and bill-pay clerk
+would do — without the machine ever touching the money itself.
+
+> **The thesis: deploy the operating system a billionaire's family office runs on —
 > every entity known, every account classified, every obligation visible, every cash
 > path modeled, every tax exposure staged for review, and every disbursement governed
-> before anyone touches a bank portal. One person, institutional weight, zero staff.
->
-> **Boundary:** Aerarium does not move money, execute trades, open accounts, file taxes,
-> or sign anything. MONETA owns sovereign intake at `moneta/`. Aerarium owns the census,
-> ledger, forecast, payrail map, tax workpapers, and review gates around that intake.
+> before anyone touches a bank portal. One person, institutional weight, zero staff.**
 
 ## What It Is
 
@@ -126,6 +151,18 @@ Even with zero known balances, the artifacts are structurally complete:
 
 Each of these is a single edit in `entities.yaml`. The generator does the rest.
 
+## What This Is Not
+
+| This is NOT | Why |
+|---|---|
+| A budgeting app | Budgeting asks *you* to remember. Aerarium makes the institution remember — continuously, across every entity, every account, every obligation, every tax implication |
+| A bookkeeping SaaS | There is no login, no subscription, no database, no cloud. Your financial office is a directory of files you own, edit in any text editor, and keep on your own drive or repo |
+| A trading desk | Aerarium never executes trades, rebalances portfolios, or buys/sells assets. It tracks positions and allocation goals; the principal acts in their brokerage portal |
+| A tax filing service | The organ produces workpapers and estimates for principal/CPA review. No return is filed, no position is submitted, no payment is sent by the organ |
+| A money-mover | Every rail ends at the principal's review-and-execute step. The organ drafts, schedules, and stages — it never sends |
+| A credential store | No banking API keys, no brokerage tokens, no raw credentials. The organ reads from manual reports, statement uploads, and principal-provided summaries |
+| A fiduciary | The organ prepares and alerts; it does not authorize or execute. The principal is the final authority for every financial act |
+
 ## Why This Is Different From Every Other Financial Tool
 
 | What you already use | What it gives you | What it doesn't give you |
@@ -218,6 +255,22 @@ All three feed the obligations ledger. Compliance sentinel gates everything. The
 principal stands at the end of every path — no money moves, no filing is submitted,
 no commitment is made without human judgment.
 
+## Governance Layer (the authority contract, plainly stated)
+
+The organ runs the financial office. The principal runs the institution.
+
+| What the organ does | What the principal does |
+|---|---|
+| Maintains entity registry, balance sheet, cash-flow projection | Enters and confirms entity/account/balance data |
+| Stages disbursement schedules and tax workpapers | Reviews and executes every disbursement in their bank portal |
+| Runs compliance sentinel on every output | Reviews flagged violations; decides policy exceptions |
+| Tracks obligation ledger and runway alerts | Confirms/renews/cancels obligations monthly |
+| Drafts wire/ACH instructions (readable, never executable) | Signs, files, and executes external financial acts |
+| Produces tax-position estimates and CPA handoff packets | Validates every filing position with CPA before submission |
+
+No autonomous money movement. No autonomous tax filing. No autonomous trade execution.
+The principal is the final authority for every financial act.
+
 ## Non-Negotiables
 
 - MONETA intakes product revenue; Aerarium records and governs the institution around it.
@@ -227,6 +280,32 @@ no commitment is made without human judgment.
 - Every tax output is a workpaper for principal/CPA review, not a filed position.
 - Privacy is structural: entity boundaries are part of the model, not a UI preference.
 - Unknown is not zero. Every unknown balance is a visible gap with an owner.
+
+## Current Stage and Validation
+
+The macro platform is **70% mature** (maturing stage). The entity registry, balance-sheet
+generator, cash-flow projection, payrail map, and obligation-ledger integration are all
+operational. The consolidate.py generator produces all artifacts from the entity YAML.
+The remaining lift to 90%:
+
+1. Enter first real balances (unlocks net worth, trend, and runway tracking)
+2. Deploy MONETA for sovereign revenue intake
+3. Wire tax-position estimation as a continuous model-driven projection
+4. Close the disbursement-scheduling automation gap
+
+Validation:
+
+```bash
+# Generate all dashboard artifacts from entity registry
+python organs/financial/consolidate.py
+
+# Expected: balance-sheet.md, cashflow.md, STATUS.md, financial-standing.json
+# all produced from entities.yaml data with no errors
+```
+
+The organ's self-feed beat (`scripts/financial-organ.py`) calls consolidate.py every
+8 beats and auto-advances maturity as slices land. The ladder is lockless and
+idempotent — it only moves up, never down.
 
 ## The Macro-Micro Relationship
 
