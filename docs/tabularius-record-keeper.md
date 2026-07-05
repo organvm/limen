@@ -122,6 +122,9 @@ It runs the deterministic TABVLARIVS/VLTIMA gates in parallel: keeper/kernel py-
 VLTIMA and TABVLARIVS pytest slices, schema validation, writer audit, projection freshness, and the
 CLI projection check. It deliberately does **not** require the live event-proof stamp by default,
 because `logs/tabularius-organ-state.json` is daemon-owned evidence, not an inner-loop unit test.
+That state file separates `updated` (organ liveness) from `event_log_updated` (event-log proof
+freshness), so `tabularius-organ.py --check` can refresh liveness without extending the proof
+streak's freshness window.
 
 When the keeper has real live state, run the event proof explicitly:
 
