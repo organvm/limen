@@ -8,6 +8,7 @@ const root = join(__dirname, "..");
 const publicDir = join(root, "web", "app", "public");
 const privateDir = join(root, "web", "app", ".generated", "surfaces");
 const schemaDir = join(root, "spec", "contracts");
+const vltimaDir = join(root, "organs", "vltima");
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
@@ -93,5 +94,6 @@ for (const name of ["client-status.json", "internal-status.json"]) {
 
 validateFile("qa-status.schema.json", "qa-status.json", privateDir);
 validateFile("readiness.schema.json", "readiness.json", privateDir);
+validateFile("vltima-kernel-projection.schema.json", "projection.json", vltimaDir);
 
 console.log("Contract JSON Schemas verified");

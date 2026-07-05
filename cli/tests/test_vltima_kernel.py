@@ -146,6 +146,15 @@ def test_vltima_kernel_writes_and_checks_canonical_projection(tmp_path):
     assert "projection stale: organs/vltima/projection.json" in stale.stderr
 
 
+def test_vltima_projection_schema_names_canonical_contract():
+    schema = json.loads((ROOT / "spec" / "contracts" / "vltima-kernel-projection.schema.json").read_text())
+
+    assert schema["$id"] == "https://limen.local/contracts/vltima-kernel-projection.schema.json"
+    assert schema["properties"]["kind"]["enum"] == ["vltima.kernel-projection"]
+    assert schema["properties"]["schema_version"]["enum"] == [1]
+    assert {"primitives", "edges", "layers", "projections", "organs", "graph"}.issubset(schema["required"])
+
+
 def test_vltima_graph_validation_rejects_dangling_edges():
     module = load_validator_module()
 
