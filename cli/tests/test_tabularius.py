@@ -15,6 +15,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+from click.testing import CliRunner
+
+from limen.cli import main
 from limen.io import load_limen_file, queue_lock, save_limen_file
 from limen.models import LimenFile, Task
 from limen.tabularius import (
@@ -27,13 +30,16 @@ from limen.tabularius import (
     _archive,
     _inbox,
     _rejected,
+    compact_event_log,
     drain_once,
+    event_log_path,
     new_ticket_id,
     pending_count,
     submit_board_meta,
     submit_ticket,
     submit_task_status,
     submit_task_upsert,
+    verify_event_log,
 )
 
 _NOW = datetime(2026, 7, 2, 12, 0, 0, tzinfo=timezone.utc)
@@ -137,6 +143,36 @@ def test_status_ticket_sets_status_and_appends_dispatch_log(tmp_path):
     assert len(t1.dispatch_log) == 1
     entry = t1.dispatch_log[0]
     assert entry.agent == "claude" and entry.status == "done" and entry.output == "shipped PR #999"
+
+
+def test_compacted_event_log_folds_to_current_board(tmp_path):
+    board = _seed_board(tmp_path)
+    submit_ticket(board, _ticket(INTENT_STATUS, task_id="T-1", log={"status": "done"}))
+    submit_ticket(board, _ticket(INTENT_UPSERT, task_id="T-new", patch=_task("T-new", status="open")))
+    drain_once(board)
+
+    result = compact_event_log(board)
+
+    assert result.verified is True
+    assert result.events == len(load_limen_file(board).tasks) + 1
+    assert result.archive_tickets == 2
+    assert result.event_log == event_log_path(board)
+    assert result.event_log.exists()
+    verify = verify_event_log(board)
+    assert verify.verified is True
+    assert verify.events == result.events
+
+
+def test_tabularius_events_command_writes_and_verifies(tmp_path, monkeypatch):
+    board = _seed_board(tmp_path)
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setenv("LIMEN_TASKS", str(board))
+
+    result = CliRunner().invoke(main, ["tabularius-events", "--write", "--verify"])
+
+    assert result.exit_code == 0, result.output
+    assert event_log_path(board).exists()
+    assert "fold(events) == tasks.yaml bytes: True" in result.output
 
 
 def test_submit_task_status_emits_status_ticket(tmp_path):

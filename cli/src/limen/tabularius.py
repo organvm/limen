@@ -49,7 +49,17 @@ from typing import Any
 from pydantic import BaseModel
 
 from limen.io import BoardCollapseError, load_limen_file, queue_lock, save_limen_file
-from limen.materialize import EV_BOARD_META, EV_BOARD_ORDER, EV_TASK_UPSERT, Event, fold
+from limen.materialize import (
+    EV_BOARD_META,
+    EV_BOARD_ORDER,
+    EV_TASK_UPSERT,
+    Event,
+    canonical_board_text,
+    events_from_jsonl,
+    events_to_jsonl,
+    fold,
+    seed_events_from_board,
+)
 from limen.models import VALID_STATUSES, LimenFile, Task
 
 # --- ticket intents (a superset of materialize's Event tags, plus the status convenience) --------
@@ -107,6 +117,10 @@ def _inbox(board_path: Path) -> Path:
 
 def _archive(board_path: Path) -> Path:
     return tickets_root(board_path) / "archive"
+
+
+def event_log_path(board_path: Path) -> Path:
+    return tickets_root(board_path) / "events.jsonl"
 
 
 def _rejected(board_path: Path) -> Path:
@@ -298,9 +312,62 @@ class DrainResult:
     rejected_ids: list[str] = field(default_factory=list)
 
 
+@dataclass
+class EventLogResult:
+    """Result of compacting or verifying the TABVLARIVS event projection."""
+
+    event_log: Path
+    events: int = 0
+    archive_tickets: int = 0
+    verified: bool = False
+    note: str = ""
+
+
 def pending_count(board_path: Path) -> int:
     inbox = _inbox(board_path)
     return len(list(inbox.glob("*.json"))) if inbox.is_dir() else 0
+
+
+def archive_count(board_path: Path) -> int:
+    archive = _archive(board_path)
+    return len(list(archive.glob("*.json"))) if archive.is_dir() else 0
+
+
+def compact_event_log(board_path: Path, out_path: Path | None = None) -> EventLogResult:
+    """Compact the current keeper projection into a canonical replayable event log.
+
+    This is the first safe Step-3 bridge: the archived tickets remain provenance, while
+    ``events.jsonl`` becomes the compacted projection seed that ``materialize.fold`` can replay
+    without needing pre-TABVLARIVS history.
+    """
+    board_path = Path(board_path)
+    out_path = Path(out_path) if out_path is not None else event_log_path(board_path)
+    board = load_limen_file(board_path)
+    events = seed_events_from_board(board)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(events_to_jsonl(events))
+    result = verify_event_log(board_path, out_path)
+    result.archive_tickets = archive_count(board_path)
+    return result
+
+
+def verify_event_log(board_path: Path, in_path: Path | None = None) -> EventLogResult:
+    """Verify a compacted event log folds back to the current board projection."""
+    board_path = Path(board_path)
+    in_path = Path(in_path) if in_path is not None else event_log_path(board_path)
+    if not in_path.exists():
+        return EventLogResult(in_path, archive_tickets=archive_count(board_path), note="event log missing")
+    events = events_from_jsonl(in_path.read_text())
+    board = load_limen_file(board_path)
+    rebuilt = fold(events)
+    verified = canonical_board_text(rebuilt) == canonical_board_text(board)
+    return EventLogResult(
+        in_path,
+        events=len(events),
+        archive_tickets=archive_count(board_path),
+        verified=verified,
+        note="fold(events) == tasks.yaml bytes" if verified else "fold(events) != tasks.yaml bytes",
+    )
 
 
 def _parse_pending(inbox: Path) -> tuple[list[tuple[Path, Ticket]], list[tuple[Path, str]]]:

@@ -165,6 +165,9 @@ above it is autonomous.
       while read and dry-run surfaces stay live.
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
       `fold(archive) == board` predicate.
+      Seed landed: `limen tabularius-events --write --verify` writes
+      `logs/tickets/events.jsonl` as a compacted projection seed and verifies
+      `materialize.fold(events.jsonl) == tasks.yaml`.
 
 See also: `board-is-event-log-projection` (memory), `cli/src/limen/materialize.py`,
 `scripts/heal-board.py`, `io.py` (`queue_lock`, `save_limen_file`, the collapse-guard).

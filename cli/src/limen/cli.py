@@ -359,9 +359,7 @@ def materialize(verify, emit_events):
     bytes are identical — the executable proof that the projection reproduces reality exactly. This
     commits nothing (it does not write tasks.yaml); it only proves the ideal form is faithful.
     """
-    import yaml
-
-    from limen.materialize import fold, seed_events_from_board
+    from limen.materialize import canonical_board_text, events_to_jsonl, fold, seed_events_from_board
 
     root = resolve_root()
     tasks_path = resolve_tasks_path(root)
@@ -378,16 +376,14 @@ def materialize(verify, emit_events):
 
     if emit_events:
         out = Path(emit_events).expanduser()
-        out.write_text("".join(json.dumps(e, ensure_ascii=False, sort_keys=True) + "\n" for e in events))
+        out.write_text(events_to_jsonl(events))
         click.echo(f"wrote {len(events)} events to {out}")
 
     if verify or not emit_events:
         rebuilt = fold(events)
         # canonical serialization = exactly what save_limen_file writes (mode=json, exclude_none,
         # sort_keys=False). Compare against the snapshot we loaded from — not a fresh read.
-        rebuilt_bytes = yaml.dump(
-            rebuilt.model_dump(mode="json", exclude_none=True), sort_keys=False, default_flow_style=False
-        )
+        rebuilt_bytes = canonical_board_text(rebuilt)
         identical = rebuilt_bytes == on_disk
         click.echo(
             f"materialize: {len(board.tasks)} tasks, {len(events)} events; "
@@ -400,6 +396,38 @@ def materialize(verify, emit_events):
                 err=True,
             )
             sys.exit(1)
+
+
+@main.command("tabularius-events")
+@click.option("--write", is_flag=True, help="Write logs/tickets/events.jsonl from the current board projection.")
+@click.option("--verify", is_flag=True, help="Verify the compacted event log folds to tasks.yaml.")
+@click.option(
+    "--event-log",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Override the default logs/tickets/events.jsonl path.",
+)
+def tabularius_events(write: bool, verify: bool, event_log: Path | None) -> None:
+    """Compact and verify TABVLARIVS' canonical replay log."""
+    from limen.tabularius import compact_event_log, event_log_path, verify_event_log
+
+    root = resolve_root()
+    tasks_path = resolve_tasks_path(root)
+    if not tasks_path.exists():
+        click.echo("tasks.yaml not found", err=True)
+        sys.exit(1)
+
+    target = event_log or event_log_path(tasks_path)
+    if not write and not verify:
+        verify = True
+
+    result = compact_event_log(tasks_path, target) if write else verify_event_log(tasks_path, target)
+    click.echo(
+        f"tabularius-events: {result.events} events, {result.archive_tickets} archived tickets; "
+        f"{result.note}: {result.verified}; path={result.event_log}"
+    )
+    if (verify or write) and not result.verified:
+        sys.exit(1)
 
 
 @main.command()

@@ -206,6 +206,9 @@ For a full local contract pass, run `scripts/verify-whole.sh`; set
 `LIMEN_CLIENT_TOKEN` are present, the same live pass also schema-probes the
 runtime adapter. Set `LIMEN_VERIFY_LIVE_RUNTIME=1` to fail if those runtime
 probe inputs are missing.
+To compact TABVLARIVS' current board projection into a replayable event log,
+run `limen tabularius-events --write --verify`; it writes
+`logs/tickets/events.jsonl` and proves the fold matches `tasks.yaml`.
 
 ## How It Works
 

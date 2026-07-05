@@ -8,9 +8,14 @@ The thesis under test: the board is a materialized view — board = fold(events)
 
 from __future__ import annotations
 
-import yaml
-
-from limen.materialize import diff_boards, fold, seed_events_from_board
+from limen.materialize import (
+    canonical_board_text,
+    diff_boards,
+    events_from_jsonl,
+    events_to_jsonl,
+    fold,
+    seed_events_from_board,
+)
 from limen.models import LimenFile
 
 
@@ -29,8 +34,12 @@ def _board(tasks: list[dict], version: str = "1.0") -> LimenFile:
     return LimenFile.model_validate({"version": version, "tasks": tasks})
 
 
+def _portal_board(tasks: list[dict], portal: dict, version: str = "1.0") -> LimenFile:
+    return LimenFile.model_validate({"version": version, "portal": portal, "tasks": tasks})
+
+
 def _canonical(board: LimenFile) -> str:
-    return yaml.dump(board.model_dump(mode="json", exclude_none=True), sort_keys=False, default_flow_style=False)
+    return canonical_board_text(board)
 
 
 def test_roundtrip_reproduces_board_bytes():
@@ -43,6 +52,38 @@ def test_roundtrip_reproduces_board_bytes():
     )
     rebuilt = fold(seed_events_from_board(board))
     assert _canonical(rebuilt) == _canonical(board)
+
+
+def test_events_jsonl_roundtrip():
+    board = _board([_task("A", status="open"), _task("B", status="done")])
+    events = seed_events_from_board(board)
+
+    text = events_to_jsonl(events)
+    parsed = events_from_jsonl("\n" + text + "\n")
+
+    assert parsed == events
+    assert _canonical(fold(parsed)) == _canonical(board)
+
+
+def test_events_jsonl_preserves_nested_mapping_order_for_byte_predicate():
+    board = _portal_board(
+        [_task("A", status="open")],
+        {
+            "budget": {
+                "per_agent": {"jules": 100, "gemini": 10, "codex": 100},
+                "track": {
+                    "date": "2026-07-05",
+                    "spent": 3,
+                    "per_agent": {"jules": 1, "gemini": 0, "codex": 2},
+                },
+            },
+            "agents": {"opencode": {"status": "idle", "accepting_tasks": True}},
+        },
+    )
+
+    parsed = events_from_jsonl(events_to_jsonl(seed_events_from_board(board)))
+
+    assert _canonical(fold(parsed)) == _canonical(board)
 
 
 def test_roundtrip_preserves_task_order():
