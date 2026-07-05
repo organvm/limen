@@ -37,14 +37,14 @@ def _seed_board(tmp_path: Path) -> Path:
     return board
 
 
-def _run_organ(tmp_path: Path, board: Path) -> subprocess.CompletedProcess[str]:
+def _run_organ(tmp_path: Path, board: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env = {
         **os.environ,
         "LIMEN_ROOT": str(tmp_path),
         "LIMEN_TASKS": str(board),
     }
     return subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / "tabularius-organ.py")],
+        [sys.executable, str(ROOT / "scripts" / "tabularius-organ.py"), *args],
         text=True,
         capture_output=True,
         check=False,
@@ -72,6 +72,7 @@ def test_tabularius_organ_stamps_event_log_cache_proof_streak(tmp_path: Path) ->
     state = json.loads(state_path.read_text())
     assert state["event_log_verified"] is True
     assert state["event_log_cache_verified"] is True
+    assert state["event_log_updated"]
     assert state["event_log_streak"] == 1
     assert state["event_log_events"] >= 1
     assert (tmp_path / "logs" / "tickets" / "events.jsonl").exists()
@@ -83,3 +84,25 @@ def test_tabularius_organ_stamps_event_log_cache_proof_streak(tmp_path: Path) ->
     assert "event-log proof ok (streak 2)" in second.stdout
     state = json.loads(state_path.read_text())
     assert state["event_log_streak"] == 2
+
+
+def test_tabularius_organ_check_preserves_proof_without_refreshing_it(tmp_path: Path) -> None:
+    board = _seed_board(tmp_path)
+    state_path = tmp_path / "logs" / "tabularius-organ-state.json"
+    submit_task_status(board, "T-1", "done", agent="limen", session_id="proof-1", now=NOW)
+
+    first = _run_organ(tmp_path, board)
+    assert first.returncode == 0, first.stdout + first.stderr
+    proof_state = json.loads(state_path.read_text())
+    proof_updated = proof_state["event_log_updated"]
+
+    check = _run_organ(tmp_path, board, "--check")
+
+    assert check.returncode == 0, check.stdout + check.stderr
+    checked_state = json.loads(state_path.read_text())
+    assert checked_state["mode"] == "check"
+    assert checked_state["event_log_verified"] is True
+    assert checked_state["event_log_cache_verified"] is True
+    assert checked_state["event_log_streak"] == 1
+    assert checked_state["event_log_updated"] == proof_updated
+    assert checked_state["updated"] != proof_updated

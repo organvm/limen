@@ -75,6 +75,17 @@ def test_tabularius_event_proof_blocks_stale_state(tmp_path: Path) -> None:
     assert "event proof state is stale" in result.stderr
 
 
+def test_tabularius_event_proof_ages_event_log_timestamp_not_liveness_timestamp(tmp_path: Path) -> None:
+    state = tmp_path / "tabularius-organ-state.json"
+    stale = datetime.now(timezone.utc) - timedelta(minutes=90)
+    write_state(state, updated=datetime.now(timezone.utc).isoformat(), event_log_updated=stale.isoformat())
+
+    result = run_checker("--state", state, "--max-age-minutes", "30")
+
+    assert result.returncode == 1
+    assert "event proof state is stale" in result.stderr
+
+
 def test_tabularius_event_proof_json_output(tmp_path: Path) -> None:
     state = tmp_path / "tabularius-organ-state.json"
     write_state(state, event_log_streak=5)

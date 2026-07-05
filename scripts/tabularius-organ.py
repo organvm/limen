@@ -34,11 +34,16 @@ ENABLED = os.environ.get("LIMEN_TABVLARIVS", "1") != "0"
 STATE = ROOT / "logs" / "tabularius-organ-state.json"
 
 
-def _previous_event_log_streak() -> int:
+def _read_state() -> dict[str, object]:
     try:
         data = json.loads(STATE.read_text())
     except (OSError, json.JSONDecodeError):
-        return 0
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _previous_event_log_streak() -> int:
+    data = _read_state()
     streak = data.get("event_log_streak")
     return streak if isinstance(streak, int) and streak > 0 else 0
 
@@ -81,7 +86,19 @@ def _stamp(**fields: object) -> None:
     """Write the counts-only liveness stamp organ-health.py probes (no task content — PII-clean)."""
     try:
         STATE.parent.mkdir(parents=True, exist_ok=True)
-        STATE.write_text(json.dumps({"updated": datetime.now(timezone.utc).isoformat(), **fields}, indent=2))
+        now = datetime.now(timezone.utc).isoformat()
+        payload: dict[str, object] = {"updated": now, **fields}
+        has_proof = any(key.startswith("event_log_") for key in fields)
+        if has_proof:
+            payload["event_log_updated"] = now
+        else:
+            previous = _read_state()
+            for key, value in previous.items():
+                if key.startswith("event_log_"):
+                    payload[key] = value
+            if "event_log_updated" not in payload and "event_log_streak" in payload and previous.get("updated"):
+                payload["event_log_updated"] = previous["updated"]
+        STATE.write_text(json.dumps(payload, indent=2))
     except OSError:
         pass
 

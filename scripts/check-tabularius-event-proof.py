@@ -73,9 +73,10 @@ def check_state(path: Path, *, min_streak: int, max_age_minutes: int) -> dict[st
             "required_streak": min_streak,
         }
 
-    updated = _parse_timestamp(data.get("updated"))
+    proof_updated_raw = data.get("event_log_updated") or data.get("updated")
+    updated = _parse_timestamp(proof_updated_raw)
     if updated is None:
-        errors.append("event proof state missing parseable updated timestamp")
+        errors.append("event proof state missing parseable proof timestamp")
         age_minutes = None
     else:
         age_minutes = (datetime.now(timezone.utc) - updated).total_seconds() / 60
@@ -107,7 +108,8 @@ def check_state(path: Path, *, min_streak: int, max_age_minutes: int) -> dict[st
         "events": events,
         "archive_tickets": _positive_int(data.get("event_log_archive_tickets")),
         "archive_replay_tickets": _positive_int(data.get("event_log_archive_replay_tickets")),
-        "updated": data.get("updated"),
+        "updated": proof_updated_raw,
+        "liveness_updated": data.get("updated"),
         "age_minutes": age_minutes,
     }
 
