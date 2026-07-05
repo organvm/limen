@@ -112,12 +112,11 @@ def test_emit_gaps_bounded_idempotent(tmp_path, monkeypatch):
     assert m.emit_gaps(["explore: governance"], "some-face", apply=True) == 0
 
 
-def test_emit_gaps_ticket_mode_drains_tabularius(tmp_path, monkeypatch):
+def test_emit_gaps_drains_tabularius(tmp_path, monkeypatch):
     m = _load(monkeypatch)
     tasks = tmp_path / "tasks.yaml"
     tasks.write_text(yaml.safe_dump({"tasks": []}))
     monkeypatch.setenv("LIMEN_TASKS", str(tasks))
-    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
 
     added = m.emit_gaps(["explore: governance"], "some-face", apply=True)
 

@@ -121,8 +121,8 @@ above it is autonomous.
       contract while preventing stale sequential-id clobber. `scripts/self-heal.py` submits guarded
       upsert tickets for stable `HEAL-*` repair tasks and drains synchronously in ticket mode.
       `scripts/converge-organ.py` submits and drains guarded upsert tickets for bounded `CONV-*`
-      gap tasks through TABVLARIVS, and
-      `scripts/corpus-converge.py` does the same for bounded `CORP-*` corpus-gap tasks.
+      gap tasks through TABVLARIVS, and `scripts/corpus-converge.py` does the same for bounded
+      `CORP-*` corpus-gap tasks.
       `scripts/current-session-fanout.py` does the same for deterministic current-session seed
       tasks. `scripts/insight-route.py` submits guarded `TASK-<insight-id>` upsert tickets and drains
       them synchronously in ticket mode. Reading the code corrected the remainder list:
@@ -173,7 +173,7 @@ above it is autonomous.
       task-board writers. It is wired into `scripts/verify-whole.sh` and blocks any new unapproved
       `tasks.yaml` writer; remaining reversible legacy fallbacks must stay explicitly allowlisted
       and carry `LIMEN_TICKETS_PRODUCE` plus TABVLARIVS producer proof. The whole-repo gate pins
-      the legacy fallback ceiling at 14, so the count can be ratcheted down but not silently grow.
+      the legacy fallback ceiling at 13, so the count can be ratcheted down but not silently grow.
       `scripts/discover-value.py --apply` is now TABVLARIVS-only: it submits and drains upsert
       tickets instead of retaining a legacy direct append fallback. `scripts/rebalance.py --apply`
       is now TABVLARIVS-only: it submits and drains guarded target-agent status tickets instead of
@@ -189,6 +189,8 @@ above it is autonomous.
       guarded task upsert tickets instead of retaining a legacy direct append fallback.
       `scripts/converge-organ.py` is now TABVLARIVS-only: it submits and drains guarded `CONV-*`
       gap-task upsert tickets instead of retaining a legacy direct append fallback.
+      `scripts/corpus-converge.py` is now TABVLARIVS-only: it submits and drains guarded `CORP-*`
+      corpus-gap upsert tickets instead of retaining a legacy direct append fallback.
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
       `fold(archive) == board` predicate.
       Seed landed: `limen tabularius-events --write --verify` writes
