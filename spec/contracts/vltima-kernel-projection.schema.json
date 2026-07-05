@@ -109,11 +109,12 @@
     "organ": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["pillar", "home", "domain_map", "macro", "micro", "first_artifact", "organ_kernel"],
+      "required": ["pillar", "home", "domain_map", "kernel_map", "macro", "micro", "first_artifact", "organ_kernel"],
       "properties": {
         "pillar": { "type": "string" },
         "home": { "type": "string" },
         "domain_map": { "type": "string" },
+        "kernel_map": { "$ref": "#/$defs/organKernelMap" },
         "macro": { "type": "string" },
         "micro": { "type": "string" },
         "first_artifact": { "type": "string" },
@@ -121,6 +122,18 @@
           "type": "array",
           "items": { "$ref": "#/$defs/primitiveRef" }
         }
+      }
+    },
+    "organKernelMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["Member", "Mandate", "Standing", "Standard", "Governance"],
+      "properties": {
+        "Member": { "type": "string" },
+        "Mandate": { "type": "string" },
+        "Standing": { "type": "string" },
+        "Standard": { "type": "string" },
+        "Governance": { "type": "string" }
       }
     },
     "graph": {

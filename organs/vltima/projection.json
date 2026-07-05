@@ -689,6 +689,13 @@
       "domain_map": "Member=client/party; Mandate=claim/matter; Standing=case posture; Standard=statute/precedent/rubric; Governance=the firm's process + ethics wall",
       "first_artifact": "a case-posture brief + evidence/chain-of-custody index for the live matter, packaged as a framework deck to show Micah",
       "home": "organs/legal/",
+      "kernel_map": {
+        "Governance": "the firm's process + ethics wall",
+        "Mandate": "claim/matter",
+        "Member": "client/party",
+        "Standard": "statute/precedent/rubric",
+        "Standing": "case posture"
+      },
       "macro": "a legal-institution platform any pro-se or under-resourced person can hold",
       "micro": "Anthony's active ADA employment matter run with a top-firm's institutional weight, AUGMENTING attorney Micah Longo (never replacing counsel, never practicing law)",
       "organ_kernel": [
@@ -719,6 +726,13 @@
       "domain_map": "Member=account/entity; Mandate=goal/allocation; Standing=net position; Standard=tax/compliance rule; Governance=the office's controls",
       "first_artifact": "a personal balance-sheet + cashflow + payrail disbursement map run on his real numbers",
       "home": "organs/financial/",
+      "kernel_map": {
+        "Governance": "the office's controls",
+        "Mandate": "goal/allocation",
+        "Member": "account/entity",
+        "Standard": "tax/compliance rule",
+        "Standing": "net position"
+      },
       "macro": "a family-office-in-a-box anyone can deploy",
       "micro": "Anthony's own disbursement (product revenue -> personal + institutional via the MONETA sovereign cash rail at moneta/, NOT a rented processor) + wealth/portfolio + tax automation",
       "organ_kernel": [
@@ -749,6 +763,13 @@
       "domain_map": "the proven Learner/Quest/Progression/Rubric/Institution skin over the 5-primitive kernel",
       "first_artifact": "the formalized 5-primitive kernel spec + the alt-education thesis brief",
       "home": "organs/education/",
+      "kernel_map": {
+        "Governance": "institution",
+        "Mandate": "quest",
+        "Member": "learner",
+        "Standard": "rubric",
+        "Standing": "progression"
+      },
       "macro": "the alt-education platform (the quarantine-from-the-system thesis)",
       "micro": "ENC1101 + Derek's narrative workshop + the homeschool engine",
       "organ_kernel": [
@@ -779,6 +800,13 @@
       "domain_map": "Member=audience; Mandate=message; Standing=reach; Standard=editorial voice; Governance=POSSE rules",
       "first_artifact": "fire the essay -> kerygma pipeline on ONE real event, end to end (drafts only; his hand on publish)",
       "home": "organs/media/",
+      "kernel_map": {
+        "Governance": "POSSE rules",
+        "Mandate": "message",
+        "Member": "audience",
+        "Standard": "editorial voice",
+        "Standing": "reach"
+      },
       "macro": "the carrier-wave infrastructure that speaks in every channel's idiom at once",
       "micro": "ORGANVM's own public face + product launch posts",
       "organ_kernel": [
@@ -809,6 +837,13 @@
       "domain_map": "the Roman cursus-honorum office sequence expressed as executable rules",
       "first_artifact": "operationalize ONE cvrsvs-honorvm rule as an executable validator",
       "home": "organs/governance/",
+      "kernel_map": {
+        "Governance": "constitutional process",
+        "Mandate": "office mandate",
+        "Member": "entity/office-holder",
+        "Standard": "cursus rule",
+        "Standing": "cursus office state"
+      },
       "macro": "a portable governance-as-code open standard anyone can adopt",
       "micro": "ORGANVM's own dual-entity operation (non-profit open project + commercial LLC)",
       "organ_kernel": [
@@ -839,6 +874,13 @@
       "domain_map": "Member=client; Mandate=engagement; Standing=delivery state; Standard=quality bar; Governance=intake->delivery process",
       "first_artifact": "turn the client-intake -> delivery flow into a repeatable autonomic playbook",
       "home": "organs/consulting/",
+      "kernel_map": {
+        "Governance": "intake->delivery process",
+        "Mandate": "engagement",
+        "Member": "client",
+        "Standard": "quality bar",
+        "Standing": "delivery state"
+      },
       "macro": "ORGANVM-as-a-service: the institutional toolkit offered to clients",
       "micro": "the Maddie / Rob / Derek client deployments",
       "organ_kernel": [
@@ -869,6 +911,13 @@
       "domain_map": "Member=work; Mandate=exhibition; Standing=archive state; Standard=aesthetic rubric; Governance=curation",
       "first_artifact": "fill the most under-populated chambers with real captioned work",
       "home": "organs/artist/",
+      "kernel_map": {
+        "Governance": "curation",
+        "Mandate": "exhibition",
+        "Member": "work",
+        "Standard": "aesthetic rubric",
+        "Standing": "archive state"
+      },
       "macro": "a studio/temple platform any artist can hold \u2014 9-chamber toolkit with Curatorial Voice and Provenance Contract frameworks",
       "micro": "Anthony's a-mavs-olevm chambers (444-file photo archive, ET4L, LOCREANCE) \u2014 all 3/3 validated",
       "organ_kernel": [
@@ -899,6 +948,13 @@
       "domain_map": "Member=person/contact; Mandate=relationship; Standing=tie strength; Standard=reciprocity norm; Governance=community rules",
       "first_artifact": "charter + 5-primitive map + derek relationship-posture brief + triage dashboard",
       "home": "organs/social/",
+      "kernel_map": {
+        "Governance": "community rules",
+        "Mandate": "relationship",
+        "Member": "person/contact",
+        "Standard": "reciprocity norm",
+        "Standing": "tie strength"
+      },
       "macro": "community + relationship infrastructure anyone can hold",
       "micro": "Anthony's network, correspondence, and relationship support",
       "organ_kernel": [
@@ -929,6 +985,13 @@
       "domain_map": "Member=body/patient; Mandate=protocol; Standing=health state; Standard=clinical guideline; Governance=care plan",
       "first_artifact": "charter the health organ + a personal recovery/access protocol (informational, not medical advice)",
       "home": "organs/health/",
+      "kernel_map": {
+        "Governance": "care plan",
+        "Mandate": "protocol",
+        "Member": "body/patient",
+        "Standard": "clinical guideline",
+        "Standing": "health state"
+      },
       "macro": "a health/recovery + disability-access institution anyone can hold",
       "micro": "the principal's unnamed post-injury recovery + disability access (ties directly to the legal ADA matter)",
       "organ_kernel": [
@@ -959,6 +1022,13 @@
       "domain_map": "Member=person in a role (employee/candidate/client); Mandate=role or policy; Standing=employment/engagement state; Standard=labor-law floor + comp benchmark + policy handbook; Governance=people-ops process + ethics wall",
       "first_artifact": "the HR-practice operating floor (intake -> policy -> compliance calendar -> offboarding) as runnable templates for Jessica's first client",
       "home": "organs/hr/",
+      "kernel_map": {
+        "Governance": "people-ops process + ethics wall",
+        "Mandate": "role or policy",
+        "Member": "person in a role (employee/candidate/client)",
+        "Standard": "labor-law floor + comp benchmark + policy handbook",
+        "Standing": "employment/engagement state"
+      },
       "macro": "an HR-institution-in-a-box (hiring loop, onboarding, handbook, compliance calendar, performance framework, offboarding) any operator or small business can hold",
       "micro": "Jessica's HR practice run with institutional weight (organs/consulting/engagements/jessica.yaml), with Styx (organvm/peer-audited--behavioral-blockchain) as the flagship performance/habits product",
       "organ_kernel": [
@@ -989,6 +1059,13 @@
       "domain_map": "Member=upstream relationship (project+maintainers); Mandate=contribution campaign (what wiring to study there); Standing=lifecycle scouted->workspace->PR open->merged/closed->backflow absorbed; Standard=the upstream's own CONTRIBUTING/CI bar + our outreach protocol (staggered bumps, no spam, genuine value only); Governance=human-gated outbound + the PLAN-06 dispatch gate",
       "first_artifact": "the mirror rendered from real hub-ledger data \u2014 organs/contributions/MIRROR.md + logs/contributions.json on the C_CONTRIB beat \u2014 resolving PLAN-06 owner packet 04 (limen is the named public-proof owner surface)",
       "home": "organs/contributions/",
+      "kernel_map": {
+        "Governance": "human-gated outbound + the PLAN-06 dispatch gate",
+        "Mandate": "contribution campaign (what wiring to study there)",
+        "Member": "upstream relationship (project+maintainers)",
+        "Standard": "the upstream's own CONTRIBUTING/CI bar + our outreach protocol (staggered bumps, no spam, genuine value only)",
+        "Standing": "lifecycle scouted->workspace->PR open->merged/closed->backflow absorbed"
+      },
       "macro": "an OSPO-in-a-box: the scout->workspace->campaign->monitor->backflow machinery plus the mirror, holdable by any solo operator or small org",
       "micro": "the live ORGANVM practice: hub organvm/contrib (generated LEDGER) + engine A (organvm_engine.contrib) + engine B (contrib_engine/) + 22+ contrib--* workspaces + ~19 upstream PRs (3 merged: fastmcp, dbt-mcp, github-stars) + the backflow manifest in organvm-corpvs-testamentvm",
       "organ_kernel": [

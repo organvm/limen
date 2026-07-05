@@ -17,6 +17,9 @@ from `kernel.yaml` or `organ-ladder.json`: primitive graph nodes and source
 edges, layers, projection groups, each organ's kernel mapping, and a typed
 `graph` object that connects layers, primitives, projections, and organs. The
 contract is named `vltima.kernel-projection` with `schema_version: 1`.
+Each organ also carries a structured `kernel_map` in `organ-ladder.json`, so
+Member/Mandate/Standing/Standard/Governance mappings are executable data instead
+of prose embedded in a `domain_map` sentence.
 
 ## Lower Layer
 

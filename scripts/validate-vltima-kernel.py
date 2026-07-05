@@ -241,6 +241,24 @@ def _graph_payload(
     return {"nodes": nodes, "edges": edges}
 
 
+def _organ_kernel_map(organ: dict[str, object], pillar: str) -> tuple[dict[str, str], list[str]]:
+    errors: list[str] = []
+    raw = organ.get("kernel_map")
+    if not isinstance(raw, dict):
+        return {}, [f"{pillar}: organ-ladder.json missing kernel_map"]
+    kernel_map: dict[str, str] = {}
+    for term in REQUIRED_ORGAN_TERMS:
+        value = raw.get(term)
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"{pillar}: organ-ladder.json kernel_map missing {term}")
+        else:
+            kernel_map[term] = value.strip()
+    extra = sorted(str(key) for key in raw if key not in REQUIRED_ORGAN_TERMS)
+    if extra:
+        errors.append(f"{pillar}: organ-ladder.json kernel_map unknown primitive(s): {', '.join(extra)}")
+    return kernel_map, errors
+
+
 def _validate_graph(graph: dict[str, object]) -> list[str]:
     errors: list[str] = []
     nodes = graph.get("nodes")
@@ -324,21 +342,27 @@ def build_projection(root: Path) -> tuple[dict[str, object] | None, list[str]]:
     for organ in ladder.get("organs") or []:
         if not isinstance(organ, dict):
             continue
+        pillar = str(organ.get("pillar") or "")
         home = str(organ.get("home") or "")
         if not home or home in seen_homes:
             continue
         seen_homes.add(home)
+        kernel_map, map_errors = _organ_kernel_map(organ, pillar or "<missing-pillar>")
+        errors.extend(map_errors)
         organs.append(
             {
-                "pillar": str(organ.get("pillar") or ""),
+                "pillar": pillar,
                 "home": home,
                 "domain_map": str(organ.get("domain_map") or ""),
+                "kernel_map": kernel_map,
                 "macro": str(organ.get("macro") or ""),
                 "micro": str(organ.get("micro") or ""),
                 "first_artifact": str(organ.get("first_artifact") or ""),
                 "organ_kernel": projection_map.get("organ_kernel", []),
             }
         )
+    if errors:
+        return None, errors
 
     primitive_edges = [
         {"from": edge["from"].removeprefix("primitive:"), "to": edge["to"].removeprefix("primitive:"), "type": edge["type"]}
@@ -425,6 +449,8 @@ def validate(root: Path) -> list[str]:
         for field in ("domain_map", "macro", "micro", "first_artifact"):
             if not str(organ.get(field) or "").strip():
                 errors.append(f"{pillar}: organ-ladder.json missing {field}")
+        _, map_errors = _organ_kernel_map(organ, pillar)
+        errors.extend(map_errors)
 
         organ_kernel = root / home / "KERNEL.md"
         if not organ_kernel.exists():

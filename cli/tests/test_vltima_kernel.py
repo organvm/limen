@@ -123,6 +123,16 @@ def test_vltima_kernel_emits_derived_projection_json():
     assert {"from": "projection:record_proof", "to": "primitive:record", "type": "projects"} in data["graph"]["edges"]
     assert {"from": "primitive:record", "to": "primitive:standing", "type": "source"} in data["graph"]["edges"]
     assert any(organ["pillar"] == "legal" and organ["organ_kernel"] for organ in data["organs"])
+    legal = next(organ for organ in data["organs"] if organ["pillar"] == "legal")
+    assert legal["kernel_map"]["Member"] == "client/party"
+    education = next(organ for organ in data["organs"] if organ["pillar"] == "education")
+    assert education["kernel_map"] == {
+        "Member": "learner",
+        "Mandate": "quest",
+        "Standing": "progression",
+        "Standard": "rubric",
+        "Governance": "institution",
+    }
 
 
 def test_vltima_kernel_writes_and_checks_canonical_projection(tmp_path):
@@ -156,6 +166,21 @@ def test_vltima_projection_schema_names_canonical_contract():
     assert schema["properties"]["kind"]["enum"] == ["vltima.kernel-projection"]
     assert schema["properties"]["schema_version"]["enum"] == [1]
     assert {"primitives", "edges", "layers", "projections", "organs", "graph"}.issubset(schema["required"])
+    assert "kernel_map" in schema["$defs"]["organ"]["required"]
+
+
+def test_vltima_kernel_rejects_organ_missing_kernel_map(tmp_path):
+    copy_root = tmp_path / "repo"
+    shutil.copytree(ROOT / "organs", copy_root / "organs")
+    shutil.copy2(ROOT / "organ-ladder.json", copy_root / "organ-ladder.json")
+    ladder = json.loads((copy_root / "organ-ladder.json").read_text())
+    ladder["organs"][0].pop("kernel_map")
+    (copy_root / "organ-ladder.json").write_text(json.dumps(ladder, indent=2))
+
+    result = run_validator("--root", copy_root)
+
+    assert result.returncode == 1
+    assert "legal: organ-ladder.json missing kernel_map" in result.stderr
 
 
 def test_vltima_kernel_cli_emits_projection_json():
