@@ -29,10 +29,13 @@ sys.path.insert(0, str(CODE_ROOT / "cli" / "src"))
 try:
     from limen.io import load_limen_file, queue_lock, save_limen_file  # noqa: E402
     from limen.models import Task  # noqa: E402
+    from limen.tabularius import drain_once, submit_task_upsert  # noqa: E402
 except Exception:  # pragma: no cover - import fallback for hermetic tests
     load_limen_file = None
     queue_lock = None
     save_limen_file = None
+    drain_once = None
+    submit_task_upsert = None
     Task = None
 
 try:
@@ -742,11 +745,54 @@ def task_model_payload(spec: dict[str, Any]) -> dict[str, Any]:
 
 
 def apply_task_seed(snapshot: dict[str, Any], tasks_path: Path) -> dict[str, Any]:
-    if load_limen_file is None or save_limen_file is None or queue_lock is None or Task is None:
+    ticket_mode = os.environ.get("LIMEN_TICKETS_PRODUCE") == "1"
+    if load_limen_file is None or Task is None:
         return {"status": "blocked", "reason": "limen task model unavailable", "appended": 0, "skipped": 0}
+    if ticket_mode and (submit_task_upsert is None or drain_once is None):
+        return {"status": "blocked", "reason": "tabularius unavailable", "appended": 0, "skipped": 0}
+    if not ticket_mode and (save_limen_file is None or queue_lock is None):
+        return {"status": "blocked", "reason": "limen task writer unavailable", "appended": 0, "skipped": 0}
     seed = list(snapshot.get("task_seed", []))
     if not seed:
         return {"status": "ready", "reason": "no task seed requested", "appended": 0, "skipped": 0}
+    if ticket_mode:
+        fresh = load_limen_file(tasks_path)
+        existing = {task.id for task in fresh.tasks}
+        tasks_to_emit: list[Task] = []
+        skipped = 0
+        for spec in seed:
+            if spec["id"] in existing:
+                skipped += 1
+                continue
+            tasks_to_emit.append(Task(**task_model_payload(spec)))
+            existing.add(spec["id"])
+        if tasks_to_emit:
+            session_id = os.environ.get("LIMEN_SESSION_ID", "current-session-fanout")
+            ticket_paths = [
+                submit_task_upsert(
+                    tasks_path,
+                    task,
+                    agent="current-session-fanout",
+                    session_id=session_id,
+                    precondition={"status": None},
+                )
+                for task in tasks_to_emit
+            ]
+            result = drain_once(tasks_path)
+            applied = set(result.applied_ids)
+            wanted = {ticket.stem for ticket in ticket_paths}
+            if wanted - applied:
+                return {
+                    "status": "blocked",
+                    "reason": (
+                        f"TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} fanout seed tickets "
+                        f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+                    ),
+                    "appended": len(applied & wanted),
+                    "skipped": skipped,
+                    "tasks_path": str(tasks_path),
+                }
+        return {"status": "ready", "appended": len(tasks_to_emit), "skipped": skipped, "tasks_path": str(tasks_path)}
     appended = 0
     skipped = 0
     with queue_lock(tasks_path) as got:

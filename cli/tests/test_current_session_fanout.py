@@ -5,6 +5,10 @@ import json
 from argparse import Namespace
 from pathlib import Path
 
+import yaml
+
+from limen.tabularius import pending_count
+
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "current-session-fanout.py"
@@ -245,3 +249,52 @@ def test_current_session_fanout_emits_plan_02_executor_criteria_and_safe_markdow
     assert "gemini lane human-gated" in markdown
     assert raw_private not in markdown
     assert raw_private in json.dumps(snap)
+
+
+def test_apply_task_seed_ticket_mode_drains_tabularius(tmp_path: Path, monkeypatch) -> None:
+    mod = _load()
+    tasks = tmp_path / "tasks.yaml"
+    tasks.write_text(
+        yaml.safe_dump(
+            {
+                "version": "1.0",
+                "tasks": [
+                    {
+                        "id": "CURR-existing",
+                        "title": "Existing seed",
+                        "target_agent": "codex",
+                        "created": "2026-07-05",
+                    }
+                ],
+            },
+            sort_keys=False,
+        )
+    )
+    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    snapshot = {
+        "task_seed": [
+            {
+                "id": "CURR-existing",
+                "title": "Existing seed",
+                "target_agent": "codex",
+                "created": "2026-07-05",
+            },
+            {
+                "id": "CURR-new",
+                "title": "New seed",
+                "target_agent": "codex",
+                "created": "2026-07-05",
+                "status": "open",
+                "labels": ["current-session-fanout"],
+            },
+        ]
+    }
+
+    result = mod.apply_task_seed(snapshot, tasks)
+
+    assert result["status"] == "ready"
+    assert result["appended"] == 1
+    assert result["skipped"] == 1
+    doc = yaml.safe_load(tasks.read_text())
+    assert [task["id"] for task in doc["tasks"]] == ["CURR-existing", "CURR-new"]
+    assert pending_count(tasks) == 0
