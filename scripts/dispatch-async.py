@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.capacity import select_lanes  # noqa: E402
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.models import DispatchLogEntry  # noqa: E402
+from limen.tabularius import drain_once, submit_task_status  # noqa: E402
 from limen.dispatch import (  # noqa: E402
     _ASYNC_LANES,
     _PRIORITY_ORDER,
@@ -47,6 +48,10 @@ ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 TASKS = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
 RUNS = ROOT / "logs" / "async-runs"
 WORKER = ROOT / "scripts" / "async-run-one.py"
+
+
+def _ticket_mode() -> bool:
+    return os.environ.get("LIMEN_TICKETS_PRODUCE") == "1"
 
 
 def _int_or_default(raw: object, default: int) -> int:
@@ -71,6 +76,51 @@ def _clear_running_markers(task_id: str) -> None:
             marker.unlink(missing_ok=True)
 
 
+def _submit_result_ticket(task, agent: str, result, now, track) -> Path | None:
+    before_status = task.status
+    before_target = task.target_agent
+    before_labels = list(task.labels or [])
+    before_logs = len(task.dispatch_log or [])
+    probe = task.model_copy(deep=True)
+    probe_track = track.model_copy(deep=True)
+
+    _apply_result(probe, agent, result, now, probe_track)
+    if (
+        probe.status == before_status
+        and probe.target_agent == before_target
+        and list(probe.labels or []) == before_labels
+        and len(probe.dispatch_log or []) == before_logs
+        and probe_track.spent == track.spent
+    ):
+        return None
+
+    patch = {}
+    precondition = {"status": before_status}
+    if probe.target_agent != before_target:
+        patch["target_agent"] = probe.target_agent
+        precondition["target_agent"] = before_target
+    if list(probe.labels or []) != before_labels:
+        patch["labels"] = list(probe.labels or [])
+        precondition["labels"] = before_labels
+    entry = (probe.dispatch_log or [])[-1] if len(probe.dispatch_log or []) > before_logs else None
+    budget_cost = max(0, int(probe_track.spent - track.spent))
+    ticket = submit_task_status(
+        TASKS,
+        task.id,
+        probe.status,
+        agent=agent,
+        session_id=str(entry.session_id) if entry else "async-harvest",
+        output=entry.output if entry else None,
+        patch=patch,
+        precondition=precondition,
+        log_status=str(entry.status) if entry else probe.status,
+        budget_cost=budget_cost if budget_cost else None,
+        budget_agent=agent,
+        now=now,
+    )
+    return ticket
+
+
 def harvest() -> int:
     """Apply finished background runs to tasks.yaml under the lock. Returns count applied."""
     RUNS.mkdir(parents=True, exist_ok=True)
@@ -79,6 +129,7 @@ def harvest() -> int:
         return 0
     now = _now()
     applied = 0
+    ticket_mode = _ticket_mode()
     with _queue_lock(TASKS) as got:
         if not got:
             # Lock timed out — skip this pass (honor the contract). The .result.json files are only
@@ -87,6 +138,8 @@ def harvest() -> int:
         lf = load_limen_file(TASKS)
         byid = {t.id: t for t in lf.tasks}
         track = lf.portal.budget.track
+        ticket_files: dict[str, tuple[Path, Path]] = {}
+        ticket_tasks: dict[str, str] = {}
         for rf in files:
             try:
                 data = json.loads(rf.read_text())
@@ -95,13 +148,37 @@ def harvest() -> int:
                 continue
             t = byid.get(data.get("task_id"))
             if t is not None and data.get("result") != "__notask__":
-                _apply_result(t, data.get("agent"), data.get("result"), now, track)
-                applied += 1
-            if data.get("task_id"):
-                _clear_running_markers(str(data.get("task_id")))
-            rf.unlink(missing_ok=True)
-        if applied:
+                if ticket_mode:
+                    ticket = _submit_result_ticket(t, str(data.get("agent") or "unknown"), data.get("result"), now, track)
+                    if ticket:
+                        ticket_files[ticket.stem] = (rf, ticket)
+                        ticket_tasks[ticket.stem] = str(data.get("task_id"))
+                    else:
+                        if data.get("task_id"):
+                            _clear_running_markers(str(data.get("task_id")))
+                        rf.unlink(missing_ok=True)
+                else:
+                    _apply_result(t, data.get("agent"), data.get("result"), now, track)
+                    applied += 1
+                    if data.get("task_id"):
+                        _clear_running_markers(str(data.get("task_id")))
+                    rf.unlink(missing_ok=True)
+            else:
+                if data.get("task_id"):
+                    _clear_running_markers(str(data.get("task_id")))
+                rf.unlink(missing_ok=True)
+        if applied and not ticket_mode:
             save_limen_file(TASKS, lf)
+    if ticket_mode and ticket_files:
+        drained = drain_once(TASKS)
+        applied_ids = set(drained.applied_ids)
+        for ticket_id, (rf, ticket_path) in ticket_files.items():
+            if ticket_id in applied_ids:
+                applied += 1
+                _clear_running_markers(ticket_tasks[ticket_id])
+                rf.unlink(missing_ok=True)
+            else:
+                ticket_path.unlink(missing_ok=True)
     return applied
 
 
@@ -132,6 +209,9 @@ def reap_stale(max_age_s: int):
                 # lock timeout can't leave the slot leaked (marker gone, task still 'dispatched').
                 reaped.append((tid, agent, m))
     if reaped:
+        ticket_mode = _ticket_mode()
+        marker_by_ticket: dict[str, tuple[Path, Path]] = {}
+        marker_without_ticket: list[Path] = []
         with _queue_lock(TASKS) as got:
             if not got:
                 # Lock busy — keep the markers (not yet unlinked) so a later beat retries the reap;
@@ -142,7 +222,33 @@ def reap_stale(max_age_s: int):
             for tid, agent, _m in reaped:
                 t = byid.get(tid)
                 if t is not None and t.status == "dispatched":
-                    if _has_done_transition(t):
+                    if ticket_mode:
+                        if _has_done_transition(t):
+                            ticket = submit_task_status(
+                                TASKS,
+                                tid,
+                                "done",
+                                agent=agent,
+                                session_id="async-reap-stale",
+                                output=(
+                                    "dispatch-async: stale worker marker reaped after prior done; restored terminal status"
+                                ),
+                                precondition={"status": "dispatched"},
+                                now=now,
+                            )
+                        else:
+                            ticket = submit_task_status(
+                                TASKS,
+                                tid,
+                                "open",
+                                agent=agent,
+                                session_id="async-reap-stale",
+                                output=f"dispatch-async: stale worker marker older than {max_age_s}s reaped; task reopened",
+                                precondition={"status": "dispatched"},
+                                now=now,
+                            )
+                        marker_by_ticket[ticket.stem] = (_m, ticket)
+                    elif _has_done_transition(t):
                         _restore_done_status(
                             t,
                             now,
@@ -164,9 +270,22 @@ def reap_stale(max_age_s: int):
                                 output=f"dispatch-async: stale worker marker older than {max_age_s}s reaped; task reopened",
                             )
                         )
-            save_limen_file(TASKS, lf)
+                else:
+                    marker_without_ticket.append(_m)
+            if not ticket_mode:
+                save_limen_file(TASKS, lf)
+        applied_markers: list[Path] = []
+        if ticket_mode and marker_by_ticket:
+            drained = drain_once(TASKS)
+            applied = set(drained.applied_ids)
+            for ticket_id, (marker, ticket_path) in marker_by_ticket.items():
+                if ticket_id in applied:
+                    applied_markers.append(marker)
+                else:
+                    ticket_path.unlink(missing_ok=True)
         # reopen is committed → now safe to remove the markers that freed these slots
-        for _tid, _agent, m in reaped:
+        markers_to_clear = marker_without_ticket + (applied_markers if ticket_mode else [m for _tid, _agent, m in reaped])
+        for m in markers_to_clear:
             m.unlink(missing_ok=True)
     return [tid for tid, _agent, _m in reaped]
 
@@ -226,6 +345,8 @@ def reserve_and_launch(agents, per_agent, cap, dry):
     now = _now()
     picked = []
     picked_ids = set()
+    ticket_mode = _ticket_mode()
+    reserve_tickets: dict[str, tuple[str, str, Path]] = {}
     with _queue_lock(TASKS) as got:
         if not got:
             # Lock busy — reserve nothing this round. Returning BEFORE `picked` is used to spawn
@@ -274,24 +395,48 @@ def reserve_and_launch(agents, per_agent, cap, dry):
                 rem -= t.budget_cost
                 spent += t.budget_cost
                 if not dry:
-                    t.status = "dispatched"
-                    t.updated = now
-                    t.dispatch_log.append(
-                        DispatchLogEntry(
-                            timestamp=now,
+                    if ticket_mode:
+                        ticket = submit_task_status(
+                            TASKS,
+                            t.id,
+                            "dispatched",
                             agent=agent,
                             session_id="async-reserve",
-                            status="dispatched",
                             output="dispatch-async: reserved before detached worker launch",
+                            precondition={"status": "open", "target_agent": t.target_agent},
+                            now=now,
                         )
-                    )
+                        reserve_tickets[ticket.stem] = (agent, t.id, ticket)
+                    else:
+                        t.status = "dispatched"
+                        t.updated = now
+                        t.dispatch_log.append(
+                            DispatchLogEntry(
+                                timestamp=now,
+                                agent=agent,
+                                session_id="async-reserve",
+                                status="dispatched",
+                                output="dispatch-async: reserved before detached worker launch",
+                            )
+                        )
                 if not is_async:
                     slots -= 1  # only local runs consume a local concurrency slot
                 taken += 1
-        if not dry and picked:
+        if not dry and picked and not ticket_mode:
             save_limen_file(TASKS, lf)
     if dry:
         return picked
+    if ticket_mode:
+        if not reserve_tickets:
+            return []
+        drained = drain_once(TASKS)
+        applied = set(drained.applied_ids)
+        picked = []
+        for ticket_id, (agent, tid, ticket_path) in reserve_tickets.items():
+            if ticket_id in applied:
+                picked.append((agent, tid))
+            else:
+                ticket_path.unlink(missing_ok=True)
     # outside the lock: write markers + spawn detached workers (fast; we never wait on them)
     for agent, tid in picked:
         (RUNS / f"{tid}__{agent}.running").write_text(now.isoformat())

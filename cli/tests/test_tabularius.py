@@ -54,6 +54,27 @@ def _seed_board(tmp_path: Path, n: int = 6) -> Path:
     return board
 
 
+def _seed_budget_board(tmp_path: Path) -> Path:
+    board = tmp_path / "tasks.yaml"
+    save_limen_file(
+        board,
+        LimenFile.model_validate(
+            {
+                "version": "1.0",
+                "portal": {
+                    "budget": {
+                        "daily": 10,
+                        "per_agent": {"codex": 10},
+                        "track": {"date": "2026-07-02", "spent": 0, "per_agent": {}},
+                    }
+                },
+                "tasks": [_task(f"T-{i}", status="open") for i in range(6)],
+            }
+        ),
+    )
+    return board
+
+
 def _ticket(intent: str, task_id: str | None = None, ts: datetime = _NOW, **over) -> Ticket:
     return Ticket(
         ticket_id=over.pop("ticket_id", new_ticket_id("test", ts)),
@@ -175,6 +196,48 @@ def test_status_ticket_precondition_rejects_stale_state(tmp_path):
     assert t1.status == "open"
     assert t1.target_agent == "jules"
     assert t1.dispatch_log == []
+
+
+def test_status_ticket_can_separate_task_status_from_log_status(tmp_path):
+    board = _seed_board(tmp_path)
+    submit_task_status(
+        board,
+        "T-1",
+        "open",
+        agent="codex",
+        session_id="dispatch",
+        log_status="failed->agy",
+        patch={"target_agent": "agy"},
+        now=_NOW,
+    )
+
+    result = drain_once(board)
+
+    assert result.applied == 1
+    t1 = {t.id: t for t in load_limen_file(board).tasks}["T-1"]
+    assert t1.status == "open"
+    assert t1.target_agent == "agy"
+    assert t1.dispatch_log[-1].status == "failed->agy"
+
+
+def test_status_ticket_applies_budget_delta(tmp_path):
+    board = _seed_budget_board(tmp_path)
+    submit_task_status(
+        board,
+        "T-1",
+        "dispatched",
+        agent="codex",
+        session_id="https://github.com/x/y/pull/9",
+        budget_cost=1,
+        now=_NOW,
+    )
+
+    result = drain_once(board)
+
+    assert result.applied == 1
+    lf = load_limen_file(board)
+    assert lf.portal.budget.track.spent == 1
+    assert lf.portal.budget.track.per_agent["codex"] == 1
 
 
 def test_partial_patch_preserves_other_fields(tmp_path):

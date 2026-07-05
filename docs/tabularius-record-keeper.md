@@ -131,8 +131,10 @@ above it is autonomous.
       also submits lifecycle-repair tickets in ticket mode. `scripts/rebalance.py` submits guarded
       target-agent tickets in ticket mode. `scripts/route.py` submits guarded target-agent and
       workstream tickets in ticket mode. `scripts/quicken.py` submits human-residue upsert/refresh
-      tickets in ticket mode. Remaining:
-      dispatch-async plus CLI dispatch result-apply.
+      tickets in ticket mode. `scripts/dispatch-async.py` submits guarded reserve/reap/harvest
+      tickets in ticket mode and drains the keeper before launching workers or clearing markers.
+      Remaining:
+      CLI dispatch result-apply.
 - [ ] Step 2.3 — MCP server → ticket producer (retire the raw write + duplicate models).
 - [ ] Step 2.4 — live API/Worker tier (needs the consistency decision above; website-sensitive).
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing

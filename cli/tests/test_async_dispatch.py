@@ -18,13 +18,18 @@ sys.path.insert(0, str(CLI_SRC))
 
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.models import Budget, BudgetTrack, DispatchLogEntry, LimenFile, Portal, Task  # noqa: E402
+from limen.tabularius import pending_count  # noqa: E402
 
 
-def _load(tmp_path, n_open=6, agent="codex"):
+def _load(tmp_path, n_open=6, agent="codex", *, ticket_mode=False):
     """Point the engine at an isolated tasks.yaml + build n open tasks, then import it fresh so its
     module-level ROOT/TASKS/RUNS pick up this env."""
     os.environ["LIMEN_ROOT"] = str(tmp_path)
     os.environ["LIMEN_TASKS"] = str(tmp_path / "tasks.yaml")
+    if ticket_mode:
+        os.environ["LIMEN_TICKETS_PRODUCE"] = "1"
+    else:
+        os.environ.pop("LIMEN_TICKETS_PRODUCE", None)
     today = datetime.date.today()
     lf = LimenFile(
         portal=Portal(budget=Budget(daily=300, per_agent={agent: 50}, track=BudgetTrack(date=today.isoformat()))),
@@ -137,6 +142,24 @@ def test_harvest_applies_pr_result_and_cleans(tmp_path):
     assert not (da.RUNS / "T0__codex.running").exists()
 
 
+def test_harvest_ticket_mode_applies_pr_result_and_cleans(tmp_path):
+    da = _load(tmp_path, n_open=2, ticket_mode=True)
+    (da.RUNS / "T0__codex.running").write_text(datetime.datetime.now(datetime.timezone.utc).isoformat())
+    (da.RUNS / "T0.result.json").write_text(
+        json.dumps(
+            {"task_id": "T0", "agent": "codex", "result": "https://github.com/x/y/pull/9", "ts": "n", "err": None}
+        )
+    )
+
+    assert da.harvest() == 1
+    t0 = _board(tmp_path)["T0"]
+    assert any("pull/9" in str(e.session_id) for e in t0.dispatch_log)
+    assert load_limen_file(tmp_path / "tasks.yaml").portal.budget.track.spent == 1
+    assert pending_count(tmp_path / "tasks.yaml") == 0
+    assert not (da.RUNS / "T0.result.json").exists()
+    assert not (da.RUNS / "T0__codex.running").exists()
+
+
 def test_reserve_and_launch_marks_and_spawns(tmp_path, monkeypatch):
     da = _load(tmp_path, n_open=6)
     calls = []
@@ -147,6 +170,21 @@ def test_reserve_and_launch_marks_and_spawns(tmp_path, monkeypatch):
     assert len(dispatched) == 2
     assert all(t.dispatch_log[-1].status == "dispatched" for t in dispatched)
     assert all(t.dispatch_log[-1].session_id == "async-reserve" for t in dispatched)
+    assert len(list(da.RUNS.glob("*__codex.running"))) == 2
+
+
+def test_reserve_ticket_mode_drains_before_spawning(tmp_path, monkeypatch):
+    da = _load(tmp_path, n_open=6, ticket_mode=True)
+    calls = []
+    monkeypatch.setattr(da.subprocess, "Popen", lambda *a, **k: calls.append(a) or type("P", (), {"pid": 1})())
+
+    picked = da.reserve_and_launch(["codex"], per_agent=2, cap=8, dry=False)
+
+    assert len(picked) == 2 and len(calls) == 2
+    dispatched = [t for t in load_limen_file(tmp_path / "tasks.yaml").tasks if t.status == "dispatched"]
+    assert len(dispatched) == 2
+    assert all(t.dispatch_log[-1].session_id == "async-reserve" for t in dispatched)
+    assert pending_count(tmp_path / "tasks.yaml") == 0
     assert len(list(da.RUNS.glob("*__codex.running"))) == 2
 
 
@@ -226,6 +264,26 @@ def test_reaper_frees_dead_workers_not_live(tmp_path):
     board = _board(tmp_path)
     assert board["DEAD"].status == "open" and board["LIVE"].status == "dispatched"
     assert board["DEAD"].dispatch_log[-1].session_id == "async-reap-stale"
+
+
+def test_reaper_ticket_mode_reopens_and_removes_marker(tmp_path):
+    da = _load(tmp_path, n_open=0, ticket_mode=True)
+    lf = load_limen_file(tmp_path / "tasks.yaml")
+    today = datetime.date.today()
+    lf.tasks.append(Task(id="DEAD", title="t", repo="x/y", target_agent="codex", status="dispatched", created=today))
+    save_limen_file(tmp_path / "tasks.yaml", lf)
+    stale = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=3000)
+    marker = da.RUNS / "DEAD__codex.running"
+    marker.write_text(stale.isoformat())
+
+    reaped = da.reap_stale(1200)
+
+    assert reaped == ["DEAD"]
+    assert not marker.exists()
+    task = _board(tmp_path)["DEAD"]
+    assert task.status == "open"
+    assert task.dispatch_log[-1].session_id == "async-reap-stale"
+    assert pending_count(tmp_path / "tasks.yaml") == 0
 
 
 def test_reaper_restores_prior_done_instead_of_reopening(tmp_path):

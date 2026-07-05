@@ -83,6 +83,8 @@ class Ticket(BaseModel):
     log: dict[str, Any] | None = None
     # optional equality guard against stale tickets, e.g. {"status": "open"}.
     precondition: dict[str, Any] | None = None
+    # optional budget accounting delta applied by the keeper with the status transition.
+    budget_delta: dict[str, Any] | None = None
 
 
 def new_ticket_id(session_id: str = "unknown", now: datetime | None = None) -> str:
@@ -187,6 +189,9 @@ def submit_task_status(
     output: str | None = None,
     patch: dict[str, Any] | None = None,
     precondition: dict[str, Any] | None = None,
+    log_status: str | None = None,
+    budget_cost: int | None = None,
+    budget_agent: str | None = None,
     now: datetime | None = None,
 ) -> Path:
     """Hand the keeper a status transition for an existing task.
@@ -198,6 +203,8 @@ def submit_task_status(
     ``id``, ``updated``, and ``dispatch_log`` so every transition has one provenance shape.
     ``precondition`` is an optional equality guard for stale producers; if the task changed before
     the keeper drains the ticket, the ticket is quarantined instead of overwriting newer state.
+    ``log_status`` lets dispatch-result producers record statuses such as ``failed->agy`` while the
+    task itself lands on a canonical status such as ``open``.
     """
     if status not in VALID_STATUSES:
         raise ValueError(f"status must be one of {', '.join(sorted(VALID_STATUSES))}")
@@ -209,9 +216,18 @@ def submit_task_status(
     forbidden = sorted(reserved.intersection(patch))
     if forbidden:
         raise ValueError(f"task status patch cannot set keeper-owned field(s): {', '.join(forbidden)}")
+    if log_status is not None and not str(log_status).strip():
+        raise ValueError("log_status must be a non-empty string")
+    if log_status is not None and log_status != status:
+        patch.setdefault("status", status)
+    budget_delta = None
+    if budget_cost is not None:
+        if budget_cost < 0:
+            raise ValueError("budget_cost cannot be negative")
+        budget_delta = {"spent": budget_cost, "agent": budget_agent or agent, "agent_spent": budget_cost}
 
     now = now or datetime.now(timezone.utc)
-    log = {"status": status}
+    log = {"status": log_status or status}
     if output is not None:
         log["output"] = output
     ticket = Ticket(
@@ -224,6 +240,7 @@ def submit_task_status(
         patch=patch,
         log=log,
         precondition=dict(precondition or {}),
+        budget_delta=budget_delta,
     )
     return submit_ticket(board_path, ticket)
 
@@ -298,6 +315,26 @@ def _apply(ticket: Ticket, tasks: OrderedDict[str, dict[str, Any]], meta: dict[s
             if ticket.intent == INTENT_STATUS and "status" not in (ticket.patch or {}) and status:
                 merged["status"] = status
         Task.model_validate(merged)  # reject a bad ticket individually
+        next_portal = None
+        if ticket.budget_delta:
+            delta = ticket.budget_delta
+            spent = int(delta.get("spent", 0) or 0)
+            agent = str(delta.get("agent") or ticket.agent)
+            agent_spent = int(delta.get("agent_spent", spent) or 0)
+            if spent < 0 or agent_spent < 0:
+                raise ValueError("budget_delta cannot be negative")
+            portal = dict(meta.get("portal") or {})
+            budget = dict(portal.get("budget") or {})
+            track = dict(budget.get("track") or {})
+            per_agent = dict(track.get("per_agent") or {})
+            track["spent"] = int(track.get("spent") or 0) + spent
+            per_agent[agent] = int(per_agent.get(agent) or 0) + agent_spent
+            track["per_agent"] = per_agent
+            budget["track"] = track
+            portal["budget"] = budget
+            next_portal = portal
+        if next_portal is not None:
+            meta["portal"] = next_portal
         tasks[ticket.task_id] = merged  # dict update keeps first-seen position; new id appends
         return
 
