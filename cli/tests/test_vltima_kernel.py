@@ -1,4 +1,5 @@
 import json
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -9,6 +10,14 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR = ROOT / "scripts" / "validate-vltima-kernel.py"
+
+
+def load_validator_module():
+    spec = importlib.util.spec_from_file_location("validate_vltima_kernel_uut", VALIDATOR)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def run_validator(*args: str | Path) -> subprocess.CompletedProcess[str]:
@@ -107,6 +116,19 @@ def test_vltima_kernel_emits_derived_projection_json():
     assert {"from": "projection:record_proof", "to": "primitive:record", "type": "projects"} in data["graph"]["edges"]
     assert {"from": "primitive:record", "to": "primitive:standing", "type": "source"} in data["graph"]["edges"]
     assert any(organ["pillar"] == "legal" and organ["organ_kernel"] for organ in data["organs"])
+
+
+def test_vltima_graph_validation_rejects_dangling_edges():
+    module = load_validator_module()
+
+    errors = module._validate_graph(
+        {
+            "nodes": [{"id": "primitive:record", "kind": "primitive"}],
+            "edges": [{"from": "primitive:record", "to": "primitive:missing", "type": "source"}],
+        }
+    )
+
+    assert errors == ["vltima graph edge[0] references missing target node: primitive:missing"]
 
 
 def test_vltima_kernel_rejects_organ_missing_projection(tmp_path):

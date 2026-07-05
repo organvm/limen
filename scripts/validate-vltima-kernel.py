@@ -232,6 +232,42 @@ def _graph_payload(
     return {"nodes": nodes, "edges": edges}
 
 
+def _validate_graph(graph: dict[str, object]) -> list[str]:
+    errors: list[str] = []
+    nodes = graph.get("nodes")
+    edges = graph.get("edges")
+    if not isinstance(nodes, list) or not isinstance(edges, list):
+        return ["vltima graph must contain nodes and edges lists"]
+    node_ids: set[str] = set()
+    for index, node in enumerate(nodes):
+        if not isinstance(node, dict):
+            errors.append(f"vltima graph node[{index}] must be a mapping")
+            continue
+        node_id = str(node.get("id") or "").strip()
+        kind = str(node.get("kind") or "").strip()
+        if not node_id or not kind:
+            errors.append(f"vltima graph node[{index}] needs id and kind")
+            continue
+        if node_id in node_ids:
+            errors.append(f"vltima graph duplicate node id: {node_id}")
+        node_ids.add(node_id)
+    for index, edge in enumerate(edges):
+        if not isinstance(edge, dict):
+            errors.append(f"vltima graph edge[{index}] must be a mapping")
+            continue
+        source = str(edge.get("from") or "").strip()
+        target = str(edge.get("to") or "").strip()
+        edge_type = str(edge.get("type") or "").strip()
+        if not source or not target or not edge_type:
+            errors.append(f"vltima graph edge[{index}] needs from, to, and type")
+            continue
+        if source not in node_ids:
+            errors.append(f"vltima graph edge[{index}] references missing source node: {source}")
+        if target not in node_ids:
+            errors.append(f"vltima graph edge[{index}] references missing target node: {target}")
+    return errors
+
+
 def build_projection(root: Path) -> tuple[dict[str, object] | None, list[str]]:
     registry, errors = _load_kernel_registry(root)
     if registry is None:
@@ -276,6 +312,11 @@ def build_projection(root: Path) -> tuple[dict[str, object] | None, list[str]]:
         {"from": edge["from"].removeprefix("primitive:"), "to": edge["to"].removeprefix("primitive:"), "type": edge["type"]}
         for edge in _primitive_edges(primitives)
     ]
+    graph = _graph_payload(primitives, projection_map, organs)
+    graph_errors = _validate_graph(graph)
+    if graph_errors:
+        return None, graph_errors
+
     return {
         "version": registry.get("version"),
         "primitives": primitives,
@@ -286,7 +327,7 @@ def build_projection(root: Path) -> tuple[dict[str, object] | None, list[str]]:
         },
         "projections": projection_map,
         "organs": organs,
-        "graph": _graph_payload(primitives, projection_map, organs),
+        "graph": graph,
     }, []
 
 
