@@ -186,8 +186,50 @@ def _primitive_edges(primitives: list[dict[str, object]]) -> list[dict[str, str]
     for primitive in primitives:
         target = str(primitive.get("id") or "")
         for source in primitive.get("sources") or []:
-            edges.append({"from": str(source), "to": target, "type": "source"})
+            edges.append({"from": f"primitive:{source}", "to": f"primitive:{target}", "type": "source"})
     return edges
+
+
+def _graph_payload(
+    primitives: list[dict[str, object]],
+    projection_map: dict[str, list[dict[str, str]]],
+    organs: list[dict[str, object]],
+) -> dict[str, object]:
+    nodes: list[dict[str, object]] = []
+    edges: list[dict[str, str]] = []
+
+    for primitive in primitives:
+        nodes.append(
+            {
+                "id": f"primitive:{primitive['id']}",
+                "kind": "primitive",
+                "label": primitive["label"],
+                "ref": primitive["id"],
+                "layer": primitive["layer"],
+            }
+        )
+    edges.extend(_primitive_edges(primitives))
+
+    for projection_name, primitive_refs in projection_map.items():
+        projection_id = f"projection:{projection_name}"
+        nodes.append({"id": projection_id, "kind": "projection", "label": projection_name, "ref": projection_name})
+        for primitive in primitive_refs:
+            edges.append({"from": projection_id, "to": f"primitive:{primitive['id']}", "type": "projects"})
+
+    for organ in organs:
+        pillar = str(organ.get("pillar") or "")
+        organ_id = f"organ:{pillar}"
+        nodes.append(
+            {
+                "id": organ_id,
+                "kind": "organ",
+                "label": pillar,
+                "ref": str(organ.get("home") or ""),
+            }
+        )
+        edges.append({"from": organ_id, "to": "projection:organ_kernel", "type": "implements"})
+
+    return {"nodes": nodes, "edges": edges}
 
 
 def build_projection(root: Path) -> tuple[dict[str, object] | None, list[str]]:
@@ -230,16 +272,21 @@ def build_projection(root: Path) -> tuple[dict[str, object] | None, list[str]]:
             }
         )
 
+    primitive_edges = [
+        {"from": edge["from"].removeprefix("primitive:"), "to": edge["to"].removeprefix("primitive:"), "type": edge["type"]}
+        for edge in _primitive_edges(primitives)
+    ]
     return {
         "version": registry.get("version"),
         "primitives": primitives,
-        "edges": _primitive_edges(primitives),
+        "edges": primitive_edges,
         "layers": {
             layer_name: [_primitive_ref(labels_by_id, primitive_id) for primitive_id in ids]
             for layer_name, ids in layer_ids.items()
         },
         "projections": projection_map,
         "organs": organs,
+        "graph": _graph_payload(primitives, projection_map, organs),
     }, []
 
 
