@@ -11,7 +11,9 @@ from datetime import date, datetime, timezone
 import pytest
 
 from limen.harvest import _diff_is_real, check_jules_harvest
+from limen.io import load_limen_file, save_limen_file
 from limen.models import DispatchLogEntry, LimenFile, Task
+from limen.tabularius import drain_once, pending_count
 
 REAL_DIFF = """diff --git a/atlas.json b/atlas.json
 new file mode 100644
@@ -103,3 +105,25 @@ def test_harvest_rejects_empty_diff_instead_of_false_done(tmp_path):
     assert "noop" in task.labels
     assert "cancelled" not in task.labels
     assert task.dispatch_log[-1].status == "failed"
+
+
+def test_harvest_can_emit_tabularius_status_ticket(tmp_path):
+    harvest_dir = tmp_path / "harvest"
+    _write_diff(harvest_dir, "555", REAL_DIFF)
+    task = _task("LIMEN-1", "555")
+    limen = LimenFile(tasks=[task])
+    board = tmp_path / "tasks.yaml"
+    save_limen_file(board, limen)
+
+    updated = check_jules_harvest(limen, harvest_dir, ticket_mode=True, tasks_path=board)
+
+    assert updated == ["LIMEN-1"]
+    assert task.status == "dispatched"
+    assert pending_count(board) == 1
+    assert load_limen_file(board).tasks[0].status == "dispatched"
+
+    drained = drain_once(board)
+    assert drained.applied == 1
+    updated_task = load_limen_file(board).tasks[0]
+    assert updated_task.status == "done"
+    assert updated_task.dispatch_log[-1].status == "done"

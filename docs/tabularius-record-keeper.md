@@ -51,6 +51,7 @@ archived ticket files are the append-only event log the board projects from.
 |-------|-------|------|
 | Engine | `cli/src/limen/tabularius.py` | `Ticket`, `submit_ticket()`, `submit_task_upsert()`, `drain_once()`, the fold/validate/seal + quarantine |
 | Producer API | `cli/src/limen/tabularius.py` → `submit_task_upsert()` | the one-line conversion target: a writer swaps `save_limen_file` for this call per NEW task (validates up front, then hands the keeper an upsert ticket) |
+| Status API | `cli/src/limen/tabularius.py` → `submit_task_status()` | the one-line conversion target for existing-task lifecycle transitions: status + dispatch_log + optional field patch as one keeper-owned ticket |
 | Beat organ | `scripts/tabularius-organ.py` | thin per-beat wrapper (like `heal-board.py`); `--check`/`--dry-run`; writes the liveness stamp |
 | Beat wiring | `scripts/heartbeat-loop.sh` | runs after `heal-board` (fold onto a *healthy* board), before the body's own mutation |
 | Proprioception | `scripts/organ-health.py` | a TABVLARIVS rung, green when `logs/tabularius-organ-state.json` is fresh |
@@ -123,7 +124,11 @@ above it is autonomous.
       them (2→7). The status-mutator tier still writes directly — that is Step 2.2.
 - [ ] Step 2.2 — the STATUS-mutator tier (`route`, `dispatch-async`, `heal-dispatch`, `rebalance`,
       `recover`, `quicken`) → emit an INTENT_STATUS ticket instead of a direct RMW (NOT an upsert — an
-      upsert of a live id merge-clobbers; these change existing tasks). Also CLI harvest/dispatch result-apply.
+      upsert of a live id merge-clobbers; these change existing tasks). **Started:** the
+      `submit_task_status()` producer API is shipped and parity-tested, `scripts/recover.py`
+      emits status tickets when `LIMEN_TICKETS_PRODUCE=1`, and the Jules harvest path submits
+      completion/failure tickets instead of saving the board directly. Remaining:
+      route/dispatch-async/heal-dispatch/rebalance/quicken plus CLI dispatch result-apply.
 - [ ] Step 2.3 — MCP server → ticket producer (retire the raw write + duplicate models).
 - [ ] Step 2.4 — live API/Worker tier (needs the consistency decision above; website-sensitive).
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing

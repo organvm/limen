@@ -50,7 +50,7 @@ from pydantic import BaseModel
 
 from limen.io import BoardCollapseError, load_limen_file, queue_lock, save_limen_file
 from limen.materialize import EV_BOARD_META, EV_BOARD_ORDER, EV_TASK_UPSERT, Event, fold
-from limen.models import LimenFile, Task
+from limen.models import VALID_STATUSES, LimenFile, Task
 
 # --- ticket intents (a superset of materialize's Event tags, plus the status convenience) --------
 INTENT_UPSERT = "task.upsert"  # create-or-merge a task field-set (patch may be full or partial)
@@ -171,6 +171,53 @@ def submit_task_upsert(
         intent=INTENT_UPSERT,
         task_id=tid,
         patch=fields,
+    )
+    return submit_ticket(board_path, ticket)
+
+
+def submit_task_status(
+    board_path: Path,
+    task_id: str,
+    status: str,
+    *,
+    agent: str,
+    session_id: str = "unknown",
+    output: str | None = None,
+    patch: dict[str, Any] | None = None,
+    now: datetime | None = None,
+) -> Path:
+    """Hand the keeper a status transition for an existing task.
+
+    This is the conversion target for writers that used to mutate an existing task in place:
+    ``task.status = ...; task.dispatch_log.append(...); save_limen_file(...)``. A status ticket
+    carries only the transition plus an optional field-level patch such as ``target_agent`` or
+    ``labels``. It deliberately does not accept whole-task identity/log fields; the keeper owns
+    ``id``, ``updated``, and ``dispatch_log`` so every transition has one provenance shape.
+    """
+    if status not in VALID_STATUSES:
+        raise ValueError(f"status must be one of {', '.join(sorted(VALID_STATUSES))}")
+    if not task_id:
+        raise ValueError("task status transition requires a task_id")
+
+    patch = dict(patch or {})
+    reserved = {"id", "updated", "dispatch_log"}
+    forbidden = sorted(reserved.intersection(patch))
+    if forbidden:
+        raise ValueError(f"task status patch cannot set keeper-owned field(s): {', '.join(forbidden)}")
+
+    now = now or datetime.now(timezone.utc)
+    log = {"status": status}
+    if output is not None:
+        log["output"] = output
+    ticket = Ticket(
+        ticket_id=new_ticket_id(session_id, now),
+        timestamp=now,
+        agent=agent,
+        session_id=session_id,
+        intent=INTENT_STATUS,
+        task_id=task_id,
+        patch=patch,
+        log=log,
     )
     return submit_ticket(board_path, ticket)
 

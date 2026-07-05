@@ -11,12 +11,21 @@ Governance` — and is built as a **fractal**: a MACRO deployment (a platform an
 deployment (Anthony's own instance). Generic + nameless underneath, his instance on top; never hardcoded
 to one person.
 
+The 5-primitives are the institutional projection of the broader
+[`vltima/`](vltima/) kernel: `Object · Subject · Agent · Actor · System · Event · Record ·
+Covenant`, plus the value layer `Exchange · Entitlement · Obligation`. The executable predicate is:
+
+```bash
+python3 scripts/validate-vltima-kernel.py
+```
+
 Standard files per organ: `KERNEL.md` (the primitive map + macro/micro), `CHARTER.md` (the org-chart of
 AI roles + workflows + what real institution it rivals), then the organ's working artifacts.
 
 | organ | pillar | home |
 |---|---|---|
 | [legal/](legal/) | Legal Organism — a litigation firm at the Cochran standard | the flagship |
+| [vltima/](vltima/) | Universal substrate — objects, subjects, agents, records, covenants, institutions, value | meta-kernel |
 | financial/ | Financial Office — a billionaire's family office | seeded |
 | education/ | Education Organism — an academy + the alt-ed thesis | seeded (edu-organism is 60–80%) |
 | media/ | Carrier-Wave Media — a cross-platform empire | seeded |

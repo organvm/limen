@@ -1,10 +1,12 @@
 import subprocess
 import re
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 from limen.io import save_limen_file
 from limen.models import LimenFile, DispatchLogEntry
+from limen.tabularius import submit_task_status
 
 
 def _get_jules_sessions(harvest_dir: Path) -> dict[str, str]:
@@ -71,7 +73,55 @@ def _diff_is_real(diff_text: str) -> bool:
     return False
 
 
-def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
+def _harvest_transition(
+    task,
+    status: str,
+    *,
+    now: datetime,
+    agent: str,
+    session_id: str,
+    output: str,
+    ticket_mode: bool = False,
+    tasks_path: Path | None = None,
+    patch: dict | None = None,
+) -> None:
+    if ticket_mode:
+        if tasks_path is None:
+            raise ValueError("tasks_path is required when ticket_mode=True")
+        submit_task_status(
+            tasks_path,
+            task.id,
+            status,
+            agent=agent,
+            session_id=session_id,
+            output=output,
+            patch=patch,
+            now=now,
+        )
+        return
+
+    task.status = status
+    task.updated = now
+    for key, value in (patch or {}).items():
+        setattr(task, key, value)
+    task.dispatch_log.append(
+        DispatchLogEntry(
+            timestamp=now,
+            agent=agent,
+            session_id=session_id,
+            status=status,
+            output=output,
+        )
+    )
+
+
+def check_jules_harvest(
+    limen: LimenFile,
+    harvest_dir: Path,
+    *,
+    ticket_mode: bool = False,
+    tasks_path: Path | None = None,
+) -> list[str]:
     updated: list[str] = []
     if not harvest_dir.exists():
         return updated
@@ -95,31 +145,31 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
                     # jules finished but produced nothing usable (empty/garbage
                     # diff). Do NOT mark done, and do NOT archive/cancel it:
                     # preserve the prompt-started work in the recovery lifecycle.
-                    task.status = "failed"
-                    if "noop" not in task.labels:
-                        task.labels.append("noop")
-                    task.updated = now
-                    task.dispatch_log.append(
-                        DispatchLogEntry(
-                            timestamp=now,
-                            agent="jules",
-                            session_id=session_id,
-                            status="failed",
-                            output=result[:500],
-                        )
+                    labels = list(task.labels)
+                    if "noop" not in labels:
+                        labels.append("noop")
+                    _harvest_transition(
+                        task,
+                        "failed",
+                        now=now,
+                        agent="jules",
+                        session_id=session_id,
+                        output=result[:500],
+                        ticket_mode=ticket_mode,
+                        tasks_path=tasks_path,
+                        patch={"labels": labels},
                     )
                     print(f"  rejected {task.id}: jules diff empty/garbage — not 'done'")
                     continue
-                task.status = "done"
-                task.updated = now
-                task.dispatch_log.append(
-                    DispatchLogEntry(
-                        timestamp=now,
-                        agent="jules",
-                        session_id=session_id,
-                        status="done",
-                        output=result[:500],
-                    )
+                _harvest_transition(
+                    task,
+                    "done",
+                    now=now,
+                    agent="jules",
+                    session_id=session_id,
+                    output=result[:500],
+                    ticket_mode=ticket_mode,
+                    tasks_path=tasks_path,
                 )
                 updated.append(task.id)
                 continue
@@ -131,16 +181,15 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
             if not result:
                 # empty result file is not completion — don't false-done it.
                 continue
-            task.status = "done"
-            task.updated = now
-            task.dispatch_log.append(
-                DispatchLogEntry(
-                    timestamp=now,
-                    agent="jules",
-                    session_id=task.dispatch_log[-1].session_id if task.dispatch_log else "harvest",
-                    status="done",
-                    output=result[:500],
-                )
+            _harvest_transition(
+                task,
+                "done",
+                now=now,
+                agent="jules",
+                session_id=task.dispatch_log[-1].session_id if task.dispatch_log else "harvest",
+                output=result[:500],
+                ticket_mode=ticket_mode,
+                tasks_path=tasks_path,
             )
             updated.append(task.id)
     return updated
@@ -155,12 +204,16 @@ def harvest_results(
     harvest_dir = scheduler_root / "jules" / "harvest"
 
     updated = []
+    ticket_mode = os.environ.get("LIMEN_TICKETS_PRODUCE") == "1"
 
     if not agent or agent == "jules":
-        updated.extend(check_jules_harvest(limen, harvest_dir))
+        updated.extend(check_jules_harvest(limen, harvest_dir, ticket_mode=ticket_mode, tasks_path=tasks_path))
 
     if updated:
-        save_limen_file(tasks_path, limen)
-        print(f"Harvested {len(updated)} task(s): {', '.join(updated)}")
+        if ticket_mode:
+            print(f"Harvested {len(updated)} task(s) into TABVLARIVS tickets: {', '.join(updated)}")
+        else:
+            save_limen_file(tasks_path, limen)
+            print(f"Harvested {len(updated)} task(s): {', '.join(updated)}")
     else:
         print("No completed tasks to harvest")

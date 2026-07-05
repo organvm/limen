@@ -31,6 +31,7 @@ from limen.tabularius import (
     new_ticket_id,
     pending_count,
     submit_ticket,
+    submit_task_status,
 )
 
 _NOW = datetime(2026, 7, 2, 12, 0, 0, tzinfo=timezone.utc)
@@ -112,6 +113,43 @@ def test_status_ticket_sets_status_and_appends_dispatch_log(tmp_path):
     assert len(t1.dispatch_log) == 1
     entry = t1.dispatch_log[0]
     assert entry.agent == "claude" and entry.status == "done" and entry.output == "shipped PR #999"
+
+
+def test_submit_task_status_emits_status_ticket(tmp_path):
+    board = _seed_board(tmp_path)
+
+    submit_task_status(
+        board,
+        "T-1",
+        "open",
+        agent="limen",
+        session_id="heal",
+        output="recover: reopened failed -> fresh cascade",
+        patch={"target_agent": "codex", "labels": ["retry"]},
+        now=_NOW,
+    )
+    result = drain_once(board)
+
+    assert result.applied == 1 and result.wrote is True
+    t1 = {t.id: t for t in load_limen_file(board).tasks}["T-1"]
+    assert t1.status == "open"
+    assert t1.target_agent == "codex"
+    assert t1.labels == ["retry"]
+    assert t1.dispatch_log[-1].agent == "limen"
+    assert t1.dispatch_log[-1].session_id == "heal"
+    assert t1.dispatch_log[-1].status == "open"
+    assert t1.dispatch_log[-1].output == "recover: reopened failed -> fresh cascade"
+
+
+def test_submit_task_status_rejects_invalid_or_keeper_owned_fields(tmp_path):
+    import pytest
+
+    board = _seed_board(tmp_path)
+
+    with pytest.raises(ValueError, match="status must be one of"):
+        submit_task_status(board, "T-1", "completed", agent="limen")
+    with pytest.raises(ValueError, match="keeper-owned"):
+        submit_task_status(board, "T-1", "open", agent="limen", patch={"dispatch_log": []})
 
 
 def test_partial_patch_preserves_other_fields(tmp_path):
@@ -290,6 +328,59 @@ def test_producer_path_matches_legacy_direct_write(tmp_path):
         a.pop("updated", None)
         b.pop("updated", None)
         assert a == b, f"field divergence on {tid}: {a} vs {b}"
+
+
+def test_status_producer_path_matches_legacy_direct_write(tmp_path):
+    """Status-mutator conversion contract: a direct status/log edit and a status ticket fold produce
+    the same task fields. This is the Step-2.2 safety rail for route/recover/dispatch harvesters."""
+    from limen.models import DispatchLogEntry
+
+    now = datetime(2026, 7, 2, 12, 0, 0, tzinfo=timezone.utc)
+    existing = [_task("T-1", status="failed", labels=["noop", "tried:agy"])] + [
+        _task(f"T-{i}", status="open") for i in range(2, 7)
+    ]
+
+    board_a = tmp_path / "a" / "tasks.yaml"
+    board_a.parent.mkdir(parents=True)
+    lf = _board(existing)
+    task = lf.tasks[0]
+    task.status = "open"
+    task.target_agent = "codex"
+    task.labels = ["noop"]
+    task.updated = now
+    task.dispatch_log.append(
+        DispatchLogEntry(
+            timestamp=now,
+            agent="limen",
+            session_id="heal",
+            status="open",
+            output="recover: reopened failed -> fresh cascade",
+        )
+    )
+    save_limen_file(board_a, lf)
+
+    board_b = tmp_path / "b" / "tasks.yaml"
+    board_b.parent.mkdir(parents=True)
+    save_limen_file(board_b, _board(existing))
+    submit_task_status(
+        board_b,
+        "T-1",
+        "open",
+        agent="limen",
+        session_id="heal",
+        output="recover: reopened failed -> fresh cascade",
+        patch={"target_agent": "codex", "labels": ["noop"]},
+        now=now,
+    )
+    result = drain_once(board_b)
+    assert result.applied == 1 and result.wrote is True
+
+    a_tasks = load_limen_file(board_a).tasks
+    b_tasks = load_limen_file(board_b).tasks
+    assert [t.id for t in a_tasks] == [t.id for t in b_tasks]
+    assert {
+        t.id: t.model_dump(mode="json", exclude_none=True) for t in a_tasks
+    } == {t.id: t.model_dump(mode="json", exclude_none=True) for t in b_tasks}
 
 
 def test_submit_task_upsert_validates_before_emitting(tmp_path):
