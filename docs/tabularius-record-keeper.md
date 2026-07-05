@@ -155,6 +155,8 @@ above it is autonomous.
       Jules harvest submits completion/failure tickets and drains them before returning.
       `generate-backlog --apply` submits upsert tickets and drains them before returning.
       `generate-revenue-backlog --apply` submits upsert tickets and drains them before returning.
+      Legacy `scripts/append-tasks.py` submits and drains guarded upsert tickets instead of
+      rewriting `tasks.yaml` directly.
 - [x] Step 2.3 — MCP server → ticket producer. `mcp/src/limen_mcp/server.py` now loads through
       the shared Limen loader and its mutating tools (`add_task`, `update_task_status`,
       `agent_claim`) submit TABVLARIVS upsert/status tickets, drain the keeper synchronously, and

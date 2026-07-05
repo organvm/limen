@@ -1,12 +1,10 @@
 import sys
-import yaml
 from pathlib import Path
 from datetime import date
 
-# route every tasks.yaml write through the ONE atomic primitive (see limen/io.py) so a
-# concurrent heartbeat read can never observe a truncated/empty queue.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.io import atomic_write_text
+from limen.io import load_limen_file
+from limen.tabularius import drain_once, submit_task_upsert
 
 tasks_to_add = [
     {"id": "LIMEN-060", "title": "feat: implement MCP tool wrappers for all 5 organvm CLIs", "repo": "a-organvm/organvm-engine", "urls": ["https://github.com/a-organvm/organvm-engine/issues/89"]},
@@ -60,11 +58,10 @@ tasks_path = Path('tasks.yaml').expanduser()
 if not tasks_path.exists():
     tasks_path = Path('~/Workspace/limen/tasks.yaml').expanduser()
 
-with open(tasks_path) as f:
-    data = yaml.safe_load(f)
-
-existing_ids = {t['id'] for t in data['tasks']}
+board = load_limen_file(tasks_path)
+existing_ids = {t.id for t in board.tasks}
 added_count = 0
+tickets = []
 for t in tasks_to_add:
     if t['id'] not in existing_ids:
         new_task = {
@@ -82,9 +79,28 @@ for t in tasks_to_add:
             "created": date.today().isoformat(),
             "dispatch_log": []
         }
-        data['tasks'].append(new_task)
+        tickets.append(
+            submit_task_upsert(
+                tasks_path,
+                new_task,
+                agent="append-tasks",
+                session_id="batch-2026-06-01",
+                precondition={"status": None},
+            )
+        )
         added_count += 1
 
-atomic_write_text(tasks_path, yaml.dump(data, default_flow_style=False, sort_keys=False))
+if tickets:
+    result = drain_once(tasks_path)
+    applied = set(result.applied_ids)
+    expected = {ticket.stem for ticket in tickets}
+    missing = expected - applied
+    if missing:
+        raise SystemExit(
+            "TABVLARIVS did not apply append-tasks ticket(s): "
+            f"applied={len(applied & expected)}/{len(expected)} rejected={result.rejected} "
+            f"deferred={result.deferred}: {result.note}"
+        )
 
-print(f"Added {added_count} tasks. Total: {len(data['tasks'])}")
+fresh = load_limen_file(tasks_path)
+print(f"Added {added_count} tasks through TABVLARIVS. Total: {len(fresh.tasks)}")
