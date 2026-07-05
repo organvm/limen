@@ -2237,30 +2237,73 @@ def release_stale_tasks(
                 }
             fresh = load_limen_file(tasks_path) if tasks_path.exists() else limen
             candidates = stale_tasks(fresh, hours=hours, agent=agent)
-            for task in candidates:
-                print(f"  {task.id} {task.status} {task.target_agent} — {task.title}")
-                if _restore_done_status(
-                    task,
-                    now,
-                    agent="limen",
-                    session_id="release-stale",
-                    output="release-stale: prior done transition wins; restored terminal status",
-                ):
-                    restored_done.append(task.id)
-                    continue
-                task.status = "open"
-                task.updated = now
-                task.dispatch_log.append(
-                    DispatchLogEntry(
-                        timestamp=now,
-                        agent="limen",
-                        session_id=session_id(),
-                        status="open",
-                        output=f"Released stale claim after {hours}h",
+            tickets = []
+            if _ticket_mode():
+                for task in candidates:
+                    print(f"  {task.id} {task.status} {task.target_agent} — {task.title}")
+                    precondition = {"status": task.status}
+                    if _has_done_transition(task) and task.status not in {"done", "archived"}:
+                        tickets.append(
+                            submit_task_status(
+                                tasks_path,
+                                task.id,
+                                "done",
+                                agent="limen",
+                                session_id="release-stale",
+                                output="release-stale: prior done transition wins; restored terminal status",
+                                precondition=precondition,
+                                now=now,
+                            )
+                        )
+                        restored_done.append(task.id)
+                        continue
+                    tickets.append(
+                        submit_task_status(
+                            tasks_path,
+                            task.id,
+                            "open",
+                            agent="limen",
+                            session_id=session_id(),
+                            output=f"Released stale claim after {hours}h",
+                            precondition=precondition,
+                            now=now,
+                        )
                     )
+                    released.append(task.id)
+            else:
+                for task in candidates:
+                    print(f"  {task.id} {task.status} {task.target_agent} — {task.title}")
+                    if _restore_done_status(
+                        task,
+                        now,
+                        agent="limen",
+                        session_id="release-stale",
+                        output="release-stale: prior done transition wins; restored terminal status",
+                    ):
+                        restored_done.append(task.id)
+                        continue
+                    task.status = "open"
+                    task.updated = now
+                    task.dispatch_log.append(
+                        DispatchLogEntry(
+                            timestamp=now,
+                            agent="limen",
+                            session_id=session_id(),
+                            status="open",
+                            output=f"Released stale claim after {hours}h",
+                        )
+                    )
+                    released.append(task.id)
+                save_limen_file(tasks_path, fresh)
+        if _ticket_mode() and tickets:
+            result = drain_once(tasks_path)
+            applied = set(result.applied_ids)
+            wanted = {ticket.stem for ticket in tickets}
+            if wanted - applied:
+                print(
+                    f"── release-stale: TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} tickets "
+                    f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
                 )
-                released.append(task.id)
-            save_limen_file(tasks_path, fresh)
     else:
         for task in candidates:
             print(f"  {task.id} {task.status} {task.target_agent} — {task.title}")

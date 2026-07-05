@@ -148,6 +148,7 @@ above it is autonomous.
       of directly rewriting false human-gate records. `scripts/jules-land.py` submits and drains
       guarded completion tickets after a Jules session lands as a PR. `scripts/self-improve.py`
       submits and drains guarded priority/status re-plan tickets in ticket mode.
+      `limen release-stale --apply` submits and drains guarded stale-claim release/restore tickets.
 - [x] Step 2.3 — MCP server → ticket producer. `mcp/src/limen_mcp/server.py` now loads through
       the shared Limen loader and its mutating tools (`add_task`, `update_task_status`,
       `agent_claim`) submit TABVLARIVS upsert/status tickets, drain the keeper synchronously, and
