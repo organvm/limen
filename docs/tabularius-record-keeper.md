@@ -241,6 +241,10 @@ above it is autonomous.
       `event_log_cache_verified`, and `event_log_streak` in `logs/tabularius-organ-state.json`.
       Proof failure is fail-open for the heartbeat but resets the streak, giving the final SSOT flip
       a concrete N-beat evidence surface instead of an informal claim.
+- [x] Step 3 flip gate — `scripts/check-tabularius-event-proof.py --min-streak N` is the read-only
+      final-flip predicate over `logs/tabularius-organ-state.json`: fresh stamp, verified event log,
+      verified regenerated cache, nonzero event count, and enough consecutive keeper seals. This is
+      not a CI hard gate because clean checkouts may have no live keeper seals yet.
 - [ ] Step 3 final — flip live startup/read paths to treat the event log as the SSOT and regenerate
       `tasks.yaml` as a materialized cache, after the standing predicate has survived enough keeper
       beats to make the cutover boring.
