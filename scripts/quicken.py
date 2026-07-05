@@ -429,6 +429,7 @@ def hang_residue(rows: list[dict]) -> dict:
         from datetime import date, datetime, timezone
         from limen.io import load_limen_file, queue_lock, save_limen_file
         from limen.models import Task
+        from limen.tabularius import submit_task_status, submit_task_upsert
     except Exception as e:  # never dead-stop the apply if the cli pkg isn't importable
         res["error"] = f"ledger unavailable ({e}); residue digest still written"
         return res
@@ -442,6 +443,7 @@ def hang_residue(rows: list[dict]) -> dict:
         lf = load_limen_file(LEDGER)
         index = {t.id: t for t in lf.tasks}
         now = datetime.now(timezone.utc)
+        ticket_mode = os.environ.get("LIMEN_TICKETS_PRODUCE") == "1"
         changed = False
         for k, info in sorted(by_key.items()):
             if k in _POSTURE:
@@ -455,39 +457,60 @@ def hang_residue(rows: list[dict]) -> dict:
             ex = index.get(tid)
             if ex and ex.status != "done":
                 refreshed = False
+                patch = {}
+                precondition = {"status": ex.status}
                 if ex.status != "needs_human":
-                    ex.status = "needs_human"
                     refreshed = True
                 if ex.context != ctx:
-                    ex.context = ctx
+                    patch["context"] = ctx
+                    precondition["context"] = ex.context
                     refreshed = True
                 if "quicken-residue" not in (ex.labels or []):
-                    ex.labels = list(ex.labels or []) + ["quicken-residue"]
+                    patch["labels"] = list(ex.labels or []) + ["quicken-residue"]
+                    precondition["labels"] = list(ex.labels or [])
                     refreshed = True
                 if refreshed:
-                    ex.updated = now
+                    if ticket_mode:
+                        submit_task_status(
+                            LEDGER,
+                            tid,
+                            "needs_human",
+                            agent="limen",
+                            session_id="quicken",
+                            output="quicken: refresh irreducible human residue",
+                            patch=patch,
+                            precondition=precondition,
+                            now=now,
+                        )
+                    else:
+                        ex.status = "needs_human"
+                        for field, value in patch.items():
+                            setattr(ex, field, value)
+                        ex.updated = now
                     changed = True
                     res["refreshed"].append(tid)
                 else:
                     res["homed"].append(f"{info['atom']} → {tid}")
             elif ex is None:
-                lf.tasks.append(
-                    Task(
-                        id=tid,
-                        title=info["atom"],
-                        type="ops",
-                        target_agent="human",
-                        priority="high",
-                        status="needs_human",
-                        labels=["user-ask", "quicken-residue", "needs-human"],
-                        context=ctx,
-                        created=date.today(),
-                        updated=now,
-                    )
+                task = Task(
+                    id=tid,
+                    title=info["atom"],
+                    type="ops",
+                    target_agent="human",
+                    priority="high",
+                    status="needs_human",
+                    labels=["user-ask", "quicken-residue", "needs-human"],
+                    context=ctx,
+                    created=date.today(),
+                    updated=now,
                 )
+                if ticket_mode:
+                    submit_task_upsert(LEDGER, task, agent="limen", session_id="quicken", now=now)
+                else:
+                    lf.tasks.append(task)
                 changed = True
                 res["created"].append(tid)
-        if changed:
+        if changed and not ticket_mode:
             save_limen_file(LEDGER, lf)
     return res
 
