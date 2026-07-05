@@ -153,6 +153,43 @@ def _primitive_ref(labels_by_id: dict[str, str], primitive_id: str) -> dict[str,
     return {"id": primitive_id, "label": labels_by_id.get(primitive_id, "")}
 
 
+def _primitive_records(registry: dict[str, object]) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    layers = registry.get("layers") or {}
+    if not isinstance(layers, dict):
+        return records
+    for layer_name, raw_items in layers.items():
+        if not isinstance(raw_items, list):
+            continue
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            primitive_id = str(item.get("id") or "").strip()
+            label = str(item.get("label") or "").strip()
+            if not primitive_id or not label:
+                continue
+            sources = item.get("sources") or []
+            records.append(
+                {
+                    "id": primitive_id,
+                    "label": label,
+                    "layer": str(layer_name),
+                    "meaning": str(item.get("meaning") or "").strip(),
+                    "sources": list(sources) if isinstance(sources, list) else [],
+                }
+            )
+    return records
+
+
+def _primitive_edges(primitives: list[dict[str, object]]) -> list[dict[str, str]]:
+    edges: list[dict[str, str]] = []
+    for primitive in primitives:
+        target = str(primitive.get("id") or "")
+        for source in primitive.get("sources") or []:
+            edges.append({"from": str(source), "to": target, "type": "source"})
+    return edges
+
+
 def build_projection(root: Path) -> tuple[dict[str, object] | None, list[str]]:
     registry, errors = _load_kernel_registry(root)
     if registry is None:
@@ -170,6 +207,7 @@ def build_projection(root: Path) -> tuple[dict[str, object] | None, list[str]]:
         for name, ids in projection.items()
         if isinstance(ids, list)
     }
+    primitives = _primitive_records(registry)
 
     organs: list[dict[str, object]] = []
     seen_homes: set[str] = set()
@@ -194,6 +232,8 @@ def build_projection(root: Path) -> tuple[dict[str, object] | None, list[str]]:
 
     return {
         "version": registry.get("version"),
+        "primitives": primitives,
+        "edges": _primitive_edges(primitives),
         "layers": {
             layer_name: [_primitive_ref(labels_by_id, primitive_id) for primitive_id in ids]
             for layer_name, ids in layer_ids.items()

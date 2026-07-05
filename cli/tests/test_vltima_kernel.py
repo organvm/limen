@@ -95,6 +95,10 @@ def test_vltima_kernel_emits_derived_projection_json():
         {"id": "record", "label": "Record"},
         {"id": "standing", "label": "Standing"},
     ]
+    by_id = {primitive["id"]: primitive for primitive in data["primitives"]}
+    assert by_id["governance"]["sources"] == ["actor", "agent", "system", "record", "covenant"]
+    assert {"from": "record", "to": "standing", "type": "source"} in data["edges"]
+    assert {"from": "covenant", "to": "governance", "type": "source"} in data["edges"]
     assert any(organ["pillar"] == "legal" and organ["organ_kernel"] for organ in data["organs"])
 
 
