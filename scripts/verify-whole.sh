@@ -52,6 +52,7 @@ python3 organs/social/validate-social.py --fleet --quiet
 step "Validate VLTIMA universal kernel and organ projections"
 python3 scripts/validate-vltima-kernel.py --quiet
 python3 scripts/validate-vltima-kernel.py --json-output >/dev/null
+python3 scripts/validate-vltima-kernel.py --check-projection --quiet
 
 step "Verify the merge-policy predicate (verdict matrix regression test)"
 bash scripts/tests/merge-policy.test.sh

@@ -35,6 +35,7 @@ REQUIRED_UNIVERSAL_TERMS = (
 REQUIRED_ORGAN_TERMS = ("Member", "Mandate", "Standing", "Standard", "Governance")
 PROJECTION_KIND = "vltima.kernel-projection"
 PROJECTION_SCHEMA_VERSION = 1
+DEFAULT_PROJECTION_PATH = Path("organs/vltima/projection.json")
 
 
 def _missing_terms(text: str, terms: tuple[str, ...]) -> list[str]:
@@ -368,6 +369,22 @@ def build_projection(root: Path) -> tuple[dict[str, object] | None, list[str]]:
     return payload, []
 
 
+def projection_json_text(projection: dict[str, object]) -> str:
+    return json.dumps(projection, indent=2, sort_keys=True) + "\n"
+
+
+def _projection_path(root: Path, raw_path: Path | None) -> Path:
+    path = raw_path or DEFAULT_PROJECTION_PATH
+    return path if path.is_absolute() else root / path
+
+
+def _display_path(root: Path, path: Path) -> str:
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
+
+
 def validate(root: Path) -> list[str]:
     errors: list[str] = []
     registry, registry_errors = _load_kernel_registry(root)
@@ -430,6 +447,22 @@ def main() -> int:
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--json-output", action="store_true", help="Emit the derived kernel projection as JSON.")
+    parser.add_argument(
+        "--write-projection",
+        action="store_true",
+        help="Write the canonical derived projection to organs/vltima/projection.json.",
+    )
+    parser.add_argument(
+        "--check-projection",
+        action="store_true",
+        help="Fail if the canonical derived projection file is missing or stale.",
+    )
+    parser.add_argument(
+        "--projection-path",
+        type=Path,
+        default=None,
+        help="Override the projection path for --write-projection/--check-projection.",
+    )
     args = parser.parse_args()
 
     root = args.root.resolve()
@@ -440,14 +473,45 @@ def main() -> int:
             print(f"  - {error}", file=sys.stderr)
         return 1
 
-    if args.json_output:
+    projection = None
+    if args.json_output or args.write_projection or args.check_projection:
         projection, projection_errors = build_projection(root)
         if projection_errors:
             print(f"vltima-kernel: blocked with {len(projection_errors)} issue(s)", file=sys.stderr)
             for error in projection_errors:
                 print(f"  - {error}", file=sys.stderr)
             return 1
-        print(json.dumps(projection, indent=2, sort_keys=True))
+        assert projection is not None
+        expected = projection_json_text(projection)
+        projection_path = _projection_path(root, args.projection_path)
+
+        if args.write_projection:
+            projection_path.parent.mkdir(parents=True, exist_ok=True)
+            projection_path.write_text(expected)
+            if not args.quiet and not args.json_output:
+                print(f"vltima-kernel: wrote projection to {_display_path(root, projection_path)}")
+
+        if args.check_projection:
+            if not projection_path.exists():
+                print(
+                    f"vltima-kernel: projection missing: {_display_path(root, projection_path)} "
+                    "(run --write-projection)",
+                    file=sys.stderr,
+                )
+                return 1
+            actual = projection_path.read_text()
+            if actual != expected:
+                print(
+                    f"vltima-kernel: projection stale: {_display_path(root, projection_path)} "
+                    "(run --write-projection)",
+                    file=sys.stderr,
+                )
+                return 1
+            if not args.quiet and not args.json_output:
+                print(f"vltima-kernel: projection current at {_display_path(root, projection_path)}")
+
+        if args.json_output:
+            sys.stdout.write(expected)
         return 0
 
     if not args.quiet:

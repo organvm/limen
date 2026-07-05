@@ -8,10 +8,13 @@ support.
 The executable registry is [`kernel.yaml`](kernel.yaml). `scripts/validate-vltima-kernel.py`
 loads that registry, verifies the canonical primitive set, and checks every organ
 projection against it. `scripts/validate-vltima-kernel.py --json-output` emits the
-derived machine-readable substrate: primitive graph nodes and source edges,
-layers, projection groups, each organ's kernel mapping from `organ-ladder.json`,
-and a typed `graph` object that connects layers, primitives, projections, and organs.
-The emitted contract is named `vltima.kernel-projection` with `schema_version: 1`.
+derived machine-readable substrate, and `--write-projection` persists the canonical
+projection at [`projection.json`](projection.json). `--check-projection` is wired
+into `scripts/verify-whole.sh` so the checked-in substrate cannot drift from
+`kernel.yaml` or `organ-ladder.json`: primitive graph nodes and source edges,
+layers, projection groups, each organ's kernel mapping, and a typed `graph`
+object that connects layers, primitives, projections, and organs. The contract is
+named `vltima.kernel-projection` with `schema_version: 1`.
 
 ## Lower Layer
 

@@ -122,6 +122,30 @@ def test_vltima_kernel_emits_derived_projection_json():
     assert any(organ["pillar"] == "legal" and organ["organ_kernel"] for organ in data["organs"])
 
 
+def test_vltima_kernel_writes_and_checks_canonical_projection(tmp_path):
+    copy_root = tmp_path / "repo"
+    shutil.copytree(ROOT / "organs", copy_root / "organs")
+    shutil.copy2(ROOT / "organ-ladder.json", copy_root / "organ-ladder.json")
+
+    write = run_validator("--root", copy_root, "--write-projection")
+
+    assert write.returncode == 0, write.stdout + write.stderr
+    projection = copy_root / "organs" / "vltima" / "projection.json"
+    assert projection.exists()
+    data = json.loads(projection.read_text())
+    assert data["kind"] == "vltima.kernel-projection"
+
+    check = run_validator("--root", copy_root, "--check-projection", "--quiet")
+
+    assert check.returncode == 0, check.stdout + check.stderr
+
+    projection.write_text("{}\n")
+    stale = run_validator("--root", copy_root, "--check-projection")
+
+    assert stale.returncode == 1
+    assert "projection stale: organs/vltima/projection.json" in stale.stderr
+
+
 def test_vltima_graph_validation_rejects_dangling_edges():
     module = load_validator_module()
 
