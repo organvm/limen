@@ -13,8 +13,8 @@ discovery. Every repo always has headroom in each lever, so the supply is effect
 Identity from metadata: the product set is DERIVED from the repos already referenced in
 tasks.yaml (the active surfaces), never a pinned list.
 
-Read-only by default (prints a plan). With --apply it appends `open` tasks via the limen
-schema (validated, atomic write). Never dispatches.
+Read-only by default (prints a plan). With --apply it submits `open` task upsert tickets through
+TABVLARIVS, the single record-keeper. Never dispatches.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.models import Task  # noqa: E402
 from limen.tabularius import drain_once, submit_task_upsert  # noqa: E402
 from limen.capacity import select_lanes  # noqa: E402
@@ -334,29 +334,28 @@ def main() -> int:
         print("\n(nothing new to generate — every (repo,lever) is already active)")
         return 0
     if args.apply:
-        # TABVLARIVS producer path (Step 2.1). LIMEN_TICKETS_PRODUCE=1 → stop writing tasks.yaml
-        # directly; hand each NEW task to the record-keeper as an upsert ticket. `new` is already
-        # deduped against the board above, so every id is brand-new (an upsert never clobbers a live
-        # id). The keeper folds them next beat. Default OFF preserves the legacy validated append.
-        if os.environ.get("LIMEN_TICKETS_PRODUCE") == "1":
-            session_id = os.environ.get("LIMEN_SESSION_ID", "generate-backlog")
-            tickets = []
-            for t in new:
-                tickets.append(submit_task_upsert(path, t, agent="generate-backlog", session_id=session_id))
-            result = drain_once(path)
-            applied = set(result.applied_ids)
-            wanted = {ticket.stem for ticket in tickets}
-            if wanted - applied:
-                print(
-                    f"\nTABVLARIVS applied {len(applied & wanted)}/{len(wanted)} generate-backlog tickets "
-                    f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+        session_id = os.environ.get("LIMEN_SESSION_ID", "generate-backlog")
+        tickets = []
+        for t in new:
+            tickets.append(
+                submit_task_upsert(
+                    path,
+                    t,
+                    agent="generate-backlog",
+                    session_id=session_id,
+                    precondition={"status": None},
                 )
-            else:
-                print(f"\nsubmitted and applied {len(new)} upsert tickets through TABVLARIVS -> {path}.")
-            return 0
-        lf.tasks.extend(new)
-        save_limen_file(path, lf)
-        print(f"\napplied: appended {len(new)} generated tasks -> {path} (route+dispatch separately)")
+            )
+        result = drain_once(path)
+        applied = set(result.applied_ids)
+        wanted = {ticket.stem for ticket in tickets}
+        if wanted - applied:
+            print(
+                f"\nTABVLARIVS applied {len(applied & wanted)}/{len(wanted)} generate-backlog tickets "
+                f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+            )
+        else:
+            print(f"\nsubmitted and applied {len(new)} upsert tickets through TABVLARIVS -> {path}.")
     else:
         print(f"\ndry-run — re-run with --apply to append {len(new)} tasks.")
     return 0

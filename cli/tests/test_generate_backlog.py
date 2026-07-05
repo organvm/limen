@@ -120,7 +120,7 @@ def test_generates_up_to_floor_and_respects_cap(tmp_path: Path):
     assert _count_generated(p) == 10
 
 
-def test_ticket_mode_applies_generated_backlog_through_tabularius(tmp_path: Path):
+def test_applies_generated_backlog_through_tabularius(tmp_path: Path):
     p = tmp_path / "tasks.yaml"
     _board(p, [f"o/r{i}" for i in range(30)], n_open_per_repo=1)
 
@@ -131,7 +131,7 @@ def test_ticket_mode_applies_generated_backlog_through_tabularius(tmp_path: Path
         "--max-new",
         "5",
         "--apply",
-        extra_env={"LIMEN_TICKETS_PRODUCE": "1", "LIMEN_SESSION_ID": "test-generate-backlog"},
+        extra_env={"LIMEN_SESSION_ID": "test-generate-backlog"},
     )
 
     assert "through TABVLARIVS" in out

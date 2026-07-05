@@ -116,7 +116,8 @@ above it is autonomous.
       the producer≡direct-write identity test; reference pair `mine-backlog` + `ingest-backlog` converted.
 - [x] Step 2.1 (creation tier converted + **CUTOVER LIVE**) — the whole task-CREATION tier now
       produces tickets: `generate-backlog`, `generate-revenue-backlog`, `generate-organ-backlog`,
-      `discover-value` converted. `scripts/generate-revenue-backlog.py --apply` submits and drains
+      `discover-value` converted. `scripts/generate-backlog.py --apply` submits and drains guarded
+      buildout-task upsert tickets through TABVLARIVS. `scripts/generate-revenue-backlog.py --apply` submits and drains
       guarded revenue-task upsert tickets through TABVLARIVS. `scripts/auto-scale.py` submits guarded
       upsert tickets and drains synchronously through TABVLARIVS, preserving the CI `tasks.yaml` commit
       contract while preventing stale sequential-id clobber. `scripts/self-heal.py` submits guarded
@@ -174,7 +175,7 @@ above it is autonomous.
       task-board writers. It is wired into `scripts/verify-whole.sh` and blocks any new unapproved
       `tasks.yaml` writer; remaining reversible legacy fallbacks must stay explicitly allowlisted
       and carry `LIMEN_TICKETS_PRODUCE` plus TABVLARIVS producer proof. The whole-repo gate pins
-      the legacy fallback ceiling at 11, so the count can be ratcheted down but not silently grow.
+      the legacy fallback ceiling at 10, so the count can be ratcheted down but not silently grow.
       `scripts/discover-value.py --apply` is now TABVLARIVS-only: it submits and drains upsert
       tickets instead of retaining a legacy direct append fallback. `scripts/rebalance.py --apply`
       is now TABVLARIVS-only: it submits and drains guarded target-agent status tickets instead of
@@ -196,6 +197,8 @@ above it is autonomous.
       current-session seed upsert tickets instead of retaining a legacy direct append fallback.
       `scripts/generate-revenue-backlog.py --apply` is now TABVLARIVS-only: it submits and drains
       guarded revenue-task upsert tickets instead of retaining a legacy direct append fallback.
+      `scripts/generate-backlog.py --apply` is now TABVLARIVS-only: it submits and drains guarded
+      buildout-task upsert tickets instead of retaining a legacy direct append fallback.
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
       `fold(archive) == board` predicate.
       Seed landed: `limen tabularius-events --write --verify` writes
