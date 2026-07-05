@@ -10,9 +10,9 @@ ends. This converts the institutional census (organ-ladder.json) into bounded, d
 tasks so every beat drives every organ toward its next maturity band.
 
 Sibling of generate-revenue-backlog.py — SAME safety contract: identity DERIVED from organ-ladder.json
-(never pinned); read-only by default (prints a plan); with --apply it appends `open` tasks via the
-limen schema (validated, atomic, fresh re-read before write) so it can't clobber a concurrent dispatch
-write; never dispatches; floor-gated + id-deduped + capped (bounded, no flood). Organ artifacts are
+(never pinned); read-only by default (prints a plan); with --apply it submits `open` task upsert
+tickets through TABVLARIVS, the single record-keeper; never dispatches; floor-gated + id-deduped +
+capped (bounded, no flood). Organ artifacts are
 authored into the limen repo under organs/<pillar>/ (the proven Studium home) so dispatch never hits a
 dead clone.
 """
@@ -28,9 +28,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.capacity import select_lanes  # noqa: E402
-from limen.io import load_limen_file, queue_lock, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.models import Task  # noqa: E402
-from limen.tabularius import submit_task_upsert  # noqa: E402
+from limen.tabularius import drain_once, submit_task_upsert  # noqa: E402
 
 # Maturity bands that still have build work. mature(>=90) is self-running — no generated tasks.
 _BUILD_STAGES = {"scaffold", "building", "maturing"}
@@ -266,32 +266,33 @@ def main() -> int:
         print(f"\ndry-run — re-run with --apply to append {len(new)} tasks.")
         return 0
 
-    # APPLY: the WHOLE read-modify-write under the shared queue_lock (the same mkdir-mutex the heartbeat
-    # and dispatchers hold) so a manual run can never torn-write with a concurrent daemon dispatch save.
-    # Fresh read UNDER the lock; only NEW ids appended (idempotent). NEVER a silent dead-stop on a busy
-    # lock: the floor-gate makes the next beat self-correct, so we report + exit non-zero, never swallow.
-    with queue_lock(path) as got:
-        if not got:
-            print("\nqueue busy (lock timeout) — skipped; re-run (self-corrects, never racing the daemon).")
-            return 1
-        fresh = load_limen_file(path)
-        have = {t.id for t in fresh.tasks}
-        to_add = [t for t in new if t.id not in have]
-        if not to_add:
-            print("\n(all planned tasks already present after fresh re-read — nothing applied.)")
-            return 0
-        # TABVLARIVS producer path (Step 2.1). LIMEN_TICKETS_PRODUCE=1 → submit each fresh-deduped task
-        # as an upsert ticket instead of writing tasks.yaml directly; the keeper folds them next beat.
-        # Default OFF keeps the legacy validated append. submit_ticket is itself lock-free (os.link).
-        if os.environ.get("LIMEN_TICKETS_PRODUCE") == "1":
-            session_id = os.environ.get("LIMEN_SESSION_ID", "generate-organ-backlog")
-            for t in to_add:
-                submit_task_upsert(path, t, agent="generate-organ-backlog", session_id=session_id)
-            print(f"\nsubmitted {len(to_add)} organ upsert tickets to the keeper's inbox (folds onto {path} next beat).")
-            return 0
-        fresh.tasks.extend(to_add)
-        save_limen_file(path, fresh)
-    print(f"\napplied: appended {len(to_add)} organ tasks -> {path} (route+dispatch separately).")
+    fresh = load_limen_file(path)
+    have = {t.id for t in fresh.tasks}
+    to_add = [t for t in new if t.id not in have]
+    if not to_add:
+        print("\n(all planned tasks already present after fresh re-read — nothing applied.)")
+        return 0
+    session_id = os.environ.get("LIMEN_SESSION_ID", "generate-organ-backlog")
+    tickets = [
+        submit_task_upsert(
+            path,
+            t,
+            agent="generate-organ-backlog",
+            session_id=session_id,
+            precondition={"status": None},
+        )
+        for t in to_add
+    ]
+    result = drain_once(path)
+    applied = set(result.applied_ids)
+    wanted = {ticket.stem for ticket in tickets}
+    if wanted - applied:
+        print(
+            f"\nTABVLARIVS applied {len(applied & wanted)}/{len(wanted)} organ tickets "
+            f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+        )
+    else:
+        print(f"\nsubmitted and applied {len(to_add)} organ upsert tickets through TABVLARIVS -> {path}.")
     for t in to_add:
         print(f"  + {t.id}")
     return 0

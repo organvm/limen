@@ -37,7 +37,6 @@ LEGACY_GATED_ALLOWLIST = {
     "cli/src/limen/dispatch.py",
     "cli/src/limen/harvest.py",
     "scripts/dispatch-async.py",
-    "scripts/generate-organ-backlog.py",
     "scripts/ingest-backlog.py",
     "scripts/insight-route.py",
     "scripts/mine-backlog.py",
