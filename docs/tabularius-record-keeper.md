@@ -176,7 +176,7 @@ above it is autonomous.
       task-board writers. It is wired into `scripts/verify-whole.sh` and blocks any new unapproved
       `tasks.yaml` writer; remaining reversible legacy fallbacks must stay explicitly allowlisted
       and carry `LIMEN_TICKETS_PRODUCE` plus TABVLARIVS producer proof. The whole-repo gate pins
-      the legacy fallback ceiling at 5, so the count can be ratcheted down but not silently grow.
+      the legacy fallback ceiling at 4, so the count can be ratcheted down but not silently grow.
       `scripts/discover-value.py --apply` is now TABVLARIVS-only: it submits and drains upsert
       tickets instead of retaining a legacy direct append fallback. `scripts/rebalance.py --apply`
       is now TABVLARIVS-only: it submits and drains guarded target-agent status tickets instead of
@@ -211,6 +211,8 @@ above it is autonomous.
       `scripts/insight-route.py` is now TABVLARIVS-only for board tasks: repo-owned insights submit
       and drain guarded `TASK-<insight-id>` upsert tickets instead of retaining a legacy direct append
       fallback.
+      `scripts/quicken.py` is now TABVLARIVS-only for human-residue board records: it submits and
+      drains guarded create/refresh tickets instead of retaining a legacy direct save fallback.
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
       `fold(archive) == board` predicate.
       Seed landed: `limen tabularius-events --write --verify` writes

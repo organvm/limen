@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "cli" / "src"))
 
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.models import LimenFile, Task  # noqa: E402
-from limen.tabularius import drain_once, pending_count  # noqa: E402
+from limen.tabularius import pending_count  # noqa: E402
 
 
 def _load():
@@ -92,7 +92,7 @@ tasks:
     assert tasks.read_text(encoding="utf-8") == before
 
 
-def test_hang_residue_ticket_mode_creates_via_tabularius(tmp_path, monkeypatch):
+def test_hang_residue_creates_via_tabularius(tmp_path, monkeypatch):
     quicken = _load()
     tasks = tmp_path / "tasks.yaml"
     save_limen_file(
@@ -105,7 +105,6 @@ def test_hang_residue_ticket_mode_creates_via_tabularius(tmp_path, monkeypatch):
         ),
     )
     monkeypatch.setattr(quicken, "LEDGER", tasks)
-    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
     atom = "land the credential/secret (your account/identity)"
 
     result = quicken.hang_residue(
@@ -119,18 +118,14 @@ def test_hang_residue_ticket_mode_creates_via_tabularius(tmp_path, monkeypatch):
     )
 
     assert result["created"] == ["ASK-quicken-credential"]
-    assert pending_count(tasks) == 1
-    assert "ASK-quicken-credential" not in {task.id for task in load_limen_file(tasks).tasks}
-
-    drained = drain_once(tasks)
-    assert drained.applied == 1
+    assert pending_count(tasks) == 0
     ask = {task.id: task for task in load_limen_file(tasks).tasks}["ASK-quicken-credential"]
     assert ask.status == "needs_human"
     assert ask.target_agent == "human"
     assert "quicken-residue" in ask.labels
 
 
-def test_hang_residue_ticket_mode_refreshes_via_tabularius(tmp_path, monkeypatch):
+def test_hang_residue_refreshes_via_tabularius(tmp_path, monkeypatch):
     quicken = _load()
     tasks = tmp_path / "tasks.yaml"
     atom = "land the credential/secret (your account/identity)"
@@ -155,7 +150,6 @@ def test_hang_residue_ticket_mode_refreshes_via_tabularius(tmp_path, monkeypatch
         ),
     )
     monkeypatch.setattr(quicken, "LEDGER", tasks)
-    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
 
     result = quicken.hang_residue(
         [
@@ -168,13 +162,7 @@ def test_hang_residue_ticket_mode_refreshes_via_tabularius(tmp_path, monkeypatch
     )
 
     assert result["refreshed"] == ["ASK-quicken-credential"]
-    ask = {task.id: task for task in load_limen_file(tasks).tasks}["ASK-quicken-credential"]
-    assert ask.status == "open"
-    assert ask.context == "old context"
-    assert pending_count(tasks) == 1
-
-    drained = drain_once(tasks)
-    assert drained.applied == 1
+    assert pending_count(tasks) == 0
     ask = {task.id: task for task in load_limen_file(tasks).tasks}["ASK-quicken-credential"]
     assert ask.status == "needs_human"
     assert "wire revenue gateway" in ask.context

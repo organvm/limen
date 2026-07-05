@@ -411,9 +411,9 @@ def hang_residue(rows: list[dict]) -> dict:
     """Hang each irreducible human atom in the PERMANENT needs_human queue — the running system of
     record (obligations-view / organ-health / reclassify all read it), capture-pushed off-disk — so
     no obligation ever lives only in a disposable worktree doc. Idempotent within QUICKEN's own
-    `ASK-quicken-<key>` namespace; written under the shared queue-lock via the atomic primitive so a
-    concurrent heartbeat can never see a torn queue. Posture atoms (gate-hold) are already homed once
-    and are never multiplied. Fail-open: a lock miss skips this beat and self-corrects next."""
+    `ASK-quicken-<key>` namespace; written through TABVLARIVS so QUICKEN never mutates the board
+    directly. Posture atoms (gate-hold) are already homed once and are never multiplied. Fail-open:
+    a keeper deferral leaves tickets for the next beat and records the partial application."""
     by_key: dict[str, dict] = {}
     for r in rows:
         if r["state"] != "STALLED" or not r["decision"]["residue"]:
@@ -427,91 +427,93 @@ def hang_residue(rows: list[dict]) -> dict:
     try:
         sys.path.insert(0, str(ROOT / "cli" / "src"))
         from datetime import date, datetime, timezone
-        from limen.io import load_limen_file, queue_lock, save_limen_file
+        from limen.io import load_limen_file
         from limen.models import Task
-        from limen.tabularius import submit_task_status, submit_task_upsert
+        from limen.tabularius import drain_once, submit_task_status, submit_task_upsert
     except Exception as e:  # never dead-stop the apply if the cli pkg isn't importable
         res["error"] = f"ledger unavailable ({e}); residue digest still written"
         return res
     if not LEDGER.exists():
         res["error"] = f"no ledger at {LEDGER}; residue digest still written"
         return res
-    with queue_lock(LEDGER) as got:
-        if not got:
-            res["error"] = "queue busy; skipped this beat (self-corrects)"
-            return res
-        lf = load_limen_file(LEDGER)
-        index = {t.id: t for t in lf.tasks}
-        now = datetime.now(timezone.utc)
-        ticket_mode = os.environ.get("LIMEN_TICKETS_PRODUCE") == "1"
-        changed = False
-        for k, info in sorted(by_key.items()):
-            if k in _POSTURE:
-                res["homed"].append(f"{info['atom']} → {_POSTURE[k]}")
-                continue
-            tid = f"ASK-quicken-{k}"
-            ctx = (
-                f"Cheapest path → {info['atom']}. Unblocks: {', '.join(sorted(info['unblocks']))}. "
-                f"Auto-hung by QUICKEN (finish-not-park); refreshes each beat until you act."
-            )
-            ex = index.get(tid)
-            if ex and ex.status != "done":
-                refreshed = False
-                patch = {}
-                precondition = {"status": ex.status}
-                if ex.status != "needs_human":
-                    refreshed = True
-                if ex.context != ctx:
-                    patch["context"] = ctx
-                    precondition["context"] = ex.context
-                    refreshed = True
-                if "quicken-residue" not in (ex.labels or []):
-                    patch["labels"] = list(ex.labels or []) + ["quicken-residue"]
-                    precondition["labels"] = list(ex.labels or [])
-                    refreshed = True
-                if refreshed:
-                    if ticket_mode:
-                        submit_task_status(
-                            LEDGER,
-                            tid,
-                            "needs_human",
-                            agent="limen",
-                            session_id="quicken",
-                            output="quicken: refresh irreducible human residue",
-                            patch=patch,
-                            precondition=precondition,
-                            now=now,
-                        )
-                    else:
-                        ex.status = "needs_human"
-                        for field, value in patch.items():
-                            setattr(ex, field, value)
-                        ex.updated = now
-                    changed = True
-                    res["refreshed"].append(tid)
-                else:
-                    res["homed"].append(f"{info['atom']} → {tid}")
-            elif ex is None:
-                task = Task(
-                    id=tid,
-                    title=info["atom"],
-                    type="ops",
-                    target_agent="human",
-                    priority="high",
-                    status="needs_human",
-                    labels=["user-ask", "quicken-residue", "needs-human"],
-                    context=ctx,
-                    created=date.today(),
-                    updated=now,
+    lf = load_limen_file(LEDGER)
+    index = {t.id: t for t in lf.tasks}
+    now = datetime.now(timezone.utc)
+    tickets: list[Path] = []
+    for k, info in sorted(by_key.items()):
+        if k in _POSTURE:
+            res["homed"].append(f"{info['atom']} → {_POSTURE[k]}")
+            continue
+        tid = f"ASK-quicken-{k}"
+        ctx = (
+            f"Cheapest path → {info['atom']}. Unblocks: {', '.join(sorted(info['unblocks']))}. "
+            f"Auto-hung by QUICKEN (finish-not-park); refreshes each beat until you act."
+        )
+        ex = index.get(tid)
+        if ex and ex.status != "done":
+            refreshed = False
+            patch = {}
+            precondition = {"status": ex.status}
+            if ex.status != "needs_human":
+                refreshed = True
+            if ex.context != ctx:
+                patch["context"] = ctx
+                precondition["context"] = ex.context
+                refreshed = True
+            if "quicken-residue" not in (ex.labels or []):
+                patch["labels"] = list(ex.labels or []) + ["quicken-residue"]
+                precondition["labels"] = list(ex.labels or [])
+                refreshed = True
+            if refreshed:
+                tickets.append(
+                    submit_task_status(
+                        LEDGER,
+                        tid,
+                        "needs_human",
+                        agent="limen",
+                        session_id="quicken",
+                        output="quicken: refresh irreducible human residue",
+                        patch=patch,
+                        precondition=precondition,
+                        now=now,
+                    )
                 )
-                if ticket_mode:
-                    submit_task_upsert(LEDGER, task, agent="limen", session_id="quicken", now=now)
-                else:
-                    lf.tasks.append(task)
-                changed = True
-                res["created"].append(tid)
-        if changed and not ticket_mode:
-            save_limen_file(LEDGER, lf)
+                res["refreshed"].append(tid)
+            else:
+                res["homed"].append(f"{info['atom']} → {tid}")
+        elif ex is None:
+            task = Task(
+                id=tid,
+                title=info["atom"],
+                type="ops",
+                target_agent="human",
+                priority="high",
+                status="needs_human",
+                labels=["user-ask", "quicken-residue", "needs-human"],
+                context=ctx,
+                created=date.today(),
+                updated=now,
+            )
+            tickets.append(
+                submit_task_upsert(
+                    LEDGER,
+                    task,
+                    agent="limen",
+                    session_id="quicken",
+                    precondition={"status": None},
+                    now=now,
+                )
+            )
+            res["created"].append(tid)
+    if tickets:
+        result = drain_once(LEDGER)
+        applied = set(result.applied_ids)
+        wanted = {ticket.stem for ticket in tickets}
+        if wanted - applied:
+            res["error"] = (
+                f"TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} quicken residue tickets "
+                f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+            )
     return res
 
 
