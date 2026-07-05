@@ -157,6 +157,8 @@ above it is autonomous.
       `generate-revenue-backlog --apply` submits upsert tickets and drains them before returning.
       Legacy `scripts/append-tasks.py` submits and drains guarded upsert tickets instead of
       rewriting `tasks.yaml` directly.
+      Post-transfer `scripts/rewrite-owners.py --apply` submits and drains guarded repo-owner
+      rewrite tickets instead of rewriting `tasks.yaml` directly.
 - [x] Step 2.3 — MCP server → ticket producer. `mcp/src/limen_mcp/server.py` now loads through
       the shared Limen loader and its mutating tools (`add_task`, `update_task_status`,
       `agent_claim`) submit TABVLARIVS upsert/status tickets, drain the keeper synchronously, and
