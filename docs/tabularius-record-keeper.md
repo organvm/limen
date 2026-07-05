@@ -129,8 +129,9 @@ above it is autonomous.
       emits status tickets when `LIMEN_TICKETS_PRODUCE=1`, and the Jules harvest path submits
       completion/failure tickets instead of saving the board directly. `scripts/heal-dispatch.py`
       also submits lifecycle-repair tickets in ticket mode. `scripts/rebalance.py` submits guarded
-      target-agent tickets in ticket mode. Remaining:
-      route/dispatch-async/quicken plus CLI dispatch result-apply.
+      target-agent tickets in ticket mode. `scripts/route.py` submits guarded target-agent and
+      workstream tickets in ticket mode. Remaining:
+      dispatch-async/quicken plus CLI dispatch result-apply.
 - [ ] Step 2.3 — MCP server → ticket producer (retire the raw write + duplicate models).
 - [ ] Step 2.4 — live API/Worker tier (needs the consistency decision above; website-sensitive).
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing

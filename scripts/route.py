@@ -60,6 +60,7 @@ from limen.capacity import (  # noqa: E402
 )
 from limen.io import load_limen_file, queue_lock, save_limen_file  # noqa: E402
 from limen.dispatch import _down_lanes  # noqa: E402
+from limen.tabularius import submit_task_status  # noqa: E402
 from limen.workstream import UNASSIGNED, assign_channel  # noqa: E402
 
 
@@ -521,6 +522,7 @@ def main() -> int:
         print("dry-run (no changes). re-run with --apply to set target_agent.")
         return 0
 
+    ticket_mode = os.environ.get("LIMEN_TICKETS_PRODUCE") == "1"
     # Apply UNDER the queue lock with a FRESH sanitized re-read, so route stops racing the
     # dispatchers (the race that wrote a Task into a dispatch_log = the torn-write source). We
     # mutate ONLY target_agent on tasks that are still open, then write through the validated
@@ -536,10 +538,18 @@ def main() -> int:
         for task in lf.tasks:
             if task.status != "open":
                 continue
+            patch = {}
+            precondition = {"status": "open"}
             v = assignments.get(task.id)
             if v:
-                task.target_agent = v
-                applied += 1
+                if ticket_mode:
+                    if task.target_agent != v:
+                        patch["target_agent"] = v
+                        precondition["target_agent"] = task.target_agent
+                        applied += 1
+                else:
+                    task.target_agent = v
+                    applied += 1
             # PURPOSE partition (workstream) — the axis ABOVE target_agent, without which the
             # channels organ's scoped `cell conduct --workstream <handle>` conductors draw an empty
             # lane. Stamp only when EMPTY (honor explicit intent) and only a RESOLVED channel (leave
@@ -548,9 +558,34 @@ def main() -> int:
             if not task.workstream:
                 handle = assign_channel(task, ROOT)
                 if handle != UNASSIGNED:
-                    task.workstream = handle
-                    ws_applied += 1
-        save_limen_file(tasks_path, lf)
+                    if ticket_mode:
+                        patch["workstream"] = handle
+                        precondition["workstream"] = task.workstream
+                        ws_applied += 1
+                    else:
+                        task.workstream = handle
+                        ws_applied += 1
+            if ticket_mode and patch:
+                fields = ", ".join(f"{key} -> {value}" for key, value in sorted(patch.items()))
+                submit_task_status(
+                    tasks_path,
+                    task.id,
+                    "open",
+                    agent="limen",
+                    session_id="route",
+                    output=f"route: {fields}",
+                    patch=patch,
+                    precondition=precondition,
+                )
+        if not ticket_mode:
+            save_limen_file(tasks_path, lf)
+    if ticket_mode:
+        print(
+            f"submitted target_agent assignment tickets ({applied}) -> {tasks_path} "
+            f"(dispatch separately, gated: limen dispatch --agent <v> --live)"
+        )
+        print(f"submitted workstream assignment tickets ({ws_applied}) -> {tasks_path} (purpose partition)")
+        return 0
     print(
         f"applied target_agent assignments ({applied}) -> {tasks_path} "
         f"(dispatch separately, gated: limen dispatch --agent <v> --live)"
