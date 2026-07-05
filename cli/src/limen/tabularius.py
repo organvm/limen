@@ -772,8 +772,9 @@ def _drain_pending(
     pending: int,
     good: list[tuple[Path, Ticket]],
     bad: list[tuple[Path, str]],
+    seed: LimenFile | None = None,
 ) -> DrainResult:
-    board = load_limen_file(board_path)
+    board = load_limen_file(board_path) if board_path.exists() or seed is None else seed
     board_json = board.model_dump(mode="json", exclude_none=True)
     tasks: OrderedDict[str, dict[str, Any]] = OrderedDict((t["id"], t) for t in board_json.get("tasks", []))
     meta: dict[str, Any] = {"version": board_json.get("version", "1.0"), "portal": board_json.get("portal")}
@@ -822,7 +823,7 @@ def _drain_pending(
     )
 
 
-def drain_once_locked(board_path: Path, *, dry_run: bool = False) -> DrainResult:
+def drain_once_locked(board_path: Path, *, dry_run: bool = False, seed: LimenFile | None = None) -> DrainResult:
     """Drain pending tickets while the caller already holds ``queue_lock(board_path)``.
 
     Reservation producers need the keeper's seal before they start external work. This entrypoint
@@ -846,7 +847,7 @@ def drain_once_locked(board_path: Path, *, dry_run: bool = False) -> DrainResult
             note=f"dry-run: {len(good)} applicable, {len(bad)} unparseable",
         )
 
-    return _drain_pending(board_path, pending=pending, good=good, bad=bad)
+    return _drain_pending(board_path, pending=pending, good=good, bad=bad, seed=seed)
 
 
 def drain_once(board_path: Path, *, dry_run: bool = False, lock_timeout: int = 20) -> DrainResult:

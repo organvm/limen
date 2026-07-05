@@ -174,10 +174,10 @@ def _load_vltima_validator(root: Path):
         click.echo(f"VLTIMA validator missing at {path}", err=True)
         sys.exit(2)
     spec = importlib.util.spec_from_file_location("limen_vltima_validator_cli", path)
-    module = importlib.util.module_from_spec(spec)
-    if spec.loader is None:
+    if spec is None or spec.loader is None:
         click.echo(f"Could not load VLTIMA validator at {path}", err=True)
         sys.exit(2)
+    module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
@@ -212,7 +212,10 @@ def _select_vltima_projection(
 
     if primitive:
         needle = _norm_selector(primitive)
-        for item in projection.get("primitives") or []:
+        primitives = projection.get("primitives")
+        if not isinstance(primitives, list):
+            primitives = []
+        for item in primitives:
             if not isinstance(item, dict):
                 continue
             identifiers = {str(item.get("id") or "").lower(), str(item.get("label") or "").lower()}
@@ -223,7 +226,10 @@ def _select_vltima_projection(
 
     if organ:
         needle = _norm_selector(organ)
-        for item in projection.get("organs") or []:
+        organs = projection.get("organs")
+        if not isinstance(organs, list):
+            organs = []
+        for item in organs:
             if not isinstance(item, dict):
                 continue
             home = _norm_selector(str(item.get("home") or ""))

@@ -11,7 +11,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from limen import census
 from limen.capacity import (
@@ -1543,8 +1543,8 @@ def _submit_result_ticket(
     ):
         return None
 
-    patch = {}
-    precondition = {"status": before_status}
+    patch: dict[str, Any] = {}
+    precondition: dict[str, Any] = {"status": before_status}
     if probe.target_agent != before_target:
         patch["target_agent"] = probe.target_agent
         precondition["target_agent"] = before_target
@@ -2125,7 +2125,7 @@ def dispatch_parallel(
     # ── RESERVE: re-read inside the queue lock, then pick and mark dispatched on that fresh board.
     # The caller may have loaded `limen` before a supervisor/heartbeat wrote tasks.yaml; saving that
     # stale snapshot would erase concurrent task additions, completions, or budget resets.
-    reserve_session = f"parallel-reserve-{secrets.token_hex(8)}"
+    reserve_session = "reserve"
     reserve_tickets = []
     reserve_drain = None
     with _queue_lock(tasks_path) as got:
@@ -2142,7 +2142,7 @@ def dispatch_parallel(
             agents,
             per_agent_limit,
             now,
-            dry_run=False,
+            dry_run=True,
             debt_blocked=debt_blocked,
         )
         if reset:
@@ -2174,7 +2174,8 @@ def dispatch_parallel(
                 )
             )
         if reserve_tickets:
-            reserve_drain = drain_once_locked(tasks_path)
+            seed = fresh if not tasks_path.exists() else None
+            reserve_drain = drain_once_locked(tasks_path, seed=seed)
 
     if reserve_tickets and reserve_drain is not None:
         applied = set(reserve_drain.applied_ids)
@@ -2187,8 +2188,11 @@ def dispatch_parallel(
     if not picked:
         print(f"── PARALLEL: nothing to dispatch for {agents} within budget")
         return
-    limen = load_limen_file(tasks_path)
-    fid = {t.id: t for t in limen.tasks}
+    sealed = load_limen_file(tasks_path)
+    limen.version = sealed.version
+    limen.portal = sealed.portal
+    limen.tasks = sealed.tasks
+    fid = {t.id: t for t in sealed.tasks}
     reserved = []
     for agent, tid in picked:
         task = fid.get(tid)
