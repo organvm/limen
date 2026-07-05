@@ -167,7 +167,8 @@ above it is autonomous.
       `fold(archive) == board` predicate.
       Seed landed: `limen tabularius-events --write --verify` writes
       `logs/tickets/events.jsonl` as a compacted projection seed and verifies
-      `materialize.fold(events.jsonl) == tasks.yaml`.
+      `materialize.fold(events.jsonl) == tasks.yaml`; `scripts/verify-whole.sh` runs the same
+      predicate against a temp event-log path to avoid repo drift.
 
 See also: `board-is-event-log-projection` (memory), `cli/src/limen/materialize.py`,
 `scripts/heal-board.py`, `io.py` (`queue_lock`, `save_limen_file`, the collapse-guard).
