@@ -403,11 +403,71 @@ def apply_proposal(proposal: dict, tasks_path: Path) -> int:
     target_agent would just thrash the router every beat)."""
     sys.path.insert(0, str(ROOT / "cli" / "src"))
     from limen.io import load_limen_file, queue_lock, save_limen_file  # noqa: E402
+    from limen.tabularius import drain_once, submit_task_status  # noqa: E402
 
     boost = {r["pattern"] for r in proposal.get("rerank", []) if r.get("move") == "boost"}
     deprio = {r["pattern"] for r in proposal.get("rerank", []) if r.get("move") == "deprioritise"}
     retire = {r["pattern"] for r in proposal.get("retire_patterns", []) if r.get("action") == "retire"}
     allow_retire = os.environ.get("LIMEN_SI_RETIRE") == "1"
+    ticket_mode = os.environ.get("LIMEN_TICKETS_PRODUCE") == "1"
+
+    if ticket_mode:
+        try:
+            lf = load_limen_file(tasks_path)
+        except Exception as exc:  # never crash the heartbeat — skip apply, proposal already written
+            print(f"[self-improve] could not load {tasks_path} for apply ({exc}); proposal-only this pass")
+            return 0
+        ch = {"boost": 0, "deprio": 0, "retire": 0}
+        tickets = []
+        for t in lf.tasks:
+            if t.status not in ("open", "failed"):
+                continue
+            p = _prefix(t.id)
+            patch = {}
+            precondition = {"status": t.status}
+            next_status = t.status
+            if p in boost and t.priority not in ("critical", "high"):
+                patch["priority"] = "high"
+                precondition["priority"] = t.priority
+                ch["boost"] += 1
+            elif p in deprio and t.priority not in ("low", "backlog"):
+                patch["priority"] = "low"
+                precondition["priority"] = t.priority
+                ch["deprio"] += 1
+            if p in retire and allow_retire and t.status != "archived":
+                labels = list(t.labels or [])
+                if "superseded" not in labels:
+                    labels.append("superseded")
+                patch["labels"] = labels
+                precondition["labels"] = list(t.labels or [])
+                next_status = "archived"
+                ch["retire"] += 1
+            if patch or next_status != t.status:
+                tickets.append(
+                    submit_task_status(
+                        tasks_path,
+                        t.id,
+                        next_status,
+                        agent="self-improve",
+                        session_id="self-improve",
+                        output="self-improve: applied task-level re-plan",
+                        patch=patch,
+                        precondition=precondition,
+                    )
+                )
+        if tickets:
+            result = drain_once(tasks_path)
+            applied = set(result.applied_ids)
+            wanted = {ticket.stem for ticket in tickets}
+            if wanted - applied:
+                print(
+                    f"[self-improve] TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} tickets "
+                    f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+                )
+        held = "" if allow_retire else f" ({len(retire)} retire patterns HELD — set LIMEN_SI_RETIRE=1)"
+        print(f"[self-improve] applied: {ch['boost']} boosted→high, {ch['deprio']} →low, "
+              f"{ch['retire']} retired→archived/superseded via TABVLARIVS{held}")
+        return 0
 
     with queue_lock(tasks_path) as got:
         if not got:
