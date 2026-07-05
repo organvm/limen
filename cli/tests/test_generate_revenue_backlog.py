@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
-from limen.models import Task
+from limen.io import load_limen_file, save_limen_file
+from limen.models import LimenFile, Task
+from limen.tabularius import pending_count
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "generate-revenue-backlog.py"
@@ -139,3 +142,44 @@ def test_positive_int_uses_default_for_invalid_values():
     assert mod._positive_int("0", 12) == 12
     assert mod._positive_int("-4", 12) == 12
     assert mod._positive_int(True, 12) == 12
+
+
+def test_ticket_mode_applies_revenue_backlog_through_tabularius(monkeypatch, tmp_path, capsys):
+    mod = _load_module()
+    board = tmp_path / "tasks.yaml"
+    ladder = tmp_path / "revenue-ladder.json"
+    save_limen_file(board, LimenFile(tasks=[]))
+    ladder.write_text(
+        json.dumps(
+            {
+                "products": [
+                    {
+                        "repo": "organvm/mirror",
+                        "stage": "building",
+                        "rank": 1,
+                        "product": "Mirror",
+                        "first_dollar_path": "the first paid workflow",
+                    }
+                ]
+            }
+        )
+    )
+    monkeypatch.setenv("LIMEN_REVENUE_LADDER", str(ladder))
+    monkeypatch.setenv("LIMEN_DISPATCH_LANES", "codex")
+    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    monkeypatch.setenv("LIMEN_SESSION_ID", "test-generate-revenue-backlog")
+    monkeypatch.setattr(mod, "_avg_headroom_pct", lambda: None)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [str(SCRIPT), "--tasks", str(board), "--floor", "2", "--max-new", "2", "--apply"],
+    )
+
+    assert mod.main() == 0
+
+    out = capsys.readouterr().out
+    assert "through TABVLARIVS" in out
+    assert pending_count(board) == 0
+    tasks = load_limen_file(board).tasks
+    assert len(tasks) == 2
+    assert {task.labels[0] for task in tasks} == {"revenue-ship", "revenue-readiness"}

@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.capacity import select_lanes  # noqa: E402
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.models import Task  # noqa: E402
-from limen.tabularius import submit_task_upsert  # noqa: E402
+from limen.tabularius import drain_once, submit_task_upsert  # noqa: E402
 
 # Stages that still have build work between here and a paying dollar. live/monetized are already
 # earning — don't generate build tasks for them.
@@ -308,9 +308,19 @@ def main() -> int:
     # OFF keeps the legacy validated append. `to_add` is already fresh-deduped, so no id clobbers.
     if os.environ.get("LIMEN_TICKETS_PRODUCE") == "1":
         session_id = os.environ.get("LIMEN_SESSION_ID", "generate-revenue-backlog")
+        tickets = []
         for t in to_add:
-            submit_task_upsert(path, t, agent="generate-revenue-backlog", session_id=session_id)
-        print(f"\nsubmitted {len(to_add)} revenue upsert tickets to the keeper's inbox (folds onto {path} next beat).")
+            tickets.append(submit_task_upsert(path, t, agent="generate-revenue-backlog", session_id=session_id))
+        result = drain_once(path)
+        applied = set(result.applied_ids)
+        wanted = {ticket.stem for ticket in tickets}
+        if wanted - applied:
+            print(
+                f"\nTABVLARIVS applied {len(applied & wanted)}/{len(wanted)} revenue tickets "
+                f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+            )
+        else:
+            print(f"\nsubmitted and applied {len(to_add)} revenue upsert tickets through TABVLARIVS -> {path}.")
         return 0
     fresh.tasks.extend(to_add)
     save_limen_file(path, fresh)
