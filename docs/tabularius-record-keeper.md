@@ -174,9 +174,11 @@ above it is autonomous.
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
       `fold(archive) == board` predicate.
       Seed landed: `limen tabularius-events --write --verify` writes
-      `logs/tickets/events.jsonl` as a compacted projection seed and verifies
-      `materialize.fold(events.jsonl) == tasks.yaml`; `scripts/verify-whole.sh` runs the same
-      predicate against a temp event-log path to avoid repo drift.
+      `logs/tickets/events.jsonl` as a compacted projection seed plus
+      `logs/tickets/events.jsonl.manifest.json` as the archive watermark. Verification now proves
+      both `materialize.fold(events.jsonl) == tasks.yaml` for a fresh seed and
+      `fold(seed + archived tickets after watermark) == tasks.yaml` after later keeper drains;
+      `scripts/verify-whole.sh` runs the same predicate against a temp event-log path to avoid repo drift.
 
 See also: `board-is-event-log-projection` (memory), `cli/src/limen/materialize.py`,
 `scripts/heal-board.py`, `io.py` (`queue_lock`, `save_limen_file`, the collapse-guard).

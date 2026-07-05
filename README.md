@@ -208,7 +208,8 @@ runtime adapter. Set `LIMEN_VERIFY_LIVE_RUNTIME=1` to fail if those runtime
 probe inputs are missing.
 To compact TABVLARIVS' current board projection into a replayable event log,
 run `limen tabularius-events --write --verify`; it writes
-`logs/tickets/events.jsonl` and proves the fold matches `tasks.yaml`.
+`logs/tickets/events.jsonl` plus a `.manifest.json` archive watermark, then
+proves the seed plus any post-watermark archived tickets folds to `tasks.yaml`.
 
 ## How It Works
 

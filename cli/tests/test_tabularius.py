@@ -12,6 +12,7 @@ and seals through the collapse-guard. The invariants that make it safe to run ev
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -33,6 +34,7 @@ from limen.tabularius import (
     compact_event_log,
     drain_once,
     event_log_path,
+    event_log_manifest_path,
     new_ticket_id,
     pending_count,
     submit_board_meta,
@@ -161,6 +163,60 @@ def test_compacted_event_log_folds_to_current_board(tmp_path):
     verify = verify_event_log(board)
     assert verify.verified is True
     assert verify.events == result.events
+
+
+def test_compacted_event_log_manifest_records_archive_watermark(tmp_path):
+    board = _seed_board(tmp_path)
+    ticket_path = submit_task_status(board, "T-1", "done", agent="limen", session_id="test", now=_NOW)
+    drain_once(board)
+
+    result = compact_event_log(board)
+
+    manifest = json.loads(event_log_manifest_path(result.event_log).read_text())
+    assert manifest["kind"] == "tabularius.compacted-seed"
+    assert manifest["archive_count"] == 1
+    assert manifest["last_ticket_id"] == ticket_path.stem
+    assert result.archive_replay_tickets == 0
+    assert result.verified is True
+
+
+def test_event_log_verification_replays_archive_after_seed_watermark(tmp_path):
+    board = _seed_board(tmp_path)
+    result = compact_event_log(board)
+    seed_event_count = result.events
+
+    submit_task_status(board, "T-1", "done", agent="limen", session_id="after-seed", now=_NOW)
+    drain_once(board)
+
+    verify = verify_event_log(board)
+
+    assert verify.verified is True
+    assert verify.archive_tickets == 1
+    assert verify.archive_replay_tickets == 1
+    assert verify.events == seed_event_count + 1
+    assert verify.note == "fold(events + archive tickets after watermark) == tasks.yaml bytes"
+
+
+def test_event_log_archive_replay_preserves_budget_delta_metadata(tmp_path):
+    board = _seed_budget_board(tmp_path)
+    result = compact_event_log(board)
+
+    submit_task_status(
+        board,
+        "T-1",
+        "dispatched",
+        agent="codex",
+        session_id="after-seed",
+        budget_cost=1,
+        now=_NOW,
+    )
+    drain_once(board)
+
+    verify = verify_event_log(board)
+
+    assert verify.verified is True
+    assert verify.archive_replay_tickets == 1
+    assert verify.events == result.events + 2  # board.meta budget delta + task status upsert
 
 
 def test_tabularius_events_command_writes_and_verifies(tmp_path, monkeypatch):

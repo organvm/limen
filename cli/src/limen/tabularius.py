@@ -37,6 +37,7 @@ Design invariants (each carried over from a shipped safety precedent):
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import uuid
@@ -52,6 +53,7 @@ from limen.io import BoardCollapseError, load_limen_file, queue_lock, save_limen
 from limen.materialize import (
     EV_BOARD_META,
     EV_BOARD_ORDER,
+    EV_TASK_REMOVE,
     EV_TASK_UPSERT,
     Event,
     canonical_board_text,
@@ -121,6 +123,10 @@ def _archive(board_path: Path) -> Path:
 
 def event_log_path(board_path: Path) -> Path:
     return tickets_root(board_path) / "events.jsonl"
+
+
+def event_log_manifest_path(log_path: Path) -> Path:
+    return Path(f"{Path(log_path)}.manifest.json")
 
 
 def _rejected(board_path: Path) -> Path:
@@ -319,8 +325,10 @@ class EventLogResult:
     event_log: Path
     events: int = 0
     archive_tickets: int = 0
+    archive_replay_tickets: int = 0
     verified: bool = False
     note: str = ""
+    manifest: Path | None = None
 
 
 def pending_count(board_path: Path) -> int:
@@ -333,12 +341,128 @@ def archive_count(board_path: Path) -> int:
     return len(list(archive.glob("*.json"))) if archive.is_dir() else 0
 
 
+def _archive_ticket_entries(board_path: Path) -> list[tuple[Path, Ticket]]:
+    archive = _archive(board_path)
+    if not archive.is_dir():
+        return []
+    entries: list[tuple[Path, Ticket]] = []
+    for path in sorted(archive.glob("*.json")):
+        entries.append((path, Ticket.model_validate_json(path.read_text())))
+    entries.sort(key=lambda pt: (pt[1].timestamp, pt[1].ticket_id))
+    return entries
+
+
+def _archive_watermark(board_path: Path) -> dict[str, Any]:
+    entries = _archive_ticket_entries(board_path)
+    if not entries:
+        return {"archive_count": 0, "last_ticket_id": None, "last_ticket_file": None}
+    last_path, last_ticket = entries[-1]
+    return {
+        "archive_count": len(entries),
+        "last_ticket_id": last_ticket.ticket_id,
+        "last_ticket_file": last_path.name,
+    }
+
+
+def _write_event_log_manifest(board_path: Path, log_path: Path) -> Path:
+    manifest_path = event_log_manifest_path(log_path)
+    payload = {
+        "schema_version": 1,
+        "kind": "tabularius.compacted-seed",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        **_archive_watermark(board_path),
+    }
+    manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    return manifest_path
+
+
+def _load_event_log_manifest(log_path: Path) -> dict[str, Any] | None:
+    manifest_path = event_log_manifest_path(log_path)
+    if not manifest_path.exists():
+        return None
+    data = json.loads(manifest_path.read_text())
+    if not isinstance(data, dict):
+        raise ValueError("event log manifest must be a JSON object")
+    if data.get("kind") != "tabularius.compacted-seed":
+        raise ValueError(f"unknown event log manifest kind: {data.get('kind')!r}")
+    return data
+
+
+def _state_from_board(board: LimenFile) -> tuple[OrderedDict[str, dict[str, Any]], dict[str, Any]]:
+    board_json = board.model_dump(mode="json", exclude_none=True)
+    tasks: OrderedDict[str, dict[str, Any]] = OrderedDict((t["id"], t) for t in board_json.get("tasks", []))
+    meta: dict[str, Any] = {"version": board_json.get("version", "1.0"), "portal": board_json.get("portal")}
+    return tasks, meta
+
+
+def _json_clone(value: Any) -> Any:
+    return json.loads(json.dumps(value))
+
+
+def _board_meta_event(meta: dict[str, Any]) -> Event:
+    return {"type": EV_BOARD_META, "data": {"version": meta.get("version", "1.0"), "portal": meta.get("portal")}}
+
+
+def _projection_events_for_ticket(
+    ticket: Ticket,
+    tasks: OrderedDict[str, dict[str, Any]],
+    meta: dict[str, Any],
+    before_meta: dict[str, Any],
+) -> list[Event]:
+    events: list[Event] = []
+    if _board_meta_event(meta) != _board_meta_event(before_meta):
+        events.append(_board_meta_event(meta))
+    if ticket.intent == INTENT_REMOVE:
+        events.append({"type": EV_TASK_REMOVE, "task_id": ticket.task_id})
+        return events
+    if ticket.intent in (INTENT_UPSERT, INTENT_STATUS):
+        events.append({"type": EV_TASK_UPSERT, "task_id": ticket.task_id, "data": tasks[ticket.task_id or ""]})
+        return events
+    if ticket.intent == INTENT_META:
+        return events or [_board_meta_event(meta)]
+    if ticket.intent == INTENT_ORDER:
+        events.append({"type": EV_BOARD_ORDER, "data": {"ids": meta.get("order", [])}})
+        return events
+    raise ValueError(f"unknown ticket intent: {ticket.intent!r}")
+
+
+def archive_projection_events_after_watermark(
+    board_path: Path,
+    seed_events: list[Event],
+    last_ticket_id: str | None,
+) -> tuple[list[Event], int]:
+    """Compile archived tickets after ``last_ticket_id`` into materialize events.
+
+    A compacted event log is a seed. The archive is the delta stream after that seed. This helper
+    replays only tickets beyond the seed watermark and emits full materialize events so
+    ``fold(seed + archive_delta)`` can prove the cache projection without mutating ``tasks.yaml``.
+    """
+    seed_board = fold(seed_events)
+    tasks, meta = _state_from_board(seed_board)
+    events: list[Event] = []
+    replayed = 0
+    seen_watermark = last_ticket_id is None
+    for _, ticket in _archive_ticket_entries(board_path):
+        if not seen_watermark:
+            if ticket.ticket_id == last_ticket_id:
+                seen_watermark = True
+            continue
+        before_meta = _json_clone(meta)
+        _apply(ticket, tasks, meta)
+        events.extend(_projection_events_for_ticket(ticket, tasks, meta, before_meta))
+        replayed += 1
+    if not seen_watermark:
+        raise ValueError(f"event log archive watermark not found: {last_ticket_id}")
+    return events, replayed
+
+
 def compact_event_log(board_path: Path, out_path: Path | None = None) -> EventLogResult:
     """Compact the current keeper projection into a canonical replayable event log.
 
     This is the first safe Step-3 bridge: the archived tickets remain provenance, while
-    ``events.jsonl`` becomes the compacted projection seed that ``materialize.fold`` can replay
-    without needing pre-TABVLARIVS history.
+    ``events.jsonl`` becomes a compacted projection seed that ``materialize.fold`` can replay
+    without needing pre-TABVLARIVS history. The sidecar manifest records the archive watermark, so
+    later verification can replay archived tickets that landed after the seed.
     """
     board_path = Path(board_path)
     out_path = Path(out_path) if out_path is not None else event_log_path(board_path)
@@ -346,27 +470,65 @@ def compact_event_log(board_path: Path, out_path: Path | None = None) -> EventLo
     events = seed_events_from_board(board)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(events_to_jsonl(events))
+    manifest = _write_event_log_manifest(board_path, out_path)
     result = verify_event_log(board_path, out_path)
     result.archive_tickets = archive_count(board_path)
+    result.manifest = manifest
     return result
 
 
 def verify_event_log(board_path: Path, in_path: Path | None = None) -> EventLogResult:
-    """Verify a compacted event log folds back to the current board projection."""
+    """Verify a compacted event log folds back to the current board projection.
+
+    If a compacted-seed manifest exists, verification replays archived tickets after the manifest
+    watermark before comparing with ``tasks.yaml``. That is the reversible Step-3 shape:
+    snapshot seed + keeper-owned archive deltas, never a direct board mutation.
+    """
     board_path = Path(board_path)
     in_path = Path(in_path) if in_path is not None else event_log_path(board_path)
+    manifest_path = event_log_manifest_path(in_path)
     if not in_path.exists():
-        return EventLogResult(in_path, archive_tickets=archive_count(board_path), note="event log missing")
+        return EventLogResult(
+            in_path,
+            archive_tickets=archive_count(board_path),
+            manifest=manifest_path if manifest_path.exists() else None,
+            note="event log missing",
+        )
     events = events_from_jsonl(in_path.read_text())
     board = load_limen_file(board_path)
+    replayed = 0
+    note_prefix = "fold(events)"
+    try:
+        manifest = _load_event_log_manifest(in_path)
+        if manifest is not None:
+            archive_events, replayed = archive_projection_events_after_watermark(
+                board_path,
+                events,
+                manifest.get("last_ticket_id"),
+            )
+            events = events + archive_events
+            if replayed:
+                note_prefix = "fold(events + archive tickets after watermark)"
+    except Exception as exc:
+        return EventLogResult(
+            in_path,
+            events=len(events),
+            archive_tickets=archive_count(board_path),
+            archive_replay_tickets=replayed,
+            verified=False,
+            note=f"event log archive replay failed: {exc}",
+            manifest=manifest_path if manifest_path.exists() else None,
+        )
     rebuilt = fold(events)
     verified = canonical_board_text(rebuilt) == canonical_board_text(board)
     return EventLogResult(
         in_path,
         events=len(events),
         archive_tickets=archive_count(board_path),
+        archive_replay_tickets=replayed,
         verified=verified,
-        note="fold(events) == tasks.yaml bytes" if verified else "fold(events) != tasks.yaml bytes",
+        note=f"{note_prefix} == tasks.yaml bytes" if verified else f"{note_prefix} != tasks.yaml bytes",
+        manifest=manifest_path if manifest_path.exists() else None,
     )
 
 
