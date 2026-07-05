@@ -24,6 +24,7 @@ from limen.capacity import (
 )
 from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
+from limen.tabularius import drain_once, submit_task_status
 from limen.doctor import stale_tasks
 from limen.model_selection import (  # the shared model vocabulary — also used by the non-bypassable `claude` shim
     _CLAUDE_TIER_ORDER,
@@ -1519,6 +1520,54 @@ def _remaining_budget(limen: LimenFile, agent: str, budget: int) -> int:
     return max(0, budget - track.spent)
 
 
+def _ticket_mode() -> bool:
+    return os.environ.get("LIMEN_TICKETS_PRODUCE") == "1"
+
+
+def _submit_result_ticket(tasks_path: Path, task: Task, agent: str, result: bool | str, now: datetime, track: BudgetTrack):
+    before_status = task.status
+    before_target = task.target_agent
+    before_labels = list(task.labels or [])
+    before_logs = len(task.dispatch_log or [])
+    probe = task.model_copy(deep=True)
+    probe_track = track.model_copy(deep=True)
+
+    _apply_result(probe, agent, result, now, probe_track)
+    if (
+        probe.status == before_status
+        and probe.target_agent == before_target
+        and list(probe.labels or []) == before_labels
+        and len(probe.dispatch_log or []) == before_logs
+        and probe_track.spent == track.spent
+    ):
+        return None
+
+    patch = {}
+    precondition = {"status": before_status}
+    if probe.target_agent != before_target:
+        patch["target_agent"] = probe.target_agent
+        precondition["target_agent"] = before_target
+    if list(probe.labels or []) != before_labels:
+        patch["labels"] = list(probe.labels or [])
+        precondition["labels"] = before_labels
+    entry = (probe.dispatch_log or [])[-1] if len(probe.dispatch_log or []) > before_logs else None
+    budget_cost = max(0, int(probe_track.spent - track.spent))
+    return submit_task_status(
+        tasks_path,
+        task.id,
+        probe.status,
+        agent=agent,
+        session_id=str(entry.session_id) if entry else "dispatch-result",
+        output=entry.output if entry else None,
+        patch=patch,
+        precondition=precondition,
+        log_status=str(entry.status) if entry else probe.status,
+        budget_cost=budget_cost if budget_cost else None,
+        budget_agent=agent,
+        now=now,
+    )
+
+
 def _commit_dispatch_results(
     tasks_path: Path,
     limen: LimenFile,
@@ -1539,14 +1588,24 @@ def _commit_dispatch_results(
             )
             return
         fresh = load_limen_file(tasks_path) if tasks_path.exists() else limen
-        _reset_budget_if_needed(fresh, now)
+        reset = _reset_budget_if_needed(fresh, now)
         fid = {t.id: t for t in fresh.tasks}
         ftrack = fresh.portal.budget.track
-        for agent, tid, res in results:
-            ft = fid.get(tid)
-            if ft is not None:
-                _apply_result(ft, agent, res, now, ftrack)
-        save_limen_file(tasks_path, fresh)
+        if _ticket_mode() and results:
+            if reset:
+                save_limen_file(tasks_path, fresh)
+            for agent, tid, res in results:
+                ft = fid.get(tid)
+                if ft is not None:
+                    _submit_result_ticket(tasks_path, ft, agent, res, now, ftrack)
+        else:
+            for agent, tid, res in results:
+                ft = fid.get(tid)
+                if ft is not None:
+                    _apply_result(ft, agent, res, now, ftrack)
+            save_limen_file(tasks_path, fresh)
+    if _ticket_mode() and results:
+        drain_once(tasks_path)
 
 
 def dispatch_tasks(

@@ -121,10 +121,11 @@ above it is autonomous.
       not writers, so not converted. **`scripts/heartbeat-loop.sh` sets `LIMEN_TICKETS_PRODUCE=1`**, so the
       LIVE fleet routes task creation through the keeper (revertible via `~/.limen.env`). Smoke-proven:
       a real `generate-backlog` run submitted 5 tickets, left the board untouched, and the keeper folded
-      them (2→7). The status-mutator tier still writes directly — that is Step 2.2.
-- [ ] Step 2.2 — the STATUS-mutator tier (`route`, `dispatch-async`, `heal-dispatch`, `rebalance`,
+      them (2→7). The status-mutator tier is now Step 2.2-complete; the remaining conversion surfaces
+      are MCP/API and the event-log SSOT flip.
+- [x] Step 2.2 — the STATUS-mutator tier (`route`, `dispatch-async`, `heal-dispatch`, `rebalance`,
       `recover`, `quicken`) → emit an INTENT_STATUS ticket instead of a direct RMW (NOT an upsert — an
-      upsert of a live id merge-clobbers; these change existing tasks). **Started:** the
+      upsert of a live id merge-clobbers; these change existing tasks). The
       `submit_task_status()` producer API is shipped and parity-tested, `scripts/recover.py`
       emits status tickets when `LIMEN_TICKETS_PRODUCE=1`, and the Jules harvest path submits
       completion/failure tickets instead of saving the board directly. `scripts/heal-dispatch.py`
@@ -133,8 +134,7 @@ above it is autonomous.
       workstream tickets in ticket mode. `scripts/quicken.py` submits human-residue upsert/refresh
       tickets in ticket mode. `scripts/dispatch-async.py` submits guarded reserve/reap/harvest
       tickets in ticket mode and drains the keeper before launching workers or clearing markers.
-      Remaining:
-      CLI dispatch result-apply.
+      CLI dispatch result-apply submits result tickets in ticket mode.
 - [ ] Step 2.3 — MCP server → ticket producer (retire the raw write + duplicate models).
 - [ ] Step 2.4 — live API/Worker tier (needs the consistency decision above; website-sensitive).
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
