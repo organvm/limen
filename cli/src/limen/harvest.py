@@ -6,7 +6,7 @@ from pathlib import Path
 
 from limen.io import save_limen_file
 from limen.models import LimenFile, DispatchLogEntry
-from limen.tabularius import submit_task_status
+from limen.tabularius import drain_once, submit_task_status
 
 
 def _get_jules_sessions(harvest_dir: Path) -> dict[str, str]:
@@ -211,6 +211,12 @@ def harvest_results(
 
     if updated:
         if ticket_mode:
+            result = drain_once(tasks_path)
+            if result.deferred or result.rejected:
+                print(
+                    f"Harvest TABVLARIVS drain: applied={result.applied} rejected={result.rejected} "
+                    f"deferred={result.deferred}: {result.note}"
+                )
             print(f"Harvested {len(updated)} task(s) into TABVLARIVS tickets: {', '.join(updated)}")
         else:
             save_limen_file(tasks_path, limen)

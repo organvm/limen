@@ -10,7 +10,7 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from limen.harvest import _diff_is_real, check_jules_harvest
+from limen.harvest import _diff_is_real, check_jules_harvest, harvest_results
 from limen.io import load_limen_file, save_limen_file
 from limen.models import DispatchLogEntry, LimenFile, Task
 from limen.tabularius import drain_once, pending_count
@@ -124,6 +124,24 @@ def test_harvest_can_emit_tabularius_status_ticket(tmp_path):
 
     drained = drain_once(board)
     assert drained.applied == 1
+    updated_task = load_limen_file(board).tasks[0]
+    assert updated_task.status == "done"
+    assert updated_task.dispatch_log[-1].status == "done"
+
+
+def test_harvest_results_ticket_mode_drains_tabularius(tmp_path, monkeypatch):
+    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    monkeypatch.setattr("limen.harvest.Path.home", lambda: tmp_path)
+    harvest_dir = tmp_path / "Workspace" / "session-meta" / "scheduler" / "jules" / "harvest"
+    _write_diff(harvest_dir, "555", REAL_DIFF)
+    task = _task("LIMEN-1", "555")
+    limen = LimenFile(tasks=[task])
+    board = tmp_path / "tasks.yaml"
+    save_limen_file(board, limen)
+
+    harvest_results(limen, board)
+
+    assert pending_count(board) == 0
     updated_task = load_limen_file(board).tasks[0]
     assert updated_task.status == "done"
     assert updated_task.dispatch_log[-1].status == "done"
