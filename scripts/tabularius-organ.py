@@ -28,7 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.tabularius import drain_once, pending_count, sync_event_log_from_archive, write_event_log_board  # noqa: E402
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 BOARD = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
 ENABLED = os.environ.get("LIMEN_TABVLARIVS", "1") != "0"
 STATE = ROOT / "logs" / "tabularius-organ-state.json"

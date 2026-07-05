@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 import subprocess
 import sys
@@ -14,6 +15,16 @@ from limen.tabularius import submit_task_status
 
 ROOT = Path(__file__).resolve().parents[2]
 NOW = datetime(2026, 7, 5, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def _load_organ_module(monkeypatch):
+    monkeypatch.delenv("LIMEN_ROOT", raising=False)
+    monkeypatch.delenv("LIMEN_TASKS", raising=False)
+    spec = importlib.util.spec_from_file_location("tabularius_organ_uut", ROOT / "scripts" / "tabularius-organ.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def _task(tid: str) -> dict[str, str]:
@@ -39,6 +50,14 @@ def _run_organ(tmp_path: Path, board: Path) -> subprocess.CompletedProcess[str]:
         check=False,
         env=env,
     )
+
+
+def test_tabularius_organ_defaults_to_checkout_root(monkeypatch) -> None:
+    module = _load_organ_module(monkeypatch)
+
+    assert module.ROOT == ROOT
+    assert module.BOARD == ROOT / "tasks.yaml"
+    assert module.STATE == ROOT / "logs" / "tabularius-organ-state.json"
 
 
 def test_tabularius_organ_stamps_event_log_cache_proof_streak(tmp_path: Path) -> None:
