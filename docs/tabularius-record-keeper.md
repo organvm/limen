@@ -115,6 +115,7 @@ Use the focused gate while changing the recordkeeper/kernel substrate:
 
 ```bash
 python3 scripts/verify-recordkeeper-kernel.py
+python3 scripts/verify-recordkeeper-kernel.py --report-file logs/recordkeeper-kernel-verify.json
 ```
 
 It runs the deterministic TABVLARIVS/VLTIMA gates in parallel: keeper/kernel py-compile, the

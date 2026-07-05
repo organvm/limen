@@ -63,3 +63,14 @@ def test_recordkeeper_kernel_gate_distinguishes_required_and_advisory_failures()
     assert payload["ok"] is False
     assert payload["required_failures"] == ["required-fail"]
     assert payload["advisory_failures"] == ["advisory-fail"]
+
+
+def test_recordkeeper_kernel_gate_writes_report_file(tmp_path: Path) -> None:
+    module = load_module()
+    report = tmp_path / "receipts" / "recordkeeper-kernel.json"
+
+    module.write_report(report, {"kind": "limen.recordkeeper-kernel-verification", "ok": True})
+
+    assert report.exists()
+    assert report.read_text().endswith("\n")
+    assert '"ok": true' in report.read_text()

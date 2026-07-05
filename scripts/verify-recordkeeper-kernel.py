@@ -242,6 +242,11 @@ def result_payload(results: Iterable[GateResult]) -> dict[str, object]:
     }
 
 
+def write_report(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n")
+
+
 def positive_int(raw: str) -> int:
     value = int(raw)
     if value < 1:
@@ -257,6 +262,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--require-event-proof", action="store_true", help="require live event proof to pass")
     parser.add_argument("--event-proof-min-streak", type=positive_int, default=3, help="required event proof streak")
     parser.add_argument("--json-output", action="store_true", help="emit machine-readable results")
+    parser.add_argument("--report-file", type=Path, default=None, help="write machine-readable results to this path")
     args = parser.parse_args(argv)
 
     root = args.root.expanduser().resolve()
@@ -269,9 +275,11 @@ def main(argv: list[str] | None = None) -> int:
     started = time.perf_counter()
     results = run_gates(root, gates, jobs=args.jobs)
     elapsed = time.perf_counter() - started
+    payload = result_payload(results)
+    payload["elapsed_seconds"] = elapsed
+    if args.report_file:
+        write_report(args.report_file.expanduser(), payload)
     if args.json_output:
-        payload = result_payload(results)
-        payload["elapsed_seconds"] = elapsed
         print(json.dumps(payload, indent=2))
     else:
         print(f"recordkeeper-kernel: {len(results)} gate(s), jobs={args.jobs}")
