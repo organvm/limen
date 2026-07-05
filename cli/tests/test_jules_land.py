@@ -22,7 +22,7 @@ def load_jules_land():
     return module
 
 
-def test_jules_land_ticket_mode_marks_done_through_tabularius(tmp_path, monkeypatch, capsys) -> None:
+def test_jules_land_marks_done_through_tabularius(tmp_path, monkeypatch, capsys) -> None:
     module = load_jules_land()
     tasks = tmp_path / "tasks.yaml"
     tasks.write_text(
@@ -51,7 +51,7 @@ def test_jules_land_ticket_mode_marks_done_through_tabularius(tmp_path, monkeypa
             sort_keys=False,
         )
     )
-    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
     monkeypatch.setattr(module, "TASKS", tasks)
     monkeypatch.setattr(module, "completed_sessions", lambda sid_map: [("123", "JULES-1")])
     monkeypatch.setattr(

@@ -22,8 +22,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.dispatch import _resolve_repo_dir, _git, _default_branch  # noqa: E402
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
-from limen.models import DispatchLogEntry, Task  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
+from limen.models import Task  # noqa: E402
 from limen.tabularius import drain_once, submit_task_status  # noqa: E402
 import datetime  # noqa: E402
 
@@ -129,7 +129,6 @@ def main() -> int:
         return any("/pull/" in str(e.session_id or "") for e in (t.dispatch_log or []))
 
     done = 0
-    ticket_mode = os.environ.get("LIMEN_TICKETS_PRODUCE") == "1"
     for sid, tid in completed_sessions(sid_map):
         if done >= args.limit:
             break
@@ -145,36 +144,25 @@ def main() -> int:
         if args.apply and msg.startswith("LANDED"):
             # record the PR URL in session_id so ever_pr() sees it → never re-land (no dupes)
             pr_url = msg.split("-> ", 1)[1].strip() if "-> " in msg else sid
-            if ticket_mode:
-                ticket = submit_task_status(
-                    TASKS,
-                    t.id,
-                    "done",
-                    agent="jules",
-                    session_id=pr_url,
-                    output=f"jules-land: landed session {sid} as PR",
-                    precondition={"status": t.status},
-                    now=now,
+            ticket = submit_task_status(
+                TASKS,
+                t.id,
+                "done",
+                agent="jules",
+                session_id=pr_url,
+                output=f"jules-land: landed session {sid} as PR",
+                precondition={"status": t.status},
+                now=now,
+            )
+            result = drain_once(TASKS)
+            if ticket.stem not in set(result.applied_ids):
+                raise SystemExit(
+                    f"TABVLARIVS did not apply jules-land ticket {ticket.stem} "
+                    f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
                 )
-                result = drain_once(TASKS)
-                if ticket.stem not in set(result.applied_ids):
-                    raise SystemExit(
-                        f"TABVLARIVS did not apply jules-land ticket {ticket.stem} "
-                        f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
-                    )
-                t.status = "done"
-            else:
-                t.status = "done"
-                t.updated = now
-                t.dispatch_log.append(DispatchLogEntry(
-                    timestamp=now, agent="jules", session_id=pr_url, status="done",
-                    output=f"jules-land: landed session {sid} as PR"))
-                save_limen_file(TASKS, lf)  # persist per-PR so a mid-run stop can't cause dupes
+            t.status = "done"
             done += 1
-    if args.apply and done and not ticket_mode:
-        save_limen_file(TASKS, lf)
-        print(f"  APPLIED -> {done} jules session(s) landed + marked done")
-    elif args.apply and done:
+    if args.apply and done:
         print(f"  APPLIED -> {done} jules session(s) landed + marked done via TABVLARIVS")
     elif not args.apply:
         print("  dry-run (pass --apply to land for real)")
