@@ -8,10 +8,12 @@ import json
 import sys
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
-UNIVERSAL_TERMS = (
+REQUIRED_UNIVERSAL_TERMS = (
     "Object",
     "Subject",
     "Agent",
@@ -30,20 +32,126 @@ UNIVERSAL_TERMS = (
     "Obligation",
 )
 
-ORGAN_TERMS = ("Member", "Mandate", "Standing", "Standard", "Governance")
+REQUIRED_ORGAN_TERMS = ("Member", "Mandate", "Standing", "Standard", "Governance")
 
 
 def _missing_terms(text: str, terms: tuple[str, ...]) -> list[str]:
     return [term for term in terms if term.lower() not in text.lower()]
 
 
+def _load_kernel_registry(root: Path) -> tuple[dict[str, object] | None, list[str]]:
+    path = root / "organs" / "vltima" / "kernel.yaml"
+    if not path.exists():
+        return None, ["organs/vltima/kernel.yaml is missing"]
+    try:
+        data = yaml.safe_load(path.read_text()) or {}
+    except Exception as exc:  # noqa: BLE001
+        return None, [f"organs/vltima/kernel.yaml is unreadable: {exc}"]
+    if not isinstance(data, dict):
+        return None, ["organs/vltima/kernel.yaml must contain a mapping"]
+    return data, []
+
+
+def _registry_terms(registry: dict[str, object]) -> tuple[dict[str, str], dict[str, list[str]], list[str]]:
+    errors: list[str] = []
+    labels_by_id: dict[str, str] = {}
+    layer_ids: dict[str, list[str]] = {}
+    layers = registry.get("layers")
+    if not isinstance(layers, dict):
+        return labels_by_id, layer_ids, ["organs/vltima/kernel.yaml missing layers mapping"]
+    for layer_name, raw_items in layers.items():
+        if not isinstance(raw_items, list):
+            errors.append(f"organs/vltima/kernel.yaml layer {layer_name} must be a list")
+            continue
+        ids: list[str] = []
+        for index, item in enumerate(raw_items):
+            if not isinstance(item, dict):
+                errors.append(f"organs/vltima/kernel.yaml layer {layer_name}[{index}] must be a mapping")
+                continue
+            primitive_id = str(item.get("id") or "").strip()
+            label = str(item.get("label") or "").strip()
+            meaning = str(item.get("meaning") or "").strip()
+            if not primitive_id or not label or not meaning:
+                errors.append(f"organs/vltima/kernel.yaml layer {layer_name}[{index}] needs id, label, and meaning")
+                continue
+            if primitive_id in labels_by_id:
+                errors.append(f"organs/vltima/kernel.yaml duplicate primitive id: {primitive_id}")
+                continue
+            labels_by_id[primitive_id] = label
+            ids.append(primitive_id)
+        layer_ids[str(layer_name)] = ids
+
+    missing = [term for term in REQUIRED_UNIVERSAL_TERMS if term not in labels_by_id.values()]
+    if missing:
+        errors.append(f"organs/vltima/kernel.yaml missing required primitive(s): {', '.join(missing)}")
+
+    for required_layer in ("lower", "institutional", "value"):
+        if required_layer not in layer_ids:
+            errors.append(f"organs/vltima/kernel.yaml missing layer: {required_layer}")
+
+    known_ids = set(labels_by_id)
+    for layer_name, raw_items in layers.items():
+        if not isinstance(raw_items, list):
+            continue
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            primitive_id = str(item.get("id") or "").strip()
+            sources = item.get("sources") or []
+            if sources and (not isinstance(sources, list) or any(not isinstance(source, str) for source in sources)):
+                errors.append(f"organs/vltima/kernel.yaml primitive {primitive_id} sources must be a string list")
+                continue
+            unknown = [source for source in sources if source not in known_ids]
+            if unknown:
+                errors.append(
+                    f"organs/vltima/kernel.yaml primitive {primitive_id} references unknown source(s): "
+                    f"{', '.join(unknown)}"
+                )
+
+    projection = registry.get("projection")
+    if not isinstance(projection, dict):
+        errors.append("organs/vltima/kernel.yaml missing projection mapping")
+    else:
+        organ_projection = projection.get("organ_kernel")
+        if not isinstance(organ_projection, list) or any(not isinstance(item, str) for item in organ_projection):
+            errors.append("organs/vltima/kernel.yaml projection.organ_kernel must be a string list")
+        else:
+            projected_labels = [labels_by_id.get(item, "") for item in organ_projection]
+            missing_projected = [term for term in REQUIRED_ORGAN_TERMS if term not in projected_labels]
+            if missing_projected:
+                errors.append(
+                    "organs/vltima/kernel.yaml projection.organ_kernel missing primitive(s): "
+                    + ", ".join(missing_projected)
+                )
+            unknown = [item for item in organ_projection if item not in known_ids]
+            if unknown:
+                errors.append(
+                    "organs/vltima/kernel.yaml projection.organ_kernel references unknown primitive(s): "
+                    + ", ".join(unknown)
+                )
+
+    return labels_by_id, layer_ids, errors
+
+
 def validate(root: Path) -> list[str]:
     errors: list[str] = []
+    registry, registry_errors = _load_kernel_registry(root)
+    errors.extend(registry_errors)
+    labels_by_id: dict[str, str] = {}
+    layer_ids: dict[str, list[str]] = {}
+    if registry:
+        labels_by_id, layer_ids, registry_term_errors = _registry_terms(registry)
+        errors.extend(registry_term_errors)
+    universal_terms = tuple(labels_by_id.values()) if labels_by_id else REQUIRED_UNIVERSAL_TERMS
+    organ_terms = tuple(labels_by_id[item] for item in layer_ids.get("institutional", []) if item in labels_by_id)
+    if not organ_terms:
+        organ_terms = REQUIRED_ORGAN_TERMS
+
     kernel = root / "organs" / "vltima" / "KERNEL.md"
     if not kernel.exists():
         errors.append("organs/vltima/KERNEL.md is missing")
     else:
-        missing = _missing_terms(kernel.read_text(), UNIVERSAL_TERMS)
+        missing = _missing_terms(kernel.read_text(), universal_terms)
         if missing:
             errors.append(f"organs/vltima/KERNEL.md is missing term(s): {', '.join(missing)}")
 
@@ -72,7 +180,7 @@ def validate(root: Path) -> list[str]:
             errors.append(f"{pillar}: {home}KERNEL.md is missing")
             continue
         text = organ_kernel.read_text()
-        missing = _missing_terms(text, ORGAN_TERMS)
+        missing = _missing_terms(text, organ_terms)
         if missing:
             errors.append(f"{pillar}: {home}KERNEL.md missing primitive(s): {', '.join(missing)}")
         if "macro" not in text.lower():

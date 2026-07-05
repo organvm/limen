@@ -3,6 +3,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR = ROOT / "scripts" / "validate-vltima-kernel.py"
@@ -34,6 +36,36 @@ def test_vltima_kernel_rejects_missing_universal_term(tmp_path):
 
     assert result.returncode == 1
     assert "organs/vltima/KERNEL.md is missing term(s): Entitlement" in result.stderr
+
+
+def test_vltima_kernel_rejects_registry_missing_required_primitive(tmp_path):
+    copy_root = tmp_path / "repo"
+    shutil.copytree(ROOT / "organs", copy_root / "organs")
+    shutil.copy2(ROOT / "organ-ladder.json", copy_root / "organ-ladder.json")
+    registry = copy_root / "organs" / "vltima" / "kernel.yaml"
+    data = yaml.safe_load(registry.read_text())
+    data["layers"]["value"] = [item for item in data["layers"]["value"] if item["label"] != "Entitlement"]
+    registry.write_text(yaml.safe_dump(data, sort_keys=False))
+
+    result = run_validator("--root", copy_root)
+
+    assert result.returncode == 1
+    assert "organs/vltima/kernel.yaml missing required primitive(s): Entitlement" in result.stderr
+
+
+def test_vltima_kernel_rejects_registry_unknown_source(tmp_path):
+    copy_root = tmp_path / "repo"
+    shutil.copytree(ROOT / "organs", copy_root / "organs")
+    shutil.copy2(ROOT / "organ-ladder.json", copy_root / "organ-ladder.json")
+    registry = copy_root / "organs" / "vltima" / "kernel.yaml"
+    data = yaml.safe_load(registry.read_text())
+    data["layers"]["institutional"][0]["sources"] = ["missing-source"]
+    registry.write_text(yaml.safe_dump(data, sort_keys=False))
+
+    result = run_validator("--root", copy_root)
+
+    assert result.returncode == 1
+    assert "primitive member references unknown source(s): missing-source" in result.stderr
 
 
 def test_vltima_kernel_rejects_organ_missing_projection(tmp_path):

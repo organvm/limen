@@ -19,6 +19,10 @@ Covenant`, plus the value layer `Exchange · Entitlement · Obligation`. The exe
 python3 scripts/validate-vltima-kernel.py
 ```
 
+The machine-readable substrate lives at [`vltima/kernel.yaml`](vltima/kernel.yaml); the validator
+derives the organ projection terms from that registry and rejects drift between the registry,
+the universal kernel document, and each organ's `KERNEL.md`.
+
 Standard files per organ: `KERNEL.md` (the primitive map + macro/micro), `CHARTER.md` (the org-chart of
 AI roles + workflows + what real institution it rivals), then the organ's working artifacts.
 

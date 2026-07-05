@@ -5,6 +5,10 @@ organs. The existing five institutional primitives stay intact; this document
 names the lower layer they project from and the value layer they must eventually
 support.
 
+The executable registry is [`kernel.yaml`](kernel.yaml). `scripts/validate-vltima-kernel.py`
+loads that registry, verifies the canonical primitive set, and checks every organ
+projection against it.
+
 ## Lower Layer
 
 | Primitive | Meaning |
