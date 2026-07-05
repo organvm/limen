@@ -161,7 +161,21 @@ def test_auto_scale_adds_schema_shaped_tasks_and_skips_existing_urls(
     assert calls[0]["params"]["q"] == "org:a-organvm is:issue is:open label:jules-ready"
     assert calls[0]["headers"]["Authorization"] == "token test-token"
     assert calls[0]["timeout"] == 30
-    assert board["tasks"][1:] == [
+    added = board["tasks"][1:]
+    contract_keys = [
+        "id",
+        "title",
+        "repo",
+        "type",
+        "target_agent",
+        "priority",
+        "budget_cost",
+        "status",
+        "labels",
+        "urls",
+        "created",
+    ]
+    assert [{key: task[key] for key in contract_keys} for task in added] == [
         {
             "id": "LIMEN-100",
             "title": "First issue",
@@ -174,7 +188,6 @@ def test_auto_scale_adds_schema_shaped_tasks_and_skips_existing_urls(
             "labels": ["jules-ready"],
             "urls": ["https://github.com/a-organvm/repo-one/issues/2"],
             "created": "2026-06-06",
-            "updated": "2026-06-06",
         },
         {
             "id": "LIMEN-101",
@@ -188,12 +201,13 @@ def test_auto_scale_adds_schema_shaped_tasks_and_skips_existing_urls(
             "labels": ["jules-ready"],
             "urls": ["https://github.com/a-organvm/repo-two/issues/3"],
             "created": "2026-06-06",
-            "updated": "2026-06-06",
         },
     ]
+    assert all(task["updated"] for task in added)
+    assert all(task["dispatch_log"] == [] for task in added)
 
 
-def test_auto_scale_ticket_mode_drains_tabularius(
+def test_auto_scale_drains_tabularius(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -227,7 +241,7 @@ def test_auto_scale_ticket_mode_drains_tabularius(
         )
 
     monkeypatch.setenv("GITHUB_TOKEN", "test-token")
-    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
     monkeypatch.setattr(auto_scale, "TASKS_FILE", tasks_path)
     monkeypatch.setattr(auto_scale, "ORGS", ["a-organvm"])
     monkeypatch.setattr(auto_scale, "date", FrozenDate)

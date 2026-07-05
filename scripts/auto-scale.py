@@ -23,11 +23,9 @@ from pathlib import Path
 import requests
 import yaml
 
-# Route every tasks.yaml write through the canonical queue lock plus the atomic primitive
-# (see limen/io.py) so concurrent heartbeat writes are not clobbered and readers never
-# observe a truncated/empty queue.
+# Route every tasks.yaml write through TABVLARIVS, the single record-keeper.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.io import atomic_write_text, queue_lock
+from limen.io import queue_lock
 from limen.tabularius import drain_once, submit_task_upsert
 
 TASKS_FILE = Path(__file__).resolve().parent.parent / "tasks.yaml"
@@ -156,7 +154,6 @@ def main() -> int:
         candidates = [c for c in candidates if c.get("repo") in allowed]
         print(f"  value-tier gate: {before} mined → {len(candidates)} in tier")
 
-    ticket_mode = os.environ.get("LIMEN_TICKETS_PRODUCE") == "1"
     new_tasks = []
     with queue_lock(TASKS_FILE) as got:
         if not got:
@@ -196,11 +193,7 @@ def main() -> int:
             )
             existing_urls.add(url)
             next_num += 1
-        if new_tasks and not ticket_mode:
-            tasks.extend(new_tasks)
-            data["tasks"] = tasks
-            atomic_write_text(TASKS_FILE, yaml.dump(data, sort_keys=False, allow_unicode=True))
-    if new_tasks and ticket_mode:
+    if new_tasks:
         session_id = os.environ.get("LIMEN_SESSION_ID", "auto-scale")
         ticket_paths = [
             submit_task_upsert(
