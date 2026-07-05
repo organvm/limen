@@ -251,7 +251,7 @@ def test_current_session_fanout_emits_plan_02_executor_criteria_and_safe_markdow
     assert raw_private in json.dumps(snap)
 
 
-def test_apply_task_seed_ticket_mode_drains_tabularius(tmp_path: Path, monkeypatch) -> None:
+def test_apply_task_seed_drains_tabularius(tmp_path: Path, monkeypatch) -> None:
     mod = _load()
     tasks = tmp_path / "tasks.yaml"
     tasks.write_text(
@@ -270,7 +270,7 @@ def test_apply_task_seed_ticket_mode_drains_tabularius(tmp_path: Path, monkeypat
             sort_keys=False,
         )
     )
-    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
     snapshot = {
         "task_seed": [
             {

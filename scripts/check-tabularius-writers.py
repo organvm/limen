@@ -36,7 +36,6 @@ STRUCTURAL_ALLOWLIST = {
 LEGACY_GATED_ALLOWLIST = {
     "cli/src/limen/dispatch.py",
     "cli/src/limen/harvest.py",
-    "scripts/current-session-fanout.py",
     "scripts/dispatch-async.py",
     "scripts/generate-backlog.py",
     "scripts/generate-organ-backlog.py",
