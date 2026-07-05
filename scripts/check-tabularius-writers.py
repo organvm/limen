@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Audit direct task-board writers against the TABVLARIVS migration allowlist.
 
-The ideal form is one board writer: TABVLARIVS. During the reversible cutover,
-some legacy fallback paths still contain direct writes, but they must be named,
-gated, and visible. This check fails any new unreviewed tasks.yaml writer.
+The ideal form is one board writer: TABVLARIVS. The live fallback allowlist is empty; this check
+fails any new unreviewed tasks.yaml writer.
 """
 
 from __future__ import annotations
@@ -31,11 +30,9 @@ STRUCTURAL_ALLOWLIST = {
     "scripts/heal-board.py": "emergency collapse repair from committed-good snapshot",
 }
 
-# Legacy fallback paths that are still present during the reversible cutover. Each must carry the
-# ticket-mode gate and TABVLARIVS producer path in the same file.
-LEGACY_GATED_ALLOWLIST = {
-    "cli/src/limen/dispatch.py",
-}
+# Legacy fallback paths that are still present during the reversible cutover. The set is empty: live
+# board mutation is now keeper-only outside structural repair/export surfaces.
+LEGACY_GATED_ALLOWLIST: set[str] = set()
 
 PRODUCER_TOKENS = (
     "submit_task_upsert",

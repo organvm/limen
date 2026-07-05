@@ -56,7 +56,7 @@ archived ticket files are the append-only event log the board projects from.
 | Beat wiring | `scripts/heartbeat-loop.sh` | runs after `heal-board` (fold onto a *healthy* board), before the body's own mutation |
 | Proprioception | `scripts/organ-health.py` | a TABVLARIVS rung, green when `logs/tabularius-organ-state.json` is fresh |
 | Keeper gate | `institutio/governance/parameters.yaml` → `LIMEN_TABVLARIVS` | master kill-switch for the keeper (default ON) |
-| Cutover gate | `institutio/governance/parameters.yaml` → `LIMEN_TICKETS_PRODUCE` | flips converted writers from direct-write to producer (default **OFF** — a merge changes nothing live; the flip is the deliberate, revertible cutover) |
+| Historical cutover gate | `institutio/governance/parameters.yaml` → `LIMEN_TICKETS_PRODUCE` | retained as an old rollout switch; live board writers are now producer-only and no longer depend on this flag |
 | Tests | `cli/tests/test_tabularius.py` | 13 tests: end-to-end submit→drain, ordering, quarantine, lock-deferral, collapse-guard, **and the producer≡direct-write identity invariant** |
 
 ### Safety invariants (each inherited from a shipped precedent)
@@ -79,19 +79,16 @@ archived ticket files are the append-only event log the board projects from.
 
 - **Step 1 — SHIPPED (this PR).** The keeper exists and runs every beat. No writer behavior changes,
   so with no producers yet it is a proven no-op. The office is manned; no clerks hand it tickets yet.
-- **Step 2 — convert writers to producers, one tier at a time (reversible per tier).**
-  Each conversion is behind `LIMEN_TICKETS_PRODUCE` (default OFF), so it merges as a no-op and the
-  cutover is a deliberate flip. The parity is *proven*, not assumed: `test_producer_path_matches_
-  legacy_direct_write` shows a converted writer produces a board identical to the legacy direct write
-  (same tasks, same fields, same order) save for the keeper's added `updated` provenance stamp — so
-  every remaining conversion is a mechanical edit against a known-safe template, not surgery.
-  1. **Scripts first** (lowest blast radius). **Reference pair converted** (`mine-backlog`,
-     `ingest-backlog` — the latter a natural fit, it wanted lock-free): each now calls
-     `submit_task_upsert` per new task when `LIMEN_TICKETS_PRODUCE=1`, keeping its read-only dedup so
-     it only ever emits brand-new ids. The rest (`generate-backlog`, `generate-revenue-backlog`,
-     `generate-organ-backlog`, `generate-positioning`, `discover-value`, `ingest-coverage`) are the
-     same one-line swap against the proven template.
-  2. **CLI harvest/dispatch result-apply** → emit a ticket instead of mutating the blob.
+- **Step 2 — SHIPPED.** Writers are producer-only. The early reversible rollout used
+  `LIMEN_TICKETS_PRODUCE`; the current live board mutation surfaces no longer retain direct-write
+  fallbacks. The parity was *proven*, not assumed: `test_producer_path_matches_legacy_direct_write`
+  showed a converted writer produced a board identical to the legacy direct write (same tasks, same
+  fields, same order) save for the keeper's added `updated` provenance stamp.
+  1. **Scripts first** (lowest blast radius). The task-creation, routing, repair, insight, async,
+     and residue scripts now submit guarded tickets and drain the keeper instead of mutating the
+     blob. Non-writers such as `generate-positioning` and `ingest-coverage` were verified as read-only
+     / obligation surfaces.
+  2. **CLI harvest/dispatch result-apply** → emit and drain tickets instead of mutating the blob.
   3. **MCP server** — replace the raw `yaml.dump` + git-push with a ticket append (removes the worst
      offender: no lock, no atomic write, no collapse-guard, and its own drifted duplicate models).
   4. **FastAPI + Worker endpoints** — enqueue a ticket and return; the keeper projects. This is the
@@ -174,9 +171,8 @@ above it is autonomous.
       while read and dry-run surfaces stay live.
 - [x] Step 2 guardrail — `scripts/check-tabularius-writers.py` audits the codebase for direct
       task-board writers. It is wired into `scripts/verify-whole.sh` and blocks any new unapproved
-      `tasks.yaml` writer; remaining reversible legacy fallbacks must stay explicitly allowlisted
-      and carry `LIMEN_TICKETS_PRODUCE` plus TABVLARIVS producer proof. The whole-repo gate pins
-      the legacy fallback ceiling at 1, so the count can be ratcheted down but not silently grow.
+      `tasks.yaml` writer. The whole-repo gate pins the legacy fallback ceiling at 0, so live board
+      mutation stays keeper-only outside structural repair/export surfaces.
       `scripts/discover-value.py --apply` is now TABVLARIVS-only: it submits and drains upsert
       tickets instead of retaining a legacy direct append fallback. `scripts/rebalance.py --apply`
       is now TABVLARIVS-only: it submits and drains guarded target-agent status tickets instead of
@@ -221,6 +217,10 @@ above it is autonomous.
       `scripts/dispatch-async.py` is now TABVLARIVS-only: async harvest, stale-marker reaping, and
       reserve-before-launch all submit and drain guarded status tickets instead of retaining legacy
       direct save fallbacks.
+      `limen dispatch` / `dispatch_parallel` / `release-stale` are now TABVLARIVS-only: serial
+      result commits, parallel reservation/result commits, budget-window resets, and stale-claim
+      releases all submit and drain guarded status/meta tickets instead of retaining legacy direct
+      save fallbacks. The legacy fallback allowlist is empty.
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
       `fold(archive) == board` predicate.
       Seed landed: `limen tabularius-events --write --verify` writes
