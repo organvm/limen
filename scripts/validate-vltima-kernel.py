@@ -33,6 +33,8 @@ REQUIRED_UNIVERSAL_TERMS = (
 )
 
 REQUIRED_ORGAN_TERMS = ("Member", "Mandate", "Standing", "Standard", "Governance")
+PROJECTION_KIND = "vltima.kernel-projection"
+PROJECTION_SCHEMA_VERSION = 1
 
 
 def _missing_terms(text: str, terms: tuple[str, ...]) -> list[str]:
@@ -274,6 +276,29 @@ def _validate_graph(graph: dict[str, object]) -> list[str]:
     return errors
 
 
+def _validate_projection_contract(payload: dict[str, object]) -> list[str]:
+    errors: list[str] = []
+    if payload.get("kind") != PROJECTION_KIND:
+        errors.append(f"vltima projection kind must be {PROJECTION_KIND!r}")
+    if payload.get("schema_version") != PROJECTION_SCHEMA_VERSION:
+        errors.append(f"vltima projection schema_version must be {PROJECTION_SCHEMA_VERSION}")
+    for key in ("primitives", "edges", "layers", "projections", "organs"):
+        if key not in payload:
+            errors.append(f"vltima projection missing key: {key}")
+    primitives = payload.get("primitives")
+    if not isinstance(primitives, list) or not primitives:
+        errors.append("vltima projection primitives must be a non-empty list")
+    organs = payload.get("organs")
+    if not isinstance(organs, list) or not organs:
+        errors.append("vltima projection organs must be a non-empty list")
+    graph = payload.get("graph")
+    if not isinstance(graph, dict):
+        errors.append("vltima projection graph must be a mapping")
+    else:
+        errors.extend(_validate_graph(graph))
+    return errors
+
+
 def build_projection(root: Path) -> tuple[dict[str, object] | None, list[str]]:
     registry, errors = _load_kernel_registry(root)
     if registry is None:
@@ -323,9 +348,9 @@ def build_projection(root: Path) -> tuple[dict[str, object] | None, list[str]]:
     if graph_errors:
         return None, graph_errors
 
-    return {
-        "kind": "vltima.kernel-projection",
-        "schema_version": 1,
+    payload = {
+        "kind": PROJECTION_KIND,
+        "schema_version": PROJECTION_SCHEMA_VERSION,
         "version": registry.get("version"),
         "primitives": primitives,
         "edges": primitive_edges,
@@ -336,7 +361,11 @@ def build_projection(root: Path) -> tuple[dict[str, object] | None, list[str]]:
         "projections": projection_map,
         "organs": organs,
         "graph": graph,
-    }, []
+    }
+    contract_errors = _validate_projection_contract(payload)
+    if contract_errors:
+        return None, contract_errors
+    return payload, []
 
 
 def validate(root: Path) -> list[str]:

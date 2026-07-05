@@ -135,6 +135,25 @@ def test_vltima_graph_validation_rejects_dangling_edges():
     assert errors == ["vltima graph edge[0] references missing target node: primitive:missing"]
 
 
+def test_vltima_projection_contract_rejects_wrong_kind_and_missing_graph():
+    module = load_validator_module()
+
+    errors = module._validate_projection_contract(
+        {
+            "kind": "wrong",
+            "schema_version": 1,
+            "primitives": [{"id": "record"}],
+            "edges": [],
+            "layers": {},
+            "projections": {},
+            "organs": [{"pillar": "legal"}],
+        }
+    )
+
+    assert "vltima projection kind must be 'vltima.kernel-projection'" in errors
+    assert "vltima projection graph must be a mapping" in errors
+
+
 def test_vltima_kernel_rejects_organ_missing_projection(tmp_path):
     copy_root = tmp_path / "repo"
     shutil.copytree(ROOT / "organs", copy_root / "organs")
