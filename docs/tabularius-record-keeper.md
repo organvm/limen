@@ -178,7 +178,9 @@ above it is autonomous.
       `logs/tickets/events.jsonl.manifest.json` as the archive watermark. Verification now proves
       both `materialize.fold(events.jsonl) == tasks.yaml` for a fresh seed and
       `fold(seed + archived tickets after watermark) == tasks.yaml` after later keeper drains;
-      `scripts/verify-whole.sh` runs the same predicate against a temp event-log path to avoid repo drift.
+      `limen tabularius-events --sync-archive --verify` appends those post-watermark archive deltas
+      into `events.jsonl` and advances the manifest; `scripts/verify-whole.sh` runs the same
+      predicate against a temp event-log path to avoid repo drift.
 
 See also: `board-is-event-log-projection` (memory), `cli/src/limen/materialize.py`,
 `scripts/heal-board.py`, `io.py` (`queue_lock`, `save_limen_file`, the collapse-guard).

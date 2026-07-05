@@ -400,6 +400,11 @@ def materialize(verify, emit_events):
 
 @main.command("tabularius-events")
 @click.option("--write", is_flag=True, help="Write logs/tickets/events.jsonl from the current board projection.")
+@click.option(
+    "--sync-archive",
+    is_flag=True,
+    help="Append archived tickets after the event-log manifest watermark before verifying.",
+)
 @click.option("--verify", is_flag=True, help="Verify the compacted event log folds to tasks.yaml.")
 @click.option(
     "--event-log",
@@ -407,9 +412,9 @@ def materialize(verify, emit_events):
     default=None,
     help="Override the default logs/tickets/events.jsonl path.",
 )
-def tabularius_events(write: bool, verify: bool, event_log: Path | None) -> None:
+def tabularius_events(write: bool, sync_archive: bool, verify: bool, event_log: Path | None) -> None:
     """Compact and verify TABVLARIVS' canonical replay log."""
-    from limen.tabularius import compact_event_log, event_log_path, verify_event_log
+    from limen.tabularius import compact_event_log, event_log_path, sync_event_log_from_archive, verify_event_log
 
     root = resolve_root()
     tasks_path = resolve_tasks_path(root)
@@ -418,10 +423,16 @@ def tabularius_events(write: bool, verify: bool, event_log: Path | None) -> None
         sys.exit(1)
 
     target = event_log or event_log_path(tasks_path)
-    if not write and not verify:
+    if not write and not sync_archive and not verify:
         verify = True
 
-    result = compact_event_log(tasks_path, target) if write else verify_event_log(tasks_path, target)
+    result = None
+    if write:
+        result = compact_event_log(tasks_path, target)
+    if sync_archive:
+        result = sync_event_log_from_archive(tasks_path, target)
+    if result is None:
+        result = verify_event_log(tasks_path, target)
     click.echo(
         f"tabularius-events: {result.events} events, {result.archive_tickets} archived tickets; "
         f"{result.note}: {result.verified}; path={result.event_log}"

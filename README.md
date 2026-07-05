@@ -210,6 +210,8 @@ To compact TABVLARIVS' current board projection into a replayable event log,
 run `limen tabularius-events --write --verify`; it writes
 `logs/tickets/events.jsonl` plus a `.manifest.json` archive watermark, then
 proves the seed plus any post-watermark archived tickets folds to `tasks.yaml`.
+To append those post-watermark archive deltas into the log and advance the
+watermark, run `limen tabularius-events --sync-archive --verify`.
 
 ## How It Works
 

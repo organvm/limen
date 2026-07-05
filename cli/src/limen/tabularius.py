@@ -532,6 +532,43 @@ def verify_event_log(board_path: Path, in_path: Path | None = None) -> EventLogR
     )
 
 
+def sync_event_log_from_archive(board_path: Path, in_path: Path | None = None) -> EventLogResult:
+    """Append archived ticket deltas after the manifest watermark into ``events.jsonl``.
+
+    This is the next reversible Step-3 rung after verification: keep the compacted seed, append
+    keeper-owned archive deltas, then advance the manifest watermark. The live board remains the
+    checked projection; this function only makes the replay log less stale.
+    """
+    board_path = Path(board_path)
+    in_path = Path(in_path) if in_path is not None else event_log_path(board_path)
+    if not in_path.exists():
+        return compact_event_log(board_path, in_path)
+    manifest_path = event_log_manifest_path(in_path)
+    events = events_from_jsonl(in_path.read_text())
+    manifest = _load_event_log_manifest(in_path)
+    if manifest is None:
+        return EventLogResult(
+            in_path,
+            events=len(events),
+            archive_tickets=archive_count(board_path),
+            verified=False,
+            note="event log manifest missing; run tabularius-events --write once before --sync-archive",
+        )
+    archive_events, replayed = archive_projection_events_after_watermark(
+        board_path,
+        events,
+        manifest.get("last_ticket_id"),
+    )
+    if archive_events:
+        with in_path.open("a", encoding="utf-8") as handle:
+            handle.write(events_to_jsonl(archive_events))
+        _write_event_log_manifest(board_path, in_path)
+    result = verify_event_log(board_path, in_path)
+    result.manifest = manifest_path
+    result.note = f"synced {replayed} archived ticket(s); {result.note}"
+    return result
+
+
 def _parse_pending(inbox: Path) -> tuple[list[tuple[Path, Ticket]], list[tuple[Path, str]]]:
     """Load every inbox ticket, splitting parseable from garbage, then order the good ones by
     (timestamp, id) so concurrent submissions replay in a single deterministic total order."""

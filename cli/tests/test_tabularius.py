@@ -41,6 +41,7 @@ from limen.tabularius import (
     submit_ticket,
     submit_task_status,
     submit_task_upsert,
+    sync_event_log_from_archive,
     verify_event_log,
 )
 
@@ -219,6 +220,28 @@ def test_event_log_archive_replay_preserves_budget_delta_metadata(tmp_path):
     assert verify.events == result.events + 2  # board.meta budget delta + task status upsert
 
 
+def test_sync_event_log_from_archive_appends_post_watermark_events(tmp_path):
+    board = _seed_board(tmp_path)
+    result = compact_event_log(board)
+    ticket_path = submit_task_status(board, "T-1", "done", agent="limen", session_id="after-seed", now=_NOW)
+    drain_once(board)
+
+    sync = sync_event_log_from_archive(board)
+
+    manifest = json.loads(event_log_manifest_path(sync.event_log).read_text())
+    assert sync.verified is True
+    assert sync.archive_replay_tickets == 0
+    assert sync.events == result.events + 1
+    assert sync.note == "synced 1 archived ticket(s); fold(events) == tasks.yaml bytes"
+    assert manifest["archive_count"] == 1
+    assert manifest["last_ticket_id"] == ticket_path.stem
+
+    verify = verify_event_log(board)
+    assert verify.verified is True
+    assert verify.archive_replay_tickets == 0
+    assert verify.events == sync.events
+
+
 def test_tabularius_events_command_writes_and_verifies(tmp_path, monkeypatch):
     board = _seed_board(tmp_path)
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
@@ -229,6 +252,20 @@ def test_tabularius_events_command_writes_and_verifies(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     assert event_log_path(board).exists()
     assert "fold(events) == tasks.yaml bytes: True" in result.output
+
+
+def test_tabularius_events_command_syncs_archive(tmp_path, monkeypatch):
+    board = _seed_board(tmp_path)
+    compact_event_log(board)
+    submit_task_status(board, "T-1", "done", agent="limen", session_id="after-seed", now=_NOW)
+    drain_once(board)
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setenv("LIMEN_TASKS", str(board))
+
+    result = CliRunner().invoke(main, ["tabularius-events", "--sync-archive", "--verify"])
+
+    assert result.exit_code == 0, result.output
+    assert "synced 1 archived ticket(s); fold(events) == tasks.yaml bytes: True" in result.output
 
 
 def test_submit_task_status_emits_status_ticket(tmp_path):
