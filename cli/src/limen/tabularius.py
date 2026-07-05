@@ -426,6 +426,89 @@ def _quarantine(rejected: list[tuple[Path, str]], dest_dir: Path) -> None:
             pass
 
 
+def _drain_pending(
+    board_path: Path,
+    *,
+    pending: int,
+    good: list[tuple[Path, Ticket]],
+    bad: list[tuple[Path, str]],
+) -> DrainResult:
+    board = load_limen_file(board_path)
+    board_json = board.model_dump(mode="json", exclude_none=True)
+    tasks: OrderedDict[str, dict[str, Any]] = OrderedDict((t["id"], t) for t in board_json.get("tasks", []))
+    meta: dict[str, Any] = {"version": board_json.get("version", "1.0"), "portal": board_json.get("portal")}
+
+    applied: list[tuple[Path, Ticket]] = []
+    rejected: list[tuple[Path, str]] = list(bad)
+    for p, ticket in good:
+        try:
+            _apply(ticket, tasks, meta)
+            applied.append((p, ticket))
+        except Exception as exc:
+            rejected.append((p, f"apply failed: {exc}"))
+
+    wrote = False
+    if applied:
+        events: list[Event] = [{"type": EV_BOARD_META, "data": {"version": meta["version"], "portal": meta["portal"]}}]
+        for tid, fields in tasks.items():
+            events.append({"type": EV_TASK_UPSERT, "task_id": tid, "data": fields})
+        if meta.get("order"):
+            events.append({"type": EV_BOARD_ORDER, "data": {"ids": meta["order"]}})
+        try:
+            new_board = fold(events)  # the proven reducer assembles + validates the whole board
+        except Exception as exc:
+            rejected.extend((p, f"batch rejected by board validation: {exc}") for p, _ in applied)
+            applied = []
+        else:
+            try:
+                save_limen_file(board_path, new_board)  # collapse-guard + atomic seal
+                wrote = True
+            except BoardCollapseError as exc:
+                # the batch would collapse the board — never write; quarantine it whole, board intact
+                rejected.extend((p, f"batch rejected by collapse-guard: {exc}") for p, _ in applied)
+                applied = []
+
+    _move([p for p, _ in applied], _archive(board_path))
+    _quarantine(rejected, _rejected(board_path))
+
+    return DrainResult(
+        pending=pending,
+        applied=len(applied),
+        rejected=len(rejected),
+        wrote=wrote,
+        note=("sealed" if wrote else "no board change"),
+        applied_ids=[t.ticket_id for _, t in applied],
+        rejected_ids=[p.stem for p, _ in rejected],
+    )
+
+
+def drain_once_locked(board_path: Path, *, dry_run: bool = False) -> DrainResult:
+    """Drain pending tickets while the caller already holds ``queue_lock(board_path)``.
+
+    Reservation producers need the keeper's seal before they start external work. This entrypoint
+    keeps the single writer logic inside TABVLARIVS without nesting the non-reentrant queue lock.
+    """
+    board_path = Path(board_path)
+    inbox = _inbox(board_path)
+    if not inbox.is_dir():
+        return DrainResult(note="inbox empty")
+
+    good, bad = _parse_pending(inbox)
+    pending = len(good) + len(bad)
+    if pending == 0:
+        return DrainResult(note="inbox empty")
+
+    if dry_run:
+        return DrainResult(
+            pending=pending,
+            applied=len(good),
+            rejected=len(bad),
+            note=f"dry-run: {len(good)} applicable, {len(bad)} unparseable",
+        )
+
+    return _drain_pending(board_path, pending=pending, good=good, bad=bad)
+
+
 def drain_once(board_path: Path, *, dry_run: bool = False, lock_timeout: int = 20) -> DrainResult:
     """Drain the inbox once: fold every pending ticket onto the board, seal, archive.
 
@@ -455,52 +538,4 @@ def drain_once(board_path: Path, *, dry_run: bool = False, lock_timeout: int = 2
         if not locked:
             return DrainResult(pending=pending, deferred=True, note="queue lock held; deferred to next beat")
 
-        board = load_limen_file(board_path)
-        board_json = board.model_dump(mode="json", exclude_none=True)
-        tasks: OrderedDict[str, dict[str, Any]] = OrderedDict((t["id"], t) for t in board_json.get("tasks", []))
-        meta: dict[str, Any] = {"version": board_json.get("version", "1.0"), "portal": board_json.get("portal")}
-
-        applied: list[tuple[Path, Ticket]] = []
-        rejected: list[tuple[Path, str]] = list(bad)
-        for p, ticket in good:
-            try:
-                _apply(ticket, tasks, meta)
-                applied.append((p, ticket))
-            except Exception as exc:
-                rejected.append((p, f"apply failed: {exc}"))
-
-        wrote = False
-        if applied:
-            events: list[Event] = [
-                {"type": EV_BOARD_META, "data": {"version": meta["version"], "portal": meta["portal"]}}
-            ]
-            for tid, fields in tasks.items():
-                events.append({"type": EV_TASK_UPSERT, "task_id": tid, "data": fields})
-            if meta.get("order"):
-                events.append({"type": EV_BOARD_ORDER, "data": {"ids": meta["order"]}})
-            try:
-                new_board = fold(events)  # the proven reducer assembles + validates the whole board
-            except Exception as exc:
-                rejected.extend((p, f"batch rejected by board validation: {exc}") for p, _ in applied)
-                applied = []
-            else:
-                try:
-                    save_limen_file(board_path, new_board)  # collapse-guard + atomic seal
-                    wrote = True
-                except BoardCollapseError as exc:
-                    # the batch would collapse the board — never write; quarantine it whole, board intact
-                    rejected.extend((p, f"batch rejected by collapse-guard: {exc}") for p, _ in applied)
-                    applied = []
-
-        _move([p for p, _ in applied], _archive(board_path))
-        _quarantine(rejected, _rejected(board_path))
-
-    return DrainResult(
-        pending=pending,
-        applied=len(applied),
-        rejected=len(rejected),
-        wrote=wrote,
-        note=("sealed" if wrote else "no board change"),
-        applied_ids=[t.ticket_id for _, t in applied],
-        rejected_ids=[p.stem for p, _ in rejected],
-    )
+        return _drain_pending(board_path, pending=pending, good=good, bad=bad)

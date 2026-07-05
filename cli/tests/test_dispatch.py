@@ -5,7 +5,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -20,7 +20,7 @@ from limen.doctor import qa_report, readiness_report, stale_tasks
 from limen.io import load_limen_file
 from limen.models import BudgetTrack, DispatchLogEntry, Task
 from limen.status import print_status
-from limen.tabularius import pending_count
+from limen.tabularius import pending_count, submit_task_status
 
 
 def load_route_module():
@@ -568,6 +568,112 @@ def test_dispatch_parallel_result_ticket_mode_drains_tabularius(
     assert board["portal"]["budget"]["track"]["per_agent"]["codex"] == 1
     assert len(task["dispatch_log"]) == 2
     assert pending_count(tasks_path) == 0
+
+
+def test_dispatch_parallel_ticket_mode_runs_only_landed_reservations(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "RESERVE-ME",
+                "title": "Reserve me",
+                "repo": "organvm/limen",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    calls: list[tuple[str, str, list[str]]] = []
+
+    def fake_dispatch(agent, task, dry_run=False):
+        calls.append((task.id, task.status, [entry.output for entry in task.dispatch_log]))
+        return True
+
+    monkeypatch.setattr(D, "call_agent_dispatch", fake_dispatch)
+
+    dispatch_parallel(
+        load_limen_file(tasks_path),
+        tasks_path,
+        agents=["codex"],
+        per_agent_limit=1,
+        max_workers=1,
+        dry_run=False,
+    )
+
+    assert calls == [
+        (
+            "RESERVE-ME",
+            "dispatched",
+            ["dispatch-parallel: reserved before agent execution"],
+        )
+    ]
+    assert pending_count(tasks_path) == 0
+
+
+def test_dispatch_parallel_ticket_mode_skips_rejected_reservation(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "RACE",
+                "title": "Race",
+                "repo": "organvm/limen",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    submit_task_status(
+        tasks_path,
+        "RACE",
+        "done",
+        agent="limen",
+        session_id="external-done",
+        output="external completion wins",
+        precondition={"status": "open"},
+        now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    calls: list[str] = []
+
+    def fake_dispatch(agent, task, dry_run=False):
+        calls.append(task.id)
+        return True
+
+    monkeypatch.setattr(D, "call_agent_dispatch", fake_dispatch)
+
+    dispatch_parallel(
+        load_limen_file(tasks_path),
+        tasks_path,
+        agents=["codex"],
+        per_agent_limit=1,
+        max_workers=1,
+        dry_run=False,
+    )
+
+    assert calls == []
+    task = read_board(tasks_path)["tasks"][0]
+    assert task["status"] == "done"
+    assert pending_count(tasks_path) == 0
+    assert "no reservation tickets landed" in capsys.readouterr().out
 
 
 def _concurrent_fold(tasks_path: Path, task_id: str = "CONCURRENT-FOLD") -> None:

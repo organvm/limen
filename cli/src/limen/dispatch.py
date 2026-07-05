@@ -24,7 +24,7 @@ from limen.capacity import (
 )
 from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
-from limen.tabularius import drain_once, submit_board_meta, submit_task_status
+from limen.tabularius import drain_once, drain_once_locked, submit_board_meta, submit_task_status
 from limen.doctor import stale_tasks
 from limen.model_selection import (  # the shared model vocabulary — also used by the non-bypassable `claude` shim
     _CLAUDE_TIER_ORDER,
@@ -1524,6 +1524,9 @@ def _ticket_mode() -> bool:
     return os.environ.get("LIMEN_TICKETS_PRODUCE") == "1"
 
 
+_PARALLEL_RESERVE_OUTPUT = "dispatch-parallel: reserved before agent execution"
+
+
 def _submit_result_ticket(tasks_path: Path, task: Task, agent: str, result: bool | str, now: datetime, track: BudgetTrack):
     before_status = task.status
     before_target = task.target_agent
@@ -1566,6 +1569,20 @@ def _submit_result_ticket(tasks_path: Path, task: Task, agent: str, result: bool
         budget_agent=agent,
         now=now,
     )
+
+
+def _reservation_landed(task: Task, agent: str, reserve_session: str) -> bool:
+    if task.status != "dispatched":
+        return False
+    for entry in task.dispatch_log or []:
+        if (
+            entry.agent == agent
+            and entry.session_id == reserve_session
+            and entry.status == "dispatched"
+            and entry.output == _PARALLEL_RESERVE_OUTPUT
+        ):
+            return True
+    return False
 
 
 def _commit_dispatch_results(
@@ -2075,7 +2092,7 @@ def _select_parallel_reservations(
                     agent=agent,
                     session_id="reserve",
                     status="dispatched",
-                    output="dispatch-parallel: reserved before agent execution",
+                    output=_PARALLEL_RESERVE_OUTPUT,
                 )
             )
             picked.append((agent, t.id))
@@ -2117,6 +2134,9 @@ def dispatch_parallel(
     # ── RESERVE: re-read inside the queue lock, then pick and mark dispatched on that fresh board.
     # The caller may have loaded `limen` before a supervisor/heartbeat wrote tasks.yaml; saving that
     # stale snapshot would erase concurrent task additions, completions, or budget resets.
+    reserve_session = f"parallel-reserve-{secrets.token_hex(8)}"
+    reserve_tickets = []
+    reserve_drain = None
     with _queue_lock(tasks_path) as got:
         if not got:
             # Lock timed out — honor the contract (io.queue_lock): skip this round rather than
@@ -2134,13 +2154,71 @@ def dispatch_parallel(
             dry_run=False,
             debt_blocked=debt_blocked,
         )
-        if not picked:
+        if _ticket_mode():
             if reset:
-                save_limen_file(tasks_path, fresh)
+                reserve_tickets.append(
+                    submit_board_meta(
+                        tasks_path,
+                        agent="limen",
+                        session_id="budget-reset",
+                        version=fresh.version,
+                        portal=fresh.portal,
+                        now=now,
+                    )
+                )
+            fid = {t.id: t for t in fresh.tasks}
+            for agent, tid in picked:
+                task = fid.get(tid)
+                if task is None:
+                    continue
+                reserve_tickets.append(
+                    submit_task_status(
+                        tasks_path,
+                        tid,
+                        "dispatched",
+                        agent=agent,
+                        session_id=reserve_session,
+                        output=_PARALLEL_RESERVE_OUTPUT,
+                        precondition={"status": "open", "target_agent": task.target_agent},
+                        now=now,
+                    )
+                )
+            if reserve_tickets:
+                reserve_drain = drain_once_locked(tasks_path)
+        else:
+            if not picked:
+                if reset:
+                    save_limen_file(tasks_path, fresh)
+                print(f"── PARALLEL: nothing to dispatch for {agents} within budget")
+                return
+            save_limen_file(tasks_path, fresh)  # reserve commit (atomic vs supervisor writes)
+            limen = fresh
+
+    if _ticket_mode():
+        if reserve_tickets and reserve_drain is not None:
+            applied = set(reserve_drain.applied_ids)
+            wanted = {ticket.stem for ticket in reserve_tickets}
+            if wanted - applied:
+                print(
+                    f"── PARALLEL: TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} reservation tickets "
+                    f"(rejected={reserve_drain.rejected}, deferred={reserve_drain.deferred}): {reserve_drain.note}"
+                )
+        if not picked:
             print(f"── PARALLEL: nothing to dispatch for {agents} within budget")
             return
-        save_limen_file(tasks_path, fresh)  # reserve commit (atomic vs supervisor writes)
-        limen = fresh
+        limen = load_limen_file(tasks_path)
+        fid = {t.id: t for t in limen.tasks}
+        reserved = []
+        for agent, tid in picked:
+            task = fid.get(tid)
+            if task is not None and _reservation_landed(task, agent, reserve_session):
+                reserved.append((agent, tid))
+        if len(reserved) != len(picked):
+            print(f"── PARALLEL: {len(reserved)}/{len(picked)} reservation ticket(s) landed; skipped unclaimed tasks")
+        picked = reserved
+        if not picked:
+            print("── PARALLEL: no reservation tickets landed; skipped agent execution")
+            return
 
     # ── RUN: concurrent agent executions (worktree→PR / jules), no tasks.yaml access here
     id2task = {t.id: t for t in limen.tasks}

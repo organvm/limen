@@ -151,6 +151,7 @@ above it is autonomous.
       `limen release-stale --apply` submits and drains guarded stale-claim release/restore tickets.
       Parallel dispatch result-commit submits and drains the same result tickets as serial dispatch.
       Serial dispatch budget-window resets submit and drain board-meta tickets in ticket mode.
+      Parallel dispatch reservations submit guarded status tickets and drain them before agent runs.
 - [x] Step 2.3 — MCP server → ticket producer. `mcp/src/limen_mcp/server.py` now loads through
       the shared Limen loader and its mutating tools (`add_task`, `update_task_status`,
       `agent_claim`) submit TABVLARIVS upsert/status tickets, drain the keeper synchronously, and
