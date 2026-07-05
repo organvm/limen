@@ -41,8 +41,7 @@ def test_unapproved_direct_board_writer_is_blocked(tmp_path: Path, monkeypatch) 
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     (scripts / "bad.py").write_text(
-        "from limen.io import save_limen_file\n"
-        "save_limen_file(tasks_path, limen_file)\n",
+        "from limen.io import save_limen_file\nsave_limen_file(tasks_path, limen_file)\n",
         encoding="utf-8",
     )
 

@@ -1523,7 +1523,9 @@ def _remaining_budget(limen: LimenFile, agent: str, budget: int) -> int:
 _PARALLEL_RESERVE_OUTPUT = "dispatch-parallel: reserved before agent execution"
 
 
-def _submit_result_ticket(tasks_path: Path, task: Task, agent: str, result: bool | str, now: datetime, track: BudgetTrack):
+def _submit_result_ticket(
+    tasks_path: Path, task: Task, agent: str, result: bool | str, now: datetime, track: BudgetTrack
+):
     before_status = task.status
     before_target = task.target_agent
     before_labels = list(task.labels or [])

@@ -257,7 +257,10 @@ def test_write_event_log_board_materializes_side_cache_after_archive_delta(tmp_p
     assert materialized.verified is True
     assert materialized.archive_replay_tickets == 1
     assert materialized.events == result.events + 1
-    assert materialized.note == "wrote materialized board cache; fold(events + archive tickets after watermark) == tasks.yaml bytes"
+    assert (
+        materialized.note
+        == "wrote materialized board cache; fold(events + archive tickets after watermark) == tasks.yaml bytes"
+    )
     assert out.read_text() == board.read_text()
 
 
@@ -672,9 +675,9 @@ def test_status_producer_path_matches_legacy_direct_write(tmp_path):
     a_tasks = load_limen_file(board_a).tasks
     b_tasks = load_limen_file(board_b).tasks
     assert [t.id for t in a_tasks] == [t.id for t in b_tasks]
-    assert {
-        t.id: t.model_dump(mode="json", exclude_none=True) for t in a_tasks
-    } == {t.id: t.model_dump(mode="json", exclude_none=True) for t in b_tasks}
+    assert {t.id: t.model_dump(mode="json", exclude_none=True) for t in a_tasks} == {
+        t.id: t.model_dump(mode="json", exclude_none=True) for t in b_tasks
+    }
 
 
 def test_submit_task_upsert_validates_before_emitting(tmp_path):

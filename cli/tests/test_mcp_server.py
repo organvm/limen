@@ -9,6 +9,7 @@ import yaml
 def _ensure_mcp_runtime():
     try:
         import mcp.server.fastmcp  # noqa: F401
+
         return
     except Exception:
         pass
