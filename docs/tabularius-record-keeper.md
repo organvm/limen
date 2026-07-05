@@ -120,7 +120,8 @@ above it is autonomous.
       upsert tickets and drains synchronously in ticket mode, preserving the CI `tasks.yaml` commit
       contract while preventing stale sequential-id clobber. `scripts/self-heal.py` submits guarded
       upsert tickets for stable `HEAL-*` repair tasks and drains synchronously in ticket mode.
-      `scripts/converge-organ.py` does the same for bounded `CONV-*` gap tasks. Reading the code corrected the remainder list:
+      `scripts/converge-organ.py` does the same for bounded `CONV-*` gap tasks, and
+      `scripts/corpus-converge.py` does the same for bounded `CORP-*` corpus-gap tasks. Reading the code corrected the remainder list:
       `generate-positioning` and `ingest-coverage` **never write `tasks.yaml`** (obligations / read-only) —
       not writers, so not converted. **`scripts/heartbeat-loop.sh` sets `LIMEN_TICKETS_PRODUCE=1`**, so the
       LIVE fleet routes task creation through the keeper (revertible via `~/.limen.env`). Smoke-proven:
