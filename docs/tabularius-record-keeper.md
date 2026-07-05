@@ -167,6 +167,10 @@ above it is autonomous.
       and synchronously drain TABVLARIVS tickets before responding; GitHub-backed FastAPI mutations
       and Cloudflare Worker mutation routes reject until a remote TABVLARIVS ticket sink exists,
       while read and dry-run surfaces stay live.
+- [x] Step 2 guardrail — `scripts/check-tabularius-writers.py` audits the codebase for direct
+      task-board writers. It is wired into `scripts/verify-whole.sh` and blocks any new unapproved
+      `tasks.yaml` writer; remaining reversible legacy fallbacks must stay explicitly allowlisted
+      and carry `LIMEN_TICKETS_PRODUCE` plus TABVLARIVS producer proof.
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
       `fold(archive) == board` predicate.
       Seed landed: `limen tabularius-events --write --verify` writes
