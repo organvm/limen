@@ -136,8 +136,8 @@ above it is autonomous.
       upsert of a live id merge-clobbers; these change existing tasks). The
       `submit_task_status()` producer API is shipped and parity-tested, `scripts/recover.py --apply`
       submits and drains guarded status-repair tickets through TABVLARIVS, and the Jules harvest path submits
-      completion/failure tickets instead of saving the board directly. `scripts/heal-dispatch.py`
-      also submits lifecycle-repair tickets in ticket mode. `scripts/rebalance.py` submits guarded
+      completion/failure tickets instead of saving the board directly. `scripts/heal-dispatch.py --apply`
+      submits and drains guarded lifecycle-repair tickets through TABVLARIVS. `scripts/rebalance.py` submits guarded
       target-agent tickets through TABVLARIVS and drains them on every `--apply`. `scripts/route.py`
       submits guarded target-agent and workstream tickets in ticket mode. `scripts/quicken.py`
       submits human-residue upsert/refresh tickets in ticket mode. `scripts/dispatch-async.py` submits guarded reserve/reap/harvest
@@ -172,7 +172,7 @@ above it is autonomous.
       task-board writers. It is wired into `scripts/verify-whole.sh` and blocks any new unapproved
       `tasks.yaml` writer; remaining reversible legacy fallbacks must stay explicitly allowlisted
       and carry `LIMEN_TICKETS_PRODUCE` plus TABVLARIVS producer proof. The whole-repo gate pins
-      the legacy fallback ceiling at 18, so the count can be ratcheted down but not silently grow.
+      the legacy fallback ceiling at 17, so the count can be ratcheted down but not silently grow.
       `scripts/discover-value.py --apply` is now TABVLARIVS-only: it submits and drains upsert
       tickets instead of retaining a legacy direct append fallback. `scripts/rebalance.py --apply`
       is now TABVLARIVS-only: it submits and drains guarded target-agent status tickets instead of
@@ -180,7 +180,9 @@ above it is autonomous.
       it submits and drains guarded failed/orphan/done-repair status tickets instead of retaining a
       legacy direct repair fallback. `scripts/jules-land.py --apply` is now TABVLARIVS-only: it
       submits and drains guarded completion tickets instead of retaining a legacy direct done-marking
-      fallback.
+      fallback. `scripts/heal-dispatch.py --apply` is now TABVLARIVS-only: it submits and drains
+      guarded lifecycle-repair tickets while holding the queue lock instead of retaining a legacy
+      direct repair fallback.
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
       `fold(archive) == board` predicate.
       Seed landed: `limen tabularius-events --write --verify` writes

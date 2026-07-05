@@ -44,7 +44,6 @@ LEGACY_GATED_ALLOWLIST = {
     "scripts/generate-backlog.py",
     "scripts/generate-organ-backlog.py",
     "scripts/generate-revenue-backlog.py",
-    "scripts/heal-dispatch.py",
     "scripts/ingest-backlog.py",
     "scripts/insight-route.py",
     "scripts/mine-backlog.py",

@@ -11,7 +11,7 @@ from pathlib import Path
 import yaml
 
 from limen.io import load_limen_file
-from limen.tabularius import drain_once, pending_count
+from limen.tabularius import pending_count
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "heal-dispatch.py"
 
@@ -57,12 +57,13 @@ def test_chronic_open_task_escalated_to_needs_human(tmp_path):
     env = dict(os.environ, LIMEN_ROOT=str(root), LIMEN_TASKS=str(root / "tasks.yaml"))
     r = subprocess.run([sys.executable, str(SCRIPT), "--apply"], env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+    assert "through TABVLARIVS" in r.stdout
     out = {t["id"]: t for t in yaml.safe_load((root / "tasks.yaml").read_text())["tasks"]}
     assert out["CHRONIC1"]["status"] == "needs_human", out["CHRONIC1"]
     assert out["FRESH1"]["status"] == "open", out["FRESH1"]  # non-chronic untouched
 
 
-def test_chronic_open_task_emits_tabularius_ticket(tmp_path):
+def test_chronic_open_task_drains_tabularius_ticket(tmp_path):
     root = tmp_path
     (root / "logs").mkdir()
     created = "2026-06-20T00:00:00+00:00"
@@ -100,16 +101,13 @@ def test_chronic_open_task_emits_tabularius_ticket(tmp_path):
             }
         )
     )
-    env = dict(os.environ, LIMEN_ROOT=str(root), LIMEN_TASKS=str(board), LIMEN_TICKETS_PRODUCE="1")
+    env = dict(os.environ, LIMEN_ROOT=str(root), LIMEN_TASKS=str(board))
+    env.pop("LIMEN_TICKETS_PRODUCE", None)
     r = subprocess.run([sys.executable, str(SCRIPT), "--apply"], env=env, capture_output=True, text=True)
 
     assert r.returncode == 0, r.stderr
-    assert "APPLIED -> TABVLARIVS tickets" in r.stdout
-    assert load_limen_file(board).tasks[0].status == "open"
-    assert pending_count(board) == 1
-
-    drained = drain_once(board)
-    assert drained.applied == 1
+    assert "through TABVLARIVS" in r.stdout
+    assert pending_count(board) == 0
     task = load_limen_file(board).tasks[0]
     assert task.status == "needs_human"
     assert task.dispatch_log[-1].status == "needs_human"
