@@ -236,6 +236,11 @@ above it is autonomous.
       overwrite the live board. `scripts/verify-whole.sh` writes a temp regenerated board cache so
       the repo now proves both "event log matches current cache" and "event log can regenerate the
       cache bytes" without flipping the live read path yet.
+- [x] Step 3 beat proof — `scripts/tabularius-organ.py` now refreshes the standing event log and
+      regenerates a temp cache after real keeper seals, then records `event_log_verified`,
+      `event_log_cache_verified`, and `event_log_streak` in `logs/tabularius-organ-state.json`.
+      Proof failure is fail-open for the heartbeat but resets the streak, giving the final SSOT flip
+      a concrete N-beat evidence surface instead of an informal claim.
 - [ ] Step 3 final — flip live startup/read paths to treat the event log as the SSOT and regenerate
       `tasks.yaml` as a materialized cache, after the standing predicate has survived enough keeper
       beats to make the cutover boring.
