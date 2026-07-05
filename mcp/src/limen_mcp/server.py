@@ -1,14 +1,20 @@
 import os
 import re
-import subprocess
+import sys
 from datetime import date, datetime
 from pathlib import Path
 import json
 from typing import Any, Dict, List, Optional
 
-import yaml
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "cli" / "src"))
+
+from limen.io import load_limen_file  # noqa: E402
+from limen.models import Task as CoreTask  # noqa: E402
+from limen.tabularius import drain_once, submit_task_status, submit_task_upsert  # noqa: E402
 
 VALID_STATUSES = {"open", "dispatched", "in_progress", "done", "failed", "failed_blocked", "needs_human", "archived"}
 VALID_PRIORITIES = {"critical", "high", "medium", "low", "backlog"}
@@ -197,45 +203,15 @@ def _load_data() -> LimenFile:
     path = _get_tasks_path()
     if not path.exists():
         return LimenFile()
-    with open(path) as f:
-        data = yaml.safe_load(f) or {}  # empty / comment-only file → None; avoid LimenFile(**None) TypeError
-    return LimenFile(**data)
+    return load_limen_file(path)
 
 
-def _save_data(data: LimenFile, commit_msg: str = "chore: mcp task update"):
+def _apply_ticket(ticket_path: Path) -> None:
     path = _get_tasks_path()
-    repo_dir = path.parent
-
-    # Write file locally first
-    with open(path, "w") as f:
-        yaml.dump(data.model_dump(mode="json"), f, default_flow_style=False, sort_keys=False)
-
-    # Layer 1: Concurrency Sync (Git Pull --Rebase wrapper)
-    if (repo_dir / ".git").exists():
-        try:
-            # 1. Stash any uncommitted changes. Capture the result so we ONLY drop the stash we
-            #    actually created — an unconditional `git stash drop` would discard an unrelated
-            #    pre-existing stash whenever there was nothing to stash ("No local changes to save").
-            stash = subprocess.run(["git", "stash"], cwd=repo_dir, capture_output=True, text=True)
-            created_stash = "No local changes to save" not in ((stash.stdout or "") + (stash.stderr or ""))
-            # 2. Pull rebase to resolve remote conflicts
-            subprocess.run(["git", "pull", "--rebase"], cwd=repo_dir, capture_output=True)
-
-            # 3. RE-WRITE the file from memory to resolve any conflicts in tasks.yaml automatically
-            with open(path, "w") as f:
-                yaml.dump(data.model_dump(mode="json"), f, default_flow_style=False, sort_keys=False)
-
-            # 4. Drop the now-superseded stash (the memory re-write above is authoritative) so stash
-            #    entries don't accumulate on every save.
-            if created_stash:
-                subprocess.run(["git", "stash", "drop"], cwd=repo_dir, capture_output=True)
-
-            # 5. Commit and Push
-            subprocess.run(["git", "add", path.name], cwd=repo_dir, capture_output=True)
-            subprocess.run(["git", "commit", "-m", commit_msg], cwd=repo_dir, capture_output=True)
-            subprocess.run(["git", "push"], cwd=repo_dir, capture_output=True)
-        except Exception as e:
-            print(f"Git sync failed: {e}")
+    result = drain_once(path)
+    if ticket_path.stem not in set(result.applied_ids):
+        ticket_path.unlink(missing_ok=True)
+        raise RuntimeError(f"TABVLARIVS did not apply MCP ticket {ticket_path.stem}: {result.note}")
 
 
 @mcp.tool()
@@ -315,7 +291,7 @@ def add_task(title: str, repo: str, agent: str = "jules", priority: str = "mediu
                 pass
     new_id = f"LIMEN-{last_num + 1:03d}"
 
-    new_task = Task(
+    new_task = CoreTask(
         id=new_id,
         title=title,
         repo=repo,
@@ -325,8 +301,8 @@ def add_task(title: str, repo: str, agent: str = "jules", priority: str = "mediu
         status="open",
         created=date.today(),
     )
-    data.tasks.append(new_task)
-    _save_data(data, commit_msg=f"feat: add task {new_id}")
+    ticket = submit_task_upsert(_get_tasks_path(), new_task, agent="mcp", session_id="mcp-add-task")
+    _apply_ticket(ticket)
     return f"Created task {new_id}"
 
 
@@ -343,16 +319,25 @@ def update_task_status(task_id: str, status: str, context: Optional[str] = None)
     for t in data.tasks:
         if t.id == task_id:
             # Layer 1: Dynamic Costing - Double budget cost on failure
+            patch = {}
             if status in ["failed", "failed_blocked", "needs_human"] and t.status == "in_progress":
-                t.budget_cost = min(t.budget_cost * 2, 8)
-
-            t.status = status
+                patch["budget_cost"] = min(t.budget_cost * 2, 8)
             if context:
-                t.context = context
-            t.updated = datetime.now()
+                patch["context"] = context
 
-            _save_data(data, commit_msg=f"chore: update {task_id} to {status}")
-            return f"Updated {task_id} to {status}. New budget cost: {t.budget_cost}"
+            ticket = submit_task_status(
+                _get_tasks_path(),
+                task_id,
+                status,
+                agent="mcp",
+                session_id="mcp-update-task-status",
+                output=f"MCP updated {task_id} to {status}",
+                patch=patch,
+                precondition={"status": t.status},
+                now=datetime.now(),
+            )
+            _apply_ticket(ticket)
+            return f"Updated {task_id} to {status}. New budget cost: {patch.get('budget_cost', t.budget_cost)}"
 
     raise ValueError(f"Task {task_id} not found")
 
@@ -417,23 +402,20 @@ def agent_claim(task_id: str, agent_name: str = "opencode") -> str:
                 return f"Task {task_id} targets {t.target_agent}, not {agent_name} - cannot claim"
 
             now = datetime.now()
-            t.status = "dispatched"
-            t.target_agent = agent_name
-            t.updated = now
-            track = data.portal.budget.track
-            track.spent += t.budget_cost
-            track.per_agent[agent_name] = track.per_agent.get(agent_name, 0) + t.budget_cost
-
-            entry = DispatchLogEntry(
-                timestamp=now,
+            ticket = submit_task_status(
+                _get_tasks_path(),
+                task_id,
+                "dispatched",
                 agent=agent_name,
                 session_id="mcp-agent-claim",
-                status="dispatched",
                 output=f"Claimed by {agent_name} via MCP",
+                patch={"target_agent": agent_name},
+                precondition={"status": "open", "target_agent": t.target_agent},
+                budget_cost=t.budget_cost,
+                budget_agent=agent_name,
+                now=now,
             )
-            t.dispatch_log.append(entry)
-
-            _save_data(data, commit_msg=f"feat: {agent_name} claim task {task_id}")
+            _apply_ticket(ticket)
             return f"{agent_name} claimed task {task_id} (status=dispatched)"
 
     raise ValueError(f"Task {task_id} not found")

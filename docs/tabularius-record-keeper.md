@@ -135,7 +135,10 @@ above it is autonomous.
       tickets in ticket mode. `scripts/dispatch-async.py` submits guarded reserve/reap/harvest
       tickets in ticket mode and drains the keeper before launching workers or clearing markers.
       CLI dispatch result-apply submits result tickets in ticket mode.
-- [ ] Step 2.3 — MCP server → ticket producer (retire the raw write + duplicate models).
+- [x] Step 2.3 — MCP server → ticket producer. `mcp/src/limen_mcp/server.py` now loads through
+      the shared Limen loader and its mutating tools (`add_task`, `update_task_status`,
+      `agent_claim`) submit TABVLARIVS upsert/status tickets, drain the keeper synchronously, and
+      no longer run the old YAML rewrite + git stash/pull/push path.
 - [ ] Step 2.4 — live API/Worker tier (needs the consistency decision above; website-sensitive).
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
       `fold(archive) == board` predicate.
