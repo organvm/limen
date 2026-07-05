@@ -39,7 +39,6 @@ LEGACY_GATED_ALLOWLIST = {
     "scripts/dispatch-async.py",
     "scripts/ingest-backlog.py",
     "scripts/insight-route.py",
-    "scripts/mine-backlog.py",
     "scripts/quicken.py",
     "scripts/route.py",
 }
