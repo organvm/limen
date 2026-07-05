@@ -147,6 +147,7 @@ def submit_task_upsert(
     *,
     agent: str,
     session_id: str = "unknown",
+    precondition: dict[str, Any] | None = None,
     now: datetime | None = None,
 ) -> Path:
     """One-line producer: hand the keeper a whole task field-set as an upsert ticket.
@@ -160,6 +161,8 @@ def submit_task_upsert(
     line of defense, not the first. Dedup remains the caller's responsibility: read the board and
     submit only genuinely-new ids, because an upsert MERGES onto any existing task ({**base, **patch})
     and blind-upserting a live id would overwrite its fields (e.g. flip a `done` task back to `open`).
+    A producer that allocates ids from a stale read can pass a guard such as ``{"status": None}``
+    so the keeper rejects the ticket if the id appears before the drain.
     """
     validated = task if isinstance(task, Task) else Task.model_validate(task)
     fields = validated.model_dump(mode="json", exclude_none=True)
@@ -175,6 +178,7 @@ def submit_task_upsert(
         intent=INTENT_UPSERT,
         task_id=tid,
         patch=fields,
+        precondition=dict(precondition or {}),
     )
     return submit_ticket(board_path, ticket)
 

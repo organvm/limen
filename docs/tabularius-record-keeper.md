@@ -50,7 +50,7 @@ archived ticket files are the append-only event log the board projects from.
 | Piece | Where | Role |
 |-------|-------|------|
 | Engine | `cli/src/limen/tabularius.py` | `Ticket`, `submit_ticket()`, `submit_task_upsert()`, `drain_once()`, the fold/validate/seal + quarantine |
-| Producer API | `cli/src/limen/tabularius.py` → `submit_task_upsert()` | the one-line conversion target: a writer swaps `save_limen_file` for this call per NEW task (validates up front, then hands the keeper an upsert ticket) |
+| Producer API | `cli/src/limen/tabularius.py` → `submit_task_upsert()` | the one-line conversion target: a writer swaps `save_limen_file` for this call per NEW task (validates up front, then hands the keeper an upsert ticket; supports optional stale-read guards for id allocators) |
 | Status API | `cli/src/limen/tabularius.py` → `submit_task_status()` | the one-line conversion target for existing-task lifecycle transitions: status + dispatch_log + optional field patch as one keeper-owned ticket |
 | Beat organ | `scripts/tabularius-organ.py` | thin per-beat wrapper (like `heal-board.py`); `--check`/`--dry-run`; writes the liveness stamp |
 | Beat wiring | `scripts/heartbeat-loop.sh` | runs after `heal-board` (fold onto a *healthy* board), before the body's own mutation |
@@ -116,7 +116,9 @@ above it is autonomous.
       the producer≡direct-write identity test; reference pair `mine-backlog` + `ingest-backlog` converted.
 - [x] Step 2.1 (creation tier converted + **CUTOVER LIVE**) — the whole task-CREATION tier now
       produces tickets: `generate-backlog`, `generate-revenue-backlog`, `generate-organ-backlog`,
-      `discover-value` converted (behind the same gate). Reading the code corrected the remainder list:
+      `discover-value` converted (behind the same gate). `scripts/auto-scale.py` also submits guarded
+      upsert tickets and drains synchronously in ticket mode, preserving the CI `tasks.yaml` commit
+      contract while preventing stale sequential-id clobber. Reading the code corrected the remainder list:
       `generate-positioning` and `ingest-coverage` **never write `tasks.yaml`** (obligations / read-only) —
       not writers, so not converted. **`scripts/heartbeat-loop.sh` sets `LIMEN_TICKETS_PRODUCE=1`**, so the
       LIVE fleet routes task creation through the keeper (revertible via `~/.limen.env`). Smoke-proven:

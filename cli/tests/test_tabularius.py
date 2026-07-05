@@ -32,6 +32,7 @@ from limen.tabularius import (
     pending_count,
     submit_ticket,
     submit_task_status,
+    submit_task_upsert,
 )
 
 _NOW = datetime(2026, 7, 2, 12, 0, 0, tzinfo=timezone.utc)
@@ -476,10 +477,26 @@ def test_submit_task_upsert_validates_before_emitting(tmp_path):
     invalid task never reaches the inbox as a silently-quarantined ticket."""
     import pytest
 
-    from limen.tabularius import submit_task_upsert
-
     board = _seed_board(tmp_path)
     # a dict missing the required `id` — must raise at submit, not land a ticket
     with pytest.raises((ValueError, Exception)):
         submit_task_upsert(board, {"title": "no id"}, agent="gen")
     assert pending_count(board) == 0  # nothing entered the inbox
+
+
+def test_upsert_precondition_rejects_existing_id(tmp_path):
+    board = _seed_board(tmp_path)
+
+    submit_task_upsert(
+        board,
+        _task("T-1", status="open", title="must not overwrite"),
+        agent="gen",
+        precondition={"status": None},
+        now=_NOW,
+    )
+    result = drain_once(board)
+
+    assert result.applied == 0
+    assert result.rejected == 1
+    task = {t.id: t for t in load_limen_file(board).tasks}["T-1"]
+    assert task.title == "task T-1"
