@@ -72,7 +72,7 @@ step "Validate task-board statuses match the canonical vocabulary"
 python3 scripts/validate-task-board.py
 
 step "Audit TABVLARIVS board writer boundaries"
-python3 scripts/check-tabularius-writers.py --quiet
+python3 scripts/check-tabularius-writers.py --quiet --max-legacy 22
 
 step "Verify TABVLARIVS event projection predicate"
 tabularius_event_log="$(mktemp "${TMPDIR:-/tmp}/limen-tabularius-events.XXXXXX")"

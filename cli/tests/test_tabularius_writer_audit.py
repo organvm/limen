@@ -27,6 +27,12 @@ def test_tabularius_writer_audit_passes_current_repo() -> None:
     assert module.audit(ROOT) == []
 
 
+def test_tabularius_writer_audit_current_repo_respects_legacy_ceiling() -> None:
+    module = _load_module()
+
+    assert module.audit(ROOT, max_legacy_writers=len(module.LEGACY_GATED_ALLOWLIST)) == []
+
+
 def test_unapproved_direct_board_writer_is_blocked(tmp_path: Path, monkeypatch) -> None:
     module = _load_module()
     _scan_only_scripts(monkeypatch, module)
@@ -90,3 +96,25 @@ def test_allowlisted_legacy_writer_requires_ticket_gate_and_producer(tmp_path: P
 
     errors = module.audit(tmp_path)
     assert errors == ["scripts/gated.py: allowlisted legacy writer is missing ticket-mode gate/producer proof"]
+
+
+def test_legacy_writer_ceiling_blocks_new_fallbacks(tmp_path: Path, monkeypatch) -> None:
+    module = _load_module()
+    _scan_only_scripts(monkeypatch, module)
+    monkeypatch.setattr(module, "LEGACY_GATED_ALLOWLIST", {"scripts/gated.py"})
+
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "gated.py").write_text(
+        "import os\n"
+        "from limen.io import save_limen_file\n"
+        "from limen.tabularius import submit_task_status\n"
+        "if os.environ.get('LIMEN_TICKETS_PRODUCE') == '1':\n"
+        "    submit_task_status(tasks_path, 'T-1', 'open', agent='limen')\n"
+        "else:\n"
+        "    save_limen_file(tasks_path, limen_file)\n",
+        encoding="utf-8",
+    )
+
+    errors = module.audit(tmp_path, max_legacy_writers=0)
+    assert errors == ["legacy gated fallback writer ceiling exceeded: 1 observed > 0 allowed"]

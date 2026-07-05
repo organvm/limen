@@ -170,7 +170,8 @@ above it is autonomous.
 - [x] Step 2 guardrail — `scripts/check-tabularius-writers.py` audits the codebase for direct
       task-board writers. It is wired into `scripts/verify-whole.sh` and blocks any new unapproved
       `tasks.yaml` writer; remaining reversible legacy fallbacks must stay explicitly allowlisted
-      and carry `LIMEN_TICKETS_PRODUCE` plus TABVLARIVS producer proof.
+      and carry `LIMEN_TICKETS_PRODUCE` plus TABVLARIVS producer proof. The whole-repo gate pins
+      the legacy fallback ceiling at 22, so the count can be ratcheted down but not silently grow.
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
       `fold(archive) == board` predicate.
       Seed landed: `limen tabularius-events --write --verify` writes

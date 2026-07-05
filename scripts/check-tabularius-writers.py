@@ -96,9 +96,10 @@ def _is_gated_legacy(text: str) -> bool:
     return "LIMEN_TICKETS_PRODUCE" in text and any(token in text for token in PRODUCER_TOKENS)
 
 
-def audit(root: Path) -> list[str]:
+def audit(root: Path, *, max_legacy_writers: int | None = None) -> list[str]:
     errors: list[str] = []
     observed: set[str] = set()
+    observed_legacy: set[str] = set()
     for path in _iter_files(root):
         text = path.read_text(encoding="utf-8", errors="replace")
         hits = _writer_lines(text)
@@ -109,6 +110,7 @@ def audit(root: Path) -> list[str]:
         if rel in STRUCTURAL_ALLOWLIST:
             continue
         if rel in LEGACY_GATED_ALLOWLIST:
+            observed_legacy.add(rel)
             if not _is_gated_legacy(text):
                 errors.append(f"{rel}: allowlisted legacy writer is missing ticket-mode gate/producer proof")
             continue
@@ -118,17 +120,30 @@ def audit(root: Path) -> list[str]:
     stale = sorted((STRUCTURAL_ALLOWLIST.keys() | LEGACY_GATED_ALLOWLIST) - observed)
     for rel in stale:
         errors.append(f"{rel}: allowlist entry is stale; no direct writer was observed")
+    if max_legacy_writers is not None and len(observed_legacy) > max_legacy_writers:
+        errors.append(
+            "legacy gated fallback writer ceiling exceeded: "
+            f"{len(observed_legacy)} observed > {max_legacy_writers} allowed"
+        )
     return errors
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
+    parser.add_argument(
+        "--max-legacy",
+        type=int,
+        default=None,
+        help="Fail if more than this many legacy gated direct writers remain.",
+    )
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 
     root = args.root.resolve()
-    errors = audit(root)
+    if args.max_legacy is not None and args.max_legacy < 0:
+        parser.error("--max-legacy must be non-negative")
+    errors = audit(root, max_legacy_writers=args.max_legacy)
     if errors:
         print(f"tabularius-writers: blocked with {len(errors)} issue(s)", file=sys.stderr)
         for error in errors:
