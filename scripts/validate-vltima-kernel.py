@@ -198,16 +198,22 @@ def _graph_payload(
     nodes: list[dict[str, object]] = []
     edges: list[dict[str, str]] = []
 
+    layer_ids = sorted({str(primitive.get("layer") or "") for primitive in primitives if primitive.get("layer")})
+    for layer_id in layer_ids:
+        nodes.append({"id": f"layer:{layer_id}", "kind": "layer", "label": layer_id, "ref": layer_id})
+
     for primitive in primitives:
+        layer_id = str(primitive["layer"])
         nodes.append(
             {
                 "id": f"primitive:{primitive['id']}",
                 "kind": "primitive",
                 "label": primitive["label"],
                 "ref": primitive["id"],
-                "layer": primitive["layer"],
+                "layer": layer_id,
             }
         )
+        edges.append({"from": f"layer:{layer_id}", "to": f"primitive:{primitive['id']}", "type": "contains"})
     edges.extend(_primitive_edges(primitives))
 
     for projection_name, primitive_refs in projection_map.items():
