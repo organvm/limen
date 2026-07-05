@@ -6,6 +6,9 @@ import sys
 from pathlib import Path
 
 import yaml
+from click.testing import CliRunner
+
+from limen.cli import main
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -153,6 +156,37 @@ def test_vltima_projection_schema_names_canonical_contract():
     assert schema["properties"]["kind"]["enum"] == ["vltima.kernel-projection"]
     assert schema["properties"]["schema_version"]["enum"] == [1]
     assert {"primitives", "edges", "layers", "projections", "organs", "graph"}.issubset(schema["required"])
+
+
+def test_vltima_kernel_cli_emits_projection_json():
+    result = CliRunner().invoke(main, ["vltima-kernel", "--root", str(ROOT), "--json-output"])
+
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["kind"] == "vltima.kernel-projection"
+    assert data["projections"]["organ_kernel"][0] == {"id": "member", "label": "Member"}
+
+
+def test_vltima_kernel_cli_checks_current_projection_and_reports_missing_custom_path(tmp_path):
+    current = CliRunner().invoke(main, ["vltima-kernel", "--root", str(ROOT), "--check-projection"])
+
+    assert current.exit_code == 0, current.output
+    assert "projection current at organs/vltima/projection.json" in current.output
+
+    missing = CliRunner().invoke(
+        main,
+        [
+            "vltima-kernel",
+            "--root",
+            str(ROOT),
+            "--check-projection",
+            "--projection-path",
+            str(tmp_path / "missing-projection.json"),
+        ],
+    )
+
+    assert missing.exit_code == 1
+    assert "projection missing:" in missing.output
 
 
 def test_vltima_graph_validation_rejects_dangling_edges():

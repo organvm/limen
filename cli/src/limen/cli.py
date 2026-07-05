@@ -1,4 +1,5 @@
 import os
+import importlib.util
 import json
 import subprocess
 import sys
@@ -165,6 +166,74 @@ def qa(agent, json_output, report_file):
         click.echo(json.dumps(report, indent=2))
     else:
         print_qa_report(report)
+
+
+def _load_vltima_validator(root: Path):
+    path = root / "scripts" / "validate-vltima-kernel.py"
+    if not path.exists():
+        click.echo(f"VLTIMA validator missing at {path}", err=True)
+        sys.exit(2)
+    spec = importlib.util.spec_from_file_location("limen_vltima_validator_cli", path)
+    module = importlib.util.module_from_spec(spec)
+    if spec.loader is None:
+        click.echo(f"Could not load VLTIMA validator at {path}", err=True)
+        sys.exit(2)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _display_path(root: Path, path: Path) -> str:
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
+
+
+@main.command("vltima-kernel")
+@click.option("--root", type=click.Path(path_type=Path), default=None, help="Repo root to inspect.")
+@click.option("--json-output", is_flag=True, help="Emit the derived VLTIMA kernel projection as JSON.")
+@click.option("--write-projection", is_flag=True, help="Write organs/vltima/projection.json from the registry.")
+@click.option("--check-projection", is_flag=True, help="Fail if organs/vltima/projection.json is missing or stale.")
+@click.option("--projection-path", type=click.Path(path_type=Path), default=None, help="Override projection path.")
+def vltima_kernel(root, json_output, write_projection, check_projection, projection_path):
+    """Validate and emit the VLTIMA universal kernel substrate."""
+    repo_root = root.expanduser().resolve() if root else resolve_limen_repo_root()
+    validator = _load_vltima_validator(repo_root)
+    errors = validator.validate(repo_root)
+    if errors:
+        click.echo(f"vltima-kernel: blocked with {len(errors)} issue(s)", err=True)
+        for error in errors:
+            click.echo(f"  - {error}", err=True)
+        sys.exit(1)
+
+    if json_output or write_projection or check_projection:
+        projection, projection_errors = validator.build_projection(repo_root)
+        if projection_errors:
+            click.echo(f"vltima-kernel: blocked with {len(projection_errors)} issue(s)", err=True)
+            for error in projection_errors:
+                click.echo(f"  - {error}", err=True)
+            sys.exit(1)
+        expected = validator.projection_json_text(projection)
+        target = validator._projection_path(repo_root, projection_path)
+        if write_projection:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(expected)
+            if not json_output:
+                click.echo(f"vltima-kernel: wrote projection to {_display_path(repo_root, target)}")
+        if check_projection:
+            if not target.exists():
+                click.echo(f"vltima-kernel: projection missing: {_display_path(repo_root, target)}", err=True)
+                sys.exit(1)
+            if target.read_text() != expected:
+                click.echo(f"vltima-kernel: projection stale: {_display_path(repo_root, target)}", err=True)
+                sys.exit(1)
+            if not json_output and not write_projection:
+                click.echo(f"vltima-kernel: projection current at {_display_path(repo_root, target)}")
+        if json_output:
+            click.echo(expected, nl=False)
+        return
+
+    click.echo("vltima-kernel: universal kernel and organ projections valid")
 
 
 @main.command()
