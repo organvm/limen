@@ -24,7 +24,7 @@ from limen.capacity import (
 )
 from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
-from limen.tabularius import drain_once, submit_task_status
+from limen.tabularius import drain_once, submit_board_meta, submit_task_status
 from limen.doctor import stale_tasks
 from limen.model_selection import (  # the shared model vocabulary — also used by the non-bypassable `claude` shim
     _CLAUDE_TIER_ORDER,
@@ -1591,21 +1591,40 @@ def _commit_dispatch_results(
         reset = _reset_budget_if_needed(fresh, now)
         fid = {t.id: t for t in fresh.tasks}
         ftrack = fresh.portal.budget.track
-        if _ticket_mode() and results:
+        tickets = []
+        if _ticket_mode():
             if reset:
-                save_limen_file(tasks_path, fresh)
+                tickets.append(
+                    submit_board_meta(
+                        tasks_path,
+                        agent="limen",
+                        session_id="budget-reset",
+                        version=fresh.version,
+                        portal=fresh.portal,
+                        now=now,
+                    )
+                )
             for agent, tid, res in results:
                 ft = fid.get(tid)
                 if ft is not None:
-                    _submit_result_ticket(tasks_path, ft, agent, res, now, ftrack)
+                    ticket = _submit_result_ticket(tasks_path, ft, agent, res, now, ftrack)
+                    if ticket is not None:
+                        tickets.append(ticket)
         else:
             for agent, tid, res in results:
                 ft = fid.get(tid)
                 if ft is not None:
                     _apply_result(ft, agent, res, now, ftrack)
             save_limen_file(tasks_path, fresh)
-    if _ticket_mode() and results:
-        drain_once(tasks_path)
+    if _ticket_mode() and tickets:
+        result = drain_once(tasks_path)
+        applied = set(result.applied_ids)
+        wanted = {ticket.stem for ticket in tickets}
+        if wanted - applied:
+            print(
+                f"── dispatch: TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} commit tickets "
+                f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+            )
 
 
 def dispatch_tasks(

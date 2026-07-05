@@ -30,6 +30,7 @@ from limen.tabularius import (
     drain_once,
     new_ticket_id,
     pending_count,
+    submit_board_meta,
     submit_ticket,
     submit_task_status,
     submit_task_upsert,
@@ -239,6 +240,21 @@ def test_status_ticket_applies_budget_delta(tmp_path):
     lf = load_limen_file(board)
     assert lf.portal.budget.track.spent == 1
     assert lf.portal.budget.track.per_agent["codex"] == 1
+
+
+def test_submit_board_meta_updates_portal(tmp_path):
+    board = _seed_budget_board(tmp_path)
+    lf = load_limen_file(board)
+    lf.portal.budget.daily = 42
+    lf.portal.budget.track.spent = 0
+
+    submit_board_meta(board, agent="limen", session_id="budget-reset", version=lf.version, portal=lf.portal, now=_NOW)
+    result = drain_once(board)
+
+    assert result.applied == 1
+    out = load_limen_file(board)
+    assert out.portal.budget.daily == 42
+    assert out.portal.budget.track.spent == 0
 
 
 def test_partial_patch_preserves_other_fields(tmp_path):

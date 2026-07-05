@@ -249,6 +249,41 @@ def submit_task_status(
     return submit_ticket(board_path, ticket)
 
 
+def submit_board_meta(
+    board_path: Path,
+    *,
+    agent: str,
+    session_id: str = "unknown",
+    version: str | None = None,
+    portal: Any | None = None,
+    now: datetime | None = None,
+) -> Path:
+    """Hand the keeper a board-level metadata update.
+
+    This is for changes that are not owned by one task, such as budget-window resets. ``portal``
+    may be a pydantic model or a plain mapping; the keeper validates the resulting whole board.
+    """
+    patch: dict[str, Any] = {}
+    if version is not None:
+        patch["version"] = version
+    if portal is not None:
+        patch["portal"] = (
+            portal.model_dump(mode="json", exclude_none=True) if hasattr(portal, "model_dump") else dict(portal)
+        )
+    if not patch:
+        raise ValueError("board meta ticket requires version and/or portal")
+    now = now or datetime.now(timezone.utc)
+    ticket = Ticket(
+        ticket_id=new_ticket_id(session_id, now),
+        timestamp=now,
+        agent=agent,
+        session_id=session_id,
+        intent=INTENT_META,
+        patch=patch,
+    )
+    return submit_ticket(board_path, ticket)
+
+
 @dataclass
 class DrainResult:
     """The outcome of one drain pass — counts only (safe to log)."""

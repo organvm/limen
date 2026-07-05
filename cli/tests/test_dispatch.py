@@ -664,6 +664,39 @@ def test_dispatch_budget_reset_persist_survives_concurrent_board_write(
     assert board["portal"]["budget"]["track"]["per_agent"]["codex"] == 0
 
 
+def test_dispatch_budget_reset_ticket_mode_drains_tabularius(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Ticket mode should commit the fresh budget reset through TABVLARIVS and preserve
+    concurrent board growth even when no task dispatches."""
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(tasks_path, [])
+    board = read_board(tasks_path)
+    board["portal"]["budget"]["track"] = {
+        "date": "2026-01-01",
+        "spent": 2,
+        "per_agent": {"codex": 2},
+        "per_agent_reset": {"codex": "2026-01-01T00:00:00+00:00"},
+    }
+    tasks_path.write_text(yaml.safe_dump(board, sort_keys=False))
+    stale = load_limen_file(tasks_path)
+
+    _concurrent_fold(tasks_path)
+
+    monkeypatch.setattr(D, "_down_lanes", lambda: set())
+    monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+
+    dispatch_tasks(stale, tasks_path, agent="codex", dry_run=False)
+
+    board = read_board(tasks_path)
+    assert "CONCURRENT-FOLD" in {task["id"] for task in board["tasks"]}
+    assert board["portal"]["budget"]["track"]["per_agent"]["codex"] == 0
+    assert pending_count(tasks_path) == 0
+
+
 def test_release_stale_apply_survives_concurrent_board_write(
     tmp_path: Path,
 ) -> None:
