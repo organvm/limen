@@ -193,8 +193,9 @@ disposable or explicitly approved task IDs.
 For the current local Python adapter, `scripts/probe-local-runtime.sh` starts a
 temporary API process with a disposable task board and runs the same HTTP probe,
 including owner verify, assign, and archive mutations.
-For the Cloudflare Worker adapter, `scripts/probe-local-worker.sh` does the same
-against Wrangler local dev and inline disposable storage.
+For the Cloudflare Worker adapter, `scripts/probe-local-worker.sh` runs the same
+read/schema probe against Wrangler local dev and confirms owner mutation routes
+return the remote TABVLARIVS ticket-sink boundary instead of rewriting storage.
 The dashboard deploy workflow requires the repository variable `LIMEN_API_URL`
 and the Actions secrets `LIMEN_API_TOKEN` and `LIMEN_CLIENT_TOKEN`; after
 Firebase hosting is released it probes that runtime with the same schema-backed

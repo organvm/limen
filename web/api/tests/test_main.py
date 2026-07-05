@@ -9,9 +9,12 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
+ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "cli" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import main
+from limen.tabularius import pending_count
 
 
 def write_board(path: Path, tasks: list[dict]) -> None:
@@ -117,6 +120,7 @@ def test_release_stale_reopens_tasks_only_when_not_dry_run(client: TestClient, t
     task = read_board(tmp_path)["tasks"][0]
     assert task["status"] == "open"
     assert task["dispatch_log"][-1]["session_id"] == "release-stale"
+    assert pending_count(tmp_path / "tasks.yaml") == 0
 
 
 def test_live_dispatch_mutates_after_command_success(
@@ -158,36 +162,45 @@ def test_live_dispatch_mutates_after_command_success(
     assert task["dispatch_log"][-1]["status"] == "dispatched"
     assert board["portal"]["budget"]["track"]["spent"] == 2
     assert board["portal"]["budget"]["track"]["per_agent"]["codex"] == 2
+    assert pending_count(tmp_path / "tasks.yaml") == 0
 
 
-def test_github_storage_create_task_uses_contents_sha(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[tuple[str, str, dict | None]] = []
-    board = yaml.safe_dump(
-        {
-            "version": "1.0",
-            "portal": {"name": "Universal Task Intake", "budget": {"daily": 100}},
-            "tasks": [],
+def test_create_task_applies_through_tabularius(client: TestClient, tmp_path: Path) -> None:
+    write_board(tmp_path / "tasks.yaml", [])
+
+    response = client.post(
+        "/api/tasks",
+        json={
+            "id": "LIMEN-004",
+            "title": "Local ticket-backed task",
+            "repo": "4444J99/limen",
+            "target_agent": "jules",
         },
-        sort_keys=False,
     )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "created"
+    board = read_board(tmp_path)
+    assert board["tasks"][0]["id"] == "LIMEN-004"
+    assert board["tasks"][0]["dispatch_log"] == []
+    assert pending_count(tmp_path / "tasks.yaml") == 0
+
+
+def test_github_storage_create_task_rejects_without_board_put(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str, dict | None]] = []
 
     def fake_github_request(method: str, url: str, payload: dict | None = None) -> dict:
         calls.append((method, url, payload))
-        if method == "GET":
-            import base64
-
-            return {"encoding": "base64", "content": base64.b64encode(board.encode()).decode(), "sha": "abc123"}
-        if method == "PUT":
-            assert payload is not None
-            assert payload["sha"] == "abc123"
-            assert payload["branch"] == "main"
-            return {"content": {"sha": "def456"}}
-        raise AssertionError(f"unexpected method {method}")
+        raise AssertionError(f"unexpected GitHub request {method} {url}")
 
     monkeypatch.setattr(main, "GITHUB_REPO", "4444J99/limen")
     monkeypatch.setattr(main, "GITHUB_TOKEN", "token")
     monkeypatch.setattr(main, "GITHUB_BRANCH", "main")
     monkeypatch.setattr(main, "GITHUB_PATH", "tasks.yaml")
+    monkeypatch.setattr(main, "LIMEN_TOKEN", "")
+    monkeypatch.delenv("LIMEN_API_TOKEN", raising=False)
+    monkeypatch.delenv("LIMEN_OWNER_TOKEN", raising=False)
+    monkeypatch.delenv("LIMEN_CLIENT_TOKEN", raising=False)
     monkeypatch.setattr(main, "github_request", fake_github_request)
     client = TestClient(main.app)
 
@@ -201,9 +214,32 @@ def test_github_storage_create_task_uses_contents_sha(monkeypatch: pytest.Monkey
         },
     )
 
-    assert response.status_code == 200
-    assert response.json()["status"] == "created"
-    assert [call[0] for call in calls] == ["GET", "PUT"]
+    assert response.status_code == 501
+    assert "TABVLARIVS remote ticket sink" in response.json()["detail"]
+    assert calls == []
+
+
+def test_github_storage_verify_task_rejects_without_board_put(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str, dict | None]] = []
+
+    def fake_github_request(method: str, url: str, payload: dict | None = None) -> dict:
+        calls.append((method, url, payload))
+        raise AssertionError(f"unexpected GitHub request {method} {url}")
+
+    monkeypatch.setattr(main, "GITHUB_REPO", "4444J99/limen")
+    monkeypatch.setattr(main, "GITHUB_TOKEN", "token")
+    monkeypatch.setattr(main, "LIMEN_TOKEN", "")
+    monkeypatch.delenv("LIMEN_API_TOKEN", raising=False)
+    monkeypatch.delenv("LIMEN_OWNER_TOKEN", raising=False)
+    monkeypatch.delenv("LIMEN_CLIENT_TOKEN", raising=False)
+    monkeypatch.setattr(main, "github_request", fake_github_request)
+    client = TestClient(main.app)
+
+    response = client.post("/api/tasks/LIMEN-004/verify", json={"status": "done"})
+
+    assert response.status_code == 501
+    assert "TABVLARIVS remote ticket sink" in response.json()["detail"]
+    assert calls == []
 
 
 def test_public_status_is_aggregate_only(client: TestClient, tmp_path: Path) -> None:
@@ -554,6 +590,7 @@ def test_assign_task_updates_steering_fields_and_logs(client: TestClient, tmp_pa
     assert task["dispatch_log"][-1]["status"] == "assigned"
     assert task["dispatch_log"][-1]["session_id"] == "qa-panel"
     assert "Route through Jules" in task["dispatch_log"][-1]["output"]
+    assert pending_count(tmp_path / "tasks.yaml") == 0
 
 
 def test_assign_task_rejects_boolean_budget_cost(client: TestClient, tmp_path: Path) -> None:
@@ -648,6 +685,7 @@ def test_verify_task_moves_active_work_to_closure_gate(client: TestClient, tmp_p
     qa = client.get("/api/qa-status").json()
     assert qa["lifecycle"]["verify"] == 0
     assert qa["lifecycle"]["archive_ready"] == 1
+    assert pending_count(tmp_path / "tasks.yaml") == 0
 
 
 def test_verify_task_can_return_attention_status(client: TestClient, tmp_path: Path) -> None:
@@ -679,6 +717,7 @@ def test_verify_task_can_return_attention_status(client: TestClient, tmp_path: P
     qa = client.get("/api/qa-status").json()
     assert qa["lifecycle"]["recover"] == 1
     assert qa["steering"]["recovery_queue"][0]["id"] == "LIMEN-014A"
+    assert pending_count(tmp_path / "tasks.yaml") == 0
 
 
 def test_verify_task_rejects_open_assignment_work(client: TestClient, tmp_path: Path) -> None:
@@ -738,6 +777,7 @@ def test_archive_done_task_suppresses_it_from_qa_steering(client: TestClient, tm
     assert qa["steering"]["next_batch"] == []
     public = client.get("/api/public-status").json()
     assert public["summary"]["completed"] == 1
+    assert pending_count(tmp_path / "tasks.yaml") == 0
 
 
 def test_archive_rejects_unresolved_task(client: TestClient, tmp_path: Path) -> None:

@@ -159,7 +159,10 @@ above it is autonomous.
       the shared Limen loader and its mutating tools (`add_task`, `update_task_status`,
       `agent_claim`) submit TABVLARIVS upsert/status tickets, drain the keeper synchronously, and
       no longer run the old YAML rewrite + git stash/pull/push path.
-- [ ] Step 2.4 — live API/Worker tier (needs the consistency decision above; website-sensitive).
+- [x] Step 2.4 — live API/Worker tier. Local file-backed FastAPI mutation endpoints now submit
+      and synchronously drain TABVLARIVS tickets before responding; GitHub-backed FastAPI mutations
+      and Cloudflare Worker mutation routes reject until a remote TABVLARIVS ticket sink exists,
+      while read and dry-run surfaces stay live.
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
       `fold(archive) == board` predicate.
 

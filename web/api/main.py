@@ -3,7 +3,7 @@ import base64
 import json
 import re
 import subprocess
-import tempfile
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -18,6 +18,12 @@ import yaml
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
+
+CLI_SRC = Path(__file__).resolve().parents[2] / "cli" / "src"
+if CLI_SRC.exists() and str(CLI_SRC) not in sys.path:
+    sys.path.insert(0, str(CLI_SRC))
+
+from limen.tabularius import drain_once, submit_board_meta, submit_task_status, submit_task_upsert  # noqa: E402
 
 VALID_STATUSES = {"open", "dispatched", "in_progress", "done", "failed", "failed_blocked", "needs_human", "archived"}
 VALID_PRIORITIES = {"critical", "high", "medium", "low", "backlog"}
@@ -421,22 +427,6 @@ def load_github_board() -> LoadedBoard:
     return LoadedBoard(yaml.safe_load(decoded) or {"portal": {}, "tasks": []}, raw.get("sha"), "github")
 
 
-def save_github_board(data: dict[str, Any], sha: str | None = None) -> None:
-    if sha is None:
-        sha = load_github_board().sha
-    message = os.environ.get("LIMEN_GITHUB_COMMIT_MESSAGE", "Update Limen task board")
-    payload: dict[str, Any] = {
-        "message": message,
-        "content": base64.b64encode(yaml.safe_dump(data, sort_keys=False, allow_unicode=True).encode("utf-8")).decode(
-            "ascii"
-        ),
-        "branch": GITHUB_BRANCH,
-    }
-    if sha:
-        payload["sha"] = sha
-    github_request("PUT", github_contents_url(), payload)
-
-
 def load_board_doc() -> LoadedBoard:
     if storage_mode() == "github":
         return load_github_board()
@@ -451,16 +441,61 @@ def load_board() -> dict[str, Any]:
     return load_board_doc().data
 
 
-def save_board(data: dict[str, Any], sha: str | None = None) -> None:
+def reject_remote_mutation() -> None:
     if storage_mode() == "github":
-        save_github_board(data, sha)
+        raise HTTPException(
+            status_code=501,
+            detail="GitHub-backed mutations are disabled until a TABVLARIVS remote ticket sink exists",
+        )
+
+
+def drain_api_tickets(tickets: list[Path], action: str) -> None:
+    if not tickets:
         return
-    path = tasks_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", delete=False, dir=path.parent) as handle:
-        yaml.safe_dump(data, handle, sort_keys=False, allow_unicode=True)
-        tmp = Path(handle.name)
-    tmp.replace(path)
+    result = drain_once(tasks_path())
+    applied = set(result.applied_ids)
+    wanted = {ticket.stem for ticket in tickets}
+    missing = wanted - applied
+    if missing:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"TABVLARIVS did not apply {action} ticket(s): "
+                f"applied={len(applied & wanted)}/{len(wanted)} rejected={result.rejected} "
+                f"deferred={result.deferred}: {result.note}"
+            ),
+        )
+
+
+def persisted_task(task_id: str) -> dict[str, Any]:
+    return find_task(load_board(), task_id)
+
+
+def submit_api_status(
+    task: dict[str, Any],
+    status: str,
+    *,
+    agent: str,
+    session_id: str,
+    output: str | None = None,
+    patch: dict[str, Any] | None = None,
+    log_status: str | None = None,
+    budget_cost: int | None = None,
+) -> Path:
+    precondition = {"status": task.get("status")}
+    return submit_task_status(
+        tasks_path(),
+        task["id"],
+        status,
+        agent=agent,
+        session_id=session_id,
+        output=output,
+        patch=patch,
+        precondition=precondition,
+        log_status=log_status,
+        budget_cost=budget_cost,
+        budget_agent=agent,
+    )
 
 
 def configured_persona_tokens() -> dict[str, set[str]]:
@@ -524,14 +559,6 @@ def maybe_reset_budget(data: dict[str, Any]) -> None:
         track["date"] = today
         track["spent"] = 0
         track["per_agent"] = {agent: 0 for agent in budget(data).get("per_agent", {})}
-
-
-def spend_budget(data: dict[str, Any], agent: str, cost: int) -> None:
-    maybe_reset_budget(data)
-    track = budget(data)["track"]
-    track["spent"] = int(track.get("spent", 0)) + cost
-    per_agent = track.setdefault("per_agent", {})
-    per_agent[agent] = int(per_agent.get(agent, 0)) + cost
 
 
 def remaining_budget(data: dict[str, Any], agent: str) -> int:
@@ -1181,44 +1208,51 @@ def get_task(task_id: str, authorization: str | None = Header(None)) -> dict[str
 @app.post("/api/tasks")
 def create_task(req: TaskCreate, authorization: str | None = Header(None)) -> dict[str, Any]:
     require_persona(authorization, {"owner"})
+    reject_remote_mutation()
     doc = load_board_doc()
     data = doc.data
     if any(task.get("id") == req.id for task in data.get("tasks", [])):
         raise HTTPException(status_code=409, detail=f"task {req.id} already exists")
     task = req.model_dump()
-    task["created"] = now_iso()
-    task["updated"] = task["created"]
+    now = datetime.now(timezone.utc)
+    task["created"] = now.date().isoformat()
+    task["updated"] = now.isoformat()
     task["dispatch_log"] = []
-    data.setdefault("tasks", []).append(task)
-    save_board(data, doc.sha)
-    return {"status": "created", "task": task}
+    ticket = submit_task_upsert(tasks_path(), task, agent="api", session_id="api-create", precondition={"status": None})
+    drain_api_tickets([ticket], "create")
+    return {"status": "created", "task": persisted_task(req.id)}
 
 
 @app.patch("/api/tasks/{task_id}")
 def update_task(task_id: str, req: TaskUpdate, authorization: str | None = Header(None)) -> dict[str, Any]:
     require_persona(authorization, {"owner"})
+    reject_remote_mutation()
     doc = load_board_doc()
     data = doc.data
     task = find_task(data, task_id)
     update = req.model_dump(exclude_none=True)
     status = update.pop("status", None)
-    output = update.pop("output", "")
-    agent = update.pop("agent", task.get("target_agent", "api"))
-    session_id = update.pop("session_id", "api")
-    for key, value in update.items():
-        task[key] = value
-    if status:
-        task["status"] = status
-        append_log(task, agent, session_id, status, output)
-    else:
-        task["updated"] = now_iso()
-    save_board(data, doc.sha)
-    return {"status": "updated", "task": task}
+    output = update.pop("output", None)
+    agent = update.pop("agent", None) or task.get("target_agent", "api")
+    session_id = update.pop("session_id", None) or "api"
+    next_status = status or task.get("status", "open")
+    ticket = submit_api_status(
+        task,
+        next_status,
+        agent=agent,
+        session_id=session_id,
+        output=output or ("Updated via Limen API" if not status else ""),
+        patch=update,
+        log_status=status or "updated",
+    )
+    drain_api_tickets([ticket], "update")
+    return {"status": "updated", "task": persisted_task(task_id)}
 
 
 @app.post("/api/tasks/{task_id}/assign")
 def assign_task(task_id: str, req: AssignmentRequest, authorization: str | None = Header(None)) -> dict[str, Any]:
     require_persona(authorization, {"owner"})
+    reject_remote_mutation()
     doc = load_board_doc()
     data = doc.data
     task = find_task(data, task_id)
@@ -1228,27 +1262,35 @@ def assign_task(task_id: str, req: AssignmentRequest, authorization: str | None 
         "budget_cost": task.get("budget_cost"),
         "status": task.get("status"),
     }
+    patch: dict[str, Any] = {}
     if req.target_agent is not None:
-        task["target_agent"] = req.target_agent
+        patch["target_agent"] = req.target_agent
     if req.priority is not None:
-        task["priority"] = req.priority
+        patch["priority"] = req.priority
     if req.budget_cost is not None:
-        task["budget_cost"] = req.budget_cost
-    if req.status is not None:
-        task["status"] = req.status
+        patch["budget_cost"] = req.budget_cost
+    next_status = req.status or task.get("status", "open")
     after = {
-        "target_agent": task.get("target_agent"),
-        "priority": task.get("priority"),
-        "budget_cost": task.get("budget_cost"),
-        "status": task.get("status"),
+        "target_agent": patch.get("target_agent", task.get("target_agent")),
+        "priority": patch.get("priority", task.get("priority")),
+        "budget_cost": patch.get("budget_cost", task.get("budget_cost")),
+        "status": next_status,
     }
     changed = [key for key, value in after.items() if before.get(key) != value]
     output = req.note or f"Assigned via steering controls: {', '.join(changed) if changed else 'no field changes'}"
-    append_log(task, "api", req.session_id, "assigned", output)
-    save_board(data, doc.sha)
+    ticket = submit_api_status(
+        task,
+        next_status,
+        agent="api",
+        session_id=req.session_id,
+        output=output,
+        patch=patch,
+        log_status="assigned",
+    )
+    drain_api_tickets([ticket], "assign")
     return {
         "status": "assigned",
-        "task": task,
+        "task": persisted_task(task_id),
         "changed": changed,
     }
 
@@ -1256,35 +1298,47 @@ def assign_task(task_id: str, req: AssignmentRequest, authorization: str | None 
 @app.post("/api/tasks/{task_id}/archive")
 def archive_task(task_id: str, req: ArchiveRequest, authorization: str | None = Header(None)) -> dict[str, Any]:
     require_persona(authorization, {"owner"})
+    reject_remote_mutation()
     doc = load_board_doc()
     data = doc.data
     task = find_task(data, task_id)
     if task.get("status") not in ("done", "archived"):
         raise HTTPException(status_code=409, detail="only done tasks can be archived")
     if task.get("status") != "archived":
-        task["status"] = "archived"
-        append_log(task, "api", req.session_id, "archived", req.note or "Archived from QA steering")
-        save_board(data, doc.sha)
+        ticket = submit_api_status(
+            task,
+            "archived",
+            agent="api",
+            session_id=req.session_id,
+            output=req.note or "Archived from QA steering",
+        )
+        drain_api_tickets([ticket], "archive")
     return {
         "status": "archived",
-        "task": task,
+        "task": persisted_task(task_id),
     }
 
 
 @app.post("/api/tasks/{task_id}/verify")
 def verify_task(task_id: str, req: VerifyRequest, authorization: str | None = Header(None)) -> dict[str, Any]:
     require_persona(authorization, {"owner"})
+    reject_remote_mutation()
     doc = load_board_doc()
     data = doc.data
     task = find_task(data, task_id)
     if task.get("status") not in ("dispatched", "in_progress", "needs_human", "failed", "failed_blocked", "done"):
         raise HTTPException(status_code=409, detail="only active, attention, or done tasks can be verified")
-    task["status"] = req.status
-    append_log(task, "qa", req.session_id, req.status, req.note or f"QA verified task as {req.status}")
-    save_board(data, doc.sha)
+    ticket = submit_api_status(
+        task,
+        req.status,
+        agent="qa",
+        session_id=req.session_id,
+        output=req.note or f"QA verified task as {req.status}",
+    )
+    drain_api_tickets([ticket], "verify")
     return {
         "status": "verified",
-        "task": task,
+        "task": persisted_task(task_id),
         "verified_status": req.status,
     }
 
@@ -1294,7 +1348,9 @@ def dispatch(req: DispatchRequest, authorization: str | None = Header(None)) -> 
     require_persona(authorization, {"owner"})
     doc = load_board_doc()
     data = doc.data
+    before_portal = json.dumps(data.get("portal", {}), sort_keys=True)
     maybe_reset_budget(data)
+    reset_budget = before_portal != json.dumps(data.get("portal", {}), sort_keys=True)
     remaining = remaining_budget(data, req.agent)
     selected: list[dict[str, Any]] = []
     for task in dispatch_candidates(data, req):
@@ -1327,22 +1383,56 @@ def dispatch(req: DispatchRequest, authorization: str | None = Header(None)) -> 
             "live": False,
         }
 
-    dispatched: list[dict[str, Any]] = []
+    reject_remote_mutation()
+    tickets: list[Path] = []
+    if reset_budget:
+        tickets.append(
+            submit_board_meta(
+                tasks_path(),
+                agent="api",
+                session_id=req.session_id,
+                version=data.get("version", "1.0"),
+                portal=data.get("portal"),
+            )
+        )
+
+    results: dict[str, tuple[bool, str]] = {}
     failed: list[dict[str, Any]] = []
     for task in selected:
         command = dispatch_command(req.agent, task)
         ok, output = run_dispatch_command(command)
+        results[task["id"]] = (ok, output)
         if ok:
-            task["status"] = "dispatched"
-            append_log(task, req.agent, req.session_id, "dispatched", output or "Dispatched via Limen API")
-            spend_budget(data, req.agent, int(task.get("budget_cost", 1)))
-            dispatched.append(task)
+            tickets.append(
+                submit_api_status(
+                    task,
+                    "dispatched",
+                    agent=req.agent,
+                    session_id=req.session_id,
+                    output=output or "Dispatched via Limen API",
+                    budget_cost=int(task.get("budget_cost", 1)),
+                )
+            )
         else:
-            task["status"] = "failed"
-            append_log(task, req.agent, req.session_id, "failed", output)
+            tickets.append(
+                submit_api_status(
+                    task,
+                    "failed",
+                    agent=req.agent,
+                    session_id=req.session_id,
+                    output=output,
+                )
+            )
             failed.append({"id": task.get("id"), "title": task.get("title"), "error": output})
 
-    save_board(data, doc.sha)
+    drain_api_tickets(tickets, "dispatch")
+    persisted = load_board()
+    persisted_by_id = {task.get("id"): task for task in persisted.get("tasks", [])}
+    dispatched = [
+        persisted_by_id[task["id"]]
+        for task in selected
+        if results.get(task["id"], (False, ""))[0] and task["id"] in persisted_by_id
+    ]
     return {
         "status": "ok" if not failed else "partial_failure",
         "agent": req.agent,
@@ -1350,7 +1440,7 @@ def dispatch(req: DispatchRequest, authorization: str | None = Header(None)) -> 
         "failed": failed,
         "count": len(dispatched),
         "live": True,
-        "remaining_budget": remaining_budget(data, req.agent),
+        "remaining_budget": remaining_budget(persisted, req.agent),
     }
 
 
@@ -1366,12 +1456,20 @@ def release_stale(
     candidates = release_stale_candidates(data, hours)
     candidate_ids = {candidate["id"] for candidate in candidates}
     if not dry_run:
+        reject_remote_mutation()
+        tickets = []
         for task in data.get("tasks", []):
             if task.get("id") in candidate_ids:
-                task["status"] = "open"
-                append_log(task, "api", "release-stale", "open", f"Released stale claim after {hours}h")
-    if not dry_run:
-        save_board(data, doc.sha)
+                tickets.append(
+                    submit_api_status(
+                        task,
+                        "open",
+                        agent="api",
+                        session_id="release-stale",
+                        output=f"Released stale claim after {hours}h",
+                    )
+                )
+        drain_api_tickets(tickets, "release-stale")
     return {
         "status": "dry_run" if dry_run else "released",
         "released": [candidate["id"] for candidate in candidates],

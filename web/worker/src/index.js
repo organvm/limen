@@ -1,13 +1,9 @@
 import YAML from "yaml";
 
 const GITHUB_API = "https://api.github.com";
-const VERIFY_STATUSES = new Set(["done", "needs_human", "failed", "failed_blocked"]);
-const VALID_STATUSES = new Set(["open", "dispatched", "in_progress", "done", "failed", "failed_blocked", "needs_human", "archived"]);
-const VALID_PRIORITIES = new Set(["critical", "high", "medium", "low", "backlog"]);
 const VALID_AGENTS = new Set(["jules", "claude", "gemini", "opencode", "codex", "copilot", "agy", "warp", "oz", "github_actions", "any"]);
 const VALID_DISPATCH_AGENTS = new Set([...VALID_AGENTS].filter((agent) => agent !== "any"));
 const TASK_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
-const SAFE_TEXT_RE = /^[^\x00-\x08\x0b\x0c\x0e-\x1f\x7f]*$/;
 let inlineBoardText = null;
 
 function nowIso() {
@@ -46,6 +42,10 @@ function error(message, status, env) {
   return json({ detail: message }, status, env);
 }
 
+function mutationUnavailable(env) {
+  return error("remote mutations are disabled until a TABVLARIVS ticket sink exists", 501, env);
+}
+
 function validationError(message, env) {
   return { response: error(message, 422, env) };
 }
@@ -62,14 +62,6 @@ function validateEnum(value, allowed, field, env) {
     return validationError(`${field} must be one of ${[...allowed].sort().join(", ")}`, env);
   }
   return { value };
-}
-
-function validateText(value, field, env, { defaultValue = "", max = 2000 } = {}) {
-  const actual = value === undefined || value === null ? defaultValue : value;
-  if (typeof actual !== "string" || actual.length > max || !SAFE_TEXT_RE.test(actual)) {
-    return validationError(`${field} must be a string up to ${max} characters without control characters`, env);
-  }
-  return { value: actual };
 }
 
 function validateInteger(value, field, env, { defaultValue = 1, min = 1, max = 100 } = {}) {
@@ -439,10 +431,6 @@ function decodeBase64(value) {
   return decodeURIComponent(Array.prototype.map.call(atob(value.replace(/\n/g, "")), (char) => `%${char.charCodeAt(0).toString(16).padStart(2, "0")}`).join(""));
 }
 
-function encodeBase64(value) {
-  return btoa(unescape(encodeURIComponent(value)));
-}
-
 async function loadBoard(env) {
   const inline = inlineBoardSource(env);
   if (inline) {
@@ -452,20 +440,6 @@ async function loadBoard(env) {
   const branch = env.LIMEN_GITHUB_BRANCH || "main";
   const raw = await githubRequest(env, "GET", `${githubUrl(env)}?ref=${encodeURIComponent(branch)}`);
   return { data: YAML.parse(decodeBase64(raw.content || "")) || { portal: {}, tasks: [] }, sha: raw.sha };
-}
-
-async function saveBoard(env, data, sha) {
-  if (inlineBoardSource(env)) {
-    inlineBoardText = YAML.stringify(data);
-    return;
-  }
-  const branch = env.LIMEN_GITHUB_BRANCH || "main";
-  await githubRequest(env, "PUT", githubUrl(env), {
-    message: env.LIMEN_GITHUB_COMMIT_MESSAGE || "Update Limen task board",
-    content: encodeBase64(YAML.stringify(data)),
-    branch,
-    ...(sha ? { sha } : {}),
-  });
 }
 
 function inlineBoardSource(env) {
@@ -487,12 +461,6 @@ function dispatchCandidates(data, agent = "jules", taskId = null) {
     .filter((task) => !taskId || task.id === taskId)
     .filter((task) => !agent || [agent, "any"].includes(task.target_agent))
     .sort((a, b) => (priority[a.priority] ?? 99) - (priority[b.priority] ?? 99));
-}
-
-function appendLog(task, agent, sessionId, status, output = "") {
-  task.dispatch_log = task.dispatch_log || [];
-  task.dispatch_log.push({ timestamp: nowIso(), agent, session_id: sessionId, status, output });
-  task.updated = nowIso();
 }
 
 async function withBoard(env, fn) {
@@ -547,19 +515,10 @@ async function route(request, env) {
     if (!Number.isFinite(hoursRaw) || hoursRaw < 0 || hoursRaw > 8760) return error("hours must be a number between 0 and 8760", 422, env);
     const hours = hoursRaw;
     const dryRun = (url.searchParams.get("dry_run") || "true") !== "false";
+    if (!dryRun) return mutationUnavailable(env);
     const doc = await loadBoard(env);
     const candidates = releaseStaleCandidates(doc.data, hours);
-    if (!dryRun) {
-      const ids = new Set(candidates.map((task) => task.id));
-      for (const task of doc.data.tasks || []) {
-        if (ids.has(task.id)) {
-          task.status = "open";
-          appendLog(task, "api", "release-stale", "open", `Released stale claim older than ${hours} hours`);
-        }
-      }
-      await saveBoard(env, doc.data, doc.sha);
-    }
-    return json({ status: dryRun ? "dry_run" : "released", count: candidates.length, candidates, released: dryRun ? [] : candidates.map((task) => task.id) }, 200, env);
+    return json({ status: "dry_run", count: candidates.length, candidates, released: [] }, 200, env);
   }
 
   if (path === "/api/dispatch" && request.method === "POST") {
@@ -590,69 +549,8 @@ async function route(request, env) {
     const action = taskMatch[2];
     if (!action && request.method === "GET") return withBoard(env, (data) => json(findTask(data, taskId.value), 200, env));
     if (request.method !== "POST") return error("method not allowed", 405, env);
-    let rawBody;
-    try { rawBody = await request.json(); } catch { return error("invalid JSON body", 422, env); }
-    const body = safeParseBody(rawBody, ["status", "note", "session_id", "target_agent", "priority", "budget_cost"]);
-    const doc = await loadBoard(env);
-    const task = findTask(doc.data, taskId.value);
-    if (action === "verify") {
-      const status = validateEnum(body.status || "done", VERIFY_STATUSES, "status", env);
-      if (status.response) return status.response;
-      const sessionId = validateText(body.session_id, "session_id", env, { defaultValue: "qa-verify", max: 128 });
-      if (sessionId.response) return sessionId.response;
-      const note = validateText(body.note, "note", env, { defaultValue: "", max: 2000 });
-      if (note.response) return note.response;
-      if (!["dispatched", "in_progress", "needs_human", "failed", "failed_blocked", "done"].includes(task.status)) return error("only active, attention, or done tasks can be verified", 409, env);
-      task.status = status.value;
-      appendLog(task, "qa", sessionId.value, task.status, note.value || `QA verified task as ${task.status}`);
-      await saveBoard(env, doc.data, doc.sha);
-      return json({ status: "verified", task, verified_status: task.status }, 200, env);
-    }
-    if (action === "assign") {
-      const sessionId = validateText(body.session_id, "session_id", env, { defaultValue: "assignment", max: 128 });
-      if (sessionId.response) return sessionId.response;
-      const note = validateText(body.note, "note", env, { defaultValue: "", max: 2000 });
-      if (note.response) return note.response;
-      const before = { target_agent: task.target_agent, priority: task.priority, budget_cost: task.budget_cost, status: task.status };
-      if (body.target_agent !== undefined) {
-        const targetAgent = validateEnum(body.target_agent, VALID_AGENTS, "target_agent", env);
-        if (targetAgent.response) return targetAgent.response;
-        task.target_agent = targetAgent.value;
-      }
-      if (body.priority !== undefined) {
-        const priority = validateEnum(body.priority, VALID_PRIORITIES, "priority", env);
-        if (priority.response) return priority.response;
-        task.priority = priority.value;
-      }
-      if (body.budget_cost !== undefined) {
-        const cost = validateInteger(body.budget_cost, "budget_cost", env, { min: 1, max: 100 });
-        if (cost.response) return cost.response;
-        task.budget_cost = cost.value;
-      }
-      if (body.status !== undefined) {
-        const status = validateEnum(body.status, VALID_STATUSES, "status", env);
-        if (status.response) return status.response;
-        task.status = status.value;
-      }
-      const after = { target_agent: task.target_agent, priority: task.priority, budget_cost: task.budget_cost, status: task.status };
-      const changed = Object.keys(after).filter((key) => before[key] !== after[key]);
-      appendLog(task, "api", sessionId.value, "assigned", note.value || `Assigned via steering controls: ${changed.join(", ") || "no field changes"}`);
-      await saveBoard(env, doc.data, doc.sha);
-      return json({ status: "assigned", task, changed }, 200, env);
-    }
-    if (action === "archive") {
-      const sessionId = validateText(body.session_id, "session_id", env, { defaultValue: "archive", max: 128 });
-      if (sessionId.response) return sessionId.response;
-      const note = validateText(body.note, "note", env, { defaultValue: "", max: 2000 });
-      if (note.response) return note.response;
-      if (!["done", "archived"].includes(task.status)) return error("only done tasks can be archived", 409, env);
-      if (task.status !== "archived") {
-        task.status = "archived";
-        appendLog(task, "api", sessionId.value, "archived", note.value || "Archived from QA steering");
-        await saveBoard(env, doc.data, doc.sha);
-      }
-      return json({ status: "archived", task }, 200, env);
-    }
+    if (action) return mutationUnavailable(env);
+    return error("method not allowed", 405, env);
   }
 
   return error("not found", 404, env);
