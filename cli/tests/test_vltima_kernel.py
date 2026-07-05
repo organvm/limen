@@ -98,6 +98,8 @@ def test_vltima_kernel_emits_derived_projection_json():
 
     assert result.returncode == 0, result.stdout + result.stderr
     data = json.loads(result.stdout)
+    assert data["kind"] == "vltima.kernel-projection"
+    assert data["schema_version"] == 1
     assert data["projections"]["organ_kernel"][0] == {"id": "member", "label": "Member"}
     assert data["projections"]["record_proof"] == [
         {"id": "event", "label": "Event"},

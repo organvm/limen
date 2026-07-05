@@ -11,6 +11,7 @@ projection against it. `scripts/validate-vltima-kernel.py --json-output` emits t
 derived machine-readable substrate: primitive graph nodes and source edges,
 layers, projection groups, each organ's kernel mapping from `organ-ladder.json`,
 and a typed `graph` object that connects primitives, projections, and organs.
+The emitted contract is named `vltima.kernel-projection` with `schema_version: 1`.
 
 ## Lower Layer
 

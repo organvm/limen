@@ -318,6 +318,8 @@ def build_projection(root: Path) -> tuple[dict[str, object] | None, list[str]]:
         return None, graph_errors
 
     return {
+        "kind": "vltima.kernel-projection",
+        "schema_version": 1,
         "version": registry.get("version"),
         "primitives": primitives,
         "edges": primitive_edges,

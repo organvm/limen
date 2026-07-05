@@ -51,7 +51,7 @@ python3 organs/social/validate-social.py --fleet --quiet
 
 step "Validate VLTIMA universal kernel and organ projections"
 python3 scripts/validate-vltima-kernel.py --quiet
-python3 scripts/validate-vltima-kernel.py --json-output | python3 -c 'import json, sys; p = json.load(sys.stdin); assert p.get("graph", {}).get("nodes") and p.get("graph", {}).get("edges") and p.get("organs"), "empty VLTIMA graph contract"'
+python3 scripts/validate-vltima-kernel.py --json-output | python3 -c 'import json, sys; p = json.load(sys.stdin); assert p.get("kind") == "vltima.kernel-projection" and p.get("schema_version") == 1, "unknown VLTIMA graph contract"; assert p.get("graph", {}).get("nodes") and p.get("graph", {}).get("edges") and p.get("organs"), "empty VLTIMA graph contract"'
 
 step "Verify the merge-policy predicate (verdict matrix regression test)"
 bash scripts/tests/merge-policy.test.sh
