@@ -214,6 +214,55 @@ def test_vltima_kernel_cli_checks_current_projection_and_reports_missing_custom_
     assert "projection missing:" in missing.output
 
 
+def test_vltima_kernel_cli_selects_primitive_by_id_or_label():
+    by_id = CliRunner().invoke(main, ["vltima-kernel", "--root", str(ROOT), "--primitive", "record"])
+    by_label = CliRunner().invoke(main, ["vltima-kernel", "--root", str(ROOT), "--primitive", "Record"])
+
+    assert by_id.exit_code == 0, by_id.output
+    assert by_label.exit_code == 0, by_label.output
+    assert json.loads(by_id.output) == json.loads(by_label.output)
+    payload = json.loads(by_id.output)
+    assert payload["id"] == "record"
+    assert payload["label"] == "Record"
+    assert payload["layer"] == "lower"
+
+
+def test_vltima_kernel_cli_selects_organ_by_pillar_or_home():
+    by_pillar = CliRunner().invoke(main, ["vltima-kernel", "--root", str(ROOT), "--organ", "education"])
+    by_home = CliRunner().invoke(main, ["vltima-kernel", "--root", str(ROOT), "--organ", "organs/education"])
+
+    assert by_pillar.exit_code == 0, by_pillar.output
+    assert by_home.exit_code == 0, by_home.output
+    assert json.loads(by_pillar.output) == json.loads(by_home.output)
+    payload = json.loads(by_pillar.output)
+    assert payload["pillar"] == "education"
+    assert payload["kernel_map"]["Member"] == "learner"
+
+
+def test_vltima_kernel_cli_selects_projection_group():
+    result = CliRunner().invoke(main, ["vltima-kernel", "--root", str(ROOT), "--projection", "organ_kernel"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload[0] == {"id": "member", "label": "Member"}
+    assert payload[-1] == {"id": "governance", "label": "Governance"}
+
+
+def test_vltima_kernel_cli_reports_unknown_selector_and_selector_conflict():
+    missing = CliRunner().invoke(main, ["vltima-kernel", "--root", str(ROOT), "--primitive", "missing"])
+
+    assert missing.exit_code == 1
+    assert "primitive not found: missing" in missing.output
+
+    conflict = CliRunner().invoke(
+        main,
+        ["vltima-kernel", "--root", str(ROOT), "--primitive", "record", "--organ", "legal"],
+    )
+
+    assert conflict.exit_code == 2
+    assert "choose only one of --primitive, --organ, or --projection" in conflict.output
+
+
 def test_vltima_graph_validation_rejects_dangling_edges():
     module = load_validator_module()
 

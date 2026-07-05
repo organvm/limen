@@ -21,6 +21,15 @@ Each organ also carries a structured `kernel_map` in `organ-ladder.json`, so
 Member/Mandate/Standing/Standard/Governance mappings are executable data instead
 of prose embedded in a `domain_map` sentence.
 
+For direct inspection, the Limen CLI exposes projection selectors over the same
+derived payload:
+
+```bash
+PYTHONPATH=cli/src python3 -m limen.cli vltima-kernel --primitive record
+PYTHONPATH=cli/src python3 -m limen.cli vltima-kernel --organ education
+PYTHONPATH=cli/src python3 -m limen.cli vltima-kernel --projection organ_kernel
+```
+
 ## Lower Layer
 
 | Primitive | Meaning |
