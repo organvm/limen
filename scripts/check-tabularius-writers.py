@@ -50,7 +50,6 @@ LEGACY_GATED_ALLOWLIST = {
     "scripts/quicken.py",
     "scripts/route.py",
     "scripts/self-heal.py",
-    "scripts/self-improve.py",
 }
 
 PRODUCER_TOKENS = (

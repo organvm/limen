@@ -148,7 +148,7 @@ def test_apply_writes_proposal_and_applies(tmp_path: Path, monkeypatch: pytest.M
     assert out_path.exists()  # proposal is written before the apply step
 
 
-def test_apply_ticket_mode_drains_tabularius(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_apply_drains_tabularius(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     si = load_self_improve()
     tasks_path = tmp_path / "tasks.yaml"
     write_board(
@@ -190,7 +190,7 @@ def test_apply_ticket_mode_drains_tabularius(tmp_path: Path, monkeypatch: pytest
         ],
         "retire_patterns": [{"pattern": "OLD", "action": "retire"}],
     }
-    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
     monkeypatch.setenv("LIMEN_SI_RETIRE", "1")
 
     assert si.apply_proposal(proposal, tasks_path) == 0
