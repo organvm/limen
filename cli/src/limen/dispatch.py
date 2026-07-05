@@ -2147,6 +2147,7 @@ def dispatch_parallel(
     # during the unlocked run aren't clobbered; re-apply each result to the fresh task by id.
     # This is the #11 keystone — without the reload, this save would silently overwrite seeds.
     n_pr = n_noop = n_fail = n_rl = n_to = n_blocked = 0
+    tickets = []
     with _queue_lock(tasks_path) as got:
         if not got:
             # Lock timed out — do NOT write unprotected (that is the #111 clobber this reload guards
@@ -2163,7 +2164,12 @@ def dispatch_parallel(
         for agent, tid, res in results:
             ft = fid.get(tid)
             if ft is not None:
-                _apply_result(ft, agent, res, now, ftrack)
+                if _ticket_mode():
+                    ticket = _submit_result_ticket(tasks_path, ft, agent, res, now, ftrack)
+                    if ticket is not None:
+                        tickets.append(ticket)
+                else:
+                    _apply_result(ft, agent, res, now, ftrack)
             if res == _RATELIMIT:
                 n_rl += 1
             elif res == _NOOP:
@@ -2176,7 +2182,17 @@ def dispatch_parallel(
                 n_pr += 1
             else:
                 n_fail += 1
-        save_limen_file(tasks_path, fresh)
+        if not _ticket_mode():
+            save_limen_file(tasks_path, fresh)
+    if _ticket_mode() and tickets:
+        result = drain_once(tasks_path)
+        applied = set(result.applied_ids)
+        wanted = {ticket.stem for ticket in tickets}
+        if wanted - applied:
+            print(
+                f"── PARALLEL: TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} result tickets "
+                f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+            )
     print(
         f"── PARALLEL done: {len(results)} ran · {n_pr} dispatched/PR · {n_noop} no-op · "
         f"{n_fail} failed→cascade · {n_blocked} blocked · {n_rl} rate-limited · {n_to} timeout→jules"
