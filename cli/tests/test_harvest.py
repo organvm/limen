@@ -84,12 +84,19 @@ def test_harvest_marks_real_diff_done(tmp_path):
     _write_diff(harvest_dir, "555", REAL_DIFF)
     task = _task("LIMEN-1", "555")
     limen = LimenFile(tasks=[task])
+    board = tmp_path / "tasks.yaml"
+    save_limen_file(board, limen)
 
-    updated = check_jules_harvest(limen, harvest_dir)
+    updated = check_jules_harvest(limen, harvest_dir, tasks_path=board)
 
     assert updated == ["LIMEN-1"]
-    assert task.status == "done"
-    assert task.dispatch_log[-1].status == "done"
+    assert task.status == "dispatched"
+    assert pending_count(board) == 1
+    drained = drain_once(board)
+    assert drained.applied == 1
+    updated_task = load_limen_file(board).tasks[0]
+    assert updated_task.status == "done"
+    assert updated_task.dispatch_log[-1].status == "done"
 
 
 def test_harvest_rejects_empty_diff_instead_of_false_done(tmp_path):
@@ -97,17 +104,24 @@ def test_harvest_rejects_empty_diff_instead_of_false_done(tmp_path):
     _write_diff(harvest_dir, "777", EMPTY_PLACEHOLDER)
     task = _task("LIMEN-2", "777")
     limen = LimenFile(tasks=[task])
+    board = tmp_path / "tasks.yaml"
+    save_limen_file(board, limen)
 
-    updated = check_jules_harvest(limen, harvest_dir)
+    updated = check_jules_harvest(limen, harvest_dir, tasks_path=board)
 
     assert updated == []  # NOT counted as a completion
-    assert task.status == "failed"  # preserved for recovery, not false-done or cancelled
-    assert "noop" in task.labels
-    assert "cancelled" not in task.labels
-    assert task.dispatch_log[-1].status == "failed"
+    assert task.status == "dispatched"
+    assert pending_count(board) == 1
+    drained = drain_once(board)
+    assert drained.applied == 1
+    updated_task = load_limen_file(board).tasks[0]
+    assert updated_task.status == "failed"  # preserved for recovery, not false-done or cancelled
+    assert "noop" in updated_task.labels
+    assert "cancelled" not in updated_task.labels
+    assert updated_task.dispatch_log[-1].status == "failed"
 
 
-def test_harvest_can_emit_tabularius_status_ticket(tmp_path):
+def test_harvest_emits_tabularius_status_ticket(tmp_path):
     harvest_dir = tmp_path / "harvest"
     _write_diff(harvest_dir, "555", REAL_DIFF)
     task = _task("LIMEN-1", "555")
@@ -115,7 +129,7 @@ def test_harvest_can_emit_tabularius_status_ticket(tmp_path):
     board = tmp_path / "tasks.yaml"
     save_limen_file(board, limen)
 
-    updated = check_jules_harvest(limen, harvest_dir, ticket_mode=True, tasks_path=board)
+    updated = check_jules_harvest(limen, harvest_dir, tasks_path=board)
 
     assert updated == ["LIMEN-1"]
     assert task.status == "dispatched"
@@ -129,8 +143,7 @@ def test_harvest_can_emit_tabularius_status_ticket(tmp_path):
     assert updated_task.dispatch_log[-1].status == "done"
 
 
-def test_harvest_results_ticket_mode_drains_tabularius(tmp_path, monkeypatch):
-    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+def test_harvest_results_drains_tabularius(tmp_path, monkeypatch):
     monkeypatch.setattr("limen.harvest.Path.home", lambda: tmp_path)
     harvest_dir = tmp_path / "Workspace" / "session-meta" / "scheduler" / "jules" / "harvest"
     _write_diff(harvest_dir, "555", REAL_DIFF)

@@ -1,12 +1,10 @@
 import subprocess
 import re
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from limen.io import save_limen_file
-from limen.models import LimenFile, DispatchLogEntry
-from limen.tabularius import drain_once, submit_task_status
+from limen.models import LimenFile
+from limen.tabularius import drain_once, pending_count, submit_task_status
 
 
 def _get_jules_sessions(harvest_dir: Path) -> dict[str, str]:
@@ -81,37 +79,22 @@ def _harvest_transition(
     agent: str,
     session_id: str,
     output: str,
-    ticket_mode: bool = False,
-    tasks_path: Path | None = None,
+    tasks_path: Path,
     patch: dict | None = None,
 ) -> None:
-    if ticket_mode:
-        if tasks_path is None:
-            raise ValueError("tasks_path is required when ticket_mode=True")
-        submit_task_status(
-            tasks_path,
-            task.id,
-            status,
-            agent=agent,
-            session_id=session_id,
-            output=output,
-            patch=patch,
-            now=now,
-        )
-        return
-
-    task.status = status
-    task.updated = now
-    for key, value in (patch or {}).items():
-        setattr(task, key, value)
-    task.dispatch_log.append(
-        DispatchLogEntry(
-            timestamp=now,
-            agent=agent,
-            session_id=session_id,
-            status=status,
-            output=output,
-        )
+    precondition = {"status": task.status}
+    if patch and "labels" in patch:
+        precondition["labels"] = list(task.labels or [])
+    submit_task_status(
+        tasks_path,
+        task.id,
+        status,
+        agent=agent,
+        session_id=session_id,
+        output=output,
+        patch=patch,
+        precondition=precondition,
+        now=now,
     )
 
 
@@ -119,8 +102,7 @@ def check_jules_harvest(
     limen: LimenFile,
     harvest_dir: Path,
     *,
-    ticket_mode: bool = False,
-    tasks_path: Path | None = None,
+    tasks_path: Path,
 ) -> list[str]:
     updated: list[str] = []
     if not harvest_dir.exists():
@@ -155,7 +137,6 @@ def check_jules_harvest(
                         agent="jules",
                         session_id=session_id,
                         output=result[:500],
-                        ticket_mode=ticket_mode,
                         tasks_path=tasks_path,
                         patch={"labels": labels},
                     )
@@ -168,7 +149,6 @@ def check_jules_harvest(
                     agent="jules",
                     session_id=session_id,
                     output=result[:500],
-                    ticket_mode=ticket_mode,
                     tasks_path=tasks_path,
                 )
                 updated.append(task.id)
@@ -188,7 +168,6 @@ def check_jules_harvest(
                 agent="jules",
                 session_id=task.dispatch_log[-1].session_id if task.dispatch_log else "harvest",
                 output=result[:500],
-                ticket_mode=ticket_mode,
                 tasks_path=tasks_path,
             )
             updated.append(task.id)
@@ -204,22 +183,21 @@ def harvest_results(
     harvest_dir = scheduler_root / "jules" / "harvest"
 
     updated = []
-    ticket_mode = os.environ.get("LIMEN_TICKETS_PRODUCE") == "1"
-
+    pending_before = pending_count(tasks_path)
     if not agent or agent == "jules":
-        updated.extend(check_jules_harvest(limen, harvest_dir, ticket_mode=ticket_mode, tasks_path=tasks_path))
+        updated.extend(check_jules_harvest(limen, harvest_dir, tasks_path=tasks_path))
 
+    result = None
+    if pending_count(tasks_path) > pending_before:
+        result = drain_once(tasks_path)
+        if result.deferred or result.rejected:
+            print(
+                f"Harvest TABVLARIVS drain: applied={result.applied} rejected={result.rejected} "
+                f"deferred={result.deferred}: {result.note}"
+            )
     if updated:
-        if ticket_mode:
-            result = drain_once(tasks_path)
-            if result.deferred or result.rejected:
-                print(
-                    f"Harvest TABVLARIVS drain: applied={result.applied} rejected={result.rejected} "
-                    f"deferred={result.deferred}: {result.note}"
-                )
-            print(f"Harvested {len(updated)} task(s) into TABVLARIVS tickets: {', '.join(updated)}")
-        else:
-            save_limen_file(tasks_path, limen)
-            print(f"Harvested {len(updated)} task(s): {', '.join(updated)}")
+        print(f"Harvested {len(updated)} completed task(s) through TABVLARIVS: {', '.join(updated)}")
+    elif result is not None and result.applied:
+        print(f"Harvested {result.applied} non-completion status update(s) through TABVLARIVS")
     else:
         print("No completed tasks to harvest")
