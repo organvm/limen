@@ -71,6 +71,8 @@ INTENT_REMOVE = "task.remove"  # drop a task id (prune/archive-out)
 INTENT_ORDER = "board.order"  # set the task display order (patch = {"ids": [...]})
 INTENT_META = "board.meta"  # set board version/portal (patch = {"version":..,"portal":..})
 _INTENTS = frozenset({INTENT_UPSERT, INTENT_STATUS, INTENT_REMOVE, INTENT_ORDER, INTENT_META})
+EVENT_LOG_MANIFEST_KIND = "tabularius.compacted-seed"
+EVENT_LOG_MANIFEST_SCHEMA_VERSION = 1
 
 
 class Ticket(BaseModel):
@@ -367,13 +369,44 @@ def _archive_watermark(board_path: Path) -> dict[str, Any]:
 def _write_event_log_manifest(board_path: Path, log_path: Path) -> Path:
     manifest_path = event_log_manifest_path(log_path)
     payload = {
-        "schema_version": 1,
-        "kind": "tabularius.compacted-seed",
+        "schema_version": EVENT_LOG_MANIFEST_SCHEMA_VERSION,
+        "kind": EVENT_LOG_MANIFEST_KIND,
         "created_at": datetime.now(timezone.utc).isoformat(),
         **_archive_watermark(board_path),
     }
+    manifest_errors = _validate_event_log_manifest(payload)
+    if manifest_errors:
+        raise ValueError("; ".join(manifest_errors))
     manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     return manifest_path
+
+
+def _validate_event_log_manifest(data: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if data.get("kind") != EVENT_LOG_MANIFEST_KIND:
+        errors.append(f"event log manifest kind must be {EVENT_LOG_MANIFEST_KIND!r}")
+    if data.get("schema_version") != EVENT_LOG_MANIFEST_SCHEMA_VERSION:
+        errors.append(f"event log manifest schema_version must be {EVENT_LOG_MANIFEST_SCHEMA_VERSION}")
+    created_at = data.get("created_at")
+    if not isinstance(created_at, str) or not created_at.strip():
+        errors.append("event log manifest created_at must be a non-empty string")
+    archive_count_value = data.get("archive_count")
+    if isinstance(archive_count_value, bool) or not isinstance(archive_count_value, int) or archive_count_value < 0:
+        errors.append("event log manifest archive_count must be a non-negative integer")
+        archive_count = 0
+    else:
+        archive_count = archive_count_value
+    last_ticket_id = data.get("last_ticket_id")
+    last_ticket_file = data.get("last_ticket_file")
+    if archive_count == 0:
+        if last_ticket_id is not None or last_ticket_file is not None:
+            errors.append("event log manifest empty archive watermark must not name a last ticket")
+    else:
+        if not isinstance(last_ticket_id, str) or not last_ticket_id.strip():
+            errors.append("event log manifest last_ticket_id must be a non-empty string when archive_count > 0")
+        if not isinstance(last_ticket_file, str) or not last_ticket_file.strip():
+            errors.append("event log manifest last_ticket_file must be a non-empty string when archive_count > 0")
+    return errors
 
 
 def _load_event_log_manifest(log_path: Path) -> dict[str, Any] | None:
@@ -383,8 +416,9 @@ def _load_event_log_manifest(log_path: Path) -> dict[str, Any] | None:
     data = json.loads(manifest_path.read_text())
     if not isinstance(data, dict):
         raise ValueError("event log manifest must be a JSON object")
-    if data.get("kind") != "tabularius.compacted-seed":
-        raise ValueError(f"unknown event log manifest kind: {data.get('kind')!r}")
+    manifest_errors = _validate_event_log_manifest(data)
+    if manifest_errors:
+        raise ValueError("; ".join(manifest_errors))
     return data
 
 

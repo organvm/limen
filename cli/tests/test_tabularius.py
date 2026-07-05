@@ -31,6 +31,7 @@ from limen.tabularius import (
     _archive,
     _inbox,
     _rejected,
+    _validate_event_log_manifest,
     compact_event_log,
     drain_once,
     event_log_path,
@@ -175,6 +176,7 @@ def test_compacted_event_log_manifest_records_archive_watermark(tmp_path):
 
     manifest = json.loads(event_log_manifest_path(result.event_log).read_text())
     assert manifest["kind"] == "tabularius.compacted-seed"
+    assert manifest["schema_version"] == 1
     assert manifest["archive_count"] == 1
     assert manifest["last_ticket_id"] == ticket_path.stem
     assert result.archive_replay_tickets == 0
@@ -240,6 +242,21 @@ def test_sync_event_log_from_archive_appends_post_watermark_events(tmp_path):
     assert verify.verified is True
     assert verify.archive_replay_tickets == 0
     assert verify.events == sync.events
+
+
+def test_event_log_manifest_validation_rejects_bad_watermark() -> None:
+    errors = _validate_event_log_manifest(
+        {
+            "kind": "tabularius.compacted-seed",
+            "schema_version": 1,
+            "created_at": "2026-07-05T00:00:00+00:00",
+            "archive_count": 0,
+            "last_ticket_id": "T-1",
+            "last_ticket_file": "T-1.json",
+        }
+    )
+
+    assert errors == ["event log manifest empty archive watermark must not name a last ticket"]
 
 
 def test_tabularius_events_command_writes_and_verifies(tmp_path, monkeypatch):
