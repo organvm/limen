@@ -412,9 +412,27 @@ def materialize(verify, emit_events):
     default=None,
     help="Override the default logs/tickets/events.jsonl path.",
 )
-def tabularius_events(write: bool, sync_archive: bool, verify: bool, event_log: Path | None) -> None:
+@click.option(
+    "--emit-board",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Write a regenerated board cache from the event log to this side path; refuses tasks.yaml.",
+)
+def tabularius_events(
+    write: bool,
+    sync_archive: bool,
+    verify: bool,
+    event_log: Path | None,
+    emit_board: Path | None,
+) -> None:
     """Compact and verify TABVLARIVS' canonical replay log."""
-    from limen.tabularius import compact_event_log, event_log_path, sync_event_log_from_archive, verify_event_log
+    from limen.tabularius import (
+        compact_event_log,
+        event_log_path,
+        sync_event_log_from_archive,
+        verify_event_log,
+        write_event_log_board,
+    )
 
     root = resolve_root()
     tasks_path = resolve_tasks_path(root)
@@ -423,7 +441,7 @@ def tabularius_events(write: bool, sync_archive: bool, verify: bool, event_log: 
         sys.exit(1)
 
     target = event_log or event_log_path(tasks_path)
-    if not write and not sync_archive and not verify:
+    if not write and not sync_archive and not verify and emit_board is None:
         verify = True
 
     result = None
@@ -431,13 +449,15 @@ def tabularius_events(write: bool, sync_archive: bool, verify: bool, event_log: 
         result = compact_event_log(tasks_path, target)
     if sync_archive:
         result = sync_event_log_from_archive(tasks_path, target)
+    if emit_board is not None:
+        result = write_event_log_board(tasks_path, emit_board, target)
     if result is None:
         result = verify_event_log(tasks_path, target)
     click.echo(
         f"tabularius-events: {result.events} events, {result.archive_tickets} archived tickets; "
         f"{result.note}: {result.verified}; path={result.event_log}"
     )
-    if (verify or write) and not result.verified:
+    if (verify or write or emit_board is not None) and not result.verified:
         sys.exit(1)
 
 

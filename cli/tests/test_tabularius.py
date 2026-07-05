@@ -44,6 +44,7 @@ from limen.tabularius import (
     submit_task_upsert,
     sync_event_log_from_archive,
     verify_event_log,
+    write_event_log_board,
 )
 
 _NOW = datetime(2026, 7, 2, 12, 0, 0, tzinfo=timezone.utc)
@@ -244,6 +245,34 @@ def test_sync_event_log_from_archive_appends_post_watermark_events(tmp_path):
     assert verify.events == sync.events
 
 
+def test_write_event_log_board_materializes_side_cache_after_archive_delta(tmp_path):
+    board = _seed_board(tmp_path)
+    result = compact_event_log(board)
+    submit_task_status(board, "T-1", "done", agent="limen", session_id="after-seed", now=_NOW)
+    drain_once(board)
+    out = tmp_path / "rebuilt-tasks.yaml"
+
+    materialized = write_event_log_board(board, out)
+
+    assert materialized.verified is True
+    assert materialized.archive_replay_tickets == 1
+    assert materialized.events == result.events + 1
+    assert materialized.note == "wrote materialized board cache; fold(events + archive tickets after watermark) == tasks.yaml bytes"
+    assert out.read_text() == board.read_text()
+
+
+def test_write_event_log_board_refuses_live_tasks_cache(tmp_path):
+    board = _seed_board(tmp_path)
+    compact_event_log(board)
+    before = board.read_text()
+
+    result = write_event_log_board(board, board)
+
+    assert result.verified is False
+    assert result.note == "refusing to overwrite live tasks.yaml cache"
+    assert board.read_text() == before
+
+
 def test_event_log_manifest_validation_rejects_bad_watermark() -> None:
     errors = _validate_event_log_manifest(
         {
@@ -283,6 +312,20 @@ def test_tabularius_events_command_syncs_archive(tmp_path, monkeypatch):
 
     assert result.exit_code == 0, result.output
     assert "synced 1 archived ticket(s); fold(events) == tasks.yaml bytes: True" in result.output
+
+
+def test_tabularius_events_command_emits_materialized_board_cache(tmp_path, monkeypatch):
+    board = _seed_board(tmp_path)
+    compact_event_log(board)
+    out = tmp_path / "rebuilt.yaml"
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setenv("LIMEN_TASKS", str(board))
+
+    result = CliRunner().invoke(main, ["tabularius-events", "--emit-board", str(out)])
+
+    assert result.exit_code == 0, result.output
+    assert out.read_text() == board.read_text()
+    assert "wrote materialized board cache; fold(events) == tasks.yaml bytes: True" in result.output
 
 
 def test_submit_task_status_emits_status_ticket(tmp_path):

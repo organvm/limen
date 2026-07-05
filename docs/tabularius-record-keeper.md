@@ -231,6 +231,11 @@ above it is autonomous.
       `limen tabularius-events --sync-archive --verify` appends those post-watermark archive deltas
       into `events.jsonl` and advances the manifest; `scripts/verify-whole.sh` runs that standing
       predicate against the ignored live `logs/tickets/events.jsonl` path.
+- [x] Step 3 cache bridge — `limen tabularius-events --emit-board <path>` folds the standing event
+      log plus post-watermark archive deltas into a sidecar `tasks.yaml` cache and refuses to
+      overwrite the live board. `scripts/verify-whole.sh` writes a temp regenerated board cache so
+      the repo now proves both "event log matches current cache" and "event log can regenerate the
+      cache bytes" without flipping the live read path yet.
 - [ ] Step 3 final — flip live startup/read paths to treat the event log as the SSOT and regenerate
       `tasks.yaml` as a materialized cache, after the standing predicate has survived enough keeper
       beats to make the cutover boring.

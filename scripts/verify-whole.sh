@@ -77,6 +77,12 @@ python3 scripts/check-tabularius-writers.py --quiet --max-legacy 0
 
 step "Verify TABVLARIVS standing event projection predicate"
 PYTHONPATH="$PYTHONPATH_VALUE" python3 -m limen.cli tabularius-events --sync-archive --verify
+tabularius_materialized_board="$(mktemp "${TMPDIR:-/tmp}/limen-tabularius-board.XXXXXX")"
+if ! PYTHONPATH="$PYTHONPATH_VALUE" python3 -m limen.cli tabularius-events --verify --emit-board "$tabularius_materialized_board"; then
+  rm -f "$tabularius_materialized_board"
+  exit 1
+fi
+rm -f "$tabularius_materialized_board"
 
 step "Report preserved worktree lifecycle debt"
 python3 scripts/worktree-debt.py

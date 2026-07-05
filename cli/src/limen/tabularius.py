@@ -518,11 +518,24 @@ def verify_event_log(board_path: Path, in_path: Path | None = None) -> EventLogR
     watermark before comparing with ``tasks.yaml``. That is the reversible Step-3 shape:
     snapshot seed + keeper-owned archive deltas, never a direct board mutation.
     """
+    rebuilt, result = folded_event_log_board(board_path, in_path)
+    if rebuilt is None:
+        return result
+    return result
+
+
+def folded_event_log_board(board_path: Path, in_path: Path | None = None) -> tuple[LimenFile | None, EventLogResult]:
+    """Fold the compacted event log plus archive deltas into a board projection.
+
+    This is the reversible Step-3 cache-regeneration primitive. It proves the event log can rebuild
+    a ``tasks.yaml``-shaped board without writing the live board; callers can compare or emit the
+    result to a side path while ``tasks.yaml`` remains the current cache.
+    """
     board_path = Path(board_path)
     in_path = Path(in_path) if in_path is not None else event_log_path(board_path)
     manifest_path = event_log_manifest_path(in_path)
     if not in_path.exists():
-        return EventLogResult(
+        return None, EventLogResult(
             in_path,
             archive_tickets=archive_count(board_path),
             manifest=manifest_path if manifest_path.exists() else None,
@@ -544,7 +557,7 @@ def verify_event_log(board_path: Path, in_path: Path | None = None) -> EventLogR
             if replayed:
                 note_prefix = "fold(events + archive tickets after watermark)"
     except Exception as exc:
-        return EventLogResult(
+        return None, EventLogResult(
             in_path,
             events=len(events),
             archive_tickets=archive_count(board_path),
@@ -555,7 +568,7 @@ def verify_event_log(board_path: Path, in_path: Path | None = None) -> EventLogR
         )
     rebuilt = fold(events)
     verified = canonical_board_text(rebuilt) == canonical_board_text(board)
-    return EventLogResult(
+    return rebuilt, EventLogResult(
         in_path,
         events=len(events),
         archive_tickets=archive_count(board_path),
@@ -564,6 +577,33 @@ def verify_event_log(board_path: Path, in_path: Path | None = None) -> EventLogR
         note=f"{note_prefix} == tasks.yaml bytes" if verified else f"{note_prefix} != tasks.yaml bytes",
         manifest=manifest_path if manifest_path.exists() else None,
     )
+
+
+def write_event_log_board(board_path: Path, out_path: Path, in_path: Path | None = None) -> EventLogResult:
+    """Write a folded event-log board projection to ``out_path``.
+
+    The function refuses to overwrite the live board. It only writes after proving the folded
+    projection is byte-identical to the current cache, keeping this rung a cache-regeneration proof
+    rather than a source-of-truth flip.
+    """
+    board_path = Path(board_path)
+    out_path = Path(out_path)
+    if out_path.resolve() == board_path.resolve():
+        target = event_log_path(board_path) if in_path is None else Path(in_path)
+        return EventLogResult(
+            target,
+            archive_tickets=archive_count(board_path),
+            verified=False,
+            note="refusing to overwrite live tasks.yaml cache",
+            manifest=event_log_manifest_path(target) if event_log_manifest_path(target).exists() else None,
+        )
+    rebuilt, result = folded_event_log_board(board_path, in_path)
+    if rebuilt is None or not result.verified:
+        return result
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(canonical_board_text(rebuilt))
+    result.note = f"wrote materialized board cache; {result.note}"
+    return result
 
 
 def sync_event_log_from_archive(board_path: Path, in_path: Path | None = None) -> EventLogResult:
