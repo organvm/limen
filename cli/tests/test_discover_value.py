@@ -71,7 +71,8 @@ def test_one_task_per_dark_repo_on_think_lanes(tmp_path: Path):
     p = tmp_path / "tasks.yaml"
     _board(p, busy_repos=[])  # nothing busy → all org repos are dark
     org = [f"o/dark{i}" for i in range(8)]
-    _run(p, "--apply", "--floor", "8", "--max-new", "8", org_repos=",".join(org))
+    out = _run(p, "--apply", "--floor", "8", "--max-new", "8", org_repos=",".join(org))
+    assert "through TABVLARIVS" in out
     gen = _generated(p)
     assert len(gen) == 8, "one discovery task per dark repo"
     assert {t["repo"] for t in gen} == set(org), "exactly the dark repos, each once"

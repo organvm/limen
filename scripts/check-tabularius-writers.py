@@ -40,7 +40,6 @@ LEGACY_GATED_ALLOWLIST = {
     "scripts/converge-organ.py",
     "scripts/corpus-converge.py",
     "scripts/current-session-fanout.py",
-    "scripts/discover-value.py",
     "scripts/dispatch-async.py",
     "scripts/generate-backlog.py",
     "scripts/generate-organ-backlog.py",
