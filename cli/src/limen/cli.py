@@ -287,7 +287,7 @@ def vltima_kernel(root, json_output, write_projection, check_projection, project
             if target.read_text() != expected:
                 click.echo(f"vltima-kernel: projection stale: {_display_path(repo_root, target)}", err=True)
                 sys.exit(1)
-            if not json_output and not write_projection:
+            if not json_output and not write_projection and not selector_requested:
                 click.echo(f"vltima-kernel: projection current at {_display_path(repo_root, target)}")
         selected = _select_vltima_projection(
             projection,

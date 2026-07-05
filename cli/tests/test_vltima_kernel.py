@@ -248,6 +248,18 @@ def test_vltima_kernel_cli_selects_projection_group():
     assert payload[-1] == {"id": "governance", "label": "Governance"}
 
 
+def test_vltima_kernel_cli_selector_stays_json_when_checking_projection():
+    result = CliRunner().invoke(
+        main,
+        ["vltima-kernel", "--root", str(ROOT), "--check-projection", "--organ", "education"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["pillar"] == "education"
+    assert "projection current" not in result.output
+
+
 def test_vltima_kernel_cli_reports_unknown_selector_and_selector_conflict():
     missing = CliRunner().invoke(main, ["vltima-kernel", "--root", str(ROOT), "--primitive", "missing"])
 
