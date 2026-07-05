@@ -134,8 +134,8 @@ above it is autonomous.
 - [x] Step 2.2 — the STATUS-mutator tier (`route`, `dispatch-async`, `heal-dispatch`, `rebalance`,
       `recover`, `quicken`) → emit an INTENT_STATUS ticket instead of a direct RMW (NOT an upsert — an
       upsert of a live id merge-clobbers; these change existing tasks). The
-      `submit_task_status()` producer API is shipped and parity-tested, `scripts/recover.py`
-      emits status tickets when `LIMEN_TICKETS_PRODUCE=1`, and the Jules harvest path submits
+      `submit_task_status()` producer API is shipped and parity-tested, `scripts/recover.py --apply`
+      submits and drains guarded status-repair tickets through TABVLARIVS, and the Jules harvest path submits
       completion/failure tickets instead of saving the board directly. `scripts/heal-dispatch.py`
       also submits lifecycle-repair tickets in ticket mode. `scripts/rebalance.py` submits guarded
       target-agent tickets through TABVLARIVS and drains them on every `--apply`. `scripts/route.py`
@@ -171,11 +171,13 @@ above it is autonomous.
       task-board writers. It is wired into `scripts/verify-whole.sh` and blocks any new unapproved
       `tasks.yaml` writer; remaining reversible legacy fallbacks must stay explicitly allowlisted
       and carry `LIMEN_TICKETS_PRODUCE` plus TABVLARIVS producer proof. The whole-repo gate pins
-      the legacy fallback ceiling at 20, so the count can be ratcheted down but not silently grow.
+      the legacy fallback ceiling at 19, so the count can be ratcheted down but not silently grow.
       `scripts/discover-value.py --apply` is now TABVLARIVS-only: it submits and drains upsert
       tickets instead of retaining a legacy direct append fallback. `scripts/rebalance.py --apply`
       is now TABVLARIVS-only: it submits and drains guarded target-agent status tickets instead of
-      retaining a legacy direct rewrite fallback.
+      retaining a legacy direct rewrite fallback. `scripts/recover.py --apply` is now TABVLARIVS-only:
+      it submits and drains guarded failed/orphan/done-repair status tickets instead of retaining a
+      legacy direct repair fallback.
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
       `fold(archive) == board` predicate.
       Seed landed: `limen tabularius-events --write --verify` writes
