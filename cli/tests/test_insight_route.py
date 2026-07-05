@@ -24,8 +24,6 @@ spec.loader.exec_module(insight_route)
 
 @pytest.fixture
 def test_env(tmp_path, monkeypatch):
-    # Isolate from the fleet env: a leaked LIMEN_TICKETS_PRODUCE=1 would silently
-    # flip the repo route onto the keeper path and break the legacy-path asserts.
     monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
     monkeypatch.delenv("LIMEN_INSIGHT_ROUTE_APPLY", raising=False)
     monkeypatch.delenv("LIMEN_INSIGHT_ROUTE_MAX", raising=False)
@@ -257,10 +255,8 @@ def test_cap_defers_overflow(test_env, monkeypatch):
     assert stats["deferred"] == 2
 
 
-def test_keeper_path_submits_and_drains_ticket(test_env, monkeypatch):
-    # With the TABVLARIVS producer flag on, a repo insight becomes a guarded
-    # upsert ticket and is synchronously drained by the keeper.
-    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+def test_repo_path_submits_and_drains_ticket(test_env):
+    # A repo insight becomes a guarded upsert ticket and is synchronously drained by the keeper.
     report = {"insights": [_repo_insight("INS-KEEPER-1")]}
     report_file = test_env["cadence"] / "hourly-keeper.json"
     report_file.write_text(json.dumps(report))
