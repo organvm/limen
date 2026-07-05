@@ -87,8 +87,48 @@ def _emit_gaps(gap_texts: list[str], origin_id: str, apply: bool) -> int:
         return 0
     from limen.io import load_limen_file, queue_lock, save_limen_file
     from limen.models import Task
+    from limen.tabularius import drain_once, submit_task_upsert
     tasks_path = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
     now = datetime.datetime.now(datetime.timezone.utc)
+    if apply and os.environ.get("LIMEN_TICKETS_PRODUCE") == "1":
+        try:
+            lf = load_limen_file(tasks_path)
+        except Exception as exc:
+            print(f"[converge] could not load tasks for gap-emit ({exc}); skipping")
+            return 0
+        have = {t.id for t in lf.tasks}
+        tasks_to_emit: list[Task] = []
+        for g in gap_texts:
+            gid = "CONV-" + re.sub(r"[^a-z0-9]+", "-", g.lower())[:40].strip("-")
+            if gid in have:
+                continue
+            have.add(gid)
+            tasks_to_emit.append(Task(
+                id=gid, title=g[:120], created=now.date(), status="open", target_agent="any",
+                priority="low", type="converge-gap",
+                context=f"gap surfaced by converge from {origin_id}"))
+        if not tasks_to_emit:
+            return 0
+        session_id = os.environ.get("LIMEN_SESSION_ID", "converge-organ")
+        ticket_paths = [
+            submit_task_upsert(
+                tasks_path,
+                task,
+                agent="converge-organ",
+                session_id=session_id,
+                precondition={"status": None},
+            )
+            for task in tasks_to_emit
+        ]
+        result = drain_once(tasks_path)
+        applied = set(result.applied_ids)
+        wanted = {ticket.stem for ticket in ticket_paths}
+        if wanted - applied:
+            raise SystemExit(
+                f"TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} converge tickets "
+                f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+            )
+        return len(tasks_to_emit)
     with queue_lock(tasks_path) as got:
         if not got:
             print("[converge] queue busy — skipped emitting gaps this pass")

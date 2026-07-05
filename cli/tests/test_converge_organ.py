@@ -10,11 +10,14 @@ from pathlib import Path
 
 import yaml
 
+from limen.tabularius import pending_count
+
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "converge-organ.py"
 
 
 def _load(monkeypatch, root):
     monkeypatch.setenv("LIMEN_ROOT", str(root))
+    monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
     spec = importlib.util.spec_from_file_location("converge_organ_uut", SCRIPT)
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
@@ -97,3 +100,20 @@ def test_gap_writer_emits_bounded_idempotent_tasks(tmp_path, monkeypatch):
     assert len(conv) == 1 and conv[0]["type"] == "converge-gap"
     # second run with the same gap adds nothing (id derived from text)
     assert m._emit_gaps(["support widget export"], "MULTI", apply=True) == 0
+
+
+def test_gap_writer_ticket_mode_drains_tabularius(tmp_path, monkeypatch):
+    m = _load(monkeypatch, tmp_path)
+    (tmp_path / "logs").mkdir()
+    tasks = tmp_path / "tasks.yaml"
+    tasks.write_text(yaml.safe_dump({"tasks": []}))
+    monkeypatch.setenv("LIMEN_TASKS", str(tasks))
+    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+
+    added = m._emit_gaps(["support widget export"], "MULTI", apply=True)
+
+    assert added == 1
+    out = yaml.safe_load(tasks.read_text())
+    conv = [t for t in out["tasks"] if t["id"].startswith("CONV-")]
+    assert len(conv) == 1 and conv[0]["type"] == "converge-gap"
+    assert pending_count(tasks) == 0
