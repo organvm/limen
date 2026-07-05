@@ -109,6 +109,30 @@ above it is autonomous.
 
 ## Recorded remaining work (this doc is the owner)
 
+### Verification tiers
+
+Use the focused gate while changing the recordkeeper/kernel substrate:
+
+```bash
+python3 scripts/verify-recordkeeper-kernel.py
+```
+
+It runs the deterministic TABVLARIVS/VLTIMA gates in parallel: keeper/kernel py-compile, the
+VLTIMA and TABVLARIVS pytest slices, schema validation, writer audit, projection freshness, and the
+CLI projection check. It deliberately does **not** require the live event-proof stamp by default,
+because `logs/tabularius-organ-state.json` is daemon-owned evidence, not an inner-loop unit test.
+
+When the keeper has real live state, run the event proof explicitly:
+
+```bash
+python3 scripts/verify-recordkeeper-kernel.py --include-event-proof
+python3 scripts/verify-recordkeeper-kernel.py --require-event-proof
+```
+
+Reserve `scripts/verify-whole.sh` for pre-merge / broad-surface verification, or after touching
+API, Worker, dashboard, MONETA, runtime probes, or deployment-sensitive code. Re-running the whole
+gate after every keeper/kernel edit is intentionally unnecessary.
+
 - [x] Step 2.1 (pattern proven) — `submit_task_upsert` producer API + `LIMEN_TICKETS_PRODUCE` gate +
       the producer≡direct-write identity test; reference pair `mine-backlog` + `ingest-backlog` converted.
 - [x] Step 2.1 (creation tier converted + **CUTOVER LIVE**) — the whole task-CREATION tier now
