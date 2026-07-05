@@ -145,7 +145,8 @@ above it is autonomous.
       CLI dispatch result-apply submits result tickets in ticket mode. `scripts/claim-task.py`
       submits and drains a guarded claim ticket for live manual claims.
       `scripts/reclassify-needs-human.py --apply` submits and drains guarded reopen tickets instead
-      of directly rewriting false human-gate records.
+      of directly rewriting false human-gate records. `scripts/jules-land.py` submits and drains
+      guarded completion tickets after a Jules session lands as a PR.
 - [x] Step 2.3 — MCP server → ticket producer. `mcp/src/limen_mcp/server.py` now loads through
       the shared Limen loader and its mutating tools (`add_task`, `update_task_status`,
       `agent_claim`) submit TABVLARIVS upsert/status tickets, drain the keeper synchronously, and
