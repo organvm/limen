@@ -59,7 +59,7 @@ from limen.capacity import (  # noqa: E402
     select_lanes,
     task_has_github_issue,
 )
-from limen.io import load_limen_file  # noqa: E402
+from limen.io import load_limen_file, load_limen_file_with_report  # noqa: E402
 from limen.dispatch import _down_lanes  # noqa: E402
 from limen.tabularius import drain_once, submit_task_status  # noqa: E402
 from limen.workstream import UNASSIGNED, assign_channel  # noqa: E402
@@ -526,10 +526,11 @@ def main() -> int:
     # Apply from a FRESH sanitized re-read, then hand field-level changes to TABVLARIVS. Route only
     # proposes target_agent/workstream updates for tasks that are still open; the keeper precondition
     # rejects any stale ticket instead of overwriting a dispatcher update.
-    lf = load_limen_file(tasks_path)
+    lf, repair_report = load_limen_file_with_report(tasks_path)
     applied = 0
     ws_applied = 0
     tickets = []
+    ticketed_task_ids: set[str] = set()
     for task in lf.tasks:
         if task.status != "open":
             continue
@@ -565,6 +566,21 @@ def main() -> int:
                     precondition=precondition,
                 )
             )
+            ticketed_task_ids.add(task.id)
+    for task in lf.tasks:
+        if task.id not in repair_report.dispatch_log_task_ids or task.id in ticketed_task_ids:
+            continue
+        tickets.append(
+            submit_task_status(
+                tasks_path,
+                task.id,
+                task.status,
+                agent="limen",
+                session_id="route-heal",
+                output="route: healed malformed dispatch_log entries",
+                precondition={"status": task.status},
+            )
+        )
     if tickets:
         result = drain_once(tasks_path)
         applied_ids = set(result.applied_ids)

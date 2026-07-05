@@ -319,7 +319,7 @@ def update_task_status(task_id: str, status: str, context: Optional[str] = None)
     for t in data.tasks:
         if t.id == task_id:
             # Layer 1: Dynamic Costing - Double budget cost on failure
-            patch = {}
+            patch: dict[str, Any] = {}
             if status in ["failed", "failed_blocked", "needs_human"] and t.status == "in_progress":
                 patch["budget_cost"] = min(t.budget_cost * 2, 8)
             if context:
