@@ -138,9 +138,9 @@ above it is autonomous.
       emits status tickets when `LIMEN_TICKETS_PRODUCE=1`, and the Jules harvest path submits
       completion/failure tickets instead of saving the board directly. `scripts/heal-dispatch.py`
       also submits lifecycle-repair tickets in ticket mode. `scripts/rebalance.py` submits guarded
-      target-agent tickets in ticket mode. `scripts/route.py` submits guarded target-agent and
-      workstream tickets in ticket mode. `scripts/quicken.py` submits human-residue upsert/refresh
-      tickets in ticket mode. `scripts/dispatch-async.py` submits guarded reserve/reap/harvest
+      target-agent tickets through TABVLARIVS and drains them on every `--apply`. `scripts/route.py`
+      submits guarded target-agent and workstream tickets in ticket mode. `scripts/quicken.py`
+      submits human-residue upsert/refresh tickets in ticket mode. `scripts/dispatch-async.py` submits guarded reserve/reap/harvest
       tickets in ticket mode and drains the keeper before launching workers or clearing markers.
       CLI dispatch result-apply submits result tickets in ticket mode. `scripts/claim-task.py`
       submits and drains a guarded claim ticket for live manual claims.
@@ -171,9 +171,11 @@ above it is autonomous.
       task-board writers. It is wired into `scripts/verify-whole.sh` and blocks any new unapproved
       `tasks.yaml` writer; remaining reversible legacy fallbacks must stay explicitly allowlisted
       and carry `LIMEN_TICKETS_PRODUCE` plus TABVLARIVS producer proof. The whole-repo gate pins
-      the legacy fallback ceiling at 21, so the count can be ratcheted down but not silently grow.
+      the legacy fallback ceiling at 20, so the count can be ratcheted down but not silently grow.
       `scripts/discover-value.py --apply` is now TABVLARIVS-only: it submits and drains upsert
-      tickets instead of retaining a legacy direct append fallback.
+      tickets instead of retaining a legacy direct append fallback. `scripts/rebalance.py --apply`
+      is now TABVLARIVS-only: it submits and drains guarded target-agent status tickets instead of
+      retaining a legacy direct rewrite fallback.
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
       `fold(archive) == board` predicate.
       Seed landed: `limen tabularius-events --write --verify` writes

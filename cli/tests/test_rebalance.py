@@ -1,6 +1,6 @@
-"""Test rebalance.py honors the lane-down filter (this session's change): open local-lane tasks
-are fanned across the PRODUCTIVE lanes only — a down lane (logs/lanes-down.txt) never receives work
-and its tasks are redistributed. _resolve_repo_dir is monkeypatched so the test needs no clones."""
+"""Test rebalance.py honors the lane-down filter: open local-lane tasks are fanned across the
+productive lanes only through TABVLARIVS — a down lane (logs/lanes-down.txt) never receives work and
+its tasks are redistributed. _resolve_repo_dir is monkeypatched so the test needs no clones."""
 
 import importlib.util
 import sys
@@ -12,13 +12,12 @@ SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "rebalance.py"
 
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.models import Budget, BudgetTrack, LimenFile, Portal, Task  # noqa: E402
-from limen.tabularius import drain_once, pending_count  # noqa: E402
+from limen.tabularius import pending_count  # noqa: E402
 
 
-def test_rebalance_skips_down_lanes(tmp_path, monkeypatch):
+def test_rebalance_skips_down_lanes(tmp_path, monkeypatch, capsys):
     import datetime
 
-    monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
     monkeypatch.setenv("LIMEN_TASKS", str(tmp_path / "tasks.yaml"))
     today = datetime.date.today()
@@ -40,13 +39,16 @@ def test_rebalance_skips_down_lanes(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["rebalance", "--lanes", "codex,claude,gemini", "--apply"])
     m.main()
 
+    out = capsys.readouterr().out
+    assert "through TABVLARIVS" in out
+    assert pending_count(tmp_path / "tasks.yaml") == 0
     lanes = Counter(t.target_agent for t in load_limen_file(tmp_path / "tasks.yaml").tasks)
     assert lanes.get("gemini", 0) == 0, f"down lane got work: {lanes}"
     assert set(lanes) == {"codex", "claude"}, f"expected only productive lanes: {lanes}"
     assert lanes["codex"] == 3 and lanes["claude"] == 3, f"not evenly fanned: {lanes}"
 
 
-def test_rebalance_ticket_mode_waits_for_tabularius(tmp_path, monkeypatch):
+def test_rebalance_ignores_legacy_ticket_gate_and_drains_tabularius(tmp_path, monkeypatch, capsys):
     import datetime
 
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
@@ -72,11 +74,9 @@ def test_rebalance_ticket_mode_waits_for_tabularius(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["rebalance", "--lanes", "codex,claude,gemini", "--apply"])
     m.main()
 
-    assert Counter(t.target_agent for t in load_limen_file(board).tasks) == {"codex": 6}
-    assert pending_count(board) == 6
-
-    drained = drain_once(board)
-    assert drained.applied == 6
+    out = capsys.readouterr().out
+    assert "through TABVLARIVS" in out
+    assert pending_count(board) == 0
     lanes = Counter(t.target_agent for t in load_limen_file(board).tasks)
     assert lanes.get("gemini", 0) == 0, f"down lane got work: {lanes}"
     assert set(lanes) == {"codex", "claude"}, f"expected only productive lanes: {lanes}"
