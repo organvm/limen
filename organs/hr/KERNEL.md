@@ -1,84 +1,91 @@
-# HR Organism — KERNEL (the people-office architecture)
+# HR Organism — KERNEL
 
-> **Boundary (load-bearing, repeated everywhere in this organ):** this is
-> people-operations infrastructure that augments human HR professionals,
-> managers, and the people they serve. It does **not** make employment
-> decisions, give employment or benefits counsel, or replace the judgment of a
-> qualified practitioner. Hiring, firing, compensation, discipline, and any
-> act with legal effect on a person's livelihood stay in human hands,
-> permanently.
+> **Boundary (load-bearing, repeated everywhere in this organ):** this is human-resources operations
+> infrastructure that AUGMENTS human operators and leaders. It does **not** replace human judgment,
+> make hiring or firing decisions autonomously, or circumvent labor law. Every material people
+> decision remains with the responsible human leader. This organ never replaces leadership — it
+> supplies the institutional weight that small teams and sole operators should never have to build
+> from scratch.
 
 ---
 
 ## Why this organ exists
 
-Large companies win the talent game not because their people are better but
-because a **people office** stands behind every manager: structured hiring
-loops, onboarding sequences, policy handbooks, compliance calendars,
-performance frameworks, and offboarding checklists. A small business or a solo
-HR consultant has the same judgment but none of that institutional backbone —
-every process is reinvented per client, per hire, per incident.
+The HR organ is an **institutional prosthesis** for human resources and people operations. It gives one person,
+one operator, or one small business the operational weight usually supplied by a
+large HR department: hiring loops, onboarding pipelines, policy handbooks, compliance calendars,
+performance frameworks, and offboarding procedures.
 
-This organ supplies the backbone as reusable, versioned artifacts: the same
-fractal move as the education organ (elite-academy weight for one learner) and
-the legal organ (top-firm weight for one matter). Eventually most of this
-apparatus is automated everywhere; the point is to hold the automated form
-first, as an institution anyone can pick up.
+The organ does not replace leadership. It replaces missing institutional bench capacity *around*
+leadership. Its job is to keep every engagement organized, current, verifiable, and ready for
+human judgment — so operators spend decision bandwidth on culture and performance, not on
+reconstructing HR infrastructure.
 
-Named by the principal 2026-07-04: *"we need a human resources institution —
-the same way that we're building an EDU institution and a law firm
-institution."*
-
-## The 5-primitive kernel, mapped to HR
-
-| Primitive | HR meaning | Concretely |
-|---|---|---|
-| **Member** | person in a role | employee, candidate, contractor, or the client an HR practitioner serves — capabilities, standing, consent, and record |
-| **Mandate** | role / policy | what the role exists to do, what the policy requires, what the engagement was hired for |
-| **Standing** | employment / engagement state | candidate → hired → onboarding → active → transitioning → alumni; or the practitioner-client engagement stage |
-| **Standard** | the compliance bar | labor-law floor, compensation benchmark, policy handbook, performance rubric |
-| **Governance** | people-ops process + ethics wall | who decides, what requires human sign-off, what the system may never do to a person |
-
-## Fractal deployment
-
-- **MACRO face** — an HR-institution-in-a-box: the hiring loop, onboarding
-  sequence, handbook skeleton, compliance calendar, performance framework, and
-  offboarding checklist as versioned templates any operator or small business
-  can hold.
-- **MICRO face** — Jessica's HR practice run with that institutional weight
-  (engagement record: `organs/consulting/engagements/jessica.yaml`), with
-  **Styx** (`organvm/peer-audited--behavioral-blockchain` — peer-audited
-  behavioral accountability, habit competition, loss-aversion staking) as the
-  flagship product for the performance/habits limb of the practice.
-  > **Styx naming reconciliation:** the limen tasks.yaml uses `organvm/styx`
-  > but the canonical public repo is `organvm/peer-audited--behavioral-blockchain`.
-  > This KERNEL uses the canonical key. A future INDEX-NOMINVM pass should
-  > reconcile all references across the estate.
-
-## First slice
-
-1. This kernel + the charter (shipped together).
-2. The Jessica engagement record at DISCOVERY (shipped).
-3. Next: the HR-practice operating floor — intake → policy → compliance
-   calendar → offboarding — as runnable templates for Jessica's first client.
-
-## Hard guardrails
-
-- No employment decisions; no counsel on hiring, firing, discipline, leave, or
-  benefits to anyone — infrastructure and drafts only, reviewed by humans.
-- Behavioral/accountability tooling (Styx) is consent-first and never used for
-  covert monitoring or evaluation of a person.
-- Every artifact that names a real person requires that person's confirmation
-  before external use.
-
-## Working name
-
-Proper name pending an **INDEX-NOMINVM** pass — consistent with the flagship
-convention (legal: Cochran, artist: A-MAVS-OLEVM, governance: Aerarium / Cvrsvs
-Honorvm). Reference `organ-ladder.json` rank 11 note.
+This flagship instance is unnamed pending an `INDEX-NOMINVM` pass (named by Anthony 2026-07-04: "we need a human resources institution" alongside the EDU and law-firm institutions). Underneath that eventual named instance, the kernel stays
+generic and nameless: **generic + nameless underneath, his instance on top**.
 
 ---
 
-*Companion documents: [`CHARTER.md`](CHARTER.md) (virtual firm org-chart +
-8-workflow orchestration + inputs/outputs + leverage math + constraint
-registry).*
+## The 5-primitive kernel, mapped to HR
+
+| Primitive | HR meaning | What the organ holds |
+|---|---|---|
+| **Member** | **person in a role (employee/candidate/client)** | Identity, role profile, accessibility/accommodation needs, contact info, and current status. |
+| **Mandate** | **role or policy** | The job description, required outcomes, compensation structure, or governing policy (handbook). |
+| **Standing** | **employment/engagement state** | Current phase (sourcing, interviewing, active, performance-plan, offboarding), tenure, and next review points. |
+| **Standard** | **labor-law floor + comp benchmark + policy handbook** | Local labor law minimums, compensation bands, internal policy handbook, and expected behavioral/performance standards. |
+| **Governance** | **people-ops process + ethics wall** | Hiring loops, approval gates, privacy/ethics walls for sensitive data, conflict-of-interest checks, and offboarding checklists. |
+
+This is the same domain-neutral kernel used across VLTIMA's organs — Member · Mandate · Standing ·
+Standard · Governance. HR changes the domain layer, not the primitive structure.
+
+---
+
+## Fractal deployment
+
+### MACRO — HR-institution-in-a-box any operator or small business can hold
+
+The base organ is a reusable HR-institution platform that any operator, founder, or small
+business can hold. It produces people-ops infrastructure, not human-judgment replacement:
+
+- hiring loops and structured interview rubrics
+- onboarding pipelines and 30/60/90-day plans
+- policy handbook generation and maintenance
+- compliance calendars (tax, benefits, labor law deadlines)
+- performance frameworks (reviews, 1:1s, development plans)
+- structured offboarding and off-boarding compliance
+
+The platform's promise is operational: every role is defined before it is opened, every
+candidate is tracked before they are interviewed, every policy is clear before it is violated,
+every compliance date is visible before it arrives, and every transition is structured.
+
+The MACRO form is intentionally generic — no individual identity, no personal data at the template
+layer. It is the platform that scales to N people with zero marginal design cost.
+
+### MICRO — Jessica's HR practice and Styx
+
+The MICRO deployment is Jessica's HR practice run with institutional weight
+(`organs/consulting/engagements/jessica.yaml`), with **Styx**
+(`organvm/peer-audited--behavioral-blockchain`, flagged to reconcile naming drift vs `organvm/styx`) as the
+flagship performance/habits product. It is the proving ground for the HR flagship: the
+generic HR organ, carried by a consulting engagement, focused on delivering institutional
+people operations.
+
+The MICRO posture is strict:
+
+- The human operator (Jessica/leadership) remains the decision-maker.
+- The organ supplies organization, structured frameworks, draft policies, and review packets.
+- Nothing is finalized, signed, or enforced by the organ autonomously.
+- Every output remains draft work product until the human owner adopts it.
+
+This instance proves the MACRO platform by producing an auditable, reviewed record of
+role definition, engagement standing, standards, and governance for active HR practice.
+
+---
+
+## Hard guardrails (non-negotiable, every beat)
+
+- **No autonomous hiring or firing.** The organ does not make terminal employment decisions.
+- **No unauthorized legal/tax advice.** All compliance outputs are flagged for proper professional review where required.
+- **Privacy and confidentiality are paramount.** The ethics wall blocks unauthorized access to compensation, performance, or health data.
+- **No output is final until reviewed, corrected, and owned by the human operator.** Every artifact is draft work product.
