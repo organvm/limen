@@ -42,7 +42,6 @@ LEGACY_GATED_ALLOWLIST = {
     "scripts/mine-backlog.py",
     "scripts/quicken.py",
     "scripts/route.py",
-    "scripts/self-heal.py",
 }
 
 PRODUCER_TOKENS = (

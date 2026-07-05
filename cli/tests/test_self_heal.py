@@ -3,7 +3,7 @@ SAFE, IDEMPOTENT heal-task emitter. gh is mocked so no network. Asserts the safe
 matter because it runs autonomously in the heartbeat:
 (1) it classifies stuck PRs exactly like merge-drain (CI-RED → cifix, CONFLICT → rebase),
 (2) --dry-run makes ZERO writes (file untouched, no queue-lock dir),
-(3) a live pass appends validated tasks via the atomic shared-append path (load → append → save),
+(3) a live pass submits and drains guarded HEAL-* upserts through TABVLARIVS,
 (4) it is IDEMPOTENT — a second run emits no duplicate for a PR that already has a heal task,
 (5) it respects the per-run --limit cap.
 """
@@ -109,11 +109,10 @@ def test_classifies_and_emits_cifix_and_rebase(tmp_path, monkeypatch):
     assert cifix["target_agent"] == "any" and cifix["status"] == "open"
 
 
-def test_ticket_mode_emits_and_drains_tabularius(tmp_path, monkeypatch):
+def test_live_pass_emits_and_drains_tabularius(tmp_path, monkeypatch):
     m = _load(tmp_path, monkeypatch)
     p = tmp_path / "tasks.yaml"
     _board(p)
-    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
 
     rc = _run(m, monkeypatch, p)
 

@@ -121,8 +121,8 @@ above it is autonomous.
       guarded revenue-task upsert tickets through TABVLARIVS. `scripts/generate-organ-backlog.py --apply`
       submits and drains guarded organ-task upsert tickets through TABVLARIVS. `scripts/auto-scale.py` submits guarded
       upsert tickets and drains synchronously through TABVLARIVS, preserving the CI `tasks.yaml` commit
-      contract while preventing stale sequential-id clobber. `scripts/self-heal.py` submits guarded
-      upsert tickets for stable `HEAL-*` repair tasks and drains synchronously in ticket mode.
+      contract while preventing stale sequential-id clobber. `scripts/self-heal.py` submits and drains
+      guarded upsert tickets for stable `HEAL-*` repair tasks through TABVLARIVS.
       `scripts/converge-organ.py` submits and drains guarded upsert tickets for bounded `CONV-*`
       gap tasks through TABVLARIVS, and `scripts/corpus-converge.py` does the same for bounded
       `CORP-*` corpus-gap tasks.
@@ -176,7 +176,7 @@ above it is autonomous.
       task-board writers. It is wired into `scripts/verify-whole.sh` and blocks any new unapproved
       `tasks.yaml` writer; remaining reversible legacy fallbacks must stay explicitly allowlisted
       and carry `LIMEN_TICKETS_PRODUCE` plus TABVLARIVS producer proof. The whole-repo gate pins
-      the legacy fallback ceiling at 9, so the count can be ratcheted down but not silently grow.
+      the legacy fallback ceiling at 8, so the count can be ratcheted down but not silently grow.
       `scripts/discover-value.py --apply` is now TABVLARIVS-only: it submits and drains upsert
       tickets instead of retaining a legacy direct append fallback. `scripts/rebalance.py --apply`
       is now TABVLARIVS-only: it submits and drains guarded target-agent status tickets instead of
@@ -202,6 +202,8 @@ above it is autonomous.
       buildout-task upsert tickets instead of retaining a legacy direct append fallback.
       `scripts/generate-organ-backlog.py --apply` is now TABVLARIVS-only: it submits and drains
       guarded organ-task upsert tickets instead of retaining a legacy direct append fallback.
+      `scripts/self-heal.py` is now TABVLARIVS-only: it submits and drains guarded `HEAL-*`
+      repair-task upsert tickets instead of retaining a legacy direct append fallback.
 - [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
       `fold(archive) == board` predicate.
       Seed landed: `limen tabularius-events --write --verify` writes
