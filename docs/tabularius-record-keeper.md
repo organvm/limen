@@ -123,7 +123,8 @@ above it is autonomous.
       `scripts/converge-organ.py` does the same for bounded `CONV-*` gap tasks, and
       `scripts/corpus-converge.py` does the same for bounded `CORP-*` corpus-gap tasks.
       `scripts/current-session-fanout.py` does the same for deterministic current-session seed
-      tasks. Reading the code corrected the remainder list:
+      tasks. `scripts/insight-route.py` submits guarded `TASK-<insight-id>` upsert tickets and drains
+      them synchronously in ticket mode. Reading the code corrected the remainder list:
       `generate-positioning` and `ingest-coverage` **never write `tasks.yaml`** (obligations / read-only) —
       not writers, so not converted. **`scripts/heartbeat-loop.sh` sets `LIMEN_TICKETS_PRODUCE=1`**, so the
       LIVE fleet routes task creation through the keeper (revertible via `~/.limen.env`). Smoke-proven:

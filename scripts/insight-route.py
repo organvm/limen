@@ -30,7 +30,7 @@ sys.path.insert(0, str(ROOT / "cli" / "src"))
 
 from limen.io import load_limen_file, save_limen_file, queue_lock  # noqa: E402
 from limen.models import Task  # noqa: E402
-from limen.tabularius import submit_task_upsert  # noqa: E402
+from limen.tabularius import drain_once, submit_task_upsert  # noqa: E402
 
 HIS_HAND_FILE = ROOT / "his-hand-levers.json"
 TASKS_YAML = ROOT / "tasks.yaml"
@@ -110,16 +110,23 @@ def route_repo_insight(insight, apply, stats=None):
         limen_file = load_limen_file(TASKS_YAML)
         if any(t.id == tid for t in limen_file.tasks):
             return
-        submit_task_upsert(
+        ticket = submit_task_upsert(
             TASKS_YAML,
             _task_for(insight, tid, repo),
             agent="insight-route",
             session_id=os.environ.get("LIMEN_SESSION_ID", "insight-route"),
+            precondition={"status": None},
         )
+        result = drain_once(TASKS_YAML)
+        if ticket.stem not in set(result.applied_ids):
+            raise SystemExit(
+                f"TABVLARIVS did not apply insight ticket {ticket.stem} "
+                f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+            )
         if stats is not None:
             stats["cap_left"] -= 1
             stats["created"] += 1
-        print(f"Submitted upsert ticket {tid} for {repo} (keeper folds next beat)")
+        print(f"Submitted and applied upsert ticket {tid} for {repo}")
         return
 
     with queue_lock(TASKS_YAML) as got:

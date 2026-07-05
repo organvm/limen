@@ -8,6 +8,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "cli" / "src"))
 from limen.io import load_limen_file  # noqa: E402
+from limen.tabularius import pending_count  # noqa: E402
 
 # Add scripts dir to path to import the script for testing
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -256,9 +257,9 @@ def test_cap_defers_overflow(test_env, monkeypatch):
     assert stats["deferred"] == 2
 
 
-def test_keeper_path_submits_ticket_not_board_write(test_env, monkeypatch):
-    # With the TABVLARIVS producer flag on, a repo insight becomes an upsert
-    # ticket in the inbox and the board file itself stays untouched.
+def test_keeper_path_submits_and_drains_ticket(test_env, monkeypatch):
+    # With the TABVLARIVS producer flag on, a repo insight becomes a guarded
+    # upsert ticket and is synchronously drained by the keeper.
     monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
     report = {"insights": [_repo_insight("INS-KEEPER-1")]}
     report_file = test_env["cadence"] / "hourly-keeper.json"
@@ -272,13 +273,9 @@ def test_keeper_path_submits_ticket_not_board_write(test_env, monkeypatch):
         insight_route.process_report(report_file, apply=True)
 
     limen_file = load_limen_file(test_env["tasks"])
-    assert len(limen_file.tasks) == 0
-    inbox = test_env["root"] / "logs" / "tickets" / "inbox"
-    tickets = list(inbox.glob("*.json"))
-    assert len(tickets) == 1
-    ticket = json.loads(tickets[0].read_text())
-    assert ticket["task_id"] == "TASK-INS-KEEPER-1"
-    assert ticket["intent"] == "task.upsert"
+    assert len(limen_file.tasks) == 1
+    assert limen_file.tasks[0].id == "TASK-INS-KEEPER-1"
+    assert pending_count(test_env["tasks"]) == 0
 
 
 def test_latest_reports_picks_true_latest_per_tier(test_env):
