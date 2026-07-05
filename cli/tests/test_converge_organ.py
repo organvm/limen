@@ -102,13 +102,12 @@ def test_gap_writer_emits_bounded_idempotent_tasks(tmp_path, monkeypatch):
     assert m._emit_gaps(["support widget export"], "MULTI", apply=True) == 0
 
 
-def test_gap_writer_ticket_mode_drains_tabularius(tmp_path, monkeypatch):
+def test_gap_writer_drains_tabularius(tmp_path, monkeypatch):
     m = _load(monkeypatch, tmp_path)
     (tmp_path / "logs").mkdir()
     tasks = tmp_path / "tasks.yaml"
     tasks.write_text(yaml.safe_dump({"tasks": []}))
     monkeypatch.setenv("LIMEN_TASKS", str(tasks))
-    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
 
     added = m._emit_gaps(["support widget export"], "MULTI", apply=True)
 
