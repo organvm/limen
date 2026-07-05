@@ -221,16 +221,19 @@ above it is autonomous.
       result commits, parallel reservation/result commits, budget-window resets, and stale-claim
       releases all submit and drain guarded status/meta tickets instead of retaining legacy direct
       save fallbacks. The legacy fallback allowlist is empty.
-- [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
-      `fold(archive) == board` predicate.
-      Seed landed: `limen tabularius-events --write --verify` writes
+- [x] Step 3 bridge — add an archive→`events.jsonl` compactor + a standing
+      `fold(seed + archive-delta) == board` predicate.
+      `limen tabularius-events --write --verify` writes
       `logs/tickets/events.jsonl` as a compacted projection seed plus
       `logs/tickets/events.jsonl.manifest.json` as the archive watermark. Verification now proves
       both `materialize.fold(events.jsonl) == tasks.yaml` for a fresh seed and
       `fold(seed + archived tickets after watermark) == tasks.yaml` after later keeper drains;
       `limen tabularius-events --sync-archive --verify` appends those post-watermark archive deltas
-      into `events.jsonl` and advances the manifest; `scripts/verify-whole.sh` runs the same
-      predicate against a temp event-log path to avoid repo drift.
+      into `events.jsonl` and advances the manifest; `scripts/verify-whole.sh` runs that standing
+      predicate against the ignored live `logs/tickets/events.jsonl` path.
+- [ ] Step 3 final — flip live startup/read paths to treat the event log as the SSOT and regenerate
+      `tasks.yaml` as a materialized cache, after the standing predicate has survived enough keeper
+      beats to make the cutover boring.
 
 See also: `board-is-event-log-projection` (memory), `cli/src/limen/materialize.py`,
 `scripts/heal-board.py`, `io.py` (`queue_lock`, `save_limen_file`, the collapse-guard).

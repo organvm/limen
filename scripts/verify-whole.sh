@@ -74,12 +74,8 @@ python3 scripts/validate-task-board.py
 step "Audit TABVLARIVS board writer boundaries"
 python3 scripts/check-tabularius-writers.py --quiet --max-legacy 0
 
-step "Verify TABVLARIVS event projection predicate"
-tabularius_event_log="$(mktemp "${TMPDIR:-/tmp}/limen-tabularius-events.XXXXXX")"
-rm -f "$tabularius_event_log"
-trap 'rm -f "$tabularius_event_log" "$tabularius_event_log.manifest.json"' EXIT
-PYTHONPATH="$PYTHONPATH_VALUE" python3 -m limen.cli tabularius-events --write --verify --event-log "$tabularius_event_log"
-rm -f "$tabularius_event_log" "$tabularius_event_log.manifest.json"
+step "Verify TABVLARIVS standing event projection predicate"
+PYTHONPATH="$PYTHONPATH_VALUE" python3 -m limen.cli tabularius-events --sync-archive --verify
 
 step "Report preserved worktree lifecycle debt"
 python3 scripts/worktree-debt.py
