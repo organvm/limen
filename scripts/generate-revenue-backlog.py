@@ -17,9 +17,9 @@ Account creation (Ko-fi/Sponsors/LemonSqueezy) is genuinely his hand and is NOT 
 everything that BUILDS the funnel and ships the products IS — so the funnel is live the instant he
 creates the accounts.
 
-Read-only by default (prints a plan). With --apply it appends `open` tasks via the limen schema
-(validated) under the canonical queue lock (so it can't clobber a concurrent dispatch write). Never
-dispatches. Floor-gated + id-deduped + capped: bounded, no flood.
+Read-only by default (prints a plan). With --apply it submits `open` task upsert tickets through
+TABVLARIVS, the single record-keeper. Never dispatches. Floor-gated + id-deduped + capped: bounded,
+no flood.
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.capacity import select_lanes  # noqa: E402
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.models import Task  # noqa: E402
 from limen.tabularius import drain_once, submit_task_upsert  # noqa: E402
 
@@ -291,40 +291,36 @@ def main() -> int:
         print(f"\ndry-run — re-run with --apply to append {len(new)} tasks.")
         return 0
 
-    # Apply lockless + atomic, exactly like the sibling generate-backlog voice it runs beside in the
-    # C_FEED block (sequential within the beat; later loaders preserve these). Re-read fresh right
-    # before the write so we pick up tasks an earlier sibling (mine-backlog) added this beat and never
-    # double-land an id. NEVER skip on contention: the floor-gate makes this idempotent, so if a long
-    # concurrent dispatch save ever clobbers, the next C_FEED beat simply re-adds (self-healing — no
-    # silent "no").
+    # Re-read fresh right before submitting tickets so we pick up tasks an earlier sibling added this
+    # beat and never double-land an id. TABVLARIVS owns the board write and collapse guard.
     fresh = load_limen_file(path)
     have = {t.id for t in fresh.tasks}
     to_add = [t for t in new if t.id not in have]
     if not to_add:
         print("\n(all planned tasks already present after fresh re-read — nothing applied.)")
         return 0
-    # TABVLARIVS producer path (Step 2.1). LIMEN_TICKETS_PRODUCE=1 → submit each fresh-deduped task as
-    # an upsert ticket instead of writing tasks.yaml directly; the keeper folds them next beat. Default
-    # OFF keeps the legacy validated append. `to_add` is already fresh-deduped, so no id clobbers.
-    if os.environ.get("LIMEN_TICKETS_PRODUCE") == "1":
-        session_id = os.environ.get("LIMEN_SESSION_ID", "generate-revenue-backlog")
-        tickets = []
-        for t in to_add:
-            tickets.append(submit_task_upsert(path, t, agent="generate-revenue-backlog", session_id=session_id))
-        result = drain_once(path)
-        applied = set(result.applied_ids)
-        wanted = {ticket.stem for ticket in tickets}
-        if wanted - applied:
-            print(
-                f"\nTABVLARIVS applied {len(applied & wanted)}/{len(wanted)} revenue tickets "
-                f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+    session_id = os.environ.get("LIMEN_SESSION_ID", "generate-revenue-backlog")
+    tickets = []
+    for t in to_add:
+        tickets.append(
+            submit_task_upsert(
+                path,
+                t,
+                agent="generate-revenue-backlog",
+                session_id=session_id,
+                precondition={"status": None},
             )
-        else:
-            print(f"\nsubmitted and applied {len(to_add)} revenue upsert tickets through TABVLARIVS -> {path}.")
-        return 0
-    fresh.tasks.extend(to_add)
-    save_limen_file(path, fresh)
-    print(f"\napplied: appended {len(to_add)} revenue tasks -> {path} (route+dispatch separately).")
+        )
+    result = drain_once(path)
+    applied = set(result.applied_ids)
+    wanted = {ticket.stem for ticket in tickets}
+    if wanted - applied:
+        print(
+            f"\nTABVLARIVS applied {len(applied & wanted)}/{len(wanted)} revenue tickets "
+            f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+        )
+    else:
+        print(f"\nsubmitted and applied {len(to_add)} revenue upsert tickets through TABVLARIVS -> {path}.")
     return 0
 
 

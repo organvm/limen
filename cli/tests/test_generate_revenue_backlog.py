@@ -144,7 +144,7 @@ def test_positive_int_uses_default_for_invalid_values():
     assert mod._positive_int(True, 12) == 12
 
 
-def test_ticket_mode_applies_revenue_backlog_through_tabularius(monkeypatch, tmp_path, capsys):
+def test_applies_revenue_backlog_through_tabularius(monkeypatch, tmp_path, capsys):
     mod = _load_module()
     board = tmp_path / "tasks.yaml"
     ladder = tmp_path / "revenue-ladder.json"
@@ -166,7 +166,7 @@ def test_ticket_mode_applies_revenue_backlog_through_tabularius(monkeypatch, tmp
     )
     monkeypatch.setenv("LIMEN_REVENUE_LADDER", str(ladder))
     monkeypatch.setenv("LIMEN_DISPATCH_LANES", "codex")
-    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
     monkeypatch.setenv("LIMEN_SESSION_ID", "test-generate-revenue-backlog")
     monkeypatch.setattr(mod, "_avg_headroom_pct", lambda: None)
     monkeypatch.setattr(
