@@ -15,12 +15,15 @@ from pathlib import Path
 
 import yaml
 
+from limen.tabularius import pending_count
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "self-heal.py"
 
 
 def _load(tmp_path, monkeypatch):
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
     (tmp_path / "logs").mkdir(exist_ok=True)
     spec = importlib.util.spec_from_file_location("self_heal_uut", SCRIPT)
     m = importlib.util.module_from_spec(spec)
@@ -104,6 +107,22 @@ def test_classifies_and_emits_cifix_and_rebase(tmp_path, monkeypatch):
     cifix = next(t for t in doc["tasks"] if t["id"] == "HEAL-cifix-organvm-exporter-54")
     assert "cifix" in cifix["labels"] and "self-heal" in cifix["labels"]
     assert cifix["target_agent"] == "any" and cifix["status"] == "open"
+
+
+def test_ticket_mode_emits_and_drains_tabularius(tmp_path, monkeypatch):
+    m = _load(tmp_path, monkeypatch)
+    p = tmp_path / "tasks.yaml"
+    _board(p)
+    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+
+    rc = _run(m, monkeypatch, p)
+
+    assert rc == 0
+    doc = yaml.safe_load(p.read_text())
+    ids = {t["id"] for t in doc["tasks"]}
+    assert ids == {"HEAL-cifix-organvm-exporter-54", "HEAL-rebase-organvm-scale-6"}
+    assert pending_count(p) == 0
+    assert not (tmp_path / "logs" / ".queue.lock.d").exists(), "TABVLARIVS owns the write lock"
 
 
 def test_dry_run_makes_zero_writes(tmp_path, monkeypatch):

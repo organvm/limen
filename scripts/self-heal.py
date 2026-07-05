@@ -46,6 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling scripts/ for _pr_scan
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.models import Task  # noqa: E402
+from limen.tabularius import drain_once, submit_task_upsert  # noqa: E402
 from _pr_scan import enumerate_open_prs, rotating_window, scaled_limit, stale_base_verdict  # noqa: E402
 
 # DERIVED from env so the conductor survives relocation; same defaults as merge-drain.py.
@@ -258,29 +259,66 @@ def main():
             print("| (none — every sick PR already has an open heal task) |  |  |  |")
         return 0
 
-    # LIVE: acquire the daemon's queue-lock, RELOAD fresh under it, dedupe by stable id, append
-    # validated Task objects, save atomically. This is the ONLY safe shared-append path.
-    if not acquire_lock():
-        print("[self-heal] queue lock held by daemon — skipping this pass (retry next tick)")
-        return 0
-    try:
+    # LIVE/TICKET: stable HEAL-* ids let us submit guarded upserts; if a race creates the same task
+    # before TABVLARIVS drains, the ticket is rejected instead of clobbering the newer record.
+    if os.environ.get("LIMEN_TICKETS_PRODUCE") == "1":
         lf = load_limen_file(tasks_path)
         existing = {t.id for t in lf.tasks}
-        emitted = []
+        emitted: list[str] = []
+        tasks_to_emit: list[Task] = []
         for verdict, repo, num, url in sick:
             tid = task_id(KINDS[verdict]["slug"], repo, num)
             if tid in existing:
                 continue
             existing.add(tid)
-            lf.tasks.append(build_task(verdict, repo, num, url, stamp))
+            task = build_task(verdict, repo, num, url, stamp)
+            tasks_to_emit.append(task)
             emitted.append(tid)
-        if emitted:
-            save_limen_file(tasks_path, lf)
-    finally:
+        if tasks_to_emit:
+            session_id = os.environ.get("LIMEN_SESSION_ID", "self-heal")
+            ticket_paths = [
+                submit_task_upsert(
+                    tasks_path,
+                    task,
+                    agent="self-heal",
+                    session_id=session_id,
+                    precondition={"status": None},
+                )
+                for task in tasks_to_emit
+            ]
+            result = drain_once(tasks_path)
+            applied = set(result.applied_ids)
+            wanted = {ticket.stem for ticket in ticket_paths}
+            if wanted - applied:
+                raise SystemExit(
+                    f"TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} self-heal tickets "
+                    f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+                )
+
+    # LIVE/LEGACY: acquire the daemon's queue-lock, RELOAD fresh under it, dedupe by stable id, append
+    # validated Task objects, save atomically. Preserved until the deliberate ticket cutover.
+    else:
+        if not acquire_lock():
+            print("[self-heal] queue lock held by daemon — skipping this pass (retry next tick)")
+            return 0
         try:
-            LOCKD.rmdir()
-        except OSError:
-            pass
+            lf = load_limen_file(tasks_path)
+            existing = {t.id for t in lf.tasks}
+            emitted = []
+            for verdict, repo, num, url in sick:
+                tid = task_id(KINDS[verdict]["slug"], repo, num)
+                if tid in existing:
+                    continue
+                existing.add(tid)
+                lf.tasks.append(build_task(verdict, repo, num, url, stamp))
+                emitted.append(tid)
+            if emitted:
+                save_limen_file(tasks_path, lf)
+        finally:
+            try:
+                LOCKD.rmdir()
+            except OSError:
+                pass
 
     ts = datetime.datetime.now().strftime("%F %T")
     summary = (f"[self-heal] {ts} window={len(prs)}/{len(allprs)} ready={b['READY']} ci-red={b['CI-RED']} "
