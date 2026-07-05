@@ -202,11 +202,12 @@ def _select_vltima_projection(
     *,
     primitive: str | None,
     organ: str | None,
+    layer: str | None,
     projection_name: str | None,
 ) -> object | None:
-    selectors = [value for value in (primitive, organ, projection_name) if value]
+    selectors = [value for value in (primitive, organ, layer, projection_name) if value]
     if len(selectors) > 1:
-        click.echo("vltima-kernel: choose only one of --primitive, --organ, or --projection", err=True)
+        click.echo("vltima-kernel: choose only one of --primitive, --organ, --layer, or --projection", err=True)
         sys.exit(2)
 
     if primitive:
@@ -232,6 +233,18 @@ def _select_vltima_projection(
         click.echo(f"vltima-kernel: organ not found: {organ}", err=True)
         sys.exit(1)
 
+    if layer:
+        layers = projection.get("layers") or {}
+        if not isinstance(layers, dict):
+            click.echo("vltima-kernel: layer map missing", err=True)
+            sys.exit(1)
+        needle = _norm_selector(layer)
+        for layer_name, primitives in layers.items():
+            if needle == str(layer_name).lower():
+                return primitives
+        click.echo(f"vltima-kernel: layer not found: {layer}", err=True)
+        sys.exit(1)
+
     if projection_name:
         projections = projection.get("projections") or {}
         if not isinstance(projections, dict):
@@ -253,8 +266,19 @@ def _select_vltima_projection(
 @click.option("--projection-path", type=click.Path(path_type=Path), default=None, help="Override projection path.")
 @click.option("--primitive", default=None, help="Emit one primitive by id or label.")
 @click.option("--organ", default=None, help="Emit one organ projection by pillar or home path.")
+@click.option("--layer", default=None, help="Emit one primitive layer by name.")
 @click.option("--projection", "projection_name", default=None, help="Emit one named projection group.")
-def vltima_kernel(root, json_output, write_projection, check_projection, projection_path, primitive, organ, projection_name):
+def vltima_kernel(
+    root,
+    json_output,
+    write_projection,
+    check_projection,
+    projection_path,
+    primitive,
+    organ,
+    layer,
+    projection_name,
+):
     """Validate and emit the VLTIMA universal kernel substrate."""
     repo_root = root.expanduser().resolve() if root else resolve_limen_repo_root()
     validator = _load_vltima_validator(repo_root)
@@ -265,7 +289,7 @@ def vltima_kernel(root, json_output, write_projection, check_projection, project
             click.echo(f"  - {error}", err=True)
         sys.exit(1)
 
-    selector_requested = bool(primitive or organ or projection_name)
+    selector_requested = bool(primitive or organ or layer or projection_name)
     if json_output or write_projection or check_projection or selector_requested:
         projection, projection_errors = validator.build_projection(repo_root)
         if projection_errors:
@@ -293,6 +317,7 @@ def vltima_kernel(root, json_output, write_projection, check_projection, project
             projection,
             primitive=primitive,
             organ=organ,
+            layer=layer,
             projection_name=projection_name,
         )
         if selected is not None:

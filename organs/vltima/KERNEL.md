@@ -26,6 +26,7 @@ derived payload:
 
 ```bash
 PYTHONPATH=cli/src python3 -m limen.cli vltima-kernel --primitive record
+PYTHONPATH=cli/src python3 -m limen.cli vltima-kernel --layer lower
 PYTHONPATH=cli/src python3 -m limen.cli vltima-kernel --organ education
 PYTHONPATH=cli/src python3 -m limen.cli vltima-kernel --projection organ_kernel
 ```

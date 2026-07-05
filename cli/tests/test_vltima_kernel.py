@@ -248,6 +248,23 @@ def test_vltima_kernel_cli_selects_projection_group():
     assert payload[-1] == {"id": "governance", "label": "Governance"}
 
 
+def test_vltima_kernel_cli_selects_layer_group():
+    result = CliRunner().invoke(main, ["vltima-kernel", "--root", str(ROOT), "--layer", "lower"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload == [
+        {"id": "object", "label": "Object"},
+        {"id": "subject", "label": "Subject"},
+        {"id": "agent", "label": "Agent"},
+        {"id": "actor", "label": "Actor"},
+        {"id": "system", "label": "System"},
+        {"id": "event", "label": "Event"},
+        {"id": "record", "label": "Record"},
+        {"id": "covenant", "label": "Covenant"},
+    ]
+
+
 def test_vltima_kernel_cli_selector_stays_json_when_checking_projection():
     result = CliRunner().invoke(
         main,
@@ -272,7 +289,7 @@ def test_vltima_kernel_cli_reports_unknown_selector_and_selector_conflict():
     )
 
     assert conflict.exit_code == 2
-    assert "choose only one of --primitive, --organ, or --projection" in conflict.output
+    assert "choose only one of --primitive, --organ, --layer, or --projection" in conflict.output
 
 
 def test_vltima_graph_validation_rejects_dangling_edges():
