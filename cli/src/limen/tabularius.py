@@ -81,6 +81,8 @@ class Ticket(BaseModel):
     patch: dict[str, Any] | None = None
     # optional dispatch_log payload appended to the task's log — {"status": .., "output"?: ..}.
     log: dict[str, Any] | None = None
+    # optional equality guard against stale tickets, e.g. {"status": "open"}.
+    precondition: dict[str, Any] | None = None
 
 
 def new_ticket_id(session_id: str = "unknown", now: datetime | None = None) -> str:
@@ -184,6 +186,7 @@ def submit_task_status(
     session_id: str = "unknown",
     output: str | None = None,
     patch: dict[str, Any] | None = None,
+    precondition: dict[str, Any] | None = None,
     now: datetime | None = None,
 ) -> Path:
     """Hand the keeper a status transition for an existing task.
@@ -193,6 +196,8 @@ def submit_task_status(
     carries only the transition plus an optional field-level patch such as ``target_agent`` or
     ``labels``. It deliberately does not accept whole-task identity/log fields; the keeper owns
     ``id``, ``updated``, and ``dispatch_log`` so every transition has one provenance shape.
+    ``precondition`` is an optional equality guard for stale producers; if the task changed before
+    the keeper drains the ticket, the ticket is quarantined instead of overwriting newer state.
     """
     if status not in VALID_STATUSES:
         raise ValueError(f"status must be one of {', '.join(sorted(VALID_STATUSES))}")
@@ -218,6 +223,7 @@ def submit_task_status(
         task_id=task_id,
         patch=patch,
         log=log,
+        precondition=dict(precondition or {}),
     )
     return submit_ticket(board_path, ticket)
 
@@ -271,6 +277,10 @@ def _apply(ticket: Ticket, tasks: OrderedDict[str, dict[str, Any]], meta: dict[s
         if not ticket.task_id:
             raise ValueError(f"{ticket.intent} requires task_id")
         base = dict(tasks.get(ticket.task_id, {}))
+        for key, expected in (ticket.precondition or {}).items():
+            actual = base.get(key)
+            if actual != expected:
+                raise ValueError(f"precondition failed for {ticket.task_id}: {key}={actual!r} != {expected!r}")
         merged = {**base, **(ticket.patch or {})}
         merged["id"] = ticket.task_id
         merged["updated"] = ticket.timestamp.isoformat()

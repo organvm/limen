@@ -64,6 +64,7 @@ def _ticket(intent: str, task_id: str | None = None, ts: datetime = _NOW, **over
         task_id=task_id,
         patch=over.pop("patch", None),
         log=over.pop("log", None),
+        precondition=over.pop("precondition", None),
     )
 
 
@@ -150,6 +151,30 @@ def test_submit_task_status_rejects_invalid_or_keeper_owned_fields(tmp_path):
         submit_task_status(board, "T-1", "completed", agent="limen")
     with pytest.raises(ValueError, match="keeper-owned"):
         submit_task_status(board, "T-1", "open", agent="limen", patch={"dispatch_log": []})
+
+
+def test_status_ticket_precondition_rejects_stale_state(tmp_path):
+    board = _seed_board(tmp_path)
+    submit_task_status(
+        board,
+        "T-1",
+        "open",
+        agent="limen",
+        session_id="route",
+        output="route: target_agent -> codex",
+        patch={"target_agent": "codex"},
+        precondition={"status": "dispatched"},
+        now=_NOW,
+    )
+
+    result = drain_once(board)
+
+    assert result.applied == 0
+    assert result.rejected == 1
+    t1 = {t.id: t for t in load_limen_file(board).tasks}["T-1"]
+    assert t1.status == "open"
+    assert t1.target_agent == "jules"
+    assert t1.dispatch_log == []
 
 
 def test_partial_patch_preserves_other_fields(tmp_path):

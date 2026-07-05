@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.capacity import LOCAL_CHECKOUT_AGENTS, canonical_agent  # noqa: E402
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.dispatch import _resolve_repo_dir, _down_lanes  # noqa: E402
+from limen.tabularius import submit_task_status  # noqa: E402
 
 LOCAL = set(LOCAL_CHECKOUT_AGENTS)
 
@@ -44,21 +45,39 @@ def main() -> int:
         print(f"skipping down lanes: {sorted(down)} — re-routing their tasks to {lanes}")
     path = Path(args.tasks)
     lf = load_limen_file(path)
+    ticket_mode = os.environ.get("LIMEN_TICKETS_PRODUCE") == "1"
 
     cands = [
         t for t in lf.tasks
         if t.status == "open" and canonical_agent(t.target_agent) in LOCAL and _resolve_repo_dir(t) is not None
     ]
     counts = {x: 0 for x in lanes}
+    assignments = []
     for i, t in enumerate(cands):
         lane = lanes[i % len(lanes)]
-        t.target_agent = lane
+        assignments.append((t.id, t.target_agent, lane))
+        if not ticket_mode:
+            t.target_agent = lane
         counts[lane] += 1
 
     print(f"rebalanced {len(cands)} dispatchable local tasks across {lanes}: {counts}")
     if args.apply:
-        save_limen_file(path, lf)
-        print("APPLIED -> tasks.yaml")
+        if ticket_mode:
+            for task_id, original_agent, lane in assignments:
+                submit_task_status(
+                    path,
+                    task_id,
+                    "open",
+                    agent="limen",
+                    session_id="rebalance",
+                    output=f"rebalance: target_agent -> {lane}",
+                    patch={"target_agent": lane},
+                    precondition={"status": "open", "target_agent": original_agent},
+                )
+            print("APPLIED -> TABVLARIVS tickets")
+        else:
+            save_limen_file(path, lf)
+            print("APPLIED -> tasks.yaml")
     else:
         print("dry-run (pass --apply to write)")
     return 0
