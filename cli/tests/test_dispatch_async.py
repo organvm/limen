@@ -1,10 +1,9 @@
-"""Regression tests for scripts/dispatch-async.py's reap_stale marker/lock ordering.
+"""Regression tests for scripts/dispatch-async.py's reap_stale marker/keeper ordering.
 
-The lock-honoring fix deferred the `.running` marker unlink until AFTER the reopen is committed
-under the queue lock — so a lock timeout can no longer leave a leaked slot (marker gone, task still
-'dispatched'). These tests pin the normal (lock-acquired) behavior the restructure must preserve:
-a stale marker reopens its task AND removes the marker; a marker with a result file present is left
-for harvest.
+The single-writer fix defers `.running` marker unlink until AFTER TABVLARIVS applies the reopen
+ticket, so a failed or deferred keeper pass cannot leave a leaked slot (marker gone, task still
+`dispatched`). These tests pin the normal behavior the restructure must preserve: a stale marker
+reopens its task AND removes the marker; a marker with a result file present is left for harvest.
 """
 
 import importlib.util
@@ -30,7 +29,6 @@ _spec.loader.exec_module(dispatch_async)
 @pytest.fixture
 def board(tmp_path, monkeypatch):
     """A tmp tasks.yaml + async-runs dir wired into the module's module-level path constants."""
-    monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
     tasks_path = tmp_path / "tasks.yaml"
     runs = tmp_path / "logs" / "async-runs"
     runs.mkdir(parents=True)

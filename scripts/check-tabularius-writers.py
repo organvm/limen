@@ -35,7 +35,6 @@ STRUCTURAL_ALLOWLIST = {
 # ticket-mode gate and TABVLARIVS producer path in the same file.
 LEGACY_GATED_ALLOWLIST = {
     "cli/src/limen/dispatch.py",
-    "scripts/dispatch-async.py",
 }
 
 PRODUCER_TOKENS = (
