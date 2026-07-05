@@ -153,6 +153,7 @@ above it is autonomous.
       Serial dispatch budget-window resets submit and drain board-meta tickets in ticket mode.
       Parallel dispatch reservations submit guarded status tickets and drain them before agent runs.
       Jules harvest submits completion/failure tickets and drains them before returning.
+      `generate-backlog --apply` submits upsert tickets and drains them before returning.
 - [x] Step 2.3 — MCP server → ticket producer. `mcp/src/limen_mcp/server.py` now loads through
       the shared Limen loader and its mutating tools (`add_task`, `update_task_status`,
       `agent_claim`) submit TABVLARIVS upsert/status tickets, drain the keeper synchronously, and

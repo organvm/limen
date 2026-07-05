@@ -60,6 +60,7 @@ def _run(
     value_repos: str | None = None,
     worktree_root: Path | None = None,
     debt_cap: str = "12",
+    extra_env: dict[str, str] | None = None,
 ) -> str:
     # LIMEN_ORGS="" disables the live-org repo source so the test is deterministic against the
     # repos in its temp tasks.yaml (the generator falls back to the queue set when no org is given).
@@ -68,6 +69,18 @@ def _run(
     if value_repos is None:
         doc = yaml.safe_load(path.read_text()) or {}
         value_repos = ",".join(sorted({t["repo"] for t in doc.get("tasks", []) if t.get("repo")}))
+    env = {
+        **os.environ,
+        "LIMEN_ORGS": "",
+        "LIMEN_ROOT": str(path.parent),
+        "LIMEN_DISPATCH_LANES": "codex,claude,agy",
+        "LIMEN_VALUE_REPOS": value_repos,
+        "LIMEN_VALUE_REPOS_FILE": str(path.parent / "no-such-tier.json"),
+        "LIMEN_WORKTREE_ROOT": str(worktree_root or path.parent / "empty-worktrees"),
+        "LIMEN_WORKTREE_DEBT_MAX": debt_cap,
+    }
+    if extra_env:
+        env.update(extra_env)
     p = subprocess.run(
         [sys.executable, str(SCRIPT), "--tasks", str(path), *args],
         capture_output=True,
@@ -75,16 +88,7 @@ def _run(
         timeout=60,
         # LIMEN_ORGS="" → no live-org source; LIMEN_ROOT=tmp → _down_lanes finds no usage.json,
         # so the routable-open floor count == total open (deterministic, no real lane-health bleed).
-        env={
-            **os.environ,
-            "LIMEN_ORGS": "",
-            "LIMEN_ROOT": str(path.parent),
-            "LIMEN_DISPATCH_LANES": "codex,claude,agy",
-            "LIMEN_VALUE_REPOS": value_repos,
-            "LIMEN_VALUE_REPOS_FILE": str(path.parent / "no-such-tier.json"),
-            "LIMEN_WORKTREE_ROOT": str(worktree_root or path.parent / "empty-worktrees"),
-            "LIMEN_WORKTREE_DEBT_MAX": debt_cap,
-        },
+        env=env,
     )
     assert p.returncode == 0, p.stderr
     return p.stdout
@@ -93,6 +97,11 @@ def _run(
 def _count_generated(path: Path) -> int:
     doc = yaml.safe_load(path.read_text())
     return sum(1 for t in doc["tasks"] if str(t["id"]).startswith("GEN-"))
+
+
+def _pending_tickets(path: Path) -> int:
+    inbox = path.parent / "logs" / "tickets" / "inbox"
+    return len(list(inbox.glob("*.json"))) if inbox.is_dir() else 0
 
 
 def test_noop_when_queue_healthy(tmp_path: Path):
@@ -109,6 +118,25 @@ def test_generates_up_to_floor_and_respects_cap(tmp_path: Path):
     # floor 100 would want 70, but the cap must hold it to 10
     _run(p, "--floor", "100", "--max-new", "10", "--apply")
     assert _count_generated(p) == 10
+
+
+def test_ticket_mode_applies_generated_backlog_through_tabularius(tmp_path: Path):
+    p = tmp_path / "tasks.yaml"
+    _board(p, [f"o/r{i}" for i in range(30)], n_open_per_repo=1)
+
+    out = _run(
+        p,
+        "--floor",
+        "100",
+        "--max-new",
+        "5",
+        "--apply",
+        extra_env={"LIMEN_TICKETS_PRODUCE": "1", "LIMEN_SESSION_ID": "test-generate-backlog"},
+    )
+
+    assert "through TABVLARIVS" in out
+    assert _count_generated(p) == 5
+    assert _pending_tickets(p) == 0
 
 
 def test_spreads_across_distinct_repos(tmp_path: Path):
