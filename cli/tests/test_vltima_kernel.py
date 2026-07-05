@@ -1,3 +1,4 @@
+import json
 import shutil
 import subprocess
 import sys
@@ -66,6 +67,35 @@ def test_vltima_kernel_rejects_registry_unknown_source(tmp_path):
 
     assert result.returncode == 1
     assert "primitive member references unknown source(s): missing-source" in result.stderr
+
+
+def test_vltima_kernel_rejects_projection_unknown_primitive(tmp_path):
+    copy_root = tmp_path / "repo"
+    shutil.copytree(ROOT / "organs", copy_root / "organs")
+    shutil.copy2(ROOT / "organ-ladder.json", copy_root / "organ-ladder.json")
+    registry = copy_root / "organs" / "vltima" / "kernel.yaml"
+    data = yaml.safe_load(registry.read_text())
+    data["projection"]["value_proof"] = ["exchange", "missing-primitive"]
+    registry.write_text(yaml.safe_dump(data, sort_keys=False))
+
+    result = run_validator("--root", copy_root)
+
+    assert result.returncode == 1
+    assert "projection.value_proof references unknown primitive(s): missing-primitive" in result.stderr
+
+
+def test_vltima_kernel_emits_derived_projection_json():
+    result = run_validator("--json-output")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    data = json.loads(result.stdout)
+    assert data["projections"]["organ_kernel"][0] == {"id": "member", "label": "Member"}
+    assert data["projections"]["record_proof"] == [
+        {"id": "event", "label": "Event"},
+        {"id": "record", "label": "Record"},
+        {"id": "standing", "label": "Standing"},
+    ]
+    assert any(organ["pillar"] == "legal" and organ["organ_kernel"] for organ in data["organs"])
 
 
 def test_vltima_kernel_rejects_organ_missing_projection(tmp_path):
