@@ -37,7 +37,6 @@ LEGACY_GATED_ALLOWLIST = {
     "cli/src/limen/dispatch.py",
     "cli/src/limen/harvest.py",
     "scripts/dispatch-async.py",
-    "scripts/route.py",
 }
 
 PRODUCER_TOKENS = (

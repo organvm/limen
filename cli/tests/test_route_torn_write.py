@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "cli" / "src"))
 
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.models import LimenFile, Task  # noqa: E402
-from limen.tabularius import drain_once, pending_count  # noqa: E402
+from limen.tabularius import pending_count  # noqa: E402
 
 
 def _board_with_torn_write(path: Path) -> None:
@@ -32,7 +32,7 @@ def _board_with_torn_write(path: Path) -> None:
             "id": "SEED-1",
             "title": "seed",
             "repo": "o/r1",
-            "target_agent": "codex",
+            "target_agent": "claude",
             "priority": "medium",
             "budget_cost": 1,
             "status": "open",
@@ -72,7 +72,6 @@ def _run(path: Path, *args: str) -> subprocess.CompletedProcess:
             "LIMEN_ORGS": "",
             "LIMEN_ROOT": str(path.parent),
             "LIMEN_DISPATCH_LANES": "codex",
-            "LIMEN_TICKETS_PRODUCE": "",
         },
     )
 
@@ -92,14 +91,16 @@ def test_route_apply_heals_the_file(tmp_path: Path):
     r = _run(p, "--apply")
     assert r.returncode == 0, r.stderr
     assert "Field required" not in r.stderr
-    # the rewritten file must be CLEAN: the malformed dispatch_log entry is gone, the valid one stays.
+    # the rewritten file must be CLEAN: the malformed dispatch_log entry is gone. TABVLARIVS appends
+    # one valid route log entry for the assignment ticket it applied.
     doc = yaml.safe_load(p.read_text())
     dls = [e for t in doc["tasks"] for e in (t.get("dispatch_log") or [])]
-    assert len(dls) == 1, f"garbage dispatch_log entry survived the rewrite: {dls}"
-    assert {"timestamp", "agent", "session_id", "status"}.issubset(dls[0].keys())
+    assert len(dls) == 2, f"unexpected dispatch_log shape after route ticket: {dls}"
+    assert all({"timestamp", "agent", "session_id", "status"}.issubset(entry.keys()) for entry in dls)
+    assert not any(entry.get("id") == "GEN-x" for entry in dls)
 
 
-def test_route_ticket_mode_waits_for_tabularius(tmp_path: Path, monkeypatch):
+def test_route_apply_drains_tabularius_tickets(tmp_path: Path, monkeypatch):
     board = tmp_path / "tasks.yaml"
     save_limen_file(
         board,
@@ -119,7 +120,6 @@ def test_route_ticket_mode_waits_for_tabularius(tmp_path: Path, monkeypatch):
     )
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
     monkeypatch.setenv("LIMEN_TASKS", str(board))
-    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
     monkeypatch.setenv("LIMEN_DISPATCH_LANES", "codex")
     monkeypatch.setenv("LIMEN_ORGS", "")
 
@@ -142,11 +142,7 @@ def test_route_ticket_mode_waits_for_tabularius(tmp_path: Path, monkeypatch):
     )
 
     assert route.main() == 0
-    assert {task.target_agent for task in load_limen_file(board).tasks} == {"claude"}
-    assert pending_count(board) == 6
-
-    drained = drain_once(board)
-    assert drained.applied == 6
+    assert pending_count(board) == 0
     tasks = load_limen_file(board).tasks
     assert {task.target_agent for task in tasks} == {"codex"}
     assert all(task.dispatch_log[-1].agent == "limen" for task in tasks)
