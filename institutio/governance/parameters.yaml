@@ -382,6 +382,18 @@ parameters:
     self_update: none
     owner: continuity
     note: "Maximum Photos metadata atoms emitted after a successful applied duplicate-proof batch."
+  LIMEN_PRIVATE_MAIL_STORY:
+    default: "$LIMEN_ROOT/.limen-private/mail-story"
+    env: LIMEN_PRIVATE_MAIL_STORY
+    self_update: none
+    owner: mail
+    note: "Ignored private object store for mail-story atoms. scripts/mail-story-ledger.py writes raw-ish derived inventory here while tracked docs receive only redacted summaries."
+  LIMEN_MAIL_ENVELOPE_INDEX:
+    default: "$HOME/Library/Mail/V10/MailData/Envelope Index"
+    env: LIMEN_MAIL_ENVELOPE_INDEX
+    self_update: none
+    owner: mail
+    note: "Read-only Apple Mail Envelope Index sqlite path used by scripts/mail-story-ledger.py. Override for host Mail schema/version drift; the script must never mutate Mail."
   LIMEN_CODEX_TOKEN_REPORT:
     default: "$LIMEN_ROOT/logs/codex-token-report.json"
     env: LIMEN_CODEX_TOKEN_REPORT
@@ -847,6 +859,18 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "Fleet dispatch boundary selector. `auto` derives reachable registered lanes from the capacity registry; explicit comma lists are normalized and filtered for down lanes."
+  LIMEN_GITHUB_ACTIONS_REPO:
+    default: "organvm/limen"
+    env: LIMEN_GITHUB_ACTIONS_REPO
+    self_update: none
+    owner: arms-agents
+    note: "Default repository for the GitHub Actions async lane workflow dispatch. Keep repository identity configurable so capacity probes derive the lane target at use-time."
+  LIMEN_GITHUB_ACTIONS_HEALTH_REPO:
+    default: ""
+    env: LIMEN_GITHUB_ACTIONS_HEALTH_REPO
+    self_update: none
+    owner: arms-agents
+    note: "Optional repository used only for GitHub Actions lane health probes. Empty means fall back to LIMEN_GITHUB_ACTIONS_REPO, preserving one dispatch target unless a separate probe repo is declared."
   LIMEN_JULES_BATCH_FILL:
     default: "1"
     env: LIMEN_JULES_BATCH_FILL
