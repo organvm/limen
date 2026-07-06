@@ -5,7 +5,7 @@ Update verified 2026-06-28:
 - Live launchd heartbeat is running and `python3 scripts/watchdog.py --dry-run` reports healthy.
 - Live heartbeat is still using SYNC dispatch. The installed plist now records `LIMEN_DISPATCH_ASYNC=0`; the currently loaded launchd job has not been reloaded since that file repair.
 - Async orchestration is implemented and tested. `pytest -q cli/tests/test_async_dispatch.py` passes after fixing stale-worker reaping so async-reserved tasks reopen when their detached worker dies.
-- `PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes codex,opencode,agy,claude,gemini,jules --per-lane 3 --max 12 --dry-run` reports no current async workers and no launchable async tasks.
+- `PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes auto --per-lane 3 --max 12 --dry-run` reports no current async workers and no launchable async tasks.
 
 The heartbeat (`scripts/heartbeat-loop.sh`, launchd `com.limen.heartbeat`) runs one polyrhythmic
 beat repeatedly: drain → heal → feed (mine) → route/rebalance → **dispatch** → reconcile → web.
@@ -51,6 +51,10 @@ results → **reserve + launch** detached workers up to a global cap, then **ret
   timeout the WHOLE process group is `SIGKILL`ed. Plain `subprocess.run(timeout=)` only kills the
   direct child — if an agent CLI spawns grandchildren holding the stdout pipe, `communicate()`
   hangs forever past the timeout (caused a real 23-min beat freeze). This makes timeouts actually fire.
+- **Isolated root retention** (`dispatch._cleanup_isolated_worktree`): local lane worktrees and
+  branch refs are classified after each run but not physically deleted by dispatch. Reclaim/removal
+  happens later through `docs/worktree-reclaim-acceptance.jsonl` and
+  `docs/branch-reap-acceptance.jsonl`, after archive and redaction proof.
 - **Queue-lock (#11)** (`dispatch._queue_lock(tasks_path)`): cross-process mutex on tasks.yaml
   (`logs/.queue.lock.d`, sibling of tasks.yaml). The heartbeat releases it BEFORE the slow dispatch
   so supervisors (seed/heal/verify) aren't starved; dispatch self-locks its reserve and
@@ -63,6 +67,8 @@ results → **reserve + launch** detached workers up to a global cap, then **ret
   DISPATCHED_NO_PR→open (re-dispatch). Respects async `.running` markers (won't reopen a live run).
 - **jules→PR** (`scripts/jules-land.py`, wired into `drain.sh`): lands completed jules sessions as
   PRs (the async-cloud equivalent of worktree→PR), dup-safe via PR-URL backfill in dispatch_log.
+  It retains the isolated local worktree/branch after PR creation; physical cleanup belongs to the
+  receipt-backed reclaim/reap organs once merged/archive/redaction proof exists.
 
 ## Shipping the output
 `scripts/merge-ready.sh` (dry-run default, `--apply` gated) merges CLEAN non-junk PRs revenue-first.

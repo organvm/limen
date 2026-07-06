@@ -11,6 +11,9 @@
 #     history or a blocked tree it logs the cheapest path and returns 0 so the beat never stops
 #     (the "never a silent no" invariant). It NEVER exits or re-execs the daemon (KeepAlive=false:
 #     an exit would not respawn — that is the documented dead-daemon failure mode).
+#   • HEAD RESTS ON THE RELEASE BRANCH — a checkout parked on a work branch is UNPARKED back to
+#     the release, but only when provably loss-free (branch tip safe on origin + no tracked dirt
+#     beyond the daemon-owned tasks.yaml); see the unpark valve below.
 #
 # Untracked runtime state (logs/autonomy-policy.json governor gate, usage.json, caches) is SAFE:
 # a fast-forward only advances committed history and leaves untracked files untouched. This organ
@@ -20,6 +23,83 @@ export HOME="${HOME:-/Users/4jp}"
 ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
 BRANCH="${LIMEN_RELEASE_BRANCH:-main}"
 
+# Regenerable daemon bookkeeping — receipt files the beat REWRITES every cycle. A commit touching ONLY
+# these is "unique" by patch-id yet carries NO genuine work: it is loss-free to re-converge past. This
+# is the exact commit that otherwise strands the live checkout — a receipt committed while in sync, then
+# left diverged when origin advanced (a merged PR) before its push landed → ff-only fails open forever,
+# pinning the daemon to stale code. Distinct from the patch-id valve ("already upstream"): this is
+# "regenerable, so losing it costs nothing". Override the globs via LIMEN_SYNC_RECEIPT_GLOBS.
+RECEIPT_GLOBS="${LIMEN_SYNC_RECEIPT_GLOBS:-docs/worktree-preservation-receipts.json docs/pr-receipts.json docs/*-receipts.json docs/*-receipt.json}"
+_only_receipts() {  # exit 0 ⟺ stdin has ≥1 path AND every path matches a receipt glob
+  local f p matched any=0
+  local -a globs
+  read -r -a globs <<<"$RECEIPT_GLOBS"   # split on whitespace WITHOUT pathname-expanding the globs
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    any=1; matched=0
+    for p in "${globs[@]}"; do
+      # shellcheck disable=SC2254  # $p is an intentional case glob-pattern, not a literal to quote
+      case "$f" in $p) matched=1; break ;; esac
+    done
+    [ "$matched" = 1 ] || return 1
+  done
+  [ "$any" = 1 ]
+}
+
+if [ "${1:-}" = "--census" ]; then
+  python3 - "$ROOT" "$BRANCH" "$RECEIPT_GLOBS" <<'PY'
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+branch = sys.argv[2]
+receipt_globs = [item for item in sys.argv[3].split() if item]
+
+
+def git(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+
+
+def count_lines(proc: subprocess.CompletedProcess[str]) -> int:
+    if proc.returncode != 0:
+        return 0
+    return len([line for line in proc.stdout.splitlines() if line.strip()])
+
+
+inside = git("rev-parse", "--is-inside-work-tree")
+is_repo = inside.returncode == 0 and inside.stdout.strip() == "true"
+tracked_dirty = git("diff", "--name-only", "HEAD") if is_repo else subprocess.CompletedProcess([], 1, "", "")
+cached_dirty = git("diff", "--cached", "--name-only") if is_repo else subprocess.CompletedProcess([], 1, "", "")
+untracked = git("ls-files", "--others", "--exclude-standard") if is_repo else subprocess.CompletedProcess([], 1, "", "")
+current = git("symbolic-ref", "--quiet", "--short", "HEAD") if is_repo else subprocess.CompletedProcess([], 1, "", "")
+remote = git("rev-parse", f"origin/{branch}") if is_repo else subprocess.CompletedProcess([], 1, "", "")
+
+print(
+    json.dumps(
+        {
+            "root_present": root.exists(),
+            "git_repo": is_repo,
+            "on_release_branch": bool(current.stdout.strip() == branch) if is_repo else False,
+            "remote_tracking_present": remote.returncode == 0,
+            "tracked_dirty_count": count_lines(tracked_dirty),
+            "cached_dirty_count": count_lines(cached_dirty),
+            "untracked_count": count_lines(untracked),
+            "tasks_present": (root / "tasks.yaml").exists(),
+            "logs_present": (root / "logs").exists(),
+            "sync_collision_present": (root / "logs" / ".sync-collision").exists(),
+            "loop_update_pending": (root / "logs" / ".loop-update-pending").exists(),
+            "receipt_globs": len(receipt_globs),
+        },
+        indent=2,
+        sort_keys=True,
+    )
+)
+PY
+  exit 0
+fi
+
 cd "$ROOT" 2>/dev/null || { echo "sync-release: no LIMEN_ROOT ($ROOT) — fail open"; exit 0; }
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "sync-release: not a git repo — fail open"; exit 0; }
 
@@ -27,6 +107,69 @@ git fetch --quiet origin "$BRANCH" 2>/dev/null || { echo "sync-release: fetch fa
 LOCAL="$(git rev-parse HEAD 2>/dev/null || echo)"
 REMOTE="$(git rev-parse "origin/$BRANCH" 2>/dev/null || echo)"
 [ -n "$REMOTE" ] || { echo "sync-release: no origin/$BRANCH — fail open"; exit 0; }
+
+# ── UNPARK valve — the live checkout must REST ON THE RELEASE BRANCH. A session that leaves HEAD
+# parked on a work branch strands the daemon on stale code with no way home (observed
+# 2026-06-29 → 07-04: five days pinned to a jules-capfill branch, 65 behind release, every
+# autonomic capture entangling runtime state into that branch). Unparking is loss-free ⟺ BOTH:
+#   • every committed local commit is already safe on origin's copy of the branch
+#     (tip == origin/<cur> after a freshen), AND
+#   • no tracked modification beyond the daemon-owned live queue (tasks.yaml — preserved across
+#     the switch; capture.sh commits+pushes any other dirt onto the branch on its own beat, after
+#     which THIS valve fires — so a parked-dirty checkout self-heals within two beats).
+# Anything less provable fails open LOUDLY with the cheapest path. Detached HEAD is left alone.
+CUR="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo)"
+if [ -n "$CUR" ] && [ "$CUR" != "$BRANCH" ]; then
+  git fetch --quiet origin "$CUR" 2>/dev/null || true
+  RCUR="$(git rev-parse "origin/$CUR" 2>/dev/null || echo)"
+  dirt="$( { git diff --name-only HEAD 2>/dev/null; git diff --cached --name-only 2>/dev/null; } | grep -vxF 'tasks.yaml' | sort -u)"
+  if [ -z "$RCUR" ] || [ "$RCUR" != "$LOCAL" ]; then
+    echo "sync-release: parked on '$CUR' with commit(s) not safe on origin/$CUR — fail open (cheapest path: push the branch; the valve unparks next beat)"
+    exit 0
+  fi
+  if [ -n "$dirt" ]; then
+    echo "sync-release: parked on '$CUR' with tracked dirt beyond tasks.yaml — fail open (capture.sh lands it next beat, then the valve unparks)"
+    exit 0
+  fi
+  TMP="$(mktemp 2>/dev/null || echo "$ROOT/logs/.tasks.unpark.$$")"
+  [ -f tasks.yaml ] && cp -f tasks.yaml "$TMP" 2>/dev/null || true
+  # A switch is blocked by exactly what blocks the ff below (observed on the 2026-07-04 live heal):
+  # (a) an UNTRACKED file the release now TRACKS (censor/precedents.jsonl that day) — release-owned,
+  # so back it up to logs/.sync-collision and remove it, the same invariant as the ff collision
+  # valve; and (b) the daemon-owned tasks.yaml differing between the branches — cleaned here (live
+  # copy restored below), with ONE retry because a beat can rewrite it mid-valve. A branch already
+  # checked out in another worktree also refuses; that stays fail-open (surfaced in the message).
+  release_tracked="$(git ls-tree -r --name-only "origin/$BRANCH" 2>/dev/null || echo)"
+  untracked="$(git ls-files --others --exclude-standard 2>/dev/null || echo)"
+  BK="$ROOT/logs/.sync-collision"
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    printf '%s\n' "$release_tracked" | grep -qxF "$f" || continue   # only paths the release tracks
+    mkdir -p "$BK/$(dirname "$f")" 2>/dev/null || true
+    cp -f "$f" "$BK/$f" 2>/dev/null || true                         # back up (never delete) before removing
+    rm -f "$f" 2>/dev/null || true
+  done <<UNPARK_EOF
+$untracked
+UNPARK_EOF
+  unparked=0
+  git checkout --quiet HEAD -- tasks.yaml 2>/dev/null || true       # clean the queue for the switch
+  why="$(git switch --quiet "$BRANCH" 2>&1)" && unparked=1
+  if [ "$unparked" = 0 ]; then
+    git checkout --quiet HEAD -- tasks.yaml 2>/dev/null || true     # a beat re-wrote it mid-valve — once more
+    why="$(git switch --quiet "$BRANCH" 2>&1)" && unparked=1
+  fi
+  [ -f "$TMP" ] && cp -f "$TMP" tasks.yaml 2>/dev/null || true
+  rm -f "$TMP" 2>/dev/null || true
+  if [ "$unparked" = 1 ]; then
+    LOCAL="$(git rev-parse HEAD 2>/dev/null || echo)"
+    echo "sync-release: UNPARKED '$CUR' → '$BRANCH' (branch tip safe on origin/$CUR) ✓"
+  else
+    why="$(printf '%s' "$why" | head -2 | tr '\n' ' ' | cut -c1-200)"
+    echo "sync-release: switch '$CUR' → '$BRANCH' refused (${why}) — fail open (reconcile by hand)"
+    exit 0
+  fi
+fi
+
 [ "$LOCAL" = "$REMOTE" ] && { echo "sync-release: at release ${REMOTE:0:7} ✓"; exit 0; }
 
 # fast-forward ONLY — never touch a diverged or rewound history…
@@ -51,16 +194,26 @@ if ! git merge-base --is-ancestor "$LOCAL" "$REMOTE" 2>/dev/null; then
 $(git log --no-merges --format=%H "$BASE..$LOCAL" 2>/dev/null)
 EOF
   fi
+  reconcile_reason="all local commits already upstream (patch-id)"
+  # Second loss-free valve: the unique local commits touch ONLY regenerable receipts (the beat rewrites
+  # them next cycle). Guarded by --is-ancestor so we NEVER discard a commit origin doesn't already have
+  # as a descendant — i.e. only when the release is strictly AHEAD of BASE, never on a rewound remote.
+  if [ "$unique" = 1 ] && [ -n "$BASE" ] \
+     && git merge-base --is-ancestor "$BASE" "$REMOTE" 2>/dev/null \
+     && git diff --name-only "$BASE..$LOCAL" 2>/dev/null | _only_receipts; then
+    unique=0
+    reconcile_reason="local commit(s) touch ONLY regenerable receipts"
+  fi
   CUR="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo)"
   if [ "$unique" = 0 ] && [ "$CUR" = "$BRANCH" ]; then
     TMP="$(mktemp 2>/dev/null || echo "$ROOT/logs/.tasks.sync.$$")"
     [ -f tasks.yaml ] && cp -f tasks.yaml "$TMP" 2>/dev/null || true
-    # reset --hard leaves UNTRACKED runtime (logs/, usage.json) untouched; patch-id proved no unique
-    # committed work is lost; tasks.yaml (daemon-owned) is restored after.
+    # reset --hard leaves UNTRACKED runtime (logs/, usage.json) untouched; the valve above proved no
+    # genuine committed work is lost; tasks.yaml (daemon-owned) is restored after.
     if git reset --hard "origin/$BRANCH" --quiet 2>/dev/null; then
       [ -f "$TMP" ] && cp -f "$TMP" tasks.yaml 2>/dev/null || true
       rm -f "$TMP" 2>/dev/null || true
-      echo "sync-release: diverged but all local commits already upstream (patch-id) — re-converged ${LOCAL:0:7} → ${REMOTE:0:7} ✓ (no unique work lost)"
+      echo "sync-release: diverged but ${reconcile_reason} — re-converged ${LOCAL:0:7} → ${REMOTE:0:7} ✓ (no unique work lost)"
       exit 0
     fi
     rm -f "$TMP" 2>/dev/null || true

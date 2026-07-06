@@ -15,7 +15,7 @@ from limen.doctor import (
 )
 from limen.dispatch import dispatch_tasks, release_stale_tasks
 from limen.harvest import harvest_results
-from limen.io import load_limen_file
+from limen.io import load_limen_file, load_limen_text
 from limen.status import print_status
 
 
@@ -181,6 +181,116 @@ def status(agent, status):
     print_status(limen, agent_filter=agent, status_filter=status)
 
 
+def _open_prs_via_gh(limit: int = 200):
+    """Enumerate open PRs in the current repo via `gh pr list` → list[workstream.PullRequest].
+
+    Kept in the CLI (IO) layer so `limen.workstream` stays pure. Fail-open: any gh error (not
+    installed, unauthenticated, not a GitHub repo) yields an empty list with a note on stderr,
+    never a traceback — the projection just shows zero PRs.
+    """
+    from limen import workstream as ws
+
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "pr",
+                "list",
+                "--state",
+                "open",
+                "--limit",
+                str(limit),
+                "--json",
+                "number,title,headRefName,url,isDraft",
+            ],
+            text=True,
+            capture_output=True,
+        )
+    except FileNotFoundError:
+        click.echo("gh not found — cannot enumerate PRs (install GitHub CLI)", err=True)
+        return []
+    if result.returncode != 0:
+        click.echo(f"gh pr list failed: {result.stderr.strip()}", err=True)
+        return []
+    try:
+        rows = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        return []
+    return [
+        ws.PullRequest(
+            number=int(r.get("number", 0)),
+            title=str(r.get("title", "")),
+            branch=str(r.get("headRefName", "")),
+            url=str(r.get("url", "")),
+            draft=bool(r.get("isDraft", False)),
+        )
+        for r in rows
+    ]
+
+
+@main.command()
+@click.option("--scope", default=None, help="Show only one channel (accepts an alias, e.g. 'revenue').")
+@click.option(
+    "--emit",
+    default=None,
+    type=click.Path(),
+    help="Write a board filtered to --scope's tasks to this path (feeds `cell conduct --workstream`).",
+)
+@click.option(
+    "--prs",
+    "prs_mode",
+    is_flag=True,
+    help="Project OPEN PRs (via gh) by channel instead of the task board — makes PR sprawl legible.",
+)
+@click.option("--json-output", "json_output", is_flag=True, help="Machine-readable roster + per-channel counts.")
+def channels(scope, emit, prs_mode, json_output):
+    """Project the board by workstream channel — the purpose partition above vendor lanes.
+
+    The roster DERIVES from organ-ladder.json (one channel per institutional organ) plus the
+    operational lanes (conductor / contributions / correspondence / prompt-parity). `--emit` writes a
+    single channel's board so a scoped `cell conduct --workstream <handle>` sees only its own lane —
+    the one-worker-one-channel invariant that cures mixed-purpose PR pileup. `--prs` reuses the same
+    channel taxonomy to bucket the open-PR pile, so session/PR sprawl reads on the purpose axis too.
+    """
+    from limen import workstream as ws
+    from limen.io import save_limen_file
+
+    root = resolve_root()
+
+    if prs_mode:
+        if emit:
+            click.echo("--emit projects the task board, not PRs; drop --prs or --emit", err=True)
+            sys.exit(2)
+        prs = _open_prs_via_gh()
+        if json_output:
+            click.echo(json.dumps(ws.pr_roster_summary(prs, root), indent=2))
+        else:
+            ws.print_pr_channels(prs, root, scope=scope)
+        return
+
+    tasks_path = resolve_tasks_path(root)
+    if not tasks_path.exists():
+        click.echo("tasks.yaml not found", err=True)
+        sys.exit(1)
+    limen = load_limen_file(tasks_path)
+
+    if emit:
+        if not scope:
+            click.echo("--emit requires --scope <handle>", err=True)
+            sys.exit(2)
+        filtered = ws.filter_board(limen, scope, root)
+        out = Path(emit).expanduser()
+        out.parent.mkdir(parents=True, exist_ok=True)
+        save_limen_file(out, filtered, allow_shrink=True)  # a single channel is legitimately small
+        click.echo(f"wrote {len(filtered.tasks)} tasks for channel '{ws.canonical_handle(scope, root)}' to {out}")
+        return
+
+    if json_output:
+        click.echo(json.dumps(ws.roster_summary(limen, root), indent=2))
+        return
+    ws.print_channels(limen, root, scope=scope)
+
+
 @main.command()
 @click.option("--agent", default=None, help="Filter by agent")
 def harvest(agent):
@@ -193,10 +303,14 @@ def harvest(agent):
 
 @main.command("workstream")
 @click.option("--codex", "launch_codex", is_flag=True, help="Open Codex in the worktree after creating the packet.")
-@click.option("--shell", "launch_shell", is_flag=True, help="Open a login shell in the worktree after creating the packet.")
+@click.option(
+    "--shell", "launch_shell", is_flag=True, help="Open a login shell in the worktree after creating the packet."
+)
 @click.option("--from", "from_ref", default=None, help="Branch or ref to create the worktree branch from.")
 @click.option("--prompt", "prompt_text", default=None, help="Inline prompt packet for .limen-workstream/README.md.")
-@click.option("--prompt-file", default=None, type=click.Path(exists=True), help="Prompt packet file to embed in README.md.")
+@click.option(
+    "--prompt-file", default=None, type=click.Path(exists=True), help="Prompt packet file to embed in README.md."
+)
 @click.option("--no-readme", is_flag=True, help="Create/reuse the worktree without writing the private kickoff packet.")
 @click.argument("repo")
 @click.argument("slug")
@@ -227,6 +341,76 @@ def workstream(launch_codex, launch_shell, from_ref, prompt_text, prompt_file, n
         if result.stderr:
             click.echo(result.stderr, err=True, nl=False)
     raise SystemExit(result.returncode)
+
+
+@main.command()
+@click.option("--verify", is_flag=True, help="Prove the fold reproduces the board byte-for-byte (exit 1 if not).")
+@click.option(
+    "--emit-events",
+    "emit_events",
+    default=None,
+    help="Write the board's seed event stream (fold input) to this JSONL path.",
+)
+def materialize(verify, emit_events):
+    """Derive the board from its event stream — step 1 of the event-sourced board.
+
+    The board (tasks.yaml) is a *materialized view*: board = fold(events). --verify seeds events
+    from the current board, folds them, re-serializes through the canonical writer, and asserts the
+    bytes are identical — the executable proof that the projection reproduces reality exactly. This
+    commits nothing (it does not write tasks.yaml); it only proves the ideal form is faithful.
+    """
+    import yaml
+
+    from limen.materialize import fold, seed_events_from_board
+
+    root = resolve_root()
+    tasks_path = resolve_tasks_path(root)
+    if not tasks_path.exists():
+        click.echo("tasks.yaml not found", err=True)
+        sys.exit(1)
+
+    # Read the board bytes exactly ONCE: seed events from, and compare against, the same buffer.
+    # The live board is rewritten every beat, so a second read_text() could observe a different file
+    # than the one we folded — a TOCTOU false-negative. load_limen_text parses that single snapshot.
+    on_disk = tasks_path.read_text()
+    board = load_limen_text(on_disk, name=tasks_path.name)
+    events = seed_events_from_board(board)
+
+    if emit_events:
+        out = Path(emit_events).expanduser()
+        out.write_text("".join(json.dumps(e, ensure_ascii=False, sort_keys=True) + "\n" for e in events))
+        click.echo(f"wrote {len(events)} events to {out}")
+
+    if verify or not emit_events:
+        rebuilt = fold(events)
+        # canonical serialization = exactly what save_limen_file writes (mode=json, exclude_none,
+        # sort_keys=False). Compare against the snapshot we loaded from — not a fresh read.
+        rebuilt_bytes = yaml.dump(
+            rebuilt.model_dump(mode="json", exclude_none=True), sort_keys=False, default_flow_style=False
+        )
+        identical = rebuilt_bytes == on_disk
+        click.echo(
+            f"materialize: {len(board.tasks)} tasks, {len(events)} events; "
+            f"fold(events) == tasks.yaml bytes: {identical}"
+        )
+        if not identical:
+            click.echo(
+                "  NON-IDENTICAL — the board on disk is not canonical, or the fold lost a field. "
+                "Re-run `limen doctor`; do not migrate writers until this exits 0.",
+                err=True,
+            )
+            sys.exit(1)
+
+
+@main.command()
+@click.option("--once", is_flag=True, help="One frame then exit")
+@click.option("--compact", is_flag=True, help="One-line compact mode")
+@click.option("-n", "--interval", default=2.0, type=float, help="Refresh interval in seconds")
+def watch(once, compact, interval):
+    """Show the real-time fleet dashboard."""
+    from limen.watch import run
+
+    run(once=once, compact=compact, interval=interval)
 
 
 if __name__ == "__main__":

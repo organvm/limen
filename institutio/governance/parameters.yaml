@@ -124,12 +124,174 @@ parameters:
     self_update: none
     owner: evocator
     note: "Path to the knowledge-corpus repo; the corpus channel writes a collection shot here (guarded, fail-open)."
+  LIMEN_PRIVATE_ROOT:
+    default: "$LIMEN_ROOT/.limen-private"
+    env: LIMEN_PRIVATE_ROOT
+    self_update: none
+    owner: continuity
+    note: "Ignored local private cartridge root (parent of session-corpus, photos-universe, etc.). Full media-dedup paths/hashes live here and are never committed; public receipts carry aggregates only."
   LIMEN_PRIVATE_SESSION_CORPUS:
     default: "$LIMEN_ROOT/.limen-private/session-corpus"
     env: LIMEN_PRIVATE_SESSION_CORPUS
     self_update: none
     owner: continuity
     note: "Ignored local raw/private session cartridge. Stores manifests and optional content-addressed object copies; never committed."
+  LIMEN_EXTERNAL_SESSION_ROOTS:
+    default: ""
+    env: LIMEN_EXTERNAL_SESSION_ROOTS
+    self_update: none
+    owner: continuity
+    note: "Optional os.pathsep-separated archive/external roots for session-corpus-ledger.py inventory. Bounded scan only; never a deletion target."
+  LIMEN_EXTERNAL_SESSION_MAX_FILES_PER_ROOT:
+    default: 2000
+    env: LIMEN_EXTERNAL_SESSION_MAX_FILES_PER_ROOT
+    self_update: none
+    owner: continuity
+    note: "Per-root file cap for external/archive session inventory so large mounted volumes cannot turn a ledger refresh into an unbounded crawl."
+  LIMEN_EXTERNAL_SESSION_MAX_DEPTH:
+    default: 5
+    env: LIMEN_EXTERNAL_SESSION_MAX_DEPTH
+    self_update: none
+    owner: continuity
+    note: "Maximum directory depth for external/archive session inventory roots."
+  LIMEN_EXTERNAL_SESSION_MAX_DIRS_PER_ROOT:
+    default: 5000
+    env: LIMEN_EXTERNAL_SESSION_MAX_DIRS_PER_ROOT
+    self_update: none
+    owner: continuity
+    note: "Per-root directory visit cap for external/archive session inventory roots."
+  LIMEN_CURRENT_SESSION_JSONL:
+    default: ""
+    env: LIMEN_CURRENT_SESSION_JSONL
+    self_update: none
+    owner: continuity
+    note: "Optional explicit Codex session JSONL for current-session fanout. Blank means derive the latest local Codex transcript."
+  LIMEN_ORIENT_TASKS:
+    default: ""
+    env: LIMEN_ORIENT_TASKS
+    self_update: none
+    owner: continuity
+    note: "Optional session-orientation verifier snapshot for tasks.yaml. Blank means the live board is read; predicates set this only to prove generator idempotence against a stable input while dispatch may be moving the live board."
+  LIMEN_ORIENT_GIT_SECTION:
+    default: ""
+    env: LIMEN_ORIENT_GIT_SECTION
+    self_update: none
+    owner: continuity
+    note: "Optional pinned Git summary line for the session-orientation verifier. Blank means read live git state; predicates set this only to avoid confusing live dirty-state changes with generator non-determinism."
+  LIMEN_ORIENT_NO_WRITE:
+    default: "0"
+    env: LIMEN_ORIENT_NO_WRITE
+    self_update: none
+    owner: continuity
+    note: "When 1, session-orient.py prints the digest without refreshing logs/session-orientation.md. Used by idempotence predicates; normal hooks leave it unset."
+  LIMEN_INSIGHT_CADENCE_VERIFY_ROOT:
+    default: ""
+    env: LIMEN_INSIGHT_CADENCE_VERIFY_ROOT
+    self_update: none
+    owner: continuity
+    note: "Optional retained sandbox root for done-insight-cadence.sh verification. Blank means create a private temporary proof root and retain it for inspection instead of deleting it."
+  LIMEN_MIN_CODEX_PLANNERS:
+    default: 10
+    env: LIMEN_MIN_CODEX_PLANNERS
+    self_update: none
+    owner: continuity
+    note: "Minimum Codex planner packets emitted by current-session fanout before executor waterfalling."
+  LIMEN_CURRENT_SESSION_FANOUT_REPO:
+    default: "organvm/limen"
+    env: LIMEN_CURRENT_SESSION_FANOUT_REPO
+    self_update: none
+    owner: continuity
+    note: "Owner/repo used when current-session fanout seeds queue tasks; normally derived from the checkout remote."
+  LIMEN_STORAGE_ROOTS:
+    default: "$LIMEN_ROOT"
+    env: LIMEN_STORAGE_ROOTS
+    self_update: none
+    owner: continuity
+    note: "Comma-separated roots for bounded substrate storage discovery. Missing roots are recorded as blockers; no root is mounted or mutated."
+  LIMEN_REPO_ROOTS:
+    default: "$LIMEN_ROOT"
+    env: LIMEN_REPO_ROOTS
+    self_update: none
+    owner: continuity
+    note: "Comma-separated local roots scanned for git repository surfaces by repo-surface ledger. Read-only discovery only."
+  LIMEN_WORKSPACE_ROOT:
+    default: "$HOME/Workspace"
+    env: LIMEN_WORKSPACE_ROOT
+    self_update: none
+    owner: continuity
+    note: "Optional local workspace root scanned for repo/product surfaces by repo-surface ledger. Read-only discovery only."
+  LIMEN_WORKTREE_ROOT:
+    default: ""
+    env: LIMEN_WORKTREE_ROOT
+    self_update: none
+    owner: continuity
+    note: "Optional local worktree root scanned for repo/product surfaces by repo-surface ledger. Empty means no extra worktree root."
+  LIMEN_REPO_SCAN_DEPTH:
+    default: 4
+    env: LIMEN_REPO_SCAN_DEPTH
+    self_update: none
+    owner: continuity
+    note: "Maximum directory depth for repo-surface ledger discovery."
+  LIMEN_PROMPT_SOURCES:
+    default: ""
+    env: LIMEN_PROMPT_SOURCES
+    self_update: none
+    owner: continuity
+    note: "Optional prompt source roots for product-ledger lifecycle counting. Empty means use bounded local defaults."
+  LIMEN_ARCHIVE_TARGETS:
+    default: ""
+    env: LIMEN_ARCHIVE_TARGETS
+    self_update: none
+    owner: continuity
+    note: "Optional archive target list for substrate/product ledger classification. Read-only; no archive mutation."
+  LIMEN_AGY_ARCHIVE_ROOT:
+    default: "$LIMEN_ROOT/.limen-private/agy-scratch-preserve"
+    env: LIMEN_AGY_ARCHIVE_ROOT
+    self_update: none
+    owner: continuity
+    note: "Private preservation root for Antigravity scratch deltas before any safe-reap decision. Ignored locally; public receipts carry redacted aggregate proof only."
+  LIMEN_WORKSPACE_UNIT_TIMEOUT_SEC:
+    default: 600                # seconds: per-entry rsync cap so one big repo copy never wedges the beat
+    env: LIMEN_WORKSPACE_UNIT_TIMEOUT_SEC
+    self_update: none
+    owner: continuity
+    note: "Hard timeout (s) for one top-level ~/Workspace entry's additive rsync inside preserve_workspace() (library-preserve.py), so a slow multi-GB repo copy never wedges the C_BACKUP beat."
+  LIMEN_STORAGE_FREE_FLOOR_GIB:
+    default: 5
+    env: LIMEN_STORAGE_FREE_FLOOR_GIB
+    self_update: none
+    owner: continuity
+    note: "Minimum free-space floor used by substrate-ledger status classification."
+  LIMEN_STORAGE_USAGE_CEILING_PCT:
+    default: 95
+    env: LIMEN_STORAGE_USAGE_CEILING_PCT
+    self_update: none
+    owner: continuity
+    note: "Maximum storage usage percentage before substrate-ledger marks a root constrained."
+  LIMEN_SUBSTRATE_CONFIG:
+    default: "$LIMEN_ROOT/config/substrate.json"
+    env: LIMEN_SUBSTRATE_CONFIG
+    self_update: none
+    owner: continuity
+    note: "Optional substrate-ledger configuration path. Missing config is non-fatal and recorded."
+  LIMEN_CONTRIB_LEDGER:
+    default: "~/Workspace/organvm/contrib/LEDGER.yaml"
+    env: LIMEN_CONTRIB_LEDGER
+    self_update: none
+    owner: contributions
+    note: "The hub ledger path (organvm/contrib LEDGER.yaml) read by product-ledger.py and contributions-organ.py. Was mis-declared as $LIMEN_ROOT/docs/contrib-ledger.md (a file that never existed) — fixed 2026-07-05 to match the executable default (the predicate wins over prose)."
+  LIMEN_CORPUS_MAX_SESSIONS:
+    default: ""
+    env: LIMEN_CORPUS_MAX_SESSIONS
+    self_update: none
+    owner: continuity
+    note: "Optional debug cap for the interactive Corpus Command Center snapshot. Blank means index every local lifecycle session; --all-sessions ignores any cap."
+  LIMEN_CORPUS_PUBLIC_UNIT_LIMIT:
+    default: 2000
+    env: LIMEN_CORPUS_PUBLIC_UNIT_LIMIT
+    self_update: none
+    owner: continuity
+    note: "Maximum redacted units exposed to the owner dashboard/public-safe corpus snapshot; coverage still records full bounded-run counts."
   LIMEN_CAPABILITY_ROOTS:
     default: ""
     env: LIMEN_CAPABILITY_ROOTS
@@ -154,6 +316,216 @@ parameters:
     self_update: none
     owner: continuity
     note: "Idle minutes before codex-quicken treats a Codex session as no longer alive. Classifier-only; it never resumes or mutates sessions."
+  LIMEN_BEAT_CONTINUATION:
+    default: 6
+    env: LIMEN_BEAT_CONTINUATION
+    self_update: none
+    owner: continuity
+    note: "Heartbeat cadence for the bounded autonomous continuation voice."
+  LIMEN_SESSION_ID:
+    default: "manual-claim"
+    env: LIMEN_SESSION_ID
+    self_update: none
+    owner: continuity
+    note: "The opaque session ID recorded in the dispatch log during task claims."
+  LIMEN_CONTINUATION:
+    default: "1"
+    env: LIMEN_CONTINUATION
+    self_update: none
+    owner: continuity
+    note: "Master gate for the daemon-driven continuation beat. 1=enabled; 0=skip."
+  LIMEN_CONTINUATION_TIMEOUT:
+    default: 600
+    env: LIMEN_CONTINUATION_TIMEOUT
+    self_update: none
+    owner: continuity
+    note: "Wall-clock ceiling in seconds for one continuation beat when timeout(1) is available."
+  LIMEN_CONTINUATION_TOKEN_GATE:
+    default: "1"
+    env: LIMEN_CONTINUATION_TOKEN_GATE
+    self_update: none
+    owner: continuity
+    note: "Gate continuation on the Codex token accounting budget report. 1=stop continuation on over-budget sessions."
+  LIMEN_PHOTOS_LIBRARY:
+    default: "$HOME/Pictures/Photos Library.photoslibrary"
+    env: LIMEN_PHOTOS_LIBRARY
+    self_update: none
+    owner: continuity
+    note: "Apple Photos.app library bundle. media-atomize --photos-metadata reads it READ-ONLY (sqlite ZASSET) to emit metadata Shot atoms; the library is never mutated."
+  LIMEN_PHOTOS_DB:
+    default: "$HOME/Pictures/Photos Library.photoslibrary/database/Photos.sqlite"
+    env: LIMEN_PHOTOS_DB
+    self_update: none
+    owner: continuity
+    note: "Path to the Photos library sqlite DB (derived from LIMEN_PHOTOS_LIBRARY). Opened read-only for photos-metadata atomization; fail-open when the schema differs."
+  LIMEN_PHOTOS_UNIVERSE_ROOT:
+    default: "/Users/4jp/Workspace/photos-universe-20260629-182431"
+    env: LIMEN_PHOTOS_UNIVERSE_ROOT
+    self_update: none
+    owner: continuity
+    note: "Photos Universe recovery checkout used by the receipt-only continuation beat."
+  LIMEN_PORTVS_TRIPTYCH_ROOT:
+    default: "/Users/4jp/Workspace/4444J99/portvs/.worktrees/triptych-story"
+    env: LIMEN_PORTVS_TRIPTYCH_ROOT
+    self_update: none
+    owner: continuity
+    note: "Portvs triptych worktree used by the continuation beat's proxy refresh."
+  LIMEN_CONTINUE_PHOTOS_GROUPS:
+    default: 25
+    env: LIMEN_CONTINUE_PHOTOS_GROUPS
+    self_update: none
+    owner: continuity
+    note: "Maximum duplicate-proof groups advanced by one continuation beat."
+  LIMEN_CONTINUE_PHOTOS_ATOMS:
+    default: 25
+    env: LIMEN_CONTINUE_PHOTOS_ATOMS
+    self_update: none
+    owner: continuity
+    note: "Maximum Photos metadata atoms emitted after a successful applied duplicate-proof batch."
+  LIMEN_CODEX_TOKEN_REPORT:
+    default: "$LIMEN_ROOT/logs/codex-token-report.json"
+    env: LIMEN_CODEX_TOKEN_REPORT
+    self_update: none
+    owner: continuity
+    note: "JSON report path for structured Codex token_count accounting."
+  LIMEN_CODEX_TOKEN_REPORT_HOURS:
+    default: 6
+    env: LIMEN_CODEX_TOKEN_REPORT_HOURS
+    self_update: none
+    owner: continuity
+    note: "Recent-session window, in hours, used by the heartbeat Codex token report."
+  LIMEN_CODEX_TOKEN_REPORT_LIMIT:
+    default: 25
+    env: LIMEN_CODEX_TOKEN_REPORT_LIMIT
+    self_update: none
+    owner: continuity
+    note: "Maximum recent Codex session JSONL files summarized by the heartbeat report."
+  LIMEN_CODEX_TOKEN_REPORT_PHASES:
+    default: 50
+    env: LIMEN_CODEX_TOKEN_REPORT_PHASES
+    self_update: none
+    owner: continuity
+    note: "Maximum per-session token_count phase deltas retained in the JSON report."
+  LIMEN_CODEX_TOKEN_GATE_HOURS:
+    default: 6
+    env: LIMEN_CODEX_TOKEN_GATE_HOURS
+    self_update: none
+    owner: continuity
+    note: "Recent-session window, in hours, used by the continuation hard spend gate."
+  LIMEN_CODEX_TOKEN_GATE_LIMIT:
+    default: 10
+    env: LIMEN_CODEX_TOKEN_GATE_LIMIT
+    self_update: none
+    owner: continuity
+    note: "Maximum recent Codex session files considered by the continuation hard spend gate."
+  LIMEN_CODEX_TOKEN_GATE_ACTIVE_SECONDS:
+    default: 900
+    env: LIMEN_CODEX_TOKEN_GATE_ACTIVE_SECONDS
+    self_update: none
+    owner: continuity
+    note: "Token-count freshness window for the continuation hard spend gate. Older over-budget sessions remain report failures but do not block receipt-safe continuation; JSONL mtime is only a compatibility fallback when token timestamps are missing."
+  LIMEN_CODEX_TOKEN_GATE_IGNORE_CURRENT_THREAD:
+    default: "1"
+    env: LIMEN_CODEX_TOKEN_GATE_IGNORE_CURRENT_THREAD
+    self_update: none
+    owner: continuity
+    note: "When 1, a Codex direct-session audit excludes CODEX_THREAD_ID from active_failures while still reporting its total/historical spend. Prevents closeout probes from self-blocking on the measuring chat; daemon runs without CODEX_THREAD_ID are unchanged."
+  LIMEN_CODEX_WARN_UNCACHED_INPUT_TOKENS:
+    default: 300000
+    env: LIMEN_CODEX_WARN_UNCACHED_INPUT_TOKENS
+    self_update: none
+    owner: continuity
+    note: "Warn threshold for high uncached Codex input in one session."
+  LIMEN_CODEX_MAX_UNCACHED_INPUT_TOKENS:
+    default: 600000
+    env: LIMEN_CODEX_MAX_UNCACHED_INPUT_TOKENS
+    self_update: none
+    owner: continuity
+    note: "Hard stop threshold for uncached Codex input in one session."
+  LIMEN_CODEX_MAX_BUDGET_TOKENS:
+    default: 800000
+    env: LIMEN_CODEX_MAX_BUDGET_TOKENS
+    self_update: none
+    owner: continuity
+    note: "Hard stop threshold for uncached-input plus output and reasoning tokens in one Codex session."
+  LIMEN_CODEX_MAX_ELAPSED_SECONDS:
+    default: 14400
+    env: LIMEN_CODEX_MAX_ELAPSED_SECONDS
+    self_update: none
+    owner: continuity
+    note: "Hard stop elapsed-time ceiling for one recent Codex session."
+  LIMEN_CLAUDE_POLL:
+    default: "0"
+    env: LIMEN_CLAUDE_POLL
+    self_update: none
+    owner: continuity
+    note: "Gate for the claude-usage active-poll avenue. 1=allow one authed usage call when a SANCTIONED env token is present; 0 (default) leaves it off so it can never read the Keychain or worsen the login-flap credential race."
+  LIMEN_CLAUDE_WEEKLY_TOKENS:
+    default: ""
+    env: LIMEN_CLAUDE_WEEKLY_TOKENS
+    self_update: none
+    owner: continuity
+    note: "Optional human-set weekly Claude token cap. When set, the claude-usage counts avenue divides the real transcript token sum by it and marks trust=proxy; unset falls back to the fleet's own estimated cap (trust=estimate) — never a fabricated number."
+  LIMEN_CLAUDE_GAUGE_FRESH_S:
+    default: 1800
+    env: LIMEN_CLAUDE_GAUGE_FRESH_S
+    self_update: none
+    owner: continuity
+    note: "Freshness ceiling in seconds for a claude-usage avenue reading. An avenue older than this is visibly SKIPPED (the anti-forgettable-hole guard) rather than silently trusted."
+  LIMEN_CLAUDE_TRANSCRIPTS_DIR:
+    default: "~/.claude/projects"
+    env: LIMEN_CLAUDE_TRANSCRIPTS_DIR
+    self_update: none
+    owner: continuity
+    note: "Root of the Claude Code session transcripts the on-disk (calibrated) claude-usage avenue scans for per-window token cost. Overridable for testing/portability; never hardcode the home path."
+  LIMEN_OVERNIGHT_WATCH_STATE:
+    default: "$LIMEN_ROOT/logs/overnight-watch-state.json"
+    env: LIMEN_OVERNIGHT_WATCH_STATE
+    self_update: "updated by scripts/overnight-watch.py"
+    owner: continuity
+    note: "State file used by the cheap overnight monitor to count repeated heartbeat ticks across one-shot launchd invocations."
+  LIMEN_OVERNIGHT_WATCH_RECEIPT:
+    default: "$LIMEN_ROOT/logs/overnight-watch.jsonl"
+    env: LIMEN_OVERNIGHT_WATCH_RECEIPT
+    self_update: "appended by scripts/overnight-watch.py"
+    owner: continuity
+    note: "Append-only JSONL receipt path for agent-free overnight heartbeat progress monitoring."
+  LIMEN_OVERNIGHT_WATCH_ALERT:
+    default: "$LIMEN_ROOT/logs/overnight-watch-alert.json"
+    env: LIMEN_OVERNIGHT_WATCH_ALERT
+    self_update: "updated by scripts/overnight-watch.py"
+    owner: continuity
+    note: "Deduped active alert path for overnight monitor failures; replaces long interactive-agent polling loops with WATCH_ALERT receipts."
+  LIMEN_OVERNIGHT_WATCH_MAX_LOG_AGE_SEC:
+    default: 1200
+    env: LIMEN_OVERNIGHT_WATCH_MAX_LOG_AGE_SEC
+    self_update: none
+    owner: continuity
+    note: "Maximum heartbeat log age before the overnight monitor emits WATCH_ALERT heartbeat-log-stale."
+  LIMEN_OVERNIGHT_WATCH_MAX_STALE_TICKS:
+    default: 6
+    env: LIMEN_OVERNIGHT_WATCH_MAX_STALE_TICKS
+    self_update: none
+    owner: continuity
+    note: "Maximum consecutive one-shot monitor samples with the same latest tick and no active workers before WATCH_ALERT heartbeat-progress-stale."
+  LIMEN_OVERNIGHT_WATCH_EXPECT_DISPATCH_ASYNC:
+    default: ""
+    env: LIMEN_OVERNIGHT_WATCH_EXPECT_DISPATCH_ASYNC
+    self_update: none
+    owner: continuity
+    note: "Optional expected LIMEN_DISPATCH_ASYNC value for overnight monitor env-drift alerts."
+  LIMEN_OVERNIGHT_WATCH_EXPECT_DISPATCH_LANES:
+    default: ""
+    env: LIMEN_OVERNIGHT_WATCH_EXPECT_DISPATCH_LANES
+    self_update: none
+    owner: continuity
+    note: "Optional expected LIMEN_DISPATCH_LANES value for overnight monitor env-drift alerts."
+  LIMEN_OVERNIGHT_WATCH_INTERVAL_SEC:
+    default: 300
+    env: LIMEN_OVERNIGHT_WATCH_INTERVAL_SEC
+    self_update: none
+    owner: continuity
+    note: "Attached --watch loop interval; launchd should normally run one-shot invocations instead."
   LIMEN_PUBLIC_SITE_URL:
     default: "https://device-streaming-067d747a.web.app"
     env: LIMEN_PUBLIC_SITE_URL
@@ -205,6 +577,129 @@ parameters:
     self_update: none
     owner: health
     note: "Minimum logged observations before the learning department surfaces a pattern (avoids inferring from noise)."
+  # --- CVSTOS: the keeper of the host (chat-app/local debt + factory invariant + reaper proprioception) ---
+  LIMEN_BEAT_CVSTOS:
+    default: 24                 # cadence: census the host every 24 beats (filesystem walk ⇒ rare)
+    env: LIMEN_BEAT_CVSTOS
+    self_update: none
+    owner: cvstos
+    note: "How often CVSTOS censuses chat-app/local debt + measures the factory-host invariant + probes reaper liveness. Read-only (surface), lockless, fail-open."
+  LIMEN_CVSTOS:
+    default: 1                  # default-ON: the surface pass rides the beat (read-only)
+    env: LIMEN_CVSTOS
+    self_update: none
+    owner: cvstos
+    note: "Master gate for the CVSTOS beat. ON by default (surface-only, read-only). Set 0 to silence the rung. The --apply reclaim is never passed by the beat regardless of this gate."
+  LIMEN_CVSTOS_DEBT_CAP_GB:
+    default: 5                  # evictable chat-app cache over this ⇒ --check reports eviction owed
+    env: LIMEN_CVSTOS_DEBT_CAP_GB
+    self_update: none
+    owner: cvstos
+    note: "Evictable chat-app cache (GB) above which the host is not at factory — the eviction stage is owed. A derived threshold, not a pinned truth."
+  LIMEN_CVSTOS_REAPER_STALE_H:
+    default: 48                 # a reaper voice-stamp older than this ⇒ stale
+    env: LIMEN_CVSTOS_REAPER_STALE_H
+    self_update: none
+    owner: cvstos
+    note: "Hours after which a reaper (worktree/clone/branch/preserve) with no fresh voice-stamp is treated as stale in the proprioception roof."
+  LIMEN_CVSTOS_SCAN_CAP:
+    default: 600000             # bound the filesystem walk so a pathological tree can't hang the beat
+    env: LIMEN_CVSTOS_SCAN_CAP
+    self_update: none
+    owner: cvstos
+    note: "Max directory entries the debt-sizing walk visits before returning an approximate total. Bounds the beat's cost; never blocks."
+  LIMEN_AGY_SCRATCH_ROOT:
+    default: "$HOME/.gemini/antigravity-cli/scratch"
+    env: LIMEN_AGY_SCRATCH_ROOT
+    self_update: none
+    owner: cvstos
+    note: "Antigravity/Agy scratch checkout root audited by antigravity-scratch-bridge.py and surfaced by CVSTOS. Inventory only; deletion is a separate receipt-gated action."
+  LIMEN_AGY_SCRATCH_MIN_IDLE_H:
+    default: 24
+    env: LIMEN_AGY_SCRATCH_MIN_IDLE_H
+    self_update: none
+    owner: cvstos
+    note: "Minimum idle hours before the Antigravity scratch bridge may label a clean remote-preserved root as a safe-reap candidate."
+  # --- VVLTVS: the countenance — verify the public face reflects the live SSOT (sibling of CVSTOS) ---
+  LIMEN_BEAT_VVLTVS:
+    default: 24                 # cadence: verify the public face every 24 beats (offline file reads ⇒ cheap)
+    env: LIMEN_BEAT_VVLTVS
+    self_update: none
+    owner: vvltvs
+    note: "How often VVLTVS verifies the public face reflects the live SSOT (profile/portfolio drift) + surfaces the contribution-mix radar. Offline on the beat (reads the SSOT + face files + cached mix), read-only, fail-open."
+  LIMEN_VVLTVS:
+    default: 1                  # default-ON: the surface pass rides the beat (read-only, offline)
+    env: LIMEN_VVLTVS
+    self_update: none
+    owner: vvltvs
+    note: "Master gate for the VVLTVS beat. ON by default (surface-only, never writes his public face). Set 0 to silence the rung. The --apply remediation plan is never run by the beat."
+  LIMEN_VVLTVS_REVIEW_FLOOR:
+    default: 10                 # review-contribution % below this ⇒ flagged FDE-lane liability
+    env: LIMEN_VVLTVS_REVIEW_FLOOR
+    self_update: none
+    owner: vvltvs
+    note: "Code-review contribution percent below which the activity shape is flagged a liability (a low review share reads as a high-volume solo operator). A derived threshold, not a pinned truth."
+  LIMEN_VVLTVS_REFRESH:
+    default: 0                  # default-OFF: the beat never hits `gh api` — reads the cached mix only
+    env: LIMEN_VVLTVS_REFRESH
+    self_update: none
+    owner: vvltvs
+    note: "When 1, the beat MAY recompute the contribution mix via one `gh api graphql` call if the cache is stale. Default 0 keeps the beat fully offline; `--refresh` always forces a recompute regardless."
+  LIMEN_VVLTVS_MIX_STALE_DAYS:
+    default: 7                  # cached contribution mix older than this ⇒ marked stale (advisory)
+    env: LIMEN_VVLTVS_MIX_STALE_DAYS
+    self_update: none
+    owner: vvltvs
+    note: "Age (days) after which the cached contribution mix is treated as stale. Only surfaced as an advisory (and triggers a refresh when LIMEN_VVLTVS_REFRESH=1); never fails the predicate."
+  # --- SPECVLVM: the contributions mirror — outward to learn inward; proof, never outreach ---
+  LIMEN_BEAT_CONTRIB:
+    default: 12                 # cadence: re-render the contributions mirror every 12 beats (offline file reads => cheap)
+    env: LIMEN_BEAT_CONTRIB
+    self_update: none
+    owner: contributions
+    note: "How often SPECVLVM re-renders organs/contributions/MIRROR.md + logs/contributions.json from hub-ledger outputs. Offline on the beat, idempotent (writes only on change), fail-open."
+  LIMEN_CONTRIB:
+    default: 1                  # default-ON: the mirror rides the beat (read-only outward, never sends)
+    env: LIMEN_CONTRIB
+    self_update: none
+    owner: contributions
+    note: "Master gate for the SPECVLVM beat. ON by default — the organ never sends (no comments/bumps/PRs/posts; outbound stays his hand per the PLAN-06 planner decision). Set 0 to silence the rung."
+  LIMEN_CONTRIB_REFRESH:
+    default: 0                  # default-OFF: the beat never hits `gh api` — reads the local hub ledger or the committed cache only
+    env: LIMEN_CONTRIB_REFRESH
+    self_update: none
+    owner: contributions
+    note: "When 1, the beat MAY refresh the ledger cache via one read-only `gh api` contents call. Default 0 keeps the beat fully offline; `--refresh` always forces it regardless."
+  LIMEN_CONTRIB_HUB_REPO:
+    default: "organvm/contrib"  # the hub whose generated LEDGER.yaml is the one state surface
+    env: LIMEN_CONTRIB_HUB_REPO
+    self_update: none
+    owner: contributions
+    note: "The contribution hub repo (PLAN-06-OWNER-01). The mirror consumes its LEDGER outputs only — never raw sessions or private archaeology."
+  LIMEN_BACKFLOW_MANIFEST:
+    default: "~/Workspace/organvm-corpvs-testamentvm/data/atoms/backflow-manifest.yaml"
+    env: LIMEN_BACKFLOW_MANIFEST
+    self_update: none
+    owner: contributions
+    note: "Where the inward-lens tally reads what each contribution taught (signals routed per receiving organ). Optional: an absent manifest renders as such, never fails the mirror."
+  LIMEN_CONTRIB_STALE_DAYS:
+    default: 14                 # an open PR untouched this long (vs the SOURCE stamp) renders protocol-due
+    env: LIMEN_CONTRIB_STALE_DAYS
+    self_update: none
+    owner: contributions
+    note: "The LIFECYCLE.md staleness rule, executable: open upstream PRs whose last update predates source-stamp minus this many days derive protocol-due (a bump is owed, staged, fired one-at-a-time by his hand — never batch-bumped). Measured against the source stamp, not the clock, so renders stay deterministic."
+  LIMEN_CONTRIB_SCOUT:
+    default: 1                  # default-ON: the autopoietic limb rides the beat (bounded local walk, no network)
+    env: LIMEN_CONTRIB_SCOUT
+    self_update: none
+    owner: contributions
+    note: "Gate for the autopoietic scout: walk our own workspace dependency manifests (bounded, offline) and derive the outward opportunity pool — upstreams we lean on hardest and have never engaged. Set 0 to render the mirror without the pool."
+  LIMEN_CONTRIB_SCOUT_CAP:
+    default: 12                 # the pool renders at most this many opportunities (heaviest-used first)
+    env: LIMEN_CONTRIB_SCOUT_CAP
+    self_update: none
+    owner: contributions
+    note: "Max opportunities in the autopoietic pool. A derived bound on surface size, not a judgment — the full usage map is recomputed every beat."
   # --- ORGANS (VLTIMA): convert idle capacity into institutional weight (legal/financial/education/...) ---
   LIMEN_ORGAN_BACKLOG:
     default: 1                  # default-ON: organ-ladder -> bounded build tasks each FEED beat
@@ -236,6 +731,38 @@ parameters:
     self_update: none
     owner: vltima
     note: "Max new organ-build tasks appended per run. Bounded output; id-deduped against existing tasks."
+  # --- SELF-HEAL: the PR-repair FACTORY — turn REFUSED PRs (CI-red / conflicting) into fixable tasks ---
+  LIMEN_SELF_HEAL:
+    default: 1                  # default-ON: emit HEAL-cifix / HEAL-rebase tasks each HEAL beat
+    env: LIMEN_SELF_HEAL
+    self_update: none
+    owner: heal
+    note: "Toggle for the self-heal PR-repair factory (scripts/self-heal.py) wired into the HEAL beat. 1=on. Classifies the fleet's refused PRs and emits bounded HEAL-cifix/HEAL-rebase tasks so the router+dispatcher fix them and merge-drain lands them — merge-drain is the bouncer, this is the factory. Self-acquires the queue-lock (skips cleanly when the daemon holds it), already-queued-deduped, fail-open. 0=off."
+  LIMEN_SELF_HEAL_TIMEOUT:
+    default: 150                # seconds: cap the network-touching classify+emit run inside the beat
+    env: LIMEN_SELF_HEAL_TIMEOUT
+    self_update: none
+    owner: heal
+    note: "Hard timeout (s) for the self-heal factory inside the HEAL beat so a slow gh enumeration never wedges the heartbeat."
+  LIMEN_SELF_HEAL_SCAN:
+    default: 30                 # rotating window: PRs classified per beat (self-heal.py --scan)
+    env: LIMEN_SELF_HEAL_SCAN
+    self_update: none
+    owner: heal
+    note: "How many PRs the factory classifies per beat (a rotating window over the full fleet), so each beat does a bounded slice rather than the whole backlog at once."
+  # --- SELF-IMPROVE (route SI-weighting): clamp per-lane weight so no lane starves or swamps the fleet ---
+  LIMEN_SI_WEIGHT_FLOOR:
+    default: 0.25               # lower clamp: a down-weighted lane is still picked sometimes (never starved)
+    env: LIMEN_SI_WEIGHT_FLOOR
+    self_update: none
+    owner: route
+    note: "Floor on the self-improvement lane-weight multiplier in route.py. A down-weighted lane gets a proportionally higher effective load (picked less) but is clamped here so it is never fully starved. Derive-not-pin."
+  LIMEN_SI_WEIGHT_CEILING:
+    default: 2.0                # upper clamp: a boosted lane can be favored, but never swamps the fleet
+    env: LIMEN_SI_WEIGHT_CEILING
+    self_update: none
+    owner: route
+    note: "Ceiling on the self-improvement lane-weight multiplier in route.py (clamped to >= floor). Keeps a boost-underused lane from swamping the fleet. Was referenced in code but undeclared — folded into the panel to clear the NO-HARDCODE gate."
   # --- WALLS: keep the published walls (credential #320, his-hand #330) from drifting ---
   LIMEN_BEAT_WALLS:
     default: 12                 # cadence: regenerate the walls every 12 beats
@@ -302,19 +829,145 @@ parameters:
     self_update: none
     owner: limen-daemon
     note: "Release branch that sync-release.sh and live-root-gate.py compare the live daemon checkout against. Changing it changes convergence evidence only; branch switches remain human-gated."
+  LIMEN_SYNC_RECEIPT_GLOBS:
+    default: "docs/worktree-preservation-receipts.json docs/pr-receipts.json docs/*-receipts.json docs/*-receipt.json"
+    env: LIMEN_SYNC_RECEIPT_GLOBS
+    self_update: none
+    owner: limen-daemon
+    note: "Space-separated globs of REGENERABLE daemon receipt files. sync-release.sh re-converges a diverged live checkout when its unique local commits touch ONLY these (loss-free — the beat rewrites them), instead of failing open forever and pinning the daemon to stale code. Genuinely-unique history still fails open to hand-reconcile."
   LIMEN_DISPATCH_CEILING:
     default: null              # currently in heartbeat-loop.sh
     env: LIMEN_DISPATCH_CEILING
     self_update: "may lower under VITALS pressure"
     owner: arms-agents
     note: "First cross-organ link: VITALS pressure should drive this ceiling down."
+  LIMEN_DISPATCH_LANES:
+    default: "auto"
+    env: LIMEN_DISPATCH_LANES
+    self_update: none
+    owner: arms-agents
+    note: "Fleet dispatch boundary selector. `auto` derives reachable registered lanes from the capacity registry; explicit comma lists are normalized and filtered for down lanes."
+  LIMEN_JULES_BATCH_FILL:
+    default: "1"
+    env: LIMEN_JULES_BATCH_FILL
+    self_update: none
+    owner: arms-agents
+    note: "When 1, route.py treats healthy Jules as a normal repo-capable remote batch lane so its daily run budget is actively filled instead of waiting only for slow/fallback work."
+  LIMEN_REMOTE_BATCH_BIAS:
+    default: "0"
+    env: LIMEN_REMOTE_BATCH_BIAS
+    self_update: none
+    owner: arms-agents
+    note: "When 1, historical route ledger bias may down-weight remote batch-fill lanes. Default 0 preserves explicit daily utilization targets for lanes such as Jules."
+  LIMEN_ASYNC_DEFUNCT_GRACE:
+    default: 120
+    env: LIMEN_ASYNC_DEFUNCT_GRACE
+    self_update: none
+    owner: arms-agents
+    note: "Seconds to wait before a live async worker with a zombie child is treated as defunct and reaped through the queue-locked reopen path."
+  LIMEN_QUEUE_LOCK_HELD:
+    default: ""
+    env: LIMEN_QUEUE_LOCK_HELD
+    self_update: none
+    owner: limen-daemon
+    note: "Internal reentrancy marker exported only while heartbeat-loop.sh holds the queue lock, allowing child board writers to share the parent critical section instead of deadlocking on their own lock probe."
+  LIMEN_QUEUE_LOCK_STALE_SEC:
+    default: 900
+    env: LIMEN_QUEUE_LOCK_STALE_SEC
+    self_update: none
+    owner: limen-daemon
+    note: "Conservative age threshold before Python lock users may reap a metadata-free queue lock directory. PID-bearing locks are reaped only when the holder process is dead."
+  LIMEN_OPENCODE_CLOCK:
+    default: ""
+    env: LIMEN_OPENCODE_CLOCK
+    self_update: none
+    owner: arms-agents
+    note: "When set to '1', instructs the OpenCode lane to activate its usage-clock telemetry so the fleet can track its consumption. Injected into the opencode run environment by dispatch.py."
+  LIMEN_TASK_ID:
+    default: ""
+    env: LIMEN_TASK_ID
+    self_update: none
+    owner: arms-agents
+    note: "The Limen task ID injected into the opencode lane run environment so the agent knows which task it is executing. Set by dispatch.py at dispatch time."
+  LIMEN_ISOLATION_PROMPT_GUARD:
+    default: "1"
+    env: LIMEN_ISOLATION_PROMPT_GUARD
+    self_update: none
+    owner: arms-agents
+    note: "Prompt-level guard for isolated async/local worker packets. 1=explicitly forbid live-root and tasks.yaml mutation inside isolated worktrees; 0=omit the extra prompt block for tests or emergency rollback."
   # --- the non-bypassable Claude model chokepoint (scripts/shims/claude) ----------
   LIMEN_CLAUDE_SHIM_FLOOR:
     default: "haiku"           # the cheapest rung — the SAME tier the per-task ladder assigns to unclassed work
     env: LIMEN_CLAUDE_SHIM_FLOOR
     self_update: none
     owner: arms-agents
-    note: "Floor the non-bypassable `claude` shim injects when a fleet spawn carries no --model. Spawns that earned more declare --model and pass through untouched; subagents inherit it. NOT a blanket downgrade — it is the ladder's own default for unsignaled work. See fleet-model-floor-bleed."
+    note: "Floor the non-bypassable `claude` shim injects when a fleet spawn carries no --model. Spawns that earned more declare --model and pass through untouched; subagents inherit it. Capped by LIMEN_CLAUDE_MAX_INHERITED_TIER so this cannot silently become an Opus/Fable/1M default. See fleet-model-floor-bleed."
+  LIMEN_CLAUDE_MAX_INHERITED_TIER:
+    default: "sonnet"
+    env: LIMEN_CLAUDE_MAX_INHERITED_TIER
+    self_update: none
+    owner: arms-agents
+    note: "Maximum tier allowed for inherited/default Claude choices such as shim floors and global LIMEN_CLAUDE_MODEL pins. Default Sonnet keeps routine fan-out cheap; task-specific declaration sites may still earn Opus/Fable through the ladder and acceptance gates."
+  LIMEN_CLAUDE_FABLE_FALLBACK_TIER:
+    default: "sonnet"
+    env: LIMEN_CLAUDE_FABLE_FALLBACK_TIER
+    self_update: none
+    owner: arms-agents
+    note: "Fallback tier when a Fable-class task or Fable model pin lacks a current LIMEN_FABLE_ACCEPTANCE receipt. Default Sonnet prevents unaccepted Fable requests from becoming default Opus spend; set to opus only for an explicit emergency policy change."
+  LIMEN_ALLOW_EXPENSIVE_CLAUDE_MODEL_PIN:
+    default: "0"
+    env: LIMEN_ALLOW_EXPENSIVE_CLAUDE_MODEL_PIN
+    self_update: none
+    owner: arms-agents
+    note: "Emergency override allowing a global LIMEN_CLAUDE_MODEL pin to route inherited/default fleet spawns to Opus or explicit large-context models. Default 0 forces expensive defaults back under LIMEN_CLAUDE_MAX_INHERITED_TIER."
+  LIMEN_ALLOW_CLAUDE_1M_CONTEXT:
+    default: "0"
+    env: LIMEN_ALLOW_CLAUDE_1M_CONTEXT
+    self_update: none
+    owner: arms-agents
+    note: "Emergency override allowing explicit 1M/large-context Claude model pins. Default 0 strips large-context pins from tier resolution unless a current Fable acceptance receipt is present."
+  LIMEN_CLAUDE_FABLE_CLASSES:
+    default: "fable,long-horizon,huge-context,ambiguous-root-cause,final-canonical-decision"
+    env: LIMEN_CLAUDE_FABLE_CLASSES
+    self_update: none
+    owner: arms-agents
+    note: "Comma-separated task classes that may select the reserved Fable rung. Class membership is not enough by itself: LIMEN_FABLE_ACCEPTANCE must point at a written scripts/fable-allotment.py receipt before dispatch may return fable instead of falling back to LIMEN_CLAUDE_FABLE_FALLBACK_TIER."
+  LIMEN_FABLE_ACCEPTANCE:
+    default: ""
+    env: LIMEN_FABLE_ACCEPTANCE
+    self_update: none
+    owner: arms-agents
+    note: "Path to the current-week written Fable acceptance receipt emitted by scripts/fable-allotment.py accept. Empty, stale, malformed, or arbitrary paths make Fable selections fall back to Opus; value `1` is accepted only under pytest."
+  LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE:
+    default: "0"
+    env: LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE
+    self_update: none
+    owner: arms-agents
+    note: "Opt-in gate for tried:claude retry escalation from Opus to Fable. Requires LIMEN_FABLE_ACCEPTANCE as well; default caps retry bumping at Opus so Fable is never reached by inherited escalation."
+  LIMEN_ALLOW_FABLE_FANOUT:
+    default: "0"
+    env: LIMEN_ALLOW_FABLE_FANOUT
+    self_update: none
+    owner: arms-agents
+    note: "Emergency override for claude-workflow-guard's Fable fan-out check. Default 0 enforces one bounded accepted Fable objective instead of broad Fable worker pools."
+  LIMEN_MAX_FABLE_SESSION_TOKENS:
+    default: "1000000"
+    env: LIMEN_MAX_FABLE_SESSION_TOKENS
+    self_update: none
+    owner: arms-agents
+    note: "Maximum billable-ish Fable transcript tokens allowed by claude-workflow-guard before it flags the session. Counts input + output + cache creation, excluding cache reads."
+  LIMEN_ALLOW_FABLE_SESSION_BURN:
+    default: "0"
+    env: LIMEN_ALLOW_FABLE_SESSION_BURN
+    self_update: none
+    owner: arms-agents
+    note: "Emergency override for claude-workflow-guard's Fable session token cap. Default 0 keeps accepted Fable runs bounded even when they do not fan out."
+  LIMEN_ALLOW_UNACCEPTED_FABLE:
+    default: "0"
+    env: LIMEN_ALLOW_UNACCEPTED_FABLE
+    self_update: none
+    owner: arms-agents
+    note: "Emergency override for claude-workflow-guard's written-acceptance check when transcript evidence is incomplete. Default 0 blocks Fable runs that lack a visible acceptance command or receipt reference."
   LIMEN_REAL_CLAUDE:
     default: null              # DERIVED: heartbeat-loop.sh captures `command -v claude` BEFORE prepending the shim dir
     env: LIMEN_REAL_CLAUDE
@@ -328,6 +981,20 @@ parameters:
     owner: limen-daemon
     note: "Opt-in (=1) to route SSH_AUTH_SOCK through the 1Password agent (domus-genoma 02-1password.zsh). OFF by default: the app's BiometricsOnly/never-cache policy turns every agent hit into a Touch-ID prompt, and git here is HTTPS with no keys in the agent — so routing buys nothing and only risks the prompt storm. See macos-tcc-gatekeeper-dialogs-solved."
 
+  # --- FULL-SWEEP credential catch-all (scripts/creds-hydrate.py --sweep-all) ---
+  CREDS_SWEEP_VAULTS:
+    default: ""                # empty ⇒ derive from the vaults DEFAULT_MAP already draws from
+    env: LIMEN_CREDS_SWEEP_VAULTS
+    self_update: none
+    owner: limen-daemon
+    note: "Comma-separated 1Password vaults --sweep-all enumerates for the catch-all credential materialization. Empty (default) DERIVES the list from the op:// vaults the curated DEFAULT_MAP already uses (never a hardcoded vault). Promptless-only — the sweep refuses to run unless a service-account token makes op silent. See wrangler-login-and-op-ping-disease."
+  CREDS_SWEEP_LOGINS:
+    default: "0"               # OFF — LOGIN items are personal web logins, not fleet automation creds
+    env: LIMEN_CREDS_SWEEP_LOGINS
+    self_update: none
+    owner: limen-daemon
+    note: "Whether --sweep-all includes 1Password LOGIN-category items. OFF by default: those are personal web logins and a plaintext ~/.limen.env is the wrong home for them; the sweep targets API-credential/password/secret items. Set =1 only to deliberately include logins."
+
   # --- credential Wall (scripts/credential-wall.py): the pinned secret/credential index ---
   LIMEN_CRED_WALL_ISSUE:
     default: 320               # the pinned GitHub issue regenerated as the canonical secret index
@@ -335,6 +1002,40 @@ parameters:
     self_update: none
     owner: limen-daemon
     note: "Which pinned issue scripts/credential-wall.py --sync rewrites as the secret/credential Wall. Identity, not a knob — override only if the Wall issue is ever renumbered."
+
+  # --- MCP-CONNECTOR CONSENT — Lane B (scripts/mcp-auth-verify.py): the claude.ai OAuth connectors ---
+  LIMEN_MCP_VERIFY:
+    default: "1"               # ON — surface lapsed connectors in the beat log, never in chat
+    env: LIMEN_MCP_VERIFY
+    self_update: none
+    owner: limen-daemon
+    note: "Gate for the metabolize 0b step that probes claude.ai MCP-connector consent (the Lane-B sibling of creds-hydrate --verify). =0 skips it. Non-fatal + fail-open offline; a lapsed connector surfaces with its cure L-IANVA-CLOUD. See ianva-mcp-doorway."
+  LIMEN_MCP_REQUIRED:
+    default: ""                # empty ⇒ no connector is hard-required; every lapse is informational
+    env: LIMEN_MCP_REQUIRED
+    self_update: none
+    owner: limen-daemon
+    note: "Comma list of MCP connectors (substring match) that MUST be authenticated; mcp-auth-verify exits 1 if any lapses, else 0. Empty (default) DERIVES nothing as required — the hosted connectors are optional conveniences, so a lapse is logged, not fatal."
+  LIMEN_MCP_NEEDS_AUTH_CACHE:
+    default: "~/.claude/mcp-needs-auth-cache.json"
+    env: LIMEN_MCP_NEEDS_AUTH_CACHE
+    self_update: none
+    owner: limen-daemon
+    note: "Path to the daemon's needs-auth marker cache that mcp-auth-verify reads offline (connector names + internal ids only — no token material). Identity, not a knob — override only if Claude Code relocates the cache."
+
+  # --- HOST-IS-FACTORY / CARTRIDGE INTEGRITY (scripts/cartridge-connected.py): is chezmoi plugged into the real cartridge ---
+  LIMEN_CARTRIDGE_CHECK:
+    default: "1"               # ON — surface an unplugged cartridge in the beat log (0c), never in chat
+    env: LIMEN_CARTRIDGE_CHECK
+    self_update: none
+    owner: limen-daemon
+    note: "Gate for the metabolize 0c step that asserts chezmoi's source IS the real cartridge (organvm/domus-genoma), not a scratch/dummy source. =0 skips it. Non-fatal + fail-open when chezmoi is absent; nothing else checks source IDENTITY (chezmoi verify/status/health only validate whatever source is wired), so a disconnected cartridge would otherwise return a meaningless green. See host-is-factory-system-is-cartridge."
+  LIMEN_CARTRIDGE_REPO:
+    default: "organvm/domus-genoma"
+    env: LIMEN_CARTRIDGE_REPO
+    self_update: none
+    owner: limen-daemon
+    note: "The expected cartridge repo (owner/repo) whose remote chezmoi's source must match for cartridge-connected to pass. DERIVED default, not pinned per host — another person's prosthesis overrides this to their own fork; a same-repo-name fork under a different owner still validates. See derive-never-pin-hardcodes."
 
   # --- WORKTREE LIFECYCLE / parallel CELLS (scripts/cells.sh + scripts/reclaim-worktrees.py) ---
   LIMEN_RECLAIM_CLAUDE_WT:
@@ -397,6 +1098,84 @@ parameters:
     self_update: none
     owner: limen-daemon
     note: "Maximum directory depth for repo-local .worktrees discovery under LIMEN_RECLAIM_WORKSPACE_ROOTS."
+  LIMEN_DISK_HIGH_WATER:
+    default: 85
+    env: LIMEN_DISK_HIGH_WATER
+    self_update: none
+    owner: limen-daemon
+    note: "Percent-used high-water mark for the workspace data volume. INFORMATIONAL/legacy — kept for display. The pressure DECISION now keys off absolute free (LIMEN_DISK_FREE_FLOOR_GIB), because df/statvfs percent counts ~100GB of purgeable APFS space as used (the meter-lie: a 95%-by-percent disk can have ~120GB effectively free)."
+  LIMEN_DISK_FREE_FLOOR_GIB:
+    default: 15
+    env: LIMEN_DISK_FREE_FLOOR_GIB
+    self_update: none
+    owner: limen-daemon
+    note: "GiB of ABSOLUTE raw free space below which disk pressure is ON (emergency reap waives the loss-free age gate; the beat ramps hygiene to every tick). Honest signal on a large APFS volume where df% is inflated by ~100GB of purgeable-but-reclaimable space. Consumed by reap-clones.py and heartbeat-loop.sh's hygiene ramp."
+  LIMEN_DISK_PRESSURE_ESCALATE:
+    default: "1"
+    env: LIMEN_DISK_PRESSURE_ESCALATE
+    self_update: none
+    owner: limen-daemon
+    note: "ON — when absolute free space is at/below LIMEN_DISK_FREE_FLOOR_GIB the heartbeat drops hygiene cadence to every beat until it drains. Set 0 to keep hygiene on its fixed LIMEN_BEAT_HYGIENE cadence regardless of fullness."
+  LIMEN_CLONE_REAP_APPLY:
+    default: "1"
+    env: LIMEN_CLONE_REAP_APPLY
+    self_update: none
+    owner: limen-daemon
+    note: "ON — clone-maintenance reaps pure pushed-mirror clones for real (the last step of clone→work→push→DELETE). Loss-free by construction (re-cloneable from origin; unpushed/untracked/dirty/active/core all skipped), so it is reversible and ungated. Set 0 for dry-run (report reapable clones without removing)."
+  LIMEN_REAP_IDLE_DAYS:
+    default: 2
+    env: LIMEN_REAP_IDLE_DAYS
+    self_update: none
+    owner: limen-daemon
+    note: "Min idle days before a pure pushed-mirror clone is reaped by reap-clones.py — WAIVED under disk pressure (a pushed mirror is loss-free at any age; when full we reclaim now)."
+  LIMEN_REAP_MAX:
+    default: 50
+    env: LIMEN_REAP_MAX
+    self_update: none
+    owner: limen-daemon
+    note: "Max clones reap-clones.py removes per run; the remainder is logged (never silently dropped) and reaped on the next beat."
+  LIMEN_REAP_MAXDEPTH:
+    default: 3
+    env: LIMEN_REAP_MAXDEPTH
+    self_update: none
+    owner: limen-daemon
+    note: "find -maxdepth for reap-clones.py clone discovery under LIMEN_WORKSPACE (repos nest one level under org dirs like organvm/*)."
+  LIMEN_BRANCH_REAP_APPLY:
+    default: "1"
+    env: LIMEN_BRANCH_REAP_APPLY
+    self_update: none
+    owner: limen-daemon
+    note: "ON — clone-maintenance reaps provably-landed LOCAL branch refs for real (the ref sibling of clone/worktree reaping). Loss-free by construction (tip is an ancestor of main, or the PR is MERGED with an un-advanced tip; reflog-recoverable), so reversible and ungated. Set 0 for dry-run (report reapable branches without deleting)."
+  LIMEN_BRANCH_REAP_MAX:
+    default: 100
+    env: LIMEN_BRANCH_REAP_MAX
+    self_update: none
+    owner: limen-daemon
+    note: "Max branches reap-branches.py deletes per run; the remainder is logged (never silently dropped) and reaped on the next hygiene beat."
+  LIMEN_BRANCH_REAP_EVERY_MIN:
+    default: 30
+    env: LIMEN_BRANCH_REAP_EVERY_MIN
+    self_update: none
+    owner: limen-daemon
+    note: "Self-throttle for a real --apply beat of reap-branches.py — it deletes at most once per this many minutes (a --check gate always runs). Mirrors the reclaim-worktrees throttle."
+  LIMEN_BRANCH_REAP_PROTECT:
+    default: ""
+    env: LIMEN_BRANCH_REAP_PROTECT
+    self_update: none
+    owner: limen-daemon
+    note: "Extra branch names (space-separated) reap-branches.py NEVER deletes, on top of the built-in trunks (main/master/develop/trunk) and the default branch. Empty by default."
+  LIMEN_REAP_CORE:
+    default: "limen session-meta sovereign-systems--elevate-align portfolio portvs universal-mail--automation"
+    env: LIMEN_REAP_CORE
+    self_update: none
+    owner: limen-daemon
+    note: "Space-separated CORE repos reap-clones.py never removes even when they are a clean pushed mirror (the operator lives in them / the conductor needs them local)."
+  LIMEN_REAP_VERIFY_REMOTE:
+    default: "1"
+    env: LIMEN_REAP_VERIFY_REMOTE
+    self_update: none
+    owner: limen-daemon
+    note: "ON — before deleting a reap candidate, git ls-remote confirms origin STILL holds HEAD (guards the deleted/renamed-origin case where the local clone is the only copy). Fail-safe: unreachable/offline → skip, never reap. Set 0 to trust local remote-tracking refs without the network round-trip."
   LIMEN_RECLAIM_APPLY:
     default: "1"               # ON — default beat removes only clean+content-preserved+idle roots
     env: LIMEN_RECLAIM_APPLY
@@ -421,6 +1200,12 @@ parameters:
     self_update: "set per-cell by cells.sh conduct (cell-<slug>-) to namespace a scoped conductor's branches"
     owner: limen-daemon
     note: "Branch-name namespace a scoped conductor uses so parallel cells never collide on branch names or fight over main. Unset ⇒ the daemon's default cadence; cells.sh sets it per cell."
+  LIMEN_WORKSTREAM:
+    default: null              # DERIVED per scope — cells.sh sets it when `cell conduct --workstream <handle>` pins a cell to ONE channel
+    env: LIMEN_WORKSTREAM
+    self_update: "set per-cell by cells.sh conduct (--workstream <handle>) to pin a scoped conductor to a single workstream channel"
+    owner: limen-daemon
+    note: "The purpose channel a scoped conductor is pinned to (the one-worker-one-workstream invariant). cells.sh filters the cell board to this channel via `limen channels --emit`, so the conductor structurally sees only its lane. Unset ⇒ the cell sees the full board. See docs/lanes/ and limen.workstream."
 
   # --- BOARD INTEGRITY — the SSOT can never collapse, and self-heals if it somehow does ---
   # (limen.io.save_limen_file collapse-guard + scripts/heal-board.py). Root-caused 2026-06-26:
@@ -450,3 +1235,127 @@ parameters:
     self_update: none
     owner: limen-daemon
     note: "Whether scripts/heal-board.py (heartbeat preflight) auto-restores the live board from `git show HEAD:tasks.yaml` when it is unloadable or collapsed (≤ LIMEN_BOARD_SHRINK_FLOOR tasks). Idempotent: a healthy board is a no-op. The recovery net behind the save-time guard. Set 0 to disable."
+  LIMEN_TABVLARIVS:
+    default: "1"               # ON — the record-keeper drains the ticket inbox onto the board each beat
+    env: LIMEN_TABVLARIVS
+    self_update: none
+    owner: tabularius
+    note: "Master gate for TABVLARIVS (scripts/tabularius-organ.py), the single-writer record-keeper. Each beat it drains logs/tickets/inbox, folds each worker's ticket onto the healed board under the queue lock, and seals via the collapse-guarded atomic write. Idempotent: an empty inbox is an instant no-op, so it is safe every beat while no producers exist. Set 0 to silence the rung. The single-writer principle that dissolves the ~32-writer torn-write class — sibling of LIMEN_BOARD_HEAL."
+  LIMEN_TICKETS_PRODUCE:
+    default: "0"               # SAFE CODE DEFAULT — a bare manual script run stays legacy (no surprise); the FLEET opts in (see below)
+    env: LIMEN_TICKETS_PRODUCE
+    fleet_runtime: "1"         # ENACTMENT CONTRACT — the LIVE fleet MUST resolve this to 1 (heartbeat-loop.sh wires it). scripts/enactment-audit.py fails if the running beat diverges. This is the field #576 lacked: the note *claimed* the fleet enabled it, but nothing machine-checked that the wiring did — so the switch shipped dark and green.
+    self_update: none
+    owner: tabularius
+    note: "Cutover flag for the TABVLARIVS single-writer transition (Step 2). When 1, converted task-CREATION writers (mine-backlog, ingest-backlog, generate-backlog, generate-revenue-backlog, generate-organ-backlog, discover-value) STOP writing tasks.yaml directly and instead submit an upsert ticket per new task via limen.tabularius.submit_task_upsert; the keeper folds them next beat. This default 0 is the SAFE CODE FALLBACK (an ad-hoc manual run stays legacy), but the LIVE FLEET DELIBERATELY ENABLES IT: scripts/heartbeat-loop.sh sets LIMEN_TICKETS_PRODUCE=1 (overridable to 0 in ~/.limen.env to revert instantly) — the cutover, taken after the keeper was watched draining a real batch. Coverage = the task-creation tier; the status-mutator tier (route/dispatch-async/heal-dispatch/rebalance/recover/quicken) stays direct until Step 2.2 (those need INTENT_STATUS tickets, not upsert). Mixed-mode (some producers, some direct writers) is strictly safer than all-direct, so the tiers flip incrementally."
+  LIMEN_ENACTMENT_CHECK:
+    default: "1"               # ON — surface un-enacted fleet flags (declared ON but dark/stale in the running beat) in the beat log
+    env: LIMEN_ENACTMENT_CHECK
+    self_update: none
+    owner: tabularius
+    note: "Master gate for the enactment advisory (scripts/enactment-audit.py --check) run each beat by metabolize.sh section 0d. It proves every parameters.yaml flag declaring a fleet_runtime intent is actually LIVE: the WIRING rung checks the beat resolves the flag to the declared value (catches the #576 dark-switch — declared ON, wired nowhere), the LIVENESS rung checks the running daemon started AFTER its last wiring change (catches wired-but-not-kickstarted, since a `while true` loop never re-sources itself). verify-whole.sh enforces the wiring rung as a HARD gate so 'done' can never again go green on a dark switch; this beat advisory surfaces live-host liveness in the log (never chat), like creds-hydrate --verify. Set 0 to silence."
+
+  LIMEN_CENSOR_ISSUES_APPLY:
+    default: "0"               # SAFE CODE DEFAULT — dry-run; ships observable-before-autonomous (the LIMEN_CENSOR_APPLY constitutional pattern). NO fleet_runtime yet: arming is deliberately a human act.
+    env: LIMEN_CENSOR_ISSUES_APPLY
+    self_update: none
+    owner: censor
+    note: "Arms scripts/sync-censor-issues.py — the censor→GitHub mirror that makes the system's own findings part of the public graph. When 1, every live `warning` residual in logs/censor-residual.json gets exactly one open `censor`-labelled issue (marker `<!-- censor:<id> -->`), auto-closed with a citation when the lineage clears; a HUMAN close is a veto, respected forever; creations capped per pass (--cap, default 8); stamps logs/censor-issues.json. Wired in heartbeat-loop.sh (C_CENSOR lane, after insight-route) and metabolize.sh 5b — both dry-run until armed, so the plan is observable in the beat log first. WHEN ARMING: set 1 in the daemon env AND add fleet_runtime: \"1\" here in the same change, so enactment-audit.py locks it live (the #576 dark-switch lesson — never a note that claims what no rung checks)."
+
+  LIMEN_INSIGHT_ROUTE_APPLY:
+    default: "0"               # SAFE CODE DEFAULT — a bare manual run is a dry-run; the FLEET arms it (see note)
+    env: LIMEN_INSIGHT_ROUTE_APPLY
+    fleet_runtime: "1"         # ENACTMENT CONTRACT — the LIVE fleet MUST resolve this to 1 (heartbeat-loop.sh wires it); enactment-audit.py fails if the beat diverges, so the route organ can never silently go dark again (it shipped as an orphan once — tests+gate, no caller, #596)
+    self_update: none
+    owner: insight-route
+    note: "Arms scripts/insight-route.py — the insights→owners route organ that closes the insight-cadence loop. When 1, the latest report per cadence tier routes each insight to its durable owner: anthony → his-hand-levers.json (+ issue sync), org/repo → a board task via the TABVLARIVS keeper (submit_task_upsert when LIMEN_TICKETS_PRODUCE=1; board-echo insights sourced from tasks.yaml are skipped — the failed task IS the record), organ → logs/<organ>-residual.json. Default 0 keeps an ad-hoc run observe-only, but the LIVE FLEET ARMS IT: scripts/heartbeat-loop.sh exports LIMEN_INSIGHT_ROUTE_APPLY=1 (overridable to 0 in ~/.limen.env), and metabolize.sh section 5b runs it right after insight-cadence."
+
+  LIMEN_INSIGHT_ROUTE_MAX:
+    default: "5"
+    env: LIMEN_INSIGHT_ROUTE_MAX
+    self_update: none
+    owner: insight-route
+    note: "Per-pass cap on NEW board tasks created by insight-route.py. Overflow is counted in the summary line and self-corrects next beat (the insight persists in the latest report until routed). Bounds a first arming or an insight burst so the route organ can never flood the board in one pass — the same board-hygiene reflex as the sync 8/beat cap."
+
+  # --- DEMAND-SURFACE ORGANS: keep the front door reachable + launch posts homed ---
+  # (scripts/link-health.py + scripts/launch-organ.py). A 404 on a public identity surface is silent
+  # demand-loss; a launch with no home is a one-off. Both are REPEATABLE processes, not chores — the
+  # link organ probes every beat like creds-hydrate --verify, the launch organ homes every product ship.
+  LIMEN_LINK_HEALTH:
+    default: "1"               # ON — probe public surfaces for dead links each beat (throttled ~6h)
+    env: LIMEN_LINK_HEALTH
+    self_update: none
+    owner: link-health
+    note: "Beat gate for the link-health organ (scripts/link-health.py --verify). 1=probe the tracked identity/demand surfaces for 404s each beat, self-throttled to ~6h so it never floods the network; 0=off. Fail-open, never fatal — a dead link surfaces in the beat log the same way a dead credential does. See link-surfaces.json."
+  LIMEN_LINK_HEAL:
+    default: "1"               # ON — when a dead link has a verified-live remap, open a reviewable fix-PR
+    env: LIMEN_LINK_HEAL
+    self_update: none
+    owner: link-health
+    note: "Beat gate for the link-health organ's SELF-HEAL (scripts/link-health.py --heal --apply). 1=when a dead link has a verified-live replacement, auto-open a reversible fix-PR at the source; 0=detect only. Boundary: heal OPENS a PR, never MERGES — publishing the fix into a live identity surface stays the human's hand / merge-policy (the same stage-vs-send boundary the launch organ draws). Idempotent + self-limiting: the fix-PR branch embeds a hash of the exact fix-set, so a standing dead link is PR'd once and never re-nagged. Fail-open, never fatal."
+  LIMEN_LINK_SURFACES:
+    default: "$LIMEN_ROOT/link-surfaces.json"
+    env: LIMEN_LINK_SURFACES
+    self_update: none
+    owner: link-health
+    note: "Path to the declarative registry of public surfaces + host remap rules the link-health organ checks. Add a surface or a known-good remap = one entry there, never a code change. Publishes public URLs only — never a private URL or token."
+  LIMEN_LAUNCHES:
+    default: "$LIMEN_ROOT/organs/launch/launches.json"
+    env: LIMEN_LAUNCHES
+    self_update: none
+    owner: launch
+    note: "Path to the launch organ's product registry (scripts/launch-organ.py). Add a product = one entry; channel-native drafts stage under organs/launch/staged/<product>/<channel>.md and the organ NEVER sends — publishing stays the human's hand."
+  LIMEN_BEAT_GOVERNANCE:
+    default: "8"               # every 8 beats
+    env: LIMEN_BEAT_GOVERNANCE
+    self_update: none
+    owner: governance
+    note: "Beat cadence for the governance organ (scripts/governance-organ.py): run the cursus-honorum seed validator + governance standing report every N beats. Read-only, lockless, fail-open."
+  LIMEN_GOVERNANCE:
+    default: "1"               # ON — run the governance organ each due beat
+    env: LIMEN_GOVERNANCE
+    self_update: none
+    owner: governance
+    note: "Beat gate for the governance organ. 1=validate every seed.yaml in the estate + stamp the governance voice each due beat; 0=off. Never gates the beat."
+  LIMEN_BEAT_FINANCIAL:
+    default: "8"               # every 8 beats
+    env: LIMEN_BEAT_FINANCIAL
+    self_update: none
+    owner: financial
+    note: "Beat cadence for the financial organ (scripts/financial-organ.py): run the financial-office consolidator and maturity advance every N beats. Idempotent and fail-open."
+  LIMEN_FINANCIAL:
+    default: "1"               # ON — run the financial organ each due beat
+    env: LIMEN_FINANCIAL
+    self_update: none
+    owner: financial
+    note: "Beat gate for the financial organ. 1=refresh balance/cashflow/status and advance maturity when criteria are met; 0=off. Never gates the beat."
+  LIMEN_BEAT_PUBPOLICY:
+    default: "8"               # every 8 beats
+    env: LIMEN_BEAT_PUBPOLICY
+    self_update: none
+    owner: pubpolicy
+    note: "Beat cadence for the publication-policy organ (scripts/publication-policy.py --verify): re-prove the content-disposition engine stays sound (redactor owner-scoped, matrix + classifier intact) every N beats. Read-only self-test, stamps logs/publication-policy-state.json."
+  LIMEN_PUBPOLICY:
+    default: "1"               # ON — verify the disposition engine each due beat
+    env: LIMEN_PUBPOLICY
+    self_update: none
+    owner: pubpolicy
+    note: "Beat gate for the publication-policy organ (the ONE content-disposition decision: repo visibility x content class -> disposition). 1=self-verify each due beat; 0=off. Fail-open, never gates the beat. See organs/governance/PUBLICATION-POLICY.md."
+  LIMEN_OWNER_IDENTITY:
+    default: ""                # unset — the redactor uses its built-in owner instance
+    env: LIMEN_OWNER_IDENTITY
+    self_update: none
+    owner: pubpolicy
+    note: "Optional JSON override of the OWNER identity the publication-policy redactor is scoped to (handles/email_domains/names/username/phone). Fractal: the macro form works for anyone; unset uses the default instance. NEVER add a category-wide (@domain / any-phone) rule — redaction is owner-scoped only."
+  LIMEN_CODEX_SLIM:
+    default: "1"               # ON — distill Codex skill/plugin descriptions each due beat
+    env: LIMEN_CODEX_SLIM
+    self_update: none
+    owner: limen-daemon
+    note: "Beat gate for the Codex skill-description slimmer (scripts/codex-skill-slim.py --apply): distill every plugin/skill description to a thin, meaning-preserving lead so Codex's ~2% skills budget is not exceeded — keeping EVERY skill (distillation, not reduction; the session-noise-containment doctrine's Rule 1 bans disable-to-silence). 1=re-slim each beat (self-heals a marketplace-cache revert); 0=off. Idempotent, reversible (--restore), fail-open."
+  LIMEN_CODEX_SLIM_CAP:
+    default: "240"             # max chars per distilled description
+    env: LIMEN_CODEX_SLIM_CAP
+    self_update: none
+    owner: limen-daemon
+    note: "Per-description character cap the Codex slimmer distills to. Lower it if Codex still warns that descriptions were shortened; raise it to preserve more of each description. The knob, not a hardcode."

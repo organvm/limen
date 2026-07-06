@@ -14,8 +14,16 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+import yaml
 
-from limen.io import atomic_write_text, load_limen_file, save_limen_file
+from limen.io import (
+    _board_guard_config,
+    _queue_lock_stale_seconds,
+    atomic_write_text,
+    load_limen_file,
+    load_limen_text,
+    save_limen_file,
+)
 from limen.models import LimenFile
 
 
@@ -78,6 +86,32 @@ def test_save_then_load_roundtrips(tmp_path: Path) -> None:
     assert isinstance(loaded, LimenFile)
 
 
+def test_save_then_load_preserves_board_extensions(tmp_path: Path) -> None:
+    target = tmp_path / "tasks.yaml"
+    model = LimenFile.model_validate(
+        _board(
+            tasks=[
+                {
+                    "id": "T-1",
+                    "title": "t",
+                    "target_agent": "jules",
+                    "created": "2026-07-01",
+                    "custom_extension": {"keep": True},
+                }
+            ]
+        )
+    )
+    model.portal.agents["opencode"] = {"status": "idle", "clock_health": "ok"}
+    save_limen_file(target, model)
+    raw = yaml.safe_load(target.read_text())
+    loaded = load_limen_file(target)
+
+    assert raw["portal"]["agents"]["opencode"] == {"status": "idle", "clock_health": "ok"}
+    assert raw["tasks"][0]["custom_extension"] == {"keep": True}
+    assert loaded.portal.agents["opencode"]["status"] == "idle"
+    assert loaded.tasks[0].model_extra["custom_extension"] == {"keep": True}
+
+
 def test_load_refuses_empty_file(tmp_path: Path) -> None:
     """An empty/whitespace queue file is corruption, not an empty queue. load_limen_file
     must raise (so the caller restores from git) rather than return None and let the
@@ -86,3 +120,93 @@ def test_load_refuses_empty_file(tmp_path: Path) -> None:
     target.write_text("   \n")
     with pytest.raises(ValueError):
         load_limen_file(target)
+
+
+def test_load_text_matches_load_file(tmp_path: Path) -> None:
+    """load_limen_text(bytes) must parse identically to load_limen_file(path) for the same
+    content — the refactor that lets a caller read the board exactly once is behavior-preserving."""
+    target = tmp_path / "tasks.yaml"
+    model = LimenFile.model_validate(
+        _board(tasks=[{"id": "T-1", "title": "t", "target_agent": "jules", "created": "2026-07-01"}])
+    )
+    save_limen_file(target, model)
+    text = target.read_text()
+    from_file = load_limen_file(target)
+    from_text = load_limen_text(text)
+    assert from_text.model_dump(mode="json") == from_file.model_dump(mode="json")
+
+
+def test_load_text_refuses_empty() -> None:
+    """The empty/corruption guard holds on the string entry point too."""
+    with pytest.raises(ValueError):
+        load_limen_text("   \n", name="tasks.yaml")
+
+
+def test_io_numeric_env_knobs_fall_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LIMEN_QUEUE_LOCK_STALE_SEC", "bad")
+    monkeypatch.setenv("LIMEN_BOARD_SHRINK_FLOOR", "bad")
+    monkeypatch.setenv("LIMEN_BOARD_SHRINK_FRACTION", "nan")
+
+    assert _queue_lock_stale_seconds() == 900
+    assert _board_guard_config() == (True, 5, 0.10)
+
+    monkeypatch.setenv("LIMEN_BOARD_SHRINK_FRACTION", "inf")
+    assert _board_guard_config() == (True, 5, 0.10)
+
+
+def test_io_numeric_env_knobs_reject_nonpositive_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LIMEN_QUEUE_LOCK_STALE_SEC", "0")
+    monkeypatch.setenv("LIMEN_BOARD_SHRINK_FLOOR", "-2")
+    monkeypatch.setenv("LIMEN_BOARD_SHRINK_FRACTION", "-0.5")
+
+    assert _queue_lock_stale_seconds() == 900
+    assert _board_guard_config() == (True, 5, 0.10)
+
+
+def test_task_model_rejects_invalid_ids() -> None:
+    with pytest.raises(ValueError):
+        LimenFile.model_validate(
+            _board(tasks=[{"id": "bad id!", "title": "t", "target_agent": "jules", "created": "2026-07-01"}])
+        )
+
+
+@pytest.mark.parametrize("budget_cost", [True, False, 0, -1])
+def test_task_model_rejects_invalid_budget_cost(budget_cost) -> None:
+    with pytest.raises(ValueError):
+        LimenFile.model_validate(
+            _board(
+                tasks=[
+                    {
+                        "id": "T-1",
+                        "title": "t",
+                        "target_agent": "jules",
+                        "created": "2026-07-01",
+                        "budget_cost": budget_cost,
+                    }
+                ]
+            )
+        )
+
+
+def test_load_text_reads_a_frozen_snapshot(tmp_path: Path) -> None:
+    """The whole point of the single-read path: parsing a captured buffer is immune to a concurrent
+    rewrite of the file. Load from a snapshot string, then mutate the file on disk — the parsed board
+    still reflects the snapshot, never the later write (the TOCTOU false-negative --verify hit on the
+    live daemon-churned board)."""
+    target = tmp_path / "tasks.yaml"
+    save_limen_file(
+        target,
+        LimenFile.model_validate(
+            _board(tasks=[{"id": "A", "title": "a", "target_agent": "jules", "created": "2026-07-01"}])
+        ),
+    )
+    snapshot = target.read_text()
+    # a "concurrent writer" replaces the file after we captured the snapshot
+    save_limen_file(
+        target,
+        LimenFile.model_validate(
+            _board(tasks=[{"id": "B", "title": "b", "target_agent": "jules", "created": "2026-07-01"}])
+        ),
+    )
+    board = load_limen_text(snapshot, name=target.name)
+    assert [t.id for t in board.tasks] == ["A"]

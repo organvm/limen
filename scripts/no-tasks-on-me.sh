@@ -160,6 +160,44 @@ else
   printf 'note  %s\n' "offline — skipped GitHub open/closed check (pointer-presence still enforced)"
 fi
 
+# ---------------------------------------------------------------------------
+# 8: no DANGLING PROSE lever reference. A lever id named in the registry's prose
+#    (_doc/wall/spine, a label, a note, steps) but never DEFINED as an object here
+#    is a pointer to nothing durable — the exact gap §7's issue-check cannot catch
+#    (it validates objects, not references). Every `L-*` id the file mentions must
+#    resolve to a lever object in THIS git-tracked registry; external-organ atoms
+#    must be referenced descriptively, not by a bare id that reads as 'defined here.'
+# ---------------------------------------------------------------------------
+if ! python3 - "$REGISTRY" <<'PY'; then fail=1; fi
+import json, re, sys
+d = json.load(open(sys.argv[1]))
+obj_ids = {l.get("id") for l in d.get("levers", [])}
+referenced = set(re.findall(r"\bL-[A-Z0-9]+(?:-[A-Z0-9]+)*\b", json.dumps(d)))
+dangling = sorted(referenced - obj_ids)
+if dangling:
+    print(f"FAIL  registry prose names {len(dangling)} lever id(s) with no object here: {dangling} — "
+          "define each as a lever object, or reference the external atom descriptively (not by bare id).")
+    sys.exit(1)
+print(f"ok    every lever id named in prose resolves to a defined object ({len(obj_ids)} levers)")
+PY
+
+# ---------------------------------------------------------------------------
+# 9: no SPENT branch hangs. A local branch whose work is already landed on
+#    origin/main (a real merge, or a MERGED PR with an un-advanced tip) is pure
+#    residue: `git worktree remove` / `gh pr merge --delete-branch` leave the
+#    LOCAL head ref behind, so squash-merged branches pile up as the "1 ahead /
+#    N behind housekeeping" that used to get hand-waved each session. The
+#    branch-reap organ (scripts/reap-branches.py) proves the fixed point — exit
+#    0 <=> no provably-landed branch lingers. Reaping is loss-free
+#    (reflog-recoverable) so the organ self-heals it on the hygiene beat; here we
+#    only ASSERT it, so a closeout cannot pass with spent branches hanging.
+#    Fails safe offline (ancestor-only). Genuinely-unfinished branches live in
+#    their OWN git-tracked home (docs/branch-hygiene.md), never here.
+# ---------------------------------------------------------------------------
+if ! python3 "$ROOT/scripts/reap-branches.py" --check; then
+  bad "spent branches are lingering — review docs/branch-reap-acceptance.md, then write docs/branch-reap-acceptance.jsonl with archive + redaction proof before any scripts/reap-branches.py --apply"
+fi
+
 echo
 if [ "$fail" -ne 0 ]; then
   echo "VERDICT: tasks are hanging — see FAIL lines above. Hang each in its owner's git-tracked record, then re-run."
