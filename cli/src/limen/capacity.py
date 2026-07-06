@@ -29,6 +29,29 @@ class CapacityRow(AgentStatus):
     remaining: int | None
 
 
+class CapacityFillRow(TypedDict):
+    agent: str
+    target: int
+    expected_now: int
+    productive: int
+    attempts: int
+    observed: int
+    open_work: int
+    active_work: int
+    remaining: int
+    reachable: bool
+    status: str
+    evidence: str
+    action: str
+
+
+class CapacityFillSnapshot(TypedDict):
+    generated_at: str
+    status: str
+    rows: list[CapacityFillRow]
+    blockers: list[dict[str, str]]
+
+
 PAID_AGENT_ORDER: tuple[str, ...] = (
     "codex",
     "claude",
