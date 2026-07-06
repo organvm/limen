@@ -39,12 +39,14 @@ mkdir -p "$CELL_LOGS"
 die() { echo "cell: $*" >&2; exit 1; }
 write_empty_board() {
   local out="${1:?write_empty_board needs a path}"
-  cat > "$out" <<'YAML'
+  local tmp="${out}.tmp.$$"
+  cat > "$tmp" <<'YAML'
 version: "1.0"
 portal:
   name: scoped-empty
 tasks: []
 YAML
+  mv "$tmp" "$out"
 }
 slug_ok() { [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "bad slug '$1' (use letters/digits/._-)"; }
 cell_path() { echo "$WT_DIR/$1"; }
