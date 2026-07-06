@@ -36,5 +36,25 @@
 - **Active:** The protocol log records every exercise, medication, and appointment. 
 - **Review:** The `posture.md` brief is generated weekly, consolidating state, protocol adherence, and accommodation status. This brief is shared with new providers to avoid "starting from scratch" and serves as evidence for the ADA matter.
 
+## 4. Concrete Artifacts (Vertical Slice, 2026-07-05)
+
+| Artifact | Location | Workflow | Status |
+|---|---|---|---|
+| Recovery-Posture Brief | `cases/01-post-injury/posture.md` | W1 — Intake → posture | ✅ Active |
+| State Log (first entry) | `cases/01-post-injury/state-log.yaml` | W2 — State → record | ✅ Active (daily beat) |
+| Protocol-Adherence Log | `cases/01-post-injury/protocol-log.md` | W3 — Protocol → adherence | ✅ Active |
+| Appointment Calendar | `cases/01-post-injury/calendar.md` | W4 — Appointments → calendar | ○ Not yet created |
+| Accommodation Record | `cases/01-post-injury/accommodation-log.md` | W5 — Accommodation → documentation | ✅ Active |
+| Safety Certification | (stamped on every artifact) | W6 — Safety sentinel | ✅ Active |
+| Reception Script | `RECEPTION.md` | Conductor prompt | ✅ Active |
+| Workflow Runner | `workflow-runner.sh` | Orchestration | ✅ Active |
+
+## 5. Cross-Organ Handoff
+
+The accommodation record produced by W5 is consumed by the legal organ (`organs/legal/`) for the
+ADA employment matter. The handoff is documented in the accommodation log's "Legal Organ Handoff"
+section. The safety sentinel prevents health-organ outputs from crossing into legal advice; the
+legal organ's ethics wall prevents legal outputs from crossing into clinical advice.
+
 ---
-*First Vertical Slice of the Health Organ — Generated 2026-07-05*
+*First Vertical Slice of the Health Organ — Generated 2026-07-05 · Updated 2026-07-05*
