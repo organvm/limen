@@ -1,55 +1,108 @@
-# Legal Organism — KERNEL
+# Legal Organism — KERNEL (Cochran)
 
-> **Boundary (load-bearing, repeated everywhere in this organ):** this is legal-operations *infrastructure*
-> that AUGMENTS a licensed attorney. It does **not** practice law, give legal advice, or replace counsel.
-> Every privileged judgment, filing, and strategic decision stays with the attorney of record
-> (currently Micah Longo) and the client. The organ organizes, drafts, indexes, and researches so the
-> human professionals operate with a top-firm's leverage.
+> **Boundary (load-bearing, repeated everywhere in this organ):** this is legal-operations
+> infrastructure that AUGMENTS licensed counsel. It does **not** give legal advice, practice law,
+> file pleadings, send communications, or make legal judgments. Every legal judgment, privilege
+> decision, filing, settlement decision, and court strategy remains with the attorney of record
+> and the client. This organ never replaces counsel — it supplies the institutional bench that
+> counsel should never have to build alone.
+
+---
 
 ## Why this organ exists
 
-The rich don't win cases because they're right more often — they win because a *firm* stands behind
-them: partners, associates, paralegals, researchers, an evidence room, a process that misses nothing.
-The under-resourced get a single overworked lawyer and a shoebox of documents. This organ gives one
-person the institutional weight of that firm — the **Cochran standard** — as a coordinated set of AI
-roles working under a real attorney's direction.
+The legal organ is an **institutional prosthesis** for legal representation. It gives one person,
+one solo practitioner, or one under-resourced team the operational weight usually supplied by a
+large firm: intake discipline, matter memory, evidence indexing, posture tracking, deadline
+control, authority mapping, draft preparation, and ethics review.
 
-## The 5-primitive kernel, mapped to the legal domain
+The organ does not replace counsel. It replaces missing institutional bench capacity *around*
+counsel. Its job is to keep every matter organized, current, verifiable, and ready for attorney
+judgment — so the attorney spends decision bandwidth on strategy and advocacy, not on
+reconstructing process infrastructure.
 
-| Primitive | Legal meaning | Concretely |
+Anthony named this flagship **Cochran**. The name is an internal standard and flagship identity,
+not a claim of affiliation or representation. Underneath that named instance, the kernel stays
+generic and nameless: **generic + nameless underneath, his instance on top**.
+
+---
+
+## The 5-primitive kernel, mapped to law
+
+| Primitive | Legal meaning | What the organ holds |
 |---|---|---|
-| **Member** | the client / party | the person the matter belongs to; their role, capacity, and goals |
-| **Mandate** | the claim / matter | the cause(s) of action, the relief sought, the theory of the case |
-| **Standing** | case posture | where the matter is right now: stage, deadlines, open obligations, leverage |
-| **Standard** | statute · precedent · rubric | the controlling law, the elements to prove, the evidentiary bar |
-| **Governance** | the firm's process + ethics wall | who may decide what, what stays privileged, conflict + UPL guardrails |
+| **Member** | **client / party** | The represented person or entity, role in the matter, identity protections, authority to act, accessibility needs, and desired outcome. |
+| **Mandate** | **claim / matter** | The legal problem: claim, matter scope, relief sought, live theory, exclusions, and attorney-approved work boundaries. |
+| **Standing** | **case posture** | Current procedural posture: stage, venue, deadlines, open obligations, risks, leverage, blockers, and next review points. |
+| **Standard** | **statute / precedent / rubric** | Governing statutes, regulations, precedent, court rules, proof standards, and attorney-approved rubrics used to test the matter record. |
+| **Governance** | **firm process + ethics wall** | Review gates, UPL boundary, conflicts screen, privilege controls, chain-of-custody discipline, approval authority, and no-self-action rules. |
 
-This is the *same* kernel as the education and financial organs — only the skin changes. That is the
-fractal: one structure, every pillar.
+This is the same domain-neutral kernel used across VLTIMA's organs — Member · Mandate · Standing ·
+Standard · Governance. Legal changes the domain layer, not the primitive structure.
+
+---
 
 ## Fractal deployment
 
-- **MACRO** — a legal-institution platform any pro-se or under-resourced person (or a small firm) can
-  hold: matter intake, an elements-of-the-claim checklist, an evidence/chain-of-custody index, a
-  deadline calendar, and AI-drafted (attorney-reviewed) document skeletons. Institutional weight for the
-  many.
-- **MICRO** — Anthony's active ADA failure-to-accommodate employment matter, run with that weight,
-  *augmenting* attorney Micah Longo: a single source of truth for the case posture, an indexed evidence
-  record, and draft work product the attorney reviews and owns.
+### MACRO — legal-institution platform any pro-se or under-resourced person can hold
 
-## What the fleet builds next here (from organ-ladder.json)
+The base organ is a reusable legal-institution platform that any pro-se litigant, under-resourced
+client, legal-aid program, solo counsel, or small firm can hold. It produces matter infrastructure,
+not legal advice:
 
-1. `CHARTER.md` — the org-chart of AI roles + the workflows the firm runs (see [CHARTER.md](CHARTER.md)).
-2. The first vertical slice — a real case-posture brief + evidence index for the live matter, packaged
-   as [FRAMEWORK-FOR-MICAH.md](FRAMEWORK-FOR-MICAH.md): the deck that shows what an AI-run firm looks like.
-3. Then: deepen toward a reusable matter-management substrate (macro), with the micro instance as the
-   proving ground.
+- client/party and claim intake
+- living case-posture records
+- evidence indexes and chain-of-custody logs
+- statute, precedent, rule, and rubric maps for attorney verification
+- deadline and obligation calendars
+- draft skeletons routed through attorney review
+- ethics, conflict, privilege, and UPL gates on every artifact
 
-## Hard guardrails (every contributor + every dispatched task)
+The platform's promise is operational, not legal: every fact is indexed before it is needed, every
+deadline is visible before it arrives, every authority reference is verifiable, every draft is
+marked for review, and every external act waits for the attorney or authorized human.
 
-- No legal advice, no UPL (unauthorized practice of law). Outputs are drafts, organization, and research
-  for a licensed attorney to review, correct, and adopt.
-- Nothing is filed, sent, or served by the system. The attorney/client decides and acts.
-- Privilege is sacred: privileged material is handled as privileged; nothing leaves the client/attorney
-  channel. Real case facts are the client's to provide — placeholders until then.
-- Cite real authority only; never invent cases, statutes, or holdings.
+The MACRO form is intentionally generic — no individual identity, no personal data at the template
+layer. It is the platform that scales to N matters with zero marginal design cost.
+
+### MICRO — Anthony's active ADA employment matter, augmenting attorney Micah Longo
+
+The MICRO deployment is Anthony's live ADA employment matter, run with a top firm's institutional
+weight, **augmenting attorney Micah Longo** (never replacing counsel, never practicing law). It is
+the proving ground for the Cochran flagship: the generic legal organ, carried by the named
+standard, focused on one high-stakes matter where missing institutional bench capacity would
+otherwise be the constraint.
+
+The MICRO posture is strict:
+
+- Micah Longo remains counsel and the legal decision-maker.
+- Anthony remains the client and owner of his own choices.
+- The organ supplies organization, indexing, research support, draft skeletons, and review packets.
+- Nothing is filed, sent, served, threatened, or represented as advice by the organ.
+- Every output remains draft work product until counsel and the client own it.
+
+This instance proves the MACRO platform by producing an auditable, attorney-reviewed record of
+matter posture, evidence, law, deadlines, and ethics compliance for a single active proceeding.
+No personal name other than the client's own is used in the record beyond the client relationship.
+
+---
+
+## Hard guardrails (non-negotiable, every beat)
+
+- **No legal advice, no unauthorized practice of law.** All outputs are draft/organization work
+  product for attorney review. The organ does not practice law.
+- **No filings, service, court submission, demand, negotiation, or external communication by the
+  organ.** Every external act stays with the attorney of record.
+- **No independent attorney-client relationship is created by the system.** The organ is an
+  infrastructure layer, not a law firm.
+- **No output is final until reviewed, corrected, and owned by the attorney and client.** Every
+  artifact is draft work product.
+- **Privilege, confidentiality, conflicts, accessibility, and retention controls outrank
+  convenience.** The ethics gate blocks any output that breaches these boundaries.
+- **Authority references must be factual and verifiable.** No invented law, citations, facts, or
+  outcomes. Every authority is attorney-provided or explicitly verified before use.
+
+---
+
+*Companion documents: [`CHARTER.md`](CHARTER.md) (virtual firm org-chart + 6-workflow orchestration) ·
+[`FRAMEWORK-FOR-MICAH.md`](FRAMEWORK-FOR-MICAH.md) (attorney-facing framework deck).*

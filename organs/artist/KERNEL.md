@@ -1,77 +1,161 @@
 # A-MAVS-OLEVM — KERNEL (the studio/museum domain model)
 
 > **Boundary (load-bearing, repeated everywhere in this organ):** this is creative-institution
-> *infrastructure* that AUGMENTS a practicing artist. It does **not** create art, dictate vision,
-> alter source files, or replace the artist's hand. Every curatorial suggestion, caption draft,
-> and exhibition grouping is a proposal the artist reviews and owns. The organ archives,
-> catalogs, curates, and exhibits; the human creates.
+> infrastructure that AUGMENTS a practicing artist. It does **not** create art, dictate artistic
+> vision, alter source files, or replace the artist's hand. Every curatorial suggestion,
+> caption draft, and exhibition grouping is a proposal the artist reviews and owns. The human
+> creates; the organ supplies the institution.
+
+---
 
 ## Why this organ exists
 
-The wealthy don't preserve their creative legacies because they're more prolific — they preserve
-them because a *museum* stands behind them: curators who see the arc, archivists who lose
-nothing, conservators who keep work from rotting, exhibition designers who frame pieces so they
-land. The rest of the world has a hard drive full of folders named "untitled" and a decade of
-work that no one, including the artist, can reliably find or sequence.
+Artists usually lose their work to entropy first, not lack of talent. File sprawl, weak naming,
+provenance gaps, and missed sequencing degrade a portfolio over time and leave the body of work
+invisible to its own author.
 
-This organ delivers the institutional weight of a world-class museum/studio — the **Pantheon
-standard** — as a coordinated set of AI roles working under the artist's direction. One person,
-the full apparatus.
+This organ gives one person the infrastructure of a museum/studio: curation, catalog discipline,
+preservation, and release sequencing. It is the **same 5-primitive kernel** used by every other
+VLTIMA organ — mapped to the artist's domain instead of education, legal, or financial.
+
+---
 
 ## The 5-primitive kernel, mapped to the artist domain
 
 | Primitive | Artist meaning | Concretely |
 |---|---|---|
-| **Member** | the work / artifact | the piece itself — its medium, date, provenance, original file, and the hand that made it |
-| **Mandate** | the exhibition / intent | the thesis of the collection, the audience it addresses, the impact it seeks |
-| **Standing** | archive state | where the work is now: raw, cataloged, curated, exhibited, dormant, or at risk |
-| **Standard** | the aesthetic rubric | the visual language, the quality bar, the thematic constraints — the rules the artist owns |
-| **Governance** | curation + preservation | what gets shown, what gets cut, what gets preserved, who decides, what is never self-acted |
+| **Member** (Work) | each piece / artifact in the archive | every artifact, with medium, date, provenance link, source file path, and custody state — never floating, always traceable |
+| **Mandate** (Exhibition) | the story each grouping tells | what a selection of works is built to argue — specific enough to be curated toward, not vague enough to include everything by default |
+| **Standing** (Archive state) | where a piece is right now | RAW · CATALOGED · CURATED · STAGED · EXHIBITED · DORMANT · AT-RISK — the full lifecycle, never collapsed into "in the archive somewhere" |
+| **Standard** (Aesthetic rubric) | what quality looks like | the criteria the artist names for inclusion, sequencing, and framing — applied consistently across the whole catalog |
+| **Governance** (Curation) | what requires the artist's hand | what the organ proposes vs. what the artist must confirm, approve, or reject before anything moves outward |
 
-This is the *same* kernel as the legal and education organs — only the skin changes. That is the
-fractal: one structure, every pillar.
+This is the same 5-primitive map as other organs. Only the domain changes.
+
+---
 
 ## Fractal deployment
 
-- **MACRO** — a studio/temple platform any artist can hold: raw-archive intake, a full catalog
-  with provenance, curatorial grouping workflows, exhibition-packaging pipelines, and a
-  preservation audit. Institutional weight for any creator who refuses to let their life's work
-  rot on a hard drive. Generic + nameless underneath; never hardcoded to one person.
+### MACRO face — the reusable studio/temple platform any artist can hold
 
-- **MICRO** — Anthony's **a-mavs-olevm** — three named chambers currently in residence:
-  the **444-file photo archive** (the primary body, sequenced and cataloged), **ET4L** (a
-  thematic series within the archive), and **LOCREANCE** (an ongoing practice-based body).
-  The micro instance is the proving ground; the macro platform is the residue it distills.
+The 9-chamber toolkit: Vault, Catalog, Studio, Gallery, Archive, Press, Calendar, Atrium,
+Scriptorium. Full description in [`MACRO-FACE.md`](MACRO-FACE.md).
 
-## The 9-chamber Pantheon (the rival institution's standard)
+This face is generic and nameless. It runs for the artist as architect, not as an external
+assistant taking the frame away. Its two distinguishing frameworks:
 
-A world-class museum doesn't have one room — it has an infrastructure:
+- **The Curatorial Voice** — the consistent idiom of selection, sequencing, and framing
+  that makes an artist's exhibition argument legible. Three layers: Selection Rubric,
+  Sequencing Logic, Framing Language.
+- **The Provenance Contract** — the ethical floor: source files are sacred, provenance
+  is written not assumed, the artist's voice is sovereign, no outward action without a gate.
 
-| Chamber | Function |
+### MICRO instance — Anthony's a-mavs-olevm
+
+Three chambers proving the platform against a real body of work:
+
+| Chamber | Type | Standing | Proof target |
+|---|---|---|---|
+| **444-file photo archive** | Primary source body | CATALOGED | The Vault and Catalog preserve provenance before curation |
+| **ET4L** | Thematic series extracted from the archive | CURATED | The Gallery and Press turn cataloged work into an exhibition argument |
+| **LOCREANCE** | Active practice body | RAW | The Studio and Calendar handle continuing production without custody loss |
+
+Full deployment record in [`MICRO-FACE.md`](MICRO-FACE.md). All three chambers pass the
+full six-rule artist-organ validation suite.
+
+---
+
+## The 9-chamber operating surface
+
+A real institution is layered architecture:
+
+| Chamber | Function | Feeds |
+|---|---|---|
+| **The Vault** | all raw material, safely captured and format-checked | Catalog |
+| **The Catalog** | indexed records: provenance, date, medium, series, and links | Gallery |
+| **The Studio** | active workbench and current production state | Catalog |
+| **The Gallery** | narrative groupings and exhibition sequences | Press |
+| **The Archive** | preservation records and custody chain | Governance |
+| **The Press** | draft exhibition language and contextual notes | Calendar |
+| **The Calendar** | release timing and exhibition cadence | Atrium |
+| **The Atrium** | external-facing portfolio / exhibition entry layer | (public) |
+| **The Scriptorium** | aesthetic rubric: style, standards, and constraints | All chambers |
+
+Every chamber is defined. Every chamber has a named output. Every chamber is gated by the
+artist before its output reaches the world.
+
+---
+
+## The authority contract
+
+| What the organ does | What the artist does |
 |---|---|
-| **The Vault** | every raw piece, safe, untouched, format-verified |
-| **The Catalog** | everything indexed: date, medium, series, provenance, cross-references |
-| **The Gallery** | curated groupings that tell a story — the exhibition layer |
-| **The Studio** | the artist's active workbench: what is being made, what is in progress |
-| **The Archive** | provenance records, format audits, chain-of-custody for all acquired work |
-| **The Press** | exhibition copy, artist statements, catalog notes — draft text the artist owns |
-| **The Calendar** | exhibition schedule, release cadence, publication dates |
-| **The Atrium** | the public face: the portfolio that greets the world |
-| **The Scriptorium** | the aesthetic rubric itself — the rules, the voice, the constraints |
+| Captures intake, assigns Vault record | Confirms provenance and medium are accurate |
+| Builds Catalog record, names Standing | Confirms the record before the piece advances |
+| Proposes groupings and exhibition sequences | Approves, revises, or rejects each proposed grouping |
+| Drafts titles, statements, and captions | Rewrites and signs the language that frames their work |
+| Issues preservation-risk report | Decides what happens to at-risk or dormant work |
+| Maintains the Calendar and cadence | Approves the exhibition rhythm and release timing |
+| Assembles staged deployment package | Approves each release event before anything leaves the platform |
 
-The organ builds toward all nine. The micro instance fills them in order of urgency.
+No autonomous publication. No autonomous archive alteration. No autonomous language issuance.
+
+---
+
+## The exhibition arc
+
+```
+INTAKE → VAULT → CATALOG → CURATE → FRAME → PRESERVE → STAGE → [ARTIST GATE] → EXHIBIT
+```
+
+Posture rules:
+- The sequence advances; it does not regress silently
+- Standing changes are logged explicitly and require confirmation
+- AT-RISK pieces cannot be staged until risk is resolved
+- EXHIBITED requires explicit artist approval at the gate
+
+---
 
 ## Hard guardrails (every contributor + every dispatched task)
 
-- **No AI-generated art.** The archive holds what the human made. Nothing is generated,
-  composited, or altered and added to the archive as if it were the artist's work.
-- **Do not alter original source files.** The organ catalogs, indexes, and preserves; it never
-  edits, overwrites, recompresses, or destroys raw work.
-- **The artist's vision is final.** Curation groupings, captions, exhibition framing, and catalog
-  copy are drafts for the artist to review, correct, and adopt. Nothing is published or distributed
-  without the creator's explicit per-event approval.
-- **Provenance is sacred.** Every piece carries its date, medium, source, and chain of custody.
-  Nothing is backdated, misattributed, or rewritten.
-- **No irreversible outward-facing action without the artist's gate.** Exhibition publication,
-  portfolio deployment, social distribution — staged first, surfaced, waiting. Approval in one
-  context does not extend to the next.
+- **No AI-generated art in the archive.** The source archive contains what the artist made. No generated
+  composition, no altered source substitution, no unlabeled additions.
+- **Do not alter original source files.** The organ catalogs, indexes, preserves, and drafts; it never edits,
+  overwrites, or recompresses original source assets.
+- **The artist's vision is final.** Curation choices, captions, sequencing, and statements are draft proposals.
+  The artist accepts, rewrites, or rejects each output.
+- **Provenance is sacred.** Dates, medium, source, and custody are recorded faithfully and never backdated
+  without confirmation.
+- **No irreversible outward-facing action without gate.** Publication, social distribution, or portfolio deployment
+  is staged, surfaced, and approved per event.
+
+---
+
+## What gets built next
+
+From the organ-backlog for the maturing stage (70% → 90%):
+
+1. Complete one full RAW→EXHIBITED cycle for at least one chamber — from intake through
+   artist-approved exhibition package
+2. Issue a preservation-risk report against the full 444-file archive
+3. Fire the Press chamber: complete ET4L statement and caption set for artist rewrite
+4. Populate the Scriptorium with a written aesthetic rubric for at least one medium
+5. Stabilize LOCREANCE intake cadence and run first batch through Vault → Catalog
+
+## Validation
+
+```bash
+# Rules #1-6: archive standing, artist gates, primitive completeness, evidence,
+# no-overreach boundary, and next reviewable artifact
+python organs/artist/validate-artist.py --fleet
+python organs/artist/validate-artist.py --checklist
+```
+
+`scripts/verify-whole.sh` runs the fleet check, so an artist chamber regression fails
+the repo predicate instead of remaining a hand-audited claim.
+
+---
+
+*Companion documents: [`CHARTER.md`](CHARTER.md) (roles + workflows),
+[`MACRO-FACE.md`](MACRO-FACE.md) (the studio/temple platform any artist holds),
+[`MICRO-FACE.md`](MICRO-FACE.md) (live chambers: 444-file archive / ET4L / LOCREANCE).*

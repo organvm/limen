@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import os
+import json
 import re
 import shlex
 import shutil
 import subprocess
-from datetime import datetime, timezone
 from pathlib import Path
+from collections.abc import Iterable
+from datetime import datetime, timezone
 from typing import TypedDict, TypeVar
 
+from limen import census
 from limen.models import Task
 
 T = TypeVar("T")
@@ -28,14 +31,17 @@ class CapacityRow(AgentStatus):
     remaining: int | None
 
 
-class CapacityFillRow(AgentStatus):
+class CapacityFillRow(TypedDict):
+    agent: str
     target: int
+    expected_now: int
     productive: int
     attempts: int
-    expected_now: int
+    observed: int
     open_work: int
     active_work: int
     remaining: int
+    reachable: bool
     status: str
     evidence: str
     action: str
@@ -48,65 +54,30 @@ class CapacityFillSnapshot(TypedDict):
     blockers: list[dict[str, str]]
 
 
-PAID_AGENT_ORDER: tuple[str, ...] = (
-    "codex",
-    "claude",
-    "opencode",
-    "agy",
-    "gemini",
-    # ollama: the LOCAL, UNMETERED floor of the cascade — the pilot light. It has no token
-    # budget and no rate-limit window, so when every metered/cloud vendor is spent (the exact
-    # "we didn't pace tokens perfectly between refreshes" case), the beat still has a lane that
-    # can produce. Self-activating: reachable only once a model is pulled (see agent_status).
-    "ollama",
-    "jules",
-    "copilot",
-    "warp",
-    "oz",
-    "github_actions",
-)
+# These six were once hand-maintained literals here; they are now DERIVED VIEWS of the single
+# vendor register in `census.py` (one record per vendor owns every fact). Editing a vendor — or
+# recording that one went dark (see census: gemini) — is a one-record edit there, not six here.
+# test_census locks each of these against its historical value so the derivation can never drift.
+# (ollama is the LOCAL, UNMETERED floor of the cascade — the pilot light: no budget, no window, so
+# when every metered/cloud vendor is spent the beat still has a lane that can produce. Reachable
+# only once a model is pulled — see agent_status / census ollama record.)
+PAID_AGENT_ORDER: tuple[str, ...] = census.paid_agent_order()
 
-DEFAULT_FILL_AGENTS: tuple[str, ...] = ("codex", "claude", "opencode", "agy", "gemini", "jules")
-
-BAD_USAGE_HEALTH = frozenset({"throttle", "ratelimited", "depleted", "down", "error", "blocked"})
-
-AGENT_ALIASES: dict[str, str] = {
-    "actions": "github_actions",
-    "gha": "github_actions",
-    "github-actions": "github_actions",
-    "antigravity": "agy",
+DEFAULT_FILL_AGENTS: tuple[str, ...] = ("jules", "claude", "opencode", "agy", "gemini", "codex", "copilot")
+DEFAULT_DAILY_TASK_TARGETS: dict[str, int] = {
+    # Human contract: Claude should get a deliberately programmed/check-up batch daily.
+    "claude": 15,
 }
+BAD_USAGE_HEALTH = {"exhausted", "rate-limited", "low", "throttle"}
 
-LOCAL_CHECKOUT_AGENTS = frozenset({"codex", "claude", "opencode", "agy", "gemini", "ollama"})
-ISSUE_ASSIGNMENT_AGENTS = frozenset({"copilot"})
+AGENT_ALIASES: dict[str, str] = census.agent_aliases()
 
-_DEFAULT_BINARIES: dict[str, str] = {
-    "codex": "codex",
-    "claude": "claude",
-    "opencode": "opencode",
-    "agy": "agy",
-    "gemini": "gemini",
-    "ollama": "ollama",
-    "jules": "jules",
-    "copilot": "gh",
-    "warp": "warp",
-    "oz": "oz",
-    "github_actions": "gh",
-}
+LOCAL_CHECKOUT_AGENTS = census.local_checkout_agents()
+ISSUE_ASSIGNMENT_AGENTS = census.issue_assignment_agents()
 
-_KINDS: dict[str, str] = {
-    "codex": "local-cli",
-    "claude": "local-cli",
-    "opencode": "local-cli",
-    "agy": "local-cli",
-    "gemini": "local-cli",
-    "ollama": "local-cli",
-    "jules": "cloud-cli",
-    "copilot": "github-issue",
-    "warp": "paid-service",
-    "oz": "paid-service",
-    "github_actions": "github-actions",
-}
+_DEFAULT_BINARIES: dict[str, str] = census.default_binaries()
+
+_KINDS: dict[str, str] = census.kinds()
 
 _ISSUE_RE = re.compile(r"github\.com/([^/\s]+/[^/\s]+)/issues/(\d+)")
 
@@ -396,6 +367,35 @@ def capacity_census(board: object = None, budget_limit: int | None = None) -> li
     return rows
 
 
+def select_lanes(
+    selector: str | None = "auto",
+    board: object = None,
+    *,
+    down_lanes: Iterable[str] | None = None,
+) -> list[str]:
+    """Resolve a lane selector through the canonical capacity registry.
+
+    ``auto`` means lanes that are reachable and have remaining board capacity.
+    ``all`` means every registered lane except live-down lanes. Explicit comma
+    lists normalize aliases and ignore unknown/down lanes.
+    """
+    raw = (selector or "auto").strip() or "auto"
+    down = {canonical_agent(agent.strip()) for agent in (down_lanes or []) if str(agent).strip()}
+    key = raw.lower()
+    if key == "all":
+        return [agent for agent in PAID_AGENT_ORDER if agent not in down]
+    if key == "auto":
+        rows = capacity_census(board)
+        return [str(row["agent"]) for row in rows if row.get("reachable") and str(row["agent"]) not in down]
+
+    lanes: list[str] = []
+    for item in raw.split(","):
+        agent = canonical_agent(item.strip())
+        if agent and agent in PAID_AGENT_ORDER and agent not in down and agent not in lanes:
+            lanes.append(agent)
+    return lanes
+
+
 def format_capacity_census(rows: list[CapacityRow]) -> str:
     lines = ["-- capacity census"]
     for row in rows:
@@ -408,30 +408,85 @@ def format_capacity_census(rows: list[CapacityRow]) -> str:
     return "\n".join(lines)
 
 
-def _load_limen_json(path: Path) -> dict[str, object]:
+def _root() -> Path:
+    return Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+
+
+def _load_usage(root: Path | None = None) -> dict[str, object]:
     try:
-        raw = path.read_text(encoding="utf-8")
-    except (FileNotFoundError, PermissionError):
-        return {}
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
+        data = json.loads(((root or _root()) / "logs" / "usage.json").read_text())
+    except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}
 
 
 def _parse_dt(value: object) -> datetime | None:
-    if not isinstance(value, str):
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if not value:
         return None
     try:
-        dt = datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except ValueError:
         return None
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
-def _load_usage(root: Path) -> dict[str, object]:
-    return _load_limen_json(root / "logs" / "usage.json")
+def _window_hours_from_usage(agent: str, usage: dict[str, object]) -> float:
+    vendors = usage.get("vendors") if isinstance(usage, dict) else {}
+    info = vendors.get(agent) if isinstance(vendors, dict) else {}
+    if isinstance(info, dict):
+        hours = info.get("window_hours")
+        if isinstance(hours, (int, float)) and hours > 0:
+            return float(hours)
+        window = str(info.get("window") or "")
+    else:
+        window = ""
+    match = re.search(r"(\d+(?:\.\d+)?)\s*h", window)
+    if match:
+        return float(match.group(1))
+    if "today" in window or "day" in window or "24" in window:
+        return 24.0
+    return 24.0
+
+
+def _progress_from_usage(agent: str, usage: dict[str, object], reset_at: datetime | None, now: datetime) -> float:
+    vendors = usage.get("vendors") if isinstance(usage, dict) else {}
+    info = vendors.get(agent) if isinstance(vendors, dict) else {}
+    if isinstance(info, dict):
+        time_left = info.get("time_left_frac")
+        if isinstance(time_left, (int, float)):
+            return max(0.0, min(1.0, 1.0 - float(time_left)))
+    if reset_at is None:
+        return 1.0
+    hours = _window_hours_from_usage(agent, usage)
+    elapsed = max(0.0, (now - reset_at).total_seconds() / 3600.0)
+    return max(0.0, min(1.0, elapsed / hours))
+
+
+def _daily_task_target(agent: str, board: object) -> int:
+    env_name = f"LIMEN_{agent.upper()}_DAILY_TASKS"
+    if os.environ.get(env_name):
+        return _int(os.environ.get(env_name), 0)
+    if agent in DEFAULT_DAILY_TASK_TARGETS:
+        return DEFAULT_DAILY_TASK_TARGETS[agent]
+    budget = _budget_from_board(board)
+    per_agent = _get(budget, "per_agent", {}) or {}
+    if isinstance(per_agent, dict) and agent in per_agent:
+        return _int(per_agent.get(agent), 0)
+    return 0
+
+
+def _task_agent(task: Task | dict[str, object]) -> str:
+    return canonical_agent(str(task_value(task, "target_agent", "") or ""))
+
+
+def _task_status(task: Task | dict[str, object]) -> str:
+    return str(task_value(task, "status", "") or "")
+
+
+def _task_cost_int(task: Task | dict[str, object]) -> int:
+    return _int(task_value(task, "budget_cost", 1), 1)
 
 
 def _usage_consumed_runs(agent: str, usage: dict[str, object]) -> int:
@@ -451,18 +506,6 @@ def _usage_health(agent: str, usage: dict[str, object]) -> str:
     return str(info.get("health") or "") if isinstance(info, dict) else ""
 
 
-def _task_status(task: object) -> str:
-    return str(_get(task, "status") or "")
-
-
-def _task_agent(task: object) -> str:
-    return canonical_agent(_get(task, "target_agent", ""))
-
-
-def _task_cost_int(task: object) -> int:
-    return _int(_get(task, "budget_cost"), 0)
-
-
 def _lane_work_counts(board: object, agent: str) -> tuple[int, int]:
     tasks = _get(board, "tasks", []) or []
     if not isinstance(tasks, list):
@@ -470,36 +513,43 @@ def _lane_work_counts(board: object, agent: str) -> tuple[int, int]:
     open_work = 0
     active_work = 0
     for task in tasks:
+        if not isinstance(task, (dict, Task)):
+            continue
         status = _task_status(task)
         task_agent = _task_agent(task)
+        cost = _task_cost_int(task)
         if status == "open" and task_agent in {agent, "any"}:
-            open_work += _task_cost_int(task)
+            open_work += cost
         elif status in {"dispatched", "in_progress"} and task_agent == agent:
-            active_work += _task_cost_int(task)
+            active_work += cost
     return open_work, active_work
 
 
-def _dispatch_event_attempts(board: object, agent: str) -> int:
+def _dispatch_event_attempts(board: object, agent: str, day: str) -> int:
     tasks = _get(board, "tasks", []) or []
     if not isinstance(tasks, list):
         return 0
-    attempts = 0
+    touched: set[str] = set()
     for task in tasks:
-        if _task_agent(task) not in {agent, "any"}:
+        if not isinstance(task, (dict, Task)):
             continue
-        log = _get(task, "dispatch_log", []) or []
+        task_id = str(task_value(task, "id", "") or "")
+        log = task_value(task, "dispatch_log", []) or []
         if not isinstance(log, list):
             continue
-        attempts += sum(1 for event in log if isinstance(event, dict) and str(event.get("status", "")).strip())
-    return attempts
-
-
-def _daily_task_target(board: object, agent: str, *, default: int | None = None) -> int:
-    budget = _budget_from_board(board)
-    caps = _get(budget, "per_agent", {}) or {}
-    if isinstance(caps, dict) and agent in caps:
-        return _int(caps.get(agent), default=default or 0)
-    return default or 0
+        for event in log:
+            event_agent = canonical_agent(str(_get(event, "agent", "") or ""))
+            if event_agent != agent:
+                continue
+            timestamp = _get(event, "timestamp", "")
+            if day and not str(timestamp).startswith(day):
+                continue
+            status = str(_get(event, "status", "") or "")
+            if status == "open":
+                continue
+            if task_id:
+                touched.add(task_id)
+    return len(touched)
 
 
 def capacity_fill_snapshot(
@@ -510,44 +560,47 @@ def capacity_fill_snapshot(
     down_lanes: set[str] | None = None,
     agents: tuple[str, ...] | None = None,
 ) -> CapacityFillSnapshot:
+    """Compare paid-lane fill against each lane's current reset window.
+
+    The key distinction is productive board spend vs. attempted dispatches. Failed/rerouted
+    attempts prove the lane was touched, but they do not satisfy the daily fill contract.
+    """
     now = now or datetime.now(timezone.utc)
     if now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
+    usage = usage if usage is not None else _load_usage()
+    down_lanes = down_lanes or set()
     budget = _budget_from_board(board)
     track = _get(budget, "track", {}) or {}
+    day = str(_get(track, "date", "") or now.date().isoformat())
     per_agent_spent = _get(track, "per_agent", {}) or {}
     per_agent_reset = _get(track, "per_agent_reset", {}) or {}
-    per_agent_caps = _get(budget, "per_agent", {}) or {}
     if not isinstance(per_agent_spent, dict):
         per_agent_spent = {}
     if not isinstance(per_agent_reset, dict):
         per_agent_reset = {}
-    if not isinstance(per_agent_caps, dict):
-        per_agent_caps = {}
 
-    usage = usage if usage is not None else _load_usage(Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))))
-    down_lanes = set(down_lanes or ())
     census = {row["agent"]: row for row in capacity_census(board)}
     rows: list[CapacityFillRow] = []
     blockers: list[dict[str, str]] = []
-
     for agent in agents or DEFAULT_FILL_AGENTS:
-        target = _daily_task_target(board, agent)
+        target = _daily_task_target(agent, board)
         if target <= 0:
             continue
         reset_at = _parse_dt(per_agent_reset.get(agent))
-        if reset_at is None:
-            expected_now = target
-        else:
-            progress = max(0.0, min(1.0, (now - reset_at).total_seconds() / (24 * 60 * 60)))
-            expected_now = max(1 if progress > 0 else 0, int(round(target * progress)))
+        progress = _progress_from_usage(agent, usage, reset_at, now)
+        expected_now = min(target, int(round(target * progress)))
+        if progress > 0 and expected_now == 0:
+            expected_now = 1
         productive = _int(per_agent_spent.get(agent), 0)
-        attempts = max(_dispatch_event_attempts(board, agent), _usage_consumed_runs(agent, usage))
+        attempts = max(_dispatch_event_attempts(board, agent, day), _usage_consumed_runs(agent, usage))
         observed = max(productive, attempts)
         open_work, active_work = _lane_work_counts(board, agent)
-        row_census = census.get(agent, {})
-        reachable = bool(row_census.get("reachable", False))
+        remaining = max(0, target - productive)
+        row_census = census.get(agent)
+        reachable = bool(row_census and row_census["reachable"]) and agent not in down_lanes
         usage_health = _usage_health(agent, usage)
+
         if agent in down_lanes:
             status = "blocked"
             evidence = "lane is down by the live dispatch gate"
@@ -560,8 +613,7 @@ def capacity_fill_snapshot(
             if attempts >= expected_now:
                 status = "unproductive"
                 evidence = (
-                    f"attempted {attempts}/{expected_now}, but productive board spend is "
-                    f"{productive}/{expected_now}"
+                    f"attempted {attempts}/{expected_now}, but productive board spend is {productive}/{expected_now}"
                 )
                 action = "heal failed/rerouted dispatches so attempts become done/dispatched work"
             elif reachable and open_work > 0:
@@ -580,22 +632,21 @@ def capacity_fill_snapshot(
             status = "healthy"
             evidence = f"productive {productive}/{expected_now}; attempts {attempts}/{expected_now}"
             action = "keep pacing normally"
+
         row: CapacityFillRow = {
             "agent": agent,
             "target": target,
+            "expected_now": expected_now,
             "productive": productive,
             "attempts": attempts,
-            "expected_now": expected_now,
+            "observed": observed,
             "open_work": open_work,
             "active_work": active_work,
-            "remaining": max(0, target - productive),
+            "remaining": remaining,
             "reachable": reachable,
             "status": status,
             "evidence": evidence,
             "action": action,
-            "kind": str(row_census.get("kind", "unknown")),
-            "detail": str(row_census.get("detail", "")),
-            "command": row_census.get("command") if isinstance(row_census.get("command"), list) else None,
         }
         rows.append(row)
         if status in {"underfilled", "unproductive", "blocked", "no_work"}:

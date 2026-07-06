@@ -1,6 +1,9 @@
+import hashlib
 import json
+import os
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -8,14 +11,37 @@ ROOT = Path(__file__).resolve().parents[2]
 GUARD = ROOT / "scripts" / "claude-workflow-guard.py"
 
 
-def run_guard(*args, input_text=None):
+def run_guard(*args, input_text=None, env=None):
+    child_env = os.environ.copy()
+    if env:
+        child_env.update(env)
     return subprocess.run(
         [sys.executable, str(GUARD), *args],
         input=input_text,
         capture_output=True,
         text=True,
         cwd=ROOT,
+        env=child_env,
     )
+
+
+def write_fable_receipt(tmp_path: Path) -> Path:
+    now = datetime.now(timezone.utc)
+    monday = (now - timedelta(days=now.weekday())).date().isoformat()
+    receipt = tmp_path / "fable-acceptance.json"
+    receipt.write_text(
+        json.dumps(
+            {
+                "schema": "limen.fable_acceptance.v1",
+                "week": monday,
+                "category": "adversarial-review",
+                "percent": 5,
+                "sources": ["docs/fable-allotment.md"],
+                "verification": ["python3 scripts/fable-allotment.py audit"],
+            }
+        )
+    )
+    return receipt
 
 
 def test_normalize_candidates_accepts_nested_json_string():
@@ -55,6 +81,41 @@ def test_audit_workflow_blocks_opus_fanout_and_unparsed_string_args(tmp_path):
     assert "Opus fanout blocked" in violations
     assert "undefined PR target detected" in violations
     assert "script does not parse args" in violations
+
+
+def test_audit_workflow_blocks_unaccepted_fable(tmp_path):
+    wf = {
+        "workflowName": "canonical-fable-synthesis",
+        "status": "completed",
+        "agentCount": 1,
+        "workflowProgress": [{"model": "claude-fable-5", "state": "done"}],
+        "result": {"summary": "done"},
+    }
+    p = tmp_path / "wf.json"
+    p.write_text(json.dumps(wf))
+    proc = run_guard("audit-workflow", str(p))
+    assert proc.returncode == 2
+    violations = "\n".join(json.loads(proc.stdout)["reports"][0]["violations"])
+    assert "Fable run lacks written acceptance command" in violations
+
+
+def test_audit_workflow_allows_accepted_single_fable(tmp_path):
+    receipt = tmp_path / "logs" / "fable-acceptance" / "accepted.json"
+    receipt.parent.mkdir(parents=True)
+    receipt.write_text("{}")
+    wf = {
+        "workflowName": "canonical-fable-synthesis",
+        "status": "completed",
+        "agentCount": 1,
+        "fableAcceptance": str(receipt),
+        "workflowProgress": [{"model": "claude-fable-5", "state": "done"}],
+        "result": {"summary": "done"},
+    }
+    p = tmp_path / "wf.json"
+    p.write_text(json.dumps(wf))
+    proc = run_guard("audit-workflow", str(p))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert json.loads(proc.stdout)["ok"] is True
 
 
 def test_audit_workflow_allows_sonnet_success_with_ci_failure_words(tmp_path):
@@ -123,6 +184,237 @@ def test_audit_transcript_blocks_unbounded_expensive_opus_fanout(tmp_path):
     assert "Opus billable budget exceeded" in violations
     assert "agent/workflow fanout exceeded" in violations
     assert "unbounded goal phrase detected" in violations
+
+
+def test_audit_transcript_redacts_unbounded_prompt_text(tmp_path):
+    transcript = tmp_path / "session.jsonl"
+    prompt = "keep going until ideal form with private local details"
+    transcript.write_text(
+        json.dumps(
+            {
+                "type": "user",
+                "message": {"content": prompt},
+            }
+        )
+        + "\n"
+    )
+
+    proc = run_guard("audit-transcript", str(transcript), "--max-billable-tokens", "1000000")
+    assert proc.returncode == 2
+    assert prompt not in proc.stdout
+    report = json.loads(proc.stdout)
+    evidence = report["unboundedGoalEvidence"][0]
+    assert "text" not in evidence
+    assert evidence["textSha256"] == hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    assert evidence["chars"] == len(prompt)
+
+
+def test_audit_transcript_flags_opus_subagent_fanout(tmp_path):
+    """The verify-studio-launch shape: a cheap orchestrator that fans out expensive-tier
+    subagents. The guard reads each subagent's REAL model field and flags the fan-out."""
+    main = tmp_path / "session.jsonl"
+    main.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "model": "claude-sonnet-4-6",
+                    "content": [{"type": "text", "text": "orchestrating"}],
+                    "usage": {"input_tokens": 5, "output_tokens": 5},
+                },
+            }
+        )
+        + "\n"
+    )
+    subdir = tmp_path / "session" / "subagents"
+    subdir.mkdir(parents=True)
+    for name in ("verify-a", "verify-b"):
+        (subdir / f"{name}.jsonl").write_text(
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "model": "claude-opus-4-8[1m]",
+                        "content": [{"type": "text", "text": "trivial verify"}],
+                        "usage": {"input_tokens": 5, "output_tokens": 5},
+                    },
+                }
+            )
+            + "\n"
+        )
+    proc = run_guard(
+        "audit-transcript",
+        str(main),
+        "--max-billable-tokens",
+        "1000000",
+        "--max-opus-billable-tokens",
+        "1000000",
+        "--max-agent-calls",
+        "100",
+        "--max-opus-agents",
+        "1",
+    )
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    report = json.loads(proc.stdout)
+    assert report["expensiveSubagents"] == 2
+    assert report["expensiveTier"] == "opus"
+    assert "subagent fanout" in "\n".join(report["violations"])
+
+
+def test_audit_transcript_recurses_workflow_subagent_dirs(tmp_path):
+    main = tmp_path / "session.jsonl"
+    main.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "model": "claude-sonnet-4-6",
+                    "content": [{"type": "text", "text": "orchestrating"}],
+                    "usage": {"input_tokens": 5, "output_tokens": 5},
+                },
+            }
+        )
+        + "\n"
+    )
+    nested = tmp_path / "session" / "subagents" / "workflows" / "wf_123" / "agent-a.jsonl"
+    nested.parent.mkdir(parents=True)
+    nested.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "model": "claude-opus-4-8[1m]",
+                    "content": [{"type": "text", "text": "nested verifier"}],
+                    "usage": {"input_tokens": 5, "output_tokens": 5},
+                },
+            }
+        )
+        + "\n"
+    )
+
+    proc = run_guard(
+        "audit-transcript",
+        str(main),
+        "--max-billable-tokens",
+        "1000000",
+        "--max-opus-billable-tokens",
+        "1000000",
+        "--max-agent-calls",
+        "100",
+        "--max-opus-agents",
+        "0",
+    )
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    report = json.loads(proc.stdout)
+    assert report["files"] == [str(main), str(nested)]
+    assert report["expensiveSubagents"] == 1
+    assert "subagent fanout" in "\n".join(report["violations"])
+
+
+def test_audit_transcript_blocks_unaccepted_fable(tmp_path):
+    transcript = tmp_path / "session.jsonl"
+    transcript.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "model": "claude-fable-5",
+                    "content": [{"type": "text", "text": "canonical answer"}],
+                    "usage": {"input_tokens": 5, "output_tokens": 5},
+                },
+            }
+        )
+        + "\n"
+    )
+    proc = run_guard("audit-transcript", str(transcript), "--max-billable-tokens", "1000000")
+    assert proc.returncode == 2
+    report = json.loads(proc.stdout)
+    assert report["fableBillableTokens"] == 10
+    assert "Fable run lacks written acceptance command" in "\n".join(report["violations"])
+
+
+def test_audit_transcript_policy_mentions_do_not_accept_fable(tmp_path):
+    transcript = tmp_path / "session.jsonl"
+    transcript.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {"content": "docs mention LIMEN_FABLE_ACCEPTANCE and fable-allotment.py accept"},
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "model": "claude-fable-5",
+                            "content": [{"type": "text", "text": "done"}],
+                            "usage": {"input_tokens": 5, "output_tokens": 5},
+                        },
+                    }
+                ),
+            ]
+        )
+        + "\n"
+    )
+    proc = run_guard("audit-transcript", str(transcript), "--max-billable-tokens", "1000000")
+    assert proc.returncode == 2
+    assert "Fable run lacks written acceptance command" in "\n".join(json.loads(proc.stdout)["violations"])
+
+
+def test_audit_transcript_allows_current_receipt_env(tmp_path):
+    transcript = tmp_path / "session.jsonl"
+    transcript.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "model": "claude-fable-5",
+                    "content": [{"type": "text", "text": "accepted"}],
+                    "usage": {"input_tokens": 5, "output_tokens": 5},
+                },
+            }
+        )
+        + "\n"
+    )
+    receipt = write_fable_receipt(tmp_path)
+    proc = run_guard(
+        "audit-transcript",
+        str(transcript),
+        "--max-billable-tokens",
+        "1000000",
+        env={"LIMEN_FABLE_ACCEPTANCE": str(receipt)},
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert json.loads(proc.stdout)["fableAcceptanceSeen"] is True
+
+
+def test_audit_transcript_gates_fable_billable_tokens(tmp_path):
+    transcript = tmp_path / "session.jsonl"
+    transcript.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "model": "claude-fable-5",
+                    "content": [{"type": "text", "text": "expensive"}],
+                    "usage": {"input_tokens": 40, "cache_creation_input_tokens": 40, "output_tokens": 40},
+                },
+            }
+        )
+        + "\n"
+    )
+    proc = run_guard(
+        "audit-transcript",
+        str(transcript),
+        "--max-billable-tokens",
+        "1000000",
+        "--max-fable-billable-tokens",
+        "100",
+    )
+    assert proc.returncode == 2
+    assert "Fable billable budget exceeded" in "\n".join(json.loads(proc.stdout)["violations"])
 
 
 def test_audit_transcript_allows_small_bounded_sonnet_session(tmp_path):

@@ -1,4 +1,5 @@
 import contextlib
+import math
 import os
 import re
 import sys
@@ -13,12 +14,124 @@ import yaml
 from limen.models import LimenFile
 
 _DLOG_REQUIRED = {"timestamp", "agent", "session_id", "status"}
+_QUEUE_LOCK_STALE_SEC = 900
 
 
 class BoardCollapseError(RuntimeError):
     """Raised when a save would catastrophically shrink the board — a clobber. The existing
     good board is left INTACT and the rejected payload is preserved to a `.rejected-<stamp>`
     sidecar (never lost). See save_limen_file's collapse-guard."""
+
+
+def _int_or_default(raw: object, default: int, *, minimum: int | None = None) -> int:
+    if isinstance(raw, bool):
+        return default
+    if isinstance(raw, int):
+        value = raw
+    elif isinstance(raw, float):
+        value = int(raw)
+    elif isinstance(raw, str | bytes | bytearray):
+        try:
+            value = int(raw)
+        except ValueError:
+            return default
+    else:
+        return default
+    if not math.isfinite(float(value)):
+        return default
+    if minimum is not None and value < minimum:
+        return default
+    return value
+
+
+def _float_or_default(raw: object, default: float, *, minimum: float | None = None) -> float:
+    if isinstance(raw, bool):
+        return default
+    if isinstance(raw, int | float | str | bytes | bytearray):
+        try:
+            value = float(raw)
+        except ValueError:
+            return default
+    else:
+        return default
+    if not math.isfinite(value):
+        return default
+    if minimum is not None and value < minimum:
+        return default
+    return value
+
+
+def _queue_lock_stale_seconds() -> int:
+    return _int_or_default(
+        os.environ.get("LIMEN_QUEUE_LOCK_STALE_SEC"),
+        _QUEUE_LOCK_STALE_SEC,
+        minimum=1,
+    )
+
+
+def _lock_age_seconds(lockd: Path) -> float:
+    try:
+        return max(0.0, time.time() - lockd.stat().st_mtime)
+    except OSError:
+        return 0.0
+
+
+def _pid_is_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def _read_lock_pid(lockd: Path) -> int | None:
+    try:
+        raw = (lockd / "pid").read_text().strip()
+    except OSError:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+def _write_lock_metadata(lockd: Path) -> None:
+    try:
+        (lockd / "pid").write_text(f"{os.getpid()}\n")
+        (lockd / "created_at").write_text(datetime.now(timezone.utc).isoformat() + "\n")
+    except OSError:
+        pass
+
+
+def _clear_lock_metadata(lockd: Path) -> None:
+    for name in ("pid", "created_at"):
+        try:
+            (lockd / name).unlink()
+        except OSError:
+            pass
+
+
+def _try_reap_stale_queue_lock(lockd: Path) -> bool:
+    """Remove a stale queue lock if it is provably dead.
+
+    PID-bearing locks are safe to reap as soon as their process is gone. Metadata-free locks can be
+    created by older shell holders, so only reap them after a conservative age threshold.
+    """
+    pid = _read_lock_pid(lockd)
+    if pid is not None and _pid_is_alive(pid):
+        return False
+    if pid is None and _lock_age_seconds(lockd) < _queue_lock_stale_seconds():
+        return False
+    _clear_lock_metadata(lockd)
+    try:
+        lockd.rmdir()
+        return True
+    except OSError:
+        return False
 
 
 @contextlib.contextmanager
@@ -34,18 +147,24 @@ def queue_lock(tasks_path: Path, timeout: int = 90) -> Iterator[bool]:
     lockd = Path(tasks_path).parent / "logs" / ".queue.lock.d"
     got = False
     lockd.parent.mkdir(parents=True, exist_ok=True)
+    if os.environ.get("LIMEN_QUEUE_LOCK_HELD") == "1" and lockd.exists():
+        yield True
+        return
     for _ in range(timeout):
         try:
             lockd.mkdir()
+            _write_lock_metadata(lockd)
             got = True
             break
         except FileExistsError:
+            _try_reap_stale_queue_lock(lockd)
             time.sleep(1)
     try:
         yield got
     finally:
         if got:
             try:
+                _clear_lock_metadata(lockd)
                 lockd.rmdir()
             except OSError:
                 pass
@@ -101,28 +220,39 @@ def _backfill_required_task_fields(raw: dict[str, object]) -> int:
     return fixed
 
 
-def load_limen_file(path: Path) -> LimenFile:
-    raw = yaml.safe_load(path.read_text())
+def load_limen_text(text: str, name: str = "tasks.yaml") -> LimenFile:
+    """Parse a board from an in-memory string — the single-read entry point.
+
+    Callers that must reason about the *exact bytes* they loaded (e.g. the materialize --verify
+    byte-identity check, or history-replay loading a git revision) read the file once and pass the
+    buffer here, instead of reading it a second time — a live board the fleet rewrites every beat
+    can change between two reads (a TOCTOU false-negative). `load_limen_file` is this plus the read.
+    """
+    raw = yaml.safe_load(text)
     if raw is None:
         # an empty/whitespace file is corruption, not an empty queue — refuse to load it as
         # None (which would crash downstream); the caller should restore from git/backup.
-        raise ValueError(f"{path} is empty or invalid YAML — refusing to load (restore from git HEAD)")
+        raise ValueError(f"{name} is empty or invalid YAML — refusing to load (restore from git HEAD)")
     dropped = _sanitize_dispatch_logs(raw)
     if dropped:
         print(
             f"[limen.io] tolerated {dropped} malformed dispatch_log "
-            f"entr{'y' if dropped == 1 else 'ies'} in {Path(path).name} (torn-write recovery)",
+            f"entr{'y' if dropped == 1 else 'ies'} in {name} (torn-write recovery)",
             file=sys.stderr,
         )
     backfilled = _backfill_required_task_fields(raw)
     if backfilled:
         print(
             f"[limen.io] backfilled missing `created` on {backfilled} "
-            f"task{'' if backfilled == 1 else 's'} in {Path(path).name} (one partial task must "
+            f"task{'' if backfilled == 1 else 's'} in {name} (one partial task must "
             f"never reject the whole board)",
             file=sys.stderr,
         )
     return LimenFile.model_validate(raw)
+
+
+def load_limen_file(path: Path) -> LimenFile:
+    return load_limen_text(path.read_text(), name=Path(path).name)
 
 
 def atomic_write_text(path: Path, text: str) -> None:
@@ -162,14 +292,12 @@ def _board_guard_config() -> tuple[bool, int, float]:
     """(enabled, floor, fraction) — declared in institutio/governance/parameters.yaml as
     LIMEN_BOARD_GUARD / LIMEN_BOARD_SHRINK_FLOOR / LIMEN_BOARD_SHRINK_FRACTION."""
     on = os.environ.get("LIMEN_BOARD_GUARD", "1") != "0"
-    try:
-        floor = int(os.environ.get("LIMEN_BOARD_SHRINK_FLOOR", "5"))
-    except ValueError:
-        floor = 5
-    try:
-        fraction = float(os.environ.get("LIMEN_BOARD_SHRINK_FRACTION", "0.10"))
-    except ValueError:
-        fraction = 0.10
+    floor = _int_or_default(os.environ.get("LIMEN_BOARD_SHRINK_FLOOR"), 5, minimum=1)
+    fraction = _float_or_default(
+        os.environ.get("LIMEN_BOARD_SHRINK_FRACTION"),
+        0.10,
+        minimum=0.0,
+    )
     return on, floor, fraction
 
 
