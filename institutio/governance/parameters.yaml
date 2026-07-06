@@ -130,6 +130,18 @@ parameters:
     self_update: none
     owner: continuity
     note: "Ignored local private cartridge root (parent of session-corpus, photos-universe, etc.). Full media-dedup paths/hashes live here and are never committed; public receipts carry aggregates only."
+  LIMEN_PRIVATE_MAIL_STORY:
+    default: "$LIMEN_ROOT/.limen-private/mail-story"
+    env: LIMEN_PRIVATE_MAIL_STORY
+    self_update: none
+    owner: mail
+    note: "Ignored local private root for mail-story atoms/snapshots. The public ledger receives only redacted aggregate evidence; raw-ish mail metadata stays uncommitted."
+  LIMEN_MAIL_ENVELOPE_INDEX:
+    default: "$HOME/Library/Mail/V10/MailData/Envelope Index"
+    env: LIMEN_MAIL_ENVELOPE_INDEX
+    self_update: none
+    owner: mail
+    note: "Read-only Apple Mail Envelope Index path used by mail-story-ledger.py. Missing or incompatible local Mail state degrades to a recorded unavailable source; the script never mutates Mail."
   LIMEN_PRIVATE_SESSION_CORPUS:
     default: "$LIMEN_ROOT/.limen-private/session-corpus"
     env: LIMEN_PRIVATE_SESSION_CORPUS
@@ -859,6 +871,18 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "When 1, historical route ledger bias may down-weight remote batch-fill lanes. Default 0 preserves explicit daily utilization targets for lanes such as Jules."
+  LIMEN_GITHUB_ACTIONS_REPO:
+    default: "organvm/limen"
+    env: LIMEN_GITHUB_ACTIONS_REPO
+    self_update: none
+    owner: arms-agents
+    note: "Default repository used when the github_actions capacity probe needs a workflow-health target and no narrower health repo override is set."
+  LIMEN_GITHUB_ACTIONS_HEALTH_REPO:
+    default: "organvm/limen"
+    env: LIMEN_GITHUB_ACTIONS_HEALTH_REPO
+    self_update: none
+    owner: arms-agents
+    note: "Optional repository override for the github_actions lane reachability probe; it checks the configured workflow exists before marking the lane reachable."
   LIMEN_ASYNC_DEFUNCT_GRACE:
     default: 120
     env: LIMEN_ASYNC_DEFUNCT_GRACE
