@@ -43,11 +43,12 @@
 | Recovery-Posture Brief | `cases/01-post-injury/posture.md` | W1 — Intake → posture | ✅ Active |
 | State Log (first entry) | `cases/01-post-injury/state-log.yaml` | W2 — State → record | ✅ Active (daily beat) |
 | Protocol-Adherence Log | `cases/01-post-injury/protocol-log.md` | W3 — Protocol → adherence | ✅ Active |
-| Appointment Calendar | `cases/01-post-injury/calendar.md` | W4 — Appointments → calendar | ○ Not yet created |
+| Appointment Calendar | `cases/01-post-injury/calendar.md` | W4 — Appointments → calendar | ✅ Active |
 | Accommodation Record | `cases/01-post-injury/accommodation-log.md` | W5 — Accommodation → documentation | ✅ Active |
 | Safety Certification | (stamped on every artifact) | W6 — Safety sentinel | ✅ Active |
 | Reception Script | `RECEPTION.md` | Conductor prompt | ✅ Active |
 | Workflow Runner | `workflow-runner.sh` | Orchestration | ✅ Active |
+| Beat Log | `cases/01-post-injury/beat-log.yaml` | Orchestration audit trail | ✅ Active |
 
 ## 5. Cross-Organ Handoff
 
@@ -57,4 +58,4 @@ section. The safety sentinel prevents health-organ outputs from crossing into le
 legal organ's ethics wall prevents legal outputs from crossing into clinical advice.
 
 ---
-*First Vertical Slice of the Health Organ — Generated 2026-07-05 · Updated 2026-07-05*
+*First Vertical Slice of the Health Organ — Generated 2026-07-05 · Updated 2026-07-06*
