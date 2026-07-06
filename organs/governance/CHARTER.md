@@ -43,16 +43,20 @@ is auditable at any moment. This organ supplies that system.
 
 ## First proof: the seed validator
 
-The first executable rule — `validate-seed.py` — operationalizes the **Cursus Honorum Rule #1:
-Valid Office**. A seed contract must declare its `promotion_status` as one of the recognized offices
-in the sequence (INCUBATOR → ALPHA → BETA → STABLE → MATURE), and `implementation_status` must match.
-Skipping is a hard failure.
+The first two executable rules are `validate-seed.py`:
+
+- **Rule #1: Valid Office** — a seed contract must declare `promotion_status` as one of the
+  recognized offices in the sequence (INCUBATOR → ALPHA → BETA → STABLE → MATURE), and
+  `implementation_status` must match. Skipping is a hard failure.
+- **Rule #2: Structured edges** — `produces` and `consumes` blocks must be list-structured and
+  explicit in partner targeting (`consumers` / `source`) when represented as mappings.
 
 Run it:
 
 ```bash
 python organs/governance/validate-seed.py path/to/seed.yaml
 python organs/governance/validate-seed.py --fleet   # validate all seed.yaml files in the working tree
+python organs/governance/validate-seed.py /path/to/seed.yaml --strict-graph
 ```
 
 This is the micro instance: every repo in the ORGANVM estate is validated against the cursus on every
@@ -74,3 +78,29 @@ beat. The macro form is a standalone library any multi-repo ecosystem can import
 
 The Compliance Sentinel watches every action against this boundary. Any action that would blur these
 mandates is staged and surfaced — never self-resolved.
+
+## Maturity and next steps
+
+The governance organ is **75% mature** (maturing stage, rank 5 on the organ ladder). The entity
+register with dual-entity boundary matrix, cursus validator, entity-integrity checker, and both
+faces (macro + micro) are operational. The remaining lift to 90%:
+
+1. Wire the governance beat into the heartbeat loop (`C_GOVERNANCE` cadence)
+2. Operationalize the compliance sentinel as a continuous beat
+3. Automate the append-only audit log
+4. Close one complete promotion cycle with full validation trail
+
+Validation:
+
+```bash
+python organs/governance/validate-seed.py --fleet --strict-graph
+python organs/governance/validate-entities.py --fleet
+```
+
+Both validators are expected to pass "Concordia" on every governance beat.
+
+---
+
+*Companion documents: [`KERNEL.md`](KERNEL.md) (architecture + 5-primitive map),
+[`MACRO-FACE.md`](MACRO-FACE.md) (portable standard), [`MICRO-FACE.md`](MICRO-FACE.md)
+(ORGANVM's live instance).*

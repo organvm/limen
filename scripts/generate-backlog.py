@@ -16,6 +16,7 @@ tasks.yaml (the active surfaces), never a pinned list.
 Read-only by default (prints a plan). With --apply it appends `open` tasks via the limen
 schema (validated, atomic write). Never dispatches.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -29,47 +30,61 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.models import Task  # noqa: E402
+from limen.tabularius import submit_task_upsert  # noqa: E402
+from limen.capacity import select_lanes  # noqa: E402
 from limen.worktree_debt import worktree_debt_exceeded  # noqa: E402
 
 # Useful, repo-agnostic but ACTIONABLE levers. The agent resolves the specifics in-repo.
 # (key, priority, title, context-template). {repo} is filled per product.
 TEMPLATES = [
-    ("test-coverage", "medium",
-     "Raise test coverage in {repo}",
-     "Find the largest source module in {repo} with little or no test coverage and add a focused, "
-     "PASSING test suite for it. Run the repo's own test command and confirm green. No placeholder tests."),
-    ("ci-green", "high",
-     "Make {repo} CI green",
-     "Inspect the latest FAILING checks on {repo}'s default branch, fix the root cause (lint / types / "
-     "failing test / config), and confirm the checks pass. If CI is already green, add the single most "
-     "valuable missing check (e.g. typecheck or test-matrix) instead."),
-    ("docs", "low",
-     "Real usage docs for {repo}",
-     "Derive an accurate Usage section in {repo}'s README from the ACTUAL entrypoints/exports (install, "
-     "run, key commands + flags). No invented features, no TODOs — only what the code actually does."),
-    ("security", "high",
-     "Security hardening pass on {repo}",
-     "Run the ecosystem audit for {repo} (npm audit / pip-audit / equivalent), upgrade or pin "
-     "high-severity advisories, and add input validation at the main untrusted-input entrypoints. "
-     "Open a PR; keep the build green."),
-    ("simplify", "medium",
-     "Reduce complexity in {repo}",
-     "Identify the most complex or most-duplicated module in {repo} and refactor it for clarity, with "
-     "tests proving behavior is unchanged. Net lines should not grow without cause."),
-    ("typing", "medium",
-     "Tighten types in {repo}",
-     "Eliminate the worst untyped hotspots in {repo}'s most-imported module (remove `any` / add type "
-     "hints / fix loose signatures). Keep the build and tests green."),
+    (
+        "test-coverage",
+        "medium",
+        "Raise test coverage in {repo}",
+        "Find the largest source module in {repo} with little or no test coverage and add a focused, "
+        "PASSING test suite for it. Run the repo's own test command and confirm green. No placeholder tests.",
+    ),
+    (
+        "ci-green",
+        "high",
+        "Make {repo} CI green",
+        "Inspect the latest FAILING checks on {repo}'s default branch, fix the root cause (lint / types / "
+        "failing test / config), and confirm the checks pass. If CI is already green, add the single most "
+        "valuable missing check (e.g. typecheck or test-matrix) instead.",
+    ),
+    (
+        "docs",
+        "low",
+        "Real usage docs for {repo}",
+        "Derive an accurate Usage section in {repo}'s README from the ACTUAL entrypoints/exports (install, "
+        "run, key commands + flags). No invented features, no TODOs — only what the code actually does.",
+    ),
+    (
+        "security",
+        "high",
+        "Security hardening pass on {repo}",
+        "Run the ecosystem audit for {repo} (npm audit / pip-audit / equivalent), upgrade or pin "
+        "high-severity advisories, and add input validation at the main untrusted-input entrypoints. "
+        "Open a PR; keep the build green.",
+    ),
+    (
+        "simplify",
+        "medium",
+        "Reduce complexity in {repo}",
+        "Identify the most complex or most-duplicated module in {repo} and refactor it for clarity, with "
+        "tests proving behavior is unchanged. Net lines should not grow without cause.",
+    ),
+    (
+        "typing",
+        "medium",
+        "Tighten types in {repo}",
+        "Eliminate the worst untyped hotspots in {repo}'s most-imported module (remove `any` / add type "
+        "hints / fix loose signatures). Keep the build and tests green.",
+    ),
 ]
 
 # statuses that count as "this (repo,lever) is already being worked" — don't duplicate those.
 _ACTIVE = {"open", "dispatched", "in_progress", "needs_human"}
-
-# The lanes the FLEET dispatcher can actually serve. github_actions/warp/oz are CI/service triggers,
-# NOT fleet-dispatchable — a queue full of those is NOT a full fleet queue (the overnight idle bug:
-# 79 github_actions/oz tasks made the floor look met while the dispatcher saw nothing to run). "any"
-# is routable (the router picks a live lane). Keep this in sync with the heartbeat LANES.
-_DISPATCH_LANES = {"codex", "opencode", "agy", "claude", "gemini", "jules", "any"}
 
 
 def _org_repos() -> list[str]:
@@ -79,14 +94,24 @@ def _org_repos() -> list[str]:
     Excludes infra/meta/site/example/contrib-fork names. Returns [] on any error so main() can fall
     back to the tasks.yaml set (the generator must never break the feed beat)."""
     import subprocess
+
     orgs = [o.strip() for o in os.environ.get("LIMEN_ORGS", "organvm").split(",") if o.strip()]
     out: list[str] = []
     for org in orgs:
         try:
             r = subprocess.run(
-                ["gh", "api", f"/orgs/{org}/repos", "--paginate",
-                 "--jq", ".[] | select(.fork==false and .archived==false) | .full_name"],
-                capture_output=True, text=True, timeout=120)
+                [
+                    "gh",
+                    "api",
+                    f"/orgs/{org}/repos",
+                    "--paginate",
+                    "--jq",
+                    ".[] | select(.fork==false and .archived==false) | .full_name",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
             if r.returncode == 0:
                 out += [ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
         except Exception:
@@ -133,24 +158,128 @@ def _avg_headroom_pct() -> float | None:
     fpath = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parent.parent)) / "logs" / "usage.json"
     try:
         vendors = (json.loads(fpath.read_text()) or {}).get("vendors", {})
-        hs = [v["headroom_pct"] for v in vendors.values()
-              if isinstance(v, dict) and isinstance(v.get("headroom_pct"), (int, float))]
+        hs = [
+            v["headroom_pct"]
+            for v in vendors.values()
+            if isinstance(v, dict) and isinstance(v.get("headroom_pct"), (int, float))
+        ]
         return sum(hs) / len(hs) if hs else None
     except Exception:
         return None
 
 
+def _dispatch_lanes(board: object, dead: set[str]) -> set[str]:
+    selector = os.environ.get("LIMEN_DISPATCH_LANES", "auto")
+    return set(select_lanes(selector, board, down_lanes=dead)) | {"any"}
+
+
+def _headroom_bucket(value: float | None) -> str:
+    if value is None:
+        return "unknown"
+    if value >= 90:
+        return "very_high"
+    if value >= 75:
+        return "high"
+    if value >= 50:
+        return "medium"
+    if value >= 25:
+        return "low"
+    return "very_low"
+
+
+def census(tasks_path: Path) -> dict:
+    """Redacted feed census: aggregate queue/gate shape only, never task text or repo names."""
+    report = {
+        "tasks_present": tasks_path.exists(),
+        "tasks_readable": False,
+        "task_count": 0,
+        "status_counts": {},
+        "routable_open_count": 0,
+        "active_buildout_count": 0,
+        "generated_buildout_count": 0,
+        "value_tier_count": len(_allowed_repos()),
+        "template_count": len(TEMPLATES),
+        "headroom_bucket": _headroom_bucket(_avg_headroom_pct()),
+        "worktree_debt_gate_enabled": os.environ.get("LIMEN_WORKTREE_DEBT_GATE", "1") == "1",
+        "worktree_debt_readable": False,
+        "worktree_debt_count": 0,
+        "worktree_debt_limit": None,
+        "worktree_debt_exceeded": False,
+    }
+    try:
+        lf = load_limen_file(tasks_path)
+    except Exception:
+        return report
+    tasks = lf.tasks
+    report["tasks_readable"] = True
+    report["task_count"] = len(tasks)
+    report["status_counts"] = dict(sorted(Counter(str(t.status) for t in tasks).items()))
+
+    try:
+        from limen.dispatch import _down_lanes, _routine_generated_buildout_allowed
+
+        dead = _down_lanes()
+    except Exception:
+        dead = set()
+
+        def _routine_generated_buildout_allowed(_task):
+            return True
+
+    dispatch_lanes = _dispatch_lanes(lf, dead)
+    template_keys = {k for k, *_ in TEMPLATES}
+    report["routable_open_count"] = sum(
+        1
+        for t in tasks
+        if t.status == "open"
+        and (t.target_agent or "any") in dispatch_lanes
+        and (t.target_agent or "any") not in dead
+        and _routine_generated_buildout_allowed(t)
+    )
+    report["active_buildout_count"] = sum(
+        1
+        for t in tasks
+        if t.status in _ACTIVE and t.labels and t.labels[0] in template_keys
+    )
+    report["generated_buildout_count"] = sum(
+        1
+        for t in tasks
+        if t.labels and "generated" in t.labels and "build-out" in t.labels
+    )
+    try:
+        debt_exceeded, debt_report, limit = worktree_debt_exceeded()
+        report["worktree_debt_readable"] = True
+        report["worktree_debt_count"] = int(debt_report.get("debt", 0))
+        report["worktree_debt_limit"] = limit
+        report["worktree_debt_exceeded"] = bool(debt_exceeded)
+    except Exception:
+        pass
+    return report
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", default=os.environ.get("LIMEN_TASKS", "tasks.yaml"))
-    ap.add_argument("--floor", type=int, default=int(os.environ.get("LIMEN_BACKLOG_FLOOR", "60")),
-                    help="top the OPEN queue up to this depth; generate nothing if already at/above")
-    ap.add_argument("--max-new", type=int, default=int(os.environ.get("LIMEN_GEN_MAX", "40")),
-                    help="hard cap on tasks generated in one run (anti-flood)")
+    ap.add_argument(
+        "--floor",
+        type=int,
+        default=int(os.environ.get("LIMEN_BACKLOG_FLOOR", "60")),
+        help="top the OPEN queue up to this depth; generate nothing if already at/above",
+    )
+    ap.add_argument(
+        "--max-new",
+        type=int,
+        default=int(os.environ.get("LIMEN_GEN_MAX", "40")),
+        help="hard cap on tasks generated in one run (anti-flood)",
+    )
     ap.add_argument("--apply", action="store_true", help="append to tasks.yaml (validated, atomic)")
+    ap.add_argument("--census", action="store_true", help="print redacted feed queue/gate counts and exit")
     args = ap.parse_args()
 
     path = Path(args.tasks)
+    if args.census:
+        print(json.dumps(census(path), indent=2, sort_keys=True))
+        return 0
+
     lf = load_limen_file(path)
     tasks = lf.tasks
 
@@ -165,21 +294,26 @@ def main() -> int:
             )
             return 0
 
-    # Floor on ROUTABLE-BY-THE-FLEET open work, not total open. Two ways a "full" queue can be a lie:
-    #   1. tasks stuck on a dead lane (e.g. jules exhausted → unroutable RIGHT NOW), and
-    #   2. tasks bound to a non-fleet lane (github_actions/warp/oz) the dispatcher never serves.
-    # Either masks an empty fleet queue → the generator never fires and the tank sits full while dark
-    # repos stay uncovered (the overnight idle bug). Count only open tasks on a LIVE DISPATCH lane.
+    # Floor on ROUTABLE-BY-THE-FLEET open work, not total open. The dispatchable set is the same
+    # selector heartbeat passes to dispatch; "any" is routable because route.py picks a live lane.
     try:
-        from limen.dispatch import _down_lanes
+        from limen.dispatch import _down_lanes, _routine_generated_buildout_allowed
+
         _dead = _down_lanes()
     except Exception:
         _dead = set()
+
+        def _routine_generated_buildout_allowed(_task):
+            return True
+
+    dispatch_lanes = _dispatch_lanes(lf, _dead)
     open_now = sum(
-        1 for t in tasks
+        1
+        for t in tasks
         if t.status == "open"
-        and (t.target_agent or "any") in _DISPATCH_LANES
+        and (t.target_agent or "any") in dispatch_lanes
         and (t.target_agent or "any") not in _dead
+        and _routine_generated_buildout_allowed(t)
     )
     # Headroom accelerator (symmetric with discover-value.py): a full tank lifts the floor up to 3x so
     # the routable queue stays deep enough to feed the accelerated dispatch toward each reset cliff;
@@ -189,8 +323,10 @@ def main() -> int:
     if avg_hr is not None and avg_hr >= 50:
         floor = int(round(args.floor * (1 + min(2.0, (avg_hr - 50) / 25))))
     if open_now >= floor:
-        print(f"queue healthy: routable-open={open_now} >= floor={floor} "
-              f"(avg headroom {avg_hr if avg_hr is None else round(avg_hr)}%) — nothing to generate.")
+        print(
+            f"queue healthy: routable-open={open_now} >= floor={floor} "
+            f"(avg headroom {avg_hr if avg_hr is None else round(avg_hr)}%) — nothing to generate."
+        )
         return 0
     need = min(floor - open_now, args.max_new)
 
@@ -221,7 +357,7 @@ def main() -> int:
         print("no candidate repos in the value tier — nothing to generate.")
         return 0
     if org:
-        print(f"  candidate repos: {len(repos)} ({len(org)} from org, +{len(set(in_queue)-set(org))} queue-only)")
+        print(f"  candidate repos: {len(repos)} ({len(org)} from org, +{len(set(in_queue) - set(org))} queue-only)")
 
     # how loaded is each repo right now (fewest-loaded get fed first → spread the work).
     load = Counter(t.repo for t in tasks if t.status in _ACTIVE and t.repo)
@@ -230,7 +366,8 @@ def main() -> int:
     # what (repo, lever) pairs are already active → skip them.
     existing = {t.id for t in tasks}
     active_pairs = {
-        (t.repo, t.labels[0]) for t in tasks
+        (t.repo, t.labels[0])
+        for t in tasks
         if t.status in _ACTIVE and t.repo and t.labels and t.labels[0] in {k for k, *_ in TEMPLATES}
     }
 
@@ -253,16 +390,29 @@ def main() -> int:
                 continue
             existing.add(tid)
             active_pairs.add((repo, key))
-            new.append(Task(
-                id=tid, title=title.format(repo=repo), repo=repo, type="code",
-                target_agent="any", priority=prio, budget_cost=1, status="open",
-                labels=[key, "generated", "build-out"], urls=[],
-                context=ctx.format(repo=repo) + f" [auto-generated {stamp} to keep the stream endless]",
-                depends_on=[], created=stamp, dispatch_log=[],
-            ))
+            new.append(
+                Task(
+                    id=tid,
+                    title=title.format(repo=repo),
+                    repo=repo,
+                    type="code",
+                    target_agent="any",
+                    priority=prio,
+                    budget_cost=1,
+                    status="open",
+                    labels=[key, "generated", "build-out"],
+                    urls=[],
+                    context=ctx.format(repo=repo) + f" [auto-generated {stamp} to keep the stream endless]",
+                    depends_on=[],
+                    created=stamp,
+                    dispatch_log=[],
+                )
+            )
 
-    print(f"# generate-backlog: open={open_now} floor={args.floor} -> generating {len(new)} "
-          f"(cap {args.max_new}) across {len(set(t.repo for t in new))} repos\n")
+    print(
+        f"# generate-backlog: open={open_now} floor={args.floor} -> generating {len(new)} "
+        f"(cap {args.max_new}) across {len(set(t.repo for t in new))} repos\n"
+    )
     print("| new task id | repo | prio | lever |")
     print("|---|---|---|---|")
     for t in new:
@@ -272,6 +422,16 @@ def main() -> int:
         print("\n(nothing new to generate — every (repo,lever) is already active)")
         return 0
     if args.apply:
+        # TABVLARIVS producer path (Step 2.1). LIMEN_TICKETS_PRODUCE=1 → stop writing tasks.yaml
+        # directly; hand each NEW task to the record-keeper as an upsert ticket. `new` is already
+        # deduped against the board above, so every id is brand-new (an upsert never clobbers a live
+        # id). The keeper folds them next beat. Default OFF preserves the legacy validated append.
+        if os.environ.get("LIMEN_TICKETS_PRODUCE") == "1":
+            session_id = os.environ.get("LIMEN_SESSION_ID", "generate-backlog")
+            for t in new:
+                submit_task_upsert(path, t, agent="generate-backlog", session_id=session_id)
+            print(f"\nsubmitted {len(new)} upsert tickets to the keeper's inbox (folds onto {path} next beat).")
+            return 0
         lf.tasks.extend(new)
         save_limen_file(path, lf)
         print(f"\napplied: appended {len(new)} generated tasks -> {path} (route+dispatch separately)")
