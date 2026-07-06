@@ -1,0 +1,3 @@
+**Thesis for organvm/palimpsest:**
+
+organvm/palimpsest holds high latent value as both a consumer-facing, location-based exploration experience and a reusable spatial-data capability for the broader estate. While its end vision is a gamified AR treasure hunt layered on historical cartography, its core engine—an autopoietic pipeline designed to continuously ingest, georeference, and stack historical maps as time-layers under a live base map—can serve as a foundational organ for other civic, educational, or historical projects. The single best concrete first task is to build out Phase 1 (`plans/01-phase-1-demo.md`): creating a single-city web time-slider demo to prove out the base-map stacking and opacity controls before scaling the ingestion pipeline.
