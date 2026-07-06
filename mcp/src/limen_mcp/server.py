@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, List, Dict
 import json
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field, field_validator
 

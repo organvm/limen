@@ -483,15 +483,15 @@ def _daily_task_target(agent: str, board: object) -> int:
     return 0
 
 
-def _task_agent(task: object) -> str:
+def _task_agent(task: Task | dict[str, object]) -> str:
     return canonical_agent(str(task_value(task, "target_agent", "") or ""))
 
 
-def _task_status(task: object) -> str:
+def _task_status(task: Task | dict[str, object]) -> str:
     return str(task_value(task, "status", "") or "")
 
 
-def _task_cost_int(task: object) -> int:
+def _task_cost_int(task: Task | dict[str, object]) -> int:
     return _int(task_value(task, "budget_cost", 1), 1)
 
 
@@ -544,6 +544,8 @@ def _lane_work_counts(board: object, agent: str) -> tuple[int, int]:
     open_work = 0
     active_work = 0
     for task in tasks:
+        if not isinstance(task, (dict, Task)):
+            continue
         status = _task_status(task)
         task_agent = _task_agent(task)
         cost = _task_cost_int(task)
@@ -615,8 +617,7 @@ def capacity_fill_snapshot(
             if attempts >= expected_now:
                 status = "unproductive"
                 evidence = (
-                    f"attempted {attempts}/{expected_now}, but productive board spend is "
-                    f"{productive}/{expected_now}"
+                    f"attempted {attempts}/{expected_now}, but productive board spend is {productive}/{expected_now}"
                 )
                 action = "heal failed/rerouted dispatches so attempts become done/dispatched work"
             elif reachable and open_work > 0:
