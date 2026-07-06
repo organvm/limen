@@ -1,6 +1,6 @@
 # Financial Office — Rolling Cash-Flow Projection
 
-> Generated: 2026-07-06T00:07:54Z
+> Generated: 2026-07-06T08:55:33Z
 > *Forward-looking estimate based on known revenue stages and obligations.
 > Confidence increases as more balances and obligation amounts are confirmed.*
 
@@ -39,11 +39,10 @@
 
 ## Obligations (financial-material)
 
-Sourced from `obligations-ledger.json` — 11 protocol-class obligations:
+Sourced from `obligations-ledger.json` — 10 protocol-class obligations:
 
 | Priority | Title | Owner | Next Step |
 |---|---|---|---|
-| 95 | Security — credential change — U.S. Department of Education | yours | VERIFY you made this change. If NOT you: secure the account immediately (change password, revoke sessions/third-party access). |
 | 90 | Fraud alert — verify first — Stripe | yours | VERIFY the sender is genuine (fraud notices are heavily spoofed — do NOT click links). If real, call the number on the back of the card. |
 | 90 | Fraud alert — verify first — Santander Bank | yours | VERIFY the sender is genuine (fraud notices are heavily spoofed — do NOT click links). If real, call the number on the back of the card. |
 | 88 | Student loan — default risk — Nelnet | yours | Log in at nelnet.studentaid.gov: check default status, recertify the income-driven repayment plan, and set the lowest viable payment. |
