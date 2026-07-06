@@ -1,6 +1,6 @@
 # Session Corpus Ledger
 
-Generated: `2026-06-28T19:27:25+00:00`
+Generated: `2026-07-06T15:38:37+00:00`
 Horizon: `all local history`
 
 ## Canonical Decision
@@ -11,53 +11,70 @@ Horizon: `all local history`
 - `prompt-lifecycle-ledger.py` is the redacted crosswalk from local prompts/sessions to worktrees, tasks, GitHub receipts, and cloud probes.
 - Raw personal/session data is private local material. It belongs under `./.limen-private/session-corpus/` when materialized, never in public Git history.
 - The app screenshots are coverage hints, not canonical input. Canonical input is the local Claude/Codex/session-meta filesystem state.
+- External/archive roots are opt-in through `LIMEN_EXTERNAL_SESSION_ROOTS`; they are bounded inventory inputs, not deletion targets.
 
 ## Local Session Sources
 
-Total seen: `9833` files, `2.2 GiB`.
+Total seen: `14099` files, `3.5 GiB`.
 
 | Source | Root | Files | Size | Newest |
 |---|---:|---:|---:|---|
-| `claude-projects` | `~/.claude/projects` | 4925 | 1.4 GiB | `2026-06-28T17:13:04+00:00` |
-| `codex-sessions` | `~/.codex/sessions` | 923 | 773.9 MiB | `2026-06-28T19:27:21+00:00` |
-| `claude-file-history` | `~/.claude/file-history` | 3519 | 42.2 MiB | `2026-06-27T00:26:28+00:00` |
-| `codex-goals-state` | `~/.codex` | 6 | 12.1 MiB | `2026-06-28T19:27:21+00:00` |
-| `claude-plans` | `~/.claude/plans` | 34 | 289.3 KiB | `2026-06-25T03:22:45+00:00` |
-| `codex-history` | `~/.codex` | 1 | 231.9 KiB | `2026-06-28T18:55:55+00:00` |
-| `claude-usage-session-meta` | `~/.claude/usage-data/session-meta` | 197 | 221.4 KiB | `2026-06-23T19:06:40+00:00` |
-| `codex-app-sqlite` | `~/.codex/sqlite` | 1 | 68.0 KiB | `2026-06-27T13:58:29+00:00` |
-| `claude-tasks` | `~/.claude/tasks` | 188 | 57.7 KiB | `2026-06-26T00:08:52+00:00` |
-| `claude-usage-facets` | `~/.claude/usage-data/facets` | 32 | 29.1 KiB | `2026-06-23T19:06:55+00:00` |
-| `codex-attachments` | `~/.codex/attachments` | 4 | 6.2 KiB | `2026-06-27T18:15:45+00:00` |
-| `codex-shell-snapshots` | `~/.codex/shell_snapshots` | 3 | 4.2 KiB | `2026-06-28T18:52:24+00:00` |
+| `claude-projects` | `~/.claude/projects` | 6646 | 1.9 GiB | `2026-07-06T15:30:51+00:00` |
+| `codex-sessions` | `~/.local/share/codex/sessions` | 1389 | 1.5 GiB | `2026-07-06T15:38:33+00:00` |
+| `claude-file-history` | `~/.claude/file-history` | 5059 | 67.2 MiB | `2026-07-05T18:01:34+00:00` |
+| `codex-goals-state` | `~/.local/share/codex` | 6 | 21.1 MiB | `2026-07-06T15:38:33+00:00` |
+| `chatgpt-desktop-app-support` | `~/Library/Application Support/com.openai.chat` | 257 | 15.7 MiB | `2026-07-06T14:19:50+00:00` |
+| `codex-shell-snapshots` | `~/.local/share/codex/shell_snapshots` | 13 | 4.2 MiB | `2026-07-06T15:26:49+00:00` |
+| `codex-history` | `~/.local/share/codex` | 1 | 823.1 KiB | `2026-07-06T15:28:28+00:00` |
+| `gemini-desktop-stores` | `~/Library/Application Support/com.google.GeminiMacOS` | 12 | 569.0 KiB | `2026-06-23T21:43:47+00:00` |
+| `claude-usage-session-meta` | `~/.claude/usage-data/session-meta` | 397 | 426.9 KiB | `2026-07-03T13:33:18+00:00` |
+| `claude-plans` | `~/.claude/plans` | 43 | 369.8 KiB | `2026-07-03T15:08:54+00:00` |
+| `claude-desktop-indexeddb` | `~/Library/Application Support/Claude/IndexedDB` | 2 | 359.2 KiB | `2026-06-30T11:06:52+00:00` |
+| `codex-app-sqlite` | `~/.local/share/codex/sqlite` | 1 | 68.0 KiB | `2026-06-30T11:03:30+00:00` |
+| `claude-tasks` | `~/.claude/tasks` | 206 | 59.9 KiB | `2026-07-03T15:47:52+00:00` |
+| `claude-usage-facets` | `~/.claude/usage-data/facets` | 62 | 55.3 KiB | `2026-07-03T13:33:30+00:00` |
+| `codex-attachments` | `~/.local/share/codex/attachments` | 4 | 6.2 KiB | `2026-06-27T18:15:45+00:00` |
+| `perplexity-desktop-stores` | `~/Library/Application Support/ai.perplexity.macv3` | 1 | 400 B | `2026-06-02T13:20:10+00:00` |
+
+## Missing Local App Sources
+
+These are known local app/store adapters with no matched files in this scan. This is a coverage signal only; roots are not deletion targets.
+
+| Source | Root | Reason |
+|---|---|---|
+| `chatgpt-atlas-app-support` | `~/Library/Application Support/OpenAI/ChatGPT Atlas` | `no-matching-files` |
 
 ## Existing Organs
 
 | Organ | Role | Path | Git state |
 |---|---|---|---|
-| `session-meta` | producer: redacted, deduped multi-provider atoms | `~/Workspace/session-meta` | `## codex/preserve-session-meta-owner-state-20260627` |
-| `knowledge-corpus` | distillation target: collection, reduced faces, THE ONE | `~/Workspace/knowledge-corpus` | `## codex/preserve-knowledge-corpus-owner-state-20260627...origin/codex/preserve-knowledge-corpus-owner-state-20260627 [ahead 1]` |
-| `conversation-corpus-engine` | product/research engine: provider import and corpus promotion | `~/Workspace/conversation-corpus-engine` | `## discover-latent-value-corpus-engine...origin/discover-latent-value-corpus-engine` |
+| `session-meta` | producer: redacted, deduped multi-provider atoms | `~/Workspace/session-meta` | `## fix/security-hardening-0629; 15 dirty entries` |
+| `knowledge-corpus` | distillation target: collection, reduced faces, THE ONE | `~/Workspace/knowledge-corpus` | `not a git repo` |
+| `conversation-corpus-engine` | product/research engine: provider import and corpus promotion | `~/Workspace/conversation-corpus-engine` | `not a git repo` |
 
 ## Substrate Counts
 
-- `session-meta/ingest/manifest.jsonl`: 23,646 records, mtime `2026-06-28T16:26:19+00:00`.
-- `session-meta/ingest/atoms.jsonl`: 114,526 atoms, mtime `2026-06-28T16:29:14+00:00`.
-- `knowledge-corpus`: `13` reduced faces; `00-THE-ONE.md` present: `True`.
-- Top manifest sources: `gemini` 4,592, `claude` 3,961, `chatgpt` 2,709, `claude-projects` 2,525, `cowork-sessions` 2,047, `antigravity` 1,893, `downloads` 1,717, `intake` 1,569.
+- `session-meta/ingest/manifest.jsonl`: 25,105 records, mtime `2026-07-06T15:19:11+00:00`.
+- `session-meta/ingest/atoms.jsonl`: 218,477 atoms, mtime `2026-07-06T15:24:31+00:00`.
+- `knowledge-corpus`: `0` reduced faces; `00-THE-ONE.md` present: `False`.
+- Top manifest sources: `gemini` 4,592, `claude` 3,961, `claude-projects` 3,519, `chatgpt` 2,709, `cowork-sessions` 2,047, `codex` 1,958, `antigravity` 1,893, `downloads` 1,717.
 
 ## Session Lifecycle
 
-- No `quicken.py` journal found yet.
-- No `codex-quicken.py` journal found yet.
+- Last `quicken.py` journal: `2026-07-06T15:17:59+00:00`.
+- Claude FleetView sessions classified: `25` total; `9` stalled, `16` closed, `0` alive, `0` done.
+- Reaped worktrees in that pass: `0`.
+- Last `codex-quicken.py` journal: `2026-06-27T21:42:32+00:00`.
+- Codex sessions classified: `887` total; `ALIVE` 1, `CLOSED` 783, `PARKED` 40, `STALLED` 63.
+- Top Codex lifecycle families: `auth_credentials` 405, `session_lifecycle` 159, `github_review` 158, `worktree_lifecycle` 77, `agent_coordination` 40, `technical_debt_ci` 36.
 
 ## Private Cartridge
 
 - Private root: `~/Workspace/limen/.limen-private/session-corpus`.
 - Private inventory: `~/Workspace/limen/.limen-private/session-corpus/inventory/session-corpus-ledger.json`.
 - `.limen-private/` is ignored by Git; it is the local raw/private landing zone.
-- Materialized objects this run: copied `117`, already present `9716`, bytes copied `79.4 MiB`.
-- Private object store now holds `7527` unique objects, `3.2 GiB`.
+- Raw object materialization was not requested on this run.
+- Private object store currently holds `13845` unique objects, `6.2 GiB`.
 - Private screenshot evidence: `14` PNG artifacts, `22.9 MiB`, newest `2026-06-27T13:41:25+00:00`.
 - Screenshot batches: `2026-06-27` 14.
 
@@ -75,9 +92,8 @@ Total seen: `9833` files, `2.2 GiB`.
 
 ## Roadblocks And Potholes
 
+- session-meta is not clean/in-sync; do not mutate it from Limen until its existing dirty and divergent work is preserved or merged.
 - Local Claude/Codex app stores are live private data; screenshots are only UI evidence. Canonical ingestion must come from the filesystem stores, not from the screenshots.
-- Claude has a lifecycle organ (`scripts/quicken.py`), but no recent journal was found; refresh it before treating Claude FleetView lifecycle as current.
-- Codex has a lifecycle classifier (`scripts/codex-quicken.py`), but no journal was found; run it before relying on Codex app history as typed lifecycle coverage.
 
 ## Commands
 

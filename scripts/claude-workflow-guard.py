@@ -16,6 +16,7 @@ Read-only. It writes no repo state unless --out is supplied.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -27,6 +28,66 @@ from typing import Any
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 BAD_TARGET_RE = re.compile(r"\bundefined#undefined\b|repo[=:]\\?\"?undefined|number[=:]\\?\"?undefined")
 FAILED_LOG_RE = re.compile(r"\bfailed:|agent died|monthly spend limit|rate[_ -]?limit", re.IGNORECASE)
+FABLE_ACCEPTANCE_RE = re.compile(
+    r"fable-allotment\.py\s+accept|LIMEN_FABLE_ACCEPTANCE|fableAcceptance|fable-acceptance",
+    re.IGNORECASE,
+)
+
+
+def _model_selection() -> Any:
+    """Load the shared tier vocabulary BY FILE PATH — the same self-contained importlib load
+    ``scripts/shims/claude`` uses — so this guard never re-encodes the model ladder and never
+    drags in the ``limen`` package ``__init__``. Fail-open to None so the guard still runs
+    standalone if the module is missing. ([[fleet-model-floor-bleed]] [[derive-never-pin-hardcodes]])"""
+    try:
+        import importlib.util
+
+        root = Path(os.environ.get("LIMEN_ROOT") or Path(__file__).resolve().parents[1])
+        path = root / "cli" / "src" / "limen" / "model_selection.py"
+        if not path.exists():
+            path = Path(__file__).resolve().parents[1] / "cli" / "src" / "limen" / "model_selection.py"
+        spec = importlib.util.spec_from_file_location("_limen_model_selection_guard", path)
+        if spec is None or spec.loader is None:
+            return None
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    except Exception:
+        return None
+
+
+def _tier_order() -> tuple[str, ...]:
+    mod = _model_selection()
+    try:
+        if mod is not None:
+            return tuple(str(t) for t in mod._CLAUDE_TIER_ORDER)
+    except Exception:
+        pass
+    return ("haiku", "sonnet", "opus")
+
+
+def _expensive_tier() -> str:
+    """The Opus-class expensive rung's alias. Fable is guarded separately because it has a
+    written-acceptance rule; adding it above Opus must not make Opus fan-out invisible."""
+    order = _tier_order()
+    if "opus" in order:
+        return "opus"
+    try:
+        return order[-1]
+    except Exception:
+        return "opus"
+
+
+def _fable_tier() -> str:
+    order = _tier_order()
+    if "fable" in order:
+        return "fable"
+    return "fable"
+
+
+# The expensive rung, resolved once per process from the one brain (not a hardcoded literal).
+_EXPENSIVE = _expensive_tier()
+_FABLE = _fable_tier()
 
 
 def _read_text(path: str | None) -> str:
@@ -48,6 +109,19 @@ def _as_text(value: Any) -> str:
     if isinstance(value, str):
         return value
     return json.dumps(value, sort_keys=True, ensure_ascii=False)
+
+
+def _current_fable_acceptance_present() -> bool:
+    mod = _model_selection()
+    try:
+        return bool(mod is not None and mod._claude_fable_acceptance_present())
+    except Exception:
+        return False
+
+
+def _structured_fable_acceptance(value: Any) -> bool:
+    text = _as_text(value).strip()
+    return bool(text and FABLE_ACCEPTANCE_RE.search(text))
 
 
 def normalize_candidates(data: Any, *, allow_empty: bool = False) -> list[dict[str, Any]]:
@@ -84,17 +158,28 @@ def normalize_candidates(data: Any, *, allow_empty: bool = False) -> list[dict[s
     return out
 
 
-def _workflow_violations(path: Path, wf: dict[str, Any], *, max_opus_agents: int) -> list[str]:
+def _workflow_violations(
+    path: Path,
+    wf: dict[str, Any],
+    *,
+    max_opus_agents: int,
+    max_fable_agents: int,
+) -> list[str]:
     violations: list[str] = []
     name = wf.get("workflowName") or wf.get("summary") or path.name
     progress = wf.get("workflowProgress") or []
-    agent_count = int(wf.get("agentCount") or len(progress) or 0)
+    int(wf.get("agentCount") or len(progress) or 0)
     models = [str(p.get("model", "")) for p in progress if isinstance(p, dict)]
-    opus_agents = sum(1 for m in models if "opus" in m.lower())
+    opus_agents = sum(1 for m in models if _EXPENSIVE in m.lower())
+    fable_agents = sum(1 for m in models if _FABLE in m.lower())
 
     if opus_agents > max_opus_agents and os.environ.get("LIMEN_ALLOW_OPUS_FANOUT") != "1":
         violations.append(
             f"{name}: Opus fanout blocked ({opus_agents} Opus agents; max {max_opus_agents})"
+        )
+    if fable_agents > max_fable_agents and os.environ.get("LIMEN_ALLOW_FABLE_FANOUT") != "1":
+        violations.append(
+            f"{name}: Fable fanout blocked ({fable_agents} Fable agents; max {max_fable_agents})"
         )
 
     scan_parts = [
@@ -113,6 +198,13 @@ def _workflow_violations(path: Path, wf: dict[str, Any], *, max_opus_agents: int
                 p.get("lastToolSummary"),
             ])
     scan = "\n".join(_as_text(x) for x in scan_parts)
+    fable_acceptance_ok = _structured_fable_acceptance(wf.get("fableAcceptance"))
+    if (
+        fable_agents
+        and not fable_acceptance_ok
+        and os.environ.get("LIMEN_ALLOW_UNACCEPTED_FABLE") != "1"
+    ):
+        violations.append(f"{name}: Fable run lacks written acceptance command")
     if BAD_TARGET_RE.search(scan):
         violations.append(f"{name}: undefined PR target detected")
 
@@ -141,9 +233,20 @@ def _workflow_violations(path: Path, wf: dict[str, Any], *, max_opus_agents: int
     return violations
 
 
-def audit_workflow(path: Path, *, max_opus_agents: int, live_merged: bool = False) -> dict[str, Any]:
+def audit_workflow(
+    path: Path,
+    *,
+    max_opus_agents: int,
+    max_fable_agents: int,
+    live_merged: bool = False,
+) -> dict[str, Any]:
     wf = json.loads(path.read_text())
-    violations = _workflow_violations(path, wf, max_opus_agents=max_opus_agents)
+    violations = _workflow_violations(
+        path,
+        wf,
+        max_opus_agents=max_opus_agents,
+        max_fable_agents=max_fable_agents,
+    )
     live = None
     if live_merged:
         live = verify_claimed_merged(wf)
@@ -219,7 +322,10 @@ def audit_transcript(
     *,
     max_billable_tokens: int,
     max_opus_billable_tokens: int,
+    max_fable_billable_tokens: int,
     max_agent_calls: int,
+    max_opus_agents: int,
+    max_fable_agents: int,
 ) -> dict[str, Any]:
     """Audit a Claude transcript for unbounded, expensive session shape.
 
@@ -231,7 +337,7 @@ def audit_transcript(
     files = [main]
     subagents = main.with_suffix("") / "subagents"
     if subagents.exists():
-        files.extend(sorted(subagents.glob("*.jsonl")))
+        files.extend(sorted(p for p in subagents.rglob("*.jsonl") if p.is_file()))
 
     total_billable = 0
     cache_read_tokens = 0
@@ -239,8 +345,16 @@ def audit_transcript(
     usage_messages = 0
     agent_calls = 0
     opus_billable = 0
+    fable_billable = 0
     user_unbounded: list[dict[str, Any]] = []
     models: dict[str, int] = {}
+    # A fan-out of subagents each riding the expensive tier is the exact shape of the
+    # verify-studio-launch incident (6 trivial verifiers on Opus). Count subagent transcripts
+    # (files[1:], never the main session) that ran ANY assistant turn on the costliest rung.
+    subagent_paths = {str(p) for p in files[1:]}
+    expensive_subagent_files: set[str] = set()
+    fable_subagent_files: set[str] = set()
+    fable_acceptance_seen = _current_fable_acceptance_present()
 
     unbounded_re = re.compile(
         r"\b(no stopping|indefinite|indefinitely|until ideal form|keep going until ideal form)\b",
@@ -250,13 +364,28 @@ def audit_transcript(
     for path in files:
         for line_no, row in _iter_jsonl(path):
             msg = row.get("message") or {}
+            if _structured_fable_acceptance(row.get("fableAcceptance")) or (
+                isinstance(msg, dict) and _structured_fable_acceptance(msg.get("fableAcceptance"))
+            ):
+                fable_acceptance_seen = True
             if row.get("type") == "user":
                 text = _content_text(msg.get("content"))
                 if unbounded_re.search(text):
-                    user_unbounded.append({"path": str(path), "line": line_no, "text": text[:240]})
+                    user_unbounded.append(
+                        {
+                            "path": str(path),
+                            "line": line_no,
+                            "textSha256": hashlib.sha256(text.encode("utf-8", "replace")).hexdigest(),
+                            "chars": len(text),
+                        }
+                    )
             if row.get("type") != "assistant":
                 continue
             model = str(msg.get("model") or "unknown")
+            if str(path) in subagent_paths and _EXPENSIVE in model.lower():
+                expensive_subagent_files.add(str(path))
+            if str(path) in subagent_paths and _FABLE in model.lower():
+                fable_subagent_files.add(str(path))
             content = msg.get("content") or []
             if isinstance(content, list):
                 agent_calls += sum(
@@ -275,8 +404,10 @@ def audit_transcript(
             cache_read_tokens += int(usage.get("cache_read_input_tokens", 0))
             output_tokens += int(usage.get("output_tokens", 0))
             models[model] = models.get(model, 0) + billable
-            if "opus" in model.lower():
+            if _EXPENSIVE in model.lower():
                 opus_billable += billable
+            if _FABLE in model.lower():
+                fable_billable += billable
 
     violations: list[str] = []
     if total_billable > max_billable_tokens and os.environ.get("LIMEN_ALLOW_EXPENSIVE_SESSION") != "1":
@@ -290,8 +421,28 @@ def audit_transcript(
         violations.append(
             f"Opus billable budget exceeded ({opus_billable} > {max_opus_billable_tokens})"
         )
+    if (
+        fable_billable > max_fable_billable_tokens
+        and os.environ.get("LIMEN_ALLOW_FABLE_SESSION_BURN") != "1"
+    ):
+        violations.append(
+            f"Fable billable budget exceeded ({fable_billable} > {max_fable_billable_tokens})"
+        )
     if agent_calls > max_agent_calls and os.environ.get("LIMEN_ALLOW_AGENT_FANOUT") != "1":
         violations.append(f"agent/workflow fanout exceeded ({agent_calls} > {max_agent_calls})")
+    expensive_subagents = len(expensive_subagent_files)
+    if expensive_subagents > max_opus_agents and os.environ.get("LIMEN_ALLOW_OPUS_FANOUT") != "1":
+        violations.append(
+            f"{_EXPENSIVE} subagent fanout ({expensive_subagents} subagents on {_EXPENSIVE}; "
+            f"max {max_opus_agents}) — tier each fan-out agent by job, don't inherit the session model"
+        )
+    fable_subagents = len(fable_subagent_files)
+    if fable_subagents > max_fable_agents and os.environ.get("LIMEN_ALLOW_FABLE_FANOUT") != "1":
+        violations.append(
+            f"Fable subagent fanout ({fable_subagents} subagents on {_FABLE}; max {max_fable_agents})"
+        )
+    if fable_billable and not fable_acceptance_seen and os.environ.get("LIMEN_ALLOW_UNACCEPTED_FABLE") != "1":
+        violations.append("Fable run lacks written acceptance command")
     if user_unbounded and os.environ.get("LIMEN_ALLOW_UNBOUNDED_GOAL") != "1":
         violations.append(f"unbounded goal phrase detected ({len(user_unbounded)} occurrence(s))")
 
@@ -304,7 +455,13 @@ def audit_transcript(
         "cacheReadTokens": cache_read_tokens,
         "outputTokens": output_tokens,
         "opusBillableTokens": opus_billable,
+        "fableBillableTokens": fable_billable,
         "agentCalls": agent_calls,
+        "expensiveSubagents": expensive_subagents,
+        "fableSubagents": fable_subagents,
+        "fableAcceptanceSeen": fable_acceptance_seen,
+        "expensiveTier": _EXPENSIVE,
+        "fableTier": _FABLE,
         "modelsBillable": models,
         "unboundedGoalEvidence": user_unbounded[:10],
         "violations": violations,
@@ -356,12 +513,14 @@ def main(argv: list[str] | None = None) -> int:
     aw = sub.add_parser("audit-workflow")
     aw.add_argument("workflow", nargs="+")
     aw.add_argument("--max-opus-agents", type=int, default=1)
+    aw.add_argument("--max-fable-agents", type=int, default=1)
     aw.add_argument("--live-merged", action="store_true")
     aw.add_argument("--out")
 
     ases = sub.add_parser("audit-session")
     ases.add_argument("session")
     ases.add_argument("--max-opus-agents", type=int, default=1)
+    ases.add_argument("--max-fable-agents", type=int, default=1)
     ases.add_argument("--live-merged", action="store_true")
     ases.add_argument("--out")
 
@@ -369,7 +528,10 @@ def main(argv: list[str] | None = None) -> int:
     at.add_argument("session_or_jsonl")
     at.add_argument("--max-billable-tokens", type=int, default=int(os.environ.get("LIMEN_MAX_CLAUDE_SESSION_TOKENS", "2000000")))
     at.add_argument("--max-opus-billable-tokens", type=int, default=int(os.environ.get("LIMEN_MAX_OPUS_SESSION_TOKENS", "750000")))
+    at.add_argument("--max-fable-billable-tokens", type=int, default=int(os.environ.get("LIMEN_MAX_FABLE_SESSION_TOKENS", "1000000")))
     at.add_argument("--max-agent-calls", type=int, default=int(os.environ.get("LIMEN_MAX_AGENT_CALLS", "8")))
+    at.add_argument("--max-opus-agents", type=int, default=1)
+    at.add_argument("--max-fable-agents", type=int, default=1)
     at.add_argument("--out")
 
     args = ap.parse_args(argv)
@@ -384,13 +546,23 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.cmd == "audit-workflow":
             reports = [
-                audit_workflow(Path(p), max_opus_agents=args.max_opus_agents, live_merged=args.live_merged)
+                audit_workflow(
+                    Path(p),
+                    max_opus_agents=args.max_opus_agents,
+                    max_fable_agents=args.max_fable_agents,
+                    live_merged=args.live_merged,
+                )
                 for p in args.workflow
             ]
         elif args.cmd == "audit-session":
             session_dir = _find_session_dir(args.session)
             reports = [
-                audit_workflow(p, max_opus_agents=args.max_opus_agents, live_merged=args.live_merged)
+                audit_workflow(
+                    p,
+                    max_opus_agents=args.max_opus_agents,
+                    max_fable_agents=args.max_fable_agents,
+                    live_merged=args.live_merged,
+                )
                 for p in sorted((session_dir / "workflows").glob("*.json"))
             ]
             summary = {
@@ -406,7 +578,10 @@ def main(argv: list[str] | None = None) -> int:
                 args.session_or_jsonl,
                 max_billable_tokens=args.max_billable_tokens,
                 max_opus_billable_tokens=args.max_opus_billable_tokens,
+                max_fable_billable_tokens=args.max_fable_billable_tokens,
                 max_agent_calls=args.max_agent_calls,
+                max_opus_agents=args.max_opus_agents,
+                max_fable_agents=args.max_fable_agents,
             )
             _emit(report, args.out)
             return 0 if report["ok"] else 2

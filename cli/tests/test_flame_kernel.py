@@ -35,6 +35,8 @@ def test_kernel_rides_every_prompt(tmp_path, monkeypatch):
     assert "You are VLTIMA." in p  # the self rides along
     assert "YOUR TASK THIS BEAT" in p  # divider separates identity from work
     assert "do a thing" in p  # the concrete task is still there
+    assert "VERIFICATION DISCIPLINE" in p
+    assert "Do not run scripts/verify-whole.sh" in p
 
 
 def test_kernel_disabled_is_bare_prompt(tmp_path, monkeypatch):
@@ -45,6 +47,7 @@ def test_kernel_disabled_is_bare_prompt(tmp_path, monkeypatch):
     p = D._build_prompt(_task())
     assert "VLTIMA" not in p
     assert p.startswith("Complete task T1")
+    assert "VERIFICATION DISCIPLINE" in p
 
 
 def test_missing_kernel_fails_open(tmp_path, monkeypatch):
@@ -121,10 +124,15 @@ def test_run_cmd_captures_jules_session_id(monkeypatch):
     assert out == "5450674856461095192"
 
 
-def test_ollama_is_cascade_floor():
+def test_ollama_is_cascade_floor(monkeypatch):
+    monkeypatch.delenv("LIMEN_DISPATCH_LANES", raising=False)
+    monkeypatch.setattr(D, "_down_lanes", lambda: set())
     assert "ollama" in C.PAID_AGENT_ORDER
     assert "ollama" in C.LOCAL_CHECKOUT_AGENTS
     assert D._LANE_CASCADE[-1] == "ollama"  # the very last resort
+    monkeypatch.setattr(D, "select_lanes", lambda *a, **k: ["opencode", "agy", "jules"])
+    assert D._next_lane("jules") is None  # floor is not used until a model makes it reachable
+    monkeypatch.setattr(D, "select_lanes", lambda *a, **k: ["opencode", "agy", "jules", "ollama"])
     assert D._next_lane("jules") == "ollama"  # reached only after cloud-async too
     assert D._next_lane("ollama") is None  # nothing below the floor
 
