@@ -2,7 +2,7 @@
 # Created 2026-07-04 from the principal's niche-institution directive.
 
 member:
-  name: "Jessica"
+  name: "{{MEMBER_NAME}}"
   context: >
     Human-resources professional and Instagram-growth practitioner (named in
     the recovered hokage-chess ecosystem docs as the resident Instagram growth

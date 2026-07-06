@@ -53,7 +53,7 @@ never *joining a downline*.
    ("personalized free plan" — the real deliverable, gated by email).
 3. **Plan delivery** — send the personalized plan; set the check-in
    expectation (weekly, opt-out anytime).
-4. **Check-in cadence** — the Teamzy-driven warm loop: celebrate progress,
+4. **Check-in cadence** — the {{CRM_PLATFORM}}-driven warm loop: celebrate progress,
    surface obstacles, no pitch until the lead raises the buying question or
    completes 2+ check-ins.
 5. **Offer conversation** — the paid ask, made personally: the offer ladder
@@ -74,9 +74,9 @@ movement:
 
 - **Daily (≈30 min, "power half-hour"):** read the signal sheet → send
   5–10 personal replies/check-ins from staged drafts → mark outcomes in
-  Teamzy. Rob types every send.
-- **Weekly:** fire the content batch (3–5 posts); send one Scroll-pattern
-  email to the list; review the Teamzy warm column and pick who's ready for
+  {{CRM_PLATFORM}}. Rob types every send.
+- **Weekly:** fire the content batch (3–5 posts); send one {{NEWSLETTER_NAME}}-pattern
+  email to the list; review the {{CRM_PLATFORM}} warm column and pick who's ready for
   an offer conversation.
 - **Monthly:** KPI review against the sheet below; prune dead leads with a
   graceful-exit note; ambassador check-in.
@@ -95,7 +95,7 @@ the durable owner. The floor runs degraded-but-running without them:
   explicit `{{ROB_AFFILIATE_LINK}}` slot that the validator verifies is
   declared owed, never fabricated);
 - canonical FB/IG handle confirmation (RB-8);
-- current Teamzy field schema (so the four attribution fields —
+- current {{CRM_PLATFORM}} field schema (so the four attribution fields —
   `Source_Content_ID`, `Wearable_User`, `Owned_Media_Subscriber`,
   `Ambassador_Readiness` — land without collision);
 - existing reel/short links (to seed the L0 inventory).

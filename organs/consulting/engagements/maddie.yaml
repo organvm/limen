@@ -1,5 +1,5 @@
 member:
-  name: "Maddie"
+  name: "{{MEMBER_NAME}}"
   context: "Private client channel — scope capture under changing priorities"
 mandate:
   description: "Engagement intake and delivery posture under changing scope"
