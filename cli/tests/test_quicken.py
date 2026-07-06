@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "quicken.py"
+sys.path.insert(0, str(ROOT / "cli" / "src"))
+
+from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.models import LimenFile, Task  # noqa: E402
+from limen.tabularius import pending_count  # noqa: E402
 
 
 def _load():
@@ -38,6 +44,7 @@ def test_breathe_numeric_env_falls_back(monkeypatch, capsys):
 
 
 def test_hang_residue_does_not_refresh_unchanged_human_ask(tmp_path, monkeypatch):
+    monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
     quicken = _load()
     tasks = tmp_path / "tasks.yaml"
     atom = "land the credential/secret (your account/identity)"
@@ -85,6 +92,39 @@ tasks:
     assert tasks.read_text(encoding="utf-8") == before
 
 
+def test_hang_residue_creates_via_tabularius(tmp_path, monkeypatch):
+    quicken = _load()
+    tasks = tmp_path / "tasks.yaml"
+    save_limen_file(
+        tasks,
+        LimenFile(
+            tasks=[
+                Task(id=f"FILL-{i}", title="filler", target_agent="codex", status="open", created="2026-07-01")
+                for i in range(5)
+            ]
+        ),
+    )
+    monkeypatch.setattr(quicken, "LEDGER", tasks)
+    atom = "land the credential/secret (your account/identity)"
+
+    result = quicken.hang_residue(
+        [
+            {
+                "state": "STALLED",
+                "title": "wire revenue gateway",
+                "decision": {"residue": atom},
+            }
+        ]
+    )
+
+    assert result["created"] == ["ASK-quicken-credential"]
+    assert pending_count(tasks) == 0
+    ask = {task.id: task for task in load_limen_file(tasks).tasks}["ASK-quicken-credential"]
+    assert ask.status == "needs_human"
+    assert ask.target_agent == "human"
+    assert "quicken-residue" in ask.labels
+
+
 def test_write_residue_splits_queued_unblocks_before_deduping(monkeypatch):
     quicken = _load()
     atom = "send the drafted message (never auto-send)"
@@ -106,6 +146,50 @@ def test_write_residue_splits_queued_unblocks_before_deduping(monkeypatch):
 
     assert "effort-level-ultracode, effort-level-ultracode" not in doc
     assert "unblocks: effort-level-ultracode, nous research outreach p" in doc
+
+
+def test_hang_residue_refreshes_via_tabularius(tmp_path, monkeypatch):
+    quicken = _load()
+    tasks = tmp_path / "tasks.yaml"
+    atom = "land the credential/secret (your account/identity)"
+    save_limen_file(
+        tasks,
+        LimenFile(
+            tasks=[
+                Task(
+                    id="ASK-quicken-credential",
+                    title=atom,
+                    target_agent="human",
+                    status="open",
+                    labels=["user-ask"],
+                    context="old context",
+                    created="2026-07-01",
+                ),
+                *[
+                    Task(id=f"FILL-{i}", title="filler", target_agent="codex", status="open", created="2026-07-01")
+                    for i in range(5)
+                ],
+            ]
+        ),
+    )
+    monkeypatch.setattr(quicken, "LEDGER", tasks)
+
+    result = quicken.hang_residue(
+        [
+            {
+                "state": "STALLED",
+                "title": "wire revenue gateway",
+                "decision": {"residue": atom},
+            }
+        ]
+    )
+
+    assert result["refreshed"] == ["ASK-quicken-credential"]
+    assert pending_count(tasks) == 0
+    ask = {task.id: task for task in load_limen_file(tasks).tasks}["ASK-quicken-credential"]
+    assert ask.status == "needs_human"
+    assert "wire revenue gateway" in ask.context
+    assert "quicken-residue" in ask.labels
 
 
 def test_reap_done_apply_delegates_without_removing_worktree(tmp_path, monkeypatch):

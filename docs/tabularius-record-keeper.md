@@ -50,12 +50,13 @@ archived ticket files are the append-only event log the board projects from.
 | Piece | Where | Role |
 |-------|-------|------|
 | Engine | `cli/src/limen/tabularius.py` | `Ticket`, `submit_ticket()`, `submit_task_upsert()`, `drain_once()`, the fold/validate/seal + quarantine |
-| Producer API | `cli/src/limen/tabularius.py` → `submit_task_upsert()` | the one-line conversion target: a writer swaps `save_limen_file` for this call per NEW task (validates up front, then hands the keeper an upsert ticket) |
+| Producer API | `cli/src/limen/tabularius.py` → `submit_task_upsert()` | the one-line conversion target: a writer swaps `save_limen_file` for this call per NEW task (validates up front, then hands the keeper an upsert ticket; supports optional stale-read guards for id allocators) |
+| Status API | `cli/src/limen/tabularius.py` → `submit_task_status()` | the one-line conversion target for existing-task lifecycle transitions: status + dispatch_log + optional field patch as one keeper-owned ticket |
 | Beat organ | `scripts/tabularius-organ.py` | thin per-beat wrapper (like `heal-board.py`); `--check`/`--dry-run`; writes the liveness stamp |
 | Beat wiring | `scripts/heartbeat-loop.sh` | runs after `heal-board` (fold onto a *healthy* board), before the body's own mutation |
 | Proprioception | `scripts/organ-health.py` | a TABVLARIVS rung, green when `logs/tabularius-organ-state.json` is fresh |
 | Keeper gate | `institutio/governance/parameters.yaml` → `LIMEN_TABVLARIVS` | master kill-switch for the keeper (default ON) |
-| Cutover gate | `institutio/governance/parameters.yaml` → `LIMEN_TICKETS_PRODUCE` | flips converted writers from direct-write to producer (default **OFF** — a merge changes nothing live; the flip is the deliberate, revertible cutover) |
+| Historical cutover gate | `institutio/governance/parameters.yaml` → `LIMEN_TICKETS_PRODUCE` | retained as an old rollout switch; live board writers are now producer-only and no longer depend on this flag |
 | Tests | `cli/tests/test_tabularius.py` | 13 tests: end-to-end submit→drain, ordering, quarantine, lock-deferral, collapse-guard, **and the producer≡direct-write identity invariant** |
 
 ### Safety invariants (each inherited from a shipped precedent)
@@ -78,19 +79,16 @@ archived ticket files are the append-only event log the board projects from.
 
 - **Step 1 — SHIPPED (this PR).** The keeper exists and runs every beat. No writer behavior changes,
   so with no producers yet it is a proven no-op. The office is manned; no clerks hand it tickets yet.
-- **Step 2 — convert writers to producers, one tier at a time (reversible per tier).**
-  Each conversion is behind `LIMEN_TICKETS_PRODUCE` (default OFF), so it merges as a no-op and the
-  cutover is a deliberate flip. The parity is *proven*, not assumed: `test_producer_path_matches_
-  legacy_direct_write` shows a converted writer produces a board identical to the legacy direct write
-  (same tasks, same fields, same order) save for the keeper's added `updated` provenance stamp — so
-  every remaining conversion is a mechanical edit against a known-safe template, not surgery.
-  1. **Scripts first** (lowest blast radius). **Reference pair converted** (`mine-backlog`,
-     `ingest-backlog` — the latter a natural fit, it wanted lock-free): each now calls
-     `submit_task_upsert` per new task when `LIMEN_TICKETS_PRODUCE=1`, keeping its read-only dedup so
-     it only ever emits brand-new ids. The rest (`generate-backlog`, `generate-revenue-backlog`,
-     `generate-organ-backlog`, `generate-positioning`, `discover-value`, `ingest-coverage`) are the
-     same one-line swap against the proven template.
-  2. **CLI harvest/dispatch result-apply** → emit a ticket instead of mutating the blob.
+- **Step 2 — SHIPPED.** Writers are producer-only. The early reversible rollout used
+  `LIMEN_TICKETS_PRODUCE`; the current live board mutation surfaces no longer retain direct-write
+  fallbacks. The parity was *proven*, not assumed: `test_producer_path_matches_legacy_direct_write`
+  showed a converted writer produced a board identical to the legacy direct write (same tasks, same
+  fields, same order) save for the keeper's added `updated` provenance stamp.
+  1. **Scripts first** (lowest blast radius). The task-creation, routing, repair, insight, async,
+     and residue scripts now submit guarded tickets and drain the keeper instead of mutating the
+     blob. Non-writers such as `generate-positioning` and `ingest-coverage` were verified as read-only
+     / obligation surfaces.
+  2. **CLI harvest/dispatch result-apply** → emit and drain tickets instead of mutating the blob.
   3. **MCP server** — replace the raw `yaml.dump` + git-push with a ticket append (removes the worst
      offender: no lock, no atomic write, no collapse-guard, and its own drifted duplicate models).
   4. **FastAPI + Worker endpoints** — enqueue a ticket and return; the keeper projects. This is the
@@ -111,23 +109,173 @@ above it is autonomous.
 
 ## Recorded remaining work (this doc is the owner)
 
+### Verification tiers
+
+Use the focused gate while changing the recordkeeper/kernel substrate:
+
+```bash
+python3 scripts/verify-recordkeeper-kernel.py
+python3 scripts/verify-recordkeeper-kernel.py --report-file logs/recordkeeper-kernel-verify.json
+```
+
+It runs the deterministic TABVLARIVS/VLTIMA gates in parallel: keeper/kernel py-compile, the
+VLTIMA and TABVLARIVS pytest slices, schema validation, writer audit, projection freshness, and the
+CLI projection check. It deliberately does **not** require the live event-proof stamp by default,
+because `logs/tabularius-organ-state.json` is daemon-owned evidence, not an inner-loop unit test.
+That state file separates `updated` (organ liveness) from `event_log_updated` (event-log proof
+freshness), so `tabularius-organ.py --check` can refresh liveness without extending the proof
+streak's freshness window.
+
+When the keeper has real live state, run the event proof explicitly:
+
+```bash
+python3 scripts/verify-recordkeeper-kernel.py --include-event-proof
+python3 scripts/verify-recordkeeper-kernel.py --require-event-proof
+```
+
+Reserve `scripts/verify-whole.sh` for pre-merge / broad-surface verification, or after touching
+API, Worker, dashboard, MONETA, runtime probes, or deployment-sensitive code. Re-running the whole
+gate after every keeper/kernel edit is intentionally unnecessary.
+
 - [x] Step 2.1 (pattern proven) — `submit_task_upsert` producer API + `LIMEN_TICKETS_PRODUCE` gate +
       the producer≡direct-write identity test; reference pair `mine-backlog` + `ingest-backlog` converted.
 - [x] Step 2.1 (creation tier converted + **CUTOVER LIVE**) — the whole task-CREATION tier now
       produces tickets: `generate-backlog`, `generate-revenue-backlog`, `generate-organ-backlog`,
-      `discover-value` converted (behind the same gate). Reading the code corrected the remainder list:
+      `discover-value` converted. `scripts/generate-backlog.py --apply` submits and drains guarded
+      buildout-task upsert tickets through TABVLARIVS. `scripts/generate-revenue-backlog.py --apply` submits and drains
+      guarded revenue-task upsert tickets through TABVLARIVS. `scripts/generate-organ-backlog.py --apply`
+      submits and drains guarded organ-task upsert tickets through TABVLARIVS. `scripts/auto-scale.py` submits guarded
+      upsert tickets and drains synchronously through TABVLARIVS, preserving the CI `tasks.yaml` commit
+      contract while preventing stale sequential-id clobber. `scripts/self-heal.py` submits and drains
+      guarded upsert tickets for stable `HEAL-*` repair tasks through TABVLARIVS.
+      `scripts/converge-organ.py` submits and drains guarded upsert tickets for bounded `CONV-*`
+      gap tasks through TABVLARIVS, and `scripts/corpus-converge.py` does the same for bounded
+      `CORP-*` corpus-gap tasks.
+      `scripts/current-session-fanout.py` submits and drains guarded upsert tickets for deterministic
+      current-session seed tasks. `scripts/insight-route.py` submits guarded `TASK-<insight-id>` upsert tickets and drains
+      them synchronously in ticket mode. Reading the code corrected the remainder list:
       `generate-positioning` and `ingest-coverage` **never write `tasks.yaml`** (obligations / read-only) —
       not writers, so not converted. **`scripts/heartbeat-loop.sh` sets `LIMEN_TICKETS_PRODUCE=1`**, so the
       LIVE fleet routes task creation through the keeper (revertible via `~/.limen.env`). Smoke-proven:
       a real `generate-backlog` run submitted 5 tickets, left the board untouched, and the keeper folded
-      them (2→7). The status-mutator tier still writes directly — that is Step 2.2.
-- [ ] Step 2.2 — the STATUS-mutator tier (`route`, `dispatch-async`, `heal-dispatch`, `rebalance`,
+      them (2→7). The status-mutator tier is now Step 2.2-complete; the remaining conversion surfaces
+      are MCP/API and the event-log SSOT flip.
+- [x] Step 2.2 — the STATUS-mutator tier (`route`, `dispatch-async`, `heal-dispatch`, `rebalance`,
       `recover`, `quicken`) → emit an INTENT_STATUS ticket instead of a direct RMW (NOT an upsert — an
-      upsert of a live id merge-clobbers; these change existing tasks). Also CLI harvest/dispatch result-apply.
-- [ ] Step 2.3 — MCP server → ticket producer (retire the raw write + duplicate models).
-- [ ] Step 2.4 — live API/Worker tier (needs the consistency decision above; website-sensitive).
-- [ ] Step 3 — flip SSOT to the event log; add an archive→`events.jsonl` compactor + a standing
-      `fold(archive) == board` predicate.
+      upsert of a live id merge-clobbers; these change existing tasks). The
+      `submit_task_status()` producer API is shipped and parity-tested, `scripts/recover.py --apply`
+      submits and drains guarded status-repair tickets through TABVLARIVS, and the Jules harvest path submits
+      completion/failure tickets instead of saving the board directly. `scripts/heal-dispatch.py --apply`
+      submits and drains guarded lifecycle-repair tickets through TABVLARIVS. `scripts/rebalance.py` submits guarded
+      target-agent tickets through TABVLARIVS and drains them on every `--apply`. `scripts/route.py`
+      submits guarded target-agent and workstream tickets in ticket mode. `scripts/quicken.py`
+      submits human-residue upsert/refresh tickets in ticket mode. `scripts/dispatch-async.py` submits guarded reserve/reap/harvest
+      tickets in ticket mode and drains the keeper before launching workers or clearing markers.
+      CLI dispatch result-apply submits result tickets in ticket mode. `scripts/claim-task.py`
+      submits and drains a guarded claim ticket for live manual claims.
+      `scripts/reclassify-needs-human.py --apply` submits and drains guarded reopen tickets instead
+      of directly rewriting false human-gate records. `scripts/jules-land.py --apply` is
+      TABVLARIVS-only: it submits and drains guarded completion tickets after a Jules session lands
+      as a PR. `scripts/self-improve.py --apply` submits and drains guarded priority/status re-plan
+      tickets through TABVLARIVS.
+      `limen release-stale --apply` submits and drains guarded stale-claim release/restore tickets.
+      Parallel dispatch result-commit submits and drains the same result tickets as serial dispatch.
+      Serial dispatch budget-window resets submit and drain board-meta tickets in ticket mode.
+      Parallel dispatch reservations submit guarded status tickets and drain them before agent runs.
+      Jules harvest submits completion/failure tickets and drains them before returning.
+      `generate-backlog --apply` submits upsert tickets and drains them before returning.
+      `generate-revenue-backlog --apply` submits upsert tickets and drains them before returning.
+      Legacy `scripts/append-tasks.py` submits and drains guarded upsert tickets instead of
+      rewriting `tasks.yaml` directly.
+      Post-transfer `scripts/rewrite-owners.py --apply` submits and drains guarded repo-owner
+      rewrite tickets instead of rewriting `tasks.yaml` directly.
+- [x] Step 2.3 — MCP server → ticket producer. `mcp/src/limen_mcp/server.py` now loads through
+      the shared Limen loader and its mutating tools (`add_task`, `update_task_status`,
+      `agent_claim`) submit TABVLARIVS upsert/status tickets, drain the keeper synchronously, and
+      no longer run the old YAML rewrite + git stash/pull/push path.
+- [x] Step 2.4 — live API/Worker tier. Local file-backed FastAPI mutation endpoints now submit
+      and synchronously drain TABVLARIVS tickets before responding; GitHub-backed FastAPI mutations
+      and Cloudflare Worker mutation routes reject until a remote TABVLARIVS ticket sink exists,
+      while read and dry-run surfaces stay live.
+- [x] Step 2 guardrail — `scripts/check-tabularius-writers.py` audits the codebase for direct
+      task-board writers. It is wired into `scripts/verify-whole.sh` and blocks any new unapproved
+      `tasks.yaml` writer. The whole-repo gate pins the legacy fallback ceiling at 0, so live board
+      mutation stays keeper-only outside structural repair/export surfaces.
+      `scripts/discover-value.py --apply` is now TABVLARIVS-only: it submits and drains upsert
+      tickets instead of retaining a legacy direct append fallback. `scripts/rebalance.py --apply`
+      is now TABVLARIVS-only: it submits and drains guarded target-agent status tickets instead of
+      retaining a legacy direct rewrite fallback. `scripts/recover.py --apply` is now TABVLARIVS-only:
+      it submits and drains guarded failed/orphan/done-repair status tickets instead of retaining a
+      legacy direct repair fallback. `scripts/jules-land.py --apply` is now TABVLARIVS-only: it
+      submits and drains guarded completion tickets instead of retaining a legacy direct done-marking
+      fallback. `scripts/heal-dispatch.py --apply` is now TABVLARIVS-only: it submits and drains
+      guarded lifecycle-repair tickets while holding the queue lock instead of retaining a legacy
+      direct repair fallback. `scripts/self-improve.py --apply` is now TABVLARIVS-only: it submits
+      and drains guarded priority/status re-plan tickets instead of retaining a legacy direct
+      re-plan fallback. `scripts/auto-scale.py` is now TABVLARIVS-only: it submits and drains
+      guarded task upsert tickets instead of retaining a legacy direct append fallback.
+      `scripts/converge-organ.py` is now TABVLARIVS-only: it submits and drains guarded `CONV-*`
+      gap-task upsert tickets instead of retaining a legacy direct append fallback.
+      `scripts/corpus-converge.py` is now TABVLARIVS-only: it submits and drains guarded `CORP-*`
+      corpus-gap upsert tickets instead of retaining a legacy direct append fallback.
+      `scripts/current-session-fanout.py` is now TABVLARIVS-only: it submits and drains guarded
+      current-session seed upsert tickets instead of retaining a legacy direct append fallback.
+      `scripts/generate-revenue-backlog.py --apply` is now TABVLARIVS-only: it submits and drains
+      guarded revenue-task upsert tickets instead of retaining a legacy direct append fallback.
+      `scripts/generate-backlog.py --apply` is now TABVLARIVS-only: it submits and drains guarded
+      buildout-task upsert tickets instead of retaining a legacy direct append fallback.
+      `scripts/generate-organ-backlog.py --apply` is now TABVLARIVS-only: it submits and drains
+      guarded organ-task upsert tickets instead of retaining a legacy direct append fallback.
+      `scripts/self-heal.py` is now TABVLARIVS-only: it submits and drains guarded `HEAL-*`
+      repair-task upsert tickets instead of retaining a legacy direct append fallback.
+      `scripts/mine-backlog.py --apply` is now TABVLARIVS-only: it submits and drains guarded
+      GitHub-issue task upsert tickets instead of retaining a legacy direct append fallback.
+      `scripts/ingest-backlog.py --apply` is now TABVLARIVS-only: it submits and drains guarded
+      Studium content upsert tickets instead of retaining a legacy direct append fallback.
+      `scripts/insight-route.py` is now TABVLARIVS-only for board tasks: repo-owned insights submit
+      and drain guarded `TASK-<insight-id>` upsert tickets instead of retaining a legacy direct append
+      fallback.
+      `scripts/quicken.py` is now TABVLARIVS-only for human-residue board records: it submits and
+      drains guarded create/refresh tickets instead of retaining a legacy direct save fallback.
+      `scripts/route.py --apply` is now TABVLARIVS-only: it submits and drains guarded
+      target-agent/workstream assignment tickets instead of retaining a legacy direct rewrite
+      fallback.
+      `limen harvest` is now TABVLARIVS-only: Jules result and no-op/failed harvest transitions
+      submit and drain guarded status tickets instead of retaining a legacy direct save fallback.
+      `scripts/dispatch-async.py` is now TABVLARIVS-only: async harvest, stale-marker reaping, and
+      reserve-before-launch all submit and drain guarded status tickets instead of retaining legacy
+      direct save fallbacks.
+      `limen dispatch` / `dispatch_parallel` / `release-stale` are now TABVLARIVS-only: serial
+      result commits, parallel reservation/result commits, budget-window resets, and stale-claim
+      releases all submit and drain guarded status/meta tickets instead of retaining legacy direct
+      save fallbacks. The legacy fallback allowlist is empty.
+- [x] Step 3 bridge — add an archive→`events.jsonl` compactor + a standing
+      `fold(seed + archive-delta) == board` predicate.
+      `limen tabularius-events --write --verify` writes
+      `logs/tickets/events.jsonl` as a compacted projection seed plus
+      `logs/tickets/events.jsonl.manifest.json` as the archive watermark. Verification now proves
+      both `materialize.fold(events.jsonl) == tasks.yaml` for a fresh seed and
+      `fold(seed + archived tickets after watermark) == tasks.yaml` after later keeper drains;
+      `limen tabularius-events --sync-archive --verify` appends those post-watermark archive deltas
+      into `events.jsonl` and advances the manifest; `scripts/verify-whole.sh` runs that standing
+      predicate against the ignored live `logs/tickets/events.jsonl` path.
+- [x] Step 3 cache bridge — `limen tabularius-events --emit-board <path>` folds the standing event
+      log plus post-watermark archive deltas into a sidecar `tasks.yaml` cache and refuses to
+      overwrite the live board. `scripts/verify-whole.sh` writes a temp regenerated board cache so
+      the repo now proves both "event log matches current cache" and "event log can regenerate the
+      cache bytes" without flipping the live read path yet.
+- [x] Step 3 beat proof — `scripts/tabularius-organ.py` now refreshes the standing event log and
+      regenerates a temp cache after real keeper seals, then records `event_log_verified`,
+      `event_log_cache_verified`, and `event_log_streak` in `logs/tabularius-organ-state.json`.
+      Proof failure is fail-open for the heartbeat but resets the streak, giving the final SSOT flip
+      a concrete N-beat evidence surface instead of an informal claim.
+- [x] Step 3 flip gate — `scripts/check-tabularius-event-proof.py --min-streak N` is the read-only
+      final-flip predicate over `logs/tabularius-organ-state.json`: fresh stamp, verified event log,
+      verified regenerated cache, nonzero event count, and enough consecutive keeper seals. This is
+      not a CI hard gate because clean checkouts may have no live keeper seals yet.
+- [ ] Step 3 final — flip live startup/read paths to treat the event log as the SSOT and regenerate
+      `tasks.yaml` as a materialized cache, after the standing predicate has survived enough keeper
+      beats to make the cutover boring.
 
 See also: `board-is-event-log-projection` (memory), `cli/src/limen/materialize.py`,
 `scripts/heal-board.py`, `io.py` (`queue_lock`, `save_limen_file`, the collapse-guard).

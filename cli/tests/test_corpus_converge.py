@@ -13,6 +13,8 @@ from pathlib import Path
 
 import yaml
 
+from limen.tabularius import pending_count
+
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "corpus-converge.py"
 REPO = Path(__file__).resolve().parents[2]
 
@@ -21,6 +23,7 @@ def _load(monkeypatch):
     # LIMEN_ROOT must point at the real repo so `import limen.*` resolves; corpus/state/log/tasks
     # are redirected to tmp by each test via env.
     monkeypatch.setenv("LIMEN_ROOT", str(REPO))
+    monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
     spec = importlib.util.spec_from_file_location("corpus_converge_uut", SCRIPT)
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
@@ -107,6 +110,21 @@ def test_emit_gaps_bounded_idempotent(tmp_path, monkeypatch):
     assert len(corp) == 1 and corp[0]["type"] == "corpus-gap"
     # second run with the same gap adds nothing (id derived from text)
     assert m.emit_gaps(["explore: governance"], "some-face", apply=True) == 0
+
+
+def test_emit_gaps_drains_tabularius(tmp_path, monkeypatch):
+    m = _load(monkeypatch)
+    tasks = tmp_path / "tasks.yaml"
+    tasks.write_text(yaml.safe_dump({"tasks": []}))
+    monkeypatch.setenv("LIMEN_TASKS", str(tasks))
+
+    added = m.emit_gaps(["explore: governance"], "some-face", apply=True)
+
+    assert added == 1
+    out = yaml.safe_load(tasks.read_text())
+    corp = [t for t in out["tasks"] if t["id"].startswith("CORP-")]
+    assert len(corp) == 1 and corp[0]["type"] == "corpus-gap"
+    assert pending_count(tasks) == 0
 
 
 def test_gather_new_material_fail_open_on_missing_dirs(tmp_path, monkeypatch):

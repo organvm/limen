@@ -5,21 +5,20 @@ The Studium's breadth (per-work music deepening, film companions, corpus fetches
 studium/expansion-backlog.yaml under a release-hold. This is the SANCTIONED funnel that merges the
 CONTENT-class tasks into the daemon-contended tasks.yaml as a re-emitting C_FEED voice:
 
-  * LOCKLESS + atomic — exactly like the sibling generate-backlog / generate-revenue-backlog voices.
-    The daemon does NOT hold the queue lock across a beat, so taking queue_lock here would only STARVE
-    this voice (it times out under live contention and skips every beat — the tasks never land). It
-    re-reads fresh right before the write, then atomic-saves (temp file -> os.replace).
+  * SINGLE-WRITER — it never writes tasks.yaml directly. It emits guarded upsert tickets and
+    TABVLARIVS folds them onto the board as the one record keeper.
   * IDEMPOTENT + SELF-HEALING — only NEW task ids are appended, so it runs every beat as a no-op once
-    seeded; if a long concurrent dispatch save ever clobbers the rows, the next beat simply re-adds
-    them. (A one-shot lock-guarded apply was the bug; a re-emitting voice is the cure.)
+    seeded; if old legacy drift ever removes the rows, the next beat simply re-emits guarded tickets.
+    (A one-shot lock-guarded apply was the bug; a re-emitting voice through the keeper is the cure.)
 
 It respects the backlog's OWN internal gates: only the content-authoring sections are released
 (deepening — MINUS the in-flight odyssey — plus corpus_gaps and film.first_pass). The his-gate
 sections (community / community_interaction / analysis / tier2_staged / Letterboxd posting) and any
 row carrying a `gate:` field are NEVER released here.
 
-Read-only by default (prints exactly what it WOULD add). With --apply it appends losslessly + atomically.
-Never dispatches; the live daemon (autonomy mode "dispatch") routes the new tasks on its own beats.
+Read-only by default (prints exactly what it WOULD add). With --apply it submits and drains
+TABVLARIVS tickets. Never dispatches; the live daemon (autonomy mode "dispatch") routes the new tasks
+on its own beats.
 
 PRECONDITION (executability): the fleet executes a task by cloning the repo's DEFAULT branch. These
 content tasks need the studium/ scaffold (canon.yaml, the book-01 templates, scripts/studium-validate.py)
@@ -46,9 +45,9 @@ except ImportError:  # pragma: no cover
 
 HERE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(HERE / "cli" / "src"))
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.models import Task  # noqa: E402
-from limen.tabularius import submit_task_upsert  # noqa: E402
+from limen.tabularius import drain_once, submit_task_upsert  # noqa: E402
 
 SRC_DEFAULT = HERE / "studium" / "expansion-backlog.yaml"
 # the Studium lives in this repo; the fleet authors arcs into studium/ and opens a PR here.
@@ -118,7 +117,7 @@ def main() -> int:
             str(Path(os.path.expanduser(os.environ.get("LIMEN_ROOT", "~/Workspace/limen"))) / "tasks.yaml"),
         ),
     )
-    ap.add_argument("--apply", action="store_true", help="append to tasks.yaml losslessly (atomic, re-emitting)")
+    ap.add_argument("--apply", action="store_true", help="submit guarded upsert tickets through TABVLARIVS")
     args = ap.parse_args()
 
     src = Path(os.path.expanduser(args.source))
@@ -143,44 +142,39 @@ def main() -> int:
         print("|---|---|")
         for t in new:
             print(f"| {t.id} | {t.title} |")
-        print(f"\ndry-run — re-run with --apply to append {len(new)} tasks (lossless atomic, re-emitting).")
+        print(f"\ndry-run — re-run with --apply to submit {len(new)} tasks through TABVLARIVS.")
         return 0
 
-    # APPLY — lockless + atomic, exactly like the generate-revenue-backlog / generate-backlog voices it
-    # runs beside in the C_FEED block. The daemon does NOT hold the queue lock across a beat, so taking
-    # queue_lock here only STARVES this voice: under live contention it times out and skips EVERY beat,
-    # so the tasks never land (observed live — "queue busy ... skipped" each beat). Instead, re-read
-    # fresh right before the write (pick up ids a sibling added this beat, never double-land), extend,
-    # and atomic-save. NEVER skip on contention: the id-dedupe makes this idempotent, so if a long
-    # concurrent dispatch save ever clobbers, the next C_FEED beat simply re-adds (self-healing — the
-    # "never a silent no" invariant; a one-shot lock-guarded apply was the bug, a re-emitting voice is
-    # the cure).
-    fresh = load_limen_file(path)  # fresh re-read right before the write (dedup only; read never clobbers)
+    # Re-read fresh right before submitting tickets so we pick up rows a sibling added this beat and
+    # never double-land an id. TABVLARIVS owns the board write and collapse guard.
+    fresh = load_limen_file(path)
     existing = {t.id for t in fresh.tasks}
     new = [t for t in candidates if t.id not in existing]
     if not new:
         print("nothing new — every staged content task already in the queue (idempotent no-op).")
         return 0
 
-    # TABVLARIVS producer path (Step 2.1). When LIMEN_TICKETS_PRODUCE=1 this voice stops writing
-    # tasks.yaml directly and instead hands each NEW task to the record-keeper as an upsert ticket;
-    # the keeper folds them onto the board next beat (single-writer — no interleave to clobber). The
-    # read above still dedups, so we only ever emit brand-new ids (an upsert MERGES, never blind-adds).
-    # Default OFF keeps the legacy direct write until the deliberate cutover flip.
-    if os.environ.get("LIMEN_TICKETS_PRODUCE") == "1":
-        session_id = os.environ.get("LIMEN_SESSION_ID", "ingest-backlog")
-        for t in new:
-            submit_task_upsert(path, t, agent="ingest-backlog", session_id=session_id)
-        print(f"submitted {len(new)} Studium content upsert tickets to the keeper's inbox "
-              f"(TABVLARIVS folds them onto {path} next beat; never dispatched here).")
-        for t in new:
-            print(f"  + {t.id}")
-        return 0
-
-    fresh.tasks.extend(new)
-    save_limen_file(path, fresh)  # atomic temp -> os.replace
-    print(f"applied: appended {len(new)} Studium content tasks -> {path} "
-          f"(the daemon routes them on its own beats; never dispatched here).")
+    session_id = os.environ.get("LIMEN_SESSION_ID", "ingest-backlog")
+    tickets = [
+        submit_task_upsert(
+            path,
+            t,
+            agent="ingest-backlog",
+            session_id=session_id,
+            precondition={"status": None},
+        )
+        for t in new
+    ]
+    result = drain_once(path)
+    applied = set(result.applied_ids)
+    wanted = {ticket.stem for ticket in tickets}
+    if wanted - applied:
+        print(
+            f"TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} Studium content tickets "
+            f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+        )
+    else:
+        print(f"submitted and applied {len(new)} Studium content upsert tickets through TABVLARIVS -> {path}.")
     for t in new:
         print(f"  + {t.id}")
     return 0

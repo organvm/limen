@@ -25,8 +25,8 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
-from limen.models import DispatchLogEntry  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
+from limen.tabularius import drain_once_locked, submit_task_status  # noqa: E402
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 LOCKD = ROOT / "logs" / ".queue.lock.d"
@@ -47,6 +47,20 @@ def acquire_lock(timeout=15):
 def last_session(t):
     log = t.dispatch_log or []
     return str(log[-1].session_id) if log else ""
+
+
+def submit_transition(task, path: Path, now, status: str, output: str, *, patch: dict | None = None) -> Path:
+    return submit_task_status(
+        path,
+        task.id,
+        status,
+        agent="limen",
+        session_id="heal",
+        output=output,
+        patch=patch,
+        precondition={"status": task.status},
+        now=now,
+    )
 
 
 def main():
@@ -76,6 +90,7 @@ def main():
         path = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
         lf = load_limen_file(path)
         now = datetime.datetime.now(datetime.timezone.utc)
+        tickets = []
         merged_done, open_pr_done, reopened, escalated = [], [], [], []
 
         for t in lf.tasks:
@@ -83,53 +98,79 @@ def main():
             # ones the loop below handles — stop them re-looping; surface for a human. Idempotent
             # (skips ones already needs_human). Reversible.
             if t.id in chronic_ids and t.status in ("open", "failed"):
-                t.status = "needs_human"
-                t.updated = now
-                t.dispatch_log.append(DispatchLogEntry(
-                    timestamp=now, agent="limen", session_id="heal", status="needs_human",
-                    output="heal-dispatch: chronic (reopened ≥3×, never a PR) → escalated, stop re-looping"))
+                if args.apply:
+                    tickets.append(
+                        submit_transition(
+                            t,
+                            path,
+                            now,
+                            "needs_human",
+                            "heal-dispatch: chronic (reopened ≥3×, never a PR) → escalated, stop re-looping",
+                        )
+                    )
                 escalated.append(t.id)
                 continue
             if t.status != "dispatched":   # re-check fresh state under lock
                 continue
             if t.id in merged_ids:
-                t.status = "done"
-                t.updated = now
-                t.dispatch_log.append(DispatchLogEntry(
-                    timestamp=now, agent="limen", session_id="heal",
-                    status="done", output="heal-dispatch: PR merged → done"))
+                if args.apply:
+                    tickets.append(
+                        submit_transition(
+                            t,
+                            path,
+                            now,
+                            "done",
+                            "heal-dispatch: PR merged → done",
+                        )
+                    )
                 merged_done.append(t.id)
             elif t.id in open_pr_ids:
                 # work produced an OPEN PR (awaiting merge) — mark done at the dispatch level
                 # so it leaves the loop and is NOT recycled into a DUPLICATE PR. The merge
                 # itself is tracked separately (PR-close backlog), gated on CI/billing.
-                t.status = "done"
-                t.updated = now
-                t.dispatch_log.append(DispatchLogEntry(
-                    timestamp=now, agent="limen", session_id="heal",
-                    status="done", output="heal-dispatch: PR open (awaiting merge) → done"))
+                if args.apply:
+                    tickets.append(
+                        submit_transition(
+                            t,
+                            path,
+                            now,
+                            "done",
+                            "heal-dispatch: PR open (awaiting merge) → done",
+                        )
+                    )
                 open_pr_done.append(t.id)
             elif t.id in closed_ids or t.id in nopr_ids:
                 # NO_PR: only reopen if STILL no PR url (daemon may have re-dispatched)
                 if t.id in nopr_ids and PR_RE.search(last_session(t)):
                     continue
                 if t.id in chronic_ids:
-                    t.status = "needs_human"
-                    t.updated = now
-                    t.dispatch_log.append(DispatchLogEntry(
-                        timestamp=now, agent="limen", session_id="heal",
-                        status="needs_human",
-                        output="heal-dispatch: dispatched with no PR and chronic (reopened ≥3×) → escalated, stop re-looping"))
+                    if args.apply:
+                        tickets.append(
+                            submit_transition(
+                                t,
+                                path,
+                                now,
+                                "needs_human",
+                                "heal-dispatch: dispatched with no PR and chronic (reopened ≥3×) → escalated, stop re-looping",
+                            )
+                        )
                     escalated.append(t.id)
                     continue
-                t.status = "open"
-                t.target_agent = t.target_agent or CASCADE_TOP
-                t.labels = [x for x in t.labels if not x.startswith("tried:")]
-                t.updated = now
                 why = "PR closed unmerged" if t.id in closed_ids else "dispatched but no PR (silent no-op)"
-                t.dispatch_log.append(DispatchLogEntry(
-                    timestamp=now, agent="limen", session_id="heal",
-                    status="open", output=f"heal-dispatch: {why} → reopened"))
+                if args.apply:
+                    tickets.append(
+                        submit_transition(
+                            t,
+                            path,
+                            now,
+                            "open",
+                            f"heal-dispatch: {why} → reopened",
+                            patch={
+                                "target_agent": t.target_agent or CASCADE_TOP,
+                                "labels": [x for x in t.labels if not x.startswith("tried:")],
+                            },
+                        )
+                    )
                 reopened.append(t.id)
 
         print(f"heal-dispatch: {len(merged_done)} merged→done, "
@@ -144,8 +185,17 @@ def main():
         for i in escalated:
             print(f"    escalate: {i}")
         if args.apply:
-            save_limen_file(path, lf)
-            print("  APPLIED -> tasks.yaml")
+            result = drain_once_locked(path)
+            applied = set(result.applied_ids)
+            wanted = {ticket.stem for ticket in tickets}
+            if wanted - applied:
+                print(
+                    "  APPLIED -> TABVLARIVS tickets "
+                    f"({len(applied & wanted)}/{len(wanted)} applied, rejected={result.rejected}, "
+                    f"deferred={result.deferred}): {result.note}"
+                )
+            else:
+                print(f"  APPLIED -> {len(tickets)} status tickets through TABVLARIVS")
         else:
             print("  dry-run (pass --apply)")
     finally:

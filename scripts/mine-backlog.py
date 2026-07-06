@@ -13,7 +13,7 @@ Bounded by design (the backlog is ~1600+ issues; the budget is 100/day):
   --label L         only issues carrying label L
   --exclude-label   skip these labels (default: park,blocked,wip,duplicate,
                     invalid,wontfix) — "park"/"blocked" are deferred by design
-  --apply           append to tasks.yaml via the limen schema (validated);
+  --apply           submit upsert tickets through TABVLARIVS (validated);
                     without it, prints the plan and changes nothing.
 
 Priority is read from labels: ship-now/critical -> high; ship-soon -> medium;
@@ -188,29 +188,29 @@ def main() -> int:
 
     # validated append via the limen schema
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-    from limen.io import load_limen_file, save_limen_file
-    from limen.models import Task
-    from limen.tabularius import submit_task_upsert
+    from limen.tabularius import drain_once, submit_task_upsert
 
-    # TABVLARIVS producer path (Step 2.1). LIMEN_TICKETS_PRODUCE=1 → stop writing tasks.yaml directly;
-    # hand each mined task to the record-keeper as an upsert ticket (the helper validates it, exactly
-    # like the legacy Task(**t) fail-fast). The keeper folds them next beat. `capped` is already
-    # deduped against the live board above, so every id is brand-new (upsert never clobbers a live id).
-    # Default OFF preserves the legacy validated direct append until the cutover flip.
-    if os.environ.get("LIMEN_TICKETS_PRODUCE") == "1":
-        session_id = os.environ.get("LIMEN_SESSION_ID", "mine-backlog")
-        for t in capped:
-            submit_task_upsert(tasks_path, t, agent="mine-backlog", session_id=session_id)
-        print(f"\nsubmitted {len(capped)} upsert tickets to the keeper's inbox "
-              f"(TABVLARIVS folds them onto {tasks_path} next beat).")
-        print("next: the record-keeper seals them, then   python3 scripts/route.py --apply")
-        return 0
-
-    limen = load_limen_file(tasks_path)
-    for t in capped:
-        limen.tasks.append(Task(**t))
-    save_limen_file(tasks_path, limen)
-    print(f"\napplied: appended {len(capped)} open tasks -> {tasks_path}")
+    session_id = os.environ.get("LIMEN_SESSION_ID", "mine-backlog")
+    tickets = [
+        submit_task_upsert(
+            tasks_path,
+            t,
+            agent="mine-backlog",
+            session_id=session_id,
+            precondition={"status": None},
+        )
+        for t in capped
+    ]
+    result = drain_once(tasks_path)
+    applied = set(result.applied_ids)
+    wanted = {ticket.stem for ticket in tickets}
+    if wanted - applied:
+        print(
+            f"\nTABVLARIVS applied {len(applied & wanted)}/{len(wanted)} mined tickets "
+            f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+        )
+    else:
+        print(f"\nsubmitted and applied {len(capped)} mined upsert tickets through TABVLARIVS -> {tasks_path}.")
     print("next: python3 scripts/route.py --apply   then   limen dispatch --agent <v> --live")
     return 0
 

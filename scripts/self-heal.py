@@ -13,11 +13,9 @@ This is alchemical progress toward ideal form (the fleet repairing its OWN work)
 Safety / shape (matches the sibling organs exactly):
   • SCAN side is identical to merge-drain.py (same OWNERS, same `gh search prs --author @me`,
     the same assess() classifier: READY / CI-RED / CI-PENDING / CONFLICT). Read-only `gh`.
-  • EMIT side uses the ONE safe shared-append path every tasks.yaml writer uses: acquire the
-    daemon's queue-lock (logs/.queue.lock.d, the heal-dispatch.py convention), RELOAD fresh
-    under the lock, append validated limen Task objects, save via the atomic writer
-    (limen.io.save_limen_file → temp file + fsync + os.replace). Never a naive open()/dump,
-    so it can NEVER race the daemon or torn-read tasks.yaml.
+  • EMIT side submits guarded HEAL-* upsert tickets through TABVLARIVS, the single record-keeper.
+    The keeper owns the queue-lock, validation, collapse guard, and atomic board seal, so this organ
+    never performs a direct tasks.yaml write.
   • IDEMPOTENT: each heal task has a STABLE id derived from kind+owner+repo+num
     (HEAL-cifix-… / HEAL-rebase-…). If that id already exists in tasks.yaml (any status), no
     duplicate is emitted — re-running is a no-op until the PR's state changes.
@@ -39,19 +37,18 @@ import json
 import os
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling scripts/ for _pr_scan
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.models import Task  # noqa: E402
+from limen.tabularius import drain_once, submit_task_upsert  # noqa: E402
 from _pr_scan import enumerate_open_prs, rotating_window, scaled_limit, stale_base_verdict  # noqa: E402
 
 # DERIVED from env so the conductor survives relocation; same defaults as merge-drain.py.
 OWNERS = [o.strip() for o in os.environ.get("LIMEN_OWNERS", "organvm,4444J99").split(",") if o.strip()]
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
-LOCKD = ROOT / "logs" / ".queue.lock.d"
 LOG = ROOT / "logs" / "self-heal.log"
 
 # the heal kinds this organ emits, keyed by the classifier verdict it reacts to.
@@ -184,16 +181,6 @@ def build_task(verdict, repo, num, url, stamp):
     )
 
 
-def acquire_lock(timeout=15):
-    for _ in range(timeout):
-        try:
-            LOCKD.mkdir()
-            return True
-        except FileExistsError:
-            time.sleep(1)
-    return False
-
-
 def env_int(name, default):
     try:
         value = int(os.environ.get(name, str(default)) or str(default))
@@ -258,29 +245,40 @@ def main():
             print("| (none — every sick PR already has an open heal task) |  |  |  |")
         return 0
 
-    # LIVE: acquire the daemon's queue-lock, RELOAD fresh under it, dedupe by stable id, append
-    # validated Task objects, save atomically. This is the ONLY safe shared-append path.
-    if not acquire_lock():
-        print("[self-heal] queue lock held by daemon — skipping this pass (retry next tick)")
-        return 0
-    try:
-        lf = load_limen_file(tasks_path)
-        existing = {t.id for t in lf.tasks}
-        emitted = []
-        for verdict, repo, num, url in sick:
-            tid = task_id(KINDS[verdict]["slug"], repo, num)
-            if tid in existing:
-                continue
-            existing.add(tid)
-            lf.tasks.append(build_task(verdict, repo, num, url, stamp))
-            emitted.append(tid)
-        if emitted:
-            save_limen_file(tasks_path, lf)
-    finally:
-        try:
-            LOCKD.rmdir()
-        except OSError:
-            pass
+    # LIVE: stable HEAL-* ids let us submit guarded upserts; if a race creates the same task
+    # before TABVLARIVS drains, the ticket is rejected instead of clobbering the newer record.
+    lf = load_limen_file(tasks_path)
+    existing = {t.id for t in lf.tasks}
+    emitted: list[str] = []
+    tasks_to_emit: list[Task] = []
+    for verdict, repo, num, url in sick:
+        tid = task_id(KINDS[verdict]["slug"], repo, num)
+        if tid in existing:
+            continue
+        existing.add(tid)
+        task = build_task(verdict, repo, num, url, stamp)
+        tasks_to_emit.append(task)
+        emitted.append(tid)
+    if tasks_to_emit:
+        session_id = os.environ.get("LIMEN_SESSION_ID", "self-heal")
+        ticket_paths = [
+            submit_task_upsert(
+                tasks_path,
+                task,
+                agent="self-heal",
+                session_id=session_id,
+                precondition={"status": None},
+            )
+            for task in tasks_to_emit
+        ]
+        result = drain_once(tasks_path)
+        applied = set(result.applied_ids)
+        wanted = {ticket.stem for ticket in ticket_paths}
+        if wanted - applied:
+            raise SystemExit(
+                f"TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} self-heal tickets "
+                f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+            )
 
     ts = datetime.datetime.now().strftime("%F %T")
     summary = (f"[self-heal] {ts} window={len(prs)}/{len(allprs)} ready={b['READY']} ci-red={b['CI-RED']} "

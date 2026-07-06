@@ -27,9 +27,10 @@ Cost model (the "tiering", one level up from model-tiering):
     across every reachable capable lane so no paid service sits idle while work
     exists.
 
-Read-only by default: prints a routing plan. With --apply it only rewrites each
-task's target_agent in tasks.yaml (reversible) — it never dispatches. Dispatch
-stays a separate, explicitly-gated step (`limen dispatch --agent X --live`).
+Read-only by default: prints a routing plan. With --apply it submits guarded
+assignment tickets through TABVLARIVS and drains them synchronously — it never
+dispatches. Dispatch stays a separate, explicitly-gated step
+(`limen dispatch --agent X --live`).
 
 Usage:
   python3 route.py [--tasks tasks.yaml] [--apply] [--workdir ~/Workspace]
@@ -58,8 +59,9 @@ from limen.capacity import (  # noqa: E402
     select_lanes,
     task_has_github_issue,
 )
-from limen.io import load_limen_file, queue_lock, save_limen_file  # noqa: E402
+from limen.io import load_limen_file, load_limen_file_with_report  # noqa: E402
 from limen.dispatch import _down_lanes  # noqa: E402
+from limen.tabularius import drain_once, submit_task_status  # noqa: E402
 from limen.workstream import UNASSIGNED, assign_channel  # noqa: E402
 
 
@@ -455,7 +457,7 @@ def main() -> int:
     ap.add_argument("--tasks", default=os.environ.get("LIMEN_TASKS", "tasks.yaml"))
     ap.add_argument("--workdir", default=os.environ.get("LIMEN_WORKDIR", str(Path.home() / "Workspace")))
     ap.add_argument(
-        "--apply", action="store_true", help="rewrite target_agent in tasks.yaml (reversible); never dispatches"
+        "--apply", action="store_true", help="submit guarded assignment tickets through TABVLARIVS; never dispatches"
     )
     args = ap.parse_args()
 
@@ -469,8 +471,8 @@ def main() -> int:
     # so route never re-emits / re-encodes the malformed dispatch_log rows that produced the
     # "dispatch_log.*.agent Field required" trace every beat. Decisions run on a (possibly stale)
     # snapshot WITHOUT the lock, because the capacity census/health probes shell out (which/gh) and
-    # we must not hold the queue mutex across slow work. The actual write re-reads fresh UNDER the
-    # lock below, so we only ever clobber our own target_agent field, never a dispatcher's append.
+    # we must not hold the queue mutex across slow work. The actual apply step re-reads fresh below
+    # and emits guarded field-level tickets, so route never overwrites a dispatcher's append.
     data = load_limen_file(tasks_path).model_dump(mode="json", exclude_none=True)
     census = capacity_census(data)
     health = _fleet_health(data)
@@ -521,36 +523,75 @@ def main() -> int:
         print("dry-run (no changes). re-run with --apply to set target_agent.")
         return 0
 
-    # Apply UNDER the queue lock with a FRESH sanitized re-read, so route stops racing the
-    # dispatchers (the race that wrote a Task into a dispatch_log = the torn-write source). We
-    # mutate ONLY target_agent on tasks that are still open, then write through the validated
-    # save_limen_file (never a raw dump). If the lock is busy, skip this pass — a missed routing
-    # write is harmless and self-corrects next beat (never block the beat / never dead-stop).
-    with queue_lock(tasks_path) as got:
-        if not got:
-            print("queue busy — skipped applying target_agent this pass (self-corrects next beat).")
-            return 0
-        lf = load_limen_file(tasks_path)
-        applied = 0
-        ws_applied = 0
-        for task in lf.tasks:
-            if task.status != "open":
-                continue
-            v = assignments.get(task.id)
-            if v:
-                task.target_agent = v
-                applied += 1
-            # PURPOSE partition (workstream) — the axis ABOVE target_agent, without which the
-            # channels organ's scoped `cell conduct --workstream <handle>` conductors draw an empty
-            # lane. Stamp only when EMPTY (honor explicit intent) and only a RESOLVED channel (leave
-            # UNASSIGNED as None so it re-derives next beat when new signal appears). Same lock, same
-            # fresh re-read, same validated save — a sibling of the vendor assignment above.
-            if not task.workstream:
-                handle = assign_channel(task, ROOT)
-                if handle != UNASSIGNED:
-                    task.workstream = handle
-                    ws_applied += 1
-        save_limen_file(tasks_path, lf)
+    # Apply from a FRESH sanitized re-read, then hand field-level changes to TABVLARIVS. Route only
+    # proposes target_agent/workstream updates for tasks that are still open; the keeper precondition
+    # rejects any stale ticket instead of overwriting a dispatcher update.
+    lf, repair_report = load_limen_file_with_report(tasks_path)
+    applied = 0
+    ws_applied = 0
+    tickets = []
+    ticketed_task_ids: set[str] = set()
+    for task in lf.tasks:
+        if task.status != "open":
+            continue
+        patch = {}
+        precondition = {"status": "open"}
+        v = assignments.get(task.id)
+        if v and task.target_agent != v:
+            patch["target_agent"] = v
+            precondition["target_agent"] = task.target_agent
+            applied += 1
+        # PURPOSE partition (workstream) — the axis ABOVE target_agent, without which the
+        # channels organ's scoped `cell conduct --workstream <handle>` conductors draw an empty
+        # lane. Stamp only when EMPTY (honor explicit intent) and only a RESOLVED channel (leave
+        # UNASSIGNED as None so it re-derives next beat when new signal appears). Same fresh re-read,
+        # same keeper-owned seal — a sibling of the vendor assignment above.
+        if not task.workstream:
+            handle = assign_channel(task, ROOT)
+            if handle != UNASSIGNED:
+                patch["workstream"] = handle
+                precondition["workstream"] = task.workstream
+                ws_applied += 1
+        if patch:
+            fields = ", ".join(f"{key} -> {value}" for key, value in sorted(patch.items()))
+            tickets.append(
+                submit_task_status(
+                    tasks_path,
+                    task.id,
+                    "open",
+                    agent="limen",
+                    session_id="route",
+                    output=f"route: {fields}",
+                    patch=patch,
+                    precondition=precondition,
+                )
+            )
+            ticketed_task_ids.add(task.id)
+    for task in lf.tasks:
+        if task.id not in repair_report.dispatch_log_task_ids or task.id in ticketed_task_ids:
+            continue
+        tickets.append(
+            submit_task_status(
+                tasks_path,
+                task.id,
+                task.status,
+                agent="limen",
+                session_id="route-heal",
+                output="route: healed malformed dispatch_log entries",
+                precondition={"status": task.status},
+            )
+        )
+    if tickets:
+        result = drain_once(tasks_path)
+        applied_ids = set(result.applied_ids)
+        wanted = {ticket.stem for ticket in tickets}
+        if wanted - applied_ids:
+            print(
+                f"TABVLARIVS applied {len(applied_ids & wanted)}/{len(wanted)} route tickets "
+                f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+            )
+        else:
+            print(f"submitted and applied {len(tickets)} route tickets through TABVLARIVS -> {tasks_path}")
     print(
         f"applied target_agent assignments ({applied}) -> {tasks_path} "
         f"(dispatch separately, gated: limen dispatch --agent <v> --live)"

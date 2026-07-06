@@ -18,9 +18,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
-from limen.models import DispatchLogEntry  # noqa: E402
-from limen.dispatch import _has_done_transition, _restore_done_status  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
+from limen.dispatch import _has_done_transition  # noqa: E402
+from limen.tabularius import drain_once, submit_task_status  # noqa: E402
 
 CASCADE_TOP = "codex"
 
@@ -44,29 +44,48 @@ def main() -> int:
     path = Path(args.tasks)
     lf = load_limen_file(path)
     now = datetime.datetime.now(datetime.timezone.utc)
+    tickets = []
 
     live = None  # lazily fetched only if we have orphan candidates
-    reopened_failed, reopened_orphan = [], []
+    reopened_failed, reopened_orphan, restored_done = [], [], []
 
     for t in lf.tasks:
         if len(reopened_failed) + len(reopened_orphan) >= args.limit:
             break
         if _has_done_transition(t):
-            _restore_done_status(
-                t,
-                now,
-                session_id="heal",
-                output="recover: prior done transition wins; restored terminal status",
-            )
+            if t.status not in {"done", "archived"}:
+                if args.apply:
+                    tickets.append(
+                        submit_task_status(
+                            path,
+                            t.id,
+                            "done",
+                            agent="limen",
+                            session_id="heal",
+                            output="recover: prior done transition wins; restored terminal status",
+                            precondition={"status": t.status},
+                            now=now,
+                        )
+                    )
+                restored_done.append(t.id)
             continue
         if t.status == "failed":
-            t.status = "open"
-            t.target_agent = CASCADE_TOP
-            t.labels = [x for x in t.labels if not x.startswith("tried:")]
-            t.updated = now
-            t.dispatch_log.append(DispatchLogEntry(
-                timestamp=now, agent="limen", session_id="heal",
-                status="open", output="recover: reopened failed → fresh cascade"))
+            labels = [x for x in t.labels if not x.startswith("tried:")]
+            output = "recover: reopened failed -> fresh cascade"
+            if args.apply:
+                tickets.append(
+                    submit_task_status(
+                        path,
+                        t.id,
+                        "open",
+                        agent="limen",
+                        session_id="heal",
+                        output=output,
+                        patch={"target_agent": CASCADE_TOP, "labels": labels},
+                        precondition={"status": "failed"},
+                        now=now,
+                    )
+                )
             reopened_failed.append(t.id)
         elif t.status == "dispatched" and t.target_agent == "jules":
             sid = ""
@@ -78,17 +97,38 @@ def main() -> int:
             if live is None:
                 live = live_jules_sessions()
             if live and sid not in live:  # session aged out / lost → orphaned
-                t.status = "open"
-                t.updated = now
-                t.dispatch_log.append(DispatchLogEntry(
-                    timestamp=now, agent="limen", session_id="heal",
-                    status="open", output=f"recover: orphaned (session {sid} gone) → reopened"))
+                output = f"recover: orphaned (session {sid} gone) -> reopened"
+                if args.apply:
+                    tickets.append(
+                        submit_task_status(
+                            path,
+                            t.id,
+                            "open",
+                            agent="limen",
+                            session_id="heal",
+                            output=output,
+                            precondition={"status": "dispatched", "target_agent": "jules"},
+                            now=now,
+                        )
+                    )
                 reopened_orphan.append(t.id)
 
-    print(f"recover: {len(reopened_failed)} failed reopened, {len(reopened_orphan)} orphaned reopened")
+    print(
+        f"recover: {len(reopened_failed)} failed reopened, "
+        f"{len(reopened_orphan)} orphaned reopened, {len(restored_done)} done restored"
+    )
     if args.apply:
-        save_limen_file(path, lf)
-        print("  APPLIED -> tasks.yaml")
+        result = drain_once(path)
+        applied = set(result.applied_ids)
+        wanted = {ticket.stem for ticket in tickets}
+        if wanted - applied:
+            print(
+                "  APPLIED -> TABVLARIVS tickets "
+                f"({len(applied & wanted)}/{len(wanted)} applied, rejected={result.rejected}, "
+                f"deferred={result.deferred}): {result.note}"
+            )
+        else:
+            print(f"  APPLIED -> {len(tickets)} status tickets through TABVLARIVS")
     else:
         print("  dry-run (pass --apply)")
     return 0

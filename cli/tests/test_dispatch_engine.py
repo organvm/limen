@@ -314,6 +314,37 @@ def test_reload_fresh_commit_preserves_concurrent_write(tmp_path):
     assert any("pull/1" in str(e.session_id) for e in final["A"].dispatch_log), "result not recorded"
 
 
+def test_commit_dispatch_results_ticket_mode_preserves_concurrent_write(tmp_path, monkeypatch):
+    """The TABVLARIVS path keeps the reload-fresh guarantee: result tickets are derived from the
+    fresh board, then the keeper drains them without clobbering concurrent task additions."""
+    import datetime
+    from limen.io import load_limen_file, save_limen_file
+    from limen.models import Budget, BudgetTrack, LimenFile, Portal, Task
+    from limen.tabularius import pending_count
+
+    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    tp = tmp_path / "tasks.yaml"
+    today = datetime.date.today()
+    lf = LimenFile(
+        portal=Portal(budget=Budget(daily=300, per_agent={"codex": 50}, track=BudgetTrack(date=str(today)))),
+        tasks=[Task(id="A", title="a", repo="x/y", target_agent="codex", status="dispatched", created=today)],
+    )
+    save_limen_file(tp, lf)
+    stale = load_limen_file(tp)
+    sup = load_limen_file(tp)
+    sup.tasks.append(Task(id="B-SEED", title="s", repo="x/y", target_agent="codex", status="open", created=today))
+    save_limen_file(tp, sup)
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    D._commit_dispatch_results(tp, stale, [("codex", "A", "https://github.com/x/y/pull/1")], now)
+
+    final = {t.id: t for t in load_limen_file(tp).tasks}
+    assert "B-SEED" in final, "concurrent seed was clobbered in ticket mode"
+    assert any("pull/1" in str(e.session_id) for e in final["A"].dispatch_log), "result not recorded"
+    assert load_limen_file(tp).portal.budget.track.spent == 1
+    assert pending_count(tp) == 0
+
+
 def test_deps_not_met_on_awaiting_merge_marker():
     """Regression: a dependency whose only heal marker is 'PR open (awaiting merge) → done' must
     NOT be considered merged (the bare-stem 'merg' bug unlocked dependents on PR-open prematurely)."""

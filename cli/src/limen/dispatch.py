@@ -11,7 +11,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from limen import census
 from limen.capacity import (
@@ -22,8 +22,9 @@ from limen.capacity import (
     ollama_model,
     select_lanes,
 )
-from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
+from limen.io import load_limen_file, queue_lock as _queue_lock
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
+from limen.tabularius import drain_once, drain_once_locked, submit_board_meta, submit_task_status
 from limen.doctor import stale_tasks
 from limen.model_selection import (  # the shared model vocabulary — also used by the non-bypassable `claude` shim
     _CLAUDE_TIER_ORDER,
@@ -1584,6 +1585,69 @@ def _remaining_budget(limen: LimenFile, agent: str, budget: int) -> int:
     return max(0, budget - track.spent)
 
 
+_PARALLEL_RESERVE_OUTPUT = "dispatch-parallel: reserved before agent execution"
+
+
+def _submit_result_ticket(
+    tasks_path: Path, task: Task, agent: str, result: bool | str, now: datetime, track: BudgetTrack
+):
+    before_status = task.status
+    before_target = task.target_agent
+    before_labels = list(task.labels or [])
+    before_logs = len(task.dispatch_log or [])
+    probe = task.model_copy(deep=True)
+    probe_track = track.model_copy(deep=True)
+
+    _apply_result(probe, agent, result, now, probe_track)
+    if (
+        probe.status == before_status
+        and probe.target_agent == before_target
+        and list(probe.labels or []) == before_labels
+        and len(probe.dispatch_log or []) == before_logs
+        and probe_track.spent == track.spent
+    ):
+        return None
+
+    patch: dict[str, Any] = {}
+    precondition: dict[str, Any] = {"status": before_status}
+    if probe.target_agent != before_target:
+        patch["target_agent"] = probe.target_agent
+        precondition["target_agent"] = before_target
+    if list(probe.labels or []) != before_labels:
+        patch["labels"] = list(probe.labels or [])
+        precondition["labels"] = before_labels
+    entry = (probe.dispatch_log or [])[-1] if len(probe.dispatch_log or []) > before_logs else None
+    budget_cost = max(0, int(probe_track.spent - track.spent))
+    return submit_task_status(
+        tasks_path,
+        task.id,
+        probe.status,
+        agent=agent,
+        session_id=str(entry.session_id) if entry else "dispatch-result",
+        output=entry.output if entry else None,
+        patch=patch,
+        precondition=precondition,
+        log_status=str(entry.status) if entry else probe.status,
+        budget_cost=budget_cost if budget_cost else None,
+        budget_agent=agent,
+        now=now,
+    )
+
+
+def _reservation_landed(task: Task, agent: str, reserve_session: str) -> bool:
+    if task.status != "dispatched":
+        return False
+    for entry in task.dispatch_log or []:
+        if (
+            entry.agent == agent
+            and entry.session_id == reserve_session
+            and entry.status == "dispatched"
+            and entry.output == _PARALLEL_RESERVE_OUTPUT
+        ):
+            return True
+    return False
+
+
 def _commit_dispatch_results(
     tasks_path: Path,
     limen: LimenFile,
@@ -1591,10 +1655,10 @@ def _commit_dispatch_results(
     now: datetime,
 ) -> None:
     """COMMIT for the serial path, mirroring dispatch_parallel's commit: reload FRESH under the
-    queue lock and re-apply each result by id. The caller's snapshot is minutes stale by the time
-    agents finish — saving it whole erases every concurrent write made meanwhile (keeper folds,
-    route stamps, status transitions): the lost-update board wipe. A task completed elsewhere in
-    the interim keeps its terminal status (_apply_result's lifecycle guards); a task removed from
+    queue lock and derive result tickets by id. The caller's snapshot is minutes stale by the time
+    agents finish — projecting it whole would erase every concurrent write made meanwhile (keeper
+    folds, route stamps, status transitions): the lost-update board wipe. A task completed elsewhere
+    in the interim keeps its terminal status (_apply_result's lifecycle guards); a task removed from
     the fresh board is skipped."""
     with _queue_lock(tasks_path) as got:
         if not got:
@@ -1604,14 +1668,36 @@ def _commit_dispatch_results(
             )
             return
         fresh = load_limen_file(tasks_path) if tasks_path.exists() else limen
-        _reset_budget_if_needed(fresh, now)
+        reset = _reset_budget_if_needed(fresh, now)
         fid = {t.id: t for t in fresh.tasks}
         ftrack = fresh.portal.budget.track
+        tickets = []
+        if reset:
+            tickets.append(
+                submit_board_meta(
+                    tasks_path,
+                    agent="limen",
+                    session_id="budget-reset",
+                    version=fresh.version,
+                    portal=fresh.portal,
+                    now=now,
+                )
+            )
         for agent, tid, res in results:
             ft = fid.get(tid)
             if ft is not None:
-                _apply_result(ft, agent, res, now, ftrack)
-        save_limen_file(tasks_path, fresh)
+                ticket = _submit_result_ticket(tasks_path, ft, agent, res, now, ftrack)
+                if ticket is not None:
+                    tickets.append(ticket)
+    if tickets:
+        result = drain_once(tasks_path)
+        applied = set(result.applied_ids)
+        wanted = {ticket.stem for ticket in tickets}
+        if wanted - applied:
+            print(
+                f"── dispatch: TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} commit tickets "
+                f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+            )
 
 
 def dispatch_tasks(
@@ -2062,7 +2148,7 @@ def _select_parallel_reservations(
                     agent=agent,
                     session_id="reserve",
                     status="dispatched",
-                    output="dispatch-parallel: reserved before agent execution",
+                    output=_PARALLEL_RESERVE_OUTPUT,
                 )
             )
             picked.append((agent, t.id))
@@ -2104,6 +2190,9 @@ def dispatch_parallel(
     # ── RESERVE: re-read inside the queue lock, then pick and mark dispatched on that fresh board.
     # The caller may have loaded `limen` before a supervisor/heartbeat wrote tasks.yaml; saving that
     # stale snapshot would erase concurrent task additions, completions, or budget resets.
+    reserve_session = "reserve"
+    reserve_tickets = []
+    reserve_drain = None
     with _queue_lock(tasks_path) as got:
         if not got:
             # Lock timed out — honor the contract (io.queue_lock): skip this round rather than
@@ -2118,16 +2207,68 @@ def dispatch_parallel(
             agents,
             per_agent_limit,
             now,
-            dry_run=False,
+            dry_run=True,
             debt_blocked=debt_blocked,
         )
-        if not picked:
-            if reset:
-                save_limen_file(tasks_path, fresh)
-            print(f"── PARALLEL: nothing to dispatch for {agents} within budget")
-            return
-        save_limen_file(tasks_path, fresh)  # reserve commit (atomic vs supervisor writes)
-        limen = fresh
+        if reset:
+            reserve_tickets.append(
+                submit_board_meta(
+                    tasks_path,
+                    agent="limen",
+                    session_id="budget-reset",
+                    version=fresh.version,
+                    portal=fresh.portal,
+                    now=now,
+                )
+            )
+        fid = {t.id: t for t in fresh.tasks}
+        for agent, tid in picked:
+            task = fid.get(tid)
+            if task is None:
+                continue
+            reserve_tickets.append(
+                submit_task_status(
+                    tasks_path,
+                    tid,
+                    "dispatched",
+                    agent=agent,
+                    session_id=reserve_session,
+                    output=_PARALLEL_RESERVE_OUTPUT,
+                    precondition={"status": "open", "target_agent": task.target_agent},
+                    now=now,
+                )
+            )
+        if reserve_tickets:
+            seed = fresh if not tasks_path.exists() else None
+            reserve_drain = drain_once_locked(tasks_path, seed=seed)
+
+    if reserve_tickets and reserve_drain is not None:
+        applied = set(reserve_drain.applied_ids)
+        wanted = {ticket.stem for ticket in reserve_tickets}
+        if wanted - applied:
+            print(
+                f"── PARALLEL: TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} reservation tickets "
+                f"(rejected={reserve_drain.rejected}, deferred={reserve_drain.deferred}): {reserve_drain.note}"
+            )
+    if not picked:
+        print(f"── PARALLEL: nothing to dispatch for {agents} within budget")
+        return
+    sealed = load_limen_file(tasks_path)
+    limen.version = sealed.version
+    limen.portal = sealed.portal
+    limen.tasks = sealed.tasks
+    fid = {t.id: t for t in sealed.tasks}
+    reserved = []
+    for agent, tid in picked:
+        task = fid.get(tid)
+        if task is not None and _reservation_landed(task, agent, reserve_session):
+            reserved.append((agent, tid))
+    if len(reserved) != len(picked):
+        print(f"── PARALLEL: {len(reserved)}/{len(picked)} reservation ticket(s) landed; skipped unclaimed tasks")
+    picked = reserved
+    if not picked:
+        print("── PARALLEL: no reservation tickets landed; skipped agent execution")
+        return
 
     # ── RUN: concurrent agent executions (worktree→PR / jules), no tasks.yaml access here
     id2task = {t.id: t for t in limen.tasks}
@@ -2150,9 +2291,10 @@ def dispatch_parallel(
                 cooled.add(agent)
 
     # ── COMMIT: reload FRESH under the lock so writes a supervisor (seed/heal/verify) made
-    # during the unlocked run aren't clobbered; re-apply each result to the fresh task by id.
-    # This is the #11 keystone — without the reload, this save would silently overwrite seeds.
+    # during the unlocked run aren't clobbered; derive each result ticket from the fresh task by id.
+    # This is the #11 keystone — without the reload, the result projection could silently overwrite seeds.
     n_pr = n_noop = n_fail = n_rl = n_to = n_blocked = 0
+    tickets = []
     with _queue_lock(tasks_path) as got:
         if not got:
             # Lock timed out — do NOT write unprotected (that is the #111 clobber this reload guards
@@ -2169,7 +2311,9 @@ def dispatch_parallel(
         for agent, tid, res in results:
             ft = fid.get(tid)
             if ft is not None:
-                _apply_result(ft, agent, res, now, ftrack)
+                ticket = _submit_result_ticket(tasks_path, ft, agent, res, now, ftrack)
+                if ticket is not None:
+                    tickets.append(ticket)
             if res == _RATELIMIT:
                 n_rl += 1
             elif res == _NOOP:
@@ -2182,7 +2326,15 @@ def dispatch_parallel(
                 n_pr += 1
             else:
                 n_fail += 1
-        save_limen_file(tasks_path, fresh)
+    if tickets:
+        result = drain_once(tasks_path)
+        applied = set(result.applied_ids)
+        wanted = {ticket.stem for ticket in tickets}
+        if wanted - applied:
+            print(
+                f"── PARALLEL: TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} result tickets "
+                f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+            )
     print(
         f"── PARALLEL done: {len(results)} ran · {n_pr} dispatched/PR · {n_noop} no-op · "
         f"{n_fail} failed→cascade · {n_blocked} blocked · {n_rl} rate-limited · {n_to} timeout→jules"
@@ -2243,30 +2395,47 @@ def release_stale_tasks(
                 }
             fresh = load_limen_file(tasks_path) if tasks_path.exists() else limen
             candidates = stale_tasks(fresh, hours=hours, agent=agent)
+            tickets = []
             for task in candidates:
                 print(f"  {task.id} {task.status} {task.target_agent} — {task.title}")
-                if _restore_done_status(
-                    task,
-                    now,
-                    agent="limen",
-                    session_id="release-stale",
-                    output="release-stale: prior done transition wins; restored terminal status",
-                ):
+                precondition = {"status": task.status}
+                if _has_done_transition(task) and task.status not in {"done", "archived"}:
+                    tickets.append(
+                        submit_task_status(
+                            tasks_path,
+                            task.id,
+                            "done",
+                            agent="limen",
+                            session_id="release-stale",
+                            output="release-stale: prior done transition wins; restored terminal status",
+                            precondition=precondition,
+                            now=now,
+                        )
+                    )
                     restored_done.append(task.id)
                     continue
-                task.status = "open"
-                task.updated = now
-                task.dispatch_log.append(
-                    DispatchLogEntry(
-                        timestamp=now,
+                tickets.append(
+                    submit_task_status(
+                        tasks_path,
+                        task.id,
+                        "open",
                         agent="limen",
                         session_id=session_id(),
-                        status="open",
                         output=f"Released stale claim after {hours}h",
+                        precondition=precondition,
+                        now=now,
                     )
                 )
                 released.append(task.id)
-            save_limen_file(tasks_path, fresh)
+        if tickets:
+            result = drain_once(tasks_path)
+            applied = set(result.applied_ids)
+            wanted = {ticket.stem for ticket in tickets}
+            if wanted - applied:
+                print(
+                    f"── release-stale: TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} tickets "
+                    f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+                )
     else:
         for task in candidates:
             print(f"  {task.id} {task.status} {task.target_agent} — {task.title}")

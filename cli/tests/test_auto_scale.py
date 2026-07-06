@@ -8,6 +8,8 @@ from types import ModuleType
 import pytest
 import yaml
 
+from limen.tabularius import pending_count
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -62,6 +64,7 @@ def read_board(path: Path) -> dict:
 
 def isolate_value_tier(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.delenv("LIMEN_VALUE_REPOS", raising=False)
+    monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
     monkeypatch.setenv("LIMEN_VALUE_REPOS_FILE", str(tmp_path / "missing-value-repos.json"))
 
 
@@ -158,7 +161,21 @@ def test_auto_scale_adds_schema_shaped_tasks_and_skips_existing_urls(
     assert calls[0]["params"]["q"] == "org:a-organvm is:issue is:open label:jules-ready"
     assert calls[0]["headers"]["Authorization"] == "token test-token"
     assert calls[0]["timeout"] == 30
-    assert board["tasks"][1:] == [
+    added = board["tasks"][1:]
+    contract_keys = [
+        "id",
+        "title",
+        "repo",
+        "type",
+        "target_agent",
+        "priority",
+        "budget_cost",
+        "status",
+        "labels",
+        "urls",
+        "created",
+    ]
+    assert [{key: task[key] for key in contract_keys} for task in added] == [
         {
             "id": "LIMEN-100",
             "title": "First issue",
@@ -171,7 +188,6 @@ def test_auto_scale_adds_schema_shaped_tasks_and_skips_existing_urls(
             "labels": ["jules-ready"],
             "urls": ["https://github.com/a-organvm/repo-one/issues/2"],
             "created": "2026-06-06",
-            "updated": "2026-06-06",
         },
         {
             "id": "LIMEN-101",
@@ -185,9 +201,64 @@ def test_auto_scale_adds_schema_shaped_tasks_and_skips_existing_urls(
             "labels": ["jules-ready"],
             "urls": ["https://github.com/a-organvm/repo-two/issues/3"],
             "created": "2026-06-06",
-            "updated": "2026-06-06",
         },
     ]
+    assert all(task["updated"] for task in added)
+    assert all(task["dispatch_log"] == [] for task in added)
+
+
+def test_auto_scale_drains_tabularius(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    auto_scale = load_auto_scale()
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "LIMEN-099",
+                "title": "Existing",
+                "repo": "a-organvm/existing",
+                "type": "code",
+                "target_agent": "jules",
+                "priority": "medium",
+                "budget_cost": 1,
+                "status": "open",
+                "urls": ["https://github.com/a-organvm/existing/issues/1"],
+                "created": "2026-06-01",
+            }
+        ],
+        daily=2,
+    )
+    isolate_value_tier(monkeypatch, tmp_path)
+
+    def fake_get(url: str, *, params: dict, headers: dict, timeout: int) -> FakeResponse:
+        return FakeResponse(
+            200,
+            {"items": [{"html_url": "https://github.com/a-organvm/repo-one/issues/2", "title": "First issue"}]},
+        )
+
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+    monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
+    monkeypatch.setattr(auto_scale, "TASKS_FILE", tasks_path)
+    monkeypatch.setattr(auto_scale, "ORGS", ["a-organvm"])
+    monkeypatch.setattr(auto_scale, "date", FrozenDate)
+    monkeypatch.setattr(auto_scale.requests, "get", fake_get)
+
+    assert auto_scale.main() == 0
+
+    out = capsys.readouterr().out
+    assert "via TABVLARIVS" in out
+    board = read_board(tasks_path)
+    assert [task["id"] for task in board["tasks"]] == ["LIMEN-099", "LIMEN-100"]
+    added = board["tasks"][1]
+    assert added["title"] == "First issue"
+    assert added["status"] == "open"
+    assert added["labels"] == ["jules-ready"]
+    assert added["urls"] == ["https://github.com/a-organvm/repo-one/issues/2"]
+    assert pending_count(tasks_path) == 0
 
 
 def test_auto_scale_reloads_under_queue_lock_before_writing(

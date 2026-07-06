@@ -184,6 +184,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "When 1, session-orient.py prints the digest without refreshing logs/session-orientation.md. Used by idempotence predicates; normal hooks leave it unset."
+  LIMEN_INSIGHT_CADENCE_VERIFY_ROOT:
+    default: ""
+    env: LIMEN_INSIGHT_CADENCE_VERIFY_ROOT
+    self_update: none
+    owner: continuity
+    note: "Optional retained sandbox root for done-insight-cadence.sh verification. Blank means create a private temporary proof root and retain it for inspection instead of deleting it."
   LIMEN_MIN_CODEX_PLANNERS:
     default: 10
     env: LIMEN_MIN_CODEX_PLANNERS
@@ -1193,6 +1199,18 @@ parameters:
     self_update: none
     owner: tabularius
     note: "Master gate for TABVLARIVS (scripts/tabularius-organ.py), the single-writer record-keeper. Each beat it drains logs/tickets/inbox, folds each worker's ticket onto the healed board under the queue lock, and seals via the collapse-guarded atomic write. Idempotent: an empty inbox is an instant no-op, so it is safe every beat while no producers exist. Set 0 to silence the rung. The single-writer principle that dissolves the ~32-writer torn-write class — sibling of LIMEN_BOARD_HEAL."
+  LIMEN_TABULARIUS_EVENT_PROOF_MIN_STREAK:
+    default: 3
+    env: LIMEN_TABULARIUS_EVENT_PROOF_MIN_STREAK
+    self_update: none
+    owner: tabularius
+    note: "Minimum consecutive keeper proof streak required by scripts/check-tabularius-event-proof.py before the final event-log source-of-truth flip is allowed."
+  LIMEN_TABULARIUS_EVENT_PROOF_MAX_AGE_MINUTES:
+    default: 1440
+    env: LIMEN_TABULARIUS_EVENT_PROOF_MAX_AGE_MINUTES
+    self_update: none
+    owner: tabularius
+    note: "Maximum age in minutes for the event-log proof timestamp checked by scripts/check-tabularius-event-proof.py. Set <=0 only for an explicit offline replay audit."
   LIMEN_TICKETS_PRODUCE:
     default: "0"               # SAFE CODE DEFAULT — a bare manual script run stays legacy (no surprise); the FLEET opts in (see below)
     env: LIMEN_TICKETS_PRODUCE

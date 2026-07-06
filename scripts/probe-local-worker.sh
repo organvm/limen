@@ -155,7 +155,8 @@ for _ in {1..80}; do
     --task-id PROBE-001 \
     --verify-task-id PROBE-VERIFY \
     --assign-task-id PROBE-ASSIGN \
-    --archive-task-id PROBE-ARCHIVE >/tmp/limen-worker-probe.log 2>&1; then
+    --archive-task-id PROBE-ARCHIVE \
+    --mutation-mode remote-reject >/tmp/limen-worker-probe.log 2>&1; then
     cat /tmp/limen-worker-probe.log
     exit 0
   fi

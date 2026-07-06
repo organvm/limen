@@ -5,7 +5,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -20,6 +20,7 @@ from limen.doctor import qa_report, readiness_report, stale_tasks
 from limen.io import load_limen_file
 from limen.models import BudgetTrack, DispatchLogEntry, Task
 from limen.status import print_status
+from limen.tabularius import pending_count, submit_task_status
 
 
 def load_route_module():
@@ -527,6 +528,154 @@ def test_dispatch_parallel_does_not_dispatch_stale_open_task(
     assert calls == []
 
 
+def test_dispatch_parallel_result_ticket_mode_drains_tabularius(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "DISPATCH-ME",
+                "title": "Dispatch me",
+                "repo": "organvm/limen",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    monkeypatch.setattr(D, "call_agent_dispatch", lambda agent, task, dry_run=False: True)
+
+    dispatch_parallel(
+        load_limen_file(tasks_path),
+        tasks_path,
+        agents=["codex"],
+        per_agent_limit=1,
+        max_workers=1,
+        dry_run=False,
+    )
+
+    board = read_board(tasks_path)
+    task = board["tasks"][0]
+    assert task["status"] == "dispatched"
+    assert board["portal"]["budget"]["track"]["spent"] == 1
+    assert board["portal"]["budget"]["track"]["per_agent"]["codex"] == 1
+    assert len(task["dispatch_log"]) == 2
+    assert pending_count(tasks_path) == 0
+
+
+def test_dispatch_parallel_ticket_mode_runs_only_landed_reservations(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "RESERVE-ME",
+                "title": "Reserve me",
+                "repo": "organvm/limen",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    calls: list[tuple[str, str, list[str]]] = []
+
+    def fake_dispatch(agent, task, dry_run=False):
+        calls.append((task.id, task.status, [entry.output for entry in task.dispatch_log]))
+        return True
+
+    monkeypatch.setattr(D, "call_agent_dispatch", fake_dispatch)
+
+    dispatch_parallel(
+        load_limen_file(tasks_path),
+        tasks_path,
+        agents=["codex"],
+        per_agent_limit=1,
+        max_workers=1,
+        dry_run=False,
+    )
+
+    assert calls == [
+        (
+            "RESERVE-ME",
+            "dispatched",
+            ["dispatch-parallel: reserved before agent execution"],
+        )
+    ]
+    assert pending_count(tasks_path) == 0
+
+
+def test_dispatch_parallel_ticket_mode_skips_rejected_reservation(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "RACE",
+                "title": "Race",
+                "repo": "organvm/limen",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    submit_task_status(
+        tasks_path,
+        "RACE",
+        "done",
+        agent="limen",
+        session_id="external-done",
+        output="external completion wins",
+        precondition={"status": "open"},
+        now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    calls: list[str] = []
+
+    def fake_dispatch(agent, task, dry_run=False):
+        calls.append(task.id)
+        return True
+
+    monkeypatch.setattr(D, "call_agent_dispatch", fake_dispatch)
+
+    dispatch_parallel(
+        load_limen_file(tasks_path),
+        tasks_path,
+        agents=["codex"],
+        per_agent_limit=1,
+        max_workers=1,
+        dry_run=False,
+    )
+
+    assert calls == []
+    task = read_board(tasks_path)["tasks"][0]
+    assert task["status"] == "done"
+    assert pending_count(tasks_path) == 0
+    assert "no reservation tickets landed" in capsys.readouterr().out
+
+
 def _concurrent_fold(tasks_path: Path, task_id: str = "CONCURRENT-FOLD") -> None:
     """Simulate a keeper/route write landing on tasks.yaml while a dispatch cycle holds a
     stale in-memory snapshot (the lost-update wipe scenario)."""
@@ -619,6 +768,39 @@ def test_dispatch_budget_reset_persist_survives_concurrent_board_write(
     board = read_board(tasks_path)
     assert "CONCURRENT-FOLD" in {task["id"] for task in board["tasks"]}
     assert board["portal"]["budget"]["track"]["per_agent"]["codex"] == 0
+
+
+def test_dispatch_budget_reset_ticket_mode_drains_tabularius(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Ticket mode should commit the fresh budget reset through TABVLARIVS and preserve
+    concurrent board growth even when no task dispatches."""
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(tasks_path, [])
+    board = read_board(tasks_path)
+    board["portal"]["budget"]["track"] = {
+        "date": "2026-01-01",
+        "spent": 2,
+        "per_agent": {"codex": 2},
+        "per_agent_reset": {"codex": "2026-01-01T00:00:00+00:00"},
+    }
+    tasks_path.write_text(yaml.safe_dump(board, sort_keys=False))
+    stale = load_limen_file(tasks_path)
+
+    _concurrent_fold(tasks_path)
+
+    monkeypatch.setattr(D, "_down_lanes", lambda: set())
+    monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+
+    dispatch_tasks(stale, tasks_path, agent="codex", dry_run=False)
+
+    board = read_board(tasks_path)
+    assert "CONCURRENT-FOLD" in {task["id"] for task in board["tasks"]}
+    assert board["portal"]["budget"]["track"]["per_agent"]["codex"] == 0
+    assert pending_count(tasks_path) == 0
 
 
 def test_release_stale_apply_survives_concurrent_board_write(
@@ -1179,6 +1361,56 @@ def test_release_stale_restores_prior_done_instead_of_reopening(tmp_path: Path) 
     assert task["dispatch_log"][-1]["status"] == "done"
     assert report["released"] == []
     assert report["restored_done"] == ["DONE-REOPENED"]
+
+
+def test_release_stale_ticket_mode_drains_tabularius(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_TICKETS_PRODUCE", "1")
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "STALE-CLAIM",
+                "title": "Stale dispatched task",
+                "repo": "4444J99/limen",
+                "target_agent": "jules",
+                "priority": "high",
+                "budget_cost": 1,
+                "status": "in_progress",
+                "created": "2026-06-01",
+                "dispatch_log": [],
+            },
+            {
+                "id": "DONE-REOPENED",
+                "title": "Already done but active",
+                "repo": "4444J99/limen",
+                "target_agent": "jules",
+                "priority": "high",
+                "budget_cost": 1,
+                "status": "in_progress",
+                "created": "2026-06-01",
+                "dispatch_log": [
+                    {
+                        "timestamp": "2026-06-01T00:00:00+00:00",
+                        "agent": "jules",
+                        "session_id": "prior",
+                        "status": "done",
+                    }
+                ],
+            },
+        ],
+    )
+
+    report = release_stale_tasks(load_limen_file(tasks_path), tasks_path, hours=24, dry_run=False)
+
+    tasks = {task["id"]: task for task in read_board(tasks_path)["tasks"]}
+    assert tasks["STALE-CLAIM"]["status"] == "open"
+    assert tasks["STALE-CLAIM"]["dispatch_log"][-1]["status"] == "open"
+    assert tasks["DONE-REOPENED"]["status"] == "done"
+    assert tasks["DONE-REOPENED"]["dispatch_log"][-1]["status"] == "done"
+    assert report["released"] == ["STALE-CLAIM"]
+    assert report["restored_done"] == ["DONE-REOPENED"]
+    assert pending_count(tasks_path) == 0
 
 
 def test_dispatch_limit_and_per_agent_budget(tmp_path: Path, monkeypatch) -> None:

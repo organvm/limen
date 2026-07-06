@@ -252,8 +252,9 @@ def readiness_payload() -> dict[str, Any]:
 
 
 class FakeRuntime:
-    def __init__(self, probe: ModuleType) -> None:
+    def __init__(self, probe: ModuleType, *, remote_reject_mutations: bool = False) -> None:
         self.probe = probe
+        self.remote_reject_mutations = remote_reject_mutations
         self.calls: list[dict[str, Any]] = []
         self.tasks = {
             "TASK-DENIED": {"id": "TASK-DENIED", "status": "in_progress"},
@@ -336,6 +337,8 @@ class FakeRuntime:
             return self.response(200, task)
         if method != "POST":
             return self.response(405, {"detail": "method not allowed"})
+        if action and self.remote_reject_mutations:
+            return self.response(501, {"detail": "remote mutations are disabled until a TABVLARIVS ticket sink exists"})
         if action == "verify":
             task["status"] = body.get("status", "done")
             return self.response(200, {"status": "verified", "verified_status": task["status"], "task": task})
@@ -424,6 +427,44 @@ def test_main_verifies_optional_owner_mutations(
     assert fake.tasks["TASK-ASSIGN"]["target_agent"] == "jules"
     assert fake.tasks["TASK-ASSIGN"]["status"] == "open"
     assert fake.tasks["TASK-ARCHIVE"]["status"] == "archived"
+
+
+def test_main_verifies_remote_mutation_rejection(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    probe = load_probe()
+    fake = FakeRuntime(probe, remote_reject_mutations=True)
+
+    run_probe_main(
+        monkeypatch,
+        probe,
+        fake,
+        [
+            "--api-url",
+            "https://runtime.test",
+            "--owner-token",
+            OWNER_TOKEN,
+            "--client-token",
+            CLIENT_TOKEN,
+            "--task-id",
+            "TASK-DENIED",
+            "--verify-task-id",
+            "TASK-VERIFY",
+            "--assign-task-id",
+            "TASK-ASSIGN",
+            "--archive-task-id",
+            "TASK-ARCHIVE",
+            "--mutation-mode",
+            "remote-reject",
+        ],
+    )
+
+    assert "Runtime adapter probe passed" in capsys.readouterr().out
+    assert fake.tasks["TASK-VERIFY"]["status"] == "in_progress"
+    assert fake.tasks["TASK-ASSIGN"]["target_agent"] == "codex"
+    assert fake.tasks["TASK-ASSIGN"]["status"] == "needs_human"
+    assert fake.tasks["TASK-ARCHIVE"]["status"] == "done"
 
 
 def test_request_encodes_json_and_decodes_success(monkeypatch: pytest.MonkeyPatch) -> None:

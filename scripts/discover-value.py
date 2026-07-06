@@ -16,8 +16,9 @@ discovery, and value-repos.json becomes the OUTPUT of the fleet, continuously re
 Anti-flood: ONE discovery task per dark repo (never 6 busywork levers), least-covered first, hard --max-new
 cap. Headroom-aware: when the fleet tank is full (high aggregate headroom) it raises the discovery floor so
 more dark repos get covered per window — the accelerator that burns each window toward the reserve drops.
-Read-only by default (prints a plan); --apply appends via the limen schema (validated, atomic). Never
-dispatches. Fail-open: any error → generate nothing rather than crash the feed beat. ([[no-never-happens-again]])
+Read-only by default (prints a plan); --apply submits guarded tasks through TABVLARIVS, the single
+record-keeper. Never dispatches. Fail-open: any error → generate nothing rather than crash the feed
+beat. ([[no-never-happens-again]])
 """
 from __future__ import annotations
 
@@ -31,9 +32,9 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.models import Task  # noqa: E402
-from limen.tabularius import submit_task_upsert  # noqa: E402
+from limen.tabularius import drain_once, submit_task_upsert  # noqa: E402
 
 # Thinking lanes — discovery is reasoning work, so route it to the lanes that reason best, round-robin.
 _THINK_LANES = ["codex", "claude", "opencode"]
@@ -195,18 +196,18 @@ def main() -> int:
         print("\n(nothing new to discover)")
         return 0
     if args.apply:
-        # TABVLARIVS producer path (Step 2.1). LIMEN_TICKETS_PRODUCE=1 → hand each NEW discovery task
-        # to the record-keeper as an upsert ticket instead of writing tasks.yaml directly; `new` is
-        # already deduped so every id is brand-new. Default OFF keeps the legacy validated append.
-        if os.environ.get("LIMEN_TICKETS_PRODUCE") == "1":
-            session_id = os.environ.get("LIMEN_SESSION_ID", "discover-value")
-            for t in new:
-                submit_task_upsert(path, t, agent="discover-value", session_id=session_id)
-            print(f"\nsubmitted {len(new)} discovery upsert tickets to the keeper's inbox (folds onto {path} next beat).")
-            return 0
-        lf.tasks.extend(new)
-        save_limen_file(path, lf)
-        print(f"\napplied: appended {len(new)} discovery tasks -> {path} (route+dispatch separately)")
+        session_id = os.environ.get("LIMEN_SESSION_ID", "discover-value")
+        tickets = [submit_task_upsert(path, t, agent="discover-value", session_id=session_id) for t in new]
+        result = drain_once(path)
+        applied = set(result.applied_ids)
+        wanted = {ticket.stem for ticket in tickets}
+        if wanted - applied:
+            print(
+                f"\nTABVLARIVS applied {len(applied & wanted)}/{len(wanted)} discovery tickets "
+                f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+            )
+        else:
+            print(f"\nsubmitted and applied {len(new)} discovery upsert tickets through TABVLARIVS -> {path}.")
     else:
         print(f"\ndry-run — re-run with --apply to append {len(new)} discovery tasks.")
     return 0

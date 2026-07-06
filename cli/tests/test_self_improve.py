@@ -8,6 +8,9 @@ from types import ModuleType
 import pytest
 import yaml
 
+from limen.io import load_limen_file
+from limen.tabularius import pending_count
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -143,6 +146,62 @@ def test_apply_writes_proposal_and_applies(tmp_path: Path, monkeypatch: pytest.M
     # the heartbeat) so a board the strict loader can't parse just skips apply — both return 0.
     assert si.main() == 0
     assert out_path.exists()  # proposal is written before the apply step
+
+
+def test_apply_drains_tabularius(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    si = load_self_improve()
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "REV-one",
+                "title": "boost me",
+                "target_agent": "any",
+                "status": "open",
+                "priority": "medium",
+                "created": "2026-07-05",
+                "labels": [],
+            },
+            {
+                "id": "LOW-one",
+                "title": "lower me",
+                "target_agent": "any",
+                "status": "open",
+                "priority": "medium",
+                "created": "2026-07-05",
+                "labels": [],
+            },
+            {
+                "id": "OLD-one",
+                "title": "retire me",
+                "target_agent": "any",
+                "status": "open",
+                "priority": "medium",
+                "created": "2026-07-05",
+                "labels": [],
+            },
+        ],
+    )
+    proposal = {
+        "rerank": [
+            {"pattern": "REV", "move": "boost"},
+            {"pattern": "LOW", "move": "deprioritise"},
+        ],
+        "retire_patterns": [{"pattern": "OLD", "action": "retire"}],
+    }
+    monkeypatch.delenv("LIMEN_TICKETS_PRODUCE", raising=False)
+    monkeypatch.setenv("LIMEN_SI_RETIRE", "1")
+
+    assert si.apply_proposal(proposal, tasks_path) == 0
+
+    by_id = {task.id: task for task in load_limen_file(tasks_path).tasks}
+    assert by_id["REV-one"].priority == "high"
+    assert by_id["LOW-one"].priority == "low"
+    assert by_id["OLD-one"].status == "archived"
+    assert "superseded" in by_id["OLD-one"].labels
+    assert by_id["REV-one"].dispatch_log[-1].agent == "self-improve"
+    assert pending_count(tasks_path) == 0
 
 
 def test_missing_tasks_file_does_not_crash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

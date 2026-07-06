@@ -193,8 +193,9 @@ disposable or explicitly approved task IDs.
 For the current local Python adapter, `scripts/probe-local-runtime.sh` starts a
 temporary API process with a disposable task board and runs the same HTTP probe,
 including owner verify, assign, and archive mutations.
-For the Cloudflare Worker adapter, `scripts/probe-local-worker.sh` does the same
-against Wrangler local dev and inline disposable storage.
+For the Cloudflare Worker adapter, `scripts/probe-local-worker.sh` runs the same
+read/schema probe against Wrangler local dev and confirms owner mutation routes
+return the remote TABVLARIVS ticket-sink boundary instead of rewriting storage.
 The dashboard deploy workflow requires the repository variable `LIMEN_API_URL`
 and the Actions secrets `LIMEN_API_TOKEN` and `LIMEN_CLIENT_TOKEN`; after
 Firebase hosting is released it probes that runtime with the same schema-backed
@@ -205,6 +206,12 @@ For a full local contract pass, run `scripts/verify-whole.sh`; set
 `LIMEN_CLIENT_TOKEN` are present, the same live pass also schema-probes the
 runtime adapter. Set `LIMEN_VERIFY_LIVE_RUNTIME=1` to fail if those runtime
 probe inputs are missing.
+To compact TABVLARIVS' current board projection into a replayable event log,
+run `limen tabularius-events --write --verify`; it writes
+`logs/tickets/events.jsonl` plus a `.manifest.json` archive watermark, then
+proves the seed plus any post-watermark archived tickets folds to `tasks.yaml`.
+To append those post-watermark archive deltas into the log and advance the
+watermark, run `limen tabularius-events --sync-archive --verify`.
 
 ## How It Works
 

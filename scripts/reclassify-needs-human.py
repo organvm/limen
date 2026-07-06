@@ -31,7 +31,8 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
+from limen.tabularius import drain_once, submit_task_status  # noqa: E402
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parent.parent))
 
@@ -163,25 +164,42 @@ def main() -> int:
         print("wrote docs/RECLASSIFY-PROPOSAL.md")
         return 0
 
-    # Apply lockless + atomic: re-read fresh so we never clobber a concurrent dispatch write; the
-    # set-of-ids makes this idempotent (re-running flips nothing already flipped). Never skip on
-    # contention — next run simply re-applies (self-healing), mirroring generate-revenue-backlog.
+    # Apply through TABVLARIVS: re-read fresh so we never submit stale work, then hand guarded
+    # status tickets to the single keeper. The set-of-ids makes this idempotent (re-running flips
+    # nothing already flipped).
     fresh = load_limen_file(path)
     flip_set = set(flip_ids)
-    stamp = date.today().isoformat()
-    changed = 0
+    tickets: list[Path] = []
     for t in fresh.tasks:
         if t.id in flip_set and t.status == "needs_human":
-            t.status = "open"
-            t.updated = stamp
-            if "reclassified-from-needs-human" not in (t.labels or []):
-                t.labels = list(t.labels or []) + ["reclassified-from-needs-human"]
-            changed += 1
-    if not changed:
+            labels = list(t.labels or [])
+            if "reclassified-from-needs-human" not in labels:
+                labels.append("reclassified-from-needs-human")
+            tickets.append(
+                submit_task_status(
+                    path,
+                    t.id,
+                    "open",
+                    agent="limen",
+                    session_id="reclassify-needs-human",
+                    output="reclassify-needs-human: fleet-buildable code/docs reopened from false human gate",
+                    patch={"labels": labels},
+                    precondition={"status": "needs_human"},
+                )
+            )
+    if not tickets:
         print("\n(nothing to flip after fresh re-read — already applied.)")
         return 0
-    save_limen_file(path, fresh)
-    print(f"\napplied: flipped {changed} tasks needs_human->open -> {path} (route+dispatch separately).")
+    result = drain_once(path)
+    applied = set(result.applied_ids)
+    wanted = {ticket.stem for ticket in tickets}
+    if wanted - applied:
+        raise SystemExit(
+            f"TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} reclassify tickets "
+            f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+        )
+    print(f"\napplied: flipped {len(tickets)} tasks needs_human->open via TABVLARIVS -> {path} "
+          "(route+dispatch separately).")
     return 0
 
 

@@ -12,9 +12,13 @@ and seals through the collapse-guard. The invariants that make it safe to run ev
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from click.testing import CliRunner
+
+from limen.cli import main
 from limen.io import load_limen_file, queue_lock, save_limen_file
 from limen.models import LimenFile, Task
 from limen.tabularius import (
@@ -27,10 +31,20 @@ from limen.tabularius import (
     _archive,
     _inbox,
     _rejected,
+    _validate_event_log_manifest,
+    compact_event_log,
     drain_once,
+    event_log_path,
+    event_log_manifest_path,
     new_ticket_id,
     pending_count,
+    submit_board_meta,
     submit_ticket,
+    submit_task_status,
+    submit_task_upsert,
+    sync_event_log_from_archive,
+    verify_event_log,
+    write_event_log_board,
 )
 
 _NOW = datetime(2026, 7, 2, 12, 0, 0, tzinfo=timezone.utc)
@@ -53,6 +67,27 @@ def _seed_board(tmp_path: Path, n: int = 6) -> Path:
     return board
 
 
+def _seed_budget_board(tmp_path: Path) -> Path:
+    board = tmp_path / "tasks.yaml"
+    save_limen_file(
+        board,
+        LimenFile.model_validate(
+            {
+                "version": "1.0",
+                "portal": {
+                    "budget": {
+                        "daily": 10,
+                        "per_agent": {"codex": 10},
+                        "track": {"date": "2026-07-02", "spent": 0, "per_agent": {}},
+                    }
+                },
+                "tasks": [_task(f"T-{i}", status="open") for i in range(6)],
+            }
+        ),
+    )
+    return board
+
+
 def _ticket(intent: str, task_id: str | None = None, ts: datetime = _NOW, **over) -> Ticket:
     return Ticket(
         ticket_id=over.pop("ticket_id", new_ticket_id("test", ts)),
@@ -63,6 +98,7 @@ def _ticket(intent: str, task_id: str | None = None, ts: datetime = _NOW, **over
         task_id=task_id,
         patch=over.pop("patch", None),
         log=over.pop("log", None),
+        precondition=over.pop("precondition", None),
     )
 
 
@@ -112,6 +148,305 @@ def test_status_ticket_sets_status_and_appends_dispatch_log(tmp_path):
     assert len(t1.dispatch_log) == 1
     entry = t1.dispatch_log[0]
     assert entry.agent == "claude" and entry.status == "done" and entry.output == "shipped PR #999"
+
+
+def test_compacted_event_log_folds_to_current_board(tmp_path):
+    board = _seed_board(tmp_path)
+    submit_ticket(board, _ticket(INTENT_STATUS, task_id="T-1", log={"status": "done"}))
+    submit_ticket(board, _ticket(INTENT_UPSERT, task_id="T-new", patch=_task("T-new", status="open")))
+    drain_once(board)
+
+    result = compact_event_log(board)
+
+    assert result.verified is True
+    assert result.events == len(load_limen_file(board).tasks) + 1
+    assert result.archive_tickets == 2
+    assert result.event_log == event_log_path(board)
+    assert result.event_log.exists()
+    verify = verify_event_log(board)
+    assert verify.verified is True
+    assert verify.events == result.events
+
+
+def test_compacted_event_log_manifest_records_archive_watermark(tmp_path):
+    board = _seed_board(tmp_path)
+    ticket_path = submit_task_status(board, "T-1", "done", agent="limen", session_id="test", now=_NOW)
+    drain_once(board)
+
+    result = compact_event_log(board)
+
+    manifest = json.loads(event_log_manifest_path(result.event_log).read_text())
+    assert manifest["kind"] == "tabularius.compacted-seed"
+    assert manifest["schema_version"] == 1
+    assert manifest["archive_count"] == 1
+    assert manifest["last_ticket_id"] == ticket_path.stem
+    assert result.archive_replay_tickets == 0
+    assert result.verified is True
+
+
+def test_event_log_verification_replays_archive_after_seed_watermark(tmp_path):
+    board = _seed_board(tmp_path)
+    result = compact_event_log(board)
+    seed_event_count = result.events
+
+    submit_task_status(board, "T-1", "done", agent="limen", session_id="after-seed", now=_NOW)
+    drain_once(board)
+
+    verify = verify_event_log(board)
+
+    assert verify.verified is True
+    assert verify.archive_tickets == 1
+    assert verify.archive_replay_tickets == 1
+    assert verify.events == seed_event_count + 1
+    assert verify.note == "fold(events + archive tickets after watermark) == tasks.yaml bytes"
+
+
+def test_event_log_archive_replay_preserves_budget_delta_metadata(tmp_path):
+    board = _seed_budget_board(tmp_path)
+    result = compact_event_log(board)
+
+    submit_task_status(
+        board,
+        "T-1",
+        "dispatched",
+        agent="codex",
+        session_id="after-seed",
+        budget_cost=1,
+        now=_NOW,
+    )
+    drain_once(board)
+
+    verify = verify_event_log(board)
+
+    assert verify.verified is True
+    assert verify.archive_replay_tickets == 1
+    assert verify.events == result.events + 2  # board.meta budget delta + task status upsert
+
+
+def test_sync_event_log_from_archive_appends_post_watermark_events(tmp_path):
+    board = _seed_board(tmp_path)
+    result = compact_event_log(board)
+    ticket_path = submit_task_status(board, "T-1", "done", agent="limen", session_id="after-seed", now=_NOW)
+    drain_once(board)
+
+    sync = sync_event_log_from_archive(board)
+
+    manifest = json.loads(event_log_manifest_path(sync.event_log).read_text())
+    assert sync.verified is True
+    assert sync.archive_replay_tickets == 0
+    assert sync.events == result.events + 1
+    assert sync.note == "synced 1 archived ticket(s); fold(events) == tasks.yaml bytes"
+    assert manifest["archive_count"] == 1
+    assert manifest["last_ticket_id"] == ticket_path.stem
+
+    verify = verify_event_log(board)
+    assert verify.verified is True
+    assert verify.archive_replay_tickets == 0
+    assert verify.events == sync.events
+
+
+def test_write_event_log_board_materializes_side_cache_after_archive_delta(tmp_path):
+    board = _seed_board(tmp_path)
+    result = compact_event_log(board)
+    submit_task_status(board, "T-1", "done", agent="limen", session_id="after-seed", now=_NOW)
+    drain_once(board)
+    out = tmp_path / "rebuilt-tasks.yaml"
+
+    materialized = write_event_log_board(board, out)
+
+    assert materialized.verified is True
+    assert materialized.archive_replay_tickets == 1
+    assert materialized.events == result.events + 1
+    assert (
+        materialized.note
+        == "wrote materialized board cache; fold(events + archive tickets after watermark) == tasks.yaml bytes"
+    )
+    assert out.read_text() == board.read_text()
+
+
+def test_write_event_log_board_refuses_live_tasks_cache(tmp_path):
+    board = _seed_board(tmp_path)
+    compact_event_log(board)
+    before = board.read_text()
+
+    result = write_event_log_board(board, board)
+
+    assert result.verified is False
+    assert result.note == "refusing to overwrite live tasks.yaml cache"
+    assert board.read_text() == before
+
+
+def test_event_log_manifest_validation_rejects_bad_watermark() -> None:
+    errors = _validate_event_log_manifest(
+        {
+            "kind": "tabularius.compacted-seed",
+            "schema_version": 1,
+            "created_at": "2026-07-05T00:00:00+00:00",
+            "archive_count": 0,
+            "last_ticket_id": "T-1",
+            "last_ticket_file": "T-1.json",
+        }
+    )
+
+    assert errors == ["event log manifest empty archive watermark must not name a last ticket"]
+
+
+def test_tabularius_events_command_writes_and_verifies(tmp_path, monkeypatch):
+    board = _seed_board(tmp_path)
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setenv("LIMEN_TASKS", str(board))
+
+    result = CliRunner().invoke(main, ["tabularius-events", "--write", "--verify"])
+
+    assert result.exit_code == 0, result.output
+    assert event_log_path(board).exists()
+    assert "fold(events) == tasks.yaml bytes: True" in result.output
+
+
+def test_tabularius_events_command_syncs_archive(tmp_path, monkeypatch):
+    board = _seed_board(tmp_path)
+    compact_event_log(board)
+    submit_task_status(board, "T-1", "done", agent="limen", session_id="after-seed", now=_NOW)
+    drain_once(board)
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setenv("LIMEN_TASKS", str(board))
+
+    result = CliRunner().invoke(main, ["tabularius-events", "--sync-archive", "--verify"])
+
+    assert result.exit_code == 0, result.output
+    assert "synced 1 archived ticket(s); fold(events) == tasks.yaml bytes: True" in result.output
+
+
+def test_tabularius_events_command_emits_materialized_board_cache(tmp_path, monkeypatch):
+    board = _seed_board(tmp_path)
+    compact_event_log(board)
+    out = tmp_path / "rebuilt.yaml"
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setenv("LIMEN_TASKS", str(board))
+
+    result = CliRunner().invoke(main, ["tabularius-events", "--emit-board", str(out)])
+
+    assert result.exit_code == 0, result.output
+    assert out.read_text() == board.read_text()
+    assert "wrote materialized board cache; fold(events) == tasks.yaml bytes: True" in result.output
+
+
+def test_submit_task_status_emits_status_ticket(tmp_path):
+    board = _seed_board(tmp_path)
+
+    submit_task_status(
+        board,
+        "T-1",
+        "open",
+        agent="limen",
+        session_id="heal",
+        output="recover: reopened failed -> fresh cascade",
+        patch={"target_agent": "codex", "labels": ["retry"]},
+        now=_NOW,
+    )
+    result = drain_once(board)
+
+    assert result.applied == 1 and result.wrote is True
+    t1 = {t.id: t for t in load_limen_file(board).tasks}["T-1"]
+    assert t1.status == "open"
+    assert t1.target_agent == "codex"
+    assert t1.labels == ["retry"]
+    assert t1.dispatch_log[-1].agent == "limen"
+    assert t1.dispatch_log[-1].session_id == "heal"
+    assert t1.dispatch_log[-1].status == "open"
+    assert t1.dispatch_log[-1].output == "recover: reopened failed -> fresh cascade"
+
+
+def test_submit_task_status_rejects_invalid_or_keeper_owned_fields(tmp_path):
+    import pytest
+
+    board = _seed_board(tmp_path)
+
+    with pytest.raises(ValueError, match="status must be one of"):
+        submit_task_status(board, "T-1", "completed", agent="limen")
+    with pytest.raises(ValueError, match="keeper-owned"):
+        submit_task_status(board, "T-1", "open", agent="limen", patch={"dispatch_log": []})
+
+
+def test_status_ticket_precondition_rejects_stale_state(tmp_path):
+    board = _seed_board(tmp_path)
+    submit_task_status(
+        board,
+        "T-1",
+        "open",
+        agent="limen",
+        session_id="route",
+        output="route: target_agent -> codex",
+        patch={"target_agent": "codex"},
+        precondition={"status": "dispatched"},
+        now=_NOW,
+    )
+
+    result = drain_once(board)
+
+    assert result.applied == 0
+    assert result.rejected == 1
+    t1 = {t.id: t for t in load_limen_file(board).tasks}["T-1"]
+    assert t1.status == "open"
+    assert t1.target_agent == "jules"
+    assert t1.dispatch_log == []
+
+
+def test_status_ticket_can_separate_task_status_from_log_status(tmp_path):
+    board = _seed_board(tmp_path)
+    submit_task_status(
+        board,
+        "T-1",
+        "open",
+        agent="codex",
+        session_id="dispatch",
+        log_status="failed->agy",
+        patch={"target_agent": "agy"},
+        now=_NOW,
+    )
+
+    result = drain_once(board)
+
+    assert result.applied == 1
+    t1 = {t.id: t for t in load_limen_file(board).tasks}["T-1"]
+    assert t1.status == "open"
+    assert t1.target_agent == "agy"
+    assert t1.dispatch_log[-1].status == "failed->agy"
+
+
+def test_status_ticket_applies_budget_delta(tmp_path):
+    board = _seed_budget_board(tmp_path)
+    submit_task_status(
+        board,
+        "T-1",
+        "dispatched",
+        agent="codex",
+        session_id="https://github.com/x/y/pull/9",
+        budget_cost=1,
+        now=_NOW,
+    )
+
+    result = drain_once(board)
+
+    assert result.applied == 1
+    lf = load_limen_file(board)
+    assert lf.portal.budget.track.spent == 1
+    assert lf.portal.budget.track.per_agent["codex"] == 1
+
+
+def test_submit_board_meta_updates_portal(tmp_path):
+    board = _seed_budget_board(tmp_path)
+    lf = load_limen_file(board)
+    lf.portal.budget.daily = 42
+    lf.portal.budget.track.spent = 0
+
+    submit_board_meta(board, agent="limen", session_id="budget-reset", version=lf.version, portal=lf.portal, now=_NOW)
+    result = drain_once(board)
+
+    assert result.applied == 1
+    out = load_limen_file(board)
+    assert out.portal.budget.daily == 42
+    assert out.portal.budget.track.spent == 0
 
 
 def test_partial_patch_preserves_other_fields(tmp_path):
@@ -292,15 +627,84 @@ def test_producer_path_matches_legacy_direct_write(tmp_path):
         assert a == b, f"field divergence on {tid}: {a} vs {b}"
 
 
+def test_status_producer_path_matches_legacy_direct_write(tmp_path):
+    """Status-mutator conversion contract: a direct status/log edit and a status ticket fold produce
+    the same task fields. This is the Step-2.2 safety rail for route/recover/dispatch harvesters."""
+    from limen.models import DispatchLogEntry
+
+    now = datetime(2026, 7, 2, 12, 0, 0, tzinfo=timezone.utc)
+    existing = [_task("T-1", status="failed", labels=["noop", "tried:agy"])] + [
+        _task(f"T-{i}", status="open") for i in range(2, 7)
+    ]
+
+    board_a = tmp_path / "a" / "tasks.yaml"
+    board_a.parent.mkdir(parents=True)
+    lf = _board(existing)
+    task = lf.tasks[0]
+    task.status = "open"
+    task.target_agent = "codex"
+    task.labels = ["noop"]
+    task.updated = now
+    task.dispatch_log.append(
+        DispatchLogEntry(
+            timestamp=now,
+            agent="limen",
+            session_id="heal",
+            status="open",
+            output="recover: reopened failed -> fresh cascade",
+        )
+    )
+    save_limen_file(board_a, lf)
+
+    board_b = tmp_path / "b" / "tasks.yaml"
+    board_b.parent.mkdir(parents=True)
+    save_limen_file(board_b, _board(existing))
+    submit_task_status(
+        board_b,
+        "T-1",
+        "open",
+        agent="limen",
+        session_id="heal",
+        output="recover: reopened failed -> fresh cascade",
+        patch={"target_agent": "codex", "labels": ["noop"]},
+        now=now,
+    )
+    result = drain_once(board_b)
+    assert result.applied == 1 and result.wrote is True
+
+    a_tasks = load_limen_file(board_a).tasks
+    b_tasks = load_limen_file(board_b).tasks
+    assert [t.id for t in a_tasks] == [t.id for t in b_tasks]
+    assert {t.id: t.model_dump(mode="json", exclude_none=True) for t in a_tasks} == {
+        t.id: t.model_dump(mode="json", exclude_none=True) for t in b_tasks
+    }
+
+
 def test_submit_task_upsert_validates_before_emitting(tmp_path):
     """The producer validates the task up front (fail-fast, like the legacy `Task(**t)`), so an
     invalid task never reaches the inbox as a silently-quarantined ticket."""
     import pytest
-
-    from limen.tabularius import submit_task_upsert
 
     board = _seed_board(tmp_path)
     # a dict missing the required `id` — must raise at submit, not land a ticket
     with pytest.raises((ValueError, Exception)):
         submit_task_upsert(board, {"title": "no id"}, agent="gen")
     assert pending_count(board) == 0  # nothing entered the inbox
+
+
+def test_upsert_precondition_rejects_existing_id(tmp_path):
+    board = _seed_board(tmp_path)
+
+    submit_task_upsert(
+        board,
+        _task("T-1", status="open", title="must not overwrite"),
+        agent="gen",
+        precondition={"status": None},
+        now=_NOW,
+    )
+    result = drain_once(board)
+
+    assert result.applied == 0
+    assert result.rejected == 1
+    task = {t.id: t for t in load_limen_file(board).tasks}["T-1"]
+    assert task.title == "task T-1"

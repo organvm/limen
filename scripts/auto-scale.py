@@ -23,11 +23,10 @@ from pathlib import Path
 import requests
 import yaml
 
-# Route every tasks.yaml write through the canonical queue lock plus the atomic primitive
-# (see limen/io.py) so concurrent heartbeat writes are not clobbered and readers never
-# observe a truncated/empty queue.
+# Route every tasks.yaml write through TABVLARIVS, the single record-keeper.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.io import atomic_write_text, queue_lock
+from limen.io import queue_lock
+from limen.tabularius import drain_once, submit_task_upsert
 
 TASKS_FILE = Path(__file__).resolve().parent.parent / "tasks.yaml"
 # Post-move: all repos were consolidated into the single `organvm` org (was
@@ -155,6 +154,7 @@ def main() -> int:
         candidates = [c for c in candidates if c.get("repo") in allowed]
         print(f"  value-tier gate: {before} mined → {len(candidates)} in tier")
 
+    new_tasks = []
     with queue_lock(TASKS_FILE) as got:
         if not got:
             print("auto-scale: queue busy; skipped write this pass", file=sys.stderr)
@@ -167,7 +167,6 @@ def main() -> int:
             return 0
         existing_urls = _existing_urls(tasks)
         next_num = _next_task_num(tasks)
-        new_tasks = []
         for candidate in candidates:
             if len(new_tasks) >= remaining:
                 break
@@ -194,10 +193,28 @@ def main() -> int:
             )
             existing_urls.add(url)
             next_num += 1
-        if new_tasks:
-            tasks.extend(new_tasks)
-            data["tasks"] = tasks
-            atomic_write_text(TASKS_FILE, yaml.dump(data, sort_keys=False, allow_unicode=True))
+    if new_tasks:
+        session_id = os.environ.get("LIMEN_SESSION_ID", "auto-scale")
+        ticket_paths = [
+            submit_task_upsert(
+                TASKS_FILE,
+                task,
+                agent="auto-scale",
+                session_id=session_id,
+                precondition={"status": None},
+            )
+            for task in new_tasks
+        ]
+        result = drain_once(TASKS_FILE)
+        applied = set(result.applied_ids)
+        wanted = {ticket.stem for ticket in ticket_paths}
+        if wanted - applied:
+            raise SystemExit(
+                f"TABVLARIVS applied {len(applied & wanted)}/{len(wanted)} auto-scale tickets "
+                f"(rejected={result.rejected}, deferred={result.deferred}): {result.note}"
+            )
+        tasks = _tasks(_load_board())
+        print(f"auto-scale: applied {len(new_tasks)} upsert tickets via TABVLARIVS")
     print(f"Added {len(new_tasks)} new tasks. Total: {len(tasks)}")
     return 0
 

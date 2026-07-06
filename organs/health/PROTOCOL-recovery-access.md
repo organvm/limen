@@ -33,7 +33,7 @@
 
 ## 3. Workflow Implementation
 - **Intake:** Clinician directives are translated into tracking items.
-- **Active:** The protocol log records every exercise, medication, and appointment. 
+- **Active:** The protocol log records every exercise, medication, and appointment.
 - **Review:** The `posture.md` brief is generated weekly, consolidating state, protocol adherence, and accommodation status. This brief is shared with new providers to avoid "starting from scratch" and serves as evidence for the ADA matter.
 
 ## 4. Concrete Artifacts (Vertical Slice, 2026-07-05)

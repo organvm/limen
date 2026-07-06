@@ -63,8 +63,7 @@ cd "$LIMEN_ROOT" || exit 1
 # TABVLARIVS single-writer CUTOVER (Step 2.1, watched draining before flip): the fleet routes its
 # task-CREATION writers (mine/ingest-backlog, generate-backlog/-revenue/-organ, discover-value)
 # through the record-keeper's ticket inbox instead of each direct-writing tasks.yaml. Default ON for
-# the fleet; set LIMEN_TICKETS_PRODUCE=0 in ~/.limen.env to revert instantly. The keeper (organ at
-# the top of the beat) folds the tickets next beat; the status-mutator tier stays direct (Step 2.2).
+# the fleet; set LIMEN_TICKETS_PRODUCE=0 in ~/.limen.env for remaining legacy-gated paths.
 export LIMEN_TICKETS_PRODUCE="${LIMEN_TICKETS_PRODUCE:-1}"
 # INSIGHT-ROUTE armed: the insights→owners route organ (insight-route.py, after insight-cadence in
 # the beat) routes the latest report per tier to its durable owner — his-hand levers, keeper upsert
@@ -353,7 +352,7 @@ while true; do
                                        [ "${LIMEN_REVENUE_BACKLOG:-1}" = "1" ] && timeout "${LIMEN_REVENUE_TIMEOUT:-120}" python3 "$LIMEN_ROOT/scripts/generate-revenue-backlog.py" --apply 2>&1 | tail -1 || true  # REVENUE FIRST: ladder→tasks so win-class capacity builds products, not busywork (default-ON; floor-gated)
                                        [ "${LIMEN_ORGAN_BACKLOG:-1}" = "1" ] && timeout "${LIMEN_ORGAN_TIMEOUT:-120}" python3 "$LIMEN_ROOT/scripts/generate-organ-backlog.py" --apply 2>&1 | tail -1 || true  # ORGANS (VLTIMA): organ-ladder->tasks so idle capacity builds the institutional pillars (legal/financial/education/...), not busywork (default-ON; floor-gated; lockless)
                                        python3 "$LIMEN_ROOT/scripts/generate-backlog.py" --apply 2>&1 | tail -1 || true  # SELF-FEED: build-out levers on the ranked tier
-                                       [ "${LIMEN_STUDIUM:-0}" = "1" ] && timeout "${LIMEN_STUDIUM_TIMEOUT:-120}" python3 "$LIMEN_ROOT/scripts/ingest-backlog.py" --apply 2>&1 | tail -1 || true  # STUDIUM: re-emit the staged canon-breadth content tasks each beat so they SURVIVE the prune (a one-shot hand-apply gets clobbered; idempotent, gated, lockless)
+                                       [ "${LIMEN_STUDIUM:-0}" = "1" ] && timeout "${LIMEN_STUDIUM_TIMEOUT:-120}" python3 "$LIMEN_ROOT/scripts/ingest-backlog.py" --apply 2>&1 | tail -1 || true  # STUDIUM: re-emit the staged canon-breadth content tasks through TABVLARIVS so they SURVIVE the prune
                                        python3 "$LIMEN_ROOT/scripts/discover-value.py" --apply 2>&1 | tail -1 || true; }  # DISCOVER: no repo stays dark — surface latent value, burn the tank
       play "$C_BALANCE"            && { python3 "$LIMEN_ROOT/scripts/route.py" --apply 2>&1 | tail -1 || true   # PLAN
                                        if [ -n "$EFFECTIVE_LANES" ]; then

@@ -6,6 +6,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Iterator
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -15,6 +16,17 @@ from limen.models import LimenFile
 
 _DLOG_REQUIRED = {"timestamp", "agent", "session_id", "status"}
 _QUEUE_LOCK_STALE_SEC = 900
+
+
+@dataclass(frozen=True)
+class LoadRepairReport:
+    malformed_dispatch_logs: int = 0
+    dispatch_log_task_ids: tuple[str, ...] = ()
+    backfilled_tasks: int = 0
+
+    @property
+    def repaired(self) -> bool:
+        return self.malformed_dispatch_logs > 0 or self.backfilled_tasks > 0
 
 
 class BoardCollapseError(RuntimeError):
@@ -170,7 +182,7 @@ def queue_lock(tasks_path: Path, timeout: int = 90) -> Iterator[bool]:
                 pass
 
 
-def _sanitize_dispatch_logs(raw: dict[str, object]) -> int:
+def _sanitize_dispatch_logs(raw: dict[str, object]) -> tuple[int, tuple[str, ...]]:
     """NEVER-"NO" data-layer guard: tolerate torn writes. The shared tasks.yaml is written by many
     uncoordinated processes; a recurring corruption lands a whole Task object inside some task's
     dispatch_log (an entry missing timestamp/agent/session_id), which made strict validation reject
@@ -178,11 +190,12 @@ def _sanitize_dispatch_logs(raw: dict[str, object]) -> int:
     own beats. Drop ONLY the malformed log entries (garbage history rows); every task + the queue
     survive. Mutates raw in place; returns the count dropped."""
     if not isinstance(raw, dict):
-        return 0
+        return 0, ()
     dropped = 0
+    repaired_task_ids: list[str] = []
     tasks = raw.get("tasks")
     if not isinstance(tasks, list):
-        return 0
+        return 0, ()
     for t in tasks:
         if not isinstance(t, dict):
             continue
@@ -190,9 +203,14 @@ def _sanitize_dispatch_logs(raw: dict[str, object]) -> int:
         if not isinstance(dl, list):
             continue
         clean = [e for e in dl if isinstance(e, dict) and _DLOG_REQUIRED.issubset(e.keys())]
-        dropped += len(dl) - len(clean)
+        dropped_here = len(dl) - len(clean)
+        if dropped_here:
+            tid = str(t.get("id") or "")
+            if tid:
+                repaired_task_ids.append(tid)
+        dropped += dropped_here
         t["dispatch_log"] = clean
-    return dropped
+    return dropped, tuple(repaired_task_ids)
 
 
 def _backfill_required_task_fields(raw: dict[str, object]) -> int:
@@ -220,7 +238,7 @@ def _backfill_required_task_fields(raw: dict[str, object]) -> int:
     return fixed
 
 
-def load_limen_text(text: str, name: str = "tasks.yaml") -> LimenFile:
+def load_limen_text_with_report(text: str, name: str = "tasks.yaml") -> tuple[LimenFile, LoadRepairReport]:
     """Parse a board from an in-memory string — the single-read entry point.
 
     Callers that must reason about the *exact bytes* they loaded (e.g. the materialize --verify
@@ -233,7 +251,7 @@ def load_limen_text(text: str, name: str = "tasks.yaml") -> LimenFile:
         # an empty/whitespace file is corruption, not an empty queue — refuse to load it as
         # None (which would crash downstream); the caller should restore from git/backup.
         raise ValueError(f"{name} is empty or invalid YAML — refusing to load (restore from git HEAD)")
-    dropped = _sanitize_dispatch_logs(raw)
+    dropped, repaired_task_ids = _sanitize_dispatch_logs(raw)
     if dropped:
         print(
             f"[limen.io] tolerated {dropped} malformed dispatch_log "
@@ -248,11 +266,25 @@ def load_limen_text(text: str, name: str = "tasks.yaml") -> LimenFile:
             f"never reject the whole board)",
             file=sys.stderr,
         )
-    return LimenFile.model_validate(raw)
+    report = LoadRepairReport(
+        malformed_dispatch_logs=dropped,
+        dispatch_log_task_ids=repaired_task_ids,
+        backfilled_tasks=backfilled,
+    )
+    return LimenFile.model_validate(raw), report
+
+
+def load_limen_text(text: str, name: str = "tasks.yaml") -> LimenFile:
+    board, _report = load_limen_text_with_report(text, name=name)
+    return board
 
 
 def load_limen_file(path: Path) -> LimenFile:
     return load_limen_text(path.read_text(), name=Path(path).name)
+
+
+def load_limen_file_with_report(path: Path) -> tuple[LimenFile, LoadRepairReport]:
+    return load_limen_text_with_report(path.read_text(), name=Path(path).name)
 
 
 def atomic_write_text(path: Path, text: str) -> None:

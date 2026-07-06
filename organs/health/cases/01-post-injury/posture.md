@@ -17,7 +17,7 @@
 
 ## 3. Accommodation Status (ADA/Legal)
 - **Status:** **ACTIVE & ENFORCED**
-- **Provisions in Effect:** 
+- **Provisions in Effect:**
   - Remote parity on high-pain or physical therapy days.
   - Flexible scheduling for therapy appointments.
   - Required ergonomic setup.

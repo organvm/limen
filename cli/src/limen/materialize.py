@@ -29,7 +29,10 @@ byte-identically. `task.remove` drops an id (a task pruned/archived out of the b
 
 from __future__ import annotations
 
+import json
 from typing import Any
+
+import yaml
 
 from limen.models import LimenFile
 
@@ -40,6 +43,33 @@ EV_TASK_UPSERT = "task.upsert"  # create-or-replace a task's full field-set, key
 EV_TASK_REMOVE = "task.remove"  # drop a task id from the board (prune/archive-out)
 
 Event = dict[str, Any]
+
+
+def canonical_board_text(board: LimenFile) -> str:
+    """Serialize a board exactly like the existing materialize byte-identity predicate."""
+    return yaml.dump(board.model_dump(mode="json", exclude_none=True), sort_keys=False, default_flow_style=False)
+
+
+def events_to_jsonl(events: list[Event]) -> str:
+    """Serialize a canonical event stream as JSONL without disturbing field order."""
+    return "".join(json.dumps(event, ensure_ascii=False) + "\n" for event in events)
+
+
+def events_from_jsonl(text: str) -> list[Event]:
+    """Parse a canonical JSONL event stream, allowing blank separator lines."""
+    events: list[Event] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            event = json.loads(stripped)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid event JSON on line {lineno}: {exc}") from exc
+        if not isinstance(event, dict):
+            raise ValueError(f"event line {lineno} must be a JSON object")
+        events.append(event)
+    return events
 
 
 def fold(events: list[Event]) -> LimenFile:

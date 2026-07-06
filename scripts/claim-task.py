@@ -12,6 +12,9 @@ from typing import Any
 
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
+from limen.tabularius import drain_once, submit_task_status  # noqa: E402
+
 VALID_CLAIM_AGENTS = {
     "agy",
     "claude",
@@ -145,8 +148,22 @@ def main() -> int:
         )
         return 0
 
-    with args.tasks.open("w") as stream:
-        yaml.safe_dump(data, stream, default_flow_style=False, sort_keys=False)
+    ticket = submit_task_status(
+        args.tasks,
+        task["id"],
+        "dispatched",
+        agent=args.agent,
+        session_id=args.session_id,
+        output=f"claim-task: reserved {task['id']} for {args.agent}",
+        patch={"target_agent": args.agent},
+        precondition={"status": "open"},
+        budget_cost=optional_nonnegative_int(task, "budget_cost", "budget_cost"),
+        budget_agent=args.agent,
+    )
+    result = drain_once(args.tasks)
+    if ticket.stem not in set(result.applied_ids):
+        ticket.unlink(missing_ok=True)
+        raise SystemExit(f"TABVLARIVS did not apply claim ticket {ticket.stem}: {result.note}")
     print(f"claimed {task['id']} for {task['target_agent']} in {args.tasks}")
     return 0
 

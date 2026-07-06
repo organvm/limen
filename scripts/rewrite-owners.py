@@ -15,11 +15,10 @@ and will silently break dispatch the moment a repo moves:
                    `git fetch origin <base>` and PR creation stay unambiguous.
 
 SAFE BY DEFAULT. Dry-run prints exactly what it WOULD change and changes NOTHING. Only
-`--apply` (GATED) writes — and even then it writes tasks.yaml via the SAME atomic
-`limen.io.save_limen_file` (temp-file + os.replace) every other writer uses, so a crash or a
-concurrent reader can never observe a truncated file. The `git remote set-url` commands are
-ALWAYS only *emitted* (printed / written to a .sh) — this script never runs git or touches a
-checkout. Reversible: re-run pointing the mapping back, or `git checkout -- tasks.yaml
+`--apply` (GATED) writes — and even then it routes tasks.yaml owner changes through TABVLARIVS
+guarded tickets, so the record keeper remains the only board writer. The `git remote set-url`
+commands are ALWAYS only *emitted* (printed / written to a .sh) — this script never runs git or
+touches a checkout. Reversible: re-run pointing the mapping back, or `git checkout -- tasks.yaml
 .github/workflows/deploy-api.yml` before any commit.
 
   python3 scripts/rewrite-owners.py                 # DRY-RUN plan (read-only)
@@ -34,10 +33,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-# tasks.yaml is written through the project's ONE atomic writer — never a hand-rolled open().
 LIMEN_ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(LIMEN_ROOT / "cli" / "src"))
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
+from limen.tabularius import drain_once, submit_task_status  # noqa: E402
 
 TARGET = "organvm"
 
@@ -91,20 +90,47 @@ def map_repo(repo: str | None) -> str | None:
 
 def plan_tasks() -> tuple[int, list[tuple[str, str, str]], object]:
     """Load tasks.yaml via the pydantic model and compute every repo rewrite.
-    Returns (count, changes[(task_id, old, new)], limen_file_with_rewrites_applied_in_memory)."""
+    Returns (count, changes[(task_id, old, new)], current_limen_file)."""
     lf = load_limen_file(TASKS_PATH)
     changes: list[tuple[str, str, str]] = []
     for t in lf.tasks:
         new = map_repo(t.repo)
         if new is not None:
             changes.append((t.id, t.repo, new))
-            t.repo = new  # mutate the in-memory model; only persisted on --apply
     return len(changes), changes, lf
 
 
-def apply_tasks(lf) -> None:
-    """Persist via the atomic writer (temp file + fsync + os.replace). NEVER a raw write."""
-    save_limen_file(TASKS_PATH, lf)
+def apply_tasks(lf, changes: list[tuple[str, str, str]]) -> None:
+    """Persist owner rewrites through TABVLARIVS guarded tickets."""
+    tasks_by_id = {task.id: task for task in lf.tasks}
+    tickets = []
+    for task_id, old, new in changes:
+        task = tasks_by_id[task_id]
+        tickets.append(
+            submit_task_status(
+                TASKS_PATH,
+                task_id,
+                task.status,
+                agent="rewrite-owners",
+                session_id="owner-consolidation",
+                output=f"rewrite repo owner: {old} -> {new}",
+                patch={"repo": new},
+                precondition={"repo": old},
+                log_status="owner-rewrite",
+            )
+        )
+    if not tickets:
+        return
+    result = drain_once(TASKS_PATH)
+    applied = set(result.applied_ids)
+    expected = {ticket.stem for ticket in tickets}
+    missing = expected - applied
+    if missing:
+        raise SystemExit(
+            "TABVLARIVS did not apply rewrite-owners ticket(s): "
+            f"applied={len(applied & expected)}/{len(expected)} rejected={result.rejected} "
+            f"deferred={result.deferred}: {result.note}"
+        )
 
 
 # ----------------------------------------------------------------- deploy-api.yml literal ----
@@ -271,14 +297,14 @@ def main() -> int:
     # apply gate
     if not apply:
         print(f"\nDRY-RUN — nothing written. tasks.yaml refs that WOULD change: {n_tasks}")
-        print("Re-run with --apply (GATED) to write tasks.yaml + deploy-api.yml via the atomic writer.")
+        print("Re-run with --apply (GATED) to write tasks.yaml via TABVLARIVS + deploy-api.yml.")
         print("The git-remote commands are EMIT-ONLY in all modes; use --emit-remotes <file> to save them.")
         return 0
 
     print(f"\n⚠ --apply: writing tasks.yaml ({n_tasks} refs) + deploy-api.yml …")
     if n_tasks:
-        apply_tasks(lf)
-    print("  ✓ tasks.yaml rewritten via atomic save_limen_file")
+        apply_tasks(lf, changes)
+    print("  ✓ tasks.yaml owner rewrites applied through TABVLARIVS")
     if need_fix and apply_deploy():
         print(f"  ✓ deploy-api.yml LIMEN_GITHUB_REPO → {TARGET}/limen")
     print("  (git remotes NOT touched — run the emitted commands manually post-transfer.)")
