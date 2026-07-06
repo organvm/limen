@@ -1286,13 +1286,13 @@ parameters:
     env: LIMEN_BEAT_PUBPOLICY
     self_update: none
     owner: pubpolicy
-    note: "Beat cadence for the publication-policy organ (scripts/publication-policy.py --verify): re-prove the content-disposition engine stays sound (redactor owner-scoped, matrix + classifier intact) every N beats. Read-only self-test, stamps logs/publication-policy-state.json."
+    note: "Beat cadence for the publication-policy organ (scripts/publication-policy.py --verify): re-prove the content-disposition engine stays sound (redactor owner-scoped, matrix + classifier intact) every N beats, stamp logs/publication-policy-state.json, and advance the rank-10 Publication Policy maturity in organ-ladder.json when objective criteria grow."
   LIMEN_PUBPOLICY:
     default: "1"               # ON — verify the disposition engine each due beat
     env: LIMEN_PUBPOLICY
     self_update: none
     owner: pubpolicy
-    note: "Beat gate for the publication-policy organ (the ONE content-disposition decision: repo visibility x content class -> disposition). 1=self-verify each due beat; 0=off. Fail-open, never gates the beat. See organs/governance/PUBLICATION-POLICY.md."
+    note: "Beat gate for the publication-policy organ (the ONE content-disposition decision: repo visibility x content class -> disposition). 1=self-verify and self-feed each due beat; 0=off. Fail-open, never gates the beat. See organs/governance/PUBLICATION-POLICY.md."
   LIMEN_OWNER_IDENTITY:
     default: ""                # unset — the redactor uses its built-in owner instance
     env: LIMEN_OWNER_IDENTITY

@@ -287,7 +287,7 @@ def _registry():
              probe=lambda: _mtime(LOGS / "governance-organ-state.json")),
         dict(key="pubpolicy", rung="PUBPOLICY", voice="pubpolicy", cadence_key="PUBPOLICY",
              gate="LIMEN_PUBPOLICY", gate_default="1",
-             what="content-disposition engine: (repo visibility x content class) -> one disposition; owner-scoped redactor",
+             what="content-disposition engine: (repo visibility x content class) -> one disposition; owner-scoped redactor; rank-10 maturity self-feed",
              probe=lambda: _mtime(LOGS / "publication-policy-state.json")),
         dict(key="cvstos", rung="CVSTOS", voice="cvstos", cadence_key="CVSTOS",
              gate="LIMEN_CVSTOS", gate_default="1",
