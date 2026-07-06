@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from limen.models import LimenFile
 
