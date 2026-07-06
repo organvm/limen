@@ -136,6 +136,18 @@ parameters:
     self_update: none
     owner: continuity
     note: "Ignored local raw/private session cartridge. Stores manifests and optional content-addressed object copies; never committed."
+  LIMEN_PRIVATE_MAIL_STORY:
+    default: "$LIMEN_ROOT/.limen-private/mail-story"
+    env: LIMEN_PRIVATE_MAIL_STORY
+    self_update: none
+    owner: mail
+    note: "Ignored private cartridge for mail-story atom inventory. Raw-ish atoms stay off the public tree; tracked reports carry only redacted counts and hashes."
+  LIMEN_MAIL_ENVELOPE_INDEX:
+    default: "$HOME/Library/Mail/V10/MailData/Envelope Index"
+    env: LIMEN_MAIL_ENVELOPE_INDEX
+    self_update: none
+    owner: mail
+    note: "Read-only Apple Mail Envelope Index path used by mail-story-ledger.py. The ledger never mutates Mail, Gmail, labels, flags, archives, drafts, or tasks.yaml."
   LIMEN_EXTERNAL_SESSION_ROOTS:
     default: ""
     env: LIMEN_EXTERNAL_SESSION_ROOTS
@@ -847,6 +859,18 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "Fleet dispatch boundary selector. `auto` derives reachable registered lanes from the capacity registry; explicit comma lists are normalized and filtered for down lanes."
+  LIMEN_GITHUB_ACTIONS_REPO:
+    default: "organvm/limen"
+    env: LIMEN_GITHUB_ACTIONS_REPO
+    self_update: none
+    owner: arms-agents
+    note: "Default repository for the GitHub Actions dispatch lane workflow probe and dispatch command."
+  LIMEN_GITHUB_ACTIONS_HEALTH_REPO:
+    default: "$LIMEN_GITHUB_ACTIONS_REPO"
+    env: LIMEN_GITHUB_ACTIONS_HEALTH_REPO
+    self_update: none
+    owner: arms-agents
+    note: "Repository used for the GitHub Actions lane health probe. Defaults to the dispatch repo so health and action target derive together unless explicitly split."
   LIMEN_JULES_BATCH_FILL:
     default: "1"
     env: LIMEN_JULES_BATCH_FILL
