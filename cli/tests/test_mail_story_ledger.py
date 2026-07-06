@@ -230,6 +230,68 @@ def test_all_scope_emits_historical_candidates(tmp_path):
     assert sum(1 for atom in atoms if atom["status"] == "historical_candidate") == 1
 
 
+def test_thread_enrichment_promotes_final_disposition_privately(tmp_path):
+    module = _load_module()
+    db = _mail_index(tmp_path)
+    snapshot, atoms = module.build_snapshot(db)
+    target = next(atom for atom in atoms if atom["sender_domain"] == "stripe.example.test")
+    enrichment = tmp_path / "thread-enrichment.jsonl"
+    enrichment.write_text(
+        json.dumps(
+            {
+                "stable_id": target["stable_id"],
+                "final_disposition": "processed",
+                "body_read_scope": "gmail_thread",
+                "confidence": 0.91,
+                "redacted_summary": "Identity request reviewed; no raw body is public.",
+                "body_derived_facts": ["private fact stays private"],
+                "gmail_id_hash": "gmail_fixture_hash",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    enriched_records = module.load_enrichment(enrichment)
+    snapshot, atoms = module.build_snapshot(db, enrichment_records=enriched_records)
+    enriched = next(atom for atom in atoms if atom["stable_id"] == target["stable_id"])
+    markdown = module.render_markdown(snapshot)
+
+    assert enriched["final_disposition"] == "processed"
+    assert enriched["enrichment_status"] == "enriched"
+    assert enriched["body_read_scope"] == "gmail_thread"
+    assert enriched["enrichment_refs"] == {"gmail_id_hash": "gmail_fixture_hash"}
+    assert enriched["private_enrichment"]["body_derived_facts"] == ["private fact stays private"]
+    assert snapshot["dispositions"]["final_dispositions"]["processed"] == 1
+    assert "private fact stays private" not in markdown
+    assert "Identity request reviewed" not in markdown
+
+
+def test_historical_filters_emit_bounded_manifest_and_recurrence(tmp_path):
+    module = _load_module()
+    db = _mail_index(tmp_path)
+
+    snapshot, atoms = module.build_snapshot(
+        db,
+        scope="all",
+        baseline=None,
+        historical_years=[2026],
+        historical_domains=["stripe.example.test"],
+        historical_keywords=["kyc"],
+    )
+
+    assert snapshot["atom_count"] == 1
+    assert atoms[0]["sender_domain"] == "stripe.example.test"
+    assert atoms[0]["recurrence"]["sender_domain_count_in_batch"] == 1
+    manifest = snapshot["historical_manifest"]
+    assert manifest["filters"]["years"] == [2026]
+    assert manifest["filters"]["domains"] == ["stripe.example.test"]
+    assert manifest["filters"]["keywords"] == ["kyc"]
+    assert manifest["candidate_count"] == 1
+    assert manifest["hot_flagged_count"] == 1
+    assert manifest["by_cluster"] == [{"cluster_id": "identity-compliance", "messages": 1}]
+
+
 def test_gmail_count_only_reconciliation_records_connector_deltas(tmp_path):
     module = _load_module()
     db = _mail_index(tmp_path)
@@ -354,6 +416,9 @@ def test_markdown_is_redacted_while_private_atoms_keep_source(tmp_path):
     private_atoms = tmp_path / ".limen-private" / "mail-story" / "inventory" / "atoms.jsonl"
     private_snapshot = tmp_path / ".limen-private" / "mail-story" / "inventory" / "snapshot.json"
     private_gmail = tmp_path / ".limen-private" / "mail-story" / "reconciliation" / "gmail.json"
+    private_queue = tmp_path / ".limen-private" / "mail-story" / "enrichment" / "queue.json"
+    private_historical = tmp_path / ".limen-private" / "mail-story" / "historical" / "manifest.json"
+    private_clusters = tmp_path / ".limen-private" / "mail-story" / "clusters" / "clusters.json"
 
     snapshot, atoms = module.build_snapshot(db)
     markdown = module.render_markdown(snapshot)
@@ -366,11 +431,17 @@ def test_markdown_is_redacted_while_private_atoms_keep_source(tmp_path):
         private_atoms=private_atoms,
         private_snapshot=private_snapshot,
         private_gmail_reconciliation=private_gmail,
+        private_enrichment_queue=private_queue,
+        private_historical_manifest=private_historical,
+        private_cluster_theses=private_clusters,
     )
 
     public_text = doc.read_text(encoding="utf-8")
     private_text = private_atoms.read_text(encoding="utf-8")
     private_gmail_payload = json.loads(private_gmail.read_text(encoding="utf-8"))
+    private_queue_payload = json.loads(private_queue.read_text(encoding="utf-8"))
+    private_historical_payload = json.loads(private_historical.read_text(encoding="utf-8"))
+    private_clusters_payload = json.loads(private_clusters.read_text(encoding="utf-8"))
     log_payload = json.loads(log.read_text(encoding="utf-8"))
 
     for forbidden in (
@@ -391,3 +462,6 @@ def test_markdown_is_redacted_while_private_atoms_keep_source(tmp_path):
     assert log_payload["privacy"]["raw_mail_in_git"] is False
     assert log_payload["reconciliation"]["no_silent_drops"] is True
     assert private_gmail_payload["mailbox_mutations"] is False
+    assert private_queue_payload["body_reads_performed_by_script"] is False
+    assert private_historical_payload["candidate_count"] == 13
+    assert private_clusters_payload["clusters"]

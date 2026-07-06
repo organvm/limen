@@ -6,7 +6,7 @@ cluster ids, and synthesized pain-point theses.
 
 ## Snapshot
 
-- Generated: `2026-07-06T17:37:12Z`
+- Generated: `2026-07-06T17:54:19Z`
 - Source: Apple Mail Envelope Index, opened read-only.
 - Processed scope: `flagged`
 - Body/thread reads: `false`
@@ -15,13 +15,42 @@ cluster ids, and synthesized pain-point theses.
 
 ## Corpus Counts
 
-- Total indexed messages: `81564`
-- Non-deleted messages: `81564`
+- Total indexed messages: `81568`
+- Non-deleted messages: `81568`
 - Flagged non-deleted messages: `126`
 - First received: `2008-09-22 02:30:28`
-- Last received: `2026-07-06 17:33:06`
+- Last received: `2026-07-06 17:53:20`
 - Atoms emitted in this run: `126`
 - No silent drops: `true`
+
+## Hot Queue Dispositions
+
+| final disposition | atoms |
+| --- | --- |
+| human_review | 77 |
+| needs_thread_read | 12 |
+| obligation | 13 |
+| product_research | 24 |
+
+## Enrichment Queue
+
+- Queued atoms: `102`
+- Gmail writes: `false`
+- Body reads performed by script: `false`
+
+| read strategy | atoms |
+| --- | --- |
+| apple_body_resolver_needed | 11 |
+| gmail_thread | 91 |
+
+## Historical Batch Manifest
+
+- Scope: `flagged`
+- Candidate count: `126`
+- Historical candidates: `0`
+- Hot flagged in batch: `126`
+- Filters: `{"domains": [], "keywords": [], "limit": null, "years": []}`
+- Recurrence note: Counts are metadata recurrence signals; no raw bodies were read by this script.
 
 ## Reconciliation
 
@@ -30,7 +59,7 @@ cluster ids, and synthesized pain-point theses.
 
 | check | expected | actual | delta | status | note |
 | --- | --- | --- | --- | --- | --- |
-| Apple Mail total indexed messages | 81541 | 81564 | 23 | drift | - |
+| Apple Mail total indexed messages | 81541 | 81568 | 27 | drift | - |
 | Apple Mail flagged non-deleted | 108 | 126 | 18 | drift | - |
 | Gmail All Mail flagged locally | 97 | 115 | 18 | drift | - |
 | iCloud Inbox flagged locally | 11 | 11 | 0 | match | - |
@@ -56,20 +85,20 @@ cluster ids, and synthesized pain-point theses.
 
 ## Pain Point Clusters
 
-| cluster | type | atoms | priority | next actions | recurring pattern | candidate products | market/UX thesis |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Billing continuity | billing | 30 | critical (360) | human_review:27, obligation:3 | Payment, renewal, card, invoice, and subscription notices arrive across vendors. | billing custody ledger, renewal exception router | The user wants one obligation queue, not a scavenger hunt across billing portals. |
-| Identity and compliance gates | identity | 20 | critical (275) | human_review:15, obligation:5 | KYC, account review, and verification requests block access until evidence is assembled. | compliance dossier, verification request tracker | The durable product is a user-owned evidence vault with state, not a one-off upload helper. |
-| Debt and default navigation | debt | 15 | critical (225) | human_review:12, obligation:3 | Loan, tax, repayment, and default notices create a fragmented case history. | debt case file, repayment option navigator | People need procedural clarity and proof, not another generic finance dashboard. |
-| Relationship and personal administration | relationship | 16 | high (190) | product_research:16 | Human-origin messages and self-reminders carry relationship context beside vendor noise. | relationship memory ledger, owed-reply router | People will trust a tool that preserves context while refusing to send on its own. |
-| Infrastructure and domain custody | infra | 9 | high (150) | human_review:7, obligation:2 | Cloud, domain, DNS, API, and developer platform notices become ownership risk. | operator custody ledger, domain and cloud notice router | Operators need a cockpit that converts vendor mail into resource state and risk. |
-| Legal and government accountability | legal | 9 | high (150) | human_review:9 | Legal, government, benefits, and signature notices carry procedural obligations. | civic case ledger, legal notice timeline | The UX should feel like a case file with receipts, not a to-do list. |
-| Uncategorized pressure | other | 12 | medium (135) | needs_thread_read:12 | Flagged mail without a confident class still carries enough pressure to preserve. | parked evidence queue, uncertainty triage ledger | The first useful UX is honest parking with the next smallest evidence step. |
-| Security and fraud risk | security | 5 | medium (125) | human_review:5 | Security, fraud, login, and password alerts demand action but resemble phishing. | verify-first security queue, fraud alert receipt locker | The product should slow the click and speed the safe verification route. |
-| Career routing | career | 5 | medium (80) | product_research:5 | Recruiter, opportunity, interview, and role messages mix signal with staffing noise. | career opportunity router, fit-and-next-step extractor | The value is fast triage with memory of prior fit, not another job board. |
-| Health administration | health | 2 | medium (80) | human_review:2 | Appointment, lab, pharmacy, insurance, and portal notices require careful follow-up. | private care follow-up ledger, health notice router | The market wedge is privacy-safe coordination, not medical advice. |
-| Platform and developer ecosystem intelligence | platform | 1 | low (40) | product_research:1 | AI, developer, release, newsletter, and platform notices become product intelligence. | platform intelligence digest, vendor signal graph | The product should convert noisy updates into decision support with provenance. |
-| Life and creative logistics | creative_life | 2 | low (35) | product_research:2 | Tickets, events, creative commitments, and life receipts accumulate operational context. | life logistics ledger, creative commitment tracker | The UX should preserve lived context without making every event a productivity chore. |
+| cluster | type | atoms | priority | next actions | final dispositions | confidence | recurring pattern | candidate products | market/UX thesis |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Billing continuity | billing | 30 | critical (360) | human_review:27, obligation:3 | human_review:27, obligation:3 | 0.78 | Payment, renewal, card, invoice, and subscription notices arrive across vendors. | billing custody ledger, renewal exception router | The user wants one obligation queue, not a scavenger hunt across billing portals. |
+| Identity and compliance gates | identity | 20 | critical (275) | human_review:15, obligation:5 | human_review:15, obligation:5 | 0.78 | KYC, account review, and verification requests block access until evidence is assembled. | compliance dossier, verification request tracker | The durable product is a user-owned evidence vault with state, not a one-off upload helper. |
+| Debt and default navigation | debt | 15 | critical (225) | human_review:12, obligation:3 | human_review:12, obligation:3 | 0.79 | Loan, tax, repayment, and default notices create a fragmented case history. | debt case file, repayment option navigator | People need procedural clarity and proof, not another generic finance dashboard. |
+| Relationship and personal administration | relationship | 16 | high (190) | product_research:16 | product_research:16 | 0.75 | Human-origin messages and self-reminders carry relationship context beside vendor noise. | relationship memory ledger, owed-reply router | People will trust a tool that preserves context while refusing to send on its own. |
+| Infrastructure and domain custody | infra | 9 | high (150) | human_review:7, obligation:2 | human_review:7, obligation:2 | 0.8 | Cloud, domain, DNS, API, and developer platform notices become ownership risk. | operator custody ledger, domain and cloud notice router | Operators need a cockpit that converts vendor mail into resource state and risk. |
+| Legal and government accountability | legal | 9 | high (150) | human_review:9 | human_review:9 | 0.78 | Legal, government, benefits, and signature notices carry procedural obligations. | civic case ledger, legal notice timeline | The UX should feel like a case file with receipts, not a to-do list. |
+| Uncategorized pressure | other | 12 | medium (135) | needs_thread_read:12 | needs_thread_read:12 | 0.56 | Flagged mail without a confident class still carries enough pressure to preserve. | parked evidence queue, uncertainty triage ledger | The first useful UX is honest parking with the next smallest evidence step. |
+| Security and fraud risk | security | 5 | medium (125) | human_review:5 | human_review:5 | 0.75 | Security, fraud, login, and password alerts demand action but resemble phishing. | verify-first security queue, fraud alert receipt locker | The product should slow the click and speed the safe verification route. |
+| Career routing | career | 5 | medium (80) | product_research:5 | product_research:5 | 0.86 | Recruiter, opportunity, interview, and role messages mix signal with staffing noise. | career opportunity router, fit-and-next-step extractor | The value is fast triage with memory of prior fit, not another job board. |
+| Health administration | health | 2 | medium (80) | human_review:2 | human_review:2 | 0.78 | Appointment, lab, pharmacy, insurance, and portal notices require careful follow-up. | private care follow-up ledger, health notice router | The market wedge is privacy-safe coordination, not medical advice. |
+| Platform and developer ecosystem intelligence | platform | 1 | low (40) | product_research:1 | product_research:1 | 0.8 | AI, developer, release, newsletter, and platform notices become product intelligence. | platform intelligence digest, vendor signal graph | The product should convert noisy updates into decision support with provenance. |
+| Life and creative logistics | creative_life | 2 | low (35) | product_research:2 | product_research:2 | 0.93 | Tickets, events, creative commitments, and life receipts accumulate operational context. | life logistics ledger, creative commitment tracker | The UX should preserve lived context without making every event a productivity chore. |
 
 ## Cluster Details
 
@@ -77,6 +106,8 @@ cluster ids, and synthesized pain-point theses.
 
 - Universal pain point: People are expected to monitor scattered payment warnings across vendors and inboxes.
 - Software thesis: A custody layer should turn billing and renewal mail into one verified account-continuity queue.
+- Evidence confidence: 0.78
+- Recurrence window: 2025-08-24T09:56:32Z to 2026-07-03T20:46:33Z
 - Affected domains: money, work, infrastructure
 - Existing tools involved: vendor billing portals, card networks, email flags
 - Failure modes: late notice, card decline, account suspension, renewal surprise
@@ -86,6 +117,8 @@ cluster ids, and synthesized pain-point theses.
 
 - Universal pain point: Compliance workflows arrive as email fragments instead of an explainable case file.
 - Software thesis: A compliance dossier should collect requests, evidence, deadline state, and safe verification routes.
+- Evidence confidence: 0.78
+- Recurrence window: 2025-12-29T08:33:04Z to 2026-07-06T12:21:55Z
 - Affected domains: money, identity, platform access
 - Existing tools involved: KYC portals, payment processors, identity forms, email
 - Failure modes: opaque review, duplicate evidence asks, blocked payout
@@ -95,6 +128,8 @@ cluster ids, and synthesized pain-point theses.
 
 - Universal pain point: Debt systems expose consequences faster than they expose trustworthy next steps.
 - Software thesis: A debt-navigation copilot should map notices into verified options, deadlines, and escalation paths.
+- Evidence confidence: 0.79
+- Recurrence window: 2024-10-23T23:36:02Z to 2026-07-01T15:35:27Z
 - Affected domains: money, legal, career
 - Existing tools involved: loan servicers, tax vendors, government portals, email
 - Failure modes: unclear deadline, threat without path, servicer fragmentation
@@ -104,6 +139,8 @@ cluster ids, and synthesized pain-point theses.
 
 - Universal pain point: Personal administration is structurally mixed with automated vendor mail.
 - Software thesis: A relationship memory layer should separate human context from institutional noise.
+- Evidence confidence: 0.75
+- Recurrence window: 2025-12-24T03:57:28Z to 2026-07-05T20:36:05Z
 - Affected domains: relationships, time, personal admin
 - Existing tools involved: Gmail, Apple Mail, contacts, calendar
 - Failure modes: human context buried, owed reply lost, automated mail overwhelms relationship mail
@@ -113,6 +150,8 @@ cluster ids, and synthesized pain-point theses.
 
 - Universal pain point: Solo operators hold production custody through vendor emails instead of a coherent control plane.
 - Software thesis: An operator custody ledger should unify infra notices, owners, renewals, and blast-radius state.
+- Evidence confidence: 0.8
+- Recurrence window: 2025-12-29T08:33:04Z to 2026-06-04T08:43:49Z
 - Affected domains: infrastructure, money, product
 - Existing tools involved: cloud consoles, domain registrars, developer platforms, email
 - Failure modes: resource expiry, API break, ownership drift, unread blast-radius notice
@@ -122,6 +161,8 @@ cluster ids, and synthesized pain-point theses.
 
 - Universal pain point: Institutional email makes citizens assemble their own procedural memory.
 - Software thesis: A civic/legal organizer should translate notices into timelines, obligations, and evidence packets.
+- Evidence confidence: 0.78
+- Recurrence window: 2026-01-06T21:55:59Z to 2026-07-02T20:12:09Z
 - Affected domains: legal, government, money
 - Existing tools involved: court portals, government portals, signature tools, email
 - Failure modes: missed procedural step, lost evidence, opaque institution state
@@ -131,6 +172,8 @@ cluster ids, and synthesized pain-point theses.
 
 - Universal pain point: People flag uncertainty because inbox tools do not support partial understanding.
 - Software thesis: A story-mining workflow should park ambiguous mail with evidence and a next read action.
+- Evidence confidence: 0.56
+- Recurrence window: 2026-01-07T16:18:28Z to 2026-05-19T14:56:09Z
 - Affected domains: unknown
 - Existing tools involved: email flags, manual memory
 - Failure modes: ambiguous pressure, silent drop, premature deletion
@@ -140,6 +183,8 @@ cluster ids, and synthesized pain-point theses.
 
 - Universal pain point: Security email mixes real incidents with phish-like UX and no trusted verification path.
 - Software thesis: A verify-first security queue should route alerts through safe channels and preserve audit receipts.
+- Evidence confidence: 0.75
+- Recurrence window: 2025-12-27T12:11:01Z to 2026-07-03T20:46:34Z
 - Affected domains: security, money, identity
 - Existing tools involved: bank portals, password managers, account security pages, email
 - Failure modes: spoofed link, alert fatigue, missed incident, unverified recovery path
@@ -149,6 +194,8 @@ cluster ids, and synthesized pain-point theses.
 
 - Universal pain point: Opportunity inboxes mix real leads, staffing noise, and identity fit with little ranking help.
 - Software thesis: A career router should score fit, extract next steps, and preserve opportunity history.
+- Evidence confidence: 0.86
+- Recurrence window: 2026-05-18T13:55:38Z to 2026-07-02T19:03:10Z
 - Affected domains: career, money, identity
 - Existing tools involved: recruiting platforms, staffing firms, resume systems, email
 - Failure modes: low-fit lead, missed good lead, context lost across threads
@@ -158,6 +205,8 @@ cluster ids, and synthesized pain-point theses.
 
 - Universal pain point: Patients are expected to coordinate care logistics from fragmented notification systems.
 - Software thesis: A health admin ledger should turn notices into private follow-up loops with strict privacy boundaries.
+- Evidence confidence: 0.78
+- Recurrence window: 2026-01-06T18:37:41Z to 2026-01-15T13:34:47Z
 - Affected domains: health, time, money
 - Existing tools involved: patient portals, pharmacies, insurers, email
 - Failure modes: missed appointment, lost lab follow-up, coverage ambiguity, privacy leak
@@ -167,6 +216,8 @@ cluster ids, and synthesized pain-point theses.
 
 - Universal pain point: Operators need a way to convert ecosystem noise into strategic intelligence.
 - Software thesis: A platform-intelligence digest should cluster vendor signals into product and risk theses.
+- Evidence confidence: 0.8
+- Recurrence window: 2026-06-25T22:17:58Z to 2026-06-25T22:17:58Z
 - Affected domains: product, career, infrastructure
 - Existing tools involved: developer newsletters, platform changelogs, vendor dashboards, email
 - Failure modes: signal lost in volume, missed deprecation, unconnected product clue
@@ -176,6 +227,8 @@ cluster ids, and synthesized pain-point theses.
 
 - Universal pain point: Calendar-adjacent life mail is not treated as part of a personal operating system.
 - Software thesis: A life-logistics layer should connect tickets, commitments, receipts, and story context.
+- Evidence confidence: 0.93
+- Recurrence window: 2026-07-03T01:01:57Z to 2026-07-03T01:01:57Z
 - Affected domains: creative_life, time, relationships
 - Existing tools involved: ticket platforms, calendar tools, receipts, email
 - Failure modes: lost receipt, missed event context, unlinked calendar state
@@ -227,6 +280,7 @@ cluster ids, and synthesized pain-point theses.
 - No message body text is read by this pass.
 - Full sender addresses, sender display names, subjects, summaries, and Apple row ids stay in ignored private JSON.
 - Private atoms expose a redacted subject plus hashes at top level; raw metadata is nested under `private_evidence`.
+- Thread/body enrichment is accepted only through ignored private JSON/JSONL and summarized as disposition counts.
 - The tracked report intentionally exposes only domains, counts, cluster names, atom ids, and synthesized theses.
 - Gmail thread enrichment is a later gated action for atoms whose `next_action` requires it.
 
@@ -236,4 +290,6 @@ cluster ids, and synthesized pain-point theses.
 - Refresh the redacted report and ignored private atoms: `python3 scripts/mail-story-ledger.py --write`
 - Reconcile live Gmail STARRED counts: `python3 scripts/mail-story-ledger.py --write --gmail-starred-messages <n> --gmail-starred-threads <n>`
 - Reconcile a private Gmail metadata export: `python3 scripts/mail-story-ledger.py --write --gmail-starred-export .limen-private/mail-story/reconciliation/gmail-starred-export.json`
+- Apply private enrichment: `python3 scripts/mail-story-ledger.py --write --thread-enrichment .limen-private/mail-story/enrichment/thread-enrichment.jsonl`
+- Run a bounded historical batch: `python3 scripts/mail-story-ledger.py --scope all --historical-year 2026 --historical-domain stripe.com --write`
 - Process all non-deleted indexed mail privately: `python3 scripts/mail-story-ledger.py --scope all --write`

@@ -33,6 +33,10 @@ PRIVATE_ROOT = Path(os.environ.get("LIMEN_PRIVATE_MAIL_STORY", ROOT / ".limen-pr
 PRIVATE_ATOMS = PRIVATE_ROOT / "inventory" / "mail-story-atoms.jsonl"
 PRIVATE_SNAPSHOT = PRIVATE_ROOT / "inventory" / "mail-story-snapshot.json"
 PRIVATE_GMAIL_RECONCILIATION = PRIVATE_ROOT / "reconciliation" / "gmail-starred-reconciliation.json"
+PRIVATE_ENRICHMENT = PRIVATE_ROOT / "enrichment" / "thread-enrichment.jsonl"
+PRIVATE_ENRICHMENT_QUEUE = PRIVATE_ROOT / "enrichment" / "enrichment-queue.json"
+PRIVATE_HISTORICAL_MANIFEST = PRIVATE_ROOT / "historical" / "historical-manifest.json"
+PRIVATE_CLUSTER_THESES = PRIVATE_ROOT / "clusters" / "pain-point-clusters.json"
 MAIL_INDEX = Path(
     os.environ.get(
         "LIMEN_MAIL_ENVELOPE_INDEX",
@@ -41,6 +45,16 @@ MAIL_INDEX = Path(
 )
 
 SCHEMA = "limen.mail_story.v1"
+
+FINAL_DISPOSITIONS = {
+    "processed",
+    "needs_thread_read",
+    "human_review",
+    "obligation",
+    "product_research",
+    "parked",
+}
+HIGH_RISK_BLOCKERS = {"billing", "debt", "health", "identity", "infra", "legal", "security"}
 
 BASELINE_RECONCILIATION: dict[str, Any] = {
     "source": "user_brief_2026-07-06",
@@ -498,6 +512,21 @@ def next_action(cluster_id: str, confidence: float) -> str:
     return "parked"
 
 
+def enrichment_needed(atom: dict[str, Any]) -> bool:
+    action = atom.get("next_action")
+    if action in {"needs_thread_read", "obligation"}:
+        return True
+    return action == "human_review" and atom.get("blocker_type") in HIGH_RISK_BLOCKERS
+
+
+def read_strategy(atom: dict[str, Any]) -> str:
+    if not enrichment_needed(atom):
+        return "none"
+    if atom.get("account") == "gmail":
+        return "gmail_thread"
+    return "apple_body_resolver_needed"
+
+
 def atom_from_row(row: sqlite3.Row, *, scope: str) -> dict[str, Any]:
     cluster_id, hits, confidence = classify(row)
     cluster = CLUSTERS[cluster_id]
@@ -514,6 +543,7 @@ def atom_from_row(row: sqlite3.Row, *, scope: str) -> dict[str, Any]:
         row["sender_address"],
         subject,
     )
+    action = next_action(cluster_id, confidence)
     return {
         "schema": SCHEMA,
         "stable_id": atom_id,
@@ -557,7 +587,15 @@ def atom_from_row(row: sqlite3.Row, *, scope: str) -> dict[str, Any]:
         "confidence": round(confidence, 2),
         "evidence_scope": "metadata_summary" if row["summary"] else "metadata",
         "privacy_level": "private_only",
-        "next_action": next_action(cluster_id, confidence),
+        "next_action": action,
+        "final_disposition": action,
+        "enrichment_status": (
+            "queued"
+            if action in {"needs_thread_read", "obligation"} or cluster["blocker_type"] in HIGH_RISK_BLOCKERS
+            else "metadata_only"
+        ),
+        "body_read_scope": "none",
+        "enrichment_refs": {},
         "private_evidence": {
             "sender_address": row["sender_address"],
             "sender_name": row["sender_name"],
@@ -567,10 +605,43 @@ def atom_from_row(row: sqlite3.Row, *, scope: str) -> dict[str, Any]:
     }
 
 
-def fetch_message_rows(conn: sqlite3.Connection, *, scope: str, limit: int | None) -> list[sqlite3.Row]:
+def fetch_message_rows(
+    conn: sqlite3.Connection,
+    *,
+    scope: str,
+    limit: int | None,
+    historical_years: list[int] | None = None,
+    historical_domains: list[str] | None = None,
+    historical_keywords: list[str] | None = None,
+) -> list[sqlite3.Row]:
     where = "m.deleted = 0"
+    params: list[Any] = []
     if scope == "flagged":
         where += " AND m.flagged = 1"
+    if historical_years:
+        placeholders = ", ".join("?" for _ in historical_years)
+        where += f" AND strftime('%Y', datetime(m.date_received, 'unixepoch')) IN ({placeholders})"
+        params.extend(str(year) for year in historical_years)
+    if historical_domains:
+        domain_terms: list[str] = []
+        for domain in historical_domains:
+            normalized = domain.lower().lstrip("@")
+            domain_terms.append("LOWER(a.address) LIKE ?")
+            params.append(f"%@{normalized}")
+        where += " AND (" + " OR ".join(domain_terms) + ")"
+    if historical_keywords:
+        keyword_terms: list[str] = []
+        for keyword in historical_keywords:
+            needle = f"%{keyword.lower()}%"
+            keyword_terms.extend(
+                [
+                    "LOWER(COALESCE(s.subject, '')) LIKE ?",
+                    "LOWER(COALESCE(sm.summary, '')) LIKE ?",
+                    "LOWER(COALESCE(a.address, '')) LIKE ?",
+                ]
+            )
+            params.extend([needle, needle, needle])
+        where += " AND (" + " OR ".join(keyword_terms) + ")"
     sql = f"""
         SELECT
             m.ROWID AS apple_rowid,
@@ -596,7 +667,6 @@ def fetch_message_rows(conn: sqlite3.Connection, *, scope: str, limit: int | Non
         WHERE {where}
         ORDER BY m.date_received DESC, m.ROWID DESC
     """
-    params: list[Any] = []
     if limit is not None:
         sql += " LIMIT ?"
         params.append(limit)
@@ -699,6 +769,11 @@ def cluster_summary(atoms: list[dict[str, Any]]) -> list[dict[str, Any]]:
         cluster = CLUSTERS[cluster_id]
         domains = Counter(atom["sender_domain"] for atom in cluster_atoms).most_common(8)
         actions = Counter(atom["next_action"] for atom in cluster_atoms)
+        dispositions = Counter(atom.get("final_disposition") for atom in cluster_atoms)
+        received = sorted(atom["received_at"] for atom in cluster_atoms if atom.get("received_at"))
+        avg_confidence = round(
+            sum(float(atom.get("confidence") or 0) for atom in cluster_atoms) / len(cluster_atoms), 2
+        )
         priority = len(cluster_atoms) * 10 + TYPE_WEIGHT.get(cluster["blocker_type"], 1) * 15
         rows.append(
             {
@@ -711,7 +786,11 @@ def cluster_summary(atoms: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "priority_label": priority_label(priority),
                 "top_domains": [{"domain": domain, "messages": count} for domain, count in domains],
                 "next_actions": dict(sorted(actions.items())),
+                "final_dispositions": dict(sorted(dispositions.items())),
                 "example_atom_ids": [atom["stable_id"] for atom in cluster_atoms[:5]],
+                "first_seen": received[0] if received else None,
+                "last_seen": received[-1] if received else None,
+                "evidence_confidence": avg_confidence,
                 "affected_life_domains": cluster["affected_life_domains"],
                 "existing_tools_involved": cluster["existing_tools_involved"],
                 "failure_modes": cluster["failure_modes"],
@@ -723,6 +802,143 @@ def cluster_summary(atoms: list[dict[str, Any]]) -> list[dict[str, Any]]:
             }
         )
     return sorted(rows, key=lambda row: (-row["priority"], -row["atom_count"], row["cluster_id"]))
+
+
+def apply_recurrence_metadata(atoms: list[dict[str, Any]]) -> None:
+    by_domain = Counter(atom["sender_domain"] for atom in atoms)
+    by_cluster = Counter(atom["cluster_id"] for atom in atoms)
+    cluster_dates: dict[str, list[str]] = {}
+    for atom in atoms:
+        if atom.get("received_at"):
+            cluster_dates.setdefault(atom["cluster_id"], []).append(atom["received_at"])
+    for atom in atoms:
+        dates = sorted(cluster_dates.get(atom["cluster_id"], []))
+        atom["recurrence"] = {
+            "sender_domain_count_in_batch": by_domain[atom["sender_domain"]],
+            "cluster_count_in_batch": by_cluster[atom["cluster_id"]],
+            "cluster_first_seen": dates[0] if dates else None,
+            "cluster_last_seen": dates[-1] if dates else None,
+        }
+
+
+def load_enrichment(path: Path) -> dict[str, dict[str, Any]]:
+    if path.suffix == ".jsonl":
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    else:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and isinstance(data.get("records"), list):
+            rows = data["records"]
+        elif isinstance(data, list):
+            rows = data
+        else:
+            rows = []
+    indexed: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict) or not row.get("stable_id"):
+            continue
+        disposition = row.get("final_disposition", "processed")
+        if disposition not in FINAL_DISPOSITIONS:
+            raise ValueError(f"invalid final_disposition for {row['stable_id']}: {disposition}")
+        indexed[str(row["stable_id"])] = row
+    return indexed
+
+
+def apply_enrichment_records(atoms: list[dict[str, Any]], records: dict[str, dict[str, Any]]) -> None:
+    for atom in atoms:
+        record = records.get(atom["stable_id"])
+        if not record:
+            continue
+        atom["final_disposition"] = record.get("final_disposition", "processed")
+        atom["enrichment_status"] = "enriched"
+        atom["body_read_scope"] = record.get("body_read_scope", "gmail_thread")
+        atom["evidence_scope"] = record.get("evidence_scope", "metadata_thread")
+        atom["confidence"] = round(float(record.get("confidence", atom.get("confidence", 0.75))), 2)
+        atom["enrichment_refs"] = {
+            key: value
+            for key, value in {
+                "gmail_id_hash": record.get("gmail_id_hash"),
+                "gmail_thread_id_hash": record.get("gmail_thread_id_hash"),
+                "source_export_hash": record.get("source_export_hash"),
+            }.items()
+            if value
+        }
+        atom["private_enrichment"] = {
+            "redacted_summary": redact_text(record.get("redacted_summary"), max_len=240),
+            "body_derived_facts": record.get("body_derived_facts", []),
+            "next_private_step": record.get("next_private_step"),
+        }
+
+
+def build_enrichment_queue(atoms: list[dict[str, Any]]) -> dict[str, Any]:
+    rows = []
+    for atom in atoms:
+        if not enrichment_needed(atom):
+            continue
+        rows.append(
+            {
+                "stable_id": atom["stable_id"],
+                "account": atom["account"],
+                "read_strategy": read_strategy(atom),
+                "blocker_type": atom["blocker_type"],
+                "cluster_id": atom["cluster_id"],
+                "next_action": atom["next_action"],
+                "final_disposition": atom["final_disposition"],
+                "sender_domain": atom["sender_domain"],
+                "received_at": atom["received_at"],
+                "redacted_subject": atom["redacted_subject"],
+            }
+        )
+    strategies = Counter(row["read_strategy"] for row in rows)
+    return {
+        "schema": SCHEMA,
+        "generated_at": utc_now(),
+        "mailbox_mutations": False,
+        "gmail_writes": False,
+        "body_reads_performed_by_script": False,
+        "queued_count": len(rows),
+        "by_read_strategy": dict(sorted(strategies.items())),
+        "records": rows,
+    }
+
+
+def build_historical_manifest(
+    atoms: list[dict[str, Any]],
+    *,
+    scope: str,
+    historical_years: list[int] | None,
+    historical_domains: list[str] | None,
+    historical_keywords: list[str] | None,
+    limit: int | None,
+) -> dict[str, Any]:
+    by_year = Counter((atom.get("received_at") or "unknown")[:4] for atom in atoms)
+    by_cluster = Counter(atom["cluster_id"] for atom in atoms)
+    by_domain = Counter(atom["sender_domain"] for atom in atoms)
+    return {
+        "schema": SCHEMA,
+        "generated_at": utc_now(),
+        "scope": scope,
+        "filters": {
+            "years": historical_years or [],
+            "domains": historical_domains or [],
+            "keywords": historical_keywords or [],
+            "limit": limit,
+        },
+        "candidate_count": len(atoms),
+        "historical_candidate_count": sum(1 for atom in atoms if atom["status"] == "historical_candidate"),
+        "hot_flagged_count": sum(1 for atom in atoms if atom["status"] == "hot_flagged"),
+        "by_year": [{"year": year, "messages": count} for year, count in sorted(by_year.items(), reverse=True)],
+        "by_cluster": [{"cluster_id": cluster, "messages": count} for cluster, count in by_cluster.most_common()],
+        "top_sender_domains": [{"domain": domain, "messages": count} for domain, count in by_domain.most_common(25)],
+        "recurrence_note": "Counts are metadata recurrence signals; no raw bodies were read by this script.",
+    }
+
+
+def disposition_summary(atoms: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "final_dispositions": dict(sorted(Counter(atom.get("final_disposition") for atom in atoms).items())),
+        "enrichment_status": dict(sorted(Counter(atom.get("enrichment_status") for atom in atoms).items())),
+        "read_strategy": dict(sorted(Counter(read_strategy(atom) for atom in atoms).items())),
+    }
 
 
 def _mailbox_count(stats: dict[str, Any], *, account: str, mailbox: str, key: str = "messages") -> int:
@@ -992,11 +1208,25 @@ def build_snapshot(
     gmail_count_messages: int | None = None,
     gmail_count_threads: int | None = None,
     gmail_source: str | None = None,
+    enrichment_records: dict[str, dict[str, Any]] | None = None,
+    historical_years: list[int] | None = None,
+    historical_domains: list[str] | None = None,
+    historical_keywords: list[str] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     with connect_readonly(mail_index) as conn:
         stats = mail_stats(conn)
-        rows = fetch_message_rows(conn, scope=scope, limit=limit)
+        rows = fetch_message_rows(
+            conn,
+            scope=scope,
+            limit=limit,
+            historical_years=historical_years,
+            historical_domains=historical_domains,
+            historical_keywords=historical_keywords,
+        )
     atoms = [atom_from_row(row, scope=scope) for row in rows]
+    apply_recurrence_metadata(atoms)
+    if enrichment_records:
+        apply_enrichment_records(atoms, enrichment_records)
     top_domains = Counter(atom["sender_domain"] for atom in atoms).most_common(25)
     by_type = Counter(atom["blocker_type"] for atom in atoms)
     gmail_export_label_counts = gmail_export.get("label_counts", {}) if gmail_export else {}
@@ -1030,6 +1260,7 @@ def build_snapshot(
         "atom_count": len(atoms),
         "top_domains": [{"domain": domain, "messages": count} for domain, count in top_domains],
         "by_blocker_type": dict(sorted(by_type.items())),
+        "dispositions": disposition_summary(atoms),
         "reconciliation": build_reconciliation(
             stats,
             atoms,
@@ -1044,6 +1275,15 @@ def build_snapshot(
             gmail_count_messages=effective_gmail_count_messages,
             gmail_count_threads=effective_gmail_count_threads,
             source=gmail_source,
+        ),
+        "enrichment_queue": build_enrichment_queue(atoms),
+        "historical_manifest": build_historical_manifest(
+            atoms,
+            scope=scope,
+            historical_years=historical_years,
+            historical_domains=historical_domains,
+            historical_keywords=historical_keywords,
+            limit=limit,
         ),
         "clusters": cluster_summary(atoms),
     }
@@ -1061,6 +1301,9 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
     stats = snapshot["stats"]
     reconciliation = snapshot["reconciliation"]
     gmail_reconciliation = snapshot["gmail_reconciliation"]
+    dispositions = snapshot["dispositions"]
+    enrichment_queue = snapshot["enrichment_queue"]
+    historical_manifest = snapshot["historical_manifest"]
     lines = [
         "# Mail Story Ledger",
         "",
@@ -1086,6 +1329,37 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         f"- Last received: `{stats.get('last_received_at') or 'unknown'}`",
         f"- Atoms emitted in this run: `{snapshot['atom_count']}`",
         f"- No silent drops: `{str(reconciliation['no_silent_drops']).lower()}`",
+        "",
+        "## Hot Queue Dispositions",
+        "",
+    ]
+    lines += md_table(
+        ["final disposition", "atoms"],
+        [[key, value] for key, value in dispositions["final_dispositions"].items()] or [["-", 0]],
+    )
+    lines += [
+        "",
+        "## Enrichment Queue",
+        "",
+        f"- Queued atoms: `{enrichment_queue['queued_count']}`",
+        f"- Gmail writes: `{str(enrichment_queue['gmail_writes']).lower()}`",
+        f"- Body reads performed by script: `{str(enrichment_queue['body_reads_performed_by_script']).lower()}`",
+        "",
+    ]
+    lines += md_table(
+        ["read strategy", "atoms"],
+        [[key, value] for key, value in enrichment_queue["by_read_strategy"].items()] or [["-", 0]],
+    )
+    lines += [
+        "",
+        "## Historical Batch Manifest",
+        "",
+        f"- Scope: `{historical_manifest['scope']}`",
+        f"- Candidate count: `{historical_manifest['candidate_count']}`",
+        f"- Historical candidates: `{historical_manifest['historical_candidate_count']}`",
+        f"- Hot flagged in batch: `{historical_manifest['hot_flagged_count']}`",
+        f"- Filters: `{json.dumps(historical_manifest['filters'], sort_keys=True)}`",
+        f"- Recurrence note: {historical_manifest['recurrence_note']}",
         "",
         "## Reconciliation",
         "",
@@ -1136,6 +1410,8 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
             row["atom_count"],
             f"{row['priority_label']} ({row['priority']})",
             ", ".join(f"{k}:{v}" for k, v in row["next_actions"].items()) or "-",
+            ", ".join(f"{k}:{v}" for k, v in row["final_dispositions"].items()) or "-",
+            row["evidence_confidence"],
             row["recurring_pattern"],
             ", ".join(row["candidate_products"]),
             row["market_ux_thesis"],
@@ -1149,11 +1425,13 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
             "atoms",
             "priority",
             "next actions",
+            "final dispositions",
+            "confidence",
             "recurring pattern",
             "candidate products",
             "market/UX thesis",
         ],
-        cluster_rows or [["-", "-", 0, 0, "-", "-", "-", "-"]],
+        cluster_rows or [["-", "-", 0, 0, "-", "-", "-", "-", "-", "-"]],
     )
     lines += [
         "",
@@ -1166,6 +1444,8 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
             "",
             f"- Universal pain point: {row['universal_pain_point']}",
             f"- Software thesis: {row['software_thesis']}",
+            f"- Evidence confidence: {row['evidence_confidence']}",
+            f"- Recurrence window: {row['first_seen'] or 'unknown'} to {row['last_seen'] or 'unknown'}",
             f"- Affected domains: {', '.join(row['affected_life_domains'])}",
             f"- Existing tools involved: {', '.join(row['existing_tools_involved'])}",
             f"- Failure modes: {', '.join(row['failure_modes'])}",
@@ -1210,6 +1490,7 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         "- No message body text is read by this pass.",
         "- Full sender addresses, sender display names, subjects, summaries, and Apple row ids stay in ignored private JSON.",
         "- Private atoms expose a redacted subject plus hashes at top level; raw metadata is nested under `private_evidence`.",
+        "- Thread/body enrichment is accepted only through ignored private JSON/JSONL and summarized as disposition counts.",
         "- The tracked report intentionally exposes only domains, counts, cluster names, atom ids, and synthesized theses.",
         "- Gmail thread enrichment is a later gated action for atoms whose `next_action` requires it.",
         "",
@@ -1219,6 +1500,8 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         "- Refresh the redacted report and ignored private atoms: `python3 scripts/mail-story-ledger.py --write`",
         "- Reconcile live Gmail STARRED counts: `python3 scripts/mail-story-ledger.py --write --gmail-starred-messages <n> --gmail-starred-threads <n>`",
         "- Reconcile a private Gmail metadata export: `python3 scripts/mail-story-ledger.py --write --gmail-starred-export .limen-private/mail-story/reconciliation/gmail-starred-export.json`",
+        "- Apply private enrichment: `python3 scripts/mail-story-ledger.py --write --thread-enrichment .limen-private/mail-story/enrichment/thread-enrichment.jsonl`",
+        "- Run a bounded historical batch: `python3 scripts/mail-story-ledger.py --scope all --historical-year 2026 --historical-domain stripe.com --write`",
         "- Process all non-deleted indexed mail privately: `python3 scripts/mail-story-ledger.py --scope all --write`",
         "",
     ]
@@ -1235,6 +1518,9 @@ def write_outputs(
     private_atoms: Path = PRIVATE_ATOMS,
     private_snapshot: Path = PRIVATE_SNAPSHOT,
     private_gmail_reconciliation: Path = PRIVATE_GMAIL_RECONCILIATION,
+    private_enrichment_queue: Path = PRIVATE_ENRICHMENT_QUEUE,
+    private_historical_manifest: Path = PRIVATE_HISTORICAL_MANIFEST,
+    private_cluster_theses: Path = PRIVATE_CLUSTER_THESES,
 ) -> None:
     doc_path.parent.mkdir(parents=True, exist_ok=True)
     doc_path.write_text(markdown, encoding="utf-8")
@@ -1247,6 +1533,25 @@ def write_outputs(
     private_gmail_reconciliation.parent.mkdir(parents=True, exist_ok=True)
     private_gmail_reconciliation.write_text(
         json.dumps(snapshot["gmail_reconciliation"], indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    private_enrichment_queue.parent.mkdir(parents=True, exist_ok=True)
+    private_enrichment_queue.write_text(
+        json.dumps(snapshot["enrichment_queue"], indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    private_historical_manifest.parent.mkdir(parents=True, exist_ok=True)
+    private_historical_manifest.write_text(
+        json.dumps(snapshot["historical_manifest"], indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    private_cluster_theses.parent.mkdir(parents=True, exist_ok=True)
+    private_cluster_theses.write_text(
+        json.dumps(
+            {"schema": SCHEMA, "generated_at": snapshot["generated_at"], "clusters": snapshot["clusters"]},
+            indent=2,
+            sort_keys=True,
+        ),
         encoding="utf-8",
     )
 
@@ -1285,6 +1590,31 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="source label for Gmail reconciliation evidence",
     )
+    parser.add_argument(
+        "--thread-enrichment",
+        type=Path,
+        default=None,
+        help="ignored private JSON/JSONL enrichment records keyed by stable_id",
+    )
+    parser.add_argument(
+        "--historical-year",
+        type=int,
+        action="append",
+        default=None,
+        help="historical batch year filter; repeatable",
+    )
+    parser.add_argument(
+        "--historical-domain",
+        action="append",
+        default=None,
+        help="historical batch sender-domain filter; repeatable",
+    )
+    parser.add_argument(
+        "--historical-keyword",
+        action="append",
+        default=None,
+        help="historical batch keyword filter over sender, subject, and summary; repeatable",
+    )
     parser.add_argument("--doc", type=Path, default=DOC_PATH, help="tracked redacted Markdown output")
     parser.add_argument("--log", type=Path, default=LOG_PATH, help="ignored structured public-ish snapshot")
     parser.add_argument(
@@ -1305,6 +1635,24 @@ def parse_args() -> argparse.Namespace:
         default=PRIVATE_GMAIL_RECONCILIATION,
         help="ignored private Gmail reconciliation JSON output",
     )
+    parser.add_argument(
+        "--private-enrichment-queue",
+        type=Path,
+        default=PRIVATE_ENRICHMENT_QUEUE,
+        help="ignored private enrichment queue JSON output",
+    )
+    parser.add_argument(
+        "--private-historical-manifest",
+        type=Path,
+        default=PRIVATE_HISTORICAL_MANIFEST,
+        help="ignored private historical manifest JSON output",
+    )
+    parser.add_argument(
+        "--private-cluster-theses",
+        type=Path,
+        default=PRIVATE_CLUSTER_THESES,
+        help="ignored private cluster-theses JSON output",
+    )
     args = parser.parse_args()
     if args.limit is not None and args.limit <= 0:
         parser.error("--limit must be positive")
@@ -1312,6 +1660,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--gmail-starred-messages must be non-negative")
     if args.gmail_starred_threads is not None and args.gmail_starred_threads < 0:
         parser.error("--gmail-starred-threads must be non-negative")
+    if args.historical_year and any(year < 1900 or year > 2100 for year in args.historical_year):
+        parser.error("--historical-year must be between 1900 and 2100")
     return args
 
 
@@ -1322,6 +1672,7 @@ def baseline_from_args(args: argparse.Namespace) -> dict[str, Any] | None:
 def main() -> int:
     args = parse_args()
     gmail_export = load_gmail_export(args.gmail_starred_export) if args.gmail_starred_export else None
+    enrichment_records = load_enrichment(args.thread_enrichment) if args.thread_enrichment else None
     snapshot, atoms = build_snapshot(
         args.mail_index,
         scope=args.scope,
@@ -1331,6 +1682,10 @@ def main() -> int:
         gmail_count_messages=args.gmail_starred_messages,
         gmail_count_threads=args.gmail_starred_threads,
         gmail_source=args.gmail_source,
+        enrichment_records=enrichment_records,
+        historical_years=args.historical_year,
+        historical_domains=args.historical_domain,
+        historical_keywords=args.historical_keyword,
     )
     markdown = render_markdown(snapshot)
     if args.write:
@@ -1343,6 +1698,9 @@ def main() -> int:
             private_atoms=args.private_atoms,
             private_snapshot=args.private_snapshot,
             private_gmail_reconciliation=args.private_gmail_reconciliation,
+            private_enrichment_queue=args.private_enrichment_queue,
+            private_historical_manifest=args.private_historical_manifest,
+            private_cluster_theses=args.private_cluster_theses,
         )
         print(f"mail-story-ledger: {len(atoms)} atoms over scope={args.scope}; wrote {args.doc}")
     else:
