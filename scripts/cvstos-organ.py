@@ -15,8 +15,10 @@ Three departments, each fail-open, none blocking another, all READ-ONLY on the h
              ChatGPT, Cursor, Windsurf, Copilot, the Claude desktop app, and Claude Code's own
              image-cache / jobs / shell-snapshots. Regenerable cache → an eviction candidate;
              irreplaceable/unsynced state (conversation blobs, ~/.claude/projects transcripts) →
-             surfaced with its byte weight and NEVER touched. library-preserve.py already evicts
-             ~/Library dev/build caches; EVICTVS covers the chat-app volumes it never enumerated.
+             surfaced with its byte weight and NEVER touched. Antigravity scratch is delegated to
+             antigravity-scratch-bridge.py because those roots are repo checkouts, not cache blobs.
+             library-preserve.py already evicts ~/Library dev/build caches; EVICTVS covers the
+             chat-app volumes it never enumerated.
 
   LIMES    — the factory-host invariant (limes = the frontier/boundary). Measures whether the
              posture actually holds: is the cartridge plugged in (chezmoi → organvm/domus-genoma);
@@ -86,6 +88,10 @@ def _env_positive_int(name: str, default: int) -> int:
 DEBT_CAP_GB = _env_positive_float("LIMEN_CVSTOS_DEBT_CAP_GB", 5)  # evictable chat-app cache over this ⇒ over cap
 REAPER_STALE_H = _env_positive_float("LIMEN_CVSTOS_REAPER_STALE_H", 48)  # a reaper stamp older than this ⇒ stale
 SCAN_ENTRY_CAP = _env_positive_int("LIMEN_CVSTOS_SCAN_CAP", 600000)  # bound the walk so a pathological tree can't hang the beat
+AGY_SCRATCH_ROOT = Path(
+    os.environ.get("LIMEN_AGY_SCRATCH_ROOT", HOME / ".gemini" / "antigravity-cli" / "scratch")
+)
+AGY_SCRATCH_MIN_IDLE_H = _env_positive_float("LIMEN_AGY_SCRATCH_MIN_IDLE_H", 24)
 
 # Chromium/Electron subdirectories that regenerate on next launch — safe eviction candidates.
 _REGEN_SUBDIRS = {
@@ -423,6 +429,66 @@ def _worktree_over_cap() -> bool | None:
     return rc != 0
 
 
+def antigravity_scratch() -> dict:
+    """Delegate Antigravity repo-checkout scratch classification to the focused bridge.
+
+    CVSTOS owns the one host-storage face; the bridge owns the repo-safety predicate. This keeps
+    the storage keeper unified without reimplementing git lifecycle logic here.
+    """
+    script = ROOT / "scripts" / "antigravity-scratch-bridge.py"
+    if not script.exists():
+        return {"measured": False, "present": False, "reason": "bridge-script-missing"}
+    try:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "--root",
+                str(AGY_SCRATCH_ROOT),
+                "--min-idle-hours",
+                str(AGY_SCRATCH_MIN_IDLE_H),
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=240,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"measured": False, "present": AGY_SCRATCH_ROOT.exists(), "reason": str(exc)[:120]}
+    if proc.returncode != 0:
+        return {"measured": False, "present": AGY_SCRATCH_ROOT.exists(), "reason": proc.stderr.strip()[:120]}
+    try:
+        report = json.loads(proc.stdout)
+    except ValueError:
+        return {"measured": False, "present": AGY_SCRATCH_ROOT.exists(), "reason": "bridge-json-unreadable"}
+    summary = report.get("summary") or {}
+    by_disp = summary.get("by_disposition") or {}
+    unsafe = {
+        k: int(v)
+        for k, v in by_disp.items()
+        if k
+        in {
+            "bridge_required",
+            "preserve_required",
+            "container_review_required",
+            "non_git_review_required",
+            "keep_active",
+        }
+    }
+    return {
+        "measured": True,
+        "present": bool(report.get("present")),
+        "root": str(AGY_SCRATCH_ROOT),
+        "total_roots": int(summary.get("total_roots") or 0),
+        "total_bytes": int(summary.get("total_bytes") or 0),
+        "total_gb": round(int(summary.get("total_bytes") or 0) / GB, 2),
+        "safe_reap_bytes": int(summary.get("safe_reap_bytes") or 0),
+        "safe_reap_gb": round(int(summary.get("safe_reap_bytes") or 0) / GB, 2),
+        "by_disposition": dict(sorted(by_disp.items())),
+        "unsafe_dispositions": unsafe,
+    }
+
+
 # ── assembly ─────────────────────────────────────────────────────────────────────────────────
 def assess() -> dict:
     return {
@@ -430,6 +496,7 @@ def assess() -> dict:
         "factory": factory_invariant(),
         "reapers": reaper_proprioception(),
         "worktree_over_cap": _worktree_over_cap(),
+        "antigravity_scratch": antigravity_scratch(),
     }
 
 
@@ -451,6 +518,11 @@ def failures(a: dict) -> list[str]:
             f"chat-app evictable cache {a['debt']['evictable_gb']}GB over the {a['debt']['cap_gb']:g}GB cap "
             "(eviction stage has not fired — run --apply or arm the reclaimer)"
         )
+    agy = a.get("antigravity_scratch") or {}
+    unsafe = agy.get("unsafe_dispositions") or {}
+    if agy.get("measured") and unsafe:
+        total = sum(int(v) for v in unsafe.values())
+        out.append(f"{total} Antigravity scratch root(s) need bridge/preserve/review before local deletion")
     return out
 
 
@@ -473,6 +545,13 @@ def write_stamp(a: dict, reclaimed: int | None = None) -> None:
         "reapers_fresh": a["reapers"]["fresh"],
         "reapers_stale": a["reapers"]["stale"],
         "worktree_over_cap": a["worktree_over_cap"],
+        "antigravity_scratch": {
+            "measured": a["antigravity_scratch"].get("measured"),
+            "total_roots": a["antigravity_scratch"].get("total_roots"),
+            "total_gb": a["antigravity_scratch"].get("total_gb"),
+            "safe_reap_gb": a["antigravity_scratch"].get("safe_reap_gb"),
+            "by_disposition": a["antigravity_scratch"].get("by_disposition"),
+        },
         "at_factory": not failures(a),
         "open_invariants": failures(a),
     }
@@ -492,10 +571,14 @@ def _oneliner(a: dict) -> str:
     cart = {True: "ok", False: "UNPLUGGED", None: "?"}[fac["cartridge_connected"]]
     binc = fac["bin_orphans"]["count"] if fac["bin_orphans"]["measured"] else "?"
     pkg = "drift" if fac["domus_packages"].get("drift") else ("clean" if fac["domus_packages"]["measured"] else "?")
+    agy = a.get("antigravity_scratch") or {}
+    agy_bit = "agy-scratch ?"
+    if agy.get("measured"):
+        agy_bit = f"agy-scratch {agy.get('total_gb', 0)}GB / safe {agy.get('safe_reap_gb', 0)}GB"
     return (
         f"cvstos: debt {d['evictable_gb']}GB evictable / {d['retained_gb']}GB retained "
         f"across {len(d['apps'])} apps · factory: cartridge {cart}, {binc} bin-orphans, domus {pkg} · "
-        f"reapers {r['fresh']}/{r['fresh'] + r['stale'] + r['unknown']} fresh"
+        f"reapers {r['fresh']}/{r['fresh'] + r['stale'] + r['unknown']} fresh · {agy_bit}"
     )
 
 

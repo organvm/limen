@@ -1,6 +1,6 @@
 # Session Corpus Ledger
 
-Generated: `2026-07-04T19:01:32+00:00`
+Generated: `2026-07-06T00:51:16+00:00`
 Horizon: `all local history`
 
 ## Canonical Decision
@@ -14,22 +14,27 @@ Horizon: `all local history`
 
 ## Local Session Sources
 
-Total seen: `13581` files, `3.4 GiB`.
+Total seen: `13999` files, `3.4 GiB`.
 
 | Source | Root | Files | Size | Newest |
 |---|---:|---:|---:|---|
-| `claude-projects` | `~/.claude/projects` | 6512 | 1.9 GiB | `2026-07-04T19:01:04+00:00` |
-| `codex-sessions` | `~/.local/share/codex/sessions` | 1361 | 1.4 GiB | `2026-07-04T19:01:26+00:00` |
-| `claude-file-history` | `~/.claude/file-history` | 4980 | 63.7 MiB | `2026-07-04T18:49:08+00:00` |
-| `codex-goals-state` | `~/.local/share/codex` | 6 | 20.4 MiB | `2026-07-04T19:01:26+00:00` |
-| `codex-shell-snapshots` | `~/.local/share/codex/shell_snapshots` | 8 | 2.6 MiB | `2026-07-04T18:11:30+00:00` |
-| `codex-history` | `~/.local/share/codex` | 1 | 801.2 KiB | `2026-07-04T18:11:56+00:00` |
+| `claude-projects` | `~/.claude/projects` | 6586 | 1.9 GiB | `2026-07-06T00:43:21+00:00` |
+| `codex-sessions` | `~/.local/share/codex/sessions` | 1363 | 1.4 GiB | `2026-07-06T00:51:14+00:00` |
+| `claude-file-history` | `~/.claude/file-history` | 5059 | 67.2 MiB | `2026-07-05T18:01:34+00:00` |
+| `codex-goals-state` | `~/.local/share/codex` | 6 | 19.9 MiB | `2026-07-06T00:51:14+00:00` |
+| `chatgpt-desktop-conversations` | `~/Library/Application Support/com.openai.chat` | 251 | 15.5 MiB | `2026-07-06T00:36:32+00:00` |
+| `codex-shell-snapshots` | `~/.local/share/codex/shell_snapshots` | 7 | 2.3 MiB | `2026-07-06T00:36:57+00:00` |
+| `codex-history` | `~/.local/share/codex` | 1 | 812.5 KiB | `2026-07-06T00:44:59+00:00` |
+| `gemini-desktop-stores` | `~/Library/Application Support/com.google.GeminiMacOS/Data` | 8 | 441.0 KiB | `2026-06-02T11:34:23+00:00` |
 | `claude-usage-session-meta` | `~/.claude/usage-data/session-meta` | 397 | 426.9 KiB | `2026-07-03T13:33:18+00:00` |
 | `claude-plans` | `~/.claude/plans` | 43 | 369.8 KiB | `2026-07-03T15:08:54+00:00` |
+| `claude-desktop-indexeddb` | `~/Library/Application Support/Claude/IndexedDB` | 2 | 359.2 KiB | `2026-06-30T11:06:52+00:00` |
+| `chatgpt-desktop-gizmos` | `~/Library/Application Support/com.openai.chat` | 2 | 155.3 KiB | `2026-07-06T00:44:43+00:00` |
 | `codex-app-sqlite` | `~/.local/share/codex/sqlite` | 1 | 68.0 KiB | `2026-06-30T11:03:30+00:00` |
 | `claude-tasks` | `~/.claude/tasks` | 206 | 59.9 KiB | `2026-07-03T15:47:52+00:00` |
 | `claude-usage-facets` | `~/.claude/usage-data/facets` | 62 | 55.3 KiB | `2026-07-03T13:33:30+00:00` |
 | `codex-attachments` | `~/.local/share/codex/attachments` | 4 | 6.2 KiB | `2026-06-27T18:15:45+00:00` |
+| `perplexity-desktop-stores` | `~/Library/Application Support/ai.perplexity.macv3` | 1 | 400 B | `2026-06-02T13:20:10+00:00` |
 
 ## Existing Organs
 
@@ -47,7 +52,7 @@ Total seen: `13581` files, `3.4 GiB`.
 
 ## Session Lifecycle
 
-- Last `quicken.py` journal: `2026-07-04T18:30:23+00:00`.
+- Last `quicken.py` journal: `2026-07-06T00:43:26+00:00`.
 - Claude FleetView sessions classified: `0` total; `0` stalled, `0` closed, `0` alive, `0` done.
 - Reaped worktrees in that pass: `0`.
 - Last `codex-quicken.py` journal: `2026-06-27T21:42:32+00:00`.
@@ -59,8 +64,8 @@ Total seen: `13581` files, `3.4 GiB`.
 - Private root: `~/Workspace/limen/.limen-private/session-corpus`.
 - Private inventory: `~/Workspace/limen/.limen-private/session-corpus/inventory/session-corpus-ledger.json`.
 - `.limen-private/` is ignored by Git; it is the local raw/private landing zone.
-- Materialized objects this run: copied `420`, already present `13161`, bytes copied `286.1 MiB`.
-- Private object store now holds `10577` unique objects, `4.5 GiB`.
+- Raw object materialization was not requested on this run.
+- Private object store currently holds `10577` unique objects, `4.5 GiB`.
 - Private screenshot evidence: `14` PNG artifacts, `22.9 MiB`, newest `2026-06-27T13:41:25+00:00`.
 - Screenshot batches: `2026-06-27` 14.
 

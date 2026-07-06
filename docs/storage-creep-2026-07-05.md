@@ -48,3 +48,7 @@ The next real storage fix is a new Agy/Antigravity scratch bridge:
 
 Until that bridge exists, the current large reclaim candidate is known but intentionally parked:
 `~/.gemini/antigravity-cli/scratch` is the major local creep source and needs proof before removal.
+
+Update: the read-only bridge entrypoint now lives at `scripts/antigravity-scratch-bridge.py`. It
+audits the scratch root and classifies directories before any deletion-capable tool is allowed to
+act.

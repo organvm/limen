@@ -136,6 +136,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "Ignored local raw/private session cartridge. Stores manifests and optional content-addressed object copies; never committed."
+  LIMEN_EXTERNAL_SESSION_ROOTS:
+    default: ""
+    env: LIMEN_EXTERNAL_SESSION_ROOTS
+    self_update: none
+    owner: continuity
+    note: "Optional PATH-style list of mounted/archive roots to include in session-corpus-ledger discovery. Read-only inventory and optional private materialization only; missing roots do not fail."
   LIMEN_CURRENT_SESSION_JSONL:
     default: ""
     env: LIMEN_CURRENT_SESSION_JSONL
@@ -566,6 +572,18 @@ parameters:
     self_update: none
     owner: cvstos
     note: "Max directory entries the debt-sizing walk visits before returning an approximate total. Bounds the beat's cost; never blocks."
+  LIMEN_AGY_SCRATCH_ROOT:
+    default: "$HOME/.gemini/antigravity-cli/scratch"
+    env: LIMEN_AGY_SCRATCH_ROOT
+    self_update: none
+    owner: cvstos
+    note: "Antigravity/Agy scratch checkout root audited by antigravity-scratch-bridge.py and surfaced by CVSTOS. Inventory only; deletion is a separate receipt-gated action."
+  LIMEN_AGY_SCRATCH_MIN_IDLE_H:
+    default: 24
+    env: LIMEN_AGY_SCRATCH_MIN_IDLE_H
+    self_update: none
+    owner: cvstos
+    note: "Minimum idle hours before a clean Antigravity scratch checkout can be classified as a safe-reap candidate. Dirty or unpreserved roots remain bridge/preserve required."
   # --- VVLTVS: the countenance — verify the public face reflects the live SSOT (sibling of CVSTOS) ---
   LIMEN_BEAT_VVLTVS:
     default: 24                 # cadence: verify the public face every 24 beats (offline file reads ⇒ cheap)

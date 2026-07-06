@@ -46,6 +46,14 @@ def test_three_tenses_bounded():
         assert all(0.0 <= val <= 1.0 for val in d["tenses"].values())
 
 
+def test_summary_reports_distance_from_ideal():
+    summary = _audit()["summary"]
+    assert 0.0 <= summary["alive_ratio"] <= 1.0
+    assert 0.0 <= summary["mean_score"] <= 1.0
+    assert 0.0 <= summary["distance_from_ideal"] <= 1.0
+    assert summary["weakest_tense"] in {"past", "present", "future"}
+
+
 def test_idempotent():
     assert _run("--json").stdout == _run("--json").stdout
 

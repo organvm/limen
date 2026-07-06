@@ -17,6 +17,8 @@ A door alive in all three needs nothing from his hand.
   python3 scripts/avtopoiesis.py --strict   # PREDICATE — exit 1 if any door is below the alive threshold
   python3 scripts/avtopoiesis.py --json     # machine form (organ-health / dashboards)
 """
+import argparse
+import datetime as dt
 import json
 import os
 import re
@@ -27,6 +29,8 @@ ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 SPEC = ROOT / "spec" / "avtopoiesis"
 CANON = SPEC / "canon.yaml"
 SCRIPTS = ROOT / "scripts"
+DOC_PATH = ROOT / "docs" / "avtopoiesis.md"
+LOG_PATH = ROOT / "logs" / "avtopoiesis.json"
 
 try:
     import yaml
@@ -115,23 +119,70 @@ def score_door(door, canon):
     return senses, round(total, 3)
 
 
+def _round(n):
+    return round(float(n), 3)
+
+
+def _primary_gap(senses):
+    if not senses:
+        return "unknown"
+    low = min(float(v) for v in senses.values())
+    return sorted(k for k, v in senses.items() if float(v) == low)[0]
+
+
 def build():
     canon = _load(CANON)
     threshold = float(canon.get("alive_threshold", 0.67))
     rows = []
     for d in discover_doors(canon):
         senses, total = score_door(d, canon)
-        rows.append({**d, "tenses": senses, "score": total, "alive": total >= threshold})
+        rows.append(
+            {
+                **d,
+                "tenses": senses,
+                "score": total,
+                "alive": total >= threshold,
+                "primary_gap": _primary_gap(senses),
+            }
+        )
     rows.sort(key=lambda r: (r["score"], r["key"]))
     alive = sum(1 for r in rows if r["alive"])
-    return {"threshold": threshold, "doors": rows,
-            "summary": {"total": len(rows), "alive": alive, "below": len(rows) - alive}}
+    total = len(rows)
+    mean_score = sum(float(r["score"]) for r in rows) / total if total else 0.0
+    tense_averages = {
+        tense: _round(sum(float(r["tenses"][tense]) for r in rows) / total) if total else 0.0
+        for tense in SENSES
+    }
+    below_by_primary_gap = {}
+    for row in rows:
+        if row["alive"]:
+            continue
+        below_by_primary_gap[row["primary_gap"]] = below_by_primary_gap.get(row["primary_gap"], 0) + 1
+    return {
+        "threshold": threshold,
+        "doors": rows,
+        "summary": {
+            "total": total,
+            "alive": alive,
+            "below": total - alive,
+            "alive_ratio": _round(alive / total) if total else 0.0,
+            "mean_score": _round(mean_score),
+            "distance_from_ideal": _round(1.0 - mean_score),
+            "tense_averages": tense_averages,
+            "weakest_tense": min(tense_averages, key=tense_averages.get) if tense_averages else "unknown",
+            "below_by_primary_gap": dict(sorted(below_by_primary_gap.items())),
+        },
+    }
+
+
+def pct(n):
+    return f"{float(n) * 100:.1f}%"
 
 
 def render_text(v):
     s = v["summary"]
     out = [f"AVTOPOIESIS — {s['alive']}/{s['total']} doors alive (score ≥ {v['threshold']}); "
-           f"{s['below']} below the line",
+           f"{s['below']} below the line; distance {pct(s['distance_from_ideal'])}",
            "  (past = metabolizes · present = runs unbidden · future = asks less)\n",
            f"  {'door':<15}{'past':>6}{'present':>8}{'future':>7}{'score':>7}  state"]
     for r in v["doors"]:
@@ -142,7 +193,94 @@ def render_text(v):
     return "\n".join(out)
 
 
+def render_markdown(v):
+    s = v["summary"]
+    generated = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    lines = [
+        "# AVTOPOIESIS Scorecard",
+        "",
+        f"Generated: `{generated}`",
+        "",
+        "## Current Distance",
+        "",
+        f"- Alive doors: `{s['alive']}/{s['total']}` ({pct(s['alive_ratio'])}).",
+        f"- Mean door score: `{s['mean_score']}`.",
+        f"- Distance from ideal: `{pct(s['distance_from_ideal'])}`.",
+        f"- Alive threshold: `{v['threshold']}`.",
+        f"- Weakest tense: `{s['weakest_tense']}`.",
+        "",
+        "Autopoiesis here means each heartbeat door is alive in three tenses: it metabolizes its own",
+        "history, runs unbidden, and asks less from his hand over time. The score is regenerated",
+        "from the heartbeat and canon on every run; this document is a receipt, not the source of truth.",
+        "",
+        "## Tense Averages",
+        "",
+        "| Tense | Average |",
+        "|---|---:|",
+    ]
+    for tense, value in s["tense_averages"].items():
+        lines.append(f"| `{tense}` | `{value}` |")
+
+    gaps = s.get("below_by_primary_gap") or {}
+    if gaps:
+        lines += [
+            "",
+            "## Primary Gaps",
+            "",
+            "| Gap | Doors below line |",
+            "|---|---:|",
+        ]
+        for gap, count in gaps.items():
+            lines.append(f"| `{gap}` | `{count}` |")
+
+    lines += [
+        "",
+        "## Door Scores",
+        "",
+        "| Door | Past | Present | Future | Score | State | Primary gap |",
+        "|---|---:|---:|---:|---:|---|---|",
+    ]
+    for r in v["doors"]:
+        t = r["tenses"]
+        state = "alive" if r["alive"] else "nota"
+        lines.append(
+            f"| `{r['key']}` | `{t['past']}` | `{t['present']}` | `{t['future']}` | "
+            f"`{r['score']}` | `{state}` | `{r['primary_gap']}` |"
+        )
+
+    lines += [
+        "",
+        "## Refresh",
+        "",
+        "- Audit: `python3 scripts/avtopoiesis.py`",
+        "- Predicate: `python3 scripts/avtopoiesis.py --strict`",
+        "- Receipt: `python3 scripts/avtopoiesis.py --write`",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def write_receipts(v):
+    DOC_PATH.parent.mkdir(parents=True, exist_ok=True)
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    LOG_PATH.write_text(
+        json.dumps(
+            {"generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), **v},
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    DOC_PATH.write_text(render_markdown(v), encoding="utf-8")
+
+
 def main():
+    parser = argparse.ArgumentParser(description="Measure AVTOPOIESIS distance from ideal.")
+    parser.add_argument("--json", action="store_true", help="print machine JSON")
+    parser.add_argument("--strict", action="store_true", help="exit 1 if any door is below threshold")
+    parser.add_argument("--write", action="store_true", help="write docs/ and logs/ receipts")
+    args = parser.parse_args()
+
     if yaml is None:
         print("avtopoiesis: PyYAML required", file=sys.stderr)
         return 1
@@ -150,8 +288,13 @@ def main():
         print(f"avtopoiesis: no canon ({CANON}) — nothing to gate", file=sys.stderr)
         return 1
     v = build()
-    print(json.dumps(v, indent=2) if "--json" in sys.argv else render_text(v))
-    if "--strict" in sys.argv and v["summary"]["below"] > 0:
+    if args.write:
+        write_receipts(v)
+    print(json.dumps(v, indent=2) if args.json else render_text(v))
+    if args.write and not args.json:
+        print(f"  wrote: {DOC_PATH.relative_to(ROOT)}")
+        print(f"  wrote: {LOG_PATH.relative_to(ROOT)}")
+    if args.strict and v["summary"]["below"] > 0:
         return 1
     return 0
 

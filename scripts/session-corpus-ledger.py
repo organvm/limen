@@ -48,6 +48,31 @@ LOCAL_SOURCES = [
     ("claude-tasks", HOME / ".claude" / "tasks", ("*",)),
     ("claude-plans", HOME / ".claude" / "plans", ("*",)),
     ("claude-file-history", HOME / ".claude" / "file-history", ("*",)),
+    (
+        "chatgpt-desktop-conversations",
+        HOME / "Library" / "Application Support" / "com.openai.chat",
+        ("conversations-v3-*/*.data", "project-*/conversations-v3-*/*.data"),
+    ),
+    (
+        "chatgpt-desktop-gizmos",
+        HOME / "Library" / "Application Support" / "com.openai.chat",
+        ("gizmos-*/*.data", "gizmos-*/*.json"),
+    ),
+    (
+        "claude-desktop-indexeddb",
+        HOME / "Library" / "Application Support" / "Claude" / "IndexedDB",
+        ("*.leveldb/*.ldb", "*.leveldb/*.log"),
+    ),
+    (
+        "gemini-desktop-stores",
+        HOME / "Library" / "Application Support" / "com.google.GeminiMacOS" / "Data",
+        ("*.store", "*.store-wal", "user*/*.store", "user*/*.store-wal"),
+    ),
+    (
+        "perplexity-desktop-stores",
+        HOME / "Library" / "Application Support" / "ai.perplexity.macv3",
+        ("*.json", "*.plist", "*.db", "*.sqlite", "*.store", "**/*.db", "**/*.sqlite"),
+    ),
 ]
 
 ORGANS = [
@@ -94,10 +119,41 @@ def relpath(path: Path) -> str:
         return str(path)
 
 
+def external_session_sources() -> list[tuple[str, Path, tuple[str, ...]]]:
+    """Optional mounted/archive roots for local-first conversation archaeology.
+
+    The env var is colon-separated to match PATH-like local root lists. These roots are only
+    inventoried/materialized into the ignored private cartridge; tracked ledgers carry counts.
+    """
+    raw = os.environ.get("LIMEN_EXTERNAL_SESSION_ROOTS", "")
+    out: list[tuple[str, Path, tuple[str, ...]]] = []
+    patterns = (
+        "*.md",
+        "*.txt",
+        "*.json",
+        "*.jsonl",
+        "*.yaml",
+        "*.yml",
+        "conversations*/**/*",
+        "*ChatGPT*",
+        "*Claude*",
+        "*Gemini*",
+        "*Perplexity*",
+    )
+    for idx, item in enumerate(part for part in raw.split(os.pathsep) if part.strip()):
+        root = Path(item).expanduser()
+        out.append((f"external-session-root-{idx + 1}", root, patterns))
+    return out
+
+
+def local_sources() -> list[tuple[str, Path, tuple[str, ...]]]:
+    return [*LOCAL_SOURCES, *external_session_sources()]
+
+
 def iter_local_files(days: int | None) -> list[dict[str, Any]]:
     cutoff = None if days is None else dt.datetime.now(dt.timezone.utc).timestamp() - days * 86400
     rows: list[dict[str, Any]] = []
-    for source, root, patterns in LOCAL_SOURCES:
+    for source, root, patterns in local_sources():
         if not root.exists():
             continue
         seen: set[Path] = set()
@@ -119,6 +175,7 @@ def iter_local_files(days: int | None) -> list[dict[str, Any]]:
             rows.append(
                 {
                     "source": source,
+                    "root": str(root),
                     "path": str(path),
                     "display_path": relpath(path),
                     "size": st.st_size,
@@ -136,7 +193,9 @@ def summarize_local(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             row["source"],
             {
                 "source": row["source"],
-                "root": relpath(next(root for name, root, _ in LOCAL_SOURCES if name == row["source"])),
+                "root": relpath(
+                    Path(row.get("root") or next(root for name, root, _ in local_sources() if name == row["source"]))
+                ),
                 "files": 0,
                 "bytes": 0,
                 "newest": None,
