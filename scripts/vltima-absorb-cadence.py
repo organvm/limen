@@ -5,6 +5,7 @@ Default mode is a dry-run plan. Use ``--write`` to execute the safe redacted
 cadence. Use ``--materialize-private`` only when the operator intentionally
 wants the raw local app material copied into the ignored private object store.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -12,7 +13,6 @@ import datetime as dt
 import json
 import os
 import subprocess
-import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -129,7 +129,13 @@ def tail(text: str, *, limit: int = 12) -> list[str]:
 
 def public_line(text: Any) -> str:
     line = str(text)
-    root_aliases = {str(ROOT), str(Path.cwd()), os.environ.get("LIMEN_ROOT", "")}
+    root_aliases = {
+        str(ROOT),
+        str(Path.cwd()),
+        str((Path.home() / "Workspace" / "limen").expanduser()),
+        os.environ.get("LIMEN_ROOT", ""),
+        os.environ.get("LIMEN_LIVE_ROOT", ""),
+    }
     for alias in sorted((item for item in root_aliases if item), key=len, reverse=True):
         line = line.replace(alias, "$LIMEN_ROOT")
     line = line.replace(str(Path.home()), "~")
@@ -211,7 +217,9 @@ def build_receipt(
             )
     status = "planned"
     if execute:
-        status = "ok" if all(result["status"] == "ok" for result in results) and len(results) == len(steps) else "failed"
+        status = (
+            "ok" if all(result["status"] == "ok" for result in results) and len(results) == len(steps) else "failed"
+        )
     return {
         "generated_at": now_iso(),
         "status": status,
@@ -292,7 +300,9 @@ def main() -> int:
     parser.add_argument("--write", action="store_true", help="execute the cadence and write receipts")
     parser.add_argument("--json", action="store_true", help="print receipt JSON")
     parser.add_argument("--materialize-private", action="store_true", help="include private raw materialization")
-    parser.add_argument("--continue-on-error", action="store_true", help="run later steps even if an earlier command fails")
+    parser.add_argument(
+        "--continue-on-error", action="store_true", help="run later steps even if an earlier command fails"
+    )
     parser.add_argument("--timeout", type=int, default=900, help="timeout per step in seconds")
     args = parser.parse_args()
     receipt = build_receipt(
