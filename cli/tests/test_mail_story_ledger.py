@@ -230,6 +230,112 @@ def test_all_scope_emits_historical_candidates(tmp_path):
     assert sum(1 for atom in atoms if atom["status"] == "historical_candidate") == 1
 
 
+def test_gmail_count_only_reconciliation_records_connector_deltas(tmp_path):
+    module = _load_module()
+    db = _mail_index(tmp_path)
+
+    snapshot, _atoms = module.build_snapshot(
+        db,
+        gmail_count_messages=10,
+        gmail_count_threads=8,
+        gmail_source="fixture_gmail_connector_counts",
+    )
+
+    gmail = snapshot["gmail_reconciliation"]
+    assert gmail["source"] == "fixture_gmail_connector_counts"
+    assert gmail["mode"] == "count_only"
+    assert gmail["local_gmail_flagged_messages"] == 9
+    assert gmail["local_gmail_flagged_threads"] == 9
+    assert gmail["gmail_starred_messages"] == 10
+    assert gmail["gmail_starred_threads"] == 8
+    assert gmail["message_count_delta"] == -1
+    assert gmail["thread_count_delta"] == 1
+    assert gmail["matched_messages"] == 0
+    assert gmail["local_only_messages"] is None
+    assert "requires --gmail-starred-export" in gmail["coverage_note"]
+    thread_check = next(
+        row for row in snapshot["reconciliation"]["checks"] if row["label"] == "Gmail connector STARRED threads"
+    )
+    assert thread_check["actual"] == 8
+    assert thread_check["note"] == "from read-only Gmail connector label count"
+
+
+def test_gmail_metadata_export_matches_private_records_without_bodies(tmp_path):
+    module = _load_module()
+    db = _mail_index(tmp_path)
+    export = tmp_path / "gmail-starred-export.json"
+    export.write_text(
+        json.dumps(
+            {
+                "labels": [
+                    {
+                        "id": "STARRED",
+                        "name": "STARRED",
+                        "messagesTotal": 10,
+                        "threadsTotal": 9,
+                        "messagesUnread": 0,
+                        "threadsUnread": 0,
+                    }
+                ],
+                "pages": [
+                    {
+                        "emails": [
+                            {
+                                "id": "gmail-1",
+                                "thread_id": "thread-1",
+                                "from_": "Stripe notifications@stripe.example.test",
+                                "subject": "KYC verify identity for private@example.test account 123456 should not leak",
+                                "email_ts": "2026-07-06T12:00:30+00:00",
+                                "labels": ["STARRED", "INBOX"],
+                                "has_attachment": False,
+                            },
+                            {
+                                "id": "gmail-2",
+                                "thread_id": "thread-2",
+                                "from_": "Anthropic billing@mail.anthropic.com",
+                                "subject": "Re: Anthropic billing payment failed",
+                                "email_ts": "2026-06-30T12:01:00+00:00",
+                                "labels": ["STARRED", "INBOX"],
+                                "has_attachment": False,
+                            },
+                            {
+                                "id": "gmail-extra",
+                                "thread_id": "thread-extra",
+                                "from_": "Other sender@example.test",
+                                "subject": "Gmail only",
+                                "email_ts": "2026-07-06T12:00:00+00:00",
+                                "labels": ["STARRED"],
+                                "has_attachment": False,
+                            },
+                        ]
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    gmail_export = module.load_gmail_export(export)
+    snapshot, _atoms = module.build_snapshot(db, gmail_export=gmail_export)
+    markdown = module.render_markdown(snapshot)
+
+    gmail = snapshot["gmail_reconciliation"]
+    assert gmail["source"] == str(export)
+    assert gmail["mode"] == "metadata_match"
+    assert gmail["mailbox_mutations"] is False
+    assert gmail["body_reads"] is False
+    assert gmail["label_writes"] is False
+    assert gmail["gmail_starred_messages"] == 10
+    assert gmail["gmail_starred_threads"] == 9
+    assert gmail["matched_messages"] == 2
+    assert gmail["local_only_messages"] == 7
+    assert gmail["gmail_only_messages"] == 1
+    assert {row["match_confidence"] for row in gmail["matches"]} == {"high"}
+    assert "Metadata export supplied" in gmail["coverage_note"]
+    assert "private@example.test" not in markdown
+    assert "gmail-1" not in markdown
+
+
 def test_connect_readonly_rejects_sqlite_writes(tmp_path):
     module = _load_module()
     db = _mail_index(tmp_path)
@@ -247,6 +353,7 @@ def test_markdown_is_redacted_while_private_atoms_keep_source(tmp_path):
     log = tmp_path / "logs" / "mail-story-ledger.json"
     private_atoms = tmp_path / ".limen-private" / "mail-story" / "inventory" / "atoms.jsonl"
     private_snapshot = tmp_path / ".limen-private" / "mail-story" / "inventory" / "snapshot.json"
+    private_gmail = tmp_path / ".limen-private" / "mail-story" / "reconciliation" / "gmail.json"
 
     snapshot, atoms = module.build_snapshot(db)
     markdown = module.render_markdown(snapshot)
@@ -258,10 +365,12 @@ def test_markdown_is_redacted_while_private_atoms_keep_source(tmp_path):
         log_path=log,
         private_atoms=private_atoms,
         private_snapshot=private_snapshot,
+        private_gmail_reconciliation=private_gmail,
     )
 
     public_text = doc.read_text(encoding="utf-8")
     private_text = private_atoms.read_text(encoding="utf-8")
+    private_gmail_payload = json.loads(private_gmail.read_text(encoding="utf-8"))
     log_payload = json.loads(log.read_text(encoding="utf-8"))
 
     for forbidden in (
@@ -281,3 +390,4 @@ def test_markdown_is_redacted_while_private_atoms_keep_source(tmp_path):
     assert "private body-ish summary should stay private" in private_text
     assert log_payload["privacy"]["raw_mail_in_git"] is False
     assert log_payload["reconciliation"]["no_silent_drops"] is True
+    assert private_gmail_payload["mailbox_mutations"] is False

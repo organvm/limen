@@ -32,6 +32,7 @@ LOG_PATH = ROOT / "logs" / "mail-story-ledger.json"
 PRIVATE_ROOT = Path(os.environ.get("LIMEN_PRIVATE_MAIL_STORY", ROOT / ".limen-private" / "mail-story"))
 PRIVATE_ATOMS = PRIVATE_ROOT / "inventory" / "mail-story-atoms.jsonl"
 PRIVATE_SNAPSHOT = PRIVATE_ROOT / "inventory" / "mail-story-snapshot.json"
+PRIVATE_GMAIL_RECONCILIATION = PRIVATE_ROOT / "reconciliation" / "gmail-starred-reconciliation.json"
 MAIL_INDEX = Path(
     os.environ.get(
         "LIMEN_MAIL_ENVELOPE_INDEX",
@@ -414,6 +415,24 @@ def redact_text(value: str | None, *, max_len: int = 96) -> str:
     return text
 
 
+def normalize_subject(value: str | None) -> str:
+    text = " ".join(str(value or "").lower().split())
+    text = re.sub(r"^((re|fw|fwd):\s*)+", "", text)
+    return text
+
+
+def iso_to_epoch(value: str | None) -> int | None:
+    if not value:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return int(parsed.timestamp())
+
+
 def normalize_domain(address: str | None) -> str:
     if not address or "@" not in address:
         return "unknown"
@@ -516,6 +535,11 @@ def atom_from_row(row: sqlite3.Row, *, scope: str) -> dict[str, Any]:
         "sender_domain": sender_domain,
         "redacted_subject": redact_text(subject),
         "subject_hash": sha("subject", subject),
+        "match_key": {
+            "sender_domain": sender_domain,
+            "subject_norm_hash": sha("subject_norm", normalize_subject(subject)),
+            "received_epoch": row["date_received"],
+        },
         "labels": {
             "flagged": bool(row["flagged"]),
             "flag_color": row["flag_color"],
@@ -734,10 +758,19 @@ def build_reconciliation(
     *,
     scope: str,
     baseline: dict[str, Any] | None,
+    gmail_count_messages: int | None = None,
+    gmail_count_threads: int | None = None,
 ) -> dict[str, Any]:
     local_gmail_messages = _mailbox_count(stats, account="gmail", mailbox="all_mail")
     local_gmail_threads = _mailbox_count(stats, account="gmail", mailbox="all_mail", key="distinct_threads")
     local_icloud_messages = _mailbox_count(stats, account="icloud", mailbox="inbox")
+    connector_gmail_messages = gmail_count_messages if gmail_count_messages is not None else local_gmail_messages
+    connector_gmail_threads = gmail_count_threads if gmail_count_threads is not None else local_gmail_threads
+    connector_note = (
+        "from read-only Gmail connector label count"
+        if gmail_count_messages is not None or gmail_count_threads is not None
+        else "compared to local Gmail flags; connector count not supplied"
+    )
     inventory_target = int(stats.get("flagged_non_deleted") or 0) if scope == "flagged" else len(atoms)
     checks = [
         _check_row(
@@ -763,14 +796,14 @@ def build_reconciliation(
         _check_row(
             "Gmail connector STARRED messages",
             baseline.get("gmail_starred_messages") if baseline else None,
-            local_gmail_messages,
-            note="compared to local Gmail All Mail flags; connector bodies/labels were not touched",
+            connector_gmail_messages,
+            note=connector_note,
         ),
         _check_row(
             "Gmail connector STARRED threads",
             baseline.get("gmail_starred_threads") if baseline else None,
-            local_gmail_threads,
-            note="compared to local Gmail flagged conversation ids; connector was not read in this pass",
+            connector_gmail_threads,
+            note=connector_note,
         ),
     ]
     no_silent_drops = len(atoms) == inventory_target
@@ -782,11 +815,170 @@ def build_reconciliation(
             "inventory_target": inventory_target,
             "gmail_all_mail_flagged": local_gmail_messages,
             "gmail_all_mail_flagged_threads": local_gmail_threads,
+            "gmail_connector_starred_messages": connector_gmail_messages,
+            "gmail_connector_starred_threads": connector_gmail_threads,
             "icloud_inbox_flagged": local_icloud_messages,
         },
         "no_silent_drops": no_silent_drops,
         "checks": checks,
         "status": "drift" if any(row["status"] == "drift" for row in checks) else "match",
+    }
+
+
+def _flatten_gmail_export(data: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    label_counts: dict[str, Any] = {}
+    if isinstance(data, list):
+        return [row for row in data if isinstance(row, dict)], label_counts
+    if not isinstance(data, dict):
+        return [], label_counts
+
+    labels = data.get("labels")
+    if isinstance(labels, list):
+        starred = next((row for row in labels if row.get("id") == "STARRED" or row.get("name") == "STARRED"), None)
+        if isinstance(starred, dict):
+            label_counts = {
+                "messages_total": starred.get("messagesTotal"),
+                "threads_total": starred.get("threadsTotal"),
+                "messages_unread": starred.get("messagesUnread"),
+                "threads_unread": starred.get("threadsUnread"),
+            }
+
+    emails: list[dict[str, Any]] = []
+    if isinstance(data.get("emails"), list):
+        emails.extend(row for row in data["emails"] if isinstance(row, dict))
+    if isinstance(data.get("pages"), list):
+        for page in data["pages"]:
+            if isinstance(page, dict) and isinstance(page.get("emails"), list):
+                emails.extend(row for row in page["emails"] if isinstance(row, dict))
+    return emails, label_counts
+
+
+def load_gmail_export(path: Path) -> dict[str, Any]:
+    if path.suffix == ".jsonl":
+        emails = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return {"source": str(path), "emails": [normalize_gmail_email(row) for row in emails], "label_counts": {}}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    emails, label_counts = _flatten_gmail_export(data)
+    return {
+        "source": str(path),
+        "emails": [normalize_gmail_email(row) for row in emails],
+        "label_counts": label_counts,
+    }
+
+
+def normalize_gmail_email(row: dict[str, Any]) -> dict[str, Any]:
+    subject = str(row.get("subject") or "")
+    email_ts = str(row.get("email_ts") or "")
+    sender = str(row.get("from_") or row.get("from") or "")
+    return {
+        "gmail_id_hash": sha("gmail", row.get("id")),
+        "gmail_thread_id_hash": sha("gthread", row.get("thread_id")),
+        "sender_domain": normalize_domain(sender),
+        "redacted_subject": redact_text(subject),
+        "subject_hash": sha("subject", subject),
+        "subject_norm_hash": sha("subject_norm", normalize_subject(subject)),
+        "received_at": iso_from_unix(iso_to_epoch(email_ts)),
+        "received_epoch": iso_to_epoch(email_ts),
+        "labels": sorted(str(label) for label in row.get("labels") or []),
+        "has_attachment": bool(row.get("has_attachment")),
+        "match_status": "unmatched",
+    }
+
+
+def _match_gmail_to_local(
+    local_atoms: list[dict[str, Any]],
+    gmail_emails: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], set[str], set[str]]:
+    used_local: set[str] = set()
+    matched_gmail: set[str] = set()
+    matches: list[dict[str, Any]] = []
+    for gmail in gmail_emails:
+        candidates: list[tuple[int, dict[str, Any]]] = []
+        gmail_epoch = gmail.get("received_epoch")
+        for atom in local_atoms:
+            if atom["stable_id"] in used_local:
+                continue
+            if atom.get("sender_domain") != gmail.get("sender_domain"):
+                continue
+            if atom.get("match_key", {}).get("subject_norm_hash") != gmail.get("subject_norm_hash"):
+                continue
+            local_epoch = atom.get("match_key", {}).get("received_epoch")
+            if gmail_epoch is None or local_epoch is None:
+                delta = 86_400
+            else:
+                delta = abs(int(local_epoch) - int(gmail_epoch))
+            if delta <= 172_800:
+                candidates.append((delta, atom))
+        if not candidates:
+            continue
+        candidates.sort(key=lambda item: item[0])
+        delta, atom = candidates[0]
+        used_local.add(atom["stable_id"])
+        matched_gmail.add(gmail["gmail_id_hash"])
+        matches.append(
+            {
+                "stable_id": atom["stable_id"],
+                "gmail_id_hash": gmail["gmail_id_hash"],
+                "gmail_thread_id_hash": gmail["gmail_thread_id_hash"],
+                "sender_domain": atom["sender_domain"],
+                "subject_hash": atom["subject_hash"],
+                "received_delta_seconds": delta,
+                "match_confidence": "high" if delta <= 300 else "medium",
+            }
+        )
+    return matches, used_local, matched_gmail
+
+
+def build_gmail_reconciliation(
+    atoms: list[dict[str, Any]],
+    *,
+    gmail_export: dict[str, Any] | None = None,
+    gmail_count_messages: int | None = None,
+    gmail_count_threads: int | None = None,
+    source: str | None = None,
+) -> dict[str, Any]:
+    local_atoms = [atom for atom in atoms if atom.get("account") == "gmail" and atom.get("status") == "hot_flagged"]
+    local_threads = {atom.get("source_refs", {}).get("conversation_id") for atom in local_atoms}
+    gmail_emails = gmail_export.get("emails", []) if gmail_export else []
+    label_counts = gmail_export.get("label_counts", {}) if gmail_export else {}
+    if gmail_count_messages is None:
+        gmail_count_messages = label_counts.get("messages_total") or (len(gmail_emails) if gmail_emails else None)
+    if gmail_count_threads is None:
+        gmail_count_threads = label_counts.get("threads_total") or (
+            len({row["gmail_thread_id_hash"] for row in gmail_emails}) if gmail_emails else None
+        )
+
+    matches, used_local, matched_gmail = (
+        _match_gmail_to_local(local_atoms, gmail_emails) if gmail_emails else ([], set(), set())
+    )
+    mode = "metadata_match" if gmail_emails else "count_only"
+    local_only_ids = sorted(atom["stable_id"] for atom in local_atoms if atom["stable_id"] not in used_local)
+    gmail_only_hashes = sorted(
+        row["gmail_id_hash"] for row in gmail_emails if row["gmail_id_hash"] not in matched_gmail
+    )
+    return {
+        "source": source or (gmail_export.get("source") if gmail_export else "gmail_connector_counts"),
+        "mode": mode,
+        "mailbox_mutations": False,
+        "body_reads": False,
+        "label_writes": False,
+        "local_gmail_flagged_messages": len(local_atoms),
+        "local_gmail_flagged_threads": len(local_threads),
+        "gmail_starred_messages": gmail_count_messages,
+        "gmail_starred_threads": gmail_count_threads,
+        "message_count_delta": None if gmail_count_messages is None else len(local_atoms) - int(gmail_count_messages),
+        "thread_count_delta": None if gmail_count_threads is None else len(local_threads) - int(gmail_count_threads),
+        "matched_messages": len(matches),
+        "local_only_messages": len(local_only_ids) if mode == "metadata_match" else None,
+        "gmail_only_messages": len(gmail_only_hashes) if mode == "metadata_match" else None,
+        "matches": matches,
+        "local_only_atom_ids": local_only_ids if mode == "metadata_match" else [],
+        "gmail_only_id_hashes": gmail_only_hashes if mode == "metadata_match" else [],
+        "coverage_note": (
+            "Metadata export supplied; matched by sender domain, normalized subject, and received time."
+            if mode == "metadata_match"
+            else "Count-only connector reconciliation; identity matching requires --gmail-starred-export."
+        ),
     }
 
 
@@ -796,6 +988,10 @@ def build_snapshot(
     scope: str = "flagged",
     limit: int | None = None,
     baseline: dict[str, Any] | None = BASELINE_RECONCILIATION,
+    gmail_export: dict[str, Any] | None = None,
+    gmail_count_messages: int | None = None,
+    gmail_count_threads: int | None = None,
+    gmail_source: str | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     with connect_readonly(mail_index) as conn:
         stats = mail_stats(conn)
@@ -803,6 +999,13 @@ def build_snapshot(
     atoms = [atom_from_row(row, scope=scope) for row in rows]
     top_domains = Counter(atom["sender_domain"] for atom in atoms).most_common(25)
     by_type = Counter(atom["blocker_type"] for atom in atoms)
+    gmail_export_label_counts = gmail_export.get("label_counts", {}) if gmail_export else {}
+    effective_gmail_count_messages = gmail_count_messages
+    if effective_gmail_count_messages is None:
+        effective_gmail_count_messages = gmail_export_label_counts.get("messages_total")
+    effective_gmail_count_threads = gmail_count_threads
+    if effective_gmail_count_threads is None:
+        effective_gmail_count_threads = gmail_export_label_counts.get("threads_total")
     generated_at = utc_now()
     snapshot = {
         "schema": SCHEMA,
@@ -827,7 +1030,21 @@ def build_snapshot(
         "atom_count": len(atoms),
         "top_domains": [{"domain": domain, "messages": count} for domain, count in top_domains],
         "by_blocker_type": dict(sorted(by_type.items())),
-        "reconciliation": build_reconciliation(stats, atoms, scope=scope, baseline=baseline),
+        "reconciliation": build_reconciliation(
+            stats,
+            atoms,
+            scope=scope,
+            baseline=baseline,
+            gmail_count_messages=effective_gmail_count_messages,
+            gmail_count_threads=effective_gmail_count_threads,
+        ),
+        "gmail_reconciliation": build_gmail_reconciliation(
+            atoms,
+            gmail_export=gmail_export,
+            gmail_count_messages=effective_gmail_count_messages,
+            gmail_count_threads=effective_gmail_count_threads,
+            source=gmail_source,
+        ),
         "clusters": cluster_summary(atoms),
     }
     return snapshot, atoms
@@ -843,6 +1060,7 @@ def md_table(headers: list[str], rows: list[list[Any]]) -> list[str]:
 def render_markdown(snapshot: dict[str, Any]) -> str:
     stats = snapshot["stats"]
     reconciliation = snapshot["reconciliation"]
+    gmail_reconciliation = snapshot["gmail_reconciliation"]
     lines = [
         "# Mail Story Ledger",
         "",
@@ -890,6 +1108,23 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         ],
     )
     lines += [
+        "",
+        "## Gmail STARRED Reconciliation",
+        "",
+        f"- Source: `{gmail_reconciliation['source']}`",
+        f"- Mode: `{gmail_reconciliation['mode']}`",
+        f"- Gmail body reads: `{str(gmail_reconciliation['body_reads']).lower()}`",
+        f"- Gmail label writes: `{str(gmail_reconciliation['label_writes']).lower()}`",
+        f"- Local Gmail flagged messages: `{gmail_reconciliation['local_gmail_flagged_messages']}`",
+        f"- Local Gmail flagged threads: `{gmail_reconciliation['local_gmail_flagged_threads']}`",
+        f"- Connector STARRED messages: `{gmail_reconciliation.get('gmail_starred_messages') or 'not supplied'}`",
+        f"- Connector STARRED threads: `{gmail_reconciliation.get('gmail_starred_threads') or 'not supplied'}`",
+        f"- Message count delta local-minus-connector: `{gmail_reconciliation.get('message_count_delta')}`",
+        f"- Thread count delta local-minus-connector: `{gmail_reconciliation.get('thread_count_delta')}`",
+        f"- Matched messages: `{gmail_reconciliation['matched_messages']}`",
+        f"- Local-only messages: `{gmail_reconciliation.get('local_only_messages')}`",
+        f"- Gmail-only messages: `{gmail_reconciliation.get('gmail_only_messages')}`",
+        f"- Coverage: {gmail_reconciliation['coverage_note']}",
         "",
         "## Pain Point Clusters",
         "",
@@ -982,6 +1217,8 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         "",
         "- Preview the hot flagged pass: `python3 scripts/mail-story-ledger.py`",
         "- Refresh the redacted report and ignored private atoms: `python3 scripts/mail-story-ledger.py --write`",
+        "- Reconcile live Gmail STARRED counts: `python3 scripts/mail-story-ledger.py --write --gmail-starred-messages <n> --gmail-starred-threads <n>`",
+        "- Reconcile a private Gmail metadata export: `python3 scripts/mail-story-ledger.py --write --gmail-starred-export .limen-private/mail-story/reconciliation/gmail-starred-export.json`",
         "- Process all non-deleted indexed mail privately: `python3 scripts/mail-story-ledger.py --scope all --write`",
         "",
     ]
@@ -997,6 +1234,7 @@ def write_outputs(
     log_path: Path = LOG_PATH,
     private_atoms: Path = PRIVATE_ATOMS,
     private_snapshot: Path = PRIVATE_SNAPSHOT,
+    private_gmail_reconciliation: Path = PRIVATE_GMAIL_RECONCILIATION,
 ) -> None:
     doc_path.parent.mkdir(parents=True, exist_ok=True)
     doc_path.write_text(markdown, encoding="utf-8")
@@ -1006,6 +1244,11 @@ def write_outputs(
     private_atoms.write_text("".join(json.dumps(atom, sort_keys=True) + "\n" for atom in atoms), encoding="utf-8")
     private_snapshot.parent.mkdir(parents=True, exist_ok=True)
     private_snapshot.write_text(json.dumps({**snapshot, "atoms": atoms}, indent=2, sort_keys=True), encoding="utf-8")
+    private_gmail_reconciliation.parent.mkdir(parents=True, exist_ok=True)
+    private_gmail_reconciliation.write_text(
+        json.dumps(snapshot["gmail_reconciliation"], indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -1018,6 +1261,29 @@ def parse_args() -> argparse.Namespace:
         "--no-baseline",
         action="store_true",
         help="omit the built-in 2026-07-06 brief baseline from reconciliation",
+    )
+    parser.add_argument(
+        "--gmail-starred-export",
+        type=Path,
+        default=None,
+        help="ignored private JSON/JSONL export from Gmail search_emails for STARRED messages",
+    )
+    parser.add_argument(
+        "--gmail-starred-messages",
+        type=int,
+        default=None,
+        help="read-only Gmail connector STARRED message count from list_labels",
+    )
+    parser.add_argument(
+        "--gmail-starred-threads",
+        type=int,
+        default=None,
+        help="read-only Gmail connector STARRED thread count from list_labels",
+    )
+    parser.add_argument(
+        "--gmail-source",
+        default=None,
+        help="source label for Gmail reconciliation evidence",
     )
     parser.add_argument("--doc", type=Path, default=DOC_PATH, help="tracked redacted Markdown output")
     parser.add_argument("--log", type=Path, default=LOG_PATH, help="ignored structured public-ish snapshot")
@@ -1033,9 +1299,19 @@ def parse_args() -> argparse.Namespace:
         default=PRIVATE_SNAPSHOT,
         help="ignored private snapshot JSON output",
     )
+    parser.add_argument(
+        "--private-gmail-reconciliation",
+        type=Path,
+        default=PRIVATE_GMAIL_RECONCILIATION,
+        help="ignored private Gmail reconciliation JSON output",
+    )
     args = parser.parse_args()
     if args.limit is not None and args.limit <= 0:
         parser.error("--limit must be positive")
+    if args.gmail_starred_messages is not None and args.gmail_starred_messages < 0:
+        parser.error("--gmail-starred-messages must be non-negative")
+    if args.gmail_starred_threads is not None and args.gmail_starred_threads < 0:
+        parser.error("--gmail-starred-threads must be non-negative")
     return args
 
 
@@ -1045,11 +1321,16 @@ def baseline_from_args(args: argparse.Namespace) -> dict[str, Any] | None:
 
 def main() -> int:
     args = parse_args()
+    gmail_export = load_gmail_export(args.gmail_starred_export) if args.gmail_starred_export else None
     snapshot, atoms = build_snapshot(
         args.mail_index,
         scope=args.scope,
         limit=args.limit,
         baseline=baseline_from_args(args),
+        gmail_export=gmail_export,
+        gmail_count_messages=args.gmail_starred_messages,
+        gmail_count_threads=args.gmail_starred_threads,
+        gmail_source=args.gmail_source,
     )
     markdown = render_markdown(snapshot)
     if args.write:
@@ -1061,6 +1342,7 @@ def main() -> int:
             log_path=args.log,
             private_atoms=args.private_atoms,
             private_snapshot=args.private_snapshot,
+            private_gmail_reconciliation=args.private_gmail_reconciliation,
         )
         print(f"mail-story-ledger: {len(atoms)} atoms over scope={args.scope}; wrote {args.doc}")
     else:

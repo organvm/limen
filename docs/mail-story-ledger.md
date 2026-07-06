@@ -6,7 +6,7 @@ cluster ids, and synthesized pain-point theses.
 
 ## Snapshot
 
-- Generated: `2026-07-06T16:55:58Z`
+- Generated: `2026-07-06T17:37:12Z`
 - Source: Apple Mail Envelope Index, opened read-only.
 - Processed scope: `flagged`
 - Body/thread reads: `false`
@@ -15,11 +15,11 @@ cluster ids, and synthesized pain-point theses.
 
 ## Corpus Counts
 
-- Total indexed messages: `81553`
-- Non-deleted messages: `81553`
+- Total indexed messages: `81564`
+- Non-deleted messages: `81564`
 - Flagged non-deleted messages: `126`
 - First received: `2008-09-22 02:30:28`
-- Last received: `2026-07-06 16:55:18`
+- Last received: `2026-07-06 17:33:06`
 - Atoms emitted in this run: `126`
 - No silent drops: `true`
 
@@ -30,12 +30,29 @@ cluster ids, and synthesized pain-point theses.
 
 | check | expected | actual | delta | status | note |
 | --- | --- | --- | --- | --- | --- |
-| Apple Mail total indexed messages | 81541 | 81553 | 12 | drift | - |
+| Apple Mail total indexed messages | 81541 | 81564 | 23 | drift | - |
 | Apple Mail flagged non-deleted | 108 | 126 | 18 | drift | - |
 | Gmail All Mail flagged locally | 97 | 115 | 18 | drift | - |
 | iCloud Inbox flagged locally | 11 | 11 | 0 | match | - |
-| Gmail connector STARRED messages | 97 | 115 | 18 | drift | compared to local Gmail All Mail flags; connector bodies/labels were not touched |
-| Gmail connector STARRED threads | 96 | 114 | 18 | drift | compared to local Gmail flagged conversation ids; connector was not read in this pass |
+| Gmail connector STARRED messages | 97 | 115 | 18 | drift | from read-only Gmail connector label count |
+| Gmail connector STARRED threads | 96 | 113 | 17 | drift | from read-only Gmail connector label count |
+
+## Gmail STARRED Reconciliation
+
+- Source: `gmail_connector_list_labels_2026-07-06T17:00Z`
+- Mode: `count_only`
+- Gmail body reads: `false`
+- Gmail label writes: `false`
+- Local Gmail flagged messages: `115`
+- Local Gmail flagged threads: `114`
+- Connector STARRED messages: `115`
+- Connector STARRED threads: `113`
+- Message count delta local-minus-connector: `0`
+- Thread count delta local-minus-connector: `1`
+- Matched messages: `0`
+- Local-only messages: `None`
+- Gmail-only messages: `None`
+- Coverage: Count-only connector reconciliation; identity matching requires --gmail-starred-export.
 
 ## Pain Point Clusters
 
@@ -217,4 +234,6 @@ cluster ids, and synthesized pain-point theses.
 
 - Preview the hot flagged pass: `python3 scripts/mail-story-ledger.py`
 - Refresh the redacted report and ignored private atoms: `python3 scripts/mail-story-ledger.py --write`
+- Reconcile live Gmail STARRED counts: `python3 scripts/mail-story-ledger.py --write --gmail-starred-messages <n> --gmail-starred-threads <n>`
+- Reconcile a private Gmail metadata export: `python3 scripts/mail-story-ledger.py --write --gmail-starred-export .limen-private/mail-story/reconciliation/gmail-starred-export.json`
 - Process all non-deleted indexed mail privately: `python3 scripts/mail-story-ledger.py --scope all --write`
