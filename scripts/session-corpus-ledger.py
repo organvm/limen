@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fnmatch
 import hashlib
 import json
 import os
@@ -25,7 +26,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1])).resolve()
 HOME = Path.home()
 WORKSPACE = ROOT.parent
 DOC_PATH = ROOT / "docs" / "session-corpus-ledger.md"
@@ -34,6 +35,8 @@ PRIVATE_ROOT = Path(
     os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus")
 )
 PRIVATE_INVENTORY = PRIVATE_ROOT / "inventory" / "session-corpus-ledger.json"
+EXTERNAL_SOURCE_PREFIX = "external-session-root-"
+EXTERNAL_SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", ".tox", ".mypy_cache"}
 
 LOCAL_SOURCES = [
     ("codex-sessions", HOME / ".codex" / "sessions", ("*",)),
@@ -119,6 +122,17 @@ def relpath(path: Path) -> str:
         return str(path)
 
 
+def env_positive_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
 def external_session_sources() -> list[tuple[str, Path, tuple[str, ...]]]:
     """Optional mounted/archive roots for local-first conversation archaeology.
 
@@ -150,18 +164,87 @@ def local_sources() -> list[tuple[str, Path, tuple[str, ...]]]:
     return [*LOCAL_SOURCES, *external_session_sources()]
 
 
-def iter_local_files(days: int | None) -> list[dict[str, Any]]:
+def is_external_source(source: str) -> bool:
+    return source.startswith(EXTERNAL_SOURCE_PREFIX)
+
+
+def external_match(rel: str, name: str, patterns: tuple[str, ...]) -> bool:
+    return any(fnmatch.fnmatch(rel, pattern) or fnmatch.fnmatch(name, pattern) for pattern in patterns)
+
+
+def external_candidates(root: Path, patterns: tuple[str, ...]) -> tuple[list[Path], dict[str, Any]]:
+    max_files = env_positive_int("LIMEN_EXTERNAL_SESSION_MAX_FILES_PER_ROOT", 5000)
+    max_depth = env_positive_int("LIMEN_EXTERNAL_SESSION_MAX_DEPTH", 6)
+    max_dirs = env_positive_int("LIMEN_EXTERNAL_SESSION_MAX_DIRS_PER_ROOT", 20000)
+    meta: dict[str, Any] = {
+        "bounded": True,
+        "max_files": max_files,
+        "max_depth": max_depth,
+        "max_dirs": max_dirs,
+        "dirs_seen": 0,
+        "candidate_files": 0,
+        "truncated": False,
+        "truncation_reason": None,
+    }
+    if root.is_file():
+        return ([root] if external_match(root.name, root.name, patterns) else []), meta
+
+    out: list[Path] = []
+    base_depth = len(root.resolve().parts)
+    for current, dirs, files in os.walk(root):
+        cur = Path(current)
+        meta["dirs_seen"] += 1
+        if int(meta["dirs_seen"]) > max_dirs:
+            meta["truncated"] = True
+            meta["truncation_reason"] = "directory-cap"
+            break
+
+        try:
+            depth = len(cur.resolve().parts) - base_depth
+        except OSError:
+            depth = max_depth
+        if depth >= max_depth:
+            dirs[:] = []
+        else:
+            dirs[:] = sorted(d for d in dirs if d not in EXTERNAL_SKIP_DIRS)
+
+        for name in sorted(files):
+            path = cur / name
+            try:
+                rel = path.relative_to(root).as_posix()
+            except ValueError:
+                rel = name
+            if not external_match(rel, name, patterns):
+                continue
+            out.append(path)
+            meta["candidate_files"] = len(out)
+            if len(out) >= max_files:
+                meta["truncated"] = True
+                meta["truncation_reason"] = "file-cap"
+                return out, meta
+    return out, meta
+
+
+def source_candidates(source: str, root: Path, patterns: tuple[str, ...]) -> tuple[Any, dict[str, Any]]:
+    if is_external_source(source):
+        return external_candidates(root, patterns)
+    meta = {"bounded": False, "truncated": False}
+    if root.is_file():
+        return [root], meta
+    return (path for pattern in patterns for path in root.rglob(pattern)), meta
+
+
+def scan_local_files(days: int | None) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
     cutoff = None if days is None else dt.datetime.now(dt.timezone.utc).timestamp() - days * 86400
     rows: list[dict[str, Any]] = []
+    scan_limits: dict[str, dict[str, Any]] = {}
     for source, root, patterns in local_sources():
         if not root.exists():
             continue
         seen: set[Path] = set()
-        candidates = [root] if root.is_file() else [
-            path
-            for pattern in patterns
-            for path in root.rglob(pattern)
-        ]
+        candidates, meta = source_candidates(source, root, patterns)
+        if meta.get("bounded"):
+            scan_limits[source] = {**meta, "root": str(root)}
         for path in candidates:
             if path in seen or not path.is_file():
                 continue
@@ -183,6 +266,11 @@ def iter_local_files(days: int | None) -> list[dict[str, Any]]:
                 }
             )
     rows.sort(key=lambda r: (r["mtime"] or "", r["source"], r["path"]), reverse=True)
+    return rows, scan_limits
+
+
+def iter_local_files(days: int | None) -> list[dict[str, Any]]:
+    rows, _scan_limits = scan_local_files(days)
     return rows
 
 
@@ -527,6 +615,8 @@ def render_markdown(snapshot: dict[str, Any], rows: list[dict[str, Any]], args: 
         "`./.limen-private/session-corpus/` when materialized, never in public Git history.",
         "- The app screenshots are coverage hints, not canonical input. Canonical input is the local "
         "Claude/Codex/session-meta filesystem state.",
+        "- External/archive roots are opt-in through `LIMEN_EXTERNAL_SESSION_ROOTS`; they are bounded "
+        "inventory surfaces, not deletion targets.",
         "",
         "## Local Session Sources",
         "",
@@ -542,6 +632,23 @@ def render_markdown(snapshot: dict[str, Any], rows: list[dict[str, Any]], args: 
         )
     if not local:
         lines.append("| none | n/a | 0 | 0 B | n/a |")
+
+    scan_limits = snapshot.get("scan_limits") or {}
+    if scan_limits:
+        lines += [
+            "",
+            "## External Scan Bounds",
+            "",
+            "| Source | Root | Max files | Max depth | Dirs seen | Candidates | Truncated |",
+            "|---|---|---:|---:|---:|---:|---|",
+        ]
+        for source, meta in sorted(scan_limits.items()):
+            truncated = meta.get("truncation_reason") if meta.get("truncated") else "no"
+            lines.append(
+                f"| `{source}` | `{relpath(Path(meta.get('root', '')))}` | "
+                f"`{meta.get('max_files')}` | `{meta.get('max_depth')}` | "
+                f"`{meta.get('dirs_seen')}` | `{meta.get('candidate_files')}` | `{truncated}` |"
+            )
 
     lines += [
         "",
@@ -735,12 +842,13 @@ def render_markdown(snapshot: dict[str, Any], rows: list[dict[str, Any]], args: 
 
 
 def build_snapshot(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any] | None]:
-    rows = iter_local_files(args.days)
+    rows, scan_limits = scan_local_files(args.days)
     mat = materialize(rows) if args.materialize else None
     snapshot = substrate_snapshot()
     snapshot["generated_at"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
     snapshot["horizon_days"] = args.days
     snapshot["local_summary"] = summarize_local(rows)
+    snapshot["scan_limits"] = scan_limits
     snapshot["private_root"] = str(PRIVATE_ROOT)
     snapshot["materialization"] = mat
     snapshot["object_store"] = object_store_snapshot()

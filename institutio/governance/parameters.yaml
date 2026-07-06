@@ -142,6 +142,24 @@ parameters:
     self_update: none
     owner: continuity
     note: "Optional PATH-style list of mounted/archive roots to include in session-corpus-ledger discovery. Read-only inventory and optional private materialization only; missing roots do not fail."
+  LIMEN_EXTERNAL_SESSION_MAX_FILES_PER_ROOT:
+    default: "5000"
+    env: LIMEN_EXTERNAL_SESSION_MAX_FILES_PER_ROOT
+    self_update: none
+    owner: continuity
+    note: "Per-root candidate-file cap for external/archive session-corpus scans so mounted volumes are inventoried, not crawled without bound."
+  LIMEN_EXTERNAL_SESSION_MAX_DEPTH:
+    default: "6"
+    env: LIMEN_EXTERNAL_SESSION_MAX_DEPTH
+    self_update: none
+    owner: continuity
+    note: "Maximum directory depth for optional external/archive session-corpus scans."
+  LIMEN_EXTERNAL_SESSION_MAX_DIRS_PER_ROOT:
+    default: "20000"
+    env: LIMEN_EXTERNAL_SESSION_MAX_DIRS_PER_ROOT
+    self_update: none
+    owner: continuity
+    note: "Per-root directory cap for optional external/archive session-corpus scans; truncation is recorded in the ledger."
   LIMEN_CURRENT_SESSION_JSONL:
     default: ""
     env: LIMEN_CURRENT_SESSION_JSONL
