@@ -1,6 +1,6 @@
 # Session Corpus Ledger
 
-Generated: `2026-07-06T00:51:16+00:00`
+Generated: `2026-07-06T00:55:55+00:00`
 Horizon: `all local history`
 
 ## Canonical Decision
@@ -11,17 +11,20 @@ Horizon: `all local history`
 - `prompt-lifecycle-ledger.py` is the redacted crosswalk from local prompts/sessions to worktrees, tasks, GitHub receipts, and cloud probes.
 - Raw personal/session data is private local material. It belongs under `./.limen-private/session-corpus/` when materialized, never in public Git history.
 - The app screenshots are coverage hints, not canonical input. Canonical input is the local Claude/Codex/session-meta filesystem state.
+- External/archive roots are opt-in through `LIMEN_EXTERNAL_SESSION_ROOTS`; they are bounded inventory surfaces, not deletion targets.
 
 ## Local Session Sources
 
-Total seen: `13999` files, `3.4 GiB`.
+Total seen: `17710` files, `6.8 GiB`.
 
 | Source | Root | Files | Size | Newest |
 |---|---:|---:|---:|---|
-| `claude-projects` | `~/.claude/projects` | 6586 | 1.9 GiB | `2026-07-06T00:43:21+00:00` |
-| `codex-sessions` | `~/.local/share/codex/sessions` | 1363 | 1.4 GiB | `2026-07-06T00:51:14+00:00` |
+| `claude-projects` | `~/.claude/projects` | 6587 | 1.9 GiB | `2026-07-06T00:53:02+00:00` |
+| `external-session-root-1` | `/Volumes/Archive4T` | 2000 | 1.8 GiB | `2026-07-05T21:11:46+00:00` |
+| `external-session-root-2` | `/Volumes/T7Recovery` | 1710 | 1.6 GiB | `2026-06-14T01:12:10+00:00` |
+| `codex-sessions` | `~/.local/share/codex/sessions` | 1363 | 1.4 GiB | `2026-07-06T00:55:51+00:00` |
 | `claude-file-history` | `~/.claude/file-history` | 5059 | 67.2 MiB | `2026-07-05T18:01:34+00:00` |
-| `codex-goals-state` | `~/.local/share/codex` | 6 | 19.9 MiB | `2026-07-06T00:51:14+00:00` |
+| `codex-goals-state` | `~/.local/share/codex` | 6 | 20.1 MiB | `2026-07-06T00:55:51+00:00` |
 | `chatgpt-desktop-conversations` | `~/Library/Application Support/com.openai.chat` | 251 | 15.5 MiB | `2026-07-06T00:36:32+00:00` |
 | `codex-shell-snapshots` | `~/.local/share/codex/shell_snapshots` | 7 | 2.3 MiB | `2026-07-06T00:36:57+00:00` |
 | `codex-history` | `~/.local/share/codex` | 1 | 812.5 KiB | `2026-07-06T00:44:59+00:00` |
@@ -36,19 +39,29 @@ Total seen: `13999` files, `3.4 GiB`.
 | `codex-attachments` | `~/.local/share/codex/attachments` | 4 | 6.2 KiB | `2026-06-27T18:15:45+00:00` |
 | `perplexity-desktop-stores` | `~/Library/Application Support/ai.perplexity.macv3` | 1 | 400 B | `2026-06-02T13:20:10+00:00` |
 
+## External Scan Bounds
+
+| Source | Root | Max files | Max depth | Dirs seen | Candidates | Truncated |
+|---|---|---:|---:|---:|---:|---|
+| `external-session-root-1` | `/Volumes/Archive4T` | `2000` | `5` | `2389` | `2000` | `file-cap` |
+| `external-session-root-2` | `/Volumes/T7Recovery` | `2000` | `5` | `229` | `1710` | `no` |
+| `external-session-root-3` | `/Volumes/Ingress` | `2000` | `5` | `17` | `0` | `no` |
+| `external-session-root-4` | `/Volumes/Scratch` | `2000` | `5` | `17` | `0` | `no` |
+
 ## Existing Organs
 
 | Organ | Role | Path | Git state |
 |---|---|---|---|
-| `session-meta` | producer: redacted, deduped multi-provider atoms | `~/session-meta` | `not a git repo` |
-| `knowledge-corpus` | distillation target: collection, reduced faces, THE ONE | `~/knowledge-corpus` | `not a git repo` |
-| `conversation-corpus-engine` | product/research engine: provider import and corpus promotion | `~/conversation-corpus-engine` | `not a git repo` |
+| `session-meta` | producer: redacted, deduped multi-provider atoms | `~/Workspace/session-meta` | `## fix/security-hardening-0629; 1 dirty entries` |
+| `knowledge-corpus` | distillation target: collection, reduced faces, THE ONE | `~/Workspace/knowledge-corpus` | `not a git repo` |
+| `conversation-corpus-engine` | product/research engine: provider import and corpus promotion | `~/Workspace/conversation-corpus-engine` | `not a git repo` |
 
 ## Substrate Counts
 
-- `session-meta/ingest/manifest.jsonl`: 0 records, mtime `missing`.
-- `session-meta/ingest/atoms.jsonl`: 0 atoms, mtime `missing`.
+- `session-meta/ingest/manifest.jsonl`: 25,018 records, mtime `2026-07-06T00:11:33+00:00`.
+- `session-meta/ingest/atoms.jsonl`: 205,398 atoms, mtime `2026-07-06T00:18:33+00:00`.
 - `knowledge-corpus`: `0` reduced faces; `00-THE-ONE.md` present: `False`.
+- Top manifest sources: `gemini` 4,592, `claude` 3,961, `claude-projects` 3,457, `chatgpt` 2,709, `cowork-sessions` 2,047, `codex` 1,933, `antigravity` 1,893, `downloads` 1,717.
 
 ## Session Lifecycle
 
@@ -83,8 +96,8 @@ Total seen: `13999` files, `3.4 GiB`.
 
 ## Roadblocks And Potholes
 
+- session-meta is not clean/in-sync; do not mutate it from Limen until its existing dirty and divergent work is preserved or merged.
 - Local Claude/Codex app stores are live private data; screenshots are only UI evidence. Canonical ingestion must come from the filesystem stores, not from the screenshots.
-- session-meta atoms.jsonl is missing, so corpus-converge has no atom substrate.
 
 ## Commands
 
