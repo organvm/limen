@@ -12,6 +12,7 @@
 Both run as real subprocesses against throwaway git repos, so the actual shell/Python ships.
 """
 
+import json
 import os
 import subprocess
 import time
@@ -290,11 +291,46 @@ def _age(path: Path, hours: float):
     os.utime(path, (t, t))
 
 
-def test_reclaim_removes_clean_pushed_idle(tmp_path):
+def _write_reclaim_acceptance(
+    limen_root: Path,
+    root: str,
+    action: str = "remove-worktree",
+    reason: str | None = None,
+    archive_status: str = "not_required_clean_merged_remote",
+    redaction_review: str = "not_required_remote_only",
+) -> None:
+    path = limen_root / "docs" / "worktree-reclaim-acceptance.jsonl"
+    path.parent.mkdir(exist_ok=True)
+    event = {
+        "accepted_at": "2026-07-06T05:30:00Z",
+        "root": root,
+        "action": action,
+        "accepted": True,
+        "archive_status": archive_status,
+        "redaction_review": redaction_review,
+    }
+    if reason:
+        event["reason"] = reason
+    path.write_text(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+
+
+def test_reclaim_requires_acceptance_for_clean_pushed_idle(tmp_path):
     main, bare, wtroot = _wt_root_with(tmp_path)
     dead = _add_wt(main, wtroot, "dead-task")  # clean, on origin/main, will be aged
     _age(dead, 5)
     (main / "logs").mkdir(exist_ok=True)
+    r = _run_reclaim(wtroot, main, apply=True)
+    assert r.returncode == 0, r.stderr
+    assert dead.exists(), r.stdout
+    assert "missing-reclaim-acceptance" in r.stdout
+
+
+def test_reclaim_removes_clean_pushed_idle_with_acceptance(tmp_path):
+    main, bare, wtroot = _wt_root_with(tmp_path)
+    dead = _add_wt(main, wtroot, "dead-task")  # clean, on origin/main, will be aged
+    _age(dead, 5)
+    (main / "logs").mkdir(exist_ok=True)
+    _write_reclaim_acceptance(main, "dead-task", reason="clean+merged+idle")
     r = _run_reclaim(wtroot, main, apply=True)
     assert r.returncode == 0, r.stderr
     assert not dead.exists(), r.stdout
@@ -341,6 +377,76 @@ def test_reclaim_keeps_clean_pushed_unmerged_branch(tmp_path):
     assert "not-merged-to-default" in r.stdout
 
 
+def test_reclaim_removes_clean_idle_remote_merged_receipt(tmp_path):
+    main, bare, wtroot = _wt_root_with(tmp_path)
+    (main / "logs").mkdir(exist_ok=True)
+    receipts = main / "docs" / "worktree-preservation-receipts.json"
+    receipts.parent.mkdir(exist_ok=True)
+
+    merged = _add_wt(main, wtroot, "receipt-merged")
+    _git("checkout", "-q", "-b", "merged-pr", cwd=merged)
+    _commit(merged, "squashed.txt", "merged elsewhere\n", "local pre-squash commit")
+    _age(merged, 5)
+
+    receipts.write_text(
+        json.dumps(
+            {
+                "receipts": [
+                    {
+                        "root": "receipt-merged",
+                        "lane": "remote-merged",
+                        "status": "merged_pr_preserved",
+                        "pr_state": "MERGED",
+                        "pr_url": "https://github.com/organvm/example/pull/1",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_reclaim_acceptance(main, "receipt-merged", reason="receipt-remote-merged+clean+idle")
+
+    r = _run_reclaim(wtroot, main, apply=True)
+
+    assert r.returncode == 0, r.stderr
+    assert not merged.exists(), r.stdout
+    assert "receipt-remote-merged+clean+idle" in r.stdout
+
+
+def test_reclaim_keeps_dirty_remote_merged_receipt(tmp_path):
+    main, bare, wtroot = _wt_root_with(tmp_path)
+    (main / "logs").mkdir(exist_ok=True)
+    receipts = main / "docs" / "worktree-preservation-receipts.json"
+    receipts.parent.mkdir(exist_ok=True)
+
+    dirty = _add_wt(main, wtroot, "dirty-receipt-merged")
+    _age(dirty, 5)
+    (dirty / "local-only.txt").write_text("uncommitted local data\n", encoding="utf-8")
+
+    receipts.write_text(
+        json.dumps(
+            {
+                "receipts": [
+                    {
+                        "root": "dirty-receipt-merged",
+                        "lane": "remote-merged",
+                        "status": "merged_pr_preserved",
+                        "pr_state": "MERGED",
+                        "pr_url": "https://github.com/organvm/example/pull/2",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    r = _run_reclaim(wtroot, main, apply=True)
+
+    assert r.returncode == 0, r.stderr
+    assert dirty.exists(), r.stdout
+    assert "dirty" in r.stdout
+
+
 def test_reclaim_removes_patch_equivalent_local_replay(tmp_path):
     main, bare, wtroot = _wt_root_with(tmp_path)
     (main / "logs").mkdir(exist_ok=True)
@@ -358,6 +464,7 @@ def test_reclaim_removes_patch_equivalent_local_replay(tmp_path):
     _commit(replay, "same.txt", "same change\n", "local replay of same patch")
     _git("fetch", "-q", "origin", cwd=replay)
     _age(replay, 5)
+    _write_reclaim_acceptance(main, "patch-equivalent", reason="clean+merged+idle")
 
     r = _run_reclaim(wtroot, main, apply=True)
 
@@ -375,6 +482,30 @@ def test_reclaim_dry_run_removes_nothing(tmp_path):
     assert r.returncode == 0
     assert dead.exists()  # dry-run never deletes
     assert "dry-run" in r.stdout
+
+
+def test_reclaim_removes_generated_log_shell(tmp_path):
+    limen_root = tmp_path / "limen"
+    (limen_root / "logs").mkdir(parents=True)
+    wtroot = tmp_path / ".limen-worktrees"
+    shell = wtroot / "generated-log-shell"
+    (shell / "logs").mkdir(parents=True)
+    (shell / "logs" / "session-lifecycle-pressure.md").write_text("generated\n", encoding="utf-8")
+    (shell / "logs" / "session-lifecycle-pressure.json").write_text("{}", encoding="utf-8")
+    _write_reclaim_acceptance(
+        limen_root,
+        "generated-log-shell",
+        action="remove-residue",
+        reason="generated-log-shell",
+        archive_status="not_required_generated_residue",
+        redaction_review="not_required_generated_residue",
+    )
+
+    r = _run_reclaim(wtroot, limen_root, apply=True)
+
+    assert r.returncode == 0, r.stderr
+    assert not shell.exists(), r.stdout
+    assert "generated-log-shell" in r.stdout
 
 
 def test_reclaim_malformed_numeric_env_fails_open(tmp_path):

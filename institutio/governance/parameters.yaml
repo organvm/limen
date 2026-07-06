@@ -136,6 +136,30 @@ parameters:
     self_update: none
     owner: continuity
     note: "Ignored local raw/private session cartridge. Stores manifests and optional content-addressed object copies; never committed."
+  LIMEN_EXTERNAL_SESSION_ROOTS:
+    default: ""
+    env: LIMEN_EXTERNAL_SESSION_ROOTS
+    self_update: none
+    owner: continuity
+    note: "Optional os.pathsep-separated archive/external roots for session-corpus-ledger.py inventory. Bounded scan only; never a deletion target."
+  LIMEN_EXTERNAL_SESSION_MAX_FILES_PER_ROOT:
+    default: 2000
+    env: LIMEN_EXTERNAL_SESSION_MAX_FILES_PER_ROOT
+    self_update: none
+    owner: continuity
+    note: "Per-root file cap for external/archive session inventory so large mounted volumes cannot turn a ledger refresh into an unbounded crawl."
+  LIMEN_EXTERNAL_SESSION_MAX_DEPTH:
+    default: 5
+    env: LIMEN_EXTERNAL_SESSION_MAX_DEPTH
+    self_update: none
+    owner: continuity
+    note: "Maximum directory depth for external/archive session inventory roots."
+  LIMEN_EXTERNAL_SESSION_MAX_DIRS_PER_ROOT:
+    default: 5000
+    env: LIMEN_EXTERNAL_SESSION_MAX_DIRS_PER_ROOT
+    self_update: none
+    owner: continuity
+    note: "Per-root directory visit cap for external/archive session inventory roots."
   LIMEN_CURRENT_SESSION_JSONL:
     default: ""
     env: LIMEN_CURRENT_SESSION_JSONL
@@ -214,6 +238,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "Optional archive target list for substrate/product ledger classification. Read-only; no archive mutation."
+  LIMEN_AGY_ARCHIVE_ROOT:
+    default: "$LIMEN_ROOT/.limen-private/agy-scratch-preserve"
+    env: LIMEN_AGY_ARCHIVE_ROOT
+    self_update: none
+    owner: continuity
+    note: "Private preservation root for Antigravity scratch deltas before any safe-reap decision. Ignored locally; public receipts carry redacted aggregate proof only."
   LIMEN_WORKSPACE_UNIT_TIMEOUT_SEC:
     default: 600                # seconds: per-entry rsync cap so one big repo copy never wedges the beat
     env: LIMEN_WORKSPACE_UNIT_TIMEOUT_SEC
@@ -239,11 +269,11 @@ parameters:
     owner: continuity
     note: "Optional substrate-ledger configuration path. Missing config is non-fatal and recorded."
   LIMEN_CONTRIB_LEDGER:
-    default: "$LIMEN_ROOT/docs/contrib-ledger.md"
+    default: "~/Workspace/organvm/contrib/LEDGER.yaml"
     env: LIMEN_CONTRIB_LEDGER
     self_update: none
-    owner: continuity
-    note: "Tracked contrib/product mirror ledger path used for read-only product accounting."
+    owner: contributions
+    note: "The hub ledger path (organvm/contrib LEDGER.yaml) read by product-ledger.py and contributions-organ.py. Was mis-declared as $LIMEN_ROOT/docs/contrib-ledger.md (a file that never existed) — fixed 2026-07-05 to match the executable default (the predicate wins over prose)."
   LIMEN_CORPUS_MAX_SESSIONS:
     default: ""
     env: LIMEN_CORPUS_MAX_SESSIONS
@@ -566,6 +596,18 @@ parameters:
     self_update: none
     owner: cvstos
     note: "Max directory entries the debt-sizing walk visits before returning an approximate total. Bounds the beat's cost; never blocks."
+  LIMEN_AGY_SCRATCH_ROOT:
+    default: "$HOME/.gemini/antigravity-cli/scratch"
+    env: LIMEN_AGY_SCRATCH_ROOT
+    self_update: none
+    owner: cvstos
+    note: "Antigravity/Agy scratch checkout root audited by antigravity-scratch-bridge.py and surfaced by CVSTOS. Inventory only; deletion is a separate receipt-gated action."
+  LIMEN_AGY_SCRATCH_MIN_IDLE_H:
+    default: 24
+    env: LIMEN_AGY_SCRATCH_MIN_IDLE_H
+    self_update: none
+    owner: cvstos
+    note: "Minimum idle hours before the Antigravity scratch bridge may label a clean remote-preserved root as a safe-reap candidate."
   # --- VVLTVS: the countenance — verify the public face reflects the live SSOT (sibling of CVSTOS) ---
   LIMEN_BEAT_VVLTVS:
     default: 24                 # cadence: verify the public face every 24 beats (offline file reads ⇒ cheap)
@@ -623,11 +665,29 @@ parameters:
     owner: contributions
     note: "The contribution hub repo (PLAN-06-OWNER-01). The mirror consumes its LEDGER outputs only — never raw sessions or private archaeology."
   LIMEN_BACKFLOW_MANIFEST:
-    default: "~/Workspace/organvm-corpvs-testamentvm/backflow-manifest.yaml"
+    default: "~/Workspace/organvm-corpvs-testamentvm/data/atoms/backflow-manifest.yaml"
     env: LIMEN_BACKFLOW_MANIFEST
     self_update: none
     owner: contributions
     note: "Where the inward-lens tally reads what each contribution taught (signals routed per receiving organ). Optional: an absent manifest renders as such, never fails the mirror."
+  LIMEN_CONTRIB_STALE_DAYS:
+    default: 14                 # an open PR untouched this long (vs the SOURCE stamp) renders protocol-due
+    env: LIMEN_CONTRIB_STALE_DAYS
+    self_update: none
+    owner: contributions
+    note: "The LIFECYCLE.md staleness rule, executable: open upstream PRs whose last update predates source-stamp minus this many days derive protocol-due (a bump is owed, staged, fired one-at-a-time by his hand — never batch-bumped). Measured against the source stamp, not the clock, so renders stay deterministic."
+  LIMEN_CONTRIB_SCOUT:
+    default: 1                  # default-ON: the autopoietic limb rides the beat (bounded local walk, no network)
+    env: LIMEN_CONTRIB_SCOUT
+    self_update: none
+    owner: contributions
+    note: "Gate for the autopoietic scout: walk our own workspace dependency manifests (bounded, offline) and derive the outward opportunity pool — upstreams we lean on hardest and have never engaged. Set 0 to render the mirror without the pool."
+  LIMEN_CONTRIB_SCOUT_CAP:
+    default: 12                 # the pool renders at most this many opportunities (heaviest-used first)
+    env: LIMEN_CONTRIB_SCOUT_CAP
+    self_update: none
+    owner: contributions
+    note: "Max opportunities in the autopoietic pool. A derived bound on surface size, not a judgment — the full usage map is recomputed every beat."
   # --- ORGANS (VLTIMA): convert idle capacity into institutional weight (legal/financial/education/...) ---
   LIMEN_ORGAN_BACKLOG:
     default: 1                  # default-ON: organ-ladder -> bounded build tasks each FEED beat
@@ -775,6 +835,12 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "Fleet dispatch boundary selector. `auto` derives reachable registered lanes from the capacity registry; explicit comma lists are normalized and filtered for down lanes."
+  LIMEN_ASYNC_DEFUNCT_GRACE:
+    default: 120
+    env: LIMEN_ASYNC_DEFUNCT_GRACE
+    self_update: none
+    owner: arms-agents
+    note: "Seconds to wait before a live async worker with a zombie child is treated as defunct and reaped through the queue-locked reopen path."
   LIMEN_QUEUE_LOCK_HELD:
     default: ""
     env: LIMEN_QUEUE_LOCK_HELD

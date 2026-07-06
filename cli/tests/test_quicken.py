@@ -125,6 +125,29 @@ def test_hang_residue_creates_via_tabularius(tmp_path, monkeypatch):
     assert "quicken-residue" in ask.labels
 
 
+def test_write_residue_splits_queued_unblocks_before_deduping(monkeypatch):
+    quicken = _load()
+    atom = "send the drafted message (never auto-send)"
+    monkeypatch.setattr(
+        quicken,
+        "_queue_residue_atoms",
+        lambda: {atom: ["effort-level-ultracode, nous research outreach p"]},
+    )
+
+    doc = quicken.write_residue(
+        [
+            {
+                "state": "STALLED",
+                "title": "effort-level-ultracode",
+                "decision": {"residue": atom},
+            }
+        ]
+    )
+
+    assert "effort-level-ultracode, effort-level-ultracode" not in doc
+    assert "unblocks: effort-level-ultracode, nous research outreach p" in doc
+
+
 def test_hang_residue_refreshes_via_tabularius(tmp_path, monkeypatch):
     quicken = _load()
     tasks = tmp_path / "tasks.yaml"

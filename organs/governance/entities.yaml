@@ -10,7 +10,7 @@
 schema_version: "1.0"
 organ: "governance"
 repo: "organvm/limen"
-updated: "2026-07-03"
+updated: "2026-07-06"
 
 # ── Entity taxonomy ──────────────────────────────────────────────────────
 # Governance-specific types with their required mandate fields.
@@ -59,20 +59,24 @@ promotion_rules:
     prerequisites:
       - "seed.yaml exists and validates"
       - "organ KERNEL.md and CHARTER.md exist"
+    validated_by: "validate-seed.py — schema_version + topology checks"
   ALPHA_to_BETA:
     prerequisites:
       - "first vertical slice artifact exists"
       - "organ registered in organ-ladder.json"
       - "seed.yaml promotion_status matches implementation_status"
+    validated_by: "validate-seed.py — Rule 1e: no split declaration"
   BETA_to_STABLE:
     prerequisites:
       - "organ beat wired into heartbeat loop"
       - "maturity >= 60% in organ-ladder.json"
+    validated_by: "validate-seed.py + manual beat verification"
   STABLE_to_MATURE:
     prerequisites:
       - "organ face (macro + micro) documented"
       - "governance rules operationalized as checks"
       - "maturity >= 90% in organ-ladder.json"
+    validated_by: "validate-seed.py + manual beat verification"
 
 # ── REPOSITORY REGISTRATIONS ────────────────────────────────────────────
 # Every organ repo registered under governance, with its cursus standing.
@@ -93,6 +97,20 @@ repos:
       - "Sequencing Auditor"
       - "Entity Registrar"
       - "Compliance Sentinel"
+
+  - repo: "organvm/limen"
+    organ: "Publication Policy (the disclosure court)"
+    home: "organs/governance/"
+    entity: "cind-and-sol-foundation"
+    cursus: "INCUBATOR"
+    implementation_status: "INCUBATOR"
+    description: >
+      The disclosure court — the ONE disposition engine for "what goes on which repo."
+      Content-disposition matrix (repo visibility x content class) with owner-scoped
+      redaction. Convergence table for all scattered content-safety gates (_SECRET_RX,
+      SENSITIVE_PATTERNS, persona contracts, awaiting_publish) behind PUBLICATION-POLICY.md.
+    governance_roles:
+      - "Content Disposition"
 
 # ── ENTITIES (MICRO: ORGANVM's own) ─────────────────────────────────────
 # Legal entities under governance. Each has mandates (what it may do) and

@@ -21,8 +21,11 @@ Usage: dispatch-async.py --lanes auto --per-lane 8 --max 12 [--dry-run]
 
 import argparse
 import datetime
+import hashlib
 import json
 import os
+import re
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -45,7 +48,10 @@ from limen.dispatch import (  # noqa: E402
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 TASKS = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
 RUNS = ROOT / "logs" / "async-runs"
+RECEIPT_ARCHIVE = ROOT / ".limen-private" / "async-runs" / "archive"
 WORKER = ROOT / "scripts" / "async-run-one.py"
+_TOKEN_RE = re.compile(r"(github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{12,})")
+_EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
 
 def _int_or_default(raw: object, default: int) -> int:
@@ -68,6 +74,114 @@ def _clear_running_markers(task_id: str) -> None:
     for marker in RUNS.glob("*.running"):
         if marker.name.startswith(prefix):
             marker.unlink(missing_ok=True)
+
+
+def _running_marker_info(marker: Path) -> dict[str, object]:
+    raw = marker.read_text().strip()
+    try:
+        data = json.loads(raw)
+        started = datetime.datetime.fromisoformat(str(data.get("started_at") or ""))
+        pid = data.get("pid")
+        return {"started_at": started, "pid": int(pid) if pid is not None else None}
+    except Exception:
+        return {"started_at": datetime.datetime.fromisoformat(raw), "pid": None}
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _worker_has_defunct_child(pid: int) -> bool:
+    try:
+        proc = subprocess.run(
+            ["ps", "-axo", "pid=,ppid=,stat="],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    for line in proc.stdout.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) < 3:
+            continue
+        try:
+            ppid = int(parts[1])
+        except ValueError:
+            continue
+        if ppid == pid and "Z" in parts[2]:
+            return True
+    return False
+
+
+def _kill_worker_group(pid: int | None) -> None:
+    if pid is None:
+        return
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
+def _redact_receipt_value(value: object) -> object:
+    if isinstance(value, str):
+        redacted = _TOKEN_RE.sub("[REDACTED_TOKEN]", value)
+        redacted = _EMAIL_RE.sub("[REDACTED_EMAIL]", redacted)
+        if len(redacted) > 4000:
+            redacted = f"{redacted[:4000]}...[TRUNCATED {len(redacted) - 4000} chars]"
+        return redacted
+    if isinstance(value, list):
+        return [_redact_receipt_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _redact_receipt_value(item) for key, item in value.items()}
+    return value
+
+
+def _archive_result_receipt(
+    receipt_path: Path,
+    raw: bytes,
+    now: datetime.datetime,
+    *,
+    parsed: object | None,
+    reason: str,
+    parse_error: str | None = None,
+) -> Path:
+    day_dir = RECEIPT_ARCHIVE / now.strftime("%Y-%m-%d")
+    day_dir.mkdir(parents=True, exist_ok=True)
+    stamp = now.strftime("%Y%m%dT%H%M%SZ")
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", receipt_path.name)
+    out = day_dir / f"{stamp}-{safe_name}"
+    counter = 1
+    while out.exists():
+        out = day_dir / f"{stamp}-{counter}-{safe_name}"
+        counter += 1
+    try:
+        source = str(receipt_path.relative_to(ROOT))
+    except ValueError:
+        source = str(receipt_path)
+    archive = {
+        "archived_at": now.isoformat(),
+        "source": source,
+        "reason": reason,
+        "raw_sha256": hashlib.sha256(raw).hexdigest(),
+        "raw_bytes": len(raw),
+        "receipt": _redact_receipt_value(parsed) if parsed is not None else None,
+    }
+    if parse_error:
+        archive["parse_error"] = _redact_receipt_value(parse_error)
+        archive["raw_preview"] = _redact_receipt_value(raw.decode("utf-8", errors="replace"))
+    out.write_text(json.dumps(archive, indent=2, sort_keys=True) + "\n")
+    return out
 
 
 def _submit_result_ticket(task, agent: str, result, now, track) -> Path | None:
@@ -126,35 +240,59 @@ def harvest() -> int:
     lf = load_limen_file(TASKS)
     byid = {t.id: t for t in lf.tasks}
     track = lf.portal.budget.track
-    ticket_files: dict[str, tuple[Path, Path]] = {}
+    ticket_files: dict[str, tuple[Path, Path, bytes, dict]] = {}
     ticket_tasks: dict[str, str] = {}
     for rf in files:
+        raw = b""
         try:
-            data = json.loads(rf.read_text())
-        except Exception:
+            raw = rf.read_bytes()
+            data = json.loads(raw.decode("utf-8"))
+        except Exception as exc:
+            _archive_result_receipt(
+                rf,
+                raw,
+                now,
+                parsed=None,
+                reason="malformed-result",
+                parse_error=str(exc),
+            )
+            rf.unlink(missing_ok=True)
+            continue
+        if not isinstance(data, dict):
+            _archive_result_receipt(
+                rf,
+                raw,
+                now,
+                parsed=data,
+                reason="malformed-result",
+                parse_error="result receipt JSON root is not an object",
+            )
             rf.unlink(missing_ok=True)
             continue
         t = byid.get(data.get("task_id"))
         if t is not None and data.get("result") != "__notask__":
             ticket = _submit_result_ticket(t, str(data.get("agent") or "unknown"), data.get("result"), now, track)
             if ticket:
-                ticket_files[ticket.stem] = (rf, ticket)
+                ticket_files[ticket.stem] = (rf, ticket, raw, data)
                 ticket_tasks[ticket.stem] = str(data.get("task_id"))
             else:
                 if data.get("task_id"):
                     _clear_running_markers(str(data.get("task_id")))
+                _archive_result_receipt(rf, raw, now, parsed=data, reason="harvested")
                 rf.unlink(missing_ok=True)
         else:
             if data.get("task_id"):
                 _clear_running_markers(str(data.get("task_id")))
+            _archive_result_receipt(rf, raw, now, parsed=data, reason="harvested")
             rf.unlink(missing_ok=True)
     if ticket_files:
         drained = drain_once(TASKS)
         applied_ids = set(drained.applied_ids)
-        for ticket_id, (rf, ticket_path) in ticket_files.items():
+        for ticket_id, (rf, ticket_path, raw, data) in ticket_files.items():
             if ticket_id in applied_ids:
                 applied += 1
                 _clear_running_markers(ticket_tasks[ticket_id])
+                _archive_result_receipt(rf, raw, now, parsed=data, reason="harvested")
                 rf.unlink(missing_ok=True)
             else:
                 ticket_path.unlink(missing_ok=True)
@@ -174,25 +312,37 @@ def reap_stale(max_age_s: int):
     A live slow worker is younger than max_age (call_agent_dispatch caps the agent at its timeout)."""
     RUNS.mkdir(parents=True, exist_ok=True)
     now = _now()
+    defunct_grace_s = max(1, _env_int("LIMEN_ASYNC_DEFUNCT_GRACE", 120))
     reaped = []
     for m in RUNS.glob("*__*.running"):
         try:
-            age = (now - datetime.datetime.fromisoformat(m.read_text().strip())).total_seconds()
+            info = _running_marker_info(m)
+            age = (now - info["started_at"]).total_seconds()  # type: ignore[operator]
         except Exception:
             age = max_age_s + 1  # unreadable/empty marker → treat as stale
+            info = {"pid": None}
+        pid = info.get("pid")
+        dead_pid = isinstance(pid, int) and not _pid_alive(pid)
+        zombie_stuck = isinstance(pid, int) and age > defunct_grace_s and _worker_has_defunct_child(pid)
         if age > max_age_s:
             tid, agent = m.name[: -len(".running")].rsplit("__", 1)
             # if the worker DID finish (result file present), let harvest handle it; don't reap
             if not (RUNS / f"{tid}.result.json").exists():
                 # Defer marker unlink until TABVLARIVS applies the reopen below, so a deferred keeper
                 # pass can't leave the slot leaked (marker gone, task still 'dispatched').
-                reaped.append((tid, agent, m))
+                reaped.append((tid, agent, m, pid if isinstance(pid, int) else None))
+        elif dead_pid or zombie_stuck:
+            tid, agent = m.name[: -len(".running")].rsplit("__", 1)
+            if not (RUNS / f"{tid}.result.json").exists():
+                reaped.append((tid, agent, m, pid if isinstance(pid, int) else None))
     if reaped:
+        for _tid, _agent, _m, pid in reaped:
+            _kill_worker_group(pid)
         marker_by_ticket: dict[str, tuple[Path, Path]] = {}
         marker_without_ticket: list[Path] = []
         lf = load_limen_file(TASKS)
         byid = {t.id: t for t in lf.tasks}
-        for tid, agent, _m in reaped:
+        for tid, agent, _m, _pid in reaped:
             t = byid.get(tid)
             if t is not None and t.status == "dispatched":
                 if _has_done_transition(t):
@@ -235,7 +385,7 @@ def reap_stale(max_age_s: int):
         markers_to_clear = marker_without_ticket + applied_markers
         for m in markers_to_clear:
             m.unlink(missing_ok=True)
-    return [tid for tid, _agent, _m in reaped]
+    return [tid for tid, _agent, _m, _pid in reaped]
 
 
 def inspect_stale(max_age_s: int) -> list[str]:
@@ -245,7 +395,8 @@ def inspect_stale(max_age_s: int) -> list[str]:
     stale = []
     for m in RUNS.glob("*__*.running"):
         try:
-            age = (now - datetime.datetime.fromisoformat(m.read_text().strip())).total_seconds()
+            info = _running_marker_info(m)
+            age = (now - info["started_at"]).total_seconds()  # type: ignore[operator]
         except Exception:
             age = max_age_s + 1
         if age > max_age_s:
@@ -364,15 +515,17 @@ def reserve_and_launch(agents, per_agent, cap, dry):
             ticket_path.unlink(missing_ok=True)
     # outside the lock: write markers + spawn detached workers (fast; we never wait on them)
     for agent, tid in picked:
-        (RUNS / f"{tid}__{agent}.running").write_text(now.isoformat())
         logf = open(RUNS / f"{tid}.log", "a")
-        subprocess.Popen(
+        proc = subprocess.Popen(
             [sys.executable, str(WORKER), "--agent", agent, "--task-id", tid],
             stdout=logf,
             stderr=logf,
             stdin=subprocess.DEVNULL,
             start_new_session=True,
             env={**os.environ, "PYTHONPATH": str(ROOT / "cli" / "src")},
+        )
+        (RUNS / f"{tid}__{agent}.running").write_text(
+            json.dumps({"started_at": now.isoformat(), "agent": agent, "task_id": tid, "pid": proc.pid})
         )
     return picked
 

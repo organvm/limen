@@ -7,6 +7,7 @@ reopens its task AND removes the marker; a marker with a result file present is 
 """
 
 import importlib.util
+import json
 import sys
 from datetime import date
 from pathlib import Path
@@ -40,6 +41,7 @@ def board(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(dispatch_async, "TASKS", tasks_path)
     monkeypatch.setattr(dispatch_async, "RUNS", runs)
+    monkeypatch.setattr(dispatch_async, "RECEIPT_ARCHIVE", tmp_path / ".limen-private" / "async-runs" / "archive")
     return tasks_path, runs
 
 
@@ -72,3 +74,127 @@ def test_reap_stale_leaves_marker_when_result_present(board):
     assert marker.exists()  # left in place for harvest
     got = {t.id: t for t in load_limen_file(tasks_path).tasks}
     assert got["T1"].status == "dispatched"  # untouched
+
+
+def test_reap_dead_pid_marker_without_waiting_for_age(board, monkeypatch):
+    tasks_path, runs = board
+    marker = runs / "T1__agy.running"
+    marker.write_text(
+        json.dumps(
+            {
+                "started_at": dispatch_async._now().isoformat(),
+                "agent": "agy",
+                "task_id": "T1",
+                "pid": 424242,
+            }
+        )
+    )
+    monkeypatch.setattr(dispatch_async, "_pid_alive", lambda pid: False)
+    killed: list[int] = []
+    monkeypatch.setattr(dispatch_async, "_kill_worker_group", lambda pid: killed.append(pid))
+
+    reaped = dispatch_async.reap_stale(max_age_s=999999)
+
+    assert reaped == ["T1"]
+    assert killed == [424242]
+    assert not marker.exists()
+    got = {t.id: t for t in load_limen_file(tasks_path).tasks}
+    assert got["T1"].status == "open"
+
+
+def test_reap_zombie_child_marker_after_grace(board, monkeypatch):
+    tasks_path, runs = board
+    marker = runs / "T1__agy.running"
+    started = dispatch_async._now() - dispatch_async.datetime.timedelta(seconds=300)
+    marker.write_text(
+        json.dumps(
+            {
+                "started_at": started.isoformat(),
+                "agent": "agy",
+                "task_id": "T1",
+                "pid": 12345,
+            }
+        )
+    )
+    monkeypatch.setattr(dispatch_async, "_env_int", lambda name, default: 120)
+    monkeypatch.setattr(dispatch_async, "_pid_alive", lambda pid: True)
+    monkeypatch.setattr(dispatch_async, "_worker_has_defunct_child", lambda pid: True)
+    killed: list[int] = []
+    monkeypatch.setattr(dispatch_async, "_kill_worker_group", lambda pid: killed.append(pid))
+
+    reaped = dispatch_async.reap_stale(max_age_s=999999)
+
+    assert reaped == ["T1"]
+    assert killed == [12345]
+    assert not marker.exists()
+    got = {t.id: t for t in load_limen_file(tasks_path).tasks}
+    assert got["T1"].status == "open"
+
+
+def test_reap_leaves_live_pid_marker_before_grace(board, monkeypatch):
+    tasks_path, runs = board
+    marker = runs / "T1__agy.running"
+    marker.write_text(
+        json.dumps(
+            {
+                "started_at": dispatch_async._now().isoformat(),
+                "agent": "agy",
+                "task_id": "T1",
+                "pid": 12345,
+            }
+        )
+    )
+    monkeypatch.setattr(dispatch_async, "_env_int", lambda name, default: 120)
+    monkeypatch.setattr(dispatch_async, "_pid_alive", lambda pid: True)
+    monkeypatch.setattr(dispatch_async, "_worker_has_defunct_child", lambda pid: True)
+
+    reaped = dispatch_async.reap_stale(max_age_s=999999)
+
+    assert reaped == []
+    assert marker.exists()
+    got = {t.id: t for t in load_limen_file(tasks_path).tasks}
+    assert got["T1"].status == "dispatched"
+
+
+def test_harvest_archives_result_receipt_before_unlink(board):
+    tasks_path, runs = board
+    result = {
+        "task_id": "T1",
+        "agent": "agy",
+        "result": False,
+        "ts": "2026-07-06T00:00:00+00:00",
+        "err": "token sk-secretsecretsecret and contact test@example.com",
+    }
+    receipt = runs / "T1.result.json"
+    receipt.write_text(json.dumps(result))
+
+    applied = dispatch_async.harvest()
+
+    assert applied == 1
+    assert not receipt.exists()
+    archives = list(dispatch_async.RECEIPT_ARCHIVE.glob("*/*.result.json"))
+    assert len(archives) == 1
+    archived = json.loads(archives[0].read_text())
+    assert archived["reason"] == "harvested"
+    assert archived["raw_sha256"]
+    assert archived["receipt"]["err"] == "token [REDACTED_TOKEN] and contact [REDACTED_EMAIL]"
+    got = {t.id: t for t in load_limen_file(tasks_path).tasks}
+    assert got["T1"].dispatch_log[-1].agent == "agy"
+
+
+def test_harvest_archives_malformed_result_receipt_before_unlink(board):
+    tasks_path, runs = board
+    receipt = runs / "T1.result.json"
+    receipt.write_text("[1, 2, 3]")
+
+    applied = dispatch_async.harvest()
+
+    assert applied == 0
+    assert not receipt.exists()
+    archives = list(dispatch_async.RECEIPT_ARCHIVE.glob("*/*.result.json"))
+    assert len(archives) == 1
+    archived = json.loads(archives[0].read_text())
+    assert archived["reason"] == "malformed-result"
+    assert archived["parse_error"] == "result receipt JSON root is not an object"
+    got = {t.id: t for t in load_limen_file(tasks_path).tasks}
+    assert got["T1"].status == "dispatched"

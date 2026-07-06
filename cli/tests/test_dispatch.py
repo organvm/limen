@@ -860,6 +860,34 @@ def test_lane_run_env_keeps_lane_specific_isolation(tmp_path: Path, monkeypatch)
     assert "ANTHROPIC_API_KEY" not in claude_env
     assert "CLAUDE_CODE_OAUTH_TOKEN" not in claude_env
 
+    monkeypatch.delenv("LIMEN_CLAUDE_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("LIMEN_CLAUDE_API_KEY", raising=False)
+    claude_keyless_env = D._lane_run_env("claude")
+    assert "ANTHROPIC_API_KEY" not in claude_keyless_env
+    assert "CLAUDE_CODE_OAUTH_TOKEN" not in claude_keyless_env
+
+    monkeypatch.setenv("LIMEN_CLAUDE_API_KEY", "fleet-api-key")
+    claude_api_env = D._lane_run_env("claude")
+    assert claude_api_env["ANTHROPIC_API_KEY"] == "fleet-api-key"
+    assert "CLAUDE_CODE_OAUTH_TOKEN" not in claude_api_env
+
+
+def test_failed_agent_result_names_lane_and_task(capsys) -> None:
+    task = Task(
+        id="LIMEN-FAIL-LANE",
+        title="Fail lane",
+        repo="organvm/limen",
+        target_agent="claude",
+        priority="high",
+        budget_cost=1,
+        status="open",
+        created="2026-07-06",
+    )
+    run = subprocess.CompletedProcess(["claude"], 1, stdout="", stderr="connector shadowed")
+
+    assert D._failed_agent_result("claude", task, run) is False
+    assert "FAILED agent claude on LIMEN-FAIL-LANE (1): connector shadowed" in capsys.readouterr().out
+
 
 def test_resolve_agent_binary_uses_opencode_clock_when_installed(monkeypatch) -> None:
     monkeypatch.delenv("LIMEN_OPENCODE_BIN", raising=False)
@@ -953,6 +981,55 @@ def test_git_plumbing_retries_transient_config_lock(tmp_path: Path, monkeypatch)
 
     assert result.returncode == 0
     assert len(calls) == 2
+
+
+def _git_ok(cwd: Path, *args: str) -> str:
+    result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True)
+    return result.stdout
+
+
+def _make_cleanup_repo(tmp_path: Path) -> tuple[Path, Path, str]:
+    repo = tmp_path / "repo"
+    wt = tmp_path / "wt"
+    repo.mkdir()
+    _git_ok(repo, "init", "-q", "-b", "main")
+    (repo / "README.md").write_text("base\n", encoding="utf-8")
+    _git_ok(repo, "add", "README.md")
+    _git_ok(repo, "-c", "user.email=t@example.com", "-c", "user.name=test", "commit", "-qm", "base")
+    branch = "limen/test-cleanup"
+    _git_ok(repo, "worktree", "add", "-q", "-b", branch, str(wt), "main")
+    return repo, wt, branch
+
+
+def test_cleanup_isolated_worktree_removes_clean_noop_branch(tmp_path: Path) -> None:
+    repo, wt, branch = _make_cleanup_repo(tmp_path)
+
+    D._cleanup_isolated_worktree(repo, wt, branch, "main", pushed=False)
+
+    assert not wt.exists()
+    assert branch not in _git_ok(repo, "branch", "--list", branch)
+
+
+def test_cleanup_isolated_worktree_preserves_dirty_failed_work(tmp_path: Path) -> None:
+    repo, wt, branch = _make_cleanup_repo(tmp_path)
+    (wt / "local.txt").write_text("local-only\n", encoding="utf-8")
+
+    D._cleanup_isolated_worktree(repo, wt, branch, "main", pushed=False)
+
+    assert wt.exists()
+    assert branch in _git_ok(repo, "branch", "--list", branch)
+
+
+def test_cleanup_isolated_worktree_preserves_unpushed_commits(tmp_path: Path) -> None:
+    repo, wt, branch = _make_cleanup_repo(tmp_path)
+    (wt / "README.md").write_text("base\nlocal commit\n", encoding="utf-8")
+    _git_ok(wt, "add", "README.md")
+    _git_ok(wt, "-c", "user.email=t@example.com", "-c", "user.name=test", "commit", "-qm", "local work")
+
+    D._cleanup_isolated_worktree(repo, wt, branch, "main", pushed=False)
+
+    assert wt.exists()
+    assert D._unpreserved_work_reason(wt, "main") == "unpushed-commits"
 
 
 def test_noop_result_stays_recoverable_not_cancelled() -> None:

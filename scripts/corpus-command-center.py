@@ -8,6 +8,7 @@ state, tracked docs, the Aug-1 gate, and inbound positioning surfaces.
 Tracked/public output is redacted. Raw bodies are written only to the ignored
 private object store and referenced by content hash.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,9 +28,7 @@ import yaml
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 HOME = Path.home()
-PRIVATE_ROOT = Path(
-    os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus")
-)
+PRIVATE_ROOT = Path(os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus"))
 LIFECYCLE_INDEX = PRIVATE_ROOT / "lifecycle" / "prompt-lifecycle-index.json"
 PRIORITY_INDEX = PRIVATE_ROOT / "lifecycle" / "prompt-priority-map.json"
 ATTACK_INDEX = PRIVATE_ROOT / "lifecycle" / "session-attack-paths.json"
@@ -183,9 +182,7 @@ def atomize(text: str, *, limit: int = 18) -> list[str]:
     toks = tokens(text)
     counts = Counter(toks)
     bigrams = Counter(
-        f"{a} {b}"
-        for a, b in zip(toks, toks[1:])
-        if a not in STOP_WORDS and b not in STOP_WORDS and a != b
+        f"{a} {b}" for a, b in zip(toks, toks[1:]) if a not in STOP_WORDS and b not in STOP_WORDS and a != b
     )
     atoms = [item for item, _ in counts.most_common(limit)]
     for item, _ in bigrams.most_common(max(4, limit // 3)):
@@ -222,9 +219,15 @@ def extracted_texts(source: str, obj: dict[str, Any]) -> list[tuple[str, str, st
         ptype = payload.get("type")
         role = str(payload.get("role") or "")
         if ptype == "user_message":
-            return [("prompt", "user", text) for text in text_from_content(payload.get("message")) + text_from_content(payload.get("text_elements"))]
+            return [
+                ("prompt", "user", text)
+                for text in text_from_content(payload.get("message")) + text_from_content(payload.get("text_elements"))
+            ]
         if ptype == "agent_message":
-            return [("response", "assistant", text) for text in text_from_content(payload.get("message")) + text_from_content(payload.get("text_elements"))]
+            return [
+                ("response", "assistant", text)
+                for text in text_from_content(payload.get("message")) + text_from_content(payload.get("text_elements"))
+            ]
         if ptype == "message":
             kind = "prompt" if role == "user" else "response" if role == "assistant" else "system"
             return [(kind, role or "unknown", text) for text in text_from_content(payload.get("content"))]
@@ -359,9 +362,7 @@ def build_task_units(*, write_objects: bool) -> list[dict[str, Any]]:
         if not isinstance(task, dict) or not task.get("id"):
             continue
         body = "\n\n".join(
-            str(task.get(key) or "")
-            for key in ("title", "context")
-            if str(task.get(key) or "").strip()
+            str(task.get(key) or "") for key in ("title", "context") if str(task.get(key) or "").strip()
         ).strip()
         if not body:
             body = str(task["id"])
@@ -402,6 +403,11 @@ def build_task_units(*, write_objects: bool) -> list[dict[str, Any]]:
 def doc_candidates() -> list[Path]:
     explicit = [
         DOC_PATH,
+        ROOT / "docs" / "session-corpus-ledger.md",
+        ROOT / "docs" / "antigravity-scratch-bridge.md",
+        ROOT / "docs" / "storage-creep-2026-07-05.md",
+        ROOT / "docs" / "avtopoiesis.md",
+        ROOT / "docs" / "agent-code-review-queue.md",
         ROOT / "docs" / "prompt-lifecycle-ledger.md",
         ROOT / "docs" / "prompt-priority-map.md",
         ROOT / "docs" / "prompt-packet-ledger.md",
@@ -411,10 +417,11 @@ def doc_candidates() -> list[Path]:
         POSITIONING_DIR / "_frontdoor.md",
         POSITIONING_DIR / "_discoverability.md",
     ]
+    agent_reviews = sorted((ROOT / "docs").glob("agent-*-review.md"))
     generated = sorted(POSITIONING_DIR.glob("*.md")) if POSITIONING_DIR.exists() else []
     paths = []
     seen = set()
-    for path in explicit + generated:
+    for path in explicit + agent_reviews + generated:
         if path.exists() and path not in seen and ".internal" not in path.name:
             paths.append(path)
             seen.add(path)
@@ -467,7 +474,9 @@ def refresh_aug1_view() -> None:
     script = ROOT / "scripts" / "aug1-view.py"
     if not script.exists():
         return
-    subprocess.run([sys.executable, str(script)], cwd=ROOT, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(
+        [sys.executable, str(script)], cwd=ROOT, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
 
 
 def aug1_panel() -> dict[str, Any]:
@@ -536,10 +545,7 @@ def build_allusions(units: list[dict[str, Any]], cluster_atoms: dict[str, list[s
     lane_atoms: dict[str, Counter[str]] = defaultdict(Counter)
     for unit in units:
         lane_atoms[str(unit.get("lane_id") or "unknown")].update(unit.get("atoms", []))
-    lane_top_atoms = {
-        lane_id: [atom for atom, _ in counter.most_common(24)]
-        for lane_id, counter in lane_atoms.items()
-    }
+    lane_top_atoms = {lane_id: [atom for atom, _ in counter.most_common(24)] for lane_id, counter in lane_atoms.items()}
     rows = []
     for unit in units:
         explicit = list(unit.get("atoms") or [])
@@ -562,7 +568,9 @@ def build_allusions(units: list[dict[str, Any]], cluster_atoms: dict[str, list[s
     return rows
 
 
-def build_comparisons(clusters: list[dict[str, Any]], units: list[dict[str, Any]], limit: int = 24) -> list[dict[str, Any]]:
+def build_comparisons(
+    clusters: list[dict[str, Any]], units: list[dict[str, Any]], limit: int = 24
+) -> list[dict[str, Any]]:
     by_cluster: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for unit in units:
         by_cluster[str(unit.get("cluster_id"))].append(unit)
@@ -591,6 +599,36 @@ def build_comparisons(clusters: list[dict[str, Any]], units: list[dict[str, Any]
         if len(rows) >= limit:
             break
     return rows
+
+
+def build_comparison_previews(
+    comparisons: list[dict[str, Any]], units: list[dict[str, Any]], limit: int = 40
+) -> list[dict[str, Any]]:
+    units_by_id = {unit["unit_id"]: unit for unit in units}
+    previews = []
+    for item in comparisons[:limit]:
+        left = units_by_id.get(item["left_unit_id"], {})
+        right = units_by_id.get(item["right_unit_id"], {})
+        previews.append(
+            {
+                "comparison_id": item["comparison_id"],
+                "cluster_id": item["cluster_id"],
+                "left_unit_id": item["left_unit_id"],
+                "right_unit_id": item["right_unit_id"],
+                "left_body_preview": str(left.get("body_preview") or ""),
+                "right_body_preview": str(right.get("body_preview") or ""),
+                "left_body_object": left.get("body_object"),
+                "right_body_object": right.get("body_object"),
+            }
+        )
+    return previews
+
+
+def compact_private_unit(unit: dict[str, Any]) -> dict[str, Any]:
+    """Drop generated preview duplication; raw text remains addressable through body_object."""
+    compact = dict(unit)
+    compact.pop("body_preview", None)
+    return compact
 
 
 def redact_unit(unit: dict[str, Any]) -> dict[str, Any]:
@@ -640,7 +678,9 @@ def validate_public_redaction(public_snapshot: dict[str, Any]) -> None:
         raise ValueError(f"public corpus snapshot leaks forbidden field/text: {hits}")
 
 
-def build_snapshots(*, write_objects: bool = False, max_sessions: int | None = DEFAULT_MAX_SESSIONS) -> tuple[dict[str, Any], dict[str, Any], str]:
+def build_snapshots(
+    *, write_objects: bool = False, max_sessions: int | None = DEFAULT_MAX_SESSIONS
+) -> tuple[dict[str, Any], dict[str, Any], str]:
     lifecycle = load_json(LIFECYCLE_INDEX, {})
     priority = load_json(PRIORITY_INDEX, {})
     attack = load_json(ATTACK_INDEX, {})
@@ -653,6 +693,7 @@ def build_snapshots(*, write_objects: bool = False, max_sessions: int | None = D
     public_units_source = units[:PUBLIC_UNIT_LIMIT]
     allusions = build_allusions(public_units_source, cluster_atoms)
     comparisons = build_comparisons(clusters, units)
+    comparison_previews = build_comparison_previews(comparisons, units)
     kind_counts = Counter(str(unit.get("kind") or "unknown") for unit in units)
     lane_counts = Counter(str(unit.get("lane_id") or "unknown") for unit in units)
     source_counts = Counter(str(unit.get("source") or "unknown") for unit in units)
@@ -674,7 +715,8 @@ def build_snapshots(*, write_objects: bool = False, max_sessions: int | None = D
         "privacy": {
             "raw_text_location": str(BODY_OBJECT_ROOT),
             "public_contains_raw_text": False,
-            "private_contains_body_previews": True,
+            "private_contains_body_previews": False,
+            "private_comparison_previews": True,
         },
         "inputs": {
             "prompt_lifecycle_index": str(LIFECYCLE_INDEX),
@@ -683,10 +725,11 @@ def build_snapshots(*, write_objects: bool = False, max_sessions: int | None = D
             "tasks": str(TASKS_PATH),
         },
         "coverage": coverage,
-        "units": units,
+        "units": [compact_private_unit(unit) for unit in units],
         "clusters": clusters,
         "allusions": allusions,
         "comparisons": comparisons,
+        "comparison_previews": comparison_previews,
         "aug1": aug1_panel(),
         "inbound": inbound_panel(),
         "attack_paths": attack.get("ranked_paths", []) if isinstance(attack, dict) else [],
@@ -786,23 +829,21 @@ def render_markdown(public: dict[str, Any]) -> str:
 
 
 def render_private_html(private: dict[str, Any]) -> str:
-    comparisons = private.get("comparisons", [])[:40]
-    units_by_id = {unit["unit_id"]: unit for unit in private.get("units", [])}
+    comparison_previews = private.get("comparison_previews") or []
     cards = []
-    for item in comparisons:
-        left = units_by_id.get(item["left_unit_id"], {})
-        right = units_by_id.get(item["right_unit_id"], {})
+    for item in comparison_previews[:40]:
         cards.append(
             "<section class='cmp'>"
             f"<h2>{html.escape(item['cluster_id'])}</h2>"
             "<div class='cols'>"
-            f"<pre>{html.escape(str(left.get('body_preview') or ''))}</pre>"
-            f"<pre>{html.escape(str(right.get('body_preview') or ''))}</pre>"
+            f"<pre>{html.escape(str(item.get('left_body_preview') or ''))}</pre>"
+            f"<pre>{html.escape(str(item.get('right_body_preview') or ''))}</pre>"
             "</div>"
-            f"<p>{html.escape(str(left.get('body_object') or ''))} -> {html.escape(str(right.get('body_object') or ''))}</p>"
+            f"<p>{html.escape(str(item.get('left_body_object') or ''))} -> {html.escape(str(item.get('right_body_object') or ''))}</p>"
             "</section>"
         )
-    return """<!doctype html>
+    return (
+        """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -820,14 +861,17 @@ p{color:#667085;font-size:12px}
 <body><main>
 <h1>Corpus Command Center Private Explorer</h1>
 <p>Raw body objects live under the ignored private corpus object store. This page shows private previews for top comparisons only.</p>
-""" + "\n".join(cards) + "</main></body></html>\n"
+"""
+        + "\n".join(cards)
+        + "</main></body></html>\n"
+    )
 
 
 def write_outputs(private: dict[str, Any], public: dict[str, Any], markdown: str) -> None:
     PRIVATE_INDEX.parent.mkdir(parents=True, exist_ok=True)
     PUBLIC_INDEX.parent.mkdir(parents=True, exist_ok=True)
     DOC_PATH.parent.mkdir(parents=True, exist_ok=True)
-    PRIVATE_INDEX.write_text(json.dumps(private, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    PRIVATE_INDEX.write_text(json.dumps(private, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     PUBLIC_INDEX.write_text(json.dumps(public, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     DOC_PATH.write_text(markdown, encoding="utf-8")
     PRIVATE_HTML.write_text(render_private_html(private), encoding="utf-8")
@@ -843,7 +887,9 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_MAX_SESSIONS,
         help="optional debug cap; default indexes every local lifecycle session unless LIMEN_CORPUS_MAX_SESSIONS is set",
     )
-    parser.add_argument("--all-sessions", action="store_true", help="ignore any session cap and index every local lifecycle session")
+    parser.add_argument(
+        "--all-sessions", action="store_true", help="ignore any session cap and index every local lifecycle session"
+    )
     args = parser.parse_args(argv)
     max_sessions = None if args.all_sessions else args.max_sessions
     private, public, markdown = build_snapshots(
