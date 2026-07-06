@@ -1,4 +1,3 @@
-import sys
 with open('/tmp/atlas_worktree/scripts/heartbeat-loop.sh', 'r') as f:
     lines = f.readlines()
 

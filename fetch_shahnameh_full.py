@@ -6,13 +6,12 @@ Extracts all 50 cycles/sections with proper Persian text parsing.
 
 import urllib.request
 import urllib.error
-import json
 import time
 import sys
 import re
 from pathlib import Path
 from html.parser import HTMLParser
-from typing import List, Dict, Optional
+from typing import Dict, Optional
 
 class PoetryExtractor(HTMLParser):
     """Extract poetry lines from ganjoor.net HTML."""
@@ -196,9 +195,9 @@ class GanjoorFetcher:
                         print(f"✓ ({len(content):6d} chars)", file=sys.stderr)
                         break
                     else:
-                        print(f"~ (HTML fetched, low content)", file=sys.stderr, end='\r')
+                        print("~ (HTML fetched, low content)", file=sys.stderr, end='\r')
                 else:
-                    print(f"✗ (no/low HTML)", file=sys.stderr, end='\r')
+                    print("✗ (no/low HTML)", file=sys.stderr, end='\r')
 
             if content:
                 self.fetched_content[slug] = {
@@ -225,7 +224,7 @@ class GanjoorFetcher:
                     f.write("=" * 80 + "\n")
                     f.write("شاهنامه فردوسی - Shahnameh of Ferdowsi\n")
                     f.write("Complete Persian Original Text\n")
-                    f.write(f"Fetched from: https://ganjoor.net/ferdousi/shahname/\n")
+                    f.write("Fetched from: https://ganjoor.net/ferdousi/shahname/\n")
                     f.write(f"Date: {time.strftime('%Y-%m-%d')}\n")
                     f.write(f"Cycles fetched: {len(self.fetched_content)}/50\n")
                     f.write("=" * 80 + "\n\n")
@@ -279,7 +278,7 @@ def main():
     if fetcher.save_to_file(output_path):
         # Check file size
         file_size = output_path.stat().st_size
-        print(f"✓ Successfully saved Shahnameh corpus", file=sys.stderr)
+        print("✓ Successfully saved Shahnameh corpus", file=sys.stderr)
         print(f"  File size: {file_size:,} bytes ({file_size/1024/1024:.2f} MB)", file=sys.stderr)
 
         # Report stats
@@ -289,7 +288,7 @@ def main():
 
         return 0
     else:
-        print(f"✗ Failed to save Shahnameh corpus", file=sys.stderr)
+        print("✗ Failed to save Shahnameh corpus", file=sys.stderr)
         return 1
 
 if __name__ == '__main__':

@@ -25,7 +25,6 @@ import json
 import os
 import re
 import sys
-from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -284,7 +283,7 @@ def build_balance_sheet(
     if nw is not None:
         lines.append("### Net Worth Summary")
         lines.append("")
-        lines.append(f"| | Amount |")
+        lines.append("| | Amount |")
         lines.append("|---|---|")
         lines.append(f"| Total Assets | ${total_a:,.2f} |")
         lines.append(f"| Total Liabilities | ${total_l:,.2f} |")
@@ -512,7 +511,7 @@ def build_dashboard(
     lines.append(f"- **Net worth:** {nw_str}{trend}")
     lines.append(f"- **Balance snapshots:** {sc}")
     lines.append(
-        f"- **First dollar path:** ChatGPT Exporter → MONETA/Ko-fi (deploy-ready, principal-gated)"
+        "- **First dollar path:** ChatGPT Exporter → MONETA/Ko-fi (deploy-ready, principal-gated)"
     )
     lines.append("")
     lines.append("## Artifacts")

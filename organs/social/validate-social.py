@@ -96,7 +96,6 @@ def _validate_one(path: Path) -> list[str]:
             "Rule #2 violation: governance.never_autonomous must list forbidden autonomous acts"
         )
 
-    standard = doc.get("standard")
     evidence = doc.get("artifacts", {}).get("evidence") if isinstance(doc.get("artifacts"), dict) else None
     if not isinstance(evidence, list) or not evidence:
         violations.append("Rule #4 violation: artifacts.evidence must list at least one evidence item")

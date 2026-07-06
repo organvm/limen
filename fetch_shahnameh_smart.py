@@ -6,12 +6,11 @@ Since the exact slug structure is unclear, we discover URLs from the main page.
 
 import urllib.request
 import urllib.error
-import json
 import time
 import sys
 import re
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import Dict, Optional
 
 class GanjoorFetcher:
     """Fetch Shahnameh content from ganjoor.net."""
@@ -33,9 +32,9 @@ class GanjoorFetcher:
             req = urllib.request.Request(url, headers=self.session_headers)
             with urllib.request.urlopen(req, timeout=20) as response:
                 return response.read().decode('utf-8', errors='replace')
-        except urllib.error.HTTPError as e:
+        except urllib.error.HTTPError:
             return None
-        except Exception as e:
+        except Exception:
             return None
 
     def discover_shahnameh_urls(self) -> Dict[str, str]:
@@ -157,7 +156,7 @@ class GanjoorFetcher:
                 f.write("=" * 80 + "\n")
                 f.write("شاهنامه فردوسی\n")
                 f.write("Shahnameh of Ferdowsi - Complete Persian Original Text\n")
-                f.write(f"Source: https://ganjoor.net/ferdousi/shahname/\n")
+                f.write("Source: https://ganjoor.net/ferdousi/shahname/\n")
                 f.write(f"Fetched: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write(f"Cycles: {len(self.fetched_content)} fetched\n")
                 f.write("=" * 80 + "\n\n")
@@ -196,20 +195,20 @@ def main():
 
     if fetcher.save_to_file(output_path):
         file_size = output_path.stat().st_size
-        print(f"✓ Successfully saved Shahnameh corpus", file=sys.stderr)
+        print("✓ Successfully saved Shahnameh corpus", file=sys.stderr)
         print(f"  File size: {file_size:,} bytes ({file_size/1024/1024:.2f} MB)", file=sys.stderr)
 
         total_chars = sum(d['size'] for d in fetcher.fetched_content.values())
         print(f"  Total text: {total_chars:,} characters", file=sys.stderr)
 
         # List all discovered cycles
-        print(f"\n  Cycles fetched:", file=sys.stderr)
+        print("\n  Cycles fetched:", file=sys.stderr)
         for idx, slug in enumerate(sorted(fetcher.fetched_content.keys()), 1):
             print(f"    {idx:2d}. {slug}", file=sys.stderr)
 
         return 0
     else:
-        print(f"✗ Failed to save", file=sys.stderr)
+        print("✗ Failed to save", file=sys.stderr)
         return 1
 
 if __name__ == '__main__':

@@ -6,12 +6,11 @@ Focuses on extracting only the actual poetry verses and narrative.
 
 import urllib.request
 import urllib.error
-import json
 import time
 import sys
 import re
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Dict, Optional
 
 class GanjoorFetcher:
     """Fetch Shahnameh with improved Persian text extraction."""
@@ -124,7 +123,7 @@ class GanjoorFetcher:
             return {}
 
         print(f"✓ Discovered {len(urls)} cycles", file=sys.stderr)
-        print(f"Fetching and extracting Persian text...\n", file=sys.stderr)
+        print("Fetching and extracting Persian text...\n", file=sys.stderr)
 
         # Fetch each cycle
         for idx, path in enumerate(sorted(urls), 1):
@@ -161,7 +160,7 @@ class GanjoorFetcher:
                 f.write("=" * 80 + "\n")
                 f.write("شاهنامه فردوسی\n")
                 f.write("Shahnameh of Ferdowsi — Complete Persian Original Text\n")
-                f.write(f"Source: https://ganjoor.net/ferdousi/shahname/\n")
+                f.write("Source: https://ganjoor.net/ferdousi/shahname/\n")
                 f.write(f"Fetched: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write(f"Cycles: {len(self.fetched_content)}\n")
                 f.write(f"Total Characters: {sum(d['size'] for d in self.fetched_content.values()):,}\n")
@@ -198,16 +197,16 @@ def main():
         file_size = output_path.stat().st_size
         total_chars = sum(d['size'] for d in fetcher.fetched_content.values())
 
-        print(f"\n✓ Successfully saved to:")
+        print("\n✓ Successfully saved to:")
         print(f"  {output_path}", file=sys.stderr)
-        print(f"\nStats:", file=sys.stderr)
+        print("\nStats:", file=sys.stderr)
         print(f"  File size: {file_size:,} bytes ({file_size/1024/1024:.2f} MB)", file=sys.stderr)
         print(f"  Total Persian text: {total_chars:,} characters", file=sys.stderr)
         print(f"  Cycles: {len(content)}", file=sys.stderr)
 
         return 0
     else:
-        print(f"✗ Failed to save", file=sys.stderr)
+        print("✗ Failed to save", file=sys.stderr)
         return 1
 
 if __name__ == '__main__':
