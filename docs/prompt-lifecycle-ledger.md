@@ -1,6 +1,6 @@
 # Prompt Lifecycle Ledger
 
-Generated: `2026-06-28T02:52:30+00:00`
+Generated: `2026-07-06T09:35:14+00:00`
 Horizon: `all local history`
 
 ## Canonical Decision
@@ -12,60 +12,113 @@ Horizon: `all local history`
 
 ## Redacted Prompt Coverage
 
-Indexed `9489` app/session files, `2.1 GiB`, with `92795` prompt-like user events hashed into the private index.
+Indexed `15223` app/session files, `4.3 GiB`, with `131021` prompt-like user events hashed into the private index.
+Normalized task-body payload covered `259.7 MiB` after stripping recognized scaffold-only prompt frames.
 
-| Source | Files | Prompt Events | Event Records | Size | Newest |
-|---|---:|---:|---:|---:|---|
-| `claude-projects` | 4854 | 87828 | 313210 | 1.4 GiB | `2026-06-28T01:17:54+00:00` |
-| `codex-sessions` | 889 | 4394 | 234164 | 731.8 MiB | `2026-06-28T02:51:14+00:00` |
-| `codex-history` | 1 | 440 | 440 | 192.7 KiB | `2026-06-28T02:24:32+00:00` |
-| `claude-tasks` | 188 | 133 | 133 | 57.7 KiB | `2026-06-26T00:08:52+00:00` |
-| `claude-file-history` | 3519 | 0 | 0 | 42.2 MiB | `2026-06-27T00:26:28+00:00` |
-| `claude-plans` | 34 | 0 | 0 | 289.3 KiB | `2026-06-25T03:22:45+00:00` |
-| `codex-attachments` | 4 | 0 | 0 | 6.2 KiB | `2026-06-27T18:15:45+00:00` |
+| Source | Files/Sessions | Prompt Events | Prompt Bytes | Task Body Bytes | Event Records | Size | Newest |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `claude-projects` | 6621 | 120298 | 245.3 MiB | 239.6 MiB | 458674 | 1.9 GiB | `2026-07-06T09:32:48+00:00` |
+| `codex-sessions` | 1363 | 7566 | 18.8 MiB | 13.4 MiB | 516856 | 1.5 GiB | `2026-07-06T09:33:31+00:00` |
+| `opencode-db` | 1409 | 1416 | 3.8 MiB | 3.8 MiB | 81624 | 0 B | `2026-07-06T09:32:44+00:00` |
+| `codex-history` | 1 | 1048 | 709.6 KiB | 709.6 KiB | 1048 | 813.1 KiB | `2026-07-06T09:28:40+00:00` |
+| `agy-cli-conversations` | 501 | 481 | 2.3 MiB | 2.3 MiB | 29655 | 869.5 MiB | `2026-07-06T09:33:34+00:00` |
+| `claude-tasks` | 206 | 138 | 32.2 KiB | 32.2 KiB | 138 | 59.9 KiB | `2026-07-03T15:47:52+00:00` |
+| `agy-cli-history` | 1 | 44 | 10.7 KiB | 10.7 KiB | 44 | 16.4 KiB | `2026-07-03T11:53:18+00:00` |
+| `gemini-tmp-agy` | 15 | 30 | 267.0 KiB | 9.9 KiB | 60 | 280.8 KiB | `2026-06-30T14:29:59+00:00` |
+| `claude-file-history` | 5059 | 0 | 0 B | 0 B | 0 | 67.2 MiB | `2026-07-05T18:01:34+00:00` |
+| `claude-plans` | 43 | 0 | 0 B | 0 B | 0 | 369.8 KiB | `2026-07-03T15:08:54+00:00` |
+| `codex-attachments` | 4 | 0 | 0 B | 0 B | 0 | 6.2 KiB | `2026-06-27T18:15:45+00:00` |
+
+## Prompt Body Mix
+
+| Body Kind | Prompt Events |
+|---|---:|
+| `direct` | 126419 |
+| `flame_scaffold` | 2434 |
+| `flame_with_task_body` | 2153 |
+| `session_context` | 15 |
 
 ## Prompt To Worktree Crosswalk
 
-- Current `.limen-worktrees` roots scanned: `14`; debt roots: `8`.
-- Current worktree roots with at least one local session/prompt receipt: `14`.
-- Current worktree roots without a local session receipt in this index: `0`.
+- Current `.limen-worktrees` roots scanned: `52`; debt roots: `0`.
+- Current worktree roots with at least one local session/prompt receipt: `31`.
+- Current worktree roots without a local session receipt in this index: `21`.
 
 | Worktree Root | Session Files | Prompt Events | Debt Reason |
 |---|---:|---:|---|
-| `bld-mirror-mirror-harden-350f` | 1 | 5 | `unpushed-commits` |
-| `bld-my--father-mother-harden-44b2` | 1 | 5 | `active(<6h)` |
-| `bld-promptscope-next-rev-3fde` | 1 | 4 | `active(<6h)` |
-| `cifix-organvm-i-theoria-conversation-corpus-engine-f02e` | 3 | 79 | `unpushed-commits` |
-| `cifix-organvm-i-theoria-hierarchia-mundi-3145` | 1 | 71 | `active(<6h)` |
-| `discover-organvm-kerygma-profiles-6c74` | 1 | 24 | `not-merged-to-default` |
-| `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38` | 1 | 3 | `dirty` |
-| `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2` | 1 | 4 | `not-a-git-dir` |
-| `gen-organvm-universal-mail--automation-test-coverage-0625-151e` | 3 | 100 | `dirty` |
-| `gh-organvm-object-lessons-19-605a` | 1 | 73 | `clean+merged+idle` |
-| `resolve-a-organvm-the-invisible-ledger-4-f657` | 1 | 5 | `clean+merged+idle` |
-| `resolve-organvm-i-theoria-.github-459-1ade` | 1 | 5 | `unpushed-commits` |
-| `rev-organvm-public-record-data-scrapper-revenue-readiness-0623-023f` | 1 | 79 | `active(<6h)` |
-| `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b` | 1 | 94 | `not-a-git-dir` |
+| `agent-aefc63d95daa3131b` | 2 | 31 | `owner-blocker` |
+| `bld-my--father-mother-harden-44b2` | 1 | 5 | `remote-pr-open` |
+| `bld-promptscope-next-rev-3fde` | 1 | 4 | `remote-pr-open` |
+| `cifix-organvm-i-theoria-conversation-corpus-engine-f02e` | 3 | 79 | `remote-pr-open` |
+| `discover-organvm-kerygma-profiles-6c74` | 1 | 24 | `remote-pr-open` |
+| `domus-quarantine-retire-20260629` | 10 | 84 | `remote-pr-open` |
+| `feat+workstream-channels` | 2 | 47 | `remote-pr-open` |
+| `feat-gcp-sa-organ` | 13 | 727 | `owner-blocker` |
+| `financial-codex-finish-0704` | 0 | 0 | `remote-pr-open` |
+| `fluttering-twirling-abelson` | 8 | 315 | `remote-merged` |
+| `gen-a-organvm-a-i-council--coliseum-ci-green-0620-29ec` | 1 | 5 | `owner-blocker` |
+| `gen-organvm-universal-mail--automation-test-coverage-0625-151e` | 3 | 100 | `owner-blocker` |
+| `gh-organvm-domus-genoma-170-bbbc` | 0 | 0 | `remote-merged` |
+| `heal-cifix-organvm-organvm-engine-124-e0bb2d06` | 0 | 0 | `active(<6h)` |
+| `heal-cifix-organvm-organvm-engine-130-8a6060e4` | 0 | 0 | `active(<6h)` |
+| `heal-cifix-organvm-organvm-engine-130-ec1fdfaf` | 0 | 0 | `active(<6h)` |
+| `heal-cifix-organvm-organvm-engine-136-c3d543d8` | 0 | 0 | `active(<6h)` |
+| `heal-cifix-organvm-organvm-engine-139-11d32b27` | 0 | 0 | `active(<6h)` |
+| `heal-cifix-organvm-organvm-engine-139-9dbf53bf` | 0 | 0 | `active(<6h)` |
+| `heal-cifix-organvm-organvm-engine-143-a164221c` | 0 | 0 | `active(<6h)` |
+| `heal-cifix-organvm-organvm-engine-144-0ef4c596` | 0 | 0 | `active(<6h)` |
+| `heal-cifix-organvm-organvm-engine-144-e2096564` | 0 | 0 | `active(<6h)` |
+| `heal-cifix-organvm-organvm-ontologia-10-64603ca7` | 0 | 0 | `active(<6h)` |
+| `heal-cifix-organvm-organvm-ontologia-11-55899198` | 0 | 0 | `active(<6h)` |
+| `heal-cifix-organvm-organvm-ontologia-11-a86cf99f` | 1 | 3 | `active(<6h)` |
+| `heal-cifix-organvm-organvm-ontologia-12-2c2c85ba` | 1 | 3 | `active(<6h)` |
+| `heal-cifix-organvm-organvm-ontologia-12-c16ea5ad` | 0 | 0 | `active(<6h)` |
+| `heal-cifix-organvm-organvm-ontologia-13-953633bb` | 1 | 3 | `active(<6h)` |
+| `heal-rebase-4444j99-hokage-chess-89-0448f70e` | 1 | 3 | `active(<6h)` |
+| `limen-main-trench-20260628` | 1 | 14 | `remote-pr-open` |
+| `limen-network-substrate-20260628` | 2 | 21 | `remote-pr-open` |
+| `limen_jules-org-health-organ-kernel-0630-0289` | 0 | 0 | `active(<6h)` |
+| `limen_jules-org-health-organ-kernel-0630-02fb` | 0 | 0 | `active(<6h)` |
+| `limen_jules-org-health-organ-kernel-0630-f8cb` | 0 | 0 | `active(<6h)` |
+| `linear-conjuring-bear` | 43 | 2215 | `remote-superseded` |
+| `maddie-boundary-20260629` | 2 | 68 | `remote-pr-open` |
+| `org-financial-organ-face-0704-5a117787` | 1 | 3 | `active(<6h)` |
+| `org-health-organ-firstslice-0704-aac2b482` | 1 | 3 | `generated-log-shell` |
+| `org-health-organ-firstslice-0704-caa4e142` | 1 | 3 | `generated-log-shell` |
+| `peer-audited--behavioral-blockchain` | 95 | 650 | `owner-blocker` |
+| `photos-universe-20260629-182431` | 4 | 20 | `remote-pr-open` |
+| `pr-669-governance-deepen` | 0 | 0 | `active(<6h)` |
+| `resolve-organvm-i-theoria-.github-459-1ade` | 1 | 5 | `owner-blocker` |
+| `review-avditor-billing-pr43` | 0 | 0 | `owner-blocker` |
+| `student-email-d2l-support-20260629` | 2 | 67 | `remote-pr-open` |
+| `the-invisible-ledger` | 106 | 3036 | `remote-pr-open` |
+| `ticklish-bubbling-robin` | 69 | 2172 | `remote-pr-open` |
+| `triptych-story` | 3 | 212 | `remote-pr-open` |
+| `universal-entry-20260629` | 0 | 0 | `remote-pr-open` |
+| `universal-kernel-recordkeeper-20260705` | 0 | 0 | `active(<24h)` |
+| `warp-agent-routing-20260629` | 2 | 15 | `remote-pr-open` |
+| `wf_29a15be5-9f8-2` | 1 | 33 | `owner-blocker` |
 
 ## Task Board Crosswalk
 
-- Task records: `1427`.
-- Status distribution: `archived` 438, `dispatched` 41, `done` 807, `in_progress` 1, `needs_human` 61, `open` 79.
+- Task records: `2117`.
+- Status distribution: `archived` 439, `dispatched` 4, `done` 1043, `in_progress` 1, `needs_human` 172, `open` 458.
 - Invalid statuses outside canonical set: `0`.
-- Current worktree root slugs mentioned exactly in `tasks.yaml`: `0` / `14`.
+- Current worktree root slugs mentioned exactly in `tasks.yaml`: `3` / `52`.
 - Chronic reopen-loop candidates: `0`.
-- Dispatched tasks with PR receipt: `0`.
-- Dispatched Jules async tasks without PR yet: `41`.
-- Dispatched local tasks still inside running grace/no-op guard: `0`.
+- Dispatched tasks with PR receipt: `3`.
+- Dispatched Jules async tasks without PR yet: `0`.
+- Dispatched local tasks still inside running grace/no-op guard: `1`.
 - Dispatched local tasks stranded without PR receipt: `0`.
-- Done tasks with PR receipt still visible in dispatch log/URLs: `636`.
+- Done tasks with PR receipt still visible in dispatch log/URLs: `830`.
 
 ## Remote Receipts
 
-- GitHub worktree repos seen: `11`.
-- Git worktree roots with remote branch present: `7`; missing: `4`.
-- Branch-linked PR states: `OPEN` 6, `MERGED` 1, `CLOSED` 1.
-- Task-board GitHub PR refs seen: `657`; checked: `657`; states: `CLOSED` 31, `MERGED` 447, `OPEN` 179.
+- GitHub worktree repos seen: `14`.
+- Git worktree roots with remote branch present: `21`; missing: `26`.
+- Branch-linked PR states: `OPEN` 20, `MERGED` 5, `CLOSED` 1.
+- Task-board GitHub PR refs seen: `1194`; checked: `1000`; states: `CLOSED` 36, `MERGED` 452, `OPEN` 512.
+- Task PR receipt scan truncated at `1000` refs.
 
 ## Cloud Receipts
 
