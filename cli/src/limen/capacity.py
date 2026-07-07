@@ -8,7 +8,7 @@ import shlex
 import shutil
 import subprocess
 from pathlib import Path
-from typing import TypedDict, TypeVar
+from typing import TypedDict, TypeVar, cast
 
 from limen.models import Task
 
@@ -484,15 +484,15 @@ def _daily_task_target(agent: str, board: object) -> int:
 
 
 def _task_agent(task: object) -> str:
-    return canonical_agent(str(task_value(task, "target_agent", "") or ""))
+    return canonical_agent(str(task_value(cast("dict[str, object]", task), "target_agent", "") or ""))
 
 
 def _task_status(task: object) -> str:
-    return str(task_value(task, "status", "") or "")
+    return str(task_value(cast("dict[str, object]", task), "status", "") or "")
 
 
 def _task_cost_int(task: object) -> int:
-    return _int(task_value(task, "budget_cost", 1), 1)
+    return _int(task_value(cast("dict[str, object]", task), "budget_cost", 1), 1)
 
 
 def _dispatch_event_attempts(board: object, agent: str, day: str) -> int:
