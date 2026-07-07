@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 """creds-hydrate.py — the credential HYDRATION organ. One source of truth, auto-applied everywhere.
+# Gate authority: organs/governance/PUBLICATION-POLICY.md — convergence table row 1 (_SECRET_RX).
+# The `_SECRET_RX` pattern is mirrored in scripts/publication-policy.py as the canonical firewall.
+# This file owns credential HYDRATION (minting + verifying); the publication policy owns
+# DISPOSITION (remove/redact/publish). Changes to what constitutes a secret shape start in the
+# publication policy's _SECRET_RX, not here — mirror back if the shape changes.
 
 THE DISEASE this cures: you log into a vendor (gemini / opencode / codex / …) ONCE — and then a new
 worktree, a fresh machine state, or a lapsed token makes you do it AGAIN. The credentials already
@@ -12,7 +17,8 @@ GitHub tokens, …). The fleet just never READS from that source of truth at the
 
 THE CURE (this organ): 1Password is the ONE source of truth. On every beat / worktree-start / login,
 hydrate idempotently + silently:
-  1. `op read` each canonical credential,
+  1. read promptless sources each beat; read static op:// credentials only with explicit `--op`
+     or a promptless service-account/Connect setup,
   2. materialize it into ~/.limen.env (the env cache the daemon + dispatch._load_limen_env() read),
      and into each tool's native location where one is configured,
   3. never echo a value, chmod 600, atomic write, add-or-replace (re-runnable).
@@ -31,29 +37,32 @@ and accept a single touch — a deliberate act, never a surprise storm.
 Companion pieces (same PR):
   - dispatch._load_limen_env() — loads ~/.limen.env into os.environ so agent subprocesses inherit it.
   - metabolize.sh — sources ~/.limen.env and runs this organ each beat.
-  - deploy/com.limen.creds-hydrate.plist — a launchd login agent (arming is your hand, like the watchdog).
+  - container/launchd/com.limen.creds-hydrate.plist — a launchd login agent
+    (arming is your hand, like the watchdog).
   - route.py capacity census — the VERIFIER: after hydration every lane should read "up".
 
 Fail-open by contract: any `op` error skips that one credential (logged by NAME only) and never crashes
 the beat. Read-only by default (`--dry-run` prints the op://→target plan with NO secret reads); writes
-only with `--apply`.
+only with `--apply`, and static op:// reads still require `--op` unless promptless op auth exists.
 
 PRESENCE is not VALIDITY. `--check` (and route.py's capacity census) only ask "is the env var set?" —
 a stale/revoked/suspended token sits in ~/.limen.env looking ✓ while every lane it feeds is dead. The
 durable predicate is `--verify`: it authenticates each materialized credential against its own service
-(gh /user, cloudflare /tokens/verify, gemini /models) and exits non-zero on a dead token. Run it after
+(gh /user, cloudflare /accounts, gemini /models) and exits non-zero on a dead token. Run it after
 --apply and on a cadence — a green --check over dead creds is the precise way "done" silently rots.
 
 Usage:
   python3 scripts/creds-hydrate.py --dry-run     # print the plan (no reads, no writes) — default
   python3 scripts/creds-hydrate.py --check       # PRESENCE of env targets (NAMES only; offline) — not validity
   python3 scripts/creds-hydrate.py --verify      # VALIDITY — authenticate each cred against its service; exit 1 if any dead
-  python3 scripts/creds-hydrate.py --apply        # op read → materialize into ~/.limen.env + tool files
+  python3 scripts/creds-hydrate.py --apply        # promptless lanes only; no Touch-ID / op prompt
+  python3 scripts/creds-hydrate.py --apply --op   # deliberate op:// read → materialize static creds
   LIMEN_CREDS_MAP=/path/map.json python3 scripts/creds-hydrate.py --apply   # override the named map
 
 The MAP is a NAMED, tweakable parameter (one entry per credential). Edit DEFAULT_MAP below or point
 LIMEN_CREDS_MAP at a JSON file with the same shape.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -100,8 +109,7 @@ DEFAULT_MAP: list[dict] = [
         "enabled": True,
         # validity probe: a 200 from the model list means the key authenticates. A suspended
         # Google project answers 403 PERMISSION_DENIED / CONSUMER_SUSPENDED — caught by --verify.
-        "verify": {"url": "https://generativelanguage.googleapis.com/v1beta/models",
-                   "auth": "query", "param": "key"},
+        "verify": {"url": "https://generativelanguage.googleapis.com/v1beta/models", "auth": "query", "param": "key"},
     },
     {
         # Parked — PHANTOM env var, retired 2026-06-25 (session efb53173) after walking it to certainty.
@@ -150,9 +158,38 @@ DEFAULT_MAP: list[dict] = [
         "lane": "cloudflare (wrangler deploy)",
         "ref": "op://Personal/Cloudflare API Token/credential",
         "env": ["CLOUDFLARE_API_TOKEN"],
+        # gh_secret sink: deploy.yml's dashboard Cloudflare Pages step (the derived owned rail after
+        # the Firebase/GCP road-not-taken) reads this repo secret — the organ lands it, never a paste.
+        "gh_secret": {"repo": "organvm/limen", "name": "CLOUDFLARE_API_TOKEN"},
         "enabled": True,
-        # validity probe: the canonical token self-verify endpoint. Invalid → 401 code 1000.
-        "verify": {"url": "https://api.cloudflare.com/client/v4/user/tokens/verify", "auth": "bearer"},
+        # validity probe: GET /accounts. This works for BOTH token kinds — the earlier
+        # /user/tokens/verify endpoint is USER-token-only and returns code 1000 "Invalid API
+        # Token" for an ACCOUNT-scoped token (e.g. "Edit Cloudflare Workers"), a FALSE NEGATIVE
+        # that wrongly flagged our valid deploy token dead and spawned a phantom re-mint lever
+        # (L-CLOUDFLARE-DEPLOY). /accounts returns 200 for any live token, 401/403 for a revoked
+        # one — the correct validity semantics for the generic probe. Fixed 2026-07-01.
+        "verify": {"url": "https://api.cloudflare.com/client/v4/accounts", "auth": "bearer"},
+    },
+    {
+        # SUPERSEDED + PARKED (enabled=False) — kept ONLY as the worked example of the gh_secret multi-sink
+        # form (one op:// value fanned to many repos' CI secrets), NOT as a live or pending credential.
+        # media-ark's deploy host was DERIVED to Cloudflare Containers (logic-over-inherited-config): the GCP
+        # path was a prior session cloning limen's OWN deploy-api.yml, which is itself a no-op (limen's live
+        # API is the CF Worker limen-runtime), dragging in a dead GCP_SA_KEY for a credential that exists
+        # NOWHERE. The deploy credential is instead one already OWNED — CLOUDFLARE_API_TOKEN (the cloudflare
+        # lane above), proven headless this session. So this GCP lane is not "waiting to be minted"; it is the
+        # road-not-taken. The remaining atom is NOT a GCP SA — it is a ~$5/mo Workers Paid toggle on the owned
+        # CF account, recorded as lever L-MEDIA-ARK-HOST (#535), sequenced behind revenue. Do NOT flip this
+        # entry True unless the host decision is ever explicitly REVERSED back to GCP (unlikely). Parked so no
+        # beat SKIP-noises a phantom ref. [[media-suite-convergence]] [[logic-over-inherited-config]]
+        # [[credential-durability-organ]] [[his-hand-tasks-hang-in-permanent-registry]]
+        "lane": "gcp (cloud run deploy SA) — SUPERSEDED by cloudflare, retained as multi-sink example",
+        "ref": "op://Personal/GCP Deploy SA/credential",
+        "gh_secret": [
+            {"repo": "organvm/media-ark", "name": "GCP_SA_KEY"},
+            {"repo": "organvm/limen", "name": "GCP_SA_KEY"},
+        ],
+        "enabled": False,
     },
     {
         # CI-SECRET sink — the credential the organ didn't used to reach, so it kept landing on a human as
@@ -166,8 +203,45 @@ DEFAULT_MAP: list[dict] = [
         "enabled": True,
     },
     {
+        # CI-SECRET sink — LAVREA (4444J99/laurea, the computed-laurels organ) recomputes percentile
+        # placements daily in Actions; the default GITHUB_TOKEN cannot see private org memberships, so
+        # without a user token the snapshot collapses (5 repos, 0 orgs) and the composite claim deletes
+        # itself. The workflow reads LAUREA_TOKEN. Same promptless source as the gh/copilot/jules lane:
+        # mint from the live `gh` keyring (derive preferred; the static op:// PAT is the revoked
+        # last-resort, retained for shape parity). gh_secret-only: presence-guarded, so the beat only
+        # reads+sets when the secret is absent. [[credential-durability-organ]]
+        "lane": "laurea (computed-laurels CI secret)",
+        "ref": "op://GitHub-Tokens/master-org-token-011726/password",
+        "derive": ["gh", "auth", "token"],
+        "gh_secret": {"repo": "4444J99/laurea", "name": "LAUREA_TOKEN"},
+        "enabled": True,
+    },
+    {
+        # CI-SECRET sink — the a-i-chat--exporter Cloudflare Pages deploy (GitHub Actions) needs
+        # CLOUDFLARE_API_TOKEN as a repo secret. The token ALREADY EXISTS (the cloudflare lane above owns
+        # op://Personal/Cloudflare API Token/credential); the exporter repo correctly DEFERS — it expects
+        # the CI secret rather than documenting `wrangler login`. Landing that secret is pure plumbing the
+        # organ owns, NOT a his-hand "paste this gh secret" task — the exact wrangler-login disease, cured
+        # at the source. gh_secret-only (no env/file): presence-guarded, so once the secret is set the beat
+        # checks `gh_secret_present` and never touches 1Password again. CLOUDFLARE_ACCOUNT_ID is NOT a
+        # secret (it appears in dashboard URLs / wrangler.toml) — it belongs in the repo's own config, not
+        # here. Lands once op can read the value (gated only on the non-blocking SA vault-grant on #320).
+        # [[wrangler-login-and-op-ping-disease]] [[gmail-mutation-cascade-avenues]]
+        "lane": "cloudflare (a-i-chat--exporter CI secret)",
+        "ref": "op://Personal/Cloudflare API Token/credential",
+        "gh_secret": {"repo": "organvm/a-i-chat--exporter", "name": "CLOUDFLARE_API_TOKEN"},
+        "enabled": True,
+    },
+    {
         # Parked: the Claude token is owned by the credential-race fix + Rung-0 self-heal
         # ([[claude-login-flap-credential-race]] / L-CLAUDE-AUTH). Enable only if that handler is retired.
+        # SECOND CONSUMER (2026-07-01): this same LIMEN_CLAUDE_AUTH_TOKEN is the sanctioned env token the
+        # budget gauge's `poll` avenue reads (scripts/claude-usage.py av_poll, gated by LIMEN_CLAUDE_POLL=1)
+        # to fetch Claude's EXACT server-side weekly usage from rate-limit headers — the trust=measured tier
+        # that auto-supersedes the calibrated on-disk bridge. So retiring the login-flap handler and enabling
+        # this entry ALSO upgrades the gauge calibrated→measured; NO separate credential to mint (the
+        # "one human atom" is this same op:// item, already homed here — never re-recite it in chat).
+        # See memory: fleet-budget-gauge-truth.
         "lane": "claude",
         "ref": "op://Personal/Claude/password",
         "env": ["LIMEN_CLAUDE_AUTH_TOKEN"],
@@ -216,14 +290,26 @@ def load_map() -> list[dict]:
     return DEFAULT_MAP
 
 
+def _gh_sinks(entry: dict) -> list[dict]:
+    """gh_secret may be a single {repo,name} dict OR a LIST of them — one op:// value fanned out to
+    every repo's CI secret (e.g. the shared GCP deploy SA landed on each repo that deploys to that
+    project). Normalize to a list; empty when the entry has no CI-secret sink. Backward-compatible: a
+    lone dict becomes a one-element list, so every existing single-sink entry behaves identically."""
+    g = entry.get("gh_secret")
+    if not g:
+        return []
+    return list(g) if isinstance(g, list) else [g]
+
+
 def have_op() -> bool:
     return shutil.which("op") is not None
 
 
 # Where a 1Password service-account token lives if the user mints one. Kept OUTSIDE the repo
 # (chmod 600, never committed) so the secret never lands in git. Override with LIMEN_OP_SA_TOKEN_FILE.
-SA_TOKEN_FILE = Path(os.environ.get(
-    "LIMEN_OP_SA_TOKEN_FILE", str(Path.home() / ".config" / "op" / "service-account-token")))
+SA_TOKEN_FILE = Path(
+    os.environ.get("LIMEN_OP_SA_TOKEN_FILE", str(Path.home() / ".config" / "op" / "service-account-token"))
+)
 
 
 def load_service_account_token() -> None:
@@ -264,7 +350,9 @@ def op_read(ref: str, timeout: int = 15) -> str | None:
     try:
         r = subprocess.run(
             ["op", "read", ref],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
             stdin=subprocess.DEVNULL,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -284,8 +372,11 @@ def derive_value(cmd: list[str], timeout: int = 15) -> str | None:
     try:
         r = subprocess.run(
             cmd,
-            capture_output=True, text=True, timeout=timeout,
-            stdin=subprocess.DEVNULL, env=child_env,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            stdin=subprocess.DEVNULL,
+            env=child_env,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return None
@@ -307,7 +398,10 @@ def gh_secret_present(repo: str, name: str, timeout: int = 15) -> bool | None:
     try:
         r = subprocess.run(
             ["gh", "secret", "list", "-R", repo],
-            capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            stdin=subprocess.DEVNULL,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return None
@@ -325,7 +419,10 @@ def gh_secret_set(repo: str, name: str, value: str, timeout: int = 30) -> bool:
     try:
         r = subprocess.run(
             ["gh", "secret", "set", name, "-R", repo],
-            input=value, capture_output=True, text=True, timeout=timeout,
+            input=value,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return False
@@ -393,9 +490,9 @@ def write_tool_file(spec: dict, value: str) -> str:
 # tokens behind a green --check). --verify closes that gap: it authenticates each materialized cred
 # against its own service. Values are used only for the request and never logged.
 _SECRET_RX = (
-    re.compile(r"AIza[\w\-]{4}[\w\-]+"),          # Google API keys
+    re.compile(r"AIza[\w\-]{4}[\w\-]+"),  # Google API keys
     re.compile(r"gh[pousr]_[A-Za-z0-9]{4}[A-Za-z0-9]+"),  # GitHub tokens
-    re.compile(r"api_key:\S+"),                   # Google's error echoes the key inline
+    re.compile(r"api_key:\S+"),  # Google's error echoes the key inline
 )
 
 
@@ -415,7 +512,7 @@ def _env_value(key: str) -> str | None:
         s = line.strip()
         for pre in (f"{key}=", f"export {key}="):
             if s.startswith(pre):
-                return s[len(pre):].strip().strip('"').strip("'") or None
+                return s[len(pre) :].strip().strip('"').strip("'") or None
     return None
 
 
@@ -471,21 +568,204 @@ def probe_cred(entry: dict, value: str, timeout: int = 6) -> tuple[str, str]:
         return "unverifiable", f"unreachable ({type(e).__name__})"
 
 
+# --- FULL SWEEP -------------------------------------------------------------------------------------
+# DEFAULT_MAP is the CURATED spine: the lanes the fleet dispatches, each with the right env-var name and
+# a validity probe. --sweep-all is the CATCH-ALL that complements it: enumerate the automation vaults and
+# materialize EVERY remaining credential field into ~/.limen.env, so "one spot" holds all secrets/tokens/
+# api-keys — not just the hand-listed six. It runs ONLY when `op` is promptless (a service-account token),
+# so it can NEVER pop a Touch-ID storm; without the token it is a no-op that points at the one install step.
+# Curated items are left to their lane (correct name + probe); the sweep fills the gap so nothing is missed.
+
+# Field labels/ids that name a credential-shaped value (case-insensitive substring match on label OR id).
+_CRED_FIELD_HINTS = ("credential", "token", "api key", "api_key", "apikey", "secret", "password", "key")
+# Item categories worth sweeping. LOGIN is EXCLUDED by default — those are personal web logins, not fleet
+# automation creds, and a plaintext env is the wrong home for them (set LIMEN_CREDS_SWEEP_LOGINS=1 to include).
+_SWEEP_CATEGORIES = {"API_CREDENTIAL", "PASSWORD", "SECURE_NOTE", "DATABASE", "SERVER", "SSH_KEY"}
+
+
+def _sweep_vaults() -> list[str]:
+    """Vaults to sweep: LIMEN_CREDS_SWEEP_VAULTS (comma-sep) overrides; else the distinct vaults the
+    curated DEFAULT_MAP already draws from (op://<vault>/...) — the fleet's known automation vaults."""
+    override = os.environ.get("LIMEN_CREDS_SWEEP_VAULTS")
+    if override:
+        return [v.strip() for v in override.split(",") if v.strip()]
+    vaults: list[str] = []
+    for e in DEFAULT_MAP:
+        ref = e.get("ref", "")
+        if ref.startswith("op://"):
+            v = ref[len("op://") :].split("/", 1)[0]
+            if v and v not in vaults:
+                vaults.append(v)
+    return vaults
+
+
+def _mapped_titles() -> set[tuple[str, str]]:
+    """(vault, item-title) pairs already curated in DEFAULT_MAP — the sweep skips these so it never
+    fights the lane's correct env-var name / probe. Parsed from each op://vault/item/field ref."""
+    out: set[tuple[str, str]] = set()
+    for e in DEFAULT_MAP:
+        ref = e.get("ref", "")
+        if ref.startswith("op://"):
+            parts = ref[len("op://") :].split("/")
+            if len(parts) >= 2:
+                out.add((parts[0], parts[1]))
+    return out
+
+
+def _mapped_env_names() -> set[str]:
+    """Every env-var name the curated map owns — the sweep never clobbers these (curated wins)."""
+    out: set[str] = set()
+    for e in DEFAULT_MAP:
+        out.update(e.get("env", []))
+    return out
+
+
+def _sanitize_env_name(s: str) -> str:
+    """An item/field title -> a legal UPPER_SNAKE env var name."""
+    return re.sub(r"[^A-Za-z0-9]+", "_", s).strip("_").upper()
+
+
+def _op_json(cmd: list[str], timeout: int = 20):
+    """Run an `op` subcommand that emits JSON; return the parsed object or None on any failure."""
+    try:
+        r = subprocess.run(
+            ["op", *cmd, "--format=json"], capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0 or not r.stdout.strip():
+        return None
+    try:
+        return json.loads(r.stdout)
+    except json.JSONDecodeError:
+        return None
+
+
+def _selected_fields(item: dict) -> list[tuple[str, str]]:
+    """(env-suffix-label, value) for each credential-shaped field of an item. Values never printed."""
+    picks: list[tuple[str, str]] = []
+    for f in item.get("fields", []) or []:
+        val = f.get("value")
+        if not val:
+            continue
+        ftype = (f.get("type") or "").upper()
+        if ftype not in ("CONCEALED", "STRING", "SSHKEY", ""):
+            continue
+        label = (f.get("label") or f.get("id") or "").lower()
+        purpose = (f.get("purpose") or "").upper()
+        if purpose == "PASSWORD" or any(h in label for h in _CRED_FIELD_HINTS):
+            picks.append((f.get("label") or f.get("id") or "credential", val))
+    return picks
+
+
+def sweep_all(apply: bool) -> int:
+    """Enumerate the automation vaults and materialize every credential field NOT already curated in
+    DEFAULT_MAP. Promptless-only: a no-op (with the one install hint) when op can't read silently."""
+    if not have_op():
+        print("creds-hydrate --sweep-all: `op` not found — install the 1Password CLI first. (fail-open)")
+        return 0
+    if not op_can_read_silently():
+        print(
+            "creds-hydrate --sweep-all: op is NOT promptless — refusing to run (a sweep here would pop a "
+            "Touch-ID storm). Install the service-account token ONCE, then the sweep is silent forever:"
+        )
+        print(f"  scripts/op-service-account.sh install   # writes {SA_TOKEN_FILE}, chmod 600, value never shown")
+        return 0
+
+    vaults = _sweep_vaults()
+    include_logins = os.environ.get("LIMEN_CREDS_SWEEP_LOGINS") == "1"
+    mapped_titles, mapped_envs = _mapped_titles(), _mapped_env_names()
+    print(
+        f"creds-hydrate --sweep-all {'--apply' if apply else '(dry-run — pass --apply to write)'} "
+        f"over vault(s): {', '.join(vaults) or '(none)'}"
+    )
+    swept, skipped_curated, skipped_login, skipped_collide = 0, 0, 0, 0
+    written_names: set[str] = set()
+    for vault in vaults:
+        items = _op_json(["item", "list", "--vault", vault])
+        if not items:
+            print(f"  · {vault:20} (no items readable / empty)")
+            continue
+        for meta in items:
+            title, cat = meta.get("title", ""), (meta.get("category") or "").upper()
+            if (vault, title) in mapped_titles:
+                skipped_curated += 1
+                continue
+            if cat == "LOGIN" and not include_logins:
+                skipped_login += 1
+                continue
+            if cat not in _SWEEP_CATEGORIES and cat != "LOGIN":
+                continue
+            full = _op_json(["item", "get", meta.get("id", title), "--vault", vault])
+            if not full:
+                continue
+            fields = _selected_fields(full)
+            if not fields:
+                continue
+            base = _sanitize_env_name(title)
+            for label, val in fields:
+                name = base if len(fields) == 1 else f"{base}_{_sanitize_env_name(label)}"
+                if name in mapped_envs:  # curated map owns this name — never clobber it
+                    skipped_collide += 1
+                    del val
+                    continue
+                if apply:
+                    write_env(name, val)
+                del val
+                written_names.add(name)
+                swept += 1
+                print(f"  {'✓' if apply else 'plan:'} {vault}/{title} -> {name}")
+    print(
+        f"creds-hydrate --sweep-all: {swept} field(s){' materialized' if apply else ' planned'}, "
+        f"{skipped_curated} curated-skip, {skipped_login} login-skip, {skipped_collide} name-collision-skip."
+    )
+    if skipped_login:
+        print(
+            f"  ({skipped_login} LOGIN item(s) skipped — personal web logins; set LIMEN_CREDS_SWEEP_LOGINS=1 to include.)"
+        )
+    return 0
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Hydrate fleet credentials from 1Password — once minted, never re-logged-in.")
+    ap = argparse.ArgumentParser(
+        description="Hydrate fleet credentials from 1Password — once minted, never re-logged-in."
+    )
     g = ap.add_mutually_exclusive_group()
-    g.add_argument("--apply", action="store_true", help="op read → materialize into ~/.limen.env + tool files")
-    g.add_argument("--check", action="store_true", help="report PRESENCE of env targets (names only; offline) — not validity")
-    g.add_argument("--verify", action="store_true", help="authenticate each materialized cred against its service (VALIDITY) — exit 1 if any is dead")
+    g.add_argument(
+        "--apply", action="store_true", help="materialize promptless lanes; combine with --op for static op:// reads"
+    )
+    g.add_argument(
+        "--check", action="store_true", help="report PRESENCE of env targets (names only; offline) — not validity"
+    )
+    g.add_argument(
+        "--verify",
+        action="store_true",
+        help="authenticate each materialized cred against its service (VALIDITY) — exit 1 if any is dead",
+    )
     g.add_argument("--dry-run", action="store_true", help="print the op://→target plan; NO reads, NO writes (default)")
-    ap.add_argument("--op", action="store_true",
-                    help="ALSO read op:// lanes — may raise a 1Password Touch-ID/GUI prompt. OFF by default: "
-                         "without it, only promptless lanes (derive, e.g. the gh keyring) hydrate, so NO dialog "
-                         "ever fires from a daemon beat or an interactive session. Pass it deliberately, at a "
-                         "terminal, when you want to (re)hydrate the op:// creds and accept one biometric touch.")
+    ap.add_argument(
+        "--sweep-all",
+        action="store_true",
+        dest="sweep_all",
+        help="CATCH-ALL: materialize EVERY credential field in the automation vaults (beyond the curated "
+        "map) into ~/.limen.env. Promptless-only (needs the service-account token) — never prompts. "
+        "Combine with --apply to write; alone it dry-runs the plan.",
+    )
+    ap.add_argument(
+        "--op",
+        action="store_true",
+        help="ALSO read op:// lanes — may raise a 1Password Touch-ID/GUI prompt. OFF by default: "
+        "without it, only promptless lanes (derive, e.g. the gh keyring) hydrate, so NO dialog "
+        "ever fires from a daemon beat or an interactive session. Pass it deliberately, at a "
+        "terminal, when you want to (re)hydrate the op:// creds and accept one biometric touch.",
+    )
     args = ap.parse_args()
 
     load_service_account_token()  # hydrate OP_SERVICE_ACCOUNT_TOKEN from its file if present → silent `op read`
+
+    # --sweep-all is the catch-all pass; it complements the curated map rather than iterating it.
+    if getattr(args, "sweep_all", False):
+        return sweep_all(apply=args.apply)
 
     cred_map = [e for e in load_map() if e.get("enabled", True)]
     if not cred_map:
@@ -500,12 +780,13 @@ def main() -> int:
         any_invalid = False
         for e in cred_map:
             envs = e.get("env", [])
-            gspec = e.get("gh_secret")
-            if not envs and gspec:
+            sinks = _gh_sinks(e)
+            if not envs and sinks:
                 # A CI-secret sink isn't probeable here — the value isn't materialized on this floor and
                 # GitHub never returns a secret's value. Presence/landing is reported by --apply. Neutral,
                 # network-free, never fails the beat.
-                print(f"  · {e['lane']:28} CI-secret gh:{gspec['repo']}:{gspec['name']} — managed on --apply (value not readable back)")
+                label = ", ".join(f"gh:{s['repo']}:{s['name']}" for s in sinks)
+                print(f"  · {e['lane']:28} CI-secret {label} — managed on --apply (value not readable back)")
                 continue
             val = _env_value(envs[0]) if envs else None
             if not val:
@@ -517,8 +798,10 @@ def main() -> int:
             print(f"  {mark} {e['lane']:28} {state.upper()}" + (f" — {detail}" if detail else ""))
             any_invalid = any_invalid or state == "invalid"
         if any_invalid:
-            print("creds-hydrate: ✗ = a DEAD credential (presence ✓ is not validity). Re-mint it into its "
-                  "op:// item, then `--apply`. Re-run `--verify` to confirm green.")
+            print(
+                "creds-hydrate: ✗ = a DEAD credential (presence ✓ is not validity). Re-mint it into its "
+                "op:// item, then `--apply`. Re-run `--verify` to confirm green."
+            )
         return 1 if any_invalid else 0
 
     if not have_op():
@@ -530,15 +813,18 @@ def main() -> int:
         print(f"creds-hydrate --check ({ENV_FILE}):")
         for e in cred_map:
             envs = e.get("env", [])
-            gspec = e.get("gh_secret")
-            if not envs and gspec:
-                print(f"  · {e['lane']:28} {ref_display(e['ref'])} -> gh:{gspec['repo']}:{gspec['name']} (CI secret — checked on --apply)")
+            sinks = _gh_sinks(e)
+            if not envs and sinks:
+                label = ", ".join(f"gh:{s['repo']}:{s['name']}" for s in sinks)
+                print(f"  · {e['lane']:28} {ref_display(e['ref'])} -> {label} (CI secret — checked on --apply)")
                 continue
             present = all(_env_has(k) for k in envs) if envs else False
             mark = "✓" if present else "✗"
             print(f"  {mark} {e['lane']:28} {ref_display(e['ref'])} -> {','.join(envs) or '(file only)'}")
-        print("  (presence only — ✓ means the env var is SET, not that it still authenticates. "
-              "Run `--verify` to probe validity against each service.)")
+        print(
+            "  (presence only — ✓ means the env var is SET, not that it still authenticates. "
+            "Run `--verify` to probe validity against each service.)"
+        )
         return 0
 
     apply = args.apply  # default (no flag) == dry-run
@@ -547,8 +833,9 @@ def main() -> int:
     # ROOT CAUSE (confirmed from 1Password's own daemon logs): the app's unlock policy is
     # `BiometricsOnly` with "Ask Again After: -1" (never cache) — so EVERY `op read` re-locks
     # immediately and demands a fresh Touch-ID. Nothing is cached, so each access is its own prompt.
-    # On personal accounts a service-account token (the only promptless `op`) is NOT available
-    # (Business-only), so there is no token path to make `op read` silent here.
+    # The PERMANENT cure is a service-account token (the only promptless `op`): install it once at
+    # SA_TOKEN_FILE (scripts/op-service-account.sh) and op_can_read_silently() flips True, so this whole
+    # opt-in gate falls away — the beat and --sweep-all read op with ZERO Touch-ID, forever.
     # The earlier gate still let `op read` fire whenever stdin/stdout was a TTY — but the daemon's
     # metabolize beat and ~10 concurrent interactive sessions ALL present as TTYs, so that clause WAS
     # the storm (20+ biometric prompts in rapid succession). The cure: `op` is now strictly OPT-IN.
@@ -559,21 +846,25 @@ def main() -> int:
     # skip. [[macos-tcc-gatekeeper-dialogs-solved]]
     op_ok = op_can_read_silently() or args.op
     if apply and not op_ok:
-        hint = ("re-run with `--op` at a terminal to hydrate them (accepts one Touch-ID)."
-                if running_interactively()
-                else "they hydrate only with `--op` or a service-account token.")
-        print("creds-hydrate: op:// lanes SKIPPED (opt-in) — not touching 1Password, so no Touch-ID/GUI "
-              f"prompt fires. Promptless `derive` lanes still hydrate. To (re)hydrate the op:// creds, {hint}")
+        hint = (
+            "re-run with `--op` at a terminal to hydrate them (accepts one Touch-ID)."
+            if running_interactively()
+            else "they hydrate only with `--op` or a service-account token."
+        )
+        print(
+            "creds-hydrate: op:// lanes SKIPPED (opt-in) — not touching 1Password, so no Touch-ID/GUI "
+            f"prompt fires. Promptless `derive` lanes still hydrate. To (re)hydrate the op:// creds, {hint}"
+        )
 
     print(f"creds-hydrate {'--apply' if apply else '--dry-run (no reads, no writes — pass --apply to hydrate)'}:")
     hydrated, skipped = 0, 0
     for e in cred_map:
         ref, envs, fspec = e["ref"], e.get("env", []), e.get("file")
         dcmd = e.get("derive")
-        gspec = e.get("gh_secret")
+        sinks = _gh_sinks(e)
         targets = ", ".join(envs) + (f" + {fspec['path']}" if fspec else "")
-        if gspec:
-            targets += (" + " if targets else "") + f"gh:{gspec['repo']}:{gspec['name']}"
+        for s in sinks:
+            targets += (" + " if targets else "") + f"gh:{s['repo']}:{s['name']}"
         source = f"`{' '.join(dcmd)}` (op:// fallback)" if dcmd else ref_display(ref)
         if not apply:
             print(f"  plan: {e['lane']:28} {source} -> {targets}")
@@ -581,8 +872,9 @@ def main() -> int:
         # gh_secret-ONLY entry (no env/file): if the CI secret is already set, skip — no value read, no
         # re-push, and crucially NO 1Password touch. The organ keeps it landed without a per-beat biometric
         # prompt; it only reads+sets when the secret is ABSENT (and op is permitted / the value derivable).
-        if gspec and not envs and not fspec and gh_secret_present(gspec["repo"], gspec["name"]) is True:
-            print(f"  ✓ {e['lane']:28} -> gh:{gspec['repo']}:{gspec['name']} (already set)")
+        if sinks and not envs and not fspec and all(gh_secret_present(s["repo"], s["name"]) is True for s in sinks):
+            label = ", ".join(f"gh:{s['repo']}:{s['name']}" for s in sinks)
+            print(f"  ✓ {e['lane']:28} -> {label} (already set)")
             hydrated += 1
             continue
         # Prefer a live-minted value (e.g. the gh keyring) over the static op:// secret; fall back to
@@ -591,35 +883,42 @@ def main() -> int:
         if not val and op_ok:
             val = op_read(ref)
         if not val:
-            why = ("unreadable (check op signin / the field name)" if op_ok
-                   else "op:// read skipped — no promptless 1Password auth (fail-open, no Touch-ID)")
+            why = (
+                "unreadable (check op signin / the field name)"
+                if op_ok
+                else "op:// read skipped — no promptless 1Password auth (fail-open, no Touch-ID)"
+            )
             print(f"  SKIP {e['lane']:28} {source} — {why}")
             skipped += 1
             continue
         for k in envs:
             write_env(k, val)
         wrote_file = write_tool_file(fspec, val) if fspec else None
-        gh_set = gh_secret_set(gspec["repo"], gspec["name"], val) if gspec else None
+        gh_results = [(s, gh_secret_set(s["repo"], s["name"], val)) for s in sinks]
         del val  # drop the secret from memory promptly
         parts = []
         if envs:
             parts.append(",".join(envs))
         if wrote_file:
             parts.append(wrote_file)
-        if gspec:
-            parts.append(f"gh:{gspec['repo']}:{gspec['name']}" + ("" if gh_set else " (set FAILED)"))
+        for s, ok in gh_results:
+            parts.append(f"gh:{s['repo']}:{s['name']}" + ("" if ok else " (set FAILED)"))
         print(f"  ✓ {e['lane']:28} -> {' + '.join(parts)}")
         hydrated += 1
 
     if apply:
-        print(f"creds-hydrate: {hydrated} hydrated, {skipped} skipped. "
-              f"Apply to the running daemon: launchctl kickstart -k gui/$(id -u)/com.limen.heartbeat")
+        print(
+            f"creds-hydrate: {hydrated} hydrated, {skipped} skipped. "
+            f"Apply to the running daemon: launchctl kickstart -k gui/$(id -u)/com.limen.heartbeat"
+        )
         if skipped:
-            print("  (skipped = `op` couldn't read it: unlock with `op signin`, then re-run with `--op`, "
-                  "or fix the field in the map. Never a vendor re-login — only the 1Password unlock.)"
-                  if op_ok else
-                  "  (skipped = op:// lanes are opt-in and `--op` was not passed — this is the NO-PROMPT "
-                  "default. Promptless `derive` lanes hydrated. Pass `--op` at a terminal to hydrate op://.)")
+            print(
+                "  (skipped = `op` couldn't read it: unlock with `op signin`, then re-run with `--op`, "
+                "or fix the field in the map. Never a vendor re-login — only the 1Password unlock.)"
+                if op_ok
+                else "  (skipped = op:// lanes are opt-in and `--op` was not passed — this is the NO-PROMPT "
+                "default. Promptless `derive` lanes hydrated. Pass `--op` at a terminal to hydrate op://.)"
+            )
     return 0
 
 

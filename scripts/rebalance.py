@@ -17,10 +17,18 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
+from limen.capacity import LOCAL_CHECKOUT_AGENTS, canonical_agent  # noqa: E402
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
-from limen.dispatch import _resolve_repo_dir, _down_lanes  # noqa: E402
+from limen.dispatch import (  # noqa: E402
+    _deps_met,
+    _dispatchable,
+    _down_lanes,
+    _resolve_repo_dir,
+    _routine_generated_buildout_allowed,
+    agent_can_run_task,
+)
 
-LOCAL = {"codex", "opencode", "agy", "antigravity", "claude", "gemini"}
+LOCAL = set(LOCAL_CHECKOUT_AGENTS)
 
 
 def main() -> int:
@@ -31,7 +39,11 @@ def main() -> int:
     args = ap.parse_args()
 
     down = _down_lanes()
-    lanes = [x.strip() for x in args.lanes.split(",") if x.strip() and x.strip() not in down]
+    lanes = [
+        canonical_agent(x.strip())
+        for x in args.lanes.split(",")
+        if x.strip() and canonical_agent(x.strip()) not in down
+    ]
     if not lanes:
         print(f"no productive lanes (given lanes all down: {sorted(down)})")
         return 2
@@ -40,17 +52,36 @@ def main() -> int:
     path = Path(args.tasks)
     lf = load_limen_file(path)
 
+    id2 = {t.id: t for t in lf.tasks}
     cands = [
-        t for t in lf.tasks
-        if t.status == "open" and t.target_agent in LOCAL and _resolve_repo_dir(t) is not None
+        t
+        for t in lf.tasks
+        if _dispatchable(t)
+        and canonical_agent(t.target_agent) in LOCAL
+        and _resolve_repo_dir(t) is not None
+        and _deps_met(t, id2)
+        and _routine_generated_buildout_allowed(t)
     ]
     counts = {x: 0 for x in lanes}
-    for i, t in enumerate(cands):
-        lane = lanes[i % len(lanes)]
-        t.target_agent = lane
-        counts[lane] += 1
+    skipped = 0
+    lane_index = 0
+    for t in cands:
+        assigned = None
+        for _ in lanes:
+            lane = lanes[lane_index % len(lanes)]
+            lane_index += 1
+            if agent_can_run_task(lane, t):
+                assigned = lane
+                break
+        if assigned is None:
+            skipped += 1
+            continue
+        t.target_agent = assigned
+        counts[assigned] += 1
 
-    print(f"rebalanced {len(cands)} dispatchable local tasks across {lanes}: {counts}")
+    print(f"rebalanced {sum(counts.values())} dispatchable local tasks across {lanes}: {counts}")
+    if skipped:
+        print(f"skipped {skipped} task(s) with no safe productive lane")
     if args.apply:
         save_limen_file(path, lf)
         print("APPLIED -> tasks.yaml")

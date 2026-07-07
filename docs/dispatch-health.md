@@ -1,8 +1,8 @@
 # Dispatch Health
 
-Generated: `2026-06-29T15:16:32+00:00`
+Generated: `2026-07-07T00:52:32+00:00`
 
-Status: `blocked`
+Status: `healthy`
 
 ## Incident Class
 
@@ -15,44 +15,56 @@ Status: `blocked`
 - LaunchAgent plist: `~/Library/LaunchAgents/com.limen.heartbeat.plist` present `True`.
 - Plist KeepAlive: `True`; RunAtLoad: `True`.
 - Plist LIMEN_ROOT: `/Users/4jp/Workspace/limen`.
-- Plist LIMEN_DISPATCH_ASYNC: `0`.
-- Loaded launchd state: `running` pid `1656`.
+- Plist LIMEN_DISPATCH_ASYNC: `1`.
+- Plist LIMEN_DISPATCH_LANES: `auto`.
+- Plist LIMEN_LANES: `codex,opencode,agy,claude,gemini`.
+- Loaded launchd state: `running` pid `79488`.
 - Loaded LIMEN_ROOT: `/Users/4jp/Workspace/limen`.
-- Loaded LIMEN_DISPATCH_ASYNC: `0`.
-- Watchdog dry-run healthy: `True`; `[watchdog] 2026-06-29T15:16:33.126703+00:00 HEALTHY sig=healthy`.
+- Loaded LIMEN_DISPATCH_ASYNC: `1`.
+- Loaded LIMEN_DISPATCH_LANES: `auto`.
+- Loaded LIMEN_LANES: `codex,opencode,agy,claude,gemini`.
+- Watchdog dry-run healthy: `True`; `[watchdog] 2026-07-07T00:52:32.794290+00:00 HEALTHY sig=healthy`.
 
 ## Async Dispatch
 
-- Async dry-run requested: `True`.
-- Async dry-run ok: `True`; timed out `False`.
-- Async dry-run summary: `-- async: reaped 0 dead ; harvested 0 ; 0 still running ; would launch 0 (cap 12) -> []`.
+- Async dry-run requested: `False`.
+- Async dry-run ok: `None`; timed out `False`.
+- Async dry-run summary: ``.
+
+## Prompt Packet Gate
+
+- Prompt packet index present: `True`.
+- Prompt packet status: `clear`.
+- Open prompt packets: `0`.
+- Conductor-required packets: `0`.
+- Ready-after-predicate packets: `0`.
+- Recorded packets: `8`.
+- Public packet ledger: `~/Workspace/limen/docs/prompt-packet-ledger.md`.
 
 ## Live Root
 
 - Live root: `~/Workspace/limen`.
-- Branch: `main`; status `## main...origin/main [ahead 1]`.
-- HEAD: `d6757d3d21fc02f7d849f1f680d5c4e74c68cf70`.
-- origin/main: `9f7af24dcb7514acec86c377965fa8efa56932ce`.
-- Matches origin/main: `False`; ahead `1` behind `0`.
-- Dirty entries: `2`.
-  - `docs/dispatch-health.md`
-  - `docs/live-root-gate.md`
+- Branch: `main`; status `## main...origin/main`.
+- HEAD: `bda8cfd51aec38552e099b55c6696209763d1de3`.
+- origin/main: `bda8cfd51aec38552e099b55c6696209763d1de3`.
+- Matches origin/main: `True`; ahead `0` behind `0`.
+- Dirty entries: `0`.
 
 ## Verified Worktree
 
 - Verified worktree: `~/Workspace/limen`.
-- Branch: `main`; status `## main...origin/main [ahead 1]`.
-- HEAD matches origin/main: `False`.
+- Branch: `main`; status `## main...origin/main`.
+- HEAD matches origin/main: `True`.
 
 ## Blockers
 
-- `live-root-not-at-origin-main`: live root branch main head d6757d3d21fc differs from origin/main 9f7af24dcb75.
-- `live-root-dirty`: live root has 2 dirty entries.
+- none
 
 ## Commands
 
 - Refresh this receipt: `python3 scripts/dispatch-health.py --write --probe-async`
 - Refresh the operator gate: `python3 scripts/live-root-gate.py --write`
+- Refresh prompt packets: `python3 scripts/prompt-packet-ledger.py --write`
 - Verify async dispatch tests: `pytest -q cli/tests/test_async_dispatch.py`
 - Probe heartbeat: `python3 scripts/watchdog.py --dry-run`
-- Probe async dry-run: `PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes codex,opencode,agy,claude,gemini,jules --per-lane 3 --max 12 --dry-run`
+- Probe async dry-run: `PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes auto --per-lane 3 --max 12 --dry-run`

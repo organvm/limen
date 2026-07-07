@@ -60,9 +60,13 @@ cp .env.example .env      # fill in MINT_BTC_ADDRESS (and optionally a price)
 npm start                 # http://localhost:8787
 ```
 
-With nothing configured it still boots and serves `/health` + `/pubkey`, but
-`/checkout` returns `503 unconfigured` until `MINT_BTC_ADDRESS` is set — the code
-is done regardless; the address is the operate step.
+With nothing configured it still boots and serves `/health` + `/pubkey` — and it
+**no longer turns business away**. Before a receive address is set, `/checkout`
+pools each buyer as a `reserved` order (HTTP `202`) and `/health` reports the
+`waiting` count. The instant `MINT_BTC_ADDRESS` is set, a reserved order opens
+into a payable one on its next `/order/:id` poll and mints on confirmed payment —
+no demand is lost while the valve is closed. The address is the one sovereign
+value only the owner holds; it opens the valve, it is not a gate that drops sales.
 
 Docker:
 
@@ -71,14 +75,32 @@ docker build -t moneta .
 docker run -p 8787:8787 --env-file .env -v "$PWD/.data:/app/.data" moneta
 ```
 
+### Surviving a restart (ephemeral / $0 hosts)
+
+The mint keeps two pieces of state that **must** outlive a process recycle:
+
+- **The signing key.** If it rotates, every previously-issued Pro licence stops
+  verifying and the product's embedded public JWK goes stale. Either mount
+  `.data` on a persistent volume (the auto-generated keyfile lives there) **or**
+  set a stable `MINT_PRIVATE_JWK` as a deploy secret (organ-owned — never pasted
+  in chat). The public half is what you embed in the product build.
+- **The order book** (`MINT_ORDERS_FILE`, default `.data/orders.json`). It holds
+  the pooled `reserved` demand and issued licences; the same mounted `.data`
+  volume persists it, so a cold start or redeploy never drops a buyer in line.
+
+On a host that gives you no volume (some free tiers recycle the whole FS), set a
+stable `MINT_PRIVATE_JWK` at minimum so keys never rotate; the order book then
+resets on restart, but no *issued* licence is ever invalidated.
+
 ## Endpoints
 
 | Method | Path          | Purpose |
 |--------|---------------|---------|
-| GET    | `/health`     | Liveness + whether the mint is configured to sell. |
+| GET    | `/` , `/buy`  | The self-contained buyer-facing checkout page (HTML): shows the BTC address + amount + a BIP21 `bitcoin:` link, polls to confirmation, and returns the buyer to the product with `?ce_license_key=…`. No third-party checkout in the path. |
+| GET    | `/health`     | Liveness + `configured` flag + `waiting` (buyers pooled behind an unset address). |
 | GET    | `/pubkey`     | The ECDSA **public** JWK to embed in a product build. |
-| POST   | `/checkout`   | `{ email? }` → an order with a unique sat amount + BIP21 `payUri`. |
-| GET    | `/order/:id`  | Poll; mints + returns the `license` once payment confirms. |
+| POST   | `/checkout`   | `{ email? }` → `201` with a unique sat amount + BIP21 `payUri` when configured; `202` `reserved` (demand pooled) when no address is set yet. |
+| GET    | `/order/:id`  | Poll; opens a `reserved` order once an address exists, then mints + returns the `license` once payment confirms. |
 
 ## Wire it to a product
 

@@ -32,6 +32,10 @@ REMOTE_PR_OPEN_LANES = {"remote-pr-open"}
 REMOTE_PR_OPEN_STATUSES = {"open_pr_preserved"}
 OWNER_BLOCKER_LANES = {"owner-blocker"}
 OWNER_BLOCKER_STATUSES = {"history_mismatch_patch_preserved", "private_patch_preserved"}
+GENERATED_LOG_SHELL_FILES = {
+    "logs/session-lifecycle-pressure.md",
+    "logs/session-lifecycle-pressure.json",
+}
 
 
 class WorktreeDebtItem(TypedDict):
@@ -92,6 +96,16 @@ def _patch_equivalent_to_default(cwd: Path) -> bool:
         return False
     lines = [line.strip() for line in cherry.stdout.splitlines() if line.strip()]
     return bool(lines) and all(line.startswith("-") for line in lines)
+
+
+def _git_toplevel(cwd: Path) -> Path | None:
+    top = _git(["rev-parse", "--show-toplevel"], cwd)
+    if top.returncode != 0 or not top.stdout.strip():
+        return None
+    try:
+        return Path(top.stdout.strip()).resolve()
+    except OSError:
+        return Path(top.stdout.strip())
 
 
 def _load_preservation_receipts(limen_root: Path) -> dict[str, dict[str, Any]]:
@@ -161,6 +175,17 @@ def _is_owner_blocker(path: Path, preservation_receipts: dict[str, dict[str, Any
     return has_private_receipt and (lane in OWNER_BLOCKER_LANES or status in OWNER_BLOCKER_STATUSES)
 
 
+def is_generated_log_shell(path: Path) -> bool:
+    """True for disposable non-git worktree shells containing only pressure receipts."""
+    if not path.is_dir():
+        return False
+    try:
+        files = {item.relative_to(path).as_posix() for item in path.rglob("*") if item.is_file()}
+    except OSError:
+        return False
+    return bool(files) and files <= GENERATED_LOG_SHELL_FILES
+
+
 def _classify(
     path: Path,
     now: float,
@@ -184,8 +209,13 @@ def _classify(
         return "remote-pr-open"
     if _is_owner_blocker(path, preservation_receipts):
         return "owner-blocker"
-    if _git(["rev-parse", "--is-inside-work-tree"], path).returncode != 0:
+    top = _git_toplevel(path)
+    if top is None:
+        if is_generated_log_shell(path):
+            return "generated-log-shell"
         return "not-a-git-dir"
+    if top != resolved:
+        return "self/live-checkout" if top in self_guard else "not-a-git-dir"
     age_h = (now - path.stat().st_mtime) / 3600.0
     if age_h < min_age_h:
         return f"active(<{min_age_h:g}h)"

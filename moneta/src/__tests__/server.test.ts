@@ -25,10 +25,10 @@ afterAll(() => {
 })
 
 describe('mint HTTP server', () => {
-    it('GET /health reports liveness + configured flag', async () => {
+    it('GET /health reports liveness + configured flag + pooled demand', async () => {
         const res = await fetch(`${base}/health`)
         expect(res.status).toBe(200)
-        expect(await res.json()).toEqual({ ok: true, configured: false })
+        expect(await res.json()).toEqual({ ok: true, configured: false, waiting: 0 })
     })
 
     it('GET /pubkey serves the verify key for the product build', async () => {
@@ -39,14 +39,34 @@ describe('mint HTTP server', () => {
         expect(body.jwk.d).toBeUndefined()
     })
 
-    it('POST /checkout is refused while unconfigured', async () => {
+    it('POST /checkout pools demand (reserves) while unconfigured', async () => {
         const res = await fetch(`${base}/checkout`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ email: 'a@b.com' }),
         })
-        expect(res.status).toBe(503)
-        expect((await res.json()).error).toBe('unconfigured')
+        expect(res.status).toBe(202)
+        expect((await res.json()).status).toBe('reserved')
+    })
+
+    it('GET / serves the self-contained checkout page (no third-party checkout)', async () => {
+        const res = await fetch(`${base}/`)
+        expect(res.status).toBe(200)
+        expect(res.headers.get('content-type')).toMatch(/text\/html/)
+        const html = await res.text()
+        expect(html).toContain('<!DOCTYPE html>')
+        expect(html).toContain('Unlock Pro')
+        expect(html).toContain('/checkout')       // drives the flow against the same-origin API
+        expect(html).toContain('MONETA')          // sovereign attribution
+        // No rented processor leaks into the storefront.
+        expect(html.toLowerCase()).not.toContain('lemonsqueezy')
+        expect(html.toLowerCase()).not.toContain('stripe')
+    })
+
+    it('GET /buy is an alias for the checkout page', async () => {
+        const res = await fetch(`${base}/buy`)
+        expect(res.status).toBe(200)
+        expect(res.headers.get('content-type')).toMatch(/text\/html/)
     })
 
     it('unknown routes 404', async () => {

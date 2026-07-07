@@ -1,0 +1,387 @@
+"""Workstream channels — the PURPOSE partition of the board.
+
+Anthony's "channels": a durable, single-purpose lane a worker session draws from — the axis ABOVE
+the vendor ``target_agent`` lane. The 10-20-mixed-PRs sprawl came from having NO such axis: the
+backlog was one undifferentiated grab-bag, so a session reserved whatever was in front of it. A
+``workstream`` field on each :class:`~limen.models.Task` plus the invariant "one worker session
+draws OPEN tasks from ONE workstream only" (enforced by the scoped cell conductor,
+``cell conduct <slug> --workstream <handle>``) dissolves it.
+
+The roster is DERIVED, never a hand-kept menu (the standing "never need him to speak again"
+directive): the DOMAIN channels ARE the institutional organs in ``organ-ladder.json`` — add an
+organ, get a channel, free — and the OPERATIONAL channels are the cross-cutting process lanes
+Anthony named (conductor / contributions / correspondence / prompt-parity). The literal word
+"channel" is deliberately NOT the code token: it already means FLAME/CORPUS/MEMORY truth
+propagation in ``scripts/evocator.py`` and product × distribution in ``scripts/launch-organ.py``.
+The converged term is ``workstream`` — it already names the scaffolder (``limen workstream``), the
+private packet (``.limen-workstream/``) and ``docs/lanes/`` — so this promotes that
+already-declared-but-empty lane concept into a real, enforced field.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+from limen.models import LimenFile, Task
+
+
+@dataclass(frozen=True)
+class Channel:
+    """One durable purpose-lane. ``source`` is ``"organ"`` (derived from organ-ladder.json) or
+    ``"meta"`` (a hand-listed operational lane — the only channels NOT auto-derived)."""
+
+    handle: str
+    title: str
+    source: str
+    detail: str = ""
+    aliases: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PullRequest:
+    """A minimal open-PR reference for the PR × channel projection. Populated by the CLI from
+    ``gh pr list``; kept dependency-free (no gh/subprocess here) so the grouping stays pure."""
+
+    number: int
+    title: str
+    branch: str = ""
+    url: str = ""
+    draft: bool = False
+    repo: str = ""
+
+
+# Operational (non-organ) channels — the cross-cutting PROCESS lanes Anthony named in the
+# channel-decomposition session (2026-07-02). These are the ONLY hand-listed channels, because they
+# are not institutional organs; every DOMAIN channel derives from organ-ladder.json below.
+_META_CHANNELS: tuple[Channel, ...] = (
+    Channel(
+        "conductor",
+        "Conductor",
+        "meta",
+        "Idea intake + Q&A + packetization. Never executes a raw prompt; derives bounded tasks and "
+        "tags each with its workstream, then seeds the board or spins a scoped worker.",
+        ("intake", "brainstorm"),
+    ),
+    Channel(
+        "contributions",
+        "Contributions",
+        "meta",
+        "The code/PR lane — one worker draining contribution tasks, never mixing in mail or prompts.",
+        ("contrib", "contribution", "code", "prs", "pr"),
+    ),
+    Channel(
+        "correspondence",
+        "Correspondence",
+        "meta",
+        "The mail lane — drafts, replies, the obligations ledger. Maps to the C_MAIL beat.",
+        ("mail", "email", "comms", "inbox"),
+    ),
+    Channel(
+        "prompt-parity",
+        "Prompt-parity",
+        "meta",
+        "The completeness lane — proves every prompt Anthony gave reached the parity it was meant to "
+        "reach. Same shape as no-tasks-on-me.sh / the every-ask ledger.",
+        ("prompts", "prompt", "parity"),
+    ),
+)
+
+# Aliases that are TOO generic for FREE-TEXT inference (a PR title / commit subject): in PR-land the
+# words "pr"/"prs" are structural, not a purpose signal — every PR is a "PR" — so matching on them
+# would sweep unrelated PRs into `contributions`. They are skipped ONLY in :func:`infer_channel`;
+# the task-label path in :func:`channel_of` still honors them (a task deliberately labelled "pr" is
+# intentional). Kept a named constant, not a magic literal, so the rationale travels with the code.
+_GENERIC_TEXT_TOKENS: frozenset[str] = frozenset({"pr", "prs"})
+
+# Aliases folded onto derived ORGAN channels so Anthony's spoken vocabulary resolves to the canonical
+# pillar handle (his word works at the surface; the code converges underneath).
+_ORGAN_ALIASES: dict[str, tuple[str, ...]] = {
+    "financial": ("revenue", "money", "cash", "finance"),
+}
+
+UNASSIGNED = "(unassigned)"
+
+
+def normalize_handle(value: str | None) -> str | None:
+    """Kebab-normalize a raw handle: lowercase, runs of non-alphanumerics → '-'. Empty → None."""
+    if not value:
+        return None
+    handle = re.sub(r"[^a-z0-9]+", "-", str(value).strip().lower()).strip("-")
+    return handle or None
+
+
+def _organ_channels(root: Path) -> list[Channel]:
+    """One channel per DISTINCT organ pillar in organ-ladder.json (deduped, first-seen order)."""
+    ladder = Path(root) / "organ-ladder.json"
+    if not ladder.is_file():
+        return []
+    try:
+        data = json.loads(ladder.read_text())
+    except (OSError, json.JSONDecodeError, ValueError):
+        return []
+    seen: dict[str, Channel] = {}
+    for organ in data.get("organs", []):
+        pillar = normalize_handle(organ.get("pillar"))
+        if not pillar or pillar in seen:
+            continue
+        seen[pillar] = Channel(
+            handle=pillar,
+            title=str(organ.get("organ") or pillar.title()),
+            source="organ",
+            detail=str(organ.get("macro") or organ.get("note") or ""),
+            aliases=_ORGAN_ALIASES.get(pillar, ()),
+        )
+    return list(seen.values())
+
+
+def derived_channels(root: Path) -> list[Channel]:
+    """The canonical roster: operational meta-lanes + one channel per institutional organ.
+
+    Derived at READ time from organ-ladder.json so a new organ IS a new channel with no code edit
+    (the "never need him to speak again" property). Meta-lanes win a handle collision with an organ.
+    """
+    channels: list[Channel] = list(_META_CHANNELS)
+    have = {c.handle for c in channels}
+    for c in _organ_channels(root):
+        if c.handle not in have:
+            channels.append(c)
+            have.add(c.handle)
+    return channels
+
+
+def _alias_map(root: Path) -> dict[str, str]:
+    """{normalized handle-or-alias → canonical handle} across the whole derived roster."""
+    m: dict[str, str] = {}
+    for c in derived_channels(root):
+        m[c.handle] = c.handle
+        for a in c.aliases:
+            key = normalize_handle(a)
+            if key:
+                m[key] = c.handle
+    return m
+
+
+def canonical_handle(value: str | None, root: Path) -> str | None:
+    """Normalize a raw handle and resolve an alias (e.g. ``revenue`` → ``financial``). An unknown
+    handle is returned normalized-but-unresolved so ad-hoc channels still work (they just show up
+    outside the derived roster in the projection)."""
+    h = normalize_handle(value)
+    if h is None:
+        return None
+    return _alias_map(root).get(h, h)
+
+
+def channel_of(task: Task, root: Path) -> str:
+    """The task's channel: explicit ``workstream`` field wins; else infer from a label that matches a
+    known handle/alias (keeps pre-field tasks visible); else :data:`UNASSIGNED`."""
+    explicit = canonical_handle(getattr(task, "workstream", None), root)
+    if explicit:
+        return explicit
+    amap = _alias_map(root)
+    for label in task.labels:
+        h = normalize_handle(label)
+        if h and h in amap:
+            return amap[h]
+    return UNASSIGNED
+
+
+def infer_channel(text: str, root: Path) -> str:
+    """Best-effort channel for free text (a PR title + branch, a commit subject): split into
+    whole tokens and return the first that matches a known handle or alias, else :data:`UNASSIGNED`.
+
+    Whole-token matching (never substring) keeps it precise, exactly like the label path in
+    :func:`channel_of` — ``code-review`` matches the ``code`` → contributions alias, but ``decode``
+    never does. Most fleet-process PR titles (CAPFILL packets, ``test(...)``, ``build(deps)``) carry
+    no purpose token and land in UNASSIGNED — which is the honest signal: they have no channel yet.
+    """
+    amap = _alias_map(root)
+    for token in re.split(r"[^a-z0-9]+", str(text).lower()):
+        if token and token in amap and token not in _GENERIC_TEXT_TOKENS:
+            return amap[token]
+    return UNASSIGNED
+
+
+# Task-KIND → channel: structured fleet-task id prefixes whose PURPOSE is unambiguous even when the
+# title carries no purpose token. ``GEN-*`` are generated code contributions (test-coverage, docs,
+# typing, ci-green, simplify) → the code/PR lane; ``DISCOVER-*`` are idea/value probes → the intake
+# conductor. These are the ONLY kind-based fallbacks — everything else must earn its channel via an
+# explicit field, a matching label, or a purpose token, else it stays UNASSIGNED (the honest signal
+# that it has no channel yet). A named constant, like _META_CHANNELS/_ORGAN_ALIASES, so the rationale
+# travels with the rule rather than hiding as a literal in the assigner.
+_KIND_PREFIX_CHANNELS: tuple[tuple[str, str], ...] = (
+    ("gen-", "contributions"),
+    ("discover-", "conductor"),
+)
+
+
+def assign_channel(task: Task, root: Path) -> str:
+    """Derive the channel to STAMP onto a task during the beat's auto-partition (route.py --apply).
+
+    The projection's :func:`channel_of` only reads the explicit field + labels (so pre-field tasks
+    stay visibly UNASSIGNED); the assigner goes one step further so the board actually partitions:
+
+    1. explicit ``workstream`` field or a matching label (:func:`channel_of`) — honors intent;
+    2. a purpose token anywhere in ``id + title + repo`` (:func:`infer_channel`) — catches the
+       organ lanes (``ORG-financial-…`` → financial) whose id names the pillar but that carry no
+       label;
+    3. a task-KIND prefix (:data:`_KIND_PREFIX_CHANNELS`) — the structured GEN-*/DISCOVER-* fleet
+       tasks whose purpose is structural, not lexical.
+
+    Returns :data:`UNASSIGNED` only when nothing resolves — it never guesses a domain, so an
+    unclassifiable task stays honestly unassigned instead of being mis-lane'd.
+    """
+    explicit = channel_of(task, root)
+    if explicit != UNASSIGNED:
+        return explicit
+    inferred = infer_channel(f"{task.id} {task.title} {task.repo or ''}", root)
+    if inferred != UNASSIGNED:
+        return inferred
+    tid = (task.id or "").lower()
+    for prefix, handle in _KIND_PREFIX_CHANNELS:
+        if tid.startswith(prefix):
+            return handle
+    return UNASSIGNED
+
+
+def channel_of_pr(pr: PullRequest, root: Path) -> str:
+    """A PR's inferred channel, from its title + branch (there is no explicit field on a PR yet)."""
+    return infer_channel(f"{pr.title} {pr.branch}", root)
+
+
+def group_by_channel(limen: LimenFile, root: Path) -> dict[str, list[Task]]:
+    """{channel handle → tasks}, in roster order, with any inferred-only handles then UNASSIGNED
+    last. Every derived channel appears even when empty, so the projection is a stable scoreboard."""
+    order = [c.handle for c in derived_channels(root)]
+    buckets: dict[str, list[Task]] = {h: [] for h in order}
+    for task in limen.tasks:
+        buckets.setdefault(channel_of(task, root), []).append(task)
+    ordered: dict[str, list[Task]] = {h: buckets.get(h, []) for h in order}
+    for h, tasks in buckets.items():
+        if h not in ordered and h != UNASSIGNED:
+            ordered[h] = tasks
+    ordered[UNASSIGNED] = buckets.get(UNASSIGNED, [])
+    return ordered
+
+
+def group_prs_by_channel(prs: list[PullRequest], root: Path) -> dict[str, list[PullRequest]]:
+    """{channel handle → open PRs}, in roster order, inferred-only handles then UNASSIGNED last.
+    The PR analogue of :func:`group_by_channel` — turns a flat open-PR pile into a channel scoreboard
+    so the session/PR sprawl is legible along the same purpose axis as the task board."""
+    order = [c.handle for c in derived_channels(root)]
+    buckets: dict[str, list[PullRequest]] = {h: [] for h in order}
+    for pr in prs:
+        buckets.setdefault(channel_of_pr(pr, root), []).append(pr)
+    ordered: dict[str, list[PullRequest]] = {h: buckets.get(h, []) for h in order}
+    for h, items in buckets.items():
+        if h not in ordered and h != UNASSIGNED:
+            ordered[h] = items
+    ordered[UNASSIGNED] = buckets.get(UNASSIGNED, [])
+    return ordered
+
+
+def filter_board(limen: LimenFile, handle: str, root: Path) -> LimenFile:
+    """A board copy carrying ONLY the given channel's tasks — the substrate for the
+    one-worker-one-workstream invariant. The scoped ``cell conduct --workstream`` conductor reads
+    this as its tasks file, so it structurally cannot reach another channel's work."""
+    target = canonical_handle(handle, root)
+    kept = [t for t in limen.tasks if channel_of(t, root) == target]
+    return limen.model_copy(update={"tasks": kept})
+
+
+def _counts(tasks: list[Task]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for t in tasks:
+        counts[t.status] = counts.get(t.status, 0) + 1
+    return counts
+
+
+def roster_summary(limen: LimenFile, root: Path) -> dict:
+    """JSON-able projection of the board by channel (for ``limen channels --json-output``)."""
+    groups = group_by_channel(limen, root)
+    meta = {c.handle: c for c in derived_channels(root)}
+    channels = []
+    for handle, tasks in groups.items():
+        c = meta.get(handle)
+        channels.append(
+            {
+                "handle": handle,
+                "source": c.source if c else ("infer" if handle != UNASSIGNED else "none"),
+                "title": c.title if c else handle,
+                "counts": _counts(tasks),
+                "total": len(tasks),
+            }
+        )
+    return {"generated_from": "organ-ladder.json organs + operational meta-lanes", "channels": channels}
+
+
+def print_channels(limen: LimenFile, root: Path, scope: str | None = None) -> None:
+    """Human projection of the board by channel — the conductor's live scoreboard."""
+    groups = group_by_channel(limen, root)
+    meta = {c.handle: c for c in derived_channels(root)}
+    scope_h = canonical_handle(scope, root) if scope else None
+    print("Workstream channels — purpose partition (derived from organ-ladder.json + operational lanes)")
+    print(f"{'CHANNEL':<16} {'SRC':<6} {'OPEN':>4} {'IP':>3} {'DONE':>5} {'TOTAL':>6}  TITLE")
+    print("-" * 78)
+    for handle, tasks in groups.items():
+        if scope_h and handle != scope_h:
+            continue
+        c = meta.get(handle)
+        src = c.source if c else ("infer" if handle != UNASSIGNED else "-")
+        title = c.title if c else handle
+        counts = _counts(tasks)
+        done = counts.get("done", 0) + counts.get("archived", 0)
+        print(
+            f"{handle:<16} {src:<6} {counts.get('open', 0):>4} {counts.get('in_progress', 0):>3} "
+            f"{done:>5} {len(tasks):>6}  {title}"
+        )
+    if scope_h:
+        print()
+        for t in groups.get(scope_h, []):
+            title = (t.title[:50] + "…") if len(t.title) > 51 else t.title
+            print(f"  {t.id:<12} {t.status:<12} {t.target_agent:<8} {title}")
+
+
+def pr_roster_summary(prs: list[PullRequest], root: Path) -> dict:
+    """JSON-able projection of open PRs by channel (for ``limen channels --prs --json-output``)."""
+    groups = group_prs_by_channel(prs, root)
+    meta = {c.handle: c for c in derived_channels(root)}
+    channels = []
+    for handle, items in groups.items():
+        c = meta.get(handle)
+        channels.append(
+            {
+                "handle": handle,
+                "source": c.source if c else ("infer" if handle != UNASSIGNED else "none"),
+                "title": c.title if c else handle,
+                "total": len(items),
+                "prs": [{"number": p.number, "title": p.title, "branch": p.branch, "url": p.url} for p in items],
+            }
+        )
+    return {"projection": "open PRs × workstream channel", "total_open": len(prs), "channels": channels}
+
+
+def print_pr_channels(prs: list[PullRequest], root: Path, scope: str | None = None) -> None:
+    """Human projection of open PRs by channel — makes the session/PR sprawl legible on the purpose
+    axis. With ``scope`` set, lists that one channel's PRs; otherwise prints the per-channel counts."""
+    groups = group_prs_by_channel(prs, root)
+    meta = {c.handle: c for c in derived_channels(root)}
+    scope_h = canonical_handle(scope, root) if scope else None
+    print(f"Open PRs by workstream channel ({len(prs)} open) — purpose partition")
+    print(f"{'CHANNEL':<16} {'SRC':<6} {'PRS':>4}  TITLE")
+    print("-" * 60)
+    for handle, items in groups.items():
+        if scope_h and handle != scope_h:
+            continue
+        c = meta.get(handle)
+        src = c.source if c else ("infer" if handle != UNASSIGNED else "-")
+        title = c.title if c else handle
+        print(f"{handle:<16} {src:<6} {len(items):>4}  {title}")
+    if scope_h:
+        print()
+        for p in groups.get(scope_h, []):
+            draft = " (draft)" if p.draft else ""
+            title = (p.title[:52] + "…") if len(p.title) > 53 else p.title
+            print(f"  #{p.number:<6} {title}{draft}")

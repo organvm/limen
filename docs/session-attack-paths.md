@@ -1,6 +1,6 @@
 # Session Attack Paths
 
-Generated: `2026-06-28T20:12:46+00:00`
+Generated: `2026-07-07T00:19:44+00:00`
 
 ## Canonical Decision
 
@@ -12,13 +12,13 @@ Generated: `2026-06-28T20:12:46+00:00`
 
 ## Coverage
 
-- Redacted prompt corpus: `9489` files, `92795` prompt-like events.
+- Redacted prompt corpus: `15590` files, `136694` prompt-like events.
 - Codex classified sessions: `887`.
-- Worktree debt roots: `0`.
-- Worktree preservation receipts: `14`.
-- Parked blockers: `7`.
-- Local lifecycle footprint: `5.4 GiB`.
-- Candidate lanes: `family` 7, `human-gate` 17, `observe` 2, `parked` 5.
+- Worktree debt roots: `70`.
+- Worktree preservation receipts: `89`.
+- Parked blockers: `8`.
+- Local lifecycle footprint: `39.7 GiB`.
+- Candidate lanes: `blocker` 3, `drain` 1, `family` 7, `human-gate` 18, `observe` 293, `owner-blocker` 7, `parked` 4, `preserve` 42, `remote-close` 12, `remote-pr-open` 12, `remote-proof` 151.
 
 ## Ordering Model
 
@@ -34,31 +34,31 @@ Generated: `2026-06-28T20:12:46+00:00`
 
 | Rank | Path | Kind | Lane | Score | Evidence | Agent Fit | Next Action |
 |---:|---|---|---|---:|---|---|---|
-| 1 | `session_lifecycle` | `family` | `family` | 72 | sessions 159; states CLOSED 139, STALLED 20; prompts 636 | codex | Keep corpus/session ledgers current, collapse repeats into owner receipts. |
-| 2 | `dispatch-heartbeat-substrate-unhealthy` | `blocker` | `human-gate` | 64 | category `dispatch_lifecycle`; status `needs_human_gate` | human/codex-prep | Use `docs/live-root-gate.md` to preserve/reconcile the live Limen root and reload launchd only under an explicit operator gate; stop before reset, branch switch, task-board edits, or async enablement. |
-| 3 | `worktree_lifecycle` | `family` | `family` | 63 | sessions 77; states CLOSED 62, STALLED 15; prompts 289 | codex/openCode | Preserve dirty or missing-remote roots, then reclaim duplicate local state. |
-| 4 | `github_review` | `family` | `family` | 61 | sessions 158; states CLOSED 145, STALLED 13; prompts 615 | opencode/jules | Review PR/issue receipts only after owner repo, predicate, and blocker are explicit. |
-| 5 | `github-app-limen-bot-not-wired` | `blocker` | `human-gate` | 58 | category `github_app_identity`; status `needs_human_gate` | human/codex-prep | Create/install the org GitHub App and hydrate credentials via `scripts/set-credential.sh`; verify `bash scripts/gh-app-token.sh --which` reports the App path. |
-| 6 | `github-consolidation-collisions` | `blocker` | `human-gate` | 52 | category `github_consolidation`; status `needs_human_gate` | human/codex-prep | Collision packet is complete; await an explicit human GitHub mutation gate to run `docs/consolidation/COLLISION-RENAMES.md`, then re-run the consolidation dry-run and require 0 collisions before transfer. |
-| 7 | `agent_coordination` | `family` | `family` | 46 | sessions 40; states CLOSED 30, STALLED 10; prompts 133 | codex | Packetize bounded work; do not dispatch broad sprawl prompts. |
-| 8 | `technical_debt_ci` | `family` | `family` | 40 | sessions 36; states CLOSED 33, STALLED 3; prompts 128 | opencode/jules | Run narrow predicates and preserve failures in owner repos. |
-| 9 | `local-lifecycle-disk-pressure` | `blocker` | `parked` | 34 | category `local_lean`; status `parked` | codex | Drain only after remote/default preservation proof or non-source residue receipt; keep pressure visible in SessionStart. |
-| 10 | `convergence_corpus` | `family` | `family` | 32 | sessions 10; states CLOSED 10; prompts 37 | codex | Promote durable atoms through session-meta and knowledge-corpus. |
-| 11 | `gen-organvm-universal-mail--automation-test-coverage-0625-151e` | `worktree` | `human-gate` | 32 | reason `owner-blocker`; prompts 100; remote `missing`; open PRs 0; receipt `private_patch_preserved` | human/codex-prep | Do not PR or delegate this deletion patch. The branch has no unique commits, no remote branch, no PR, no sparse-checkout configuration, and 167 tracked files deleted from disk while HEAD is an ancestor of origin/main. Treat as stale broken checkout/deletion artifact; reclaim only after operator acceptance, and recreate from origin/main if owner work is needed. |
-| 12 | `rev-organvm-the-invisible-ledger-revenue-readiness-0623-bd8b` | `worktree` | `human-gate` | 24 | reason `documented-residue`; prompts 94; remote `not-a-git-dir`; open PRs 0; receipt `cache_only_residue` | human/codex-prep | No unique source to preserve; directory contains only Vite dependency-cache metadata. Reclaim only after normal operator acceptance. |
-| 13 | `org-artist-organ-face-0628-1291` | `worktree` | `observe` | 20 | reason `active(<6h)`; prompts 0; remote `unknown`; open PRs 0 | codex first; opencode/jules after packetization | Keep active work visible; do not interrupt unless it becomes stale. |
-| 14 | `org-financial-organ-deepen-0628-b1b3` | `worktree` | `observe` | 20 | reason `active(<6h)`; prompts 0; remote `unknown`; open PRs 0 | codex first; opencode/jules after packetization | Keep active work visible; do not interrupt unless it becomes stale. |
-| 15 | `cloud-runtime-endpoint-unconfigured` | `blocker` | `parked` | 18 | category `cloud_runtime`; status `parked` | codex | Keep separate from session intake; configure/probe runtime only in a deploy/runtime task. |
-| 16 | `uncategorized` | `family` | `family` | 18 | sessions 2; states STALLED 2; prompts 10 | codex | Inspect privately and add classifier/owner route. |
-| 17 | `cifix-organvm-i-theoria-hierarchia-mundi-3145` | `worktree` | `human-gate` | 18 | reason `remote-superseded`; prompts 71; remote `missing`; open PRs 0; receipt `superseded_on_origin_main` | human/codex-prep | No PR needed; local dirty smoke-test/root-fix draft is superseded by origin/main, including tests/test_smoke.py plus broader loader and CLI coverage. Reclaim only after normal operator acceptance. |
-| 18 | `gen-organvm-the-invisible-ledger-ci-green-0625-e3c2` | `worktree` | `human-gate` | 15 | reason `documented-residue`; prompts 4; remote `not-a-git-dir`; open PRs 0; receipt `empty_generated_residue` | human/codex-prep | No unique source to preserve; directory contains only an empty dist/ directory. Reclaim only after normal operator acceptance. |
-| 19 | `gh-organvm-object-lessons-19-605a` | `worktree` | `human-gate` | 14 | reason `clean+merged+idle`; prompts 73; remote `present`; open PRs 0; receipt `default_branch_preserved` | human/codex-prep | No local source preservation action remains. Local HEAD, origin/main, and closed PR #22 head/base OIDs all equal 745a1baa57874b4e819a0eba4b983246f72e5539; git cherry origin/main HEAD and git diff --check origin/main..HEAD are empty. Reclaim the local checkout only after normal operator acceptance. |
-| 20 | `resolve-a-organvm-the-invisible-ledger-4-f657` | `worktree` | `human-gate` | 13 | reason `clean+merged+idle`; prompts 5; remote `missing`; open PRs 0; receipt `default_branch_preserved` | human/codex-prep | No local source preservation action remains for the task branch. Local HEAD and origin/main both equal 2e785e4ad2976ea8018c27af3e6108fe09a79a95; git cherry origin/main HEAD and git diff --check origin/main..HEAD are empty; no GitHub PR or remote head exists for limen/resolve-a-organvm-the-invisible-ledger-4-f657. The old local PostgreSQL adapter tip remains preserved as preserve/resolve-a-organvm-the-invisible-ledger-4-f657-1741370 at 1741370e59110aa3f667b9d0f48ede43277eb6a5. Reclaim the local checkout only after normal operator acceptance. |
-| 21 | `gen-organvm-i-theoria-sovereign--ground-ci-green-0620-0f38` | `worktree` | `human-gate` | 11 | reason `documented-residue`; prompts 3; remote `missing`; open PRs 0; receipt `documented_non_source_residue` | human/codex-prep | Do not PR or delegate this generated-results patch. The checkout is at origin/main, the only local deltas are 11 tracked structure-tests/results/*.json snapshots, the repo README classifies the project as a parked docs-only shell with no runnable release path, and the exact patch is privately preserved. Reclaim only after operator acceptance; regenerate current structure-test snapshots from a fresh owner packet if this repo becomes active again. |
-| 22 | `cloud-credential-handles-unconfigured` | `blocker` | `parked` | 6 | category `auth_credentials`; status `parked` | human/codex-prep | Do not repair inline; open a bounded credential/setup workstream only when a cloud action requires it. |
-| 23 | `credential-codex-auth-sessions` | `blocker` | `parked` | 6 | category `auth_credentials`; status `parked` | human/codex-prep | Keep parked unless a future scoped task explicitly requires the account action. |
-| 24 | `auth_credentials` | `family` | `parked` | -1 | sessions 405; states ALIVE 1, CLOSED 364, PARKED 40; prompts 2491 | human/codex-prep | Keep hung as credential workstream; prepare only non-secret prerequisites. |
-| 25 | `resolve-organvm-i-theoria-.github-459-1ade` | `worktree` | `human-gate` | -1 | reason `owner-blocker`; prompts 5; remote `unknown`; open PRs 0; receipt `history_mismatch_patch_preserved` | human/codex-prep | Do not open a direct PR from this branch. The branch is ahead 10 and behind 43 against origin/main, has no open/closed PR, and its HEAD patch targets .github/workflows/gemini-review.yml, .github/workflows/version-control-standards.yml, dashboard TS shim files, and tsconfig.json, while current origin/main only has ci-minimal, dependabot-auto-merge, dispatch-receiver, and stale workflows. Preserve as private patch evidence; if needed, create a new narrow owner packet to cherry-pick only the Limen automation branch-policy idea into the current organvm/.github default tree. |
+| 1 | `heal-cifix-organvm-limen-424-8db5dab0` | `worktree` | `preserve` | 90 | reason `dirty`; prompts 4; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 2 | `heal-cifix-organvm-limen-428-4b320e87` | `worktree` | `preserve` | 90 | reason `dirty`; prompts 4; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 3 | `heal-cifix-organvm-limen-430-7c7129d9` | `worktree` | `preserve` | 90 | reason `dirty`; prompts 4; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 4 | `heal-cifix-organvm-limen-438-da3b854e` | `worktree` | `preserve` | 90 | reason `dirty`; prompts 4; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 5 | `heal-cifix-organvm-limen-444-a00aa985` | `worktree` | `preserve` | 90 | reason `dirty`; prompts 4; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 6 | `heal-cifix-organvm-public-process-30-59ffa133` | `worktree` | `preserve` | 90 | reason `dirty`; prompts 4; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 7 | `heal-rebase-organvm-a-i-chat--exporter-31-78a6445b` | `worktree` | `preserve` | 90 | reason `dirty`; prompts 4; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 8 | `heal-rebase-organvm-a-i-chat--exporter-61-6eab8b67` | `worktree` | `preserve` | 90 | reason `dirty`; prompts 4; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 9 | `org-financial-organ-face-0704-bd436529` | `worktree` | `preserve` | 90 | reason `dirty`; prompts 4; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 10 | `org-governance-organ-selffeed-0703-00694775` | `worktree` | `preserve` | 90 | reason `dirty`; prompts 4; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 11 | `heal-cifix-organvm-limen-422-6b0c8ca2` | `worktree` | `preserve` | 78 | reason `dirty`; prompts 4; remote `present`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 12 | `heal-cifix-organvm-limen-430-b979134a` | `worktree` | `remote-proof` | 76 | reason `not-merged-to-default`; prompts 4; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Verify remote/default preservation; reclaim local checkout only after exact proof. |
+| 13 | `local-lifecycle-disk-pressure` | `blocker` | `drain` | 74 | category `local_lean`; status `parked` | codex | Drain only after remote/default preservation proof or non-source residue receipt; keep pressure visible in SessionStart. |
+| 14 | `gh-4444j99-hokage-chess-39-25daa3dd` | `worktree` | `preserve` | 72 | reason `dirty`; prompts 0; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 15 | `gh-4444j99-hokage-chess-39-c15d2ce9` | `worktree` | `preserve` | 72 | reason `dirty`; prompts 0; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 16 | `heal-cifix-organvm-a-i--skills-27-7d6c0216` | `worktree` | `preserve` | 72 | reason `dirty`; prompts 0; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 17 | `heal-cifix-organvm-a-i--skills-27-7ed7339a` | `worktree` | `preserve` | 72 | reason `dirty`; prompts 0; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 18 | `heal-cifix-organvm-a-i--skills-27-8f4677cb` | `worktree` | `preserve` | 72 | reason `dirty`; prompts 0; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 19 | `heal-cifix-organvm-limen-422-3c1a44a2` | `worktree` | `preserve` | 72 | reason `dirty`; prompts 0; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 20 | `heal-cifix-organvm-limen-423-354fa844` | `worktree` | `preserve` | 72 | reason `dirty`; prompts 0; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 21 | `heal-cifix-organvm-limen-423-40984048` | `worktree` | `preserve` | 72 | reason `dirty`; prompts 0; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 22 | `heal-cifix-organvm-limen-423-e48b35df` | `worktree` | `preserve` | 72 | reason `dirty`; prompts 0; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 23 | `heal-cifix-organvm-limen-429-4471ceb2` | `worktree` | `preserve` | 72 | reason `dirty`; prompts 0; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 24 | `heal-cifix-organvm-limen-434-b6e642da` | `worktree` | `preserve` | 72 | reason `dirty`; prompts 0; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
+| 25 | `heal-cifix-organvm-limen-435-401dee02` | `worktree` | `preserve` | 72 | reason `dirty`; prompts 0; remote `missing`; open PRs 0 | codex first; opencode/jules after packetization | Inspect diff, run owner predicate, push branch/open draft PR or record blocker. |
 
 ## Delegation Gate
 
