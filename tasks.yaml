@@ -97050,7 +97050,7 @@ tasks:
   workstream: contributions
   priority: high
   budget_cost: 2
-  status: open
+  status: done
   labels:
   - organ-deepen
   - pillar:contributions

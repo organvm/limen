@@ -1,0 +1,47 @@
+{
+  "as_of": "2026-07-04",
+  "counts": {
+    "closed": 4,
+    "merged": 3,
+    "no-PR": 3,
+    "open": 0,
+    "post-close": 0,
+    "protocol-due": 14
+  },
+  "estate": {
+    "cited": 3,
+    "drift": [
+      "backflow-knowledge",
+      "backflow-manifest",
+      "bodi-charter",
+      "captains-log",
+      "chronicle-epoch-012",
+      "engine-a",
+      "engine-a-tests",
+      "engine-b",
+      "essay-recursive-proof",
+      "inbound-contributing",
+      "memory-constellation",
+      "memory-engine-design",
+      "memory-specvlvm",
+      "memory-sweep",
+      "outreach-protocol",
+      "plan-vacuums",
+      "pr-status-checker"
+    ],
+    "optional_absent": [
+      "hub-seed-root",
+      "session-discovery-worktrees"
+    ],
+    "present": 20,
+    "registered": 42
+  },
+  "generated": "2026-07-07T12:10:16+00:00",
+  "lifecycle_debt": 7,
+  "mirror": "organs/contributions/MIRROR.md",
+  "opportunities": 0,
+  "organ": "contributions",
+  "source": "committed cache",
+  "stale": false,
+  "total": 24
+}

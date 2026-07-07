@@ -58,38 +58,37 @@ archive the tracking repo, settle the fork, mark the ledger entry closed-out):
 
 ## The autopoietic pool — inward-derived outward opportunities
 
-The scout limb walked our own dependency manifests: these are the upstreams we lean on
-hardest and have never engaged — the next places to study wiring. Pooled for
-scout/fieldwork vetting; adoption and every send stay human-gated.
-
-| dependency | used across our repos |
-|---|---|
-| pytest | 30 |
-| typescript | 28 |
-| vitest | 22 |
-| ruff | 21 |
-| eslint | 19 |
-| pyyaml | 19 |
-| react | 14 |
-| react-dom | 13 |
-| node | 12 |
-| pytest-cov | 12 |
-| js | 9 |
-| jsdom | 9 |
+The scout walk found no unengaged dependency used across 2+ of our repos.
 
 ## Backflow (the inward product)
 
-- **ORGAN-III** — 2 signal(s) routed inward
-- **ORGAN-IV** — 3 signal(s) routed inward
-- **ORGAN-V** — 2 signal(s) routed inward
-- **ORGAN-VI** — 22 signal(s) routed inward
-- **ORGAN-VII** — 21 signal(s) routed inward
+- backflow manifest not readable from this host — the tally renders where it is.
 
 ## Estate register (`ESTATE.yaml`)
 
-42 artifacts registered — 38 verified present locally, 3 cited (remote/receipt), 0 DRIFT, 1 optional-absent.
+42 artifacts registered — 20 verified present locally, 3 cited (remote/receipt), 17 DRIFT, 2 optional-absent.
 
-_Optional-absent (expected): `hub-seed-root`_
+**DRIFT — registered artifacts gone absent (repair or re-home, never delete the entry):**
+
+- `backflow-knowledge`
+- `backflow-manifest`
+- `bodi-charter`
+- `captains-log`
+- `chronicle-epoch-012`
+- `engine-a`
+- `engine-a-tests`
+- `engine-b`
+- `essay-recursive-proof`
+- `inbound-contributing`
+- `memory-constellation`
+- `memory-engine-design`
+- `memory-specvlvm`
+- `memory-sweep`
+- `outreach-protocol`
+- `plan-vacuums`
+- `pr-status-checker`
+
+_Optional-absent (expected): `hub-seed-root`, `session-discovery-worktrees`_
 
 ## The estate this mirror reflects
 
