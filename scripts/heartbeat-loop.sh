@@ -152,6 +152,7 @@ C_QUICKEN="${LIMEN_BEAT_QUICKEN:-4}"   # QUICKEN (give stalled FleetView session
 C_POSITIONING="${LIMEN_BEAT_POSITIONING:-12}"  # POSITIONING (refresh inbound-magnet surfaces; gated OFF)
 C_AVTOPOIESIS="${LIMEN_BEAT_AVTOPOIESIS:-12}"  # AVTOPOIESIS (is each door alive? past/present/future — distance-from-ideal; gated OFF)
 C_EVOCATOR="${LIMEN_BEAT_EVOCATOR:-6}"   # EVOCATOR (the summoner — keep canonical truths present in every channel: FLAME/beat, corpus, memory)
+C_VLTIMA="${LIMEN_BEAT_VLTIMA:-12}"       # VLTIMA (absorb movement into owner-certified packets; gated OFF)
 C_HEALTH="${LIMEN_BEAT_HEALTH:-6}"       # CARE (refresh the personal health office: chart digest + visit-prep + clinical-loop chase; PII off-repo)
 C_LIFE="${LIMEN_BEAT_LIFE:-6}"           # STEWARD (refresh the digital-life office: accounts/assets/subscription purge clock; PII off-repo)
 C_GOVERNANCE="${LIMEN_BEAT_GOVERNANCE:-8}" # GOVERN (run the cursus honorum seed validator + governance standing report)
@@ -642,6 +643,15 @@ while true; do
   fi
   [ "${LIMEN_PRESERVE_LIVE_STATE:-1}" = "1" ] && \
     python3 "$LIMEN_ROOT/scripts/preserve-live-state.py" 2>&1 | tail -1 || true
+
+  # VLTIMA — absorb local/AI movement into a closed, privacy-safe metabolism: current receipts ->
+  # temporal authority -> owner certainty -> bounded packets. Gated OFF by default
+  # (LIMEN_VLTIMA=1) because broad absorption is a deliberate organ, not surprise dispatch.
+  # The default write path touches only VLTIMA-owned doctrine/state and never mutates tasks.yaml.
+  if due_voice vltima "$C_VLTIMA" && [ "${LIMEN_VLTIMA:-0}" = "1" ]; then
+    timeout "${LIMEN_VLTIMA_TIMEOUT:-900}" python3 "$LIMEN_ROOT/scripts/vltima-organ.py" --write 2>&1 | tail -2 || true
+    stamp vltima
+  fi
 
   # adaptive tempo: tighten to MIN whenever work is flowing OR the OPEN QUEUE is non-empty (so a
   # beat that produced no PR this cycle — all no-op / still-running — doesn't back off to 30min

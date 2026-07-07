@@ -61,3 +61,12 @@ measures the **distance from ideal** at a moment in time, and carries a **status
 - **Distance:** created 2026-06-25; not yet wired into a verification/heartbeat lane.
 - **Status:** SEEDED (this commit).
 - **Owner:** Claude.
+
+### IF-VLTIMA-AUTOPOIETIC-MEMBRANE — movement becomes owner-certified action
+- **Ideal form:** every local/remote AI movement is absorbed through a privacy-safe membrane,
+  classified by temporal authority, assigned to its rightful owner, and converted only into bounded
+  packets with receipt and verification.
+- **Distance:** absorption, prior-excavation, and result-digest surfaces exist; this tranche adds
+  owner certainty, packetization, a gated heartbeat organ, a CLI surface, and a read-only predicate.
+- **Status:** PARTIAL.
+- **Owner:** VLTIMA organ (`scripts/vltima-organ.py`) + Anthony for future enqueue/daemon arming.
