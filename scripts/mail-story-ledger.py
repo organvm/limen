@@ -266,6 +266,19 @@ TYPE_WEIGHT = {
 }
 
 
+
+def read_cursor(path: Path) -> int:
+    try:
+        if path.exists():
+            return int(path.read_text().strip())
+    except Exception:
+        pass
+    return 0
+
+def write_cursor(path: Path, offset: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(offset) + "\n")
+
 def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -407,7 +420,7 @@ def atom_from_row(row: sqlite3.Row, *, scope: str) -> dict[str, Any]:
     }
 
 
-def fetch_message_rows(conn: sqlite3.Connection, *, scope: str, limit: int | None) -> list[sqlite3.Row]:
+def fetch_message_rows(conn: sqlite3.Connection, *, scope: str, limit: int | None, offset: int = 0) -> list[sqlite3.Row]:
     where = "m.deleted = 0"
     if scope == "flagged":
         where += " AND m.flagged = 1"
@@ -440,6 +453,9 @@ def fetch_message_rows(conn: sqlite3.Connection, *, scope: str, limit: int | Non
     if limit is not None:
         sql += " LIMIT ?"
         params.append(limit)
+        if offset > 0:
+            sql += " OFFSET ?"
+            params.append(offset)
     return list(conn.execute(sql, params))
 
 
@@ -539,11 +555,11 @@ def cluster_summary(atoms: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def build_snapshot(
-    mail_index: Path, *, scope: str = "flagged", limit: int | None = None
+    mail_index: Path, *, scope: str = "flagged", limit: int | None = None, offset: int = 0
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     with connect_readonly(mail_index) as conn:
         stats = mail_stats(conn)
-        rows = fetch_message_rows(conn, scope=scope, limit=limit)
+        rows = fetch_message_rows(conn, scope=scope, limit=limit, offset=offset)
     atoms = [atom_from_row(row, scope=scope) for row in rows]
     top_domains = Counter(atom["sender_domain"] for atom in atoms).most_common(25)
     by_type = Counter(atom["blocker_type"] for atom in atoms)
@@ -556,6 +572,7 @@ def build_snapshot(
             "mail_index": str(mail_index),
             "scope": scope,
             "limit": limit,
+            "offset": offset,
             "read_only": True,
             "mailbox_mutations": False,
             "body_reads": False,
@@ -597,6 +614,7 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         f"- Generated: `{snapshot['generated_at']}`",
         "- Source: Apple Mail Envelope Index, opened read-only.",
         f"- Processed scope: `{snapshot['mode']['scope']}`",
+        f"- Batch offset: `{snapshot['mode'].get('offset', 0)}`",
         f"- Body/thread reads: `{str(snapshot['mode']['body_reads']).lower()}`",
         f"- Mailbox mutations: `{str(snapshot['mode']['mailbox_mutations']).lower()}`",
         "- Private atom store: `.limen-private/mail-story/inventory/mail-story-atoms.jsonl`",
@@ -683,13 +701,17 @@ def write_outputs(
     log_path: Path = LOG_PATH,
     private_atoms: Path = PRIVATE_ATOMS,
     private_snapshot: Path = PRIVATE_SNAPSHOT,
+    append: bool = False,
 ) -> None:
     doc_path.parent.mkdir(parents=True, exist_ok=True)
     doc_path.write_text(markdown, encoding="utf-8")
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_path.write_text(json.dumps(snapshot, indent=2, sort_keys=True), encoding="utf-8")
     private_atoms.parent.mkdir(parents=True, exist_ok=True)
-    private_atoms.write_text("".join(json.dumps(atom, sort_keys=True) + "\n" for atom in atoms), encoding="utf-8")
+    mode = "a" if append else "w"
+    with open(private_atoms, mode, encoding="utf-8") as f:
+        for atom in atoms:
+            f.write(json.dumps(atom, sort_keys=True) + "\n")
     private_snapshot.parent.mkdir(parents=True, exist_ok=True)
     private_snapshot.write_text(json.dumps({**snapshot, "atoms": atoms}, indent=2, sort_keys=True), encoding="utf-8")
 
@@ -722,9 +744,17 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    snapshot, atoms = build_snapshot(args.mail_index, scope=args.scope, limit=args.limit)
+    
+    offset = 0
+    cursor_path = ROOT / "logs" / f".mail-story-cursor.{args.scope}"
+    if args.scope == "all":
+        offset = read_cursor(cursor_path)
+        
+    snapshot, atoms = build_snapshot(args.mail_index, scope=args.scope, limit=args.limit, offset=offset)
     markdown = render_markdown(snapshot)
+    
     if args.write:
+        append = (args.scope == "all" and offset > 0)
         write_outputs(
             snapshot,
             atoms,
@@ -733,11 +763,14 @@ def main() -> int:
             log_path=args.log,
             private_atoms=args.private_atoms,
             private_snapshot=args.private_snapshot,
+            append=append,
         )
-        print(f"mail-story-ledger: {len(atoms)} atoms over scope={args.scope}; wrote {args.doc}")
+        if args.scope == "all" and atoms:
+            write_cursor(cursor_path, offset + len(atoms))
+        print(f"mail-story-ledger: {len(atoms)} atoms over scope={args.scope} (offset {offset}); wrote {args.doc}")
     else:
         print(markdown)
-        print(f"mail-story-ledger: {len(atoms)} atoms over scope={args.scope}; preview only")
+        print(f"mail-story-ledger: {len(atoms)} atoms over scope={args.scope} (offset {offset}); preview only")
     return 0
 
 
