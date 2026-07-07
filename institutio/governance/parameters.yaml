@@ -136,6 +136,18 @@ parameters:
     self_update: none
     owner: continuity
     note: "Ignored local raw/private session cartridge. Stores manifests and optional content-addressed object copies; never committed."
+  LIMEN_PRIVATE_MAIL_STORY:
+    default: "$LIMEN_ROOT/.limen-private/mail-story"
+    env: LIMEN_PRIVATE_MAIL_STORY
+    self_update: none
+    owner: continuity
+    note: "Ignored private mail-story cartridge root used by mail-story-ledger.py for raw-ish local atom inventory. Public receipts stay redacted; Mail is never mutated."
+  LIMEN_MAIL_ENVELOPE_INDEX:
+    default: "$HOME/Library/Mail/V10/MailData/Envelope Index"
+    env: LIMEN_MAIL_ENVELOPE_INDEX
+    self_update: none
+    owner: continuity
+    note: "Read-only Apple Mail Envelope Index path for mail-story-ledger.py metadata inventory. Override for host/version drift; no mail content or state is changed."
   LIMEN_EXTERNAL_SESSION_ROOTS:
     default: ""
     env: LIMEN_EXTERNAL_SESSION_ROOTS
@@ -919,6 +931,18 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "Prompt-level guard for isolated async/local worker packets. 1=explicitly forbid live-root and tasks.yaml mutation inside isolated worktrees; 0=omit the extra prompt block for tests or emergency rollback."
+  LIMEN_GITHUB_ACTIONS_REPO:
+    default: "organvm/limen"
+    env: LIMEN_GITHUB_ACTIONS_REPO
+    self_update: none
+    owner: arms-agents
+    note: "Default repository used when the GitHub Actions dispatch lane triggers workflow_dispatch. Override per-fleet/repo; capacity probes derive health from LIMEN_GITHUB_ACTIONS_HEALTH_REPO when set."
+  LIMEN_GITHUB_ACTIONS_HEALTH_REPO:
+    default: "$LIMEN_GITHUB_ACTIONS_REPO"
+    env: LIMEN_GITHUB_ACTIONS_HEALTH_REPO
+    self_update: none
+    owner: arms-agents
+    note: "Repository probed by the GitHub Actions lane health check before selecting the lane. Defaults to the dispatch repo so workflow reachability and dispatch target stay aligned."
   # --- the non-bypassable Claude model chokepoint (scripts/shims/claude) ----------
   LIMEN_CLAUDE_SHIM_FLOOR:
     default: "haiku"           # the cheapest rung — the SAME tier the per-task ladder assigns to unclassed work
