@@ -11,6 +11,9 @@ subject:
     - creator
     - collaborator
   representation_modes:
+    - canon_dossier
+    - public_presence_draft
+    - authority_scorecard
     - writer_submission
     - creator_presence_preview
     - public_page_draft
@@ -24,9 +27,58 @@ standing:
   current: RESEARCHING
   next: PACKET_REVIEW
 mandate:
-  description: Build a source-backed private creator dossier and mode previews before any public page or submission packet exists.
+  description: Build a source-backed authority packet, private creator dossier, and mode previews before any public page or submission packet exists.
 artifacts:
-  next_reviewable_output: Chris private dossier and writer submission packet generated from one representation record
+  next_reviewable_output: Chris authority packet, private dossier, and writer submission packet generated from one representation record
+authority_program:
+  goal: civilizational_gravitas
+  archetype_functions:
+    canonical_institution: Build a public record, editorial/theatre proof, submission readiness, and institutional dossier without claiming achieved canonical rank.
+    mass_readership: Build a discoverable writing and theatre presence that can grow readership over time without claiming mass readership as a present fact.
+  axes:
+    canonical_institution:
+      summary: Stages public writing, editorial, and theatre proof as the source-backed institutional record.
+      claim_ids:
+        - chris-public-writing
+        - chris-editorial-role
+        - chris-theatre
+      public_claim_ids:
+        - chris-public-writing
+        - chris-editorial-role
+        - chris-theatre
+      public_copy: Christopher can be presented from public writing, editorial, and theatre evidence as a writer with documented public proof.
+      output_gates:
+        - Submission or institution-facing packets remain blocked until candidate work metadata is complete.
+        - No public copy claims achieved canon status.
+    mass_readership:
+      summary: Stages public writing and theatre discoverability without asserting audience scale.
+      claim_ids:
+        - chris-public-writing
+        - chris-theatre
+      public_claim_ids:
+        - chris-public-writing
+        - chris-theatre
+      public_copy: The public presence can emphasize breadth across public writing and theatre proof without claiming readership scale.
+      output_gates:
+        - Public draft uses public profile evidence only.
+        - Public export approval remains locked before outward use.
+    hybrid_presence:
+      summary: Keeps collaboration and prototype context private while public copy stays anchored to public writing, editorial, and theatre proof.
+      claim_ids:
+        - chris-public-writing
+        - chris-editorial-role
+        - chris-theatre
+        - speech-score-lineage
+        - object-lessons-lineage
+        - message-research-authorized-later
+      public_claim_ids:
+        - chris-public-writing
+        - chris-editorial-role
+        - chris-theatre
+      public_copy: The public presence can remain anchored in public writing, editorial, and theatre proof while collaboration context stays private.
+      output_gates:
+        - Private collaboration claims stay inside review-only dossier and scorecard modes.
+        - No private message research is mined or rendered without a later authorized pass.
 works:
   - id: chris-public-writing-body
     type: authored_work
@@ -256,6 +308,45 @@ approvals:
     claim_ids: []
     note: Co-branded pages are drafts until subject and collaborator approval exist.
 outputs:
+  - id: chris-canon-dossier
+    mode: canon_dossier
+    report_grade: true
+    claim_ids:
+      - chris-public-writing
+      - chris-editorial-role
+      - chris-theatre
+      - speech-score-lineage
+      - object-lessons-lineage
+      - message-research-authorized-later
+    no_outward_action: true
+    acceptance_gates:
+      - Reviewer confirms private collaboration context is summarized without raw private text.
+      - Reviewer confirms civilizational gravitas is a program goal, not an achieved status claim.
+  - id: chris-public-presence-draft
+    mode: public_presence_draft
+    report_grade: true
+    claim_ids:
+      - chris-public-writing
+      - chris-editorial-role
+      - chris-theatre
+    no_outward_action: true
+    acceptance_gates:
+      - Reviewer confirms public presence copy uses only public-source or claim-approved claims.
+      - Christopher approval remains locked before public export.
+  - id: chris-authority-scorecard
+    mode: authority_scorecard
+    report_grade: true
+    claim_ids:
+      - chris-public-writing
+      - chris-editorial-role
+      - chris-theatre
+      - speech-score-lineage
+      - object-lessons-lineage
+      - message-research-authorized-later
+    no_outward_action: true
+    acceptance_gates:
+      - Reviewer confirms each axis reports BLOCKED, STAGED, or PUBLIC_READY.
+      - Reviewer confirms submission and approval blockers are reported instead of achieved literary status.
   - id: chris-private-dossier
     mode: private_dossier
     report_grade: true
