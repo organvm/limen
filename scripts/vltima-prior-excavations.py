@@ -23,12 +23,32 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1])).expanduser().resolve()
-PRIVATE_ROOT = Path(
-    os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus")
+CODE_ROOT = Path(__file__).resolve().parents[1]
+STATE_ROOT = Path(os.environ.get("LIMEN_STATE_ROOT", os.environ.get("LIMEN_ROOT", CODE_ROOT))).expanduser().resolve()
+
+
+def writable_output_root() -> Path:
+    explicit = os.environ.get("LIMEN_OUTPUT_ROOT")
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    env_root = os.environ.get("LIMEN_ROOT")
+    if env_root:
+        candidate = Path(env_root).expanduser()
+        docs = candidate / "docs"
+        if os.access(candidate, os.W_OK) and (docs.exists() or os.access(candidate, os.W_OK)):
+            return candidate.resolve()
+    return CODE_ROOT
+
+
+OUTPUT_ROOT = writable_output_root()
+STATE_PRIVATE_ROOT = Path(
+    os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", STATE_ROOT / ".limen-private" / "session-corpus")
 ).expanduser()
-DOC_PATH = ROOT / "docs" / "vltima-prior-excavations.md"
-PRIVATE_INDEX = PRIVATE_ROOT / "lifecycle" / "vltima-prior-excavations.json"
+OUTPUT_PRIVATE_ROOT = Path(
+    os.environ.get("LIMEN_OUTPUT_PRIVATE_SESSION_CORPUS", OUTPUT_ROOT / ".limen-private" / "session-corpus")
+).expanduser()
+DOC_PATH = OUTPUT_ROOT / "docs" / "vltima-prior-excavations.md"
+PRIVATE_INDEX = OUTPUT_PRIVATE_ROOT / "lifecycle" / "vltima-prior-excavations.json"
 
 GENERATED_RE = re.compile(r"^Generated:\s*`?([^`\n]+)`?", re.MULTILINE)
 PRIVATE_OBJECT_MARKERS = (
@@ -309,7 +329,7 @@ def now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
 
-def repo_rel(path: Path, *, root: Path = ROOT) -> str:
+def repo_rel(path: Path, *, root: Path = STATE_ROOT) -> str:
     try:
         return str(path.expanduser().resolve().relative_to(root))
     except (OSError, ValueError):
@@ -319,7 +339,7 @@ def repo_rel(path: Path, *, root: Path = ROOT) -> str:
             return str(path.expanduser())
 
 
-def path_from_label(label: str, *, root: Path = ROOT, private_root: Path = PRIVATE_ROOT) -> Path:
+def path_from_label(label: str, *, root: Path = STATE_ROOT, private_root: Path = STATE_PRIVATE_ROOT) -> Path:
     if label.startswith(".limen-private/session-corpus/"):
         return private_root / label.removeprefix(".limen-private/session-corpus/")
     return (root / label).expanduser()
@@ -601,9 +621,17 @@ def refresh_order(surfaces: list[dict[str, Any]]) -> list[str]:
     return ordered
 
 
-def build_snapshot(*, root: Path = ROOT, private_root: Path = PRIVATE_ROOT) -> dict[str, Any]:
+def build_snapshot(
+    *,
+    root: Path = STATE_ROOT,
+    private_root: Path = STATE_PRIVATE_ROOT,
+    output_root: Path = OUTPUT_ROOT,
+    output_private_root: Path = OUTPUT_PRIVATE_ROOT,
+) -> dict[str, Any]:
     root = root.expanduser().resolve()
     private_root = private_root.expanduser()
+    output_root = output_root.expanduser().resolve()
+    output_private_root = output_private_root.expanduser()
     surfaces = [build_surface(spec, root=root, private_root=private_root) for spec in SURFACES]
     known_labels: set[str] = set()
     for surface in surfaces:
@@ -640,8 +668,8 @@ def build_snapshot(*, root: Path = ROOT, private_root: Path = PRIVATE_ROOT) -> d
         "generated_at": now_iso(),
         "decision": "prior-excavation metadata register; raw private bodies are not read",
         "privacy": {
-            "tracked_output": repo_rel(DOC_PATH, root=root),
-            "private_index": str(private_root / "lifecycle" / "vltima-prior-excavations.json"),
+            "tracked_output": repo_rel(output_root / "docs" / "vltima-prior-excavations.md", root=output_root),
+            "private_index": str(output_private_root / "lifecycle" / "vltima-prior-excavations.json"),
             "raw_bodies_read": False,
         },
         "coverage": coverage,

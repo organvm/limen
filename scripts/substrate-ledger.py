@@ -16,14 +16,34 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
+CODE_ROOT = Path(__file__).resolve().parents[1]
+STATE_ROOT = Path(os.environ.get("LIMEN_STATE_ROOT", os.environ.get("LIMEN_ROOT", CODE_ROOT))).expanduser()
+
+
+def writable_output_root() -> Path:
+    explicit = os.environ.get("LIMEN_OUTPUT_ROOT")
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    env_root = os.environ.get("LIMEN_ROOT")
+    if env_root:
+        candidate = Path(env_root).expanduser()
+        docs = candidate / "docs"
+        if os.access(candidate, os.W_OK) and (docs.exists() or os.access(candidate, os.W_OK)):
+            return candidate.resolve()
+    return CODE_ROOT
+
+
+OUTPUT_ROOT = writable_output_root()
 HOME = Path.home()
-PRIVATE_ROOT = Path(
-    os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus")
+STATE_PRIVATE_ROOT = Path(
+    os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", STATE_ROOT / ".limen-private" / "session-corpus")
 )
-PRIVATE_INDEX = PRIVATE_ROOT / "lifecycle" / "substrate-ledger.json"
-DOC_PATH = ROOT / "docs" / "substrate-ledger.md"
-CONFIG_PATH = Path(os.environ.get("LIMEN_SUBSTRATE_CONFIG", ROOT / ".limen-private" / "substrate-roots.json"))
+OUTPUT_PRIVATE_ROOT = Path(
+    os.environ.get("LIMEN_OUTPUT_PRIVATE_SESSION_CORPUS", OUTPUT_ROOT / ".limen-private" / "session-corpus")
+)
+PRIVATE_INDEX = OUTPUT_PRIVATE_ROOT / "lifecycle" / "substrate-ledger.json"
+DOC_PATH = OUTPUT_ROOT / "docs" / "substrate-ledger.md"
+CONFIG_PATH = Path(os.environ.get("LIMEN_SUBSTRATE_CONFIG", STATE_ROOT / ".limen-private" / "substrate-roots.json"))
 
 ENV_ROOTS = {
     "storage_roots": "LIMEN_STORAGE_ROOTS",
@@ -76,15 +96,18 @@ def mounted_volumes() -> list[Path]:
 
 
 def default_roots() -> list[tuple[str, str, Path]]:
-    return [
-        ("repo-default", "limen-root", ROOT),
+    rows = [
+        ("repo-default", "limen-root", STATE_ROOT),
         ("repo-default", "workspace", HOME / "Workspace"),
-        ("repo-default", "workspace-parent", ROOT.parent),
+        ("repo-default", "workspace-parent", STATE_ROOT.parent),
         ("prompt-default", "codex-sessions", HOME / ".codex" / "sessions"),
         ("prompt-default", "codex-history", HOME / ".codex" / "history.jsonl"),
         ("prompt-default", "claude-projects", HOME / ".claude" / "projects"),
-        ("private-default", "private-session-corpus", PRIVATE_ROOT),
+        ("private-default", "private-session-corpus", STATE_PRIVATE_ROOT),
     ]
+    if OUTPUT_ROOT != STATE_ROOT:
+        rows.append(("repo-default", "output-root", OUTPUT_ROOT))
+    return rows
 
 
 def configured_roots(config: dict[str, Any]) -> list[tuple[str, str, Path]]:
