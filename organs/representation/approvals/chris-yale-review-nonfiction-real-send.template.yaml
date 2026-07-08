@@ -66,6 +66,11 @@ approvals:
     delivery_adapter: direct_email
     recipient_ref: venue://yale-review/submissions
     payload_ref: private://candidate-work/chris-metadata-only-nonfiction-candidate
+    sender_address_env: CHRIS_SUBMISSION_SENDER_EMAIL
+    recipient_address_env: YALE_REVIEW_SUBMISSION_EMAIL
+    message_subject_env: CHRIS_YALE_SUBMISSION_SUBJECT
+    message_body_env: CHRIS_YALE_SUBMISSION_BODY
+    payload_path_env: CHRIS_YALE_SUBMISSION_PAYLOAD_PATH
     permitted_actions: []
     claim_ids: []
-    note: To approve, copy privately, set status approved, set real_send_approval true, set operator_approved_at, and permit send_submission.
+    note: To approve, copy privately, set status approved, set real_send_approval true, set operator_approved_at, permit send_submission, and provide SMTP runtime env vars to publication-send.
