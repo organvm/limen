@@ -1,6 +1,6 @@
 # Financial Office — Rolling Cash-Flow Projection
 
-> Generated: 2026-07-08T09:54:01Z
+> Generated: 2026-07-08T17:51:37Z
 > *Forward-looking estimate based on known revenue stages and obligations.
 > Confidence increases as more balances and obligation amounts are confirmed.*
 
@@ -14,6 +14,10 @@
 | 4 | The Invisible Ledger | building | paid tier once live |
 | 5 | Mirror Mirror | building | paid tier once live |
 | 6 | Styx | building | paid tier once live |
+| 7 | PR-Repair Factory | building | GitHub Action / hosted endpoint subscription for multi-repo orgs; the internal 182-repo fleet is the case study |
+| 8 | MONETA Mint-as-a-Service | deploy-ready | exporter Pro licences through the own mint — keyless explorer confirmation, no processor in the path |
+| 9 | Fleet Cost-Compliance Guard | building | paid tool for agent-fleet teams — prevents trivial fan-out riding expensive tiers |
+| 10 | Enactment Audit | building | 'is it actually on?' assurance subscription for AI/agent shops; the 2026-07-08 retro is the sales demo |
 
 ## 12-Week Rolling Projection
 
@@ -39,7 +43,7 @@
 
 ## Obligations (financial-material)
 
-Sourced from `obligations-ledger.json` — 9 protocol-class obligations:
+Sourced from `obligations-ledger.json` — 8 protocol-class obligations:
 
 | Priority | Title | Owner | Next Step |
 |---|---|---|---|
@@ -51,4 +55,3 @@ Sourced from `obligations-ledger.json` — 9 protocol-class obligations:
 | 82 | Billing — payment failed — Anthropic | yours | Root cause is the card-0186 hold — resolve THAT first, then update the payment method here. (Cascades to Anthropic / Google Cloud / GitHub.) |
 | 78 | KYC / identity verification — Stripe | yours | Provide the exact info requested. Note: Stripe KYC is blocked on the dead LLC — prefer the individual monetization rail (Ko-fi/Lemon Squeezy). |
 | 32 | Infra alarm (self) — mail.anthropic.com | yours | Your own infra signal — the system self-heals. No action unless you want to raise the limit / preserve the resource. |
-| 28 | App update — ChatGPT | yours | Update the app if still in use; otherwise ignore (low risk, often past deadline). |
