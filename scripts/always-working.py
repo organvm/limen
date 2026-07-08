@@ -51,6 +51,8 @@ PRODUCT_LEDGER_INDEX = PRIVATE_ROOT / "lifecycle" / "product-ledger.json"
 VALUE_REPOS = ROOT / "value-repos.json"
 CONTRIBUTION_BALANCE_SCRIPT = ROOT / "scripts" / "github-contribution-balance.py"
 CONTRIBUTION_BALANCE_LOGIN = os.environ.get("LIMEN_CONTRIBUTION_BALANCE_LOGIN", "4444J99")
+CONTRIBUTION_BALANCE_POLICY = ROOT / "docs" / "github-contribution-balance.md"
+CONTRIBUTION_BALANCE_OWNER_ISSUE = "https://github.com/organvm/limen/issues/687"
 CREDENTIAL_TOMBSTONE_DOC = ROOT / "docs" / "credential-token-tombstone-audit.md"
 ARCHIVE4T_ROOT = Path(os.environ.get("LIMEN_ARCHIVE4T_ROOT", "/Volumes/Archive4T"))
 INGRESS_ROOT = Path(os.environ.get("LIMEN_INGRESS_ROOT", "/Volumes/Ingress"))
@@ -862,8 +864,10 @@ def contribution_balance_receipt() -> dict[str, Any]:
             "error": error,
         },
         "existing_receipts": [
+            relpath(CONTRIBUTION_BALANCE_POLICY),
             relpath(CONTRIBUTION_BALANCE_SCRIPT),
             relpath(ROOT / "cli" / "tests" / "test_github_contribution_balance.py"),
+            CONTRIBUTION_BALANCE_OWNER_ISSUE,
             "https://github.com/4444J99",
         ],
         "assignment_packet": {
