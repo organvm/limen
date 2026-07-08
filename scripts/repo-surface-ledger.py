@@ -610,8 +610,9 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
             for key, value in (receipt.get("evidence") or {}).items()
             if value not in {None, ""}
         )
+        safe_evidence = evidence or "`none`"
         lines.append(
-            f"| `{receipt.get('receipt')}` | `{receipt.get('status')}` | {evidence or "`none`"} |"
+            f"| `{receipt.get('receipt')}` | `{receipt.get('status')}` | {safe_evidence} |"
         )
     if not public.get("harvested_receipts"):
         lines.append("| none | `missing` | `none` |")
