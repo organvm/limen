@@ -375,8 +375,7 @@ def render_markdown(packet: dict[str, Any]) -> str:
         f"- Candidate lane: `{packet['governance']['agent_policy']['candidate_packet_lane']}`",
         f"- Delete gate: `{packet['governance']['agent_policy']['destructive_cleanup_lane']}`",
         "",
-        "Authority sources: "
-        + ", ".join(f"`{source}`" for source in packet["governance"]["authority_sources"]),
+        "Authority sources: " + ", ".join(f"`{source}`" for source in packet["governance"]["authority_sources"]),
         "",
         "## Acceptance Flow",
         "",

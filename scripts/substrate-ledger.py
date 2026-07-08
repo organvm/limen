@@ -5,6 +5,7 @@ Dry-run by default. With --write, this records a private JSON receipt and a
 tracked redacted summary. Missing configured roots are receipts, not global
 blockers, unless a caller makes them required in its own gate.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -259,7 +260,9 @@ def main() -> int:
     parser.add_argument("--refresh", action="store_true", help="accepted for operator symmetry")
     parser.add_argument("--write", action="store_true", help="write tracked summary and private index")
     parser.add_argument("--no-mounted", action="store_true", help="skip /Volumes discovery")
-    parser.add_argument("--free-floor-gib", type=float, default=float(os.environ.get("LIMEN_STORAGE_FREE_FLOOR_GIB", "10")))
+    parser.add_argument(
+        "--free-floor-gib", type=float, default=float(os.environ.get("LIMEN_STORAGE_FREE_FLOOR_GIB", "10"))
+    )
     parser.add_argument(
         "--usage-ceiling-pct",
         type=float,

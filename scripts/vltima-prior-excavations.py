@@ -11,6 +11,7 @@ It intentionally does not read raw prompt bodies, private object-store text,
 skill bodies, or plugin manifest contents. Private JSON is summarized by keys,
 collection counts, and timestamps only.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -19,7 +20,7 @@ import json
 import os
 import re
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -384,11 +385,7 @@ def json_summary(path: Path) -> dict[str, Any] | None:
     except (OSError, ValueError):
         return {"kind": "json", "readable": False}
     if isinstance(data, dict):
-        counts = {
-            key: len(value)
-            for key, value in data.items()
-            if isinstance(value, (list, dict))
-        }
+        counts = {key: len(value) for key, value in data.items() if isinstance(value, (list, dict))}
         return {
             "kind": "json",
             "top_level": "dict",
@@ -684,9 +681,7 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
     coverage = snapshot["coverage"]
     lane_bits = ", ".join(f"`{key}` {value}" for key, value in coverage["lane_counts"].items())
     status_bits = ", ".join(f"`{key}` {value}" for key, value in coverage["status_counts"].items())
-    refresh_bits = ", ".join(
-        f"`{key}` {value}" for key, value in coverage["refresh_mode_counts"].items()
-    )
+    refresh_bits = ", ".join(f"`{key}` {value}" for key, value in coverage["refresh_mode_counts"].items())
     lines = [
         "# VLTIMA Prior Excavations",
         "",
@@ -737,9 +732,7 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
     if snapshot["mismatches"]:
         lines += ["| Surface | Lane | Status | Reason |", "|---|---|---|---|"]
         for item in snapshot["mismatches"]:
-            lines.append(
-                f"| `{item['surface']}` | `{item['lane']}` | `{item['status']}` | {item['reason']} |"
-            )
+            lines.append(f"| `{item['surface']}` | `{item['lane']}` | `{item['status']}` | {item['reason']} |")
     else:
         lines.append("- No prior-excavation mismatches detected.")
     lines += [
@@ -771,7 +764,9 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_outputs(snapshot: dict[str, Any], markdown: str, *, doc_path: Path = DOC_PATH, private_index: Path = PRIVATE_INDEX) -> None:
+def write_outputs(
+    snapshot: dict[str, Any], markdown: str, *, doc_path: Path = DOC_PATH, private_index: Path = PRIVATE_INDEX
+) -> None:
     doc_path.parent.mkdir(parents=True, exist_ok=True)
     private_index.parent.mkdir(parents=True, exist_ok=True)
     doc_path.write_text(markdown, encoding="utf-8")
