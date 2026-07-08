@@ -142,8 +142,9 @@ def audit(registry, gates, env, levers_text, offline=False):
             if name in safety and env.get(name, default) != "1":
                 rows.append(dict(id=name, verdict="SAFE-OFF", note=f"default={default}", what="safety-class; off is the design"))
             continue
-        effective = env.get(name, default)
-        if default == "1" or effective == "1":
+        # classification derives from the CODE default only — env must never hide a
+        # gate from the registry check, or --contract flaps between hosts and CI
+        if default == "1":
             rows.append(dict(id=name, verdict="ARMED", note=f"default={default}", what=""))
         else:
             rows.append(dict(id=name, verdict="UNCLASSIFIED", note=f"default={default}", what="new disarmed-by-default gate — classify in spec/armed-valves.json"))
