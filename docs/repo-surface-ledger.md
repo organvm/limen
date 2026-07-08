@@ -1,7 +1,9 @@
 # Repo Surface Ledger
 
-Generated: `2026-07-07T20:07:45+00:00`
-Repos scanned: `300`
+Generated: `2026-07-08T05:35:50+00:00`
+Repos scanned: `1018`
+Scan limit: `none`
+Scan truncated: `false`
 
 ## Scan Roots
 
@@ -12,53 +14,69 @@ Repos scanned: `300`
 | Remote hash | Repos |
 |---|---:|
 | `04035a0e0922e587` | 2 |
-| `07b5141326fe1486` | 9 |
-| `0b18f313b7001304` | 2 |
-| `0f05efec3cdc8a72` | 5 |
+| `07b5141326fe1486` | 68 |
+| `0b18f313b7001304` | 7 |
+| `0f05efec3cdc8a72` | 11 |
 | `112999992cc9423f` | 2 |
-| `12e871c1ef44d032` | 7 |
-| `173dfb112bd036cc` | 6 |
+| `12e871c1ef44d032` | 10 |
+| `173dfb112bd036cc` | 26 |
 | `1db1d7d788bb64c3` | 2 |
-| `25a3228dc037176b` | 2 |
-| `26a8234de5ed9c0b` | 6 |
-| `2ccc1e3872c85115` | 7 |
-| `2cd3e5e4ecac331b` | 2 |
-| `2cf049847729f153` | 4 |
-| `2d479e58d4de5dc4` | 11 |
-| `310b9ce49578dd9e` | 4 |
-| `34967de00be14dea` | 2 |
-| `3c65f20d924effa4` | 2 |
-| `3d8978088a5b706f` | 2 |
-| `4938273bf11483d6` | 2 |
+| `25a3228dc037176b` | 6 |
+| `26a8234de5ed9c0b` | 39 |
+| `2ccc1e3872c85115` | 24 |
+| `2cd3e5e4ecac331b` | 5 |
+| `2cf049847729f153` | 14 |
+| `2d479e58d4de5dc4` | 76 |
+| `310b9ce49578dd9e` | 16 |
+| `34967de00be14dea` | 6 |
+| `3c65f20d924effa4` | 3 |
+| `3d8978088a5b706f` | 3 |
+| `3e6baf0c2c1a47f7` | 4 |
+| `44056957bb91147e` | 2 |
+| `4938273bf11483d6` | 3 |
 | `4ba17fc4463e951d` | 2 |
-| `504c1f787c09aac4` | 6 |
+| `504c1f787c09aac4` | 26 |
 | `5102d88cef70e829` | 2 |
-| `53758875e58ae64d` | 43 |
+| `53758875e58ae64d` | 214 |
+| `53c3121e303b1dde` | 2 |
 | `58cae3ae2ad71404` | 11 |
-| `66cfe72c11d426df` | 7 |
-| `6bd578f7e3df4dc0` | 5 |
-| `77c140cbdc964703` | 4 |
+| `60434759f152cbc9` | 2 |
+| `66cfe72c11d426df` | 17 |
+| `6bd578f7e3df4dc0` | 27 |
+| `737379da20702082` | 2 |
+| `77c140cbdc964703` | 7 |
 | `788150fdb9c0d09f` | 2 |
-| `7af321704a67fcb0` | 4 |
-| `8f16df9dceb1f925` | 2 |
-| `a64bc49d0d19b82a` | 3 |
-| `a76be84a7b9175f9` | 2 |
-| `a829008974b85d0d` | 4 |
-| `aa7c79f83dd0ff40` | 2 |
-| `b5bc8905138cc474` | 11 |
-| `be7d9b3ddc760187` | 2 |
+| `798adafdd0d63567` | 5 |
+| `7a48c6977bec4228` | 6 |
+| `7af321704a67fcb0` | 9 |
+| `842ae982a77d357d` | 2 |
+| `8f16df9dceb1f925` | 8 |
+| `a43780c03d89bfa9` | 2 |
+| `a64bc49d0d19b82a` | 26 |
+| `a76be84a7b9175f9` | 4 |
+| `a829008974b85d0d` | 15 |
+| `aa7c79f83dd0ff40` | 4 |
+| `b3e5c984da7b9d16` | 4 |
+| `b5bc8905138cc474` | 30 |
+| `bc304cd55ee9adb8` | 2 |
+| `be7d9b3ddc760187` | 6 |
 | `c3bf98bd6e3a6f4d` | 2 |
-| `c5a6994bab6abb82` | 3 |
-| `c631051b0d8b8e54` | 2 |
+| `c5a6994bab6abb82` | 4 |
+| `c631051b0d8b8e54` | 8 |
 | `c6a66ad53b7020b7` | 2 |
+| `cb00a17712e577cc` | 3 |
 | `cb64f2336206606d` | 2 |
-| `d89ad70239309dfe` | 6 |
+| `d89ad70239309dfe` | 43 |
 | `ddcbd60f19d9987a` | 3 |
-| `e17cb7a889d5ef3e` | 8 |
-| `e435caaf27abdb05` | 2 |
-| `e6da47c4f17d8ae9` | 2 |
+| `e17cb7a889d5ef3e` | 28 |
+| `e435caaf27abdb05` | 3 |
+| `e684d0fa84a76e41` | 3 |
+| `e6da47c4f17d8ae9` | 3 |
 | `e841b09a7964a0a0` | 3 |
-| `ed6df59048c8e3f2` | 10 |
+| `ed6df59048c8e3f2` | 84 |
+| `f56297897bd5fbaa` | 2 |
+| `fe535f0cf3122457` | 3 |
+| `ffb322597c2edf38` | 2 |
 
 ## Repo Surfaces
 
@@ -66,156 +84,864 @@ Repos scanned: `300`
 |---|---|---:|---|---:|---:|---:|---|
 | `~/Workspace/.home-cartridge/Code/organvm/universal-mail--automation` | `main` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
 | `~/Workspace/.home-cartridge/Code/speech-score-engine` | `main` | 0 | `4acc77eee9e44bcd` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-repair/writelens-object-lessons-face-20260704` | `fix/object-lessons-face-20260704` | 0 | `25a3228dc037176b` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/aw-public-face-contribution-balance-3112b780` | `limen/aw-public-face-contribution-balance-3112b780` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/aw-repo-boil-up-4c8de7fb` | `limen/aw-repo-boil-up-4c8de7fb` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/aw-substrate-agy-scratch-custody-741e8e83` | `limen/aw-substrate-agy-scratch-custody-741e8e83` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/aw-substrate-agy-scratch-session-meta-receipt-54ce7422` | `limen/aw-substrate-agy-scratch-session-meta-receipt-54ce7422` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/aw-substrate-disk-temp-b10906d1` | `limen/aw-substrate-disk-temp-b10906d1` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/aw-substrate-disk-temp-d6485fc6` | `limen/aw-substrate-disk-temp-d6485fc6` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/bld-my--father-mother-harden-44b2` | `limen/bld-my--father-mother-harden-44b2` | 0 | `7af321704a67fcb0` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/bld-promptscope-next-rev-3fde` | `limen/bld-promptscope-next-rev-3fde` | 0 | `bc304cd55ee9adb8` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/cifix-organvm-i-theoria-conversation-corpus-engine-f02e` | `limen/cifix-organvm-i-theoria-conversation-corpus-engine-f02e` | 0 | `842ae982a77d357d` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/credential-token-tombstone-bridge` | `limen/credential-token-tombstone-bridge` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/discover-organvm-browser-state-a15688df` | `limen/discover-organvm-browser-state-a15688df` | 0 | `112999992cc9423f` | 1 | 0 | 0 | `remote-present` |
+| `~/Workspace/.limen-worktrees/discover-organvm-cind-and-sol-foundation-1f04e5fe` | `limen/discover-organvm-cind-and-sol-foundation-1f04e5fe` | 0 | `737379da20702082` | 1 | 0 | 0 | `remote-present` |
+| `~/Workspace/.limen-worktrees/discover-organvm-gens-ce1d73b7` | `limen/discover-organvm-gens-ce1d73b7` | 0 | `ffb322597c2edf38` | 1 | 0 | 0 | `remote-present` |
 | `~/Workspace/.limen-worktrees/discover-organvm-kerygma-profiles-6c74` | `unknown` | 0 | `none` | 2 | 1 | 1 | `local-only` |
 | `~/Workspace/.limen-worktrees/discover-organvm-pages--theoria-copy--ergon-3ff3933b` | `limen/discover-organvm-pages--theoria-copy--ergon-3ff3933b` | 0 | `04035a0e0922e587` | 1 | 0 | 0 | `remote-present` |
+| `~/Workspace/.limen-worktrees/discover-organvm-pages--theoria-copy--kerygma-61b952b3` | `limen/discover-organvm-pages--theoria-copy--kerygma-61b952b3` | 0 | `44056957bb91147e` | 1 | 0 | 0 | `remote-present` |
+| `~/Workspace/.limen-worktrees/discover-organvm-pages--theoria-copy--logos-340cb28c` | `limen/discover-organvm-pages--theoria-copy--logos-340cb28c` | 0 | `a43780c03d89bfa9` | 1 | 0 | 0 | `remote-present` |
 | `~/Workspace/.limen-worktrees/discover-organvm-palimpsest-718249e2` | `limen/discover-organvm-palimpsest-718249e2` | 0 | `c3bf98bd6e3a6f4d` | 1 | 0 | 0 | `remote-present` |
 | `~/Workspace/.limen-worktrees/discover-organvm-sovereign--ground--4444j99-0f507a63` | `limen/discover-organvm-sovereign--ground--4444j99-0f507a63` | 0 | `cb64f2336206606d` | 0 | 0 | 0 | `remote-present` |
+| `~/Workspace/.limen-worktrees/financial-codex-finish-0704` | `codex/financial-codex-finish-0704` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/gen-a-organvm-a-i-council--coliseum-ci-green-0620-29ec` | `unknown` | 0 | `none` | 1 | 1 | 1 | `local-only` |
+| `~/Workspace/.limen-worktrees/gen-organvm-universal-mail--automation-test-coverage-0625-151e` | `limen/gen-organvm-universal-mail--automation-test-coverage-0625-151e` | 171 | `2ccc1e3872c85115` | 0 | 0 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/gh-4444j99-hokage-chess-39-25daa3dd` | `limen/gh-4444j99-hokage-chess-39-25daa3dd` | 1 | `6bd578f7e3df4dc0` | 2 | 3 | 0 | `remote-present` |
+| `~/Workspace/.limen-worktrees/gh-4444j99-hokage-chess-39-c15d2ce9` | `limen/gh-4444j99-hokage-chess-39-c15d2ce9` | 1 | `6bd578f7e3df4dc0` | 2 | 3 | 0 | `remote-present` |
+| `~/Workspace/.limen-worktrees/gh-organvm-domus-genoma-170-bbbc` | `limen/gh-organvm-domus-genoma-170-bbbc` | 1 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i--skills-26-90acdfa8` | `limen/heal-cifix-organvm-a-i--skills-26-90acdfa8` | 0 | `a829008974b85d0d` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i--skills-27-07bf31e9` | `limen/heal-cifix-organvm-a-i--skills-27-07bf31e9` | 0 | `a829008974b85d0d` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i--skills-27-7d6c0216` | `pr27` | 13 | `a829008974b85d0d` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i--skills-27-7ed7339a` | `limen/heal-cifix-organvm-a-i--skills-27-7ed7339a` | 1 | `a829008974b85d0d` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i--skills-27-8f4677cb` | `limen/heal-cifix-organvm-a-i--skills-27-8f4677cb` | 1 | `a829008974b85d0d` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i--skills-27-a88b2381` | `limen/heal-cifix-organvm-a-i--skills-27-a88b2381` | 0 | `a829008974b85d0d` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i--skills-27-b9ecf630` | `limen/heal-cifix-organvm-a-i--skills-27-b9ecf630` | 0 | `a829008974b85d0d` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i--skills-27-d0df3765` | `limen/heal-cifix-organvm-a-i--skills-27-d0df3765` | 0 | `a829008974b85d0d` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i--skills-27-f0edd746` | `limen/heal-cifix-organvm-a-i--skills-27-f0edd746` | 0 | `a829008974b85d0d` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i--skills-27-f7577686` | `limen/heal-cifix-organvm-a-i--skills-27-f7577686` | 0 | `a829008974b85d0d` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i--skills-27-fff625ac` | `limen/heal-cifix-organvm-a-i--skills-27-fff625ac` | 0 | `a829008974b85d0d` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i--skills-28-aa405c3d` | `limen/heal-cifix-organvm-a-i--skills-28-aa405c3d` | 0 | `a829008974b85d0d` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i--skills-28-d93d775c` | `limen/heal-cifix-organvm-a-i--skills-28-d93d775c` | 0 | `a829008974b85d0d` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i--skills-29-6209335e` | `limen/heal-cifix-organvm-a-i--skills-29-6209335e` | 0 | `a829008974b85d0d` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-chat--exporter-49-102d97d6` | `limen/heal-cifix-organvm-a-i-chat--exporter-49-102d97d6` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-chat--exporter-49-1992eb0d` | `limen/heal-cifix-organvm-a-i-chat--exporter-49-1992eb0d` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-chat--exporter-49-b2276866` | `limen/heal-cifix-organvm-a-i-chat--exporter-49-b2276866` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-chat--exporter-54-220ff315` | `limen/heal-cifix-organvm-a-i-chat--exporter-54-220ff315` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-chat--exporter-54-3049e7fb` | `limen/heal-cifix-organvm-a-i-chat--exporter-54-3049e7fb` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-chat--exporter-54-cac20ffd` | `limen/heal-cifix-organvm-a-i-chat--exporter-54-cac20ffd` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-175-b62b71ea` | `limen/heal-cifix-organvm-a-i-council--coliseum-175-b62b71ea` | 0 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-175-e675406b` | `limen/discover-organvm-a-i-council--coliseum-9e97` | 0 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-177-3e96d584` | `limen/heal-cifix-organvm-a-i-council--coliseum-177-3e96d584` | 0 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-177-604519a2` | `limen/heal-cifix-organvm-a-i-council--coliseum-177-604519a2` | 0 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-177-7890564d` | `limen/gen-a-organvm-a-i-council--coliseum-ci-green-0620-3e2d` | 4 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-177-c03a1bfb` | `pr-177` | 0 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-177-f2be6be4` | `limen/heal-cifix-organvm-a-i-council--coliseum-177-f2be6be4` | 0 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-179-12d7954d` | `limen/heal-cifix-organvm-a-i-council--coliseum-179-12d7954d` | 0 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-179-16c5ab05` | `limen/heal-cifix-organvm-a-i-council--coliseum-179-16c5ab05` | 1 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-179-60fd7cb7` | `limen/heal-cifix-organvm-a-i-council--coliseum-179-60fd7cb7` | 0 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-179-88104173` | `limen/heal-cifix-organvm-a-i-council--coliseum-177-51b9` | 1 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-179-95a7a232` | `limen/heal-cifix-organvm-a-i-council--coliseum-179-95a7a232` | 0 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-179-9d294f8a` | `limen/heal-cifix-organvm-a-i-council--coliseum-179-9d294f8a` | 1 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-179-aa0a4efc` | `limen/heal-cifix-organvm-a-i-council--coliseum-179-aa0a4efc` | 0 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-a-i-council--coliseum-179-f23e3f3e` | `limen/heal-cifix-organvm-a-i-council--coliseum-179-f23e3f3e` | 0 | `310b9ce49578dd9e` | 1 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-atomic-substrata-4-324acf7a` | `limen/heal-cifix-organvm-atomic-substrata-4-324acf7a` | 0 | `0f05efec3cdc8a72` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-atomic-substrata-4-41b9ec96` | `HEAD` | 0 | `0f05efec3cdc8a72` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-atomic-substrata-4-4c4f9acb` | `limen/heal-cifix-organvm-atomic-substrata-4-4c4f9acb` | 0 | `0f05efec3cdc8a72` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-atomic-substrata-4-a97adaf9` | `limen/heal-cifix-organvm-atomic-substrata-4-a97adaf9` | 0 | `0f05efec3cdc8a72` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-atomic-substrata-4-c56a4238` | `limen/heal-cifix-organvm-atomic-substrata-4-c56a4238` | 0 | `0f05efec3cdc8a72` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-atomic-substrata-4-ccc6d238` | `limen/heal-cifix-organvm-atomic-substrata-4-ccc6d238` | 14 | `0f05efec3cdc8a72` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-atomic-substrata-4-d19dab10` | `limen/heal-cifix-organvm-atomic-substrata-4-d19dab10` | 1 | `0f05efec3cdc8a72` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-atomic-substrata-4-d7d65b9e` | `limen/heal-cifix-organvm-atomic-substrata-4-d7d65b9e` | 0 | `0f05efec3cdc8a72` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-atomic-substrata-4-f0e19d7b` | `limen/heal-cifix-organvm-atomic-substrata-4-f0e19d7b` | 0 | `0f05efec3cdc8a72` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-atomic-substrata-4-faec5cc8` | `limen/heal-cifix-organvm-atomic-substrata-4-faec5cc8` | 0 | `0f05efec3cdc8a72` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-10-00307fab` | `limen/heal-cifix-organvm-bountyscope-10-00307fab` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-10-00307fab/.repair/bountyscope-pr10` | `repair-pr-10` | 0 | `0833e4c2a36df3f4` | 2 | 4 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-10-4426df03` | `limen/heal-cifix-organvm-bountyscope-10-4426df03` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-10-b8b618d1` | `limen/bld2-bountyscope-api-docs-9e6c` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-10-bd03a12c` | `limen/heal-cifix-organvm-bountyscope-10-bd03a12c` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-10-f9b2126a` | `limen/heal-cifix-organvm-bountyscope-10-f9b2126a` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-11-0b78f7e5` | `limen/heal-cifix-organvm-bountyscope-11-0b78f7e5` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-11-678c6710` | `limen/heal-cifix-organvm-bountyscope-11-678c6710` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-11-7def4da4` | `limen/heal-cifix-organvm-bountyscope-11-7def4da4` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-13-3199dbf4` | `pr-13-head` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-13-84370af8` | `limen/heal-cifix-organvm-bountyscope-13-84370af8` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-13-c8378dbc` | `limen/heal-cifix-organvm-bountyscope-13-c8378dbc` | 1 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-14-32d115f2` | `limen/heal-cifix-organvm-bountyscope-14-32d115f2` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-14-70212641` | `limen/heal-cifix-organvm-bountyscope-14-70212641` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-14-9ea58464` | `limen/heal-cifix-organvm-bountyscope-14-9ea58464` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-14-f296ce00` | `pr-14` | 1 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-14-f7b2ff23` | `HEAD` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-15-5b361063` | `limen/heal-cifix-organvm-bountyscope-15-5b361063` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-15-73f551ad` | `limen/heal-cifix-organvm-bountyscope-15-73f551ad` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-15-f40d0cca` | `fix-branch` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-16-32a8d8d9` | `limen/heal-cifix-organvm-bountyscope-16-32a8d8d9` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-16-9730de15` | `limen/heal-cifix-organvm-bountyscope-16-9730de15` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-16-9c1b77eb` | `limen/heal-cifix-organvm-bountyscope-16-9c1b77eb` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-16-a4d7e00d` | `pr-16-test` | 1 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-16-b96207a7` | `limen/heal-cifix-organvm-bountyscope-16-b96207a7` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-8-1d766f1d` | `limen/heal-cifix-organvm-bountyscope-8-1d766f1d` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-8-2120cf4d` | `heal-fix-branch` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-8-23896287` | `limen/heal-cifix-organvm-bountyscope-8-23896287` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-8-59ecd78c` | `limen/heal-cifix-organvm-bountyscope-8-59ecd78c` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-8-a2716cd2` | `limen/heal-cifix-organvm-bountyscope-8-a2716cd2` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-8-ed2b8219` | `limen/heal-cifix-organvm-bountyscope-8-ed2b8219` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-9-1c346332` | `limen/heal-cifix-organvm-bountyscope-9-1c346332` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-9-1fceab23` | `limen/heal-cifix-organvm-bountyscope-9-1fceab23` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-9-2d76cfe7` | `limen/heal-cifix-organvm-bountyscope-9-2d76cfe7` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-9-b23bd1d3` | `limen/heal-cifix-organvm-bountyscope-9-b23bd1d3` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-9-cdd2fbfe` | `limen/heal-cifix-organvm-bountyscope-9-cdd2fbfe` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-9-d8c065da` | `limen/heal-cifix-organvm-bountyscope-9-d8c065da` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-bountyscope-9-e3a88593` | `limen/heal-cifix-organvm-bountyscope-9-e3a88593` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-call-function--ontological-10-2cadebdb` | `limen/heal-cifix-organvm-call-function--ontological-10-2cadebdb` | 0 | `0b18f313b7001304` | 2 | 2 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-call-function--ontological-10-4c6b770a` | `limen/heal-cifix-organvm-call-function--ontological-10-4c6b770a` | 0 | `0b18f313b7001304` | 2 | 2 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-call-function--ontological-10-92b5aa11` | `limen/heal-cifix-organvm-call-function--ontological-10-92b5aa11` | 0 | `0b18f313b7001304` | 2 | 2 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-call-function--ontological-10-ad14b431` | `limen/discover-organvm-call-function--ontological-b91e` | 0 | `0b18f313b7001304` | 2 | 2 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-call-function--ontological-10-c02ccaea` | `limen/heal-cifix-organvm-call-function--ontological-10-c02ccaea` | 0 | `0b18f313b7001304` | 2 | 2 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-call-function--ontological-10-dc5632f4` | `limen/heal-cifix-organvm-call-function--ontological-10-dc5632f4` | 0 | `0b18f313b7001304` | 2 | 2 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-community-hub-9-48838101` | `fix-branch` | 0 | `c5a6994bab6abb82` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-community-hub-9-b78c10e5` | `limen/heal-cifix-organvm-community-hub-9-b78c10e5` | 1 | `c5a6994bab6abb82` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-109-83be4de7` | `limen/heal-cifix-organvm-domus-genoma-109-83be4de7` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-118-46a5ada9` | `limen/heal-cifix-organvm-domus-genoma-118-46a5ada9` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-120-f5bb6297` | `limen/heal-cifix-organvm-domus-genoma-120-f5bb6297` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-132-9e2ce2a0` | `limen/heal-cifix-organvm-domus-genoma-132-9e2ce2a0` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-134-79bb0602` | `limen/heal-cifix-organvm-domus-genoma-134-79bb0602` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-135-c093cc45` | `limen/heal-cifix-organvm-domus-genoma-135-c093cc45` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-136-12ee50f4` | `limen/heal-cifix-organvm-domus-genoma-136-12ee50f4` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-136-2c2c192c` | `limen/heal-cifix-organvm-domus-genoma-136-2c2c192c` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-136-32638a2c` | `limen/heal-cifix-organvm-domus-genoma-136-32638a2c` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-136-5448713c` | `limen/heal-cifix-organvm-domus-genoma-136-5448713c` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-136-6a8c088f` | `limen/gen-organvm-domus-genoma-simplify-0626-8f4e` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-136-e500adaf` | `limen/heal-cifix-organvm-domus-genoma-136-e500adaf` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-137-1fcfca82` | `limen/heal-cifix-organvm-domus-genoma-137-1fcfca82` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-138-422787bb` | `limen/heal-cifix-organvm-domus-genoma-138-422787bb` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-138-6cb82894` | `limen/heal-cifix-organvm-domus-genoma-138-6cb82894` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-138-d81d092f` | `limen/heal-cifix-organvm-domus-genoma-138-d81d092f` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-139-3c02468a` | `limen/heal-cifix-organvm-domus-genoma-139-3c02468a` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-140-e28cc056` | `limen/heal-cifix-organvm-domus-genoma-140-e28cc056` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-141-0f57388a` | `limen/heal-cifix-organvm-domus-genoma-141-0f57388a` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-141-320c1352` | `limen/heal-cifix-organvm-domus-genoma-141-320c1352` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-141-70e4ccde` | `HEAD` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-141-71678e3e` | `limen/heal-cifix-organvm-domus-genoma-141-71678e3e` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-141-c57c1b89` | `limen/gen-organvm-domus-genoma-security-0627-b9ed` | 1 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-141-d5c1d0f6` | `limen/heal-cifix-organvm-domus-genoma-141-d5c1d0f6` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-141-e43baa15` | `limen/heal-cifix-organvm-domus-genoma-141-e43baa15` | 2 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-141-ef984af5` | `limen/heal-cifix-organvm-domus-genoma-141-ef984af5` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-142-194f0277` | `limen/heal-cifix-organvm-domus-genoma-142-194f0277` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-142-2548098e` | `limen/jules-gen-organvm-domus-genoma-test-coverage-0626-e776` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-142-47b084ef` | `limen/heal-cifix-organvm-domus-genoma-142-47b084ef` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-142-9acd5d5c` | `limen/heal-cifix-organvm-domus-genoma-142-9acd5d5c` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-143-d5587a4e` | `limen/heal-cifix-organvm-domus-genoma-143-d5587a4e` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-145-b06f5919` | `limen/heal-cifix-organvm-domus-genoma-145-b06f5919` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-146-0bb5970c` | `fix/security-hardening-0628` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-146-22877d48` | `limen/heal-cifix-organvm-domus-genoma-146-22877d48` | 1 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-146-49a1e04b` | `limen/heal-cifix-organvm-domus-genoma-146-49a1e04b` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-146-89c46870` | `limen/heal-cifix-organvm-domus-genoma-146-89c46870` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-146-9dc2db2e` | `limen/heal-cifix-organvm-domus-genoma-146-9dc2db2e` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-148-3f088c21` | `limen/heal-cifix-organvm-domus-genoma-148-3f088c21` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-149-33f68e30` | `limen/heal-cifix-organvm-domus-genoma-149-33f68e30` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-149-3de37146` | `limen/heal-cifix-organvm-domus-genoma-149-3de37146` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-149-63beaf51` | `limen/heal-cifix-organvm-domus-genoma-149-63beaf51` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-149-762c5b71` | `limen/heal-cifix-organvm-domus-genoma-149-762c5b71` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-149-8df127df` | `fix/security-hardening-domus-genoma` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-149-9f9060b8` | `limen/heal-cifix-organvm-domus-genoma-149-9f9060b8` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-149-b73c4ce9` | `limen/heal-cifix-organvm-domus-genoma-149-b73c4ce9` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-149-d5e7f4d5` | `limen/heal-cifix-organvm-domus-genoma-149-d5e7f4d5` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-149-da30531a` | `limen/heal-cifix-organvm-domus-genoma-149-da30531a` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-149-e0f24a23` | `limen/heal-cifix-organvm-domus-genoma-149-e0f24a23` | 1 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-150-1c22d9db` | `limen/heal-cifix-organvm-domus-genoma-150-1c22d9db` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-150-7af8143e` | `limen/heal-cifix-organvm-domus-genoma-150-7af8143e` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-150-c9c434aa` | `limen/heal-cifix-organvm-domus-genoma-150-c9c434aa` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-152-10b45a9f` | `limen/heal-cifix-organvm-domus-genoma-152-10b45a9f` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-152-aaa842d9` | `check-pr-branch` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-152-d3af5bd7` | `limen/heal-cifix-organvm-domus-genoma-152-d3af5bd7` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-153-0c7ac0c8` | `limen/heal-cifix-organvm-domus-genoma-153-0c7ac0c8` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-153-451788bb` | `limen/heal-cifix-organvm-domus-genoma-153-451788bb` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-153-469ca57e` | `limen/heal-cifix-organvm-domus-genoma-153-469ca57e` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-153-52799968` | `limen/heal-cifix-organvm-domus-genoma-153-52799968` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-153-eb2b9ba6` | `limen/heal-cifix-organvm-domus-genoma-153-eb2b9ba6` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-154-0d7fe61f` | `limen/heal-cifix-organvm-domus-genoma-154-0d7fe61f` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-154-0d80d55c` | `limen/heal-cifix-organvm-domus-genoma-154-0d80d55c` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-154-35479caf` | `limen/gen-organvm-domus-genoma-security-0629-755d` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-155-2721d52d` | `limen/heal-cifix-organvm-domus-genoma-155-2721d52d` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-155-83292900` | `limen/heal-cifix-organvm-domus-genoma-155-83292900` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-155-ac07fcb1` | `limen/heal-cifix-organvm-domus-genoma-155-ac07fcb1` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-155-f2f394b3` | `limen/jules-gen-organvm-domus-genoma-security-0629-c52d` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-157-088ea9fb` | `limen/heal-cifix-organvm-domus-genoma-157-088ea9fb` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-157-2ae8f227` | `limen/heal-cifix-organvm-domus-genoma-157-2ae8f227` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-157-baceffbf` | `limen/heal-cifix-organvm-domus-genoma-157-baceffbf` | 1 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-157-e92cc6f4` | `limen/heal-cifix-organvm-domus-genoma-157-e92cc6f4` | 1 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-159-2cfdfff6` | `limen/heal-cifix-organvm-domus-genoma-159-2cfdfff6` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-159-615266b7` | `limen/gen-organvm-domus-genoma-simplify-0630-5198` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-159-97fee589` | `limen/heal-cifix-organvm-domus-genoma-159-97fee589` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-159-da75ada8` | `limen/heal-cifix-organvm-domus-genoma-159-da75ada8` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-163-cc358fb4` | `limen/heal-cifix-organvm-domus-genoma-163-cc358fb4` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-172-dcd0fbea` | `limen/heal-cifix-organvm-domus-genoma-172-dcd0fbea` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-domus-genoma-175-25f4a1fd` | `limen/heal-cifix-organvm-domus-genoma-175-25f4a1fd` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-11-0e5131c4` | `limen/heal-cifix-organvm-growth-auditor-11-0e5131c4` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-11-171607f7` | `limen/heal-cifix-organvm-growth-auditor-11-171607f7` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-11-5d8c134f` | `limen/heal-cifix-organvm-growth-auditor-11-5d8c134f` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-11-ddbe8b4c` | `limen/heal-cifix-organvm-growth-auditor-11-ddbe8b4c` | 0 | `504c1f787c09aac4` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-12-18efdd4f` | `limen/heal-cifix-organvm-growth-auditor-12-18efdd4f` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-12-610fe0a5` | `pr-branch` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-12-6ef30ddd` | `limen/heal-cifix-organvm-growth-auditor-12-6ef30ddd` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-12-a1d1084c` | `limen/heal-cifix-organvm-growth-auditor-12-a1d1084c` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-13-1d41d80b` | `pr-13-branch` | 0 | `504c1f787c09aac4` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-13-738af479` | `limen/heal-cifix-organvm-growth-auditor-13-738af479` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-13-8e0b3a07` | `limen/heal-cifix-organvm-growth-auditor-13-8e0b3a07` | 1 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-13-9781b056` | `limen/heal-cifix-organvm-growth-auditor-13-9781b056` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-13-b800950c` | `limen/heal-cifix-organvm-growth-auditor-13-b800950c` | 1 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-13-bc0b11cc` | `limen/heal-cifix-organvm-growth-auditor-13-bc0b11cc` | 0 | `504c1f787c09aac4` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-13-dd826129` | `limen/heal-cifix-organvm-growth-auditor-13-dd826129` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-13-fea2cc5b` | `limen/heal-cifix-organvm-growth-auditor-13-fea2cc5b` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-14-87e185fb` | `limen/heal-cifix-organvm-growth-auditor-14-87e185fb` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-16-0d2a9f23` | `limen/heal-cifix-organvm-growth-auditor-16-0d2a9f23` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-16-203e2158` | `pr-16` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-16-aa9e65aa` | `limen/heal-cifix-organvm-growth-auditor-16-aa9e65aa` | 1 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-16-abe0a1a2` | `limen/heal-cifix-organvm-growth-auditor-16-abe0a1a2` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-16-f8bc94cb` | `limen/heal-cifix-organvm-growth-auditor-16-f8bc94cb` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-17-05e37ea2` | `limen/heal-cifix-organvm-growth-auditor-17-05e37ea2` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-17-302d130e` | `limen/recover-cifix-organvm-i-theoria-growth-auditor-611d` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-growth-auditor-17-8da83fa9` | `limen/heal-cifix-organvm-growth-auditor-17-8da83fa9` | 0 | `504c1f787c09aac4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-375-0b2e1e7a` | `limen/heal-cifix-organvm-limen-375-0b2e1e7a` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-375-d7b6054a` | `limen/heal-cifix-organvm-limen-375-d7b6054a` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-385-2bb5e641` | `limen/heal-cifix-organvm-limen-385-2bb5e641` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-386-11ccc04b` | `limen/heal-cifix-organvm-limen-386-11ccc04b` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-386-3556222a` | `limen/heal-cifix-organvm-limen-386-3556222a` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-386-b1a8c51d` | `limen/heal-cifix-organvm-limen-386-b1a8c51d` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-388-5d99b99f` | `limen/heal-cifix-organvm-limen-388-5d99b99f` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-421-8f14068b` | `limen/heal-cifix-organvm-limen-421-8f14068b` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-422-0a0aae09` | `limen/heal-cifix-organvm-limen-422-0a0aae09` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-422-3a71d824` | `limen/heal-cifix-organvm-limen-422-3a71d824` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-422-3c1a44a2` | `pr-422` | 1 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-422-5764e9ef` | `limen/heal-cifix-organvm-limen-422-5764e9ef` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-422-6b0c8ca2` | `limen/heal-cifix-organvm-limen-422-6b0c8ca2` | 3 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-422-94534247` | `limen/heal-cifix-organvm-limen-422-94534247` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-422-be9eb353` | `limen/heal-cifix-organvm-limen-422-be9eb353` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-422-eda116ed` | `limen/heal-cifix-organvm-limen-422-eda116ed` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-423-354fa844` | `limen/heal-cifix-organvm-limen-423-354fa844` | 12 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-423-40984048` | `limen/heal-cifix-organvm-limen-423-40984048` | 13 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-423-47a6f9ec` | `heal/capfill-limen-423` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-423-e48b35df` | `pr-423` | 2 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-424-8db5dab0` | `limen/heal-cifix-organvm-limen-424-8db5dab0` | 3 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-425-0597e483` | `limen/heal-cifix-organvm-limen-425-0597e483` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-425-164d86db` | `limen/heal-cifix-organvm-limen-425-164d86db` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-425-713511d7` | `limen/heal-cifix-organvm-limen-425-713511d7` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-425-9c743c2c` | `limen/heal-cifix-organvm-limen-425-9c743c2c` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-425-db11388b` | `limen/heal-cifix-organvm-limen-425-db11388b` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-0ff7babe` | `limen/heal-cifix-organvm-limen-426-0ff7babe` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-41768a83` | `limen/heal-cifix-organvm-limen-426-41768a83` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-4aab452b` | `limen/heal-cifix-organvm-limen-426-4aab452b` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-6e741804` | `pr-426` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-71ba33ff` | `limen/heal-cifix-organvm-limen-426-71ba33ff` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-71c5627d` | `limen/heal-cifix-organvm-limen-426-71c5627d` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-756e0f5d` | `limen/heal-cifix-organvm-limen-426-756e0f5d` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-92e122fb` | `limen/heal-cifix-organvm-limen-426-92e122fb` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-950181d8` | `limen/heal-cifix-organvm-limen-426-950181d8` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-99c6f512` | `limen/heal-cifix-organvm-limen-426-99c6f512` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-a93cb119` | `limen/heal-cifix-organvm-limen-426-a93cb119` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-b1a41cda` | `limen/heal-cifix-organvm-limen-426-b1a41cda` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-b32aac55` | `limen/heal-cifix-organvm-limen-426-b32aac55` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-d270c2a2` | `limen/heal-cifix-organvm-limen-426-d270c2a2` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-426-d7a0e516` | `limen/heal-cifix-organvm-limen-426-d7a0e516` | 1 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-427-42616f71` | `limen/heal-cifix-organvm-limen-427-42616f71` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-427-568b73c9` | `limen/heal-cifix-organvm-limen-427-568b73c9` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-427-5f8bb97d` | `limen/heal-cifix-organvm-limen-427-5f8bb97d` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-427-a7bd2bb9` | `limen/heal-cifix-organvm-limen-427-a7bd2bb9` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-428-0079823c` | `limen/heal-cifix-organvm-limen-428-0079823c` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-428-01f73e57` | `limen/jules-capfill-jules-20260629-09-f6cc` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-428-2ae62246` | `limen/heal-cifix-organvm-limen-428-2ae62246` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-428-4b320e87` | `limen/heal-cifix-organvm-limen-428-4b320e87` | 3 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-428-544b47af` | `limen/heal-cifix-organvm-limen-428-544b47af` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-428-ad4f755d` | `limen/heal-cifix-organvm-limen-428-ad4f755d` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-428-dbe8a466` | `limen/heal-cifix-organvm-limen-428-dbe8a466` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-428-e3e2925e` | `limen/heal-cifix-organvm-limen-428-e3e2925e` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-428-e536788e` | `limen/heal-cifix-organvm-limen-428-e536788e` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-429-4471ceb2` | `pr-429` | 1 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-429-89a0a2b4` | `limen/heal-cifix-organvm-limen-429-89a0a2b4` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-429-bf5b90ab` | `limen/heal-cifix-organvm-limen-429-bf5b90ab` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-430-0a5c6bc2` | `limen/heal-cifix-organvm-limen-430-0a5c6bc2` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-430-1738f072` | `limen/heal-cifix-organvm-limen-430-1738f072` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-430-29605f83` | `limen/heal-cifix-organvm-limen-430-29605f83` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-430-61bd3388` | `limen/heal-cifix-organvm-limen-430-61bd3388` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-430-7c7129d9` | `limen/heal-cifix-organvm-limen-430-7c7129d9` | 1 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-430-955f9dd1` | `limen/heal-cifix-organvm-limen-430-955f9dd1` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-430-a14ed351` | `limen/heal-cifix-organvm-limen-430-a14ed351` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-430-af02d89e` | `limen/heal-cifix-organvm-limen-430-af02d89e` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-430-b979134a` | `limen/heal-cifix-organvm-limen-430-b979134a` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-431-11bda3f4` | `limen/heal-cifix-organvm-limen-431-11bda3f4` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-431-58a1e655` | `limen/heal-cifix-organvm-limen-431-58a1e655` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-431-6eac4607` | `limen/heal-cifix-organvm-limen-431-6eac4607` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-431-6ee61f31` | `limen/heal-cifix-organvm-limen-431-6ee61f31` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-431-749c4e36` | `limen/heal-cifix-organvm-limen-431-749c4e36` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-431-d068660e` | `limen/heal-cifix-organvm-limen-431-d068660e` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-432-00cf570a` | `limen/heal-cifix-organvm-limen-432-00cf570a` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-432-06bf02c7` | `limen/heal-cifix-organvm-limen-432-06bf02c7` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-432-19e5f605` | `limen/heal-cifix-organvm-limen-432-19e5f605` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-432-a9af57ee` | `limen/capfill-opencode-20260629-01-79bc` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-433-32e25f35` | `limen/heal-cifix-organvm-limen-433-32e25f35` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-433-aba31b6f` | `limen/heal-cifix-organvm-limen-433-aba31b6f` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-434-2f84fe31` | `limen/heal-cifix-organvm-limen-434-2f84fe31` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-434-3d7b65ff` | `limen/jules-capfill-jules-20260629-14-26c8` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-434-529e2e6d` | `limen/heal-cifix-organvm-limen-434-529e2e6d` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-434-a0692202` | `limen/heal-cifix-organvm-limen-434-a0692202` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-434-b6e642da` | `pr-434` | 1 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-435-401dee02` | `pr-435` | 12 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-435-47b10f86` | `limen/jules-capfill-jules-20260629-12-be5f` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-435-8d8df7c4` | `limen/heal-cifix-organvm-limen-435-8d8df7c4` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-435-b69ba98c` | `limen/heal-cifix-organvm-limen-435-b69ba98c` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-435-c14f845c` | `limen/heal-cifix-organvm-limen-435-c14f845c` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-435-fa00a596` | `limen/heal-cifix-organvm-limen-435-fa00a596` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-436-3b707e9b` | `limen/heal-cifix-organvm-limen-436-3b707e9b` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-436-4702c4dc` | `limen/heal-cifix-organvm-limen-436-4702c4dc` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-436-609efb0e` | `limen/heal-cifix-organvm-limen-436-609efb0e` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-436-6c1766c9` | `limen/heal-cifix-organvm-limen-436-6c1766c9` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-436-b9f684dd` | `limen/heal-cifix-organvm-limen-436-b9f684dd` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-436-ffaf1582` | `limen/capfill-agy-20260629-12-5661` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-437-59c98bd8` | `limen/heal-cifix-organvm-limen-437-59c98bd8` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-437-91307a5b` | `limen/heal-cifix-organvm-limen-437-91307a5b` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-437-a869092b` | `limen/heal-cifix-organvm-limen-437-a869092b` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-437-ae361281` | `limen/heal-cifix-organvm-limen-437-ae361281` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-438-0b5ed365` | `limen/heal-cifix-organvm-limen-438-0b5ed365` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-438-259a4909` | `limen/capfill-agy-20260629-01-aef0` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-438-260ee687` | `limen/heal-cifix-organvm-limen-438-260ee687` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-438-7e4c81d1` | `limen/heal-cifix-organvm-limen-438-7e4c81d1` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-438-899cbaa9` | `limen/heal-cifix-organvm-limen-438-899cbaa9` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-438-8dcc5429` | `limen/heal-cifix-organvm-limen-438-8dcc5429` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-438-980dae49` | `limen/heal-cifix-organvm-limen-438-980dae49` | 2 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-438-c195dbe8` | `limen/heal-cifix-organvm-limen-438-c195dbe8` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-438-c8bdc57b` | `limen/heal-cifix-organvm-limen-438-c8bdc57b` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-438-d0a9dd54` | `limen/heal-cifix-organvm-limen-438-d0a9dd54` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-438-d70e6c75` | `limen/heal-cifix-organvm-limen-438-d70e6c75` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-438-da3b854e` | `limen/heal-cifix-organvm-limen-438-da3b854e` | 1 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-438-f0f9ba29` | `limen/heal-cifix-organvm-limen-438-f0f9ba29` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-438-fcc35eed` | `limen/heal-cifix-organvm-limen-438-fcc35eed` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-439-0851d4aa` | `limen/heal-cifix-organvm-limen-439-0851d4aa` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-439-4583ba76` | `limen/heal-cifix-organvm-limen-439-4583ba76` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-439-9e5ed9f8` | `limen/heal-cifix-organvm-limen-439-9e5ed9f8` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-439-b17fd83a` | `limen/heal-cifix-organvm-limen-439-b17fd83a` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-440-735e22cd` | `limen/heal-cifix-organvm-limen-440-735e22cd` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-440-c16aa072` | `limen/capfill-agy-20260629-03-796b` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-440-f537a8e3` | `pr-440` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-440-f9739c3e` | `limen/heal-cifix-organvm-limen-440-f9739c3e` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-441-7c31138a` | `limen/capfill-agy-20260629-25-eb64` | 3 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-441-c60154a0` | `limen/heal-cifix-organvm-limen-441-c60154a0` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-442-1b11af92` | `limen/heal-cifix-organvm-limen-442-1b11af92` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-442-3902a00d` | `limen/heal-cifix-organvm-limen-442-3902a00d` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-442-41ea2f93` | `limen/heal-cifix-organvm-limen-442-41ea2f93` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-442-4ddd8c37` | `limen/heal-cifix-organvm-limen-442-4ddd8c37` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-442-c9d99871` | `limen/heal-cifix-organvm-limen-442-c9d99871` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-442-cb861a12` | `limen/heal-cifix-organvm-limen-442-cb861a12` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-443-35adbd1e` | `limen/jules-capfill-jules-20260629-08-e434` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-443-3804ed20` | `limen/heal-cifix-organvm-limen-443-3804ed20` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-443-4e67ed4e` | `limen/heal-cifix-organvm-limen-443-4e67ed4e` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-443-5476c544` | `limen/heal-cifix-organvm-limen-443-5476c544` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-443-9cd88b5e` | `limen/heal-cifix-organvm-limen-443-9cd88b5e` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-443-c22de24a` | `limen/heal-cifix-organvm-limen-443-c22de24a` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-443-ea28cfe1` | `limen/heal-cifix-organvm-limen-443-ea28cfe1` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-443-ee755868` | `limen/heal-cifix-organvm-limen-443-ee755868` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-444-32af06e6` | `limen/heal-cifix-organvm-limen-444-32af06e6` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-444-a00aa985` | `limen/heal-cifix-organvm-limen-444-a00aa985` | 3 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-444-d3ea6fe8` | `limen/heal-cifix-organvm-limen-444-d3ea6fe8` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-444-d6220f0e` | `limen/heal-cifix-organvm-limen-444-d6220f0e` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-445-08a8f4b2` | `limen/jules-capfill-agy-20260629-04-25b5` | 1 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-445-4f8beb6f` | `limen/heal-cifix-organvm-limen-445-4f8beb6f` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-445-7282d149` | `limen/heal-cifix-organvm-limen-445-7282d149` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-446-0862daaa` | `limen/heal-cifix-organvm-limen-446-0862daaa` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-446-4dfb7f88` | `pr-446` | 2 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-446-76408b03` | `limen/capfill-claude-20260629-03-5bac` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-446-acc60adb` | `limen/heal-cifix-organvm-limen-446-acc60adb` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-limen-446-c3c48d16` | `limen/heal-cifix-organvm-limen-446-c3c48d16` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-100-34862f7f` | `limen/heal-cifix-organvm-mirror-mirror-100-34862f7f` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-100-57e897da` | `limen/heal-cifix-organvm-mirror-mirror-100-57e897da` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-100-88b1e47c` | `pr-100` | 2 | `07b5141326fe1486` | 2 | 3 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-104-28912ebe` | `limen/heal-cifix-organvm-mirror-mirror-104-28912ebe` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-104-5198c1b2` | `temp-pr-fix` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-106-5aef651c` | `limen/heal-cifix-organvm-mirror-mirror-106-5aef651c` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-70-916a1157` | `limen/heal-cifix-organvm-mirror-mirror-70-916a1157` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-71-0f7132fd` | `limen/heal-cifix-organvm-mirror-mirror-71-0f7132fd` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-71-5bd74193` | `fix-pr-71-local` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-71-6877a3e2` | `limen/heal-cifix-organvm-mirror-mirror-71-6877a3e2` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-71-85627133` | `limen/heal-cifix-organvm-mirror-mirror-71-85627133` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-71-864654d6` | `limen/heal-cifix-organvm-mirror-mirror-71-864654d6` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-71-955f0971` | `limen/heal-cifix-organvm-mirror-mirror-71-955f0971` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-71-d83257ef` | `pr-71-branch` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-77-6e70554b` | `limen/heal-cifix-organvm-mirror-mirror-77-6e70554b` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-77-c105b09b` | `limen/heal-cifix-organvm-mirror-mirror-77-c105b09b` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-77-d31a3fdd` | `limen/rev-organvm-mirror-mirror-revenue-ship-0629-2975` | 0 | `07b5141326fe1486` | 2 | 3 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-79-0d6535cc` | `limen/heal-cifix-organvm-mirror-mirror-79-0d6535cc` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-79-1e9cc4c2` | `limen/heal-cifix-organvm-mirror-mirror-79-1e9cc4c2` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-79-269ffb04` | `limen/heal-cifix-organvm-mirror-mirror-79-269ffb04` | 2 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-79-3b040b44` | `limen/heal-cifix-organvm-mirror-mirror-79-3b040b44` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-79-651b0a5c` | `limen/heal-cifix-organvm-mirror-mirror-79-651b0a5c` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-79-7fbbb01a` | `limen/heal-cifix-organvm-mirror-mirror-79-7fbbb01a` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-79-8867d368` | `pr-79-local` | 1 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-79-88c62f2b` | `limen/heal-cifix-organvm-mirror-mirror-79-88c62f2b` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-79-a0f9c21f` | `limen/heal-cifix-organvm-mirror-mirror-79-a0f9c21f` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-79-a7261128` | `limen/heal-cifix-organvm-mirror-mirror-79-a7261128` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-79-ae77e382` | `limen/heal-cifix-organvm-mirror-mirror-79-ae77e382` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-79-c0509fb7` | `limen/heal-cifix-organvm-mirror-mirror-79-c0509fb7` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-79-d0960059` | `pr-79` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-79-f46f8991` | `limen/heal-cifix-organvm-mirror-mirror-79-f46f8991` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-83-29f6eefc` | `fix/badge-trading-tests` | 0 | `07b5141326fe1486` | 2 | 3 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-83-6c728f6b` | `limen/heal-cifix-organvm-mirror-mirror-83-6c728f6b` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-83-8dd8a3bf` | `limen/heal-cifix-organvm-mirror-mirror-83-8dd8a3bf` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-83-e010de84` | `limen/heal-cifix-organvm-mirror-mirror-83-e010de84` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-86-0470da42` | `pr-86` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-86-05676968` | `pr-86-remote` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-86-45ff622e` | `my-pr-86` | 1 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-86-68597dae` | `limen/heal-cifix-organvm-mirror-mirror-86-68597dae` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-90-028f12b1` | `HEAD` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-90-02f28edb` | `limen/heal-cifix-organvm-mirror-mirror-90-02f28edb` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-90-28834e10` | `limen/heal-cifix-organvm-mirror-mirror-90-28834e10` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-90-523909a0` | `limen/heal-cifix-organvm-mirror-mirror-90-523909a0` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-90-80c02b54` | `limen/heal-cifix-organvm-mirror-mirror-90-80c02b54` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-90-9acd9bdc` | `limen/heal-cifix-organvm-mirror-mirror-90-9acd9bdc` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-90-b2321100` | `limen/heal-cifix-organvm-mirror-mirror-90-b2321100` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-90-f04ef22e` | `pr-90-fetched` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-93-3e3f59d1` | `HEAD` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-93-692692a9` | `limen/heal-cifix-organvm-mirror-mirror-93-692692a9` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-93-71481367` | `limen/heal-cifix-organvm-mirror-mirror-93-71481367` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-93-7dfcb32a` | `limen/heal-cifix-organvm-mirror-mirror-93-7dfcb32a` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-93-b220e6bf` | `limen/heal-cifix-organvm-mirror-mirror-93-b220e6bf` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-93-ef454360` | `limen/heal-cifix-organvm-mirror-mirror-93-ef454360` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-93-f60b2510` | `pr93` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-94-543799cf` | `limen/heal-cifix-organvm-mirror-mirror-94-543799cf` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-94-7890f8b6` | `limen/heal-cifix-organvm-mirror-mirror-94-7890f8b6` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-94-802b94e1` | `limen/heal-cifix-organvm-mirror-mirror-94-802b94e1` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-95-10d60bab` | `limen/heal-cifix-organvm-mirror-mirror-95-10d60bab` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-95-20f0cd1b` | `pr-95` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-95-47edfa17` | `limen/heal-cifix-organvm-mirror-mirror-95-47edfa17` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-mirror-mirror-95-49e2a3f0` | `limen/rev-organvm-mirror-mirror-revenue-readiness-0630-0e9c` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-my--father-mother-19-083a318a` | `limen/heal-cifix-organvm-my--father-mother-19-083a318a` | 0 | `7af321704a67fcb0` | 1 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-my--father-mother-19-6a175061` | `limen/heal-cifix-organvm-my--father-mother-19-6a175061` | 0 | `7af321704a67fcb0` | 1 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-my--father-mother-19-7988886d` | `limen/heal-cifix-organvm-my--father-mother-19-7988886d` | 0 | `7af321704a67fcb0` | 1 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-my--father-mother-21-17cd7d29` | `limen/heal-cifix-organvm-my--father-mother-21-17cd7d29` | 0 | `7af321704a67fcb0` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-my--father-mother-21-5fcb223d` | `limen/heal-cifix-organvm-my--father-mother-21-5fcb223d` | 0 | `7af321704a67fcb0` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-my--father-mother-21-7bcbbfea` | `limen/heal-cifix-organvm-my--father-mother-21-7bcbbfea` | 1 | `7af321704a67fcb0` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-my--father-mother-21-fd6a0ac5` | `pr-21` | 0 | `7af321704a67fcb0` | 1 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-narratological-algorithmic-lenses-36-04061cb0` | `limen/heal-cifix-organvm-narratological-algorithmic-lenses-36-04061cb0` | 0 | `77c140cbdc964703` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-narratological-algorithmic-lenses-36-3fffe0b5` | `limen/heal-cifix-organvm-narratological-algorithmic-lenses-36-3fffe0b5` | 0 | `77c140cbdc964703` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-narratological-algorithmic-lenses-36-b62cbab8` | `limen/heal-cifix-organvm-narratological-algorithmic-lenses-36-b62cbab8` | 0 | `77c140cbdc964703` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-narratological-algorithmic-lenses-36-ee87a77a` | `limen/heal-cifix-organvm-narratological-algorithmic-lenses-36-ee87a77a` | 0 | `77c140cbdc964703` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-narratological-algorithmic-lenses-36-faf77525` | `HEAD` | 0 | `77c140cbdc964703` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-nexus--babel-alexandria-125-306fcd79` | `limen/heal-cifix-organvm-nexus--babel-alexandria-125-306fcd79` | 0 | `3c65f20d924effa4` | 2 | 2 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-nexus--babel-alexandria-125-e175f665` | `limen/heal-cifix-organvm-nexus--babel-alexandria-125-e175f665` | 0 | `3c65f20d924effa4` | 2 | 2 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-corpvs-testamentvm-511-0ae9eb8e` | `limen/heal-cifix-organvm-organvm-corpvs-testamentvm-511-0ae9eb8e` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-corpvs-testamentvm-511-cc58b96d` | `limen/limen-083-f6e2` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-100-93e5b4a5` | `limen/heal-cifix-organvm-organvm-engine-100-93e5b4a5` | 1 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-101-b739a03a` | `pr-101` | 3 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-101-c904d6f9` | `limen/heal-cifix-organvm-organvm-engine-101-c904d6f9` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-101-ea4a10a6` | `limen/heal-cifix-organvm-organvm-engine-101-ea4a10a6` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-101-f6982463` | `limen/heal-cifix-organvm-organvm-engine-101-f6982463` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-104-12075415` | `limen/heal-cifix-organvm-organvm-engine-104-12075415` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-104-dd154bce` | `pr-104` | 5 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-104-ed05f7dd` | `limen/heal-cifix-organvm-organvm-engine-104-ed05f7dd` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-105-0b8f68ed` | `limen/heal-cifix-organvm-organvm-engine-105-0b8f68ed` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-105-a7fcb622` | `pr-105-head` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-105-c5873560` | `limen/heal-cifix-organvm-organvm-engine-105-c5873560` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-105-c5873560/organvm-engine` | `limen/limen-050-4874` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-107-3af07d59` | `limen/heal-cifix-organvm-organvm-engine-107-3af07d59` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-107-3ce185c7` | `limen/heal-cifix-organvm-organvm-engine-107-3ce185c7` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-108-549cd029` | `pr-108` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-108-857e62e1` | `limen/heal-cifix-organvm-organvm-engine-108-857e62e1` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-108-d008ab8a` | `limen/heal-cifix-organvm-organvm-engine-108-d008ab8a` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-108-fc3c02b5` | `limen/heal-cifix-organvm-organvm-engine-108-fc3c02b5` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-109-0d0596f6` | `limen/heal-cifix-organvm-organvm-engine-109-0d0596f6` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-109-d6a542c2` | `limen/heal-cifix-organvm-organvm-engine-109-d6a542c2` | 1 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-110-1a697942` | `limen/heal-cifix-organvm-organvm-engine-110-1a697942` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-110-697941f0` | `limen/heal-cifix-organvm-organvm-engine-110-697941f0` | 44 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-110-cf645ef4` | `pr-110-branch` | 1 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-111-622a6492` | `limen/heal-cifix-organvm-organvm-engine-111-622a6492` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-111-842e51f5` | `limen/heal-cifix-organvm-organvm-engine-111-842e51f5` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-111-9cd68006` | `limen/heal-cifix-organvm-organvm-engine-111-9cd68006` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-113-88a01a9d` | `limen/heal-cifix-organvm-organvm-engine-113-88a01a9d` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-113-fa094f50` | `limen/heal-cifix-organvm-organvm-engine-113-fa094f50` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-124-e0bb2d06` | `pr-124` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-130-8a6060e4` | `pr-130` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-130-ec1fdfaf` | `limen/resolve-a-organvm-organvm-engine-117-ceab` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-136-c3d543d8` | `limen/jules-limen-067-1688` | 3 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-139-11d32b27` | `limen/resolve-a-organvm-organvm-engine-112-c362` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-139-9dbf53bf` | `limen/heal-cifix-organvm-organvm-engine-139-9dbf53bf` | 1 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-139-b438a568` | `limen/heal-cifix-organvm-organvm-engine-139-b438a568` | 1 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-143-a164221c` | `limen/heal-cifix-organvm-organvm-engine-143-a164221c` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-144-0ef4c596` | `limen/heal-cifix-organvm-organvm-engine-144-0ef4c596` | 2 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-144-6ffd7057` | `limen/heal-cifix-organvm-organvm-engine-144-6ffd7057` | 1 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-engine-144-e2096564` | `limen/heal-cifix-organvm-organvm-engine-144-e2096564` | 1 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-ontologia-10-0356e4b9` | `limen/heal-cifix-organvm-organvm-ontologia-10-0356e4b9` | 0 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-ontologia-10-64603ca7` | `pr-10` | 0 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-ontologia-10-be8406e3` | `limen/heal-cifix-organvm-organvm-ontologia-10-be8406e3` | 0 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-ontologia-11-2978d499` | `limen/heal-cifix-organvm-organvm-ontologia-11-2978d499` | 0 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-ontologia-11-55899198` | `limen/heal-cifix-organvm-organvm-ontologia-11-55899198` | 1 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-ontologia-11-a86cf99f` | `limen/heal-cifix-organvm-organvm-ontologia-11-a86cf99f` | 0 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-ontologia-11-f753ad04` | `limen/heal-cifix-organvm-organvm-ontologia-11-f753ad04` | 0 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-ontologia-12-2c2c85ba` | `limen/heal-cifix-organvm-organvm-ontologia-12-2c2c85ba` | 0 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-ontologia-12-c16ea5ad` | `limen/heal-cifix-organvm-organvm-ontologia-12-c16ea5ad` | 0 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-ontologia-13-517e2cb9` | `limen/heal-cifix-organvm-organvm-ontologia-13-517e2cb9` | 0 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-ontologia-13-5364f697` | `limen/heal-cifix-organvm-organvm-ontologia-13-5364f697` | 1 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-ontologia-13-953633bb` | `limen/heal-cifix-organvm-organvm-ontologia-13-953633bb` | 0 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-ontologia-13-c96051e5` | `limen/heal-cifix-organvm-organvm-ontologia-13-c96051e5` | 0 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-organvm-ontologia-13-ebb63927` | `limen/heal-cifix-organvm-organvm-ontologia-13-ebb63927` | 0 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-peer-audited--behavioral-blockchain-771-0433512f` | `limen/heal-cifix-organvm-peer-audited--behavioral-blockchain-771-0433512f` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-petasum-super-petasum-150-5f8db4ee` | `limen/heal-cifix-organvm-petasum-super-petasum-150-5f8db4ee` | 0 | `fe535f0cf3122457` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-petasum-super-petasum-150-bfefaf09` | `limen/heal-cifix-organvm-petasum-super-petasum-150-bfefaf09` | 0 | `fe535f0cf3122457` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-27-b0270e71` | `limen/heal-cifix-organvm-public-process-27-b0270e71` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-28-623757d1` | `limen/heal-cifix-organvm-public-process-28-623757d1` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-28-6f74f785` | `limen/heal-cifix-organvm-public-process-28-6f74f785` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-28-8f2fcfb3` | `limen/heal-cifix-organvm-public-process-28-8f2fcfb3` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-29-14210afa` | `limen/heal-cifix-organvm-public-process-29-14210afa` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-30-2b47c833` | `limen/heal-cifix-organvm-public-process-30-2b47c833` | 1 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-30-40a0fb19` | `limen/gh-organvm-public-process-14-ba69` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-30-40a0fb19/_pipeline` | `main` | 0 | `34967de00be14dea` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-30-40a0fb19/_standards` | `main` | 0 | `aa7c79f83dd0ff40` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-30-59ffa133` | `limen/heal-cifix-organvm-public-process-30-59ffa133` | 5 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-30-81b7e012` | `limen/heal-cifix-organvm-public-process-30-81b7e012` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-30-a53c362c` | `limen/heal-cifix-organvm-public-process-30-a53c362c` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-30-a53c362c/_pipeline` | `main` | 0 | `cb00a17712e577cc` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-30-a53c362c/_standards` | `main` | 0 | `f56297897bd5fbaa` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-31-20476025` | `limen/heal-cifix-organvm-public-process-31-20476025` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-31-2cb162ea` | `limen/heal-cifix-organvm-public-process-31-2cb162ea` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-31-42c38b3d` | `limen/gh-organvm-public-process-13-62ee` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-31-42c38b3d/_pipeline` | `main` | 0 | `cb00a17712e577cc` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-31-42c38b3d/_standards` | `main` | 0 | `f56297897bd5fbaa` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-31-5a5632ef` | `limen/heal-cifix-organvm-public-process-31-5a5632ef` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-31-5c9641e1` | `limen/heal-cifix-organvm-public-process-31-5c9641e1` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-31-ccd6cf45` | `fix-pr31` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-31-cfc2a87e` | `limen/heal-cifix-organvm-public-process-31-cfc2a87e` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-33-319b4349` | `limen/heal-cifix-organvm-public-process-33-319b4349` | 1 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-33-47cc8080` | `limen/heal-cifix-organvm-public-process-33-47cc8080` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-33-6d0bb144` | `pr-33` | 2 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-33-6d0bb144/_pipeline` | `main` | 0 | `34967de00be14dea` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-33-6d0bb144/_standards` | `main` | 0 | `aa7c79f83dd0ff40` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-33-ac0cc087` | `limen/heal-cifix-organvm-public-process-33-ac0cc087` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-33-cb1d50b3` | `limen/heal-cifix-organvm-public-process-33-cb1d50b3` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-33-e4144c00` | `limen/heal-cifix-organvm-public-process-33-e4144c00` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-33-f04f03c5` | `limen/gh-organvm-public-process-17-1446` | 1 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-33-f04f03c5/_pipeline` | `main` | 0 | `34967de00be14dea` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-34-61614a22` | `pr-34` | 7 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-34-61614a22/_pipeline` | `main` | 0 | `34967de00be14dea` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-34-61614a22/_standards` | `main` | 0 | `aa7c79f83dd0ff40` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-34-752f6f37` | `limen/heal-cifix-organvm-public-process-34-752f6f37` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-34-90c17525` | `limen/heal-cifix-organvm-public-process-34-90c17525` | 1 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-34-b0f362dc` | `limen/gh-organvm-public-process-15-5f5f` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-34-b0f362dc/_pipeline` | `main` | 0 | `34967de00be14dea` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-process-34-db165650` | `limen/heal-cifix-organvm-public-process-34-db165650` | 0 | `b5bc8905138cc474` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-record-data-scrapper-315-92684314` | `limen/heal-cifix-organvm-public-record-data-scrapper-315-92684314` | 0 | `12e871c1ef44d032` | 2 | 3 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-record-data-scrapper-315-ac6c61f8` | `limen/heal-cifix-organvm-public-record-data-scrapper-315-ac6c61f8` | 0 | `12e871c1ef44d032` | 2 | 3 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-record-data-scrapper-315-d69452a0` | `limen/heal-cifix-organvm-public-record-data-scrapper-315-d69452a0` | 0 | `12e871c1ef44d032` | 2 | 3 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-record-data-scrapper-337-9a71dedd` | `limen/heal-cifix-organvm-public-record-data-scrapper-337-9a71dedd` | 0 | `12e871c1ef44d032` | 2 | 3 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-record-data-scrapper-337-cf34b72a` | `limen/heal-cifix-organvm-public-record-data-scrapper-337-cf34b72a` | 0 | `12e871c1ef44d032` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-record-data-scrapper-338-2d4c55b7` | `limen/heal-cifix-organvm-public-record-data-scrapper-338-2d4c55b7` | 0 | `12e871c1ef44d032` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-public-record-data-scrapper-338-39c66ec8` | `limen/heal-cifix-organvm-public-record-data-scrapper-338-39c66ec8` | 0 | `12e871c1ef44d032` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-recursive-engine--generative-entity-15-18929ff6` | `limen/heal-cifix-organvm-recursive-engine--generative-entity-15-18929ff6` | 0 | `2cd3e5e4ecac331b` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-recursive-engine--generative-entity-15-6f03ec2d` | `fix/remove-conflicting-codeql-workflow` | 4 | `2cd3e5e4ecac331b` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-recursive-engine--generative-entity-15-a915d1fb` | `pr-15-local` | 0 | `2cd3e5e4ecac331b` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-recursive-engine--generative-entity-18-2296dd3c` | `limen/heal-cifix-organvm-recursive-engine--generative-entity-18-2296dd3c` | 0 | `2cd3e5e4ecac331b` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-scale-threshold-emergence-4-cf350735` | `limen/heal-cifix-organvm-scale-threshold-emergence-4-cf350735` | 1 | `788150fdb9c0d09f` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-schema-definitions-7-4535f14e` | `limen/gen-a-organvm-schema-definitions-test-coverage-0620-429f` | 0 | `798adafdd0d63567` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-schema-definitions-7-535c5b92` | `limen/heal-cifix-organvm-schema-definitions-7-535c5b92` | 1 | `798adafdd0d63567` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-schema-definitions-7-9edff626` | `pr-7` | 0 | `798adafdd0d63567` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-schema-definitions-7-f11dac25` | `limen/heal-cifix-organvm-schema-definitions-7-f11dac25` | 0 | `798adafdd0d63567` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-system-governance-framework-41-90094af7` | `limen/heal-cifix-organvm-system-governance-framework-41-90094af7` | 0 | `3e6baf0c2c1a47f7` | 3 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-system-governance-framework-43-92be8b62` | `limen/heal-cifix-organvm-system-governance-framework-43-92be8b62` | 0 | `3e6baf0c2c1a47f7` | 3 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-system-governance-framework-43-e369b224` | `limen/discover-organvm-system-governance-framework-3ef9` | 0 | `3e6baf0c2c1a47f7` | 3 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-tab-bookmark-manager-28-7a929ab2` | `limen/heal-cifix-organvm-tab-bookmark-manager-28-7a929ab2` | 0 | `be7d9b3ddc760187` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-tab-bookmark-manager-28-7db92014` | `limen/gen-a-organvm-tab-bookmark-manager-test-coverage-0620-7a53` | 0 | `be7d9b3ddc760187` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-tab-bookmark-manager-28-c39923bb` | `limen/heal-cifix-organvm-tab-bookmark-manager-28-c39923bb` | 0 | `be7d9b3ddc760187` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-tab-bookmark-manager-28-e70c9bd1` | `pr-28` | 0 | `be7d9b3ddc760187` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-tab-bookmark-manager-28-fd8092e0` | `limen/heal-cifix-organvm-tab-bookmark-manager-28-fd8092e0` | 0 | `be7d9b3ddc760187` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-31-10c2600d` | `limen/gen-organvm-the-invisible-ledger-security-0622-559c` | 0 | `2d479e58d4de5dc4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-31-33bdef22` | `limen/heal-cifix-organvm-the-invisible-ledger-31-33bdef22` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-31-3c7d35d1` | `limen/heal-cifix-organvm-the-invisible-ledger-31-3c7d35d1` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-31-46d7cceb` | `limen/heal-cifix-organvm-the-invisible-ledger-31-46d7cceb` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-31-4b260616` | `pr-31` | 0 | `2d479e58d4de5dc4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-31-a54d7c57` | `limen/heal-cifix-organvm-the-invisible-ledger-31-a54d7c57` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-31-ae9a368f` | `limen/heal-cifix-organvm-the-invisible-ledger-31-ae9a368f` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-31-b0ae2dce` | `limen/heal-cifix-organvm-the-invisible-ledger-31-b0ae2dce` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-31-ca72cc63` | `limen/heal-cifix-organvm-the-invisible-ledger-31-ca72cc63` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-31-e4fdca30` | `limen/heal-cifix-organvm-the-invisible-ledger-31-e4fdca30` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-31-ff889566` | `limen/heal-cifix-organvm-the-invisible-ledger-31-ff889566` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-39-15c4bcf0` | `limen/heal-cifix-organvm-the-invisible-ledger-39-15c4bcf0` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-39-50be9f89` | `limen/heal-cifix-organvm-the-invisible-ledger-39-50be9f89` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-39-50be9f89/pr39.local` | `limen/rev-organvm-the-invisible-ledger-revenue-ship-0623-69f4` | 1 | `2d479e58d4de5dc4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-39-6536d9a4` | `limen/heal-cifix-organvm-the-invisible-ledger-39-6536d9a4` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-41-3e9c41ed` | `limen/heal-cifix-organvm-the-invisible-ledger-41-3e9c41ed` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-41-52c32932` | `limen/heal-cifix-organvm-the-invisible-ledger-41-52c32932` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-41-5fa12249` | `limen/heal-cifix-organvm-the-invisible-ledger-41-5fa12249` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-41-682764a8` | `limen/heal-cifix-organvm-the-invisible-ledger-41-682764a8` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-41-7196be5a` | `limen/heal-cifix-organvm-the-invisible-ledger-41-7196be5a` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-41-7cf3bf6d` | `limen/heal-cifix-organvm-the-invisible-ledger-41-7cf3bf6d` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-41-92bdce89` | `limen/heal-cifix-organvm-the-invisible-ledger-41-92bdce89` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-41-a5f34e9f` | `limen/heal-cifix-organvm-the-invisible-ledger-41-a5f34e9f` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-41-cc161bae` | `limen/heal-cifix-organvm-the-invisible-ledger-41-cc161bae` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-41-d8014107` | `limen/heal-cifix-organvm-the-invisible-ledger-41-d8014107` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-41-e9233240` | `limen/heal-cifix-organvm-the-invisible-ledger-41-e9233240` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-41-fd1b700f` | `limen/heal-cifix-organvm-the-invisible-ledger-41-fd1b700f` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-42-07e936e9` | `fix/pr-42-empty-interface` | 0 | `2d479e58d4de5dc4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-42-733f427c` | `limen/heal-cifix-organvm-the-invisible-ledger-42-733f427c` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-46-1eecc65a` | `limen/heal-cifix-organvm-the-invisible-ledger-46-1eecc65a` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-46-3a23b0e3` | `limen/heal-cifix-organvm-the-invisible-ledger-46-3a23b0e3` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-46-5dda914e` | `limen/heal-cifix-organvm-the-invisible-ledger-46-5dda914e` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-46-93aec92b` | `limen/heal-cifix-organvm-the-invisible-ledger-46-93aec92b` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-46-b8ce69ac` | `limen/heal-cifix-organvm-the-invisible-ledger-46-b8ce69ac` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-46-c9301f3f` | `limen/gen-organvm-the-invisible-ledger-test-coverage-0624-cf4c` | 0 | `2d479e58d4de5dc4` | 2 | 3 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-46-e71d0a16` | `limen/heal-cifix-organvm-the-invisible-ledger-46-e71d0a16` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-47-03853a91` | `limen/heal-cifix-organvm-the-invisible-ledger-47-03853a91` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-47-0e5032f0` | `limen/heal-cifix-organvm-the-invisible-ledger-47-0e5032f0` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-47-3bb8f437` | `limen/heal-cifix-organvm-the-invisible-ledger-47-3bb8f437` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-47-7cf3ee3d` | `limen/heal-cifix-organvm-the-invisible-ledger-47-7cf3ee3d` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-47-9d5f75b6` | `limen/heal-cifix-organvm-the-invisible-ledger-47-9d5f75b6` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-47-a738c234` | `limen/heal-cifix-organvm-the-invisible-ledger-47-a738c234` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-47-b16947c5` | `limen/heal-cifix-organvm-the-invisible-ledger-47-b16947c5` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-47-c07b6c24` | `limen/gen-organvm-the-invisible-ledger-docs-0624-9842` | 0 | `2d479e58d4de5dc4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-47-c1a1e571` | `limen/heal-cifix-organvm-the-invisible-ledger-47-c1a1e571` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-47-c234c6a5` | `limen/heal-cifix-organvm-the-invisible-ledger-47-c234c6a5` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-47-e600ef2c` | `limen/heal-cifix-organvm-the-invisible-ledger-47-e600ef2c` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-47-e77dfe37` | `limen/heal-cifix-organvm-the-invisible-ledger-47-e77dfe37` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-47-eb3de1fa` | `limen/heal-cifix-organvm-the-invisible-ledger-47-eb3de1fa` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-47-fdf1c421` | `limen/heal-cifix-organvm-the-invisible-ledger-47-fdf1c421` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-57-640a827c` | `limen/gen-organvm-the-invisible-ledger-typing-0626-fb12` | 2 | `2d479e58d4de5dc4` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-57-7bbacc21` | `limen/heal-cifix-organvm-the-invisible-ledger-57-7bbacc21` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-57-944caf95` | `limen/heal-cifix-organvm-the-invisible-ledger-57-944caf95` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-57-99c7f8a5` | `limen/heal-cifix-organvm-the-invisible-ledger-57-99c7f8a5` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-57-fdd43ffc` | `limen/heal-cifix-organvm-the-invisible-ledger-57-fdd43ffc` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-58-2becf1e0` | `limen/gen-organvm-the-invisible-ledger-test-coverage-0626-1fd6` | 1 | `2d479e58d4de5dc4` | 2 | 3 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-58-41af0681` | `limen/heal-cifix-organvm-the-invisible-ledger-58-41af0681` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-58-9ce65666` | `limen/heal-cifix-organvm-the-invisible-ledger-58-9ce65666` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-58-a7fed6d5` | `limen/heal-cifix-organvm-the-invisible-ledger-58-a7fed6d5` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-58-b9160ce8` | `limen/heal-cifix-organvm-the-invisible-ledger-58-b9160ce8` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-59-0010bd7a` | `limen/heal-cifix-organvm-the-invisible-ledger-59-0010bd7a` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-59-0651f302` | `limen/heal-cifix-organvm-the-invisible-ledger-59-0651f302` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-59-1f7b5d93` | `limen/heal-cifix-organvm-the-invisible-ledger-59-1f7b5d93` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-59-654d64ec` | `limen/heal-cifix-organvm-the-invisible-ledger-59-654d64ec` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-59-cd5f956f` | `limen/heal-cifix-organvm-the-invisible-ledger-59-cd5f956f` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-the-invisible-ledger-59-d9a8174d` | `limen/jules-rev-organvm-the-invisible-ledger-revenue-ship-0626-122e` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-trendpulse-8-90939f40` | `limen/heal-cifix-organvm-trendpulse-8-90939f40` | 0 | `e435caaf27abdb05` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-mail--automation-118-26b3e882` | `limen/heal-cifix-organvm-universal-mail--automation-118-26b3e882` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-mail--automation-118-9f686157` | `limen/heal-cifix-organvm-universal-mail--automation-118-9f686157` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-mail--automation-118-bae8982d` | `limen/heal-cifix-organvm-universal-mail--automation-118-bae8982d` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-mail--automation-118-d9aacc2c` | `limen/heal-cifix-organvm-universal-mail--automation-118-d9aacc2c` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-mail--automation-131-50de9c5b` | `limen/heal-cifix-organvm-universal-mail--automation-131-50de9c5b` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-mail--automation-131-77a85c43` | `limen/heal-cifix-organvm-universal-mail--automation-131-77a85c43` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-mail--automation-135-c74107c0` | `limen/heal-cifix-organvm-universal-mail--automation-135-c74107c0` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-mail--automation-135-d6b379ca` | `limen/heal-cifix-organvm-universal-mail--automation-135-d6b379ca` | 1 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-node-network-10-4ada8d59` | `limen/heal-cifix-organvm-universal-node-network-10-4ada8d59` | 0 | `c631051b0d8b8e54` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-node-network-10-aafa0986` | `limen/heal-cifix-organvm-universal-node-network-10-aafa0986` | 0 | `c631051b0d8b8e54` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-node-network-11-36b31ca9` | `limen/heal-cifix-organvm-universal-node-network-11-36b31ca9` | 0 | `c631051b0d8b8e54` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-node-network-7-537a2cef` | `limen/heal-cifix-organvm-universal-node-network-7-537a2cef` | 0 | `c631051b0d8b8e54` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-node-network-7-58e7652e` | `pr-7-head` | 0 | `c631051b0d8b8e54` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-node-network-7-b81430bc` | `limen/heal-cifix-organvm-universal-node-network-7-b81430bc` | 0 | `c631051b0d8b8e54` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-universal-node-network-9-570847b2` | `limen/heal-cifix-organvm-universal-node-network-9-570847b2` | 0 | `c631051b0d8b8e54` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-cifix-organvm-vigiles-aeternae--agon-cosmogonicum-7-215a1487` | `limen/heal-cifix-organvm-vigiles-aeternae--agon-cosmogonicum-7-215a1487` | 0 | `a76be84a7b9175f9` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-vigiles-aeternae--agon-cosmogonicum-7-997907fd` | `limen/heal-cifix-organvm-vigiles-aeternae--agon-cosmogonicum-7-997907fd` | 0 | `a76be84a7b9175f9` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-vigiles-aeternae--agon-cosmogonicum-7-e9da4875` | `limen/heal-cifix-organvm-vigiles-aeternae--agon-cosmogonicum-7-e9da4875` | 0 | `a76be84a7b9175f9` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-cifix-organvm-writelens-6-022938d8` | `limen/bld-writelens-ci-5acc` | 0 | `25a3228dc037176b` | 1 | 0 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-103-e7e058ff` | `limen/heal-rebase-4444j99-hokage-chess-103-e7e058ff` | 1 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-103-f5b1e4f4` | `limen/heal-rebase-4444j99-hokage-chess-103-f5b1e4f4` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-107-a1b561eb` | `pr-107` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 0 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-107-f3a0ded1` | `limen/heal-rebase-4444j99-hokage-chess-107-f3a0ded1` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-108-6253b273` | `limen/heal-rebase-4444j99-hokage-chess-108-6253b273` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-108-9266466c` | `limen/heal-rebase-4444j99-hokage-chess-108-9266466c` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-114-fb8e1c94` | `limen/heal-rebase-4444j99-hokage-chess-114-fb8e1c94` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-121-22d63bd9` | `limen/heal-rebase-4444j99-hokage-chess-121-22d63bd9` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 0 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-121-89f977f6` | `limen/heal-rebase-4444j99-hokage-chess-121-89f977f6` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 0 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-136-1cbf3b75` | `limen/heal-rebase-4444j99-hokage-chess-136-1cbf3b75` | 1 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-139-07d2980f` | `limen/jules-gh-4444j99-hokage-chess-37-f7a9` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-139-0e6f6d4a` | `limen/heal-rebase-4444j99-hokage-chess-139-0e6f6d4a` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-139-54cda4e9` | `limen/heal-rebase-4444j99-hokage-chess-139-54cda4e9` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-139-aa978656` | `limen/heal-rebase-4444j99-hokage-chess-139-aa978656` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-139-c0e277d3` | `limen/heal-rebase-4444j99-hokage-chess-139-c0e277d3` | 1 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-139-d6ff41fc` | `limen/heal-rebase-4444j99-hokage-chess-139-d6ff41fc` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-139-e3d6cd6e` | `limen/heal-rebase-4444j99-hokage-chess-139-e3d6cd6e` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-85-aee53ecd` | `limen/heal-rebase-4444j99-hokage-chess-85-aee53ecd` | 1 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-89-0448f70e` | `limen/heal-rebase-4444j99-hokage-chess-89-0448f70e` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 0 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-89-3e98bf07` | `limen/heal-rebase-4444j99-hokage-chess-89-3e98bf07` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-89-77f50ed3` | `limen/heal-rebase-4444j99-hokage-chess-89-77f50ed3` | 1 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-94-13cf83c7` | `limen/heal-rebase-4444j99-hokage-chess-94-13cf83c7` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-4444j99-hokage-chess-94-b27fb091` | `limen/heal-rebase-4444j99-hokage-chess-94-b27fb091` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-4444j99.github.io-9-77ec7ab8` | `limen/heal-rebase-organvm-4444j99.github.io-9-77ec7ab8` | 0 | `b3e5c984da7b9d16` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-4444j99.github.io-9-8c34d9b5` | `limen/heal-rebase-organvm-4444j99.github.io-9-8c34d9b5` | 0 | `b3e5c984da7b9d16` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-4444j99.github.io-9-db69ae03` | `limen/heal-rebase-organvm-4444j99.github.io-9-db69ae03` | 0 | `b3e5c984da7b9d16` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-29-13582938` | `limen/heal-rebase-organvm-a-i-chat--exporter-29-13582938` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-30-74c22c45` | `limen/heal-rebase-organvm-a-i-chat--exporter-30-74c22c45` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-30-760b4a89` | `limen/heal-rebase-organvm-a-i-chat--exporter-30-760b4a89` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-30-83dc3d03` | `limen/heal-rebase-organvm-a-i-chat--exporter-30-83dc3d03` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-30-88d45188` | `limen/heal-rebase-organvm-a-i-chat--exporter-30-88d45188` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-30-ace9199f` | `limen/heal-rebase-organvm-a-i-chat--exporter-30-ace9199f` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-30-b99de3e7` | `limen/heal-rebase-organvm-a-i-chat--exporter-30-b99de3e7` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-30-c96e4a23` | `HEAD` | 15 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-30-ec506add` | `limen/heal-rebase-organvm-a-i-chat--exporter-30-ec506add` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-31-78a6445b` | `limen/heal-rebase-organvm-a-i-chat--exporter-31-78a6445b` | 16 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-61-6eab8b67` | `limen/heal-rebase-organvm-a-i-chat--exporter-61-6eab8b67` | 1 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-66-71c4747e` | `limen/heal-rebase-organvm-a-i-chat--exporter-66-71c4747e` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-66-80a17af2` | `limen/rev-organvm-a-i-chat--exporter-revenue-funding-0623-ecb9` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-66-97a71482` | `limen/heal-rebase-organvm-a-i-chat--exporter-66-97a71482` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-66-d443d50d` | `limen/heal-rebase-organvm-a-i-chat--exporter-66-d443d50d` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-66-ea484c96` | `limen/heal-rebase-organvm-a-i-chat--exporter-66-ea484c96` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-66-f4469c47` | `limen/heal-rebase-organvm-a-i-chat--exporter-66-f4469c47` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-a-i-chat--exporter-66-fbdc462f` | `limen/heal-rebase-organvm-a-i-chat--exporter-66-fbdc462f` | 0 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-dot-github--logos-37-d981b37b` | `limen/gh-organvm-dot-github-logos-18-dad8` | 0 | `60434759f152cbc9` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-kerygma-profiles-6-1eaad9e8` | `limen/heal-rebase-organvm-kerygma-profiles-6-1eaad9e8` | 0 | `8f16df9dceb1f925` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-kerygma-profiles-6-af889f90` | `discover-kerygma-profiles-value` | 0 | `8f16df9dceb1f925` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-kerygma-profiles-7-2b25ce2c` | `auto-discovery-styx` | 0 | `8f16df9dceb1f925` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-kerygma-profiles-7-46a39587` | `limen/heal-rebase-organvm-kerygma-profiles-7-46a39587` | 0 | `8f16df9dceb1f925` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-kerygma-profiles-7-9347db5b` | `limen/heal-rebase-organvm-kerygma-profiles-7-9347db5b` | 0 | `8f16df9dceb1f925` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-kerygma-profiles-7-9d6deef6` | `limen/heal-rebase-organvm-kerygma-profiles-7-9d6deef6` | 0 | `8f16df9dceb1f925` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-kerygma-profiles-7-af89aa48` | `limen/heal-rebase-organvm-kerygma-profiles-7-af89aa48` | 0 | `8f16df9dceb1f925` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-limen-367-19c516cc` | `limen/heal-rebase-organvm-limen-367-19c516cc` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-limen-367-26b9ba59` | `limen/heal-rebase-organvm-limen-367-26b9ba59` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-limen-367-d98b18ba` | `limen/heal-rebase-organvm-limen-367-d98b18ba` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-limen-377-096a2a28` | `limen/heal-rebase-organvm-limen-377-096a2a28` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-limen-377-572af967` | `limen/heal-rebase-organvm-limen-377-572af967` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-limen-379-18472697` | `limen/heal-rebase-organvm-limen-379-18472697` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-limen-379-6310d015` | `limen/heal-rebase-organvm-limen-379-6310d015` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-limen-387-5b67cb79` | `limen/heal-rebase-organvm-limen-387-5b67cb79` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-limen-387-d8c3a97a` | `limen/heal-rebase-organvm-limen-387-d8c3a97a` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-491-26e2f5c1` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-491-26e2f5c1` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-491-32cb3228` | `claude/github-issues-review-fxajuw` | 554 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-491-80282be3` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-491-80282be3` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-491-8723a4a1` | `pr-491` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-491-c89c6254` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-491-c89c6254` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-495-3ee35262` | `limen/limen-030-7da3` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-495-464b619c` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-495-464b619c` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-495-4bffd30d` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-495-4bffd30d` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-495-51e4073a` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-495-51e4073a` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-495-e5ab1421` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-495-e5ab1421` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-496-5891b9ad` | `limen/limen-082-f016` | 1 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-496-621fc169` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-496-621fc169` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-496-e5e1e40a` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-496-e5e1e40a` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-496-f2025400` | `limen-082-f016` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-498-1b9a3103` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-498-1b9a3103` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-498-1faa3da6` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-498-1faa3da6` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-498-7bc25e20` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-498-7bc25e20` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-498-b4cabe27` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-498-b4cabe27` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-498-d5bad1dd` | `limen/limen-084-e155` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-505-26644982` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-505-26644982` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-505-37078e58` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-505-37078e58` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-505-390d3afa` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-505-390d3afa` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-organvm-corpvs-testamentvm-505-6d713222` | `limen/heal-rebase-organvm-organvm-corpvs-testamentvm-505-6d713222` | 0 | `a64bc49d0d19b82a` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-payrail-4-91d2e253` | `limen/heal-rebase-organvm-payrail-4-91d2e253` | 1 | `4938273bf11483d6` | 2 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-711-893d6d0d` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-711-893d6d0d` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-08cbe1c8` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-08cbe1c8` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-19a68f18` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-19a68f18` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-25aaded7` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-25aaded7` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-3fb5c5ac` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-3fb5c5ac` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-540caff3` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-540caff3` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-740e0af7` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-740e0af7` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-9797c829` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-9797c829` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-a265ed3f` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-a265ed3f` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-c2169a3e` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-c2169a3e` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-dd7791ce` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-dd7791ce` | 1 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-713-dd7791ce/.codex-tmp/pr713-repo` | `pr713-rebased` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-716-90a560f8` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-716-90a560f8` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-721-4cf098da` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-721-4cf098da` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-721-68871455` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-721-68871455` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-721-d20ed684` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-721-d20ed684` | 1 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-726-b65d6cfc` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-726-b65d6cfc` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-726-f040bf3f` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-726-f040bf3f` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-728-43bb34fa` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-728-43bb34fa` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-728-5dc1e570` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-728-5dc1e570` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-728-6a6303e6` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-728-6a6303e6` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-728-6d23aa76` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-728-6d23aa76` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-728-7e560a36` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-728-7e560a36` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-peer-audited--behavioral-blockchain-757-62982f1d` | `limen/heal-rebase-organvm-peer-audited--behavioral-blockchain-757-62982f1d` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-rules-system-bound-10-1ebaf735` | `limen/heal-rebase-organvm-rules-system-bound-10-1ebaf735` | 0 | `2cf049847729f153` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-rules-system-bound-10-ae4ac16b` | `limen/heal-rebase-organvm-rules-system-bound-10-ae4ac16b` | 0 | `2cf049847729f153` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-rules-system-bound-10-c2d23459` | `limen/heal-rebase-organvm-rules-system-bound-10-c2d23459` | 1 | `2cf049847729f153` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-rules-system-bound-10-eb00b73c` | `limen/resolve-organvm-i-theoria-rules-system-bound-8-6f48` | 0 | `2cf049847729f153` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-rules-system-bound-10-eba6fc9e` | `pr-10-work` | 0 | `2cf049847729f153` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-rules-system-bound-5-32379ac2` | `limen/heal-rebase-organvm-rules-system-bound-5-32379ac2` | 0 | `2cf049847729f153` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-rules-system-bound-6-1edc9fe6` | `limen/heal-rebase-organvm-rules-system-bound-6-1edc9fe6` | 0 | `2cf049847729f153` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-rules-system-bound-6-8d4ebb37` | `limen/heal-rebase-organvm-rules-system-bound-6-8d4ebb37` | 0 | `2cf049847729f153` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-rules-system-bound-6-9f7690fb` | `limen/jules-gh-organvm-i-theoria-rules-system-bound-1-18f1` | 0 | `2cf049847729f153` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-rules-system-bound-6-e5c003c7` | `limen/heal-rebase-organvm-rules-system-bound-6-e5c003c7` | 0 | `2cf049847729f153` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-rules-system-bound-9-28a32b4f` | `limen/heal-rebase-organvm-rules-system-bound-9-28a32b4f` | 0 | `2cf049847729f153` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-rules-system-bound-9-2fa2012d` | `limen/heal-rebase-organvm-rules-system-bound-9-2fa2012d` | 0 | `2cf049847729f153` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-rules-system-bound-9-c3f5163e` | `limen/heal-rebase-organvm-rules-system-bound-9-c3f5163e` | 1 | `2cf049847729f153` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-the-invisible-ledger-52-f4c5a0cd` | `limen/heal-rebase-organvm-the-invisible-ledger-52-f4c5a0cd` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-the-invisible-ledger-64-081af90f` | `limen/heal-rebase-organvm-the-invisible-ledger-64-081af90f` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-the-invisible-ledger-64-3ef1b1e0` | `limen/heal-rebase-organvm-the-invisible-ledger-64-3ef1b1e0` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-the-invisible-ledger-64-ad09114a` | `limen/heal-rebase-organvm-the-invisible-ledger-64-ad09114a` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-the-invisible-ledger-64-bac628c5` | `limen/heal-rebase-organvm-the-invisible-ledger-64-bac628c5` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-the-invisible-ledger-64-c3b7ea2e` | `limen/heal-rebase-organvm-the-invisible-ledger-64-c3b7ea2e` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-the-invisible-ledger-64-c8cfda6f` | `limen/heal-rebase-organvm-the-invisible-ledger-64-c8cfda6f` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-universal-mail--automation-119-71555e05` | `limen/heal-rebase-organvm-universal-mail--automation-119-71555e05` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-universal-mail--automation-119-ba27962d` | `limen/heal-rebase-organvm-universal-mail--automation-119-ba27962d` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-universal-mail--automation-119-fc65c6fb` | `limen/heal-rebase-organvm-universal-mail--automation-119-fc65c6fb` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-universal-mail--automation-130-17d2410f` | `limen/recover-gen-organvm-universal-mail--automation-security-0626-b4de` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-universal-mail--automation-130-22b6a786` | `limen/heal-rebase-organvm-universal-mail--automation-130-22b6a786` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-universal-mail--automation-130-60f011ef` | `limen/heal-rebase-organvm-universal-mail--automation-130-60f011ef` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-universal-mail--automation-133-9a3009da` | `limen/heal-rebase-organvm-universal-mail--automation-133-9a3009da` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-universal-mail--automation-133-bcd00c3c` | `limen/heal-rebase-organvm-universal-mail--automation-133-bcd00c3c` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-universal-mail--automation-134-087b16ce` | `limen/heal-rebase-organvm-universal-mail--automation-134-087b16ce` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-universal-mail--automation-134-e483b06c` | `limen/heal-rebase-organvm-universal-mail--automation-134-e483b06c` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-universal-mail--automation-134-e544ecb8` | `pr-134` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-vulnpulse-12-7834f24e` | `limen/heal-rebase-organvm-vulnpulse-12-7834f24e` | 0 | `e684d0fa84a76e41` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-vulnpulse-12-8d0598a5` | `limen/heal-rebase-organvm-vulnpulse-12-8d0598a5` | 0 | `e684d0fa84a76e41` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-writelens-5-c58bf555` | `limen/heal-rebase-organvm-writelens-5-c58bf555` | 0 | `25a3228dc037176b` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-writelens-7-c49fac4d` | `limen/heal-rebase-organvm-writelens-7-c49fac4d` | 0 | `25a3228dc037176b` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/.limen-worktrees/heal-rebase-organvm-writelens-8-8bcd55d1` | `limen/heal-rebase-organvm-writelens-8-8bcd55d1` | 0 | `25a3228dc037176b` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-your-fit-tailored-15-3def5941` | `limen/heal-rebase-organvm-your-fit-tailored-15-3def5941` | 0 | `7a48c6977bec4228` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-your-fit-tailored-15-5f39fd5e` | `limen/heal-rebase-organvm-your-fit-tailored-15-5f39fd5e` | 0 | `7a48c6977bec4228` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-your-fit-tailored-15-fa5d798d` | `limen/heal-rebase-organvm-your-fit-tailored-15-fa5d798d` | 0 | `7a48c6977bec4228` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-organvm-your-fit-tailored-15-fad950e3` | `limen/heal-rebase-organvm-your-fit-tailored-15-fad950e3` | 0 | `7a48c6977bec4228` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-stale-organvm-limen-383-501a04db` | `limen/heal-rebase-stale-organvm-limen-383-501a04db` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/heal-rebase-stale-organvm-limen-383-a435aada` | `limen/heal-rebase-stale-organvm-limen-383-a435aada` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-aw-mail-historical-backlog-083a` | `limen/jules-aw-mail-historical-backlog-083a` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-aw-mail-historical-backlog-1f7d` | `limen/jules-aw-mail-historical-backlog-1f7d` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-aw-mail-historical-backlog-3a0b` | `limen/jules-aw-mail-historical-backlog-3a0b` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-aw-mail-historical-backlog-43fd` | `limen/jules-aw-mail-historical-backlog-43fd` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-aw-mail-historical-backlog-4c02` | `limen/jules-aw-mail-historical-backlog-4c02` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/limen_jules-aw-mail-historical-backlog-51e4` | `limen/jules-aw-mail-historical-backlog-51e4` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-aw-mail-historical-backlog-9f1d` | `limen/jules-aw-mail-historical-backlog-9f1d` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-aw-mail-historical-backlog-c97e` | `limen/jules-aw-mail-historical-backlog-c97e` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-aw-mail-historical-backlog-e50f` | `limen/jules-aw-mail-historical-backlog-e50f` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/limen_jules-gh-4444j99-hokage-chess-39-c953` | `limen/jules-gh-4444j99-hokage-chess-39-c953` | 0 | `6bd578f7e3df4dc0` | 2 | 3 | 0 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-heal-cifix-organvm-bountyscope-12-7d22` | `limen/jules-heal-cifix-organvm-bountyscope-12-7d22` | 0 | `26a8234de5ed9c0b` | 2 | 4 | 2 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-heal-cifix-organvm-domus-genoma-124-8c36` | `limen/jules-heal-cifix-organvm-domus-genoma-124-8c36` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-heal-cifix-organvm-limen-424-6357` | `limen/jules-heal-cifix-organvm-limen-424-6357` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-heal-cifix-organvm-organvm-engine-109-60aa` | `limen/jules-heal-cifix-organvm-organvm-engine-109-60aa` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-heal-cifix-organvm-organvm-engine-139-7f50` | `limen/jules-heal-cifix-organvm-organvm-engine-139-7f50` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-heal-cifix-organvm-organvm-engine-144-db4a` | `limen/jules-heal-cifix-organvm-organvm-engine-144-db4a` | 0 | `d89ad70239309dfe` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-heal-cifix-organvm-organvm-ontologia-11-b2f0` | `limen/jules-heal-cifix-organvm-organvm-ontologia-11-b2f0` | 0 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-heal-cifix-organvm-organvm-ontologia-13-ccf7` | `limen/jules-heal-cifix-organvm-organvm-ontologia-13-ccf7` | 0 | `66cfe72c11d426df` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-heal-cifix-organvm-public-record-data-scrapper-336-9d66` | `limen/jules-heal-cifix-organvm-public-record-data-scrapper-336-9d66` | 0 | `12e871c1ef44d032` | 2 | 3 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/limen_jules-heal-cifix-organvm-trendpulse-6-fd32` | `limen/jules-heal-cifix-organvm-trendpulse-6-fd32` | 0 | `e435caaf27abdb05` | 2 | 4 | 2 | `remote-present` |
 | `~/Workspace/.limen-worktrees/limen_jules-heal-rebase-organvm-payrail-4-d50b` | `limen/jules-heal-rebase-organvm-payrail-4-d50b` | 0 | `4938273bf11483d6` | 2 | 0 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-heal-rebase-organvm-your-fit-tailored-15-0891` | `limen/jules-heal-rebase-organvm-your-fit-tailored-15-0891` | 0 | `7a48c6977bec4228` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-org-contributions-organ-deepen-0704-7930` | `limen/jules-org-contributions-organ-deepen-0704-7930` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-org-health-organ-kernel-0630-0289` | `limen/jules-org-health-organ-kernel-0630-0289` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-org-health-organ-kernel-0630-02b9` | `limen/jules-org-health-organ-kernel-0630-02b9` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-org-health-organ-kernel-0630-02fb` | `limen/jules-org-health-organ-kernel-0630-02fb` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/limen_jules-org-health-organ-kernel-0630-1481` | `limen/jules-org-health-organ-kernel-0630-1481` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/limen_jules-org-health-organ-kernel-0630-274f` | `limen/jules-org-health-organ-kernel-0630-274f` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-org-health-organ-kernel-0630-47a3` | `limen/jules-org-health-organ-kernel-0630-47a3` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-org-health-organ-kernel-0630-5341` | `limen/jules-org-health-organ-kernel-0630-5341` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-org-health-organ-kernel-0630-6ef8` | `limen/jules-org-health-organ-kernel-0630-6ef8` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-org-health-organ-kernel-0630-7bbc` | `limen/jules-org-health-organ-kernel-0630-7bbc` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/limen_jules-org-health-organ-kernel-0630-8195` | `limen/jules-org-health-organ-kernel-0630-8195` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-org-health-organ-kernel-0630-9d90` | `limen/jules-org-health-organ-kernel-0630-9d90` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/limen_jules-org-health-organ-kernel-0630-a46c` | `limen/jules-org-health-organ-kernel-0630-a46c` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/limen_jules-org-health-organ-kernel-0630-a901` | `limen/jules-org-health-organ-kernel-0630-a901` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/limen_jules-org-health-organ-kernel-0630-f8cb` | `limen/jules-org-health-organ-kernel-0630-f8cb` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/org-financial-organ-face-0704-5a117787` | `limen/org-financial-organ-face-0704-5a117787` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/org-financial-organ-face-0704-9855f329` | `limen/org-financial-organ-face-0704-9855f329` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/org-financial-organ-face-0704-bd436529` | `limen/org-financial-organ-face-0704-bd436529` | 7 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/org-governance-organ-selffeed-0703-00694775` | `limen/org-governance-organ-selffeed-0703-00694775` | 3 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/org-governance-organ-selffeed-0703-ae95b1bf` | `limen/org-governance-organ-selffeed-0703-ae95b1bf` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/peer-audited--behavioral-blockchain` | `pr-744` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/peer-audited-726-clean` | `limen/pr-726-cleanup` | 0 | `e17cb7a889d5ef3e` | 2 | 4 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/pr-669-governance-deepen` | `pr-669-governance-deepen` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/pr36-check` | `HEAD` | 0 | `77c140cbdc964703` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/resolve-organvm-i-theoria-.github-459-1ade` | `limen/resolve-organvm-i-theoria-.github-459-1ade` | 0 | `3d8978088a5b706f` | 3 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/rev-organvm-mirror-mirror-revenue-ship-0704-134a11b8` | `limen/rev-organvm-mirror-mirror-revenue-ship-0704-134a11b8` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/rev-organvm-mirror-mirror-revenue-ship-0704-94c4704f` | `limen/rev-organvm-mirror-mirror-revenue-ship-0704-94c4704f` | 0 | `07b5141326fe1486` | 2 | 3 | 3 | `remote-present` |
 | `~/Workspace/.limen-worktrees/rev-organvm-mirror-mirror-revenue-ship-0706-0dfb11ff` | `limen/rev-organvm-mirror-mirror-revenue-ship-0706-0dfb11ff` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/rev-organvm-mirror-mirror-revenue-ship-0706-4c111672` | `limen/rev-organvm-mirror-mirror-revenue-ship-0706-4c111672` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/rev-organvm-mirror-mirror-revenue-ship-0706-b53c2bab` | `limen/rev-organvm-mirror-mirror-revenue-ship-0706-b53c2bab` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
+| `~/Workspace/.limen-worktrees/review-avditor-billing-pr43` | `review/pr43-billing-fix` | 0 | `e6da47c4f17d8ae9` | 2 | 3 | 1 | `remote-present` |
+| `~/Workspace/.limen-worktrees/vltima-organ-impl-codex-20260706` | `codex/vltima-organ-impl-20260706` | 8 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/.session-meta-worktrees/reanchor-multiprovider-ingest` | `feat/reanchor-multiprovider-ingest` | 0 | `53c3121e303b1dde` | 1 | 1 | 0 | `remote-present` |
 | `~/Workspace/4444J99/domus-genoma` | `codex/artifact-open-package-20260629` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/4444J99/edgarflash` | `main` | 5 | `6ef2a267dac80813` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/4444J99/hokage-chess` | `main` | 13 | `6bd578f7e3df4dc0` | 2 | 3 | 0 | `remote-present` |
@@ -229,6 +955,8 @@ Repos scanned: `300`
 | `~/Workspace/4444J99/relationship-pipeline/.worktrees/maddie-boundary-20260629` | `work/maddie-boundary-20260629` | 0 | `e841b09a7964a0a0` | 0 | 0 | 1 | `remote-present` |
 | `~/Workspace/4444J99/relationship-pipeline/.worktrees/student-email-d2l-support-20260629` | `work/student-email-d2l-support-20260629` | 0 | `e841b09a7964a0a0` | 0 | 0 | 1 | `remote-present` |
 | `~/Workspace/4444J99/writelens` | `main` | 6 | `25a3228dc037176b` | 2 | 1 | 1 | `remote-present` |
+| `~/Workspace/_matters-private` | `master` | 0 | `none` | 1 | 0 | 0 | `local-only` |
+| `~/Workspace/a-i-chat--exporter` | `master` | 4 | `173dfb112bd036cc` | 2 | 3 | 2 | `remote-present` |
 | `~/Workspace/a-organvm/a-i-chat--exporter` | `master` | 17 | `173dfb112bd036cc` | 2 | 3 | 1 | `remote-present` |
 | `~/Workspace/a-organvm/card-trade-social` | `main` | 11 | `1dc6954b02523ae0` | 2 | 3 | 1 | `remote-present` |
 | `~/Workspace/a-organvm/essay-pipeline` | `main` | 1 | `cb00a17712e577cc` | 2 | 1 | 1 | `remote-present` |
@@ -245,7 +973,10 @@ Repos scanned: `300`
 | `~/Workspace/a-organvm/universal-mail--automation` | `pr-53` | 0 | `2ccc1e3872c85115` | 1 | 2 | 2 | `remote-present` |
 | `~/Workspace/advocata` | `main` | 0 | `143dce056d5e8257` | 2 | 2 | 0 | `remote-present` |
 | `~/Workspace/domus` | `main` | 0 | `a224b0268b1c0637` | 1 | 0 | 1 | `remote-present` |
-| `~/Workspace/limen` | `main` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
+| `~/Workspace/domus-genoma` | `limen/gen-organvm-domus-genoma-security-0626-5961` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/domus-genoma/.worktrees/domus-quarantine-retire-20260629` | `work/domus-quarantine-retire-20260629` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/domus-genoma/.worktrees/universal-entry-20260629` | `work/universal-entry-20260629` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/limen` | `main` | 1 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/limen/.claude/worktrees/agent-aefc63d95daa3131b` | `corpus-verify` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/limen/.claude/worktrees/feat+workstream-channels` | `heal/revive-self-heal-beat` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/limen/.claude/worktrees/feat-gcp-sa-organ` | `heal/derive-mediark-host-cloudflare` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
@@ -257,7 +988,7 @@ Repos scanned: `300`
 | `~/Workspace/limen/.worktrees/the-invisible-ledger` | `work/invisible-ledger-trial-followups-20260629` | 0 | `2d479e58d4de5dc4` | 2 | 4 | 2 | `remote-present` |
 | `~/Workspace/limen/.worktrees/universal-kernel-recordkeeper-20260705` | `feat/universal-kernel-recordkeeper-20260705` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/limen/.worktrees/warp-agent-routing-20260629` | `work/warp-agent-routing-20260629` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
-| `~/Workspace/limen/domus-genoma` | `pr159` | 4 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/limen/domus-genoma` | `pr159` | 0 | `ed6df59048c8e3f2` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/limen-main-trench-20260628` | `codex/limen-main-trench-20260628` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/limen-network-substrate-20260628` | `codex/network-substrate-healing-20260628` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/micro-tato` | `main` | 0 | `58cae3ae2ad71404` | 1 | 0 | 1 | `remote-present` |
@@ -271,6 +1002,7 @@ Repos scanned: `300`
 | `~/Workspace/micro-tato/.lanes/rob-game-touch-combat` | `exp/rob-game-touch-combat` | 0 | `58cae3ae2ad71404` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/micro-tato/.lanes/rob-roadmap-implementation` | `exp/rob-roadmap-implementation` | 0 | `58cae3ae2ad71404` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/micro-tato/.lanes/rob-transcript-completion` | `exp/rob-transcript-completion` | 0 | `58cae3ae2ad71404` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/mirror-mirror` | `feature/revenue-readiness` | 0 | `07b5141326fe1486` | 2 | 4 | 3 | `remote-present` |
 | `~/Workspace/organvm/4-ivi374-F0Rivi4` | `feat-initial-swarm-scaffold` | 0 | `70ac0639dd5fdd07` | 2 | 1 | 1 | `remote-present` |
 | `~/Workspace/organvm/4444J99` | `main` | 0 | `6d74f9baa789b001` | 1 | 0 | 1 | `remote-present` |
 | `~/Workspace/organvm/4444J99.github.io` | `main` | 2 | `b3e5c984da7b9d16` | 1 | 0 | 1 | `remote-present` |
@@ -361,12 +1093,17 @@ Repos scanned: `300`
 | `~/Workspace/organvm-iii-ergon/organvm-iii-ergon.github.io` | `main` | 0 | `e5c0500a3ae3d1ee` | 1 | 0 | 0 | `remote-present` |
 | `~/Workspace/organvm-iii-ergon/specvla-ergon--avditor-mvndi` | `main` | 4 | `e6da47c4f17d8ae9` | 2 | 3 | 1 | `remote-present` |
 | `~/Workspace/organvm-v-logos/.github` | `main` | 5 | `3d8978088a5b706f` | 1 | 0 | 1 | `remote-present` |
+| `~/Workspace/photos-universe-20260629-182431` | `work/photos-universe-20260629-182431` | 0 | `53758875e58ae64d` | 1 | 1 | 3 | `remote-present` |
 | `~/Workspace/script-doctor` | `master` | 0 | `none` | 1 | 0 | 1 | `local-only` |
+| `~/Workspace/session-meta` | `fix/security-hardening-0629` | 1 | `53c3121e303b1dde` | 1 | 1 | 1 | `remote-present` |
+| `~/Workspace/sovereign-systems--elevate-align` | `main` | 0 | `f1354618fb6ff318` | 2 | 2 | 1 | `remote-present` |
 | `~/Workspace/specvla-ergon--avditor-mvndi` | `discover-value-thesis` | 0 | `e6da47c4f17d8ae9` | 2 | 3 | 1 | `remote-present` |
 | `~/Workspace/studio` | `feat/launch-ready` | 0 | `none` | 1 | 0 | 0 | `local-only` |
+| `~/Workspace/universal-mail--automation` | `main` | 0 | `2ccc1e3872c85115` | 2 | 2 | 2 | `remote-present` |
 
 ## Contract
 
 - Public receipts use hashes for remotes and product surfaces.
 - Exact local paths, remote URLs, and product names stay in the ignored private index.
-- Discovery roots are derived from `LIMEN_REPO_ROOTS`, `LIMEN_WORKSPACE_ROOT`, `LIMEN_WORKTREE_ROOT`, or the current Limen root.
+- Explicit `--scan-root` values are authoritative; otherwise discovery roots are derived from `LIMEN_REPO_ROOTS`, `LIMEN_WORKSPACE_ROOT`, `LIMEN_WORKTREE_ROOT`, or the current Limen root.
+- Default scans are uncapped; explicit limited scans record whether discovery truncated.

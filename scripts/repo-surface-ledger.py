@@ -73,11 +73,15 @@ def split_paths(value: str) -> list[Path]:
 
 def configured_scan_roots(extra_roots: list[Path] | None = None) -> list[Path]:
     roots: list[Path] = []
-    for env_name in SCAN_ENV_VARS:
-        raw = os.environ.get(env_name, "")
-        if raw:
-            roots.extend(split_paths(raw))
-    roots.extend(extra_roots or [])
+    if extra_roots:
+        roots.extend(extra_roots)
+    else:
+        for env_name in SCAN_ENV_VARS:
+            raw = os.environ.get(env_name, "")
+            if raw:
+                roots.extend(split_paths(raw))
+                if env_name == "LIMEN_REPO_ROOTS":
+                    break
     if not roots:
         roots.append(ROOT)
 
@@ -112,7 +116,12 @@ def run_git(repo: Path, args: list[str], timeout: int = 10) -> str:
     return result.stdout.strip()
 
 
-def repo_roots_under(scan_roots: list[Path], *, max_depth: int = 6, limit: int = 300) -> list[Path]:
+def repo_roots_under(
+    scan_roots: list[Path],
+    *,
+    max_depth: int = 6,
+    limit: int | None = None,
+) -> tuple[list[Path], bool]:
     repos: list[Path] = []
     seen: set[str] = set()
     for scan_root in scan_roots:
@@ -130,9 +139,9 @@ def repo_roots_under(scan_roots: list[Path], *, max_depth: int = 6, limit: int =
                 if key not in seen:
                     seen.add(key)
                     repos.append(current)
-                    if len(repos) >= limit:
-                        return sorted(repos)
-    return sorted(repos)
+                    if limit and len(repos) >= limit:
+                        return sorted(repos), True
+    return sorted(repos), False
 
 
 def sanitize_remote(url: str) -> str:
@@ -287,14 +296,17 @@ def build_snapshot(
     scan_roots: list[Path] | None = None,
     *,
     max_depth: int | None = None,
-    limit: int = 300,
+    limit: int | None = None,
 ) -> dict[str, Any]:
     roots = configured_scan_roots(scan_roots)
     depth = max_depth if max_depth is not None else int(os.environ.get("LIMEN_REPO_SCAN_DEPTH", "6"))
-    repos = [repo_record(path) for path in repo_roots_under(roots, max_depth=depth, limit=limit)]
+    repo_paths, scan_truncated = repo_roots_under(roots, max_depth=depth, limit=limit)
+    repos = [repo_record(path) for path in repo_paths]
     return {
         "generated_at": now_iso(),
         "scan_roots": [relpath(path) for path in roots],
+        "scan_limit": limit,
+        "scan_truncated": scan_truncated,
         "repo_count": len(repos),
         "repos": repos,
         "duplicate_remotes": duplicate_remote_groups(repos),
@@ -329,6 +341,8 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         "",
         f"Generated: `{public['generated_at']}`",
         f"Repos scanned: `{public['repo_count']}`",
+        f"Scan limit: `{public.get('scan_limit') or 'none'}`",
+        f"Scan truncated: `{str(public.get('scan_truncated', False)).lower()}`",
         "",
         "## Scan Roots",
         "",
@@ -366,9 +380,30 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         "",
         "- Public receipts use hashes for remotes and product surfaces.",
         "- Exact local paths, remote URLs, and product names stay in the ignored private index.",
-        "- Discovery roots are derived from `LIMEN_REPO_ROOTS`, `LIMEN_WORKSPACE_ROOT`, `LIMEN_WORKTREE_ROOT`, or the current Limen root.",
+        "- Explicit `--scan-root` values are authoritative; otherwise discovery roots are derived from `LIMEN_REPO_ROOTS`, `LIMEN_WORKSPACE_ROOT`, `LIMEN_WORKTREE_ROOT`, or the current Limen root.",
+        "- Default scans are uncapped; explicit limited scans record whether discovery truncated.",
     ]
     return "\n".join(lines) + "\n"
+
+
+def snapshot_without_timestamp(snapshot: dict[str, Any]) -> dict[str, Any]:
+    stable = json.loads(json.dumps(snapshot, sort_keys=True))
+    stable["generated_at"] = None
+    return stable
+
+
+def preserve_generated_at_if_unchanged(snapshot: dict[str, Any]) -> dict[str, Any]:
+    try:
+        existing = json.loads(PRIVATE_INDEX.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return snapshot
+    if not isinstance(existing, dict):
+        return snapshot
+    if snapshot_without_timestamp(existing) == snapshot_without_timestamp(snapshot):
+        existing_generated_at = existing.get("generated_at")
+        if isinstance(existing_generated_at, str) and existing_generated_at:
+            snapshot["generated_at"] = existing_generated_at
+    return snapshot
 
 
 def write_outputs(snapshot: dict[str, Any], markdown: str) -> None:
@@ -386,10 +421,18 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="print only; never write")
     parser.add_argument("--json", action="store_true", help="print public JSON instead of markdown")
     parser.add_argument("--max-depth", type=int, default=int(os.environ.get("LIMEN_REPO_SCAN_DEPTH", "6")))
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=int(os.environ.get("LIMEN_REPO_SCAN_LIMIT", "0")),
+        help="maximum repos to classify; 0 means no limit",
+    )
     args = parser.parse_args()
 
     roots = [Path(value).expanduser() for value in args.scan_root]
-    snapshot = build_snapshot(roots, max_depth=args.max_depth)
+    snapshot = build_snapshot(roots, max_depth=args.max_depth, limit=args.limit or None)
+    if args.write and not args.dry_run:
+        snapshot = preserve_generated_at_if_unchanged(snapshot)
     markdown = render_markdown(snapshot)
     if args.write and not args.dry_run:
         write_outputs(snapshot, markdown)
