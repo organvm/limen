@@ -49,7 +49,8 @@ from pathlib import Path
 SCRIPT_ROOT = Path(__file__).resolve().parent.parent
 ROOT = Path(os.environ.get("LIMEN_ROOT", SCRIPT_ROOT))
 
-GATE_RE = re.compile(r"\$\{(LIMEN_[A-Z0-9_]+):-([^}]*)\}")
+def gate_re(prefix):
+    return re.compile(r"\$\{(" + re.escape(prefix) + r"[A-Z0-9_]+):-([^}]*)\}")
 
 # beat gates that select cadence/limits/paths, not behavior valves — never audited
 NON_VALVE_RE = re.compile(
@@ -58,18 +59,19 @@ NON_VALVE_RE = re.compile(
 )
 
 
-def discover_gates(sources):
-    """Every boolean ${LIMEN_X:-0|1} gate in the beat sources → {name: default}.
+def discover_gates(sources, prefix="LIMEN_"):
+    """Every boolean gate (``${<prefix>NAME:-0|1}``) in the beat sources → {name: default}.
 
     Only defaults of exactly "0"/"1" are valves (arm/disarm semantics); numeric
     tunables, paths, and command substitutions are parameters, not behaviors.
     """
     gates = {}
+    rx = gate_re(prefix)
     for src in sources:
         p = Path(src)
         if not p.exists():
             continue
-        for name, default in GATE_RE.findall(p.read_text(errors="replace")):
+        for name, default in rx.findall(p.read_text(errors="replace")):
             default = default.strip()
             if default in ("0", "1") and not NON_VALVE_RE.match(name):
                 gates.setdefault(name, default)
@@ -178,6 +180,9 @@ def main(argv=None):
     # only the stamp lands in the runtime root's logs/.
     ap.add_argument("--registry", default=str(SCRIPT_ROOT / "spec" / "armed-valves.json"))
     ap.add_argument("--sources", nargs="*", default=[str(SCRIPT_ROOT / "scripts" / "metabolize.sh"), str(SCRIPT_ROOT / "scripts" / "heartbeat-loop.sh")])
+    ap.add_argument("--gate-prefix", default="LIMEN_",
+                    help="env-var namespace to derive gates from (tests use a fixture prefix "
+                         "so the governed namespace never gains undeclared tokens)")
     ap.add_argument("--env-file", default=str(Path.home() / ".limen.env"))
     ap.add_argument("--levers", default=str(SCRIPT_ROOT / "his-hand-levers.json"))
     ap.add_argument("--stamp", default=str(ROOT / "logs" / "armed-valve-audit.json"))
@@ -185,7 +190,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     registry = json.loads(Path(args.registry).read_text())
-    gates = discover_gates(args.sources)
+    gates = discover_gates(args.sources, prefix=args.gate_prefix)
     env = env_view(args.env_file)
     levers_text = lever_citations(args.levers)
 

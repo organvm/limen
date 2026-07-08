@@ -23,21 +23,21 @@ trap 'rm -rf "$work"' EXIT
 # Beat-source fixture: one deliverable gate (off by default), one unclassified new gate.
 cat > "$work/beat.sh" <<'SH'
 #!/usr/bin/env bash
-if [ "${LIMEN_TEST_VALVE:-0}" = "1" ]; then echo on; fi
-if [ "${LIMEN_TEST_NEWGATE:-0}" = "1" ]; then echo new; fi
+if [ "${VALVEFIX_TEST_VALVE:-0}" = "1" ]; then echo on; fi
+if [ "${VALVEFIX_TEST_NEWGATE:-0}" = "1" ]; then echo new; fi
 SH
 
 cat > "$work/registry.json" <<'JSON'
-{"deliverable": [{"id": "LIMEN_TEST_VALVE", "kind": "env", "expected": "1", "what": "test valve"}], "safety": []}
+{"deliverable": [{"id": "VALVEFIX_TEST_VALVE", "kind": "env", "expected": "1", "what": "test valve"}], "safety": []}
 JSON
 
 echo '{"levers": []}' > "$work/levers-empty.json"
-echo '{"levers": [{"id": "L-TEST", "label": "arm LIMEN_TEST_VALVE when ready"}]}' > "$work/levers-cites.json"
+echo '{"levers": [{"id": "L-TEST", "label": "arm VALVEFIX_TEST_VALVE when ready"}]}' > "$work/levers-cites.json"
 : > "$work/env-unarmed"
-echo 'export LIMEN_TEST_VALVE=1' > "$work/env-armed"
+echo 'export VALVEFIX_TEST_VALVE=1' > "$work/env-armed"
 
 run() { # $1=env-file $2=levers-file
-  env -u LIMEN_TEST_VALVE python3 "$audit" --check --offline \
+  env -u VALVEFIX_TEST_VALVE python3 "$audit" --check --offline --gate-prefix VALVEFIX_ \
     --registry "$work/registry.json" --sources "$work/beat.sh" \
     --env-file "$1" --levers "$2" --stamp "$work/stamp.json"
 }
@@ -57,7 +57,7 @@ grep -q "SILENT-OFF" <<<"$out" || { echo "FAIL: expected SILENT-OFF verdict, got
 
 echo "case 4: new disarmed-by-default gate → UNCLASSIFIED warning, never a hard trip"
 out="$(run "$work/env-armed" "$work/levers-empty.json")"
-grep -q "UNCLASSIFIED.*LIMEN_TEST_NEWGATE" <<<"$out" || { echo "FAIL: new gate did not surface as UNCLASSIFIED: $out" >&2; exit 1; }
+grep -q "UNCLASSIFIED.*VALVEFIX_TEST_NEWGATE" <<<"$out" || { echo "FAIL: new gate did not surface as UNCLASSIFIED: $out" >&2; exit 1; }
 
 echo "case 5: stamp written with counts"
 python3 -c "import json,sys; d=json.load(open('$work/stamp.json')); sys.exit(0 if d.get('counts') and d.get('valves') else 1)" \
@@ -66,15 +66,15 @@ python3 -c "import json,sys; d=json.load(open('$work/stamp.json')); sys.exit(0 i
 echo "armed-valve-audit.test: all cases pass"
 
 echo "case 6: --contract trips only on UNCLASSIFIED (repo-deterministic rung)"
-if env -u LIMEN_TEST_VALVE python3 "$audit" --check --contract --offline \
+if env -u VALVEFIX_TEST_VALVE python3 "$audit" --check --contract --offline --gate-prefix VALVEFIX_ \
     --registry "$work/registry.json" --sources "$work/beat.sh" \
     --env-file "$work/env-unarmed" --levers "$work/levers-empty.json" --stamp "$work/stamp.json" >/dev/null 2>&1; then
   echo "FAIL: contract mode missed the unclassified gate" >&2; exit 1
 fi
 cat > "$work/registry-complete.json" <<'JSON'
-{"deliverable": [{"id": "LIMEN_TEST_VALVE", "kind": "env", "expected": "1", "what": "test valve"}], "safety": ["LIMEN_TEST_NEWGATE"]}
+{"deliverable": [{"id": "VALVEFIX_TEST_VALVE", "kind": "env", "expected": "1", "what": "test valve"}], "safety": ["VALVEFIX_TEST_NEWGATE"]}
 JSON
-env -u LIMEN_TEST_VALVE python3 "$audit" --check --contract --offline \
+env -u VALVEFIX_TEST_VALVE python3 "$audit" --check --contract --offline --gate-prefix VALVEFIX_ \
     --registry "$work/registry-complete.json" --sources "$work/beat.sh" \
     --env-file "$work/env-unarmed" --levers "$work/levers-empty.json" --stamp "$work/stamp.json" >/dev/null \
   || { echo "FAIL: complete registry failed contract mode (SILENT-OFF must not trip --contract)" >&2; exit 1; }
