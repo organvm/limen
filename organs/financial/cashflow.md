@@ -1,6 +1,6 @@
 # Financial Office — Rolling Cash-Flow Projection
 
-> Generated: 2026-07-08T00:00:57Z
+> Generated: 2026-07-08T09:54:01Z
 > *Forward-looking estimate based on known revenue stages and obligations.
 > Confidence increases as more balances and obligation amounts are confirmed.*
 
@@ -47,8 +47,8 @@ Sourced from `obligations-ledger.json` — 9 protocol-class obligations:
 | 90 | Fraud alert — verify first — Santander Bank | yours | VERIFY the sender is genuine (fraud notices are heavily spoofed — do NOT click links). If real, call the number on the back of the card. |
 | 88 | Student loan — default risk — Nelnet | yours | Log in at nelnet.studentaid.gov: check default status, recertify the income-driven repayment plan, and set the lowest viable payment. |
 | 88 | Student loan — default risk — U.S. Department of Education | yours | Log in at nelnet.studentaid.gov: check default status, recertify the income-driven repayment plan, and set the lowest viable payment. |
-| 82 | Billing — payment failed — Anthropic | yours | Root cause is the card-0186 hold — resolve THAT first, then update the payment method here. (Cascades to Anthropic / Google Cloud / GitHub.) |
 | 82 | Billing — payment failed — Google Cloud Platform | yours | Root cause is the card-0186 hold — resolve THAT first, then update the payment method here. (Cascades to Anthropic / Google Cloud / GitHub.) |
+| 82 | Billing — payment failed — Anthropic | yours | Root cause is the card-0186 hold — resolve THAT first, then update the payment method here. (Cascades to Anthropic / Google Cloud / GitHub.) |
 | 78 | KYC / identity verification — Stripe | yours | Provide the exact info requested. Note: Stripe KYC is blocked on the dead LLC — prefer the individual monetization rail (Ko-fi/Lemon Squeezy). |
 | 32 | Infra alarm (self) — mail.anthropic.com | yours | Your own infra signal — the system self-heals. No action unless you want to raise the limit / preserve the resource. |
 | 28 | App update — ChatGPT | yours | Update the app if still in use; otherwise ignore (low risk, often past deadline). |
