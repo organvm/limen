@@ -1,6 +1,6 @@
 # Submission Checklist
 
-Outward action: locked. These files are review drafts only.
+Outward action: staged. These files are review drafts; real send uses publication-send.
 Candidate metadata: READY_FOR_REVIEW.
 Route metadata: READY_FOR_REVIEW.
 Dry-run approval: LOCKED.
@@ -12,10 +12,10 @@ No publication, submission, upload, contact, form action, or public export has h
 - Chris public export approval: LOCKED unless a matching dry-run approval record is supplied.
 - Chris submission approval: LOCKED unless a matching dry-run approval record is supplied.
 - Opportunity/route submission approval: LOCKED unless a matching dry-run approval record is supplied.
-- Real send: LOCKED; approving real send is invalid in this substrate.
+- Real send: LOCKED unless a matching real_send approval record is supplied.
 
-## Before Any Human Send Outside This Tool
+## Before Publication Send
 
 - Chris reviews candidate, cover letter, disclosure, rights, and venue fit.
-- Human separately approves public export and submission route.
-- Any send happens outside this command after explicit approval; this command has no send path.
+- Public export, writer submission, route submission, and real_send approvals are recorded.
+- Run publication-send with the approval record and preserve its execution receipt.
