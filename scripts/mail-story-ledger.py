@@ -32,6 +32,7 @@ LOG_PATH = ROOT / "logs" / "mail-story-ledger.json"
 PRIVATE_ROOT = Path(os.environ.get("LIMEN_PRIVATE_MAIL_STORY", ROOT / ".limen-private" / "mail-story"))
 PRIVATE_ATOMS = PRIVATE_ROOT / "inventory" / "mail-story-atoms.jsonl"
 PRIVATE_SNAPSHOT = PRIVATE_ROOT / "inventory" / "mail-story-snapshot.json"
+OBLIGATIONS_LEDGER = Path(os.environ.get("LIMEN_OBLIGATIONS_LEDGER", ROOT / "obligations-ledger.json"))
 MAIL_INDEX = Path(
     os.environ.get(
         "LIMEN_MAIL_ENVELOPE_INDEX",
@@ -265,9 +266,28 @@ TYPE_WEIGHT = {
     "other": 1,
 }
 
+ACTION_DISPOSITIONS = {
+    "human_review": "park for owner review; never send",
+    "read_thread": "needs minimum thread/body read before any decision",
+    "product_research": "convert to product/research signal, no reply",
+    "parked": "classified and parked",
+}
+
 
 def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def display_path(path: Path) -> str:
+    resolved = path.expanduser()
+    try:
+        return str(resolved.relative_to(ROOT))
+    except ValueError:
+        pass
+    try:
+        return "~/" + str(resolved.relative_to(Path.home()))
+    except ValueError:
+        return str(resolved)
 
 
 def scoped_receipt_path(path: Path, scope: str) -> Path:
@@ -301,6 +321,21 @@ def normalize_domain(address: str | None) -> str:
         return "unknown"
     domain = address.rsplit("@", 1)[-1].strip().strip(">[]).,;:'\"").lower()
     return domain or "unknown"
+
+
+def normalize_obligation_domain(value: Any) -> str:
+    text = str(value or "").strip().strip(">[]).,;:'\"").lower()
+    if "@" in text:
+        return normalize_domain(text)
+    if re.fullmatch(r"[a-z0-9][a-z0-9.-]*\.[a-z]{2,}", text):
+        return text
+    return "unknown"
+
+
+def safe_label(value: Any, fallback: str = "unknown") -> str:
+    text = str(value or fallback).strip().lower()
+    text = re.sub(r"[^a-z0-9_.:-]+", "_", text)
+    return text.strip("_") or fallback
 
 
 def mailbox_scope(url: str | None) -> str:
@@ -542,13 +577,130 @@ def cluster_summary(atoms: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda row: (-row["priority"], -row["atom_count"], row["cluster_id"]))
 
 
+def obligation_bucket(obligation: dict[str, Any]) -> str:
+    requires_reply = bool(obligation.get("requires_reply"))
+    verify_first = bool(obligation.get("verify_first"))
+    if requires_reply and verify_first:
+        return "reply_and_verify"
+    if requires_reply:
+        return "requires_reply"
+    if verify_first:
+        return "verify_first"
+    return "review"
+
+
+def summarize_obligations(path: Path, atoms: list[dict[str, Any]]) -> dict[str, Any]:
+    active_domains = Counter(atom["sender_domain"] for atom in atoms)
+    summary: dict[str, Any] = {
+        "path": display_path(path),
+        "present": path.is_file(),
+        "readable": False,
+        "obligation_count": 0,
+        "matched_obligation_count": 0,
+        "matched_domain_count": 0,
+        "classes": [],
+        "matched_classes": [],
+        "buckets": [],
+        "matched_buckets": [],
+        "matched_domains": [],
+    }
+    if not path.is_file():
+        return summary
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        summary["error"] = type(exc).__name__
+        return summary
+
+    obligations = [item for item in payload.get("obligations", []) if isinstance(item, dict)]
+    class_counts: Counter[str] = Counter()
+    matched_class_counts: Counter[str] = Counter()
+    bucket_counts: Counter[str] = Counter()
+    matched_bucket_counts: Counter[str] = Counter()
+    obligation_domains: Counter[str] = Counter()
+
+    for obligation in obligations:
+        domain = normalize_obligation_domain(obligation.get("domain") or obligation.get("sender"))
+        cls = safe_label(obligation.get("cls"))
+        bucket = obligation_bucket(obligation)
+        class_counts[cls] += 1
+        bucket_counts[bucket] += 1
+        if domain != "unknown":
+            obligation_domains[domain] += 1
+        if domain in active_domains:
+            matched_class_counts[cls] += 1
+            matched_bucket_counts[bucket] += 1
+
+    matched_domains = [
+        {
+            "domain": domain,
+            "flagged_messages": active_domains[domain],
+            "obligations": obligation_domains[domain],
+        }
+        for domain in sorted(set(active_domains) & set(obligation_domains))
+    ]
+
+    summary.update(
+        {
+            "readable": True,
+            "generated_at": payload.get("generated_at"),
+            "obligation_count": len(obligations),
+            "matched_obligation_count": sum(row["obligations"] for row in matched_domains),
+            "matched_domain_count": len(matched_domains),
+            "classes": [{"class": key, "obligations": count} for key, count in class_counts.most_common()],
+            "matched_classes": [
+                {"class": key, "obligations": count} for key, count in matched_class_counts.most_common()
+            ],
+            "buckets": [{"bucket": key, "obligations": count} for key, count in bucket_counts.most_common()],
+            "matched_buckets": [
+                {"bucket": key, "obligations": count} for key, count in matched_bucket_counts.most_common()
+            ],
+            "matched_domains": sorted(
+                matched_domains,
+                key=lambda row: (-int(row["obligations"]), -int(row["flagged_messages"]), row["domain"]),
+            ),
+        }
+    )
+    return summary
+
+
+def needs_human_summary(atoms: list[dict[str, Any]], obligations: dict[str, Any]) -> dict[str, Any]:
+    action_counts = Counter(atom["next_action"] for atom in atoms)
+    action_obligation_links: Counter[str] = Counter()
+    matched_domains = {row["domain"] for row in obligations.get("matched_domains", [])}
+    for atom in atoms:
+        if atom["sender_domain"] in matched_domains:
+            action_obligation_links[atom["next_action"]] += 1
+
+    rows = []
+    for action, count in action_counts.most_common():
+        rows.append(
+            {
+                "bucket": action,
+                "atoms": count,
+                "matched_obligation_domains": action_obligation_links.get(action, 0),
+                "disposition": ACTION_DISPOSITIONS.get(action, "park and review before any outward action"),
+            }
+        )
+    return {
+        "buckets": rows,
+        "owner_review_atoms": sum(row["atoms"] for row in rows if row["bucket"] in {"human_review", "read_thread"}),
+    }
+
+
 def build_snapshot(
-    mail_index: Path, *, scope: str = "flagged", limit: int | None = None
+    mail_index: Path,
+    *,
+    scope: str = "flagged",
+    limit: int | None = None,
+    obligations_ledger: Path = OBLIGATIONS_LEDGER,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     with connect_readonly(mail_index) as conn:
         stats = mail_stats(conn)
         rows = fetch_message_rows(conn, scope=scope, limit=limit)
     atoms = [atom_from_row(row, scope=scope) for row in rows]
+    obligations = summarize_obligations(obligations_ledger, atoms)
     top_domains = Counter(atom["sender_domain"] for atom in atoms).most_common(25)
     by_type = Counter(atom["blocker_type"] for atom in atoms)
     generated_at = utc_now()
@@ -576,6 +728,8 @@ def build_snapshot(
         "top_domains": [{"domain": domain, "messages": count} for domain, count in top_domains],
         "by_blocker_type": dict(sorted(by_type.items())),
         "clusters": cluster_summary(atoms),
+        "obligations": obligations,
+        "needs_human": needs_human_summary(atoms, obligations),
     }
     return snapshot, atoms
 
@@ -632,6 +786,54 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         ["cluster", "type", "atoms", "priority", "next actions", "software thesis"],
         cluster_rows or [["-", "-", 0, 0, "-", "-"]],
     )
+    obligations = snapshot.get("obligations", {})
+    lines += [
+        "",
+        "## UMA Obligations Crosswalk",
+        "",
+        f"- Ledger path: `{obligations.get('path', 'obligations-ledger.json')}`",
+        f"- Ledger loaded: `{str(bool(obligations.get('readable'))).lower()}`",
+        f"- Total UMA obligations: `{obligations.get('obligation_count', 0)}`",
+        f"- Active flagged domains with UMA obligations: `{obligations.get('matched_domain_count', 0)}`",
+        f"- UMA obligations linked to active flagged domains: `{obligations.get('matched_obligation_count', 0)}`",
+        "",
+        "### Matched Obligation Classes",
+        "",
+    ]
+    lines += md_table(
+        ["class", "obligations"],
+        [[row["class"], row["obligations"]] for row in obligations.get("matched_classes", [])] or [["-", 0]],
+    )
+    lines += [
+        "",
+        "### Matched Obligation Domains",
+        "",
+    ]
+    lines += md_table(
+        ["domain", "flagged messages", "obligations"],
+        [
+            [row["domain"], row["flagged_messages"], row["obligations"]]
+            for row in obligations.get("matched_domains", [])[:20]
+        ]
+        or [["-", 0, 0]],
+    )
+    needs_human = snapshot.get("needs_human", {})
+    lines += [
+        "",
+        "## Needs-Human Buckets",
+        "",
+        f"- Owner-review/read-thread atoms: `{needs_human.get('owner_review_atoms', 0)}`",
+        "- Draft/send policy: `park only; never send`",
+        "",
+    ]
+    lines += md_table(
+        ["bucket", "atoms", "atoms on obligation domains", "disposition"],
+        [
+            [row["bucket"], row["atoms"], row["matched_obligation_domains"], row["disposition"]]
+            for row in needs_human.get("buckets", [])
+        ]
+        or [["-", 0, 0, "-"]],
+    )
     lines += [
         "",
         "## Top Sender Domains In Processed Scope",
@@ -670,8 +872,8 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         "",
         "## Commands",
         "",
-        "- Preview the hot flagged pass: `python3 scripts/mail-story-ledger.py`",
-        "- Refresh the redacted report and ignored private atoms: `python3 scripts/mail-story-ledger.py --write`",
+        "- Preview the hot flagged pass: `python3 scripts/mail-story-ledger.py --scope flagged`",
+        "- Refresh the active flagged report and ignored private atoms: `python3 scripts/mail-story-ledger.py --scope flagged --write`",
         "- Process all non-deleted indexed mail privately: `python3 scripts/mail-story-ledger.py --scope all --write`",
         "",
     ]
@@ -719,6 +921,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--doc", type=Path, default=DOC_PATH, help="tracked redacted Markdown output")
     parser.add_argument("--log", type=Path, default=LOG_PATH, help="ignored structured public-ish snapshot")
     parser.add_argument(
+        "--obligations-ledger",
+        type=Path,
+        default=OBLIGATIONS_LEDGER,
+        help="optional UMA obligations ledger used only for redacted crosswalk counts",
+    )
+    parser.add_argument(
         "--private-atoms",
         type=Path,
         default=PRIVATE_ATOMS,
@@ -738,7 +946,12 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    snapshot, atoms = build_snapshot(args.mail_index, scope=args.scope, limit=args.limit)
+    snapshot, atoms = build_snapshot(
+        args.mail_index,
+        scope=args.scope,
+        limit=args.limit,
+        obligations_ledger=args.obligations_ledger,
+    )
     markdown = render_markdown(snapshot)
     if args.write:
         write_outputs(

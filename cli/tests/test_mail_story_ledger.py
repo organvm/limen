@@ -165,8 +165,37 @@ def test_markdown_is_redacted_while_private_atoms_keep_source(tmp_path):
     log = tmp_path / "logs" / "mail-story-ledger.json"
     private_atoms = tmp_path / ".limen-private" / "mail-story" / "inventory" / "atoms.jsonl"
     private_snapshot = tmp_path / ".limen-private" / "mail-story" / "inventory" / "snapshot.json"
+    obligations = tmp_path / "obligations-ledger.json"
+    obligations.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-07-08T00:00:00Z",
+                "obligations": [
+                    {
+                        "domain": "stripe.example.test",
+                        "sender": "private-alerts@stripe.example.test",
+                        "cls": "identity",
+                        "requires_reply": True,
+                        "verify_first": True,
+                        "sample_subjects": ["Action required private client subject should not leak"],
+                        "message_ids": ["private-message-id"],
+                    },
+                    {
+                        "domain": "studentaid.gov",
+                        "sender": "private-alerts@studentaid.gov",
+                        "cls": "debt",
+                        "requires_reply": False,
+                        "verify_first": True,
+                        "sample_subjects": ["Student Loan Default Notice"],
+                        "message_ids": ["private-student-message-id"],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
 
-    snapshot, atoms = module.build_snapshot(db)
+    snapshot, atoms = module.build_snapshot(db, obligations_ledger=obligations)
     markdown = module.render_markdown(snapshot)
     module.write_outputs(
         snapshot,
@@ -202,3 +231,11 @@ def test_markdown_is_redacted_while_private_atoms_keep_source(tmp_path):
     assert json.loads(scoped_log.read_text(encoding="utf-8"))["mode"]["scope"] == "flagged"
     assert scoped_atoms.read_text(encoding="utf-8") == private_text
     assert json.loads(scoped_snapshot.read_text(encoding="utf-8"))["mode"]["scope"] == "flagged"
+    assert "UMA Obligations Crosswalk" in public_text
+    assert "Needs-Human Buckets" in public_text
+    assert snapshot["obligations"]["matched_domain_count"] == 1
+    assert snapshot["obligations"]["matched_obligation_count"] == 1
+    assert snapshot["needs_human"]["owner_review_atoms"] == 3
+    assert "private-alerts@stripe.example.test" not in public_text
+    assert "private-message-id" not in public_text
+    assert "private-alerts@stripe.example.test" not in json.dumps(log_payload)
