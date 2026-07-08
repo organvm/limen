@@ -1,6 +1,6 @@
 # Fit Report
 
-Outward action: locked. These files are review drafts only.
+Outward action: staged. These files are review drafts; real send uses publication-send.
 Candidate metadata: READY_FOR_REVIEW.
 Route metadata: READY_FOR_REVIEW.
 Dry-run approval: LOCKED.
@@ -30,12 +30,12 @@ Opportunity record: literary-submission-landscape-v3
 Approval record: not supplied
 Candidate: chris-metadata-only-nonfiction-candidate
 Selected venue/route: yale-review-nonfiction-route
-Outward action: locked; this report does not submit, upload, publish, contact, or impersonate.
+Outward action: staged; this readiness command does not submit, upload, publish, contact, or impersonate.
 Publication readiness: BLOCKED
 Candidate status: READY_FOR_REVIEW
 Route status: READY_FOR_REVIEW
 Dry-run export: LOCKED
-Real submission: LOCKED; this command has no send path.
+Real submission: LOCKED; execution uses publication-send.
 
 ## What This Is
 
@@ -55,7 +55,7 @@ Real submission: LOCKED; this command has no send path.
 - Writer public export approval is not_requested.
 - Writer submission approval is not_requested.
 - Opportunity route submission approval is not_requested.
-- Real submission remains locked outside this command even when dry-run approvals exist.
+- Real submission requires an approved real_send approval record before publication-send can execute.
 
 ## Candidate Metadata
 
@@ -96,6 +96,6 @@ Real submission: LOCKED; this command has no send path.
 - Chris controls voice review, public export, submission approval, outreach approval, and any actual send.
 - The packet does not claim acceptance, publication, editor interest, or achieved literary status.
 
-## No-Outward-Action Notice
+## Readiness Command Boundary
 
-No submission, outreach, upload, publication, contact, form action, or public-presence export is performed by this command.
+This readiness command performs no submission, outreach, upload, publication, contact, form action, or public-presence export.

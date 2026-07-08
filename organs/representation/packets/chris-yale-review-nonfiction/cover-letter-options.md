@@ -1,6 +1,6 @@
 # Cover Letter Draft Options
 
-Outward action: locked. These files are review drafts only.
+Outward action: staged. These files are review drafts; real send uses publication-send.
 Candidate metadata: READY_FOR_REVIEW.
 Route metadata: READY_FOR_REVIEW.
 Dry-run approval: LOCKED.
