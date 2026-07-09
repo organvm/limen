@@ -34,10 +34,13 @@ def test_closeout_fast_default_path_includes_resource_guard_and_excludes_full_ga
     assert "cli/tests/test_worktree_debt.py::test_reachable_from_remote_uses_single_contains_query" in script
 
 
-def test_closeout_fast_requires_live_root_ready_status():
+def test_closeout_fast_reports_live_root_status_without_failing_fast_closeout():
     script = (ROOT / "scripts" / "closeout-fast.sh").read_text(encoding="utf-8")
 
-    assert 'run_and_require_ready "live-root-gate" python3 scripts/live-root-gate.py' in script
+    assert "report_live_root_gate" in script
+    assert 'record_gate "$label" "blocked-report"' in script
+    assert '"Report live-root gate" python3 scripts/live-root-gate.py' in script
+    assert "live-root gate is report-only in closeout-fast" in script
     assert "Status: `ready`" in script
 
 
