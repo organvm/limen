@@ -23,6 +23,21 @@ Use this protocol in the right mode:
 Do not let the dispatch startup ritual override a direct human request or a higher-priority
 system / developer / runtime constraint.
 
+## Session Scope Boundary
+
+Task-agent panes are worktree-scoped by default. A task session must report, search, and close out
+against its own checkout, not the stable Limen live root. Use the explicit session contract:
+
+- `LIMEN_SESSION_MODE=task|control-plane`
+- `LIMEN_SESSION_ROOT=<current worktree root>`
+- `LIMEN_LIVE_ROOT=<stable Limen control-plane root>`
+
+Task panes default to `task` mode and must start in a dedicated worktree. In task mode, session
+orientation reads git state from `LIMEN_SESSION_ROOT` and omits global board, handoff, organ,
+worktree-debt, and lifecycle-pressure sections. Session-end lifecycle pressure scans are
+control-plane-only. Use `control-plane` mode only for the stable Limen cockpit where global board,
+daemon, lifecycle, and worktree-debt state are the intended subject.
+
 ## Startup Checklist (fast path)
 
 For dispatch-mode sessions:
@@ -109,6 +124,24 @@ library and processing substrate, not random leftovers from a recovery event.
   and bulk scans; when unplugged, continue from remote receipts and cached indexes.
 - Do not move, delete, dedupe, or purge personal data without the relevant two-copy/restore gate and
   an owner receipt.
+
+## Local Residency Boundary
+
+The laptop is not a durable host. It is allowed to be a thin control plane, not a pile of resident
+services. A human must be able to walk away from the laptop without losing public proof, revenue
+state, credential custody, media custody, task ownership, or recovery ability.
+
+- Keep at most one Limen-owned Login Item / LaunchAgent resident by default: the current control
+  supervisor (`com.limen.heartbeat`). Any additional resident label must prove why it cannot be a
+  heartbeat voice, a one-shot command, a remote service, or an external-drive custody job.
+- Do not run product, revenue, tunnel, mail, media-ingest, credential-hydration, or gateway surfaces
+  as local Login Items unless their remote/external owner and recovery receipt are already recorded.
+- Local resident state must be rebuildable from repo, remote owner surfaces, and external custody.
+  Secrets, orders, inbox state, media, and public endpoints must not depend on a laptop process being
+  alive.
+- When a local resident job appears, first stop duplicate or nonessential launchd registrations
+  reversibly, then record the owner migration path. Do not normalize extra `bash`, `node`,
+  `cloudflared`, or helper popups as acceptable background noise.
 
 ## Pain Point Ownership
 

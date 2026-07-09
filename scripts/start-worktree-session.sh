@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_LIMEN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+START_CWD="$(pwd -P)"
+
 usage() {
   cat <<'USAGE'
 Usage:
@@ -147,6 +150,8 @@ if ! git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "not a git repo: $repo" >&2
   exit 1
 fi
+limen_live_root="${LIMEN_LIVE_ROOT:-${LIMEN_ROOT:-$SCRIPT_LIMEN_ROOT}}"
+limen_live_root="$(cd "$limen_live_root" && pwd -P)"
 
 slug="$(
   printf '%s' "$raw_slug" \
@@ -212,6 +217,7 @@ else
   git -C "$repo" worktree add -b "$branch" "$wt" "$from_ref" >/dev/null
   created="created"
 fi
+wt="$(cd "$wt" && pwd -P)"
 
 echo "$created worktree: $wt"
 echo "branch: $branch"
@@ -269,6 +275,13 @@ That command works from Terminal, Kitty, Ghostty, Warp, or any normal shell. The
 
 \`\`\`bash
 cd "$wt"
+export LIMEN_SESSION_MODE=task
+export LIMEN_SESSION_ROOT="$wt"
+export LIMEN_LIVE_ROOT="$limen_live_root"
+export LIMEN_ROOT="$wt"
+export LIMEN_TASKS="$wt/tasks.yaml"
+export CLAUDE_PROJECT_DIR="$wt"
+export CODEX_PROJECT_DIR="$wt"
 if git remote get-url origin >/dev/null 2>&1; then
   git fetch --prune
 fi
@@ -280,6 +293,13 @@ For a plain shell instead of Codex:
 
 \`\`\`bash
 cd "$wt"
+export LIMEN_SESSION_MODE=task
+export LIMEN_SESSION_ROOT="$wt"
+export LIMEN_LIVE_ROOT="$limen_live_root"
+export LIMEN_ROOT="$wt"
+export LIMEN_TASKS="$wt/tasks.yaml"
+export CLAUDE_PROJECT_DIR="$wt"
+export CODEX_PROJECT_DIR="$wt"
 \${SHELL:-/bin/zsh} -l
 \`\`\`
 
@@ -309,6 +329,13 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$wt"
+export LIMEN_SESSION_MODE=task
+export LIMEN_SESSION_ROOT="$wt"
+export LIMEN_LIVE_ROOT="$limen_live_root"
+export LIMEN_ROOT="$wt"
+export LIMEN_TASKS="$wt/tasks.yaml"
+export CLAUDE_PROJECT_DIR="$wt"
+export CODEX_PROJECT_DIR="$wt"
 if git remote get-url origin >/dev/null 2>&1; then
   git fetch --prune
 fi
@@ -324,12 +351,38 @@ EOF
   echo "kickstart command: bash $kickstart"
 fi
 
+export_task_session_env() {
+  export LIMEN_SESSION_MODE=task
+  export LIMEN_SESSION_ROOT="$wt"
+  export LIMEN_LIVE_ROOT="$limen_live_root"
+  export LIMEN_ROOT="$wt"
+  export LIMEN_TASKS="$wt/tasks.yaml"
+  export CLAUDE_PROJECT_DIR="$wt"
+  export CODEX_PROJECT_DIR="$wt"
+}
+
+refuse_live_root_task_launch() {
+  if [[ "$wt" == "$limen_live_root" && "${LIMEN_SESSION_MODE:-task}" != "control-plane" ]]; then
+    echo "refusing task session in live Limen root: $limen_live_root" >&2
+    echo "launch a dedicated worktree or set LIMEN_SESSION_MODE=control-plane for a control pane" >&2
+    exit 2
+  fi
+  if [[ "$START_CWD" == "$limen_live_root" && "$wt" == "$limen_live_root" ]]; then
+    echo "refusing direct task launch from live Limen root: $limen_live_root" >&2
+    exit 2
+  fi
+}
+
 if [[ "$launch_codex" -eq 1 ]]; then
+  refuse_live_root_task_launch
+  export_task_session_env
   cd "$wt"
   exec codex
 fi
 
 if [[ "$launch_shell" -eq 1 ]]; then
+  refuse_live_root_task_launch
+  export_task_session_env
   cd "$wt"
   exec "${SHELL:-/bin/zsh}" -l
 fi
@@ -337,4 +390,8 @@ fi
 echo
 echo "Next:"
 echo "  cd $wt"
-echo "  codex"
+if [[ "$write_readme" -eq 1 ]]; then
+  echo "  bash $wt/.limen-workstream/kickstart.sh"
+else
+  echo "  LIMEN_SESSION_MODE=task LIMEN_SESSION_ROOT=$wt LIMEN_LIVE_ROOT=$limen_live_root LIMEN_ROOT=$wt codex"
+fi

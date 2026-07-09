@@ -15,7 +15,7 @@
       {
         "matcher": "startup|resume",
         "hooks": [
-          { "type": "command", "command": "LIMEN_ROOT=\"${LIMEN_ROOT:-$HOME/Workspace/limen}\"; [ -x \"$LIMEN_ROOT/scripts/hooks/session-orient.sh\" ] && \"$LIMEN_ROOT/scripts/hooks/session-orient.sh\" || true" }
+          { "type": "command", "command": "LIMEN_LIVE_ROOT=\"${LIMEN_LIVE_ROOT:-$HOME/Workspace/limen}\"; LIMEN_ROOT=\"$LIMEN_LIVE_ROOT\"; [ -x \"$LIMEN_LIVE_ROOT/scripts/hooks/session-orient.sh\" ] && \"$LIMEN_LIVE_ROOT/scripts/hooks/session-orient.sh\" || true" }
         ]
       }
     ],
@@ -23,7 +23,7 @@
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "LIMEN_ROOT=\"${LIMEN_ROOT:-$HOME/Workspace/limen}\"; [ -x \"$LIMEN_ROOT/scripts/hooks/worktree-commit-guard.sh\" ] && \"$LIMEN_ROOT/scripts/hooks/worktree-commit-guard.sh\" || true" }
+          { "type": "command", "command": "LIMEN_LIVE_ROOT=\"${LIMEN_LIVE_ROOT:-$HOME/Workspace/limen}\"; LIMEN_ROOT=\"$LIMEN_LIVE_ROOT\"; [ -x \"$LIMEN_LIVE_ROOT/scripts/hooks/worktree-commit-guard.sh\" ] && \"$LIMEN_LIVE_ROOT/scripts/hooks/worktree-commit-guard.sh\" || true" }
         ]
       }
     ],
@@ -31,15 +31,15 @@
       {
         "matcher": "Write|Edit",
         "hooks": [
-          { "type": "command", "command": "LIMEN_ROOT=\"${LIMEN_ROOT:-$HOME/Workspace/limen}\"; [ -x \"$LIMEN_ROOT/scripts/hooks/lint-edited-file.sh\" ] && \"$LIMEN_ROOT/scripts/hooks/lint-edited-file.sh\" || true" }
+          { "type": "command", "command": "LIMEN_LIVE_ROOT=\"${LIMEN_LIVE_ROOT:-$HOME/Workspace/limen}\"; LIMEN_ROOT=\"$LIMEN_LIVE_ROOT\"; [ -x \"$LIMEN_LIVE_ROOT/scripts/hooks/lint-edited-file.sh\" ] && \"$LIMEN_LIVE_ROOT/scripts/hooks/lint-edited-file.sh\" || true" }
         ]
       }
     ],
     "SessionEnd": [
       {
         "hooks": [
-          { "type": "command", "command": "LIMEN_ROOT=\"${LIMEN_ROOT:-$HOME/Workspace/limen}\"; [ -x \"$LIMEN_ROOT/scripts/hooks/session-closeout.sh\" ] && \"$LIMEN_ROOT/scripts/hooks/session-closeout.sh\" || true" },
-          { "type": "command", "command": "LIMEN_ROOT=\"${LIMEN_ROOT:-$HOME/Workspace/limen}\"; [ -x \"$LIMEN_ROOT/scripts/hooks/session-lifecycle-pressure.sh\" ] && \"$LIMEN_ROOT/scripts/hooks/session-lifecycle-pressure.sh\" || true" }
+          { "type": "command", "command": "LIMEN_LIVE_ROOT=\"${LIMEN_LIVE_ROOT:-$HOME/Workspace/limen}\"; LIMEN_ROOT=\"$LIMEN_LIVE_ROOT\"; [ -x \"$LIMEN_LIVE_ROOT/scripts/hooks/session-closeout.sh\" ] && \"$LIMEN_LIVE_ROOT/scripts/hooks/session-closeout.sh\" || true" },
+          { "type": "command", "command": "LIMEN_LIVE_ROOT=\"${LIMEN_LIVE_ROOT:-$HOME/Workspace/limen}\"; LIMEN_ROOT=\"$LIMEN_LIVE_ROOT\"; [ -x \"$LIMEN_LIVE_ROOT/scripts/hooks/session-lifecycle-pressure.sh\" ] && \"$LIMEN_LIVE_ROOT/scripts/hooks/session-lifecycle-pressure.sh\" || true" }
         ]
       }
     ]

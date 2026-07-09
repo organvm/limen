@@ -2107,14 +2107,28 @@ def _bridge_agy_scratch(task: Task, wt: Path) -> None:
         print(f"  agy-bridge {task.id}: skipped ({str(e)[:80]})")
 
 
+def _same_real_path(left: Path, right: Path) -> bool:
+    try:
+        return left.expanduser().resolve() == right.expanduser().resolve()
+    except OSError:
+        return left.expanduser().absolute() == right.expanduser().absolute()
+
+
 def _lane_run_env(agent: str, wt: Path | None = None) -> dict[str, str]:
     run_env = os.environ.copy()
     if wt is not None:
-        live_root = os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))
+        live_root = os.environ.get("LIMEN_LIVE_ROOT") or os.environ.get(
+            "LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")
+        )
+        wt_root = str(Path(wt).expanduser())
+        run_env["LIMEN_SESSION_MODE"] = "task"
+        run_env["LIMEN_SESSION_ROOT"] = wt_root
         run_env["LIMEN_LIVE_ROOT"] = live_root
-        run_env["LIMEN_ROOT"] = str(wt)
-        run_env["LIMEN_TASKS"] = str(wt / "tasks.yaml")
-        run_env["PWD"] = str(wt)
+        run_env["LIMEN_ROOT"] = wt_root
+        run_env["LIMEN_TASKS"] = str(Path(wt_root) / "tasks.yaml")
+        run_env["CLAUDE_PROJECT_DIR"] = wt_root
+        run_env["CODEX_PROJECT_DIR"] = wt_root
+        run_env["PWD"] = wt_root
         run_env["OLDPWD"] = live_root
     # gemini: API-key mode throttles hard under agentic use. If the user has done the
     # one-time Google sign-in, drop API keys for gemini only so it uses OAuth / Code-Assist.
@@ -2579,6 +2593,15 @@ def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str:
             print(f"  would [{msg}; clone first]: {binary} {' '.join(_agent_argv(agent, task))} …")
             return True
         print(f"  SKIP {task.id}: {msg} — clone it under $LIMEN_WORKDIR first")
+        return False
+    live_root = Path(
+        os.environ.get("LIMEN_LIVE_ROOT") or os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))
+    )
+    if os.environ.get("LIMEN_SESSION_MODE", "task") != "control-plane" and _same_real_path(cwd, live_root):
+        print(
+            f"  SKIP {task.id}: refusing task launch in live Limen root {live_root}; "
+            "use isolated worktree dispatch or set LIMEN_SESSION_MODE=control-plane"
+        )
         return False
     return _run_cmd(cmd, task, dry_run, cwd=str(cwd))
 

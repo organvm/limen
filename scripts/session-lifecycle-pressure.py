@@ -17,7 +17,56 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
+VALID_SESSION_MODES = {"task", "control-plane"}
+LIVE_ROOT = Path(
+    os.environ.get("LIMEN_LIVE_ROOT")
+    or os.environ.get("LIMEN_ROOT")
+    or Path(__file__).resolve().parents[1]
+).expanduser()
+
+
+def _discover_session_root() -> Path:
+    raw_session = os.environ.get("LIMEN_SESSION_ROOT")
+    if raw_session and Path(raw_session).expanduser().exists():
+        return Path(raw_session).expanduser()
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except Exception:
+        proc = subprocess.CompletedProcess([], 1, "", "")
+    if proc.returncode == 0 and proc.stdout.strip():
+        return Path(proc.stdout.strip()).expanduser()
+    for key in ("CLAUDE_PROJECT_DIR", "CODEX_PROJECT_DIR"):
+        raw = os.environ.get(key)
+        if raw and Path(raw).expanduser().exists():
+            return Path(raw).expanduser()
+    return Path.cwd()
+
+
+SESSION_ROOT = _discover_session_root()
+
+
+def _same_path(left: Path, right: Path) -> bool:
+    try:
+        return left.expanduser().resolve() == right.expanduser().resolve()
+    except OSError:
+        return left.expanduser().absolute() == right.expanduser().absolute()
+
+
+def _normal_mode(raw: str | None) -> str | None:
+    if raw in VALID_SESSION_MODES:
+        return raw
+    return None
+
+
+SESSION_MODE = _normal_mode(os.environ.get("LIMEN_SESSION_MODE")) or (
+    "control-plane" if _same_path(SESSION_ROOT, LIVE_ROOT) else "task"
+)
+ROOT = SESSION_ROOT if SESSION_MODE == "task" else LIVE_ROOT
 WORKTREE_ROOT = ROOT.parent / ".limen-worktrees"
 PRIVATE_ROOT = Path(
     os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus")
@@ -48,6 +97,32 @@ REMOTE_MISSING_CLOSED_STATUSES = {
     "private_patch_preserved",
     "superseded_on_origin_main",
 }
+
+
+def configure_session(
+    *,
+    mode: str | None = None,
+    session_root: str | Path | None = None,
+    live_root: str | Path | None = None,
+) -> None:
+    global LIVE_ROOT, SESSION_ROOT, SESSION_MODE, ROOT, WORKTREE_ROOT, PRIVATE_ROOT, PROMPT_INDEX
+    global CORPUS_INVENTORY, OUT_JSON, OUT_MD, PRESERVATION_RECEIPTS
+    if live_root is not None:
+        LIVE_ROOT = Path(live_root).expanduser()
+    if session_root is not None:
+        SESSION_ROOT = Path(session_root).expanduser()
+    requested = _normal_mode(mode) or _normal_mode(os.environ.get("LIMEN_SESSION_MODE"))
+    SESSION_MODE = requested or ("control-plane" if _same_path(SESSION_ROOT, LIVE_ROOT) else "task")
+    ROOT = SESSION_ROOT if SESSION_MODE == "task" else LIVE_ROOT
+    WORKTREE_ROOT = ROOT.parent / ".limen-worktrees"
+    PRIVATE_ROOT = Path(
+        os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus")
+    )
+    PROMPT_INDEX = PRIVATE_ROOT / "lifecycle" / "prompt-lifecycle-index.json"
+    CORPUS_INVENTORY = PRIVATE_ROOT / "inventory" / "session-corpus-ledger.json"
+    OUT_JSON = ROOT / "logs" / "session-lifecycle-pressure.json"
+    OUT_MD = ROOT / "logs" / "session-lifecycle-pressure.md"
+    PRESERVATION_RECEIPTS = ROOT / "docs" / "worktree-preservation-receipts.json"
 
 
 def fmt_bytes(n: int) -> str:
@@ -288,7 +363,22 @@ def build_snapshot() -> dict[str, Any]:
     }
 
 
+def build_task_snapshot() -> dict[str, Any]:
+    return {
+        "mode": "task",
+        "session_root": str(SESSION_ROOT),
+        "live_root": str(LIVE_ROOT),
+        "global_scan": "skipped",
+        "pressure": [],
+    }
+
+
 def render(snapshot: dict[str, Any]) -> str:
+    if snapshot.get("mode") == "task":
+        return (
+            "**Lifecycle pressure** — "
+            f"task session scoped to {snapshot.get('session_root')} · global scan skipped"
+        )
     wt = snapshot["worktrees"]
     corpus = snapshot["private_corpus"]
     remote = snapshot["remote"]
@@ -313,10 +403,14 @@ def write_outputs(snapshot: dict[str, Any], markdown: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Summarize local/remote lifecycle pressure.")
+    parser.add_argument("--mode", choices=sorted(VALID_SESSION_MODES), help="session mode")
+    parser.add_argument("--session-root", help="current task/session worktree root")
+    parser.add_argument("--live-root", help="stable Limen control-plane root")
     parser.add_argument("--write", action="store_true", help="write ignored logs snapshots")
     args = parser.parse_args()
+    configure_session(mode=args.mode, session_root=args.session_root, live_root=args.live_root)
 
-    snapshot = build_snapshot()
+    snapshot = build_task_snapshot() if SESSION_MODE == "task" else build_snapshot()
     markdown = render(snapshot)
     if args.write:
         write_outputs(snapshot, markdown)
