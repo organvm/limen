@@ -615,8 +615,7 @@ def capacity_fill_snapshot(
             if attempts >= expected_now:
                 status = "unproductive"
                 evidence = (
-                    f"attempted {attempts}/{expected_now}, but productive board spend is "
-                    f"{productive}/{expected_now}"
+                    f"attempted {attempts}/{expected_now}, but productive board spend is {productive}/{expected_now}"
                 )
                 action = "heal failed/rerouted dispatches so attempts become done/dispatched work"
             elif reachable and open_work > 0:
