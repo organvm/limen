@@ -453,8 +453,7 @@ def test_session_lifecycle_pressure_reports_partial_bounded_size_data(tmp_path: 
         "limit": 12,
         "by_reason": {"clean+merged+idle": 3},
         "items": [
-            {"name": path.name, "path": str(path), "reason": "clean+merged+idle", "debt": False}
-            for path in paths
+            {"name": path.name, "path": str(path), "reason": "clean+merged+idle", "debt": False} for path in paths
         ],
     }
 
@@ -489,9 +488,7 @@ def test_session_lifecycle_pressure_hook_second_invocation_does_not_launch_scan(
     fake_python = fake_bin / "python3"
     log = tmp_path / "python.log"
     fake_python.write_text(
-        "#!/usr/bin/env bash\n"
-        "printf '%s\\n' \"$*\" >> \"$FAKE_PYTHON_LOG\"\n"
-        "sleep 1\n",
+        '#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$FAKE_PYTHON_LOG"\nsleep 1\n',
         encoding="utf-8",
     )
     fake_python.chmod(0o755)
