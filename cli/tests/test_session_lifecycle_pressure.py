@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -2661,6 +2662,228 @@ def test_session_orientation_git_section_can_be_pinned(monkeypatch):
     monkeypatch.setenv("LIMEN_ORIENT_GIT_SECTION", "**Git** — pinned · clean")
 
     assert orient.section_git() == "**Git** — pinned · clean"
+
+
+def _git(cwd: Path, *args: str) -> str:
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return proc.stdout.strip()
+
+
+def _init_repo(path: Path) -> None:
+    path.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=path, check=True)
+    _git(path, "symbolic-ref", "HEAD", "refs/heads/main")
+    _git(path, "config", "user.email", "limen-test@example.invalid")
+    _git(path, "config", "user.name", "Limen Test")
+    (path / "README.md").write_text("fixture\n", encoding="utf-8")
+    _git(path, "add", "README.md")
+    _git(path, "commit", "-q", "-m", "init")
+
+
+def test_session_orientation_task_mode_ignores_dirty_live_root(tmp_path: Path):
+    live = tmp_path / "live-limen"
+    task = tmp_path / "task-worktree"
+    _init_repo(live)
+    _git(live, "worktree", "add", "-q", "-b", "task", str(task))
+    (live / "live-only-dirty.txt").write_text("dirty live root\n", encoding="utf-8")
+    (live / "tasks.yaml").write_text(
+        """
+tasks:
+  - id: live
+    status: open
+""",
+        encoding="utf-8",
+    )
+    (live / "logs").mkdir()
+    (live / "logs" / "handoff.json").write_text('{"generated": true}', encoding="utf-8")
+    (live / "logs" / "organ-health.json").write_text(
+        '{"summary": {"total": 1, "live": 1}, "organs": []}',
+        encoding="utf-8",
+    )
+    (live / "logs" / "session-lifecycle-pressure.md").write_text(
+        "**Lifecycle pressure** — live root dirty\n",
+        encoding="utf-8",
+    )
+
+    env = {
+        **os.environ,
+        "LIMEN_ORIENT_NO_WRITE": "1",
+        "LIMEN_LIVE_ROOT": str(live),
+        "LIMEN_SESSION_ROOT": str(task),
+        "LIMEN_SESSION_MODE": "task",
+    }
+    proc = subprocess.run(
+        [
+            "python3",
+            str(ORIENT_SCRIPT),
+            "--mode",
+            "task",
+            "--session-root",
+            str(task),
+            "--live-root",
+            str(live),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert f"**Session scope** — task worktree · {task}" in proc.stdout
+    assert "**Git** — task" in proc.stdout
+    assert "clean" in proc.stdout
+    assert "live-only-dirty.txt" not in proc.stdout
+    assert "**Board**" not in proc.stdout
+    assert "**Resume (handoff)**" not in proc.stdout
+    assert "**Organs**" not in proc.stdout
+    assert "**Lifecycle pressure**" not in proc.stdout
+
+
+def test_session_orientation_control_plane_preserves_global_sections(tmp_path: Path):
+    live = tmp_path / "live-limen"
+    _init_repo(live)
+    (live / "live-only-dirty.txt").write_text("dirty live root\n", encoding="utf-8")
+    (live / "tasks.yaml").write_text(
+        """
+tasks:
+  - id: live
+    status: open
+""",
+        encoding="utf-8",
+    )
+    (live / "logs").mkdir()
+    (live / "logs" / "handoff.json").write_text(
+        json.dumps(
+            {
+                "generated": True,
+                "open_lanes": {"total_open": 1, "by_lane": {"ops": 1}},
+                "in_flight_claims": {"count": 1, "stale": 0},
+                "last_blocker": {"needs_human_count": 0},
+                "budget_remaining": {},
+                "next_action": {"id": "NEXT", "priority": "high", "title": "Follow up"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (live / "logs" / "organ-health.json").write_text(
+        '{"summary": {"total": 2, "live": 1}, "organs": []}',
+        encoding="utf-8",
+    )
+    (live / "logs" / "session-lifecycle-pressure.md").write_text(
+        "**Lifecycle pressure** — control plane scan\n",
+        encoding="utf-8",
+    )
+
+    env = {
+        **os.environ,
+        "LIMEN_ORIENT_NO_WRITE": "1",
+        "LIMEN_LIVE_ROOT": str(live),
+        "LIMEN_SESSION_ROOT": str(live),
+        "LIMEN_SESSION_MODE": "control-plane",
+    }
+    proc = subprocess.run(
+        [
+            "python3",
+            str(ORIENT_SCRIPT),
+            "--mode",
+            "control-plane",
+            "--session-root",
+            str(live),
+            "--live-root",
+            str(live),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert "**Board** — 1 open" in proc.stdout
+    assert "**Resume (handoff)**" in proc.stdout
+    assert "**Organs** — 1/2 live" in proc.stdout
+    assert "**Lifecycle pressure** — control plane scan" in proc.stdout
+    assert "**Git** — main" in proc.stdout
+    assert "dirty" in proc.stdout
+
+
+def test_lifecycle_pressure_task_mode_skips_global_scan(monkeypatch, tmp_path: Path):
+    pressure = _load(PRESSURE_SCRIPT, "session_lifecycle_pressure_task_mode")
+    live = tmp_path / "live-limen"
+    task = tmp_path / "task-worktree"
+    live.mkdir()
+    task.mkdir()
+    pressure.configure_session(mode="task", session_root=task, live_root=live)
+
+    def explode():
+        raise AssertionError("task mode must not scan global worktree debt")
+
+    monkeypatch.setattr(pressure, "run_worktree_debt", explode)
+
+    snapshot = pressure.build_task_snapshot()
+    rendered = pressure.render(snapshot)
+
+    assert snapshot["mode"] == "task"
+    assert snapshot["session_root"] == str(task)
+    assert snapshot["global_scan"] == "skipped"
+    assert "global scan skipped" in rendered
+
+
+def test_lifecycle_pressure_hook_noops_in_task_mode(tmp_path: Path):
+    live = tmp_path / "live-limen"
+    task = tmp_path / "task-worktree"
+    live.mkdir()
+    task.mkdir()
+    env = {
+        **os.environ,
+        "LIMEN_LIVE_ROOT": str(live),
+        "LIMEN_SESSION_ROOT": str(task),
+        "LIMEN_SESSION_MODE": "task",
+    }
+
+    proc = subprocess.run(
+        ["bash", str(ROOT / "scripts" / "hooks" / "session-lifecycle-pressure.sh")],
+        cwd=task,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert proc.stdout == ""
+    assert proc.stderr == ""
+    assert not (task / "logs" / "session-lifecycle-pressure.md").exists()
+    assert not (live / "logs" / "session-lifecycle-pressure.md").exists()
+
+
+def test_session_orient_hook_prefers_cwd_git_root_over_stale_claude_project_dir(tmp_path: Path):
+    task = tmp_path / "task-worktree"
+    stale = tmp_path / "stale-claude-root"
+    _init_repo(task)
+    _init_repo(stale)
+    env = {
+        **os.environ,
+        "LIMEN_LIVE_ROOT": str(ROOT),
+        "CLAUDE_PROJECT_DIR": str(stale),
+        "LIMEN_ORIENT_NO_WRITE": "1",
+    }
+
+    proc = subprocess.run(
+        ["bash", str(ROOT / "scripts" / "hooks" / "session-orient.sh")],
+        cwd=task,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert f"**Session scope** — task worktree · {task}" in proc.stdout
+    assert str(stale) not in proc.stdout
 
 
 def test_done_session_orient_pins_generators_to_checkout_root():

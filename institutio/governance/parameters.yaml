@@ -1218,6 +1218,18 @@ parameters:
     self_update: none
     owner: limen-daemon
     note: "Live checkout that launchd is expected to run. dispatch-health.py compares this root to the verified conductor worktree before async/heartbeat receipts are trusted."
+  LIMEN_SESSION_MODE:
+    default: "task"
+    env: LIMEN_SESSION_MODE
+    self_update: none
+    owner: limen-daemon
+    note: "Session scope contract for hooks and task-pane launchers. task means orientation and lifecycle hooks stay inside LIMEN_SESSION_ROOT; control-plane means the live Limen cockpit may report global board, handoff, worktree-debt, and lifecycle state."
+  LIMEN_SESSION_ROOT:
+    default: "$PWD git root"
+    env: LIMEN_SESSION_ROOT
+    self_update: none
+    owner: limen-daemon
+    note: "Current task/session worktree root. Task panes export this explicitly so stale CLAUDE_PROJECT_DIR or LIMEN_ROOT values cannot make a clean task worktree inherit live-root dirt."
   LIMEN_ALLOW_LIVE_COMMIT:
     default: "0"
     env: LIMEN_ALLOW_LIVE_COMMIT

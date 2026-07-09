@@ -224,10 +224,64 @@ def test_isolated_lane_env_points_limen_root_at_worktree(tmp_path: Path, monkeyp
     env = D._lane_run_env("codex", wt)
 
     assert env["LIMEN_LIVE_ROOT"] == str(live_root)
+    assert env["LIMEN_SESSION_MODE"] == "task"
+    assert env["LIMEN_SESSION_ROOT"] == str(wt)
     assert env["LIMEN_ROOT"] == str(wt)
     assert env["LIMEN_TASKS"] == str(wt / "tasks.yaml")
+    assert env["CLAUDE_PROJECT_DIR"] == str(wt)
+    assert env["CODEX_PROJECT_DIR"] == str(wt)
     assert env["PWD"] == str(wt)
     assert env["OLDPWD"] == str(live_root)
+
+
+def test_legacy_local_task_launch_refuses_live_limen_root(tmp_path: Path, monkeypatch, capsys) -> None:
+    live_root = tmp_path / "live"
+    live_root.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=live_root, check=True)
+    monkeypatch.setenv("LIMEN_ROOT", str(live_root))
+    monkeypatch.setenv("LIMEN_ISOLATION", "off")
+    monkeypatch.delenv("LIMEN_SESSION_MODE", raising=False)
+    monkeypatch.setattr(D, "_resolve_agent_binary", lambda agent: agent)
+    monkeypatch.setattr(D, "_run_cmd", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError()))
+    task = Task(
+        id="LIVE-ROOT",
+        title="do not run in live root",
+        repo=str(live_root),
+        target_agent="codex",
+        created=date(2026, 7, 9),
+    )
+
+    assert D._call_local_agent("codex", task, dry_run=False) is False
+
+    assert "refusing task launch in live Limen root" in capsys.readouterr().out
+
+
+def test_legacy_local_control_plane_launch_can_use_live_limen_root(tmp_path: Path, monkeypatch) -> None:
+    live_root = tmp_path / "live"
+    live_root.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=live_root, check=True)
+    monkeypatch.setenv("LIMEN_ROOT", str(live_root))
+    monkeypatch.setenv("LIMEN_ISOLATION", "off")
+    monkeypatch.setenv("LIMEN_SESSION_MODE", "control-plane")
+    monkeypatch.setattr(D, "_resolve_agent_binary", lambda agent: agent)
+    calls = []
+
+    def fake_run_cmd(cmd, task, dry_run, cwd=None):
+        calls.append({"cmd": cmd, "cwd": cwd})
+        return True
+
+    monkeypatch.setattr(D, "_run_cmd", fake_run_cmd)
+    task = Task(
+        id="CONTROL",
+        title="control pane",
+        repo=str(live_root),
+        target_agent="codex",
+        created=date(2026, 7, 9),
+    )
+
+    assert D._call_local_agent("codex", task, dry_run=False) is True
+
+    assert calls and calls[0]["cwd"] == str(live_root)
 
 
 def test_auto_lane_selector_includes_github_actions_and_blocks_oz_without_warp_key(tmp_path: Path, monkeypatch) -> None:

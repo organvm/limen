@@ -18,6 +18,7 @@ counts-only logs/health-organ-state.json, and lever IDs/titles that already live
 the committed registry. The firewall guards this generator, not just its output.
 """
 
+import argparse
 import json
 import os
 import re
@@ -29,10 +30,75 @@ try:
 except Exception:  # pragma: no cover - dependency absence is a fail-open hook path.
     yaml = None
 
-ROOT = Path(os.environ.get("LIMEN_ROOT") or Path(__file__).resolve().parents[1])
+VALID_SESSION_MODES = {"task", "control-plane"}
+LIVE_ROOT = Path(
+    os.environ.get("LIMEN_LIVE_ROOT")
+    or os.environ.get("LIMEN_ROOT")
+    or Path(__file__).resolve().parents[1]
+).expanduser()
+
+
+def _discover_session_root() -> Path:
+    raw_session = os.environ.get("LIMEN_SESSION_ROOT")
+    if raw_session and Path(raw_session).expanduser().exists():
+        return Path(raw_session).expanduser()
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except Exception:
+        proc = subprocess.CompletedProcess([], 1, "", "")
+    if proc.returncode == 0 and proc.stdout.strip():
+        return Path(proc.stdout.strip()).expanduser()
+    for key in ("CLAUDE_PROJECT_DIR", "CODEX_PROJECT_DIR"):
+        raw = os.environ.get(key)
+        if raw and Path(raw).expanduser().exists():
+            return Path(raw).expanduser()
+    return Path.cwd()
+
+
+SESSION_ROOT = _discover_session_root()
+
+
+def _same_path(left: Path, right: Path) -> bool:
+    try:
+        return left.expanduser().resolve() == right.expanduser().resolve()
+    except OSError:
+        return left.expanduser().absolute() == right.expanduser().absolute()
+
+
+def _normal_mode(raw: str | None) -> str | None:
+    if raw in VALID_SESSION_MODES:
+        return raw
+    return None
+
+
+SESSION_MODE = _normal_mode(os.environ.get("LIMEN_SESSION_MODE")) or (
+    "control-plane" if _same_path(SESSION_ROOT, LIVE_ROOT) else "task"
+)
+ROOT = SESSION_ROOT if SESSION_MODE == "task" else LIVE_ROOT
 # The auto-memory index lives outside the repo (per-user projects dir); resolve it from
 # this repo's identity so the lookup is derived, never pinned to a machine path.
 MEMORY_INDEX = Path.home() / ".claude" / "projects" / "-Users-4jp-Workspace-limen" / "memory" / "MEMORY.md"
+
+
+def configure_session(
+    *,
+    mode: str | None = None,
+    session_root: str | Path | None = None,
+    live_root: str | Path | None = None,
+) -> None:
+    global LIVE_ROOT, SESSION_ROOT, SESSION_MODE, ROOT
+    if live_root is not None:
+        LIVE_ROOT = Path(live_root).expanduser()
+    if session_root is not None:
+        SESSION_ROOT = Path(session_root).expanduser()
+    requested = _normal_mode(mode) or _normal_mode(os.environ.get("LIMEN_SESSION_MODE"))
+    SESSION_MODE = requested or ("control-plane" if _same_path(SESSION_ROOT, LIVE_ROOT) else "task")
+    ROOT = SESSION_ROOT if SESSION_MODE == "task" else LIVE_ROOT
 
 
 def _read_text(path, limit_bytes=None):
@@ -181,8 +247,16 @@ def section_git():
     return f"**Git** — {branch}{pos} · {dirty}"
 
 
+def section_session_scope() -> str:
+    if SESSION_MODE != "task":
+        return ""
+    return f"**Session scope** — task worktree · {ROOT}"
+
+
 def section_lifecycle_pressure():
     """Local/remote lifecycle pressure from the last SessionEnd refresh."""
+    if SESSION_MODE == "task":
+        return ""
     txt = _read_text(ROOT / "logs" / "session-lifecycle-pressure.md", limit_bytes=1024)
     line = next((ln.strip() for ln in txt.splitlines() if ln.strip()), "")
     if line:
@@ -269,8 +343,14 @@ def section_omega() -> str:
     return line
 
 
-def main():
-    sections = (
+def _sections_for_mode():
+    if SESSION_MODE == "task":
+        return (
+            section_session_scope,
+            section_git,
+            section_pointers,
+        )
+    return (
         section_north_star,
         section_omega,
         section_handoff,
@@ -283,6 +363,16 @@ def main():
         section_tranche,
         section_pointers,
     )
+
+
+def main(argv: list[str] | None = None):
+    parser = argparse.ArgumentParser(description="Emit a PII-free session-orientation digest.")
+    parser.add_argument("--mode", choices=sorted(VALID_SESSION_MODES), help="session mode")
+    parser.add_argument("--session-root", help="current task/session worktree root")
+    parser.add_argument("--live-root", help="stable Limen control-plane root")
+    args = parser.parse_args(argv)
+    configure_session(mode=args.mode, session_root=args.session_root, live_root=args.live_root)
+    sections = _sections_for_mode()
     parts = []
     for fn in sections:
         try:
