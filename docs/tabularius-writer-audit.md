@@ -21,15 +21,15 @@ Unclassified calls: `0`
 | Path | Line | Call | Owner packet |
 |---|---:|---|---|
 | `cli/src/limen/cli.py` | `86` | `tasks_file.write_text` | `TAB-MAINTENANCE-BOARD-FALLBACKS` |
-| `cli/src/limen/dispatch.py` | `1872` | `save_limen_file` | `TAB-STATUS-DISPATCH-RESULTS` |
-| `cli/src/limen/dispatch.py` | `2387` | `save_limen_file` | `TAB-STATUS-DISPATCH-RESULTS` |
-| `cli/src/limen/dispatch.py` | `2443` | `save_limen_file` | `TAB-STATUS-DISPATCH-RESULTS` |
-| `cli/src/limen/dispatch.py` | `2527` | `save_limen_file` | `TAB-STATUS-DISPATCH-RESULTS` |
-| `cli/src/limen/dispatch.py` | `2384` | `save_limen_file` | `TAB-STATUS-DISPATCH-RESULTS` |
+| `cli/src/limen/dispatch.py` | `2659` | `save_limen_file` | `TAB-STATUS-DISPATCH-RESULTS` |
+| `cli/src/limen/dispatch.py` | `3207` | `save_limen_file` | `TAB-STATUS-DISPATCH-RESULTS` |
+| `cli/src/limen/dispatch.py` | `3263` | `save_limen_file` | `TAB-STATUS-DISPATCH-RESULTS` |
+| `cli/src/limen/dispatch.py` | `3347` | `save_limen_file` | `TAB-STATUS-DISPATCH-RESULTS` |
+| `cli/src/limen/dispatch.py` | `3204` | `save_limen_file` | `TAB-STATUS-DISPATCH-RESULTS` |
 | `cli/src/limen/harvest.py` | `163` | `save_limen_file` | `TAB-STATUS-HARVEST-RESULTS` |
-| `scripts/dispatch-async.py` | `364` | `save_limen_file` | `TAB-STATUS-ASYNC-HEAL` |
-| `scripts/dispatch-async.py` | `777` | `save_limen_file` | `TAB-STATUS-ASYNC-HEAL` |
-| `scripts/dispatch-async.py` | `533` | `save_limen_file` | `TAB-STATUS-ASYNC-HEAL` |
+| `scripts/dispatch-async.py` | `276` | `save_limen_file` | `TAB-STATUS-ASYNC-HEAL` |
+| `scripts/dispatch-async.py` | `700` | `save_limen_file` | `TAB-STATUS-ASYNC-HEAL` |
+| `scripts/dispatch-async.py` | `445` | `save_limen_file` | `TAB-STATUS-ASYNC-HEAL` |
 | `scripts/heal-board.py` | `251` | `atomic_write_text` | `TAB-MAINTENANCE-BOARD-FALLBACKS` |
 | `scripts/heal-board.py` | `190` | `save_limen_file` | `TAB-MAINTENANCE-BOARD-FALLBACKS` |
 | `scripts/heal-dispatch.py` | `147` | `save_limen_file` | `TAB-STATUS-ASYNC-HEAL` |
@@ -39,7 +39,7 @@ Unclassified calls: `0`
 | `scripts/quicken.py` | `497` | `save_limen_file` | `TAB-ROUTE-RESIDUE-MUTATORS` |
 | `scripts/rewrite-owners.py` | `107` | `save_limen_file` | `TAB-ROUTE-RESIDUE-MUTATORS` |
 | `scripts/route.py` | `621` | `save_limen_file` | `TAB-ROUTE-RESIDUE-MUTATORS` |
-| `scripts/self-heal.py` | `278` | `save_limen_file` | `TAB-CREATION-FALLBACKS` |
+| `scripts/self-heal.py` | `307` | `save_limen_file` | `TAB-CREATION-FALLBACKS` |
 | `scripts/self-improve.py` | `435` | `save_limen_file` | `TAB-ROUTE-RESIDUE-MUTATORS` |
 | `scripts/usage-telemetry.py` | `207` | `path.write_text` | `TAB-MAINTENANCE-BOARD-FALLBACKS` |
 

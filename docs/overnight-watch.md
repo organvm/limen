@@ -13,13 +13,15 @@ It writes:
 
 - `logs/overnight-watch.jsonl` append-only receipts
 - `logs/overnight-watch-state.json` repeated-tick state
-- `logs/overnight-watch.md` latest human-readable status
+- `logs/overnight-watch.md` latest counts-only human-readable status
 - `logs/overnight-watch-alert.json` only when a `WATCH_ALERT` is active
 
 Recommended supervisor cadence is a cheap one-shot invocation every five
-minutes. The script exits non-zero only when it has concrete evidence of a
-blocker, such as a missing heartbeat log, stale heartbeat log, repeated latest
-tick with no active workers, or optional dispatch-env drift.
+minutes. Exit `10` means the value gate blocked generic dispatch and printed
+the next command to run. Exit `1` means it has concrete evidence of a
+`WATCH_ALERT`, such as a missing heartbeat log, stale heartbeat log, repeated
+latest tick with no active workers, stale handoff, hard value-gate stop, or
+optional dispatch-env drift.
 
 The repo includes a launchd job for that cadence:
 
