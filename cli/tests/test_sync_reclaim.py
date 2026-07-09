@@ -16,6 +16,7 @@ import json
 import os
 import subprocess
 import time
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -268,7 +269,7 @@ def _add_wt(main: Path, wtroot: Path, name: str, branch_from="origin/main"):
     return path
 
 
-def _run_reclaim(wtroot: Path, limen_root: Path, apply=True, extra_env=None):
+def _run_reclaim(wtroot: Path, limen_root: Path, apply=True, extra_env=None, extra_args=None):
     env = {
         **os.environ,
         "LIMEN_WORKTREE_ROOT": str(wtroot),
@@ -283,6 +284,8 @@ def _run_reclaim(wtroot: Path, limen_root: Path, apply=True, extra_env=None):
     args = ["python3", str(RECLAIM)]
     if apply:
         args += ["--apply", "--force"]
+    if extra_args:
+        args += extra_args
     return subprocess.run(args, capture_output=True, text=True, env=env)
 
 
@@ -314,6 +317,44 @@ def _write_reclaim_acceptance(
     if reason:
         event["reason"] = reason
     path.write_text(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+
+
+def _load_reclaim_module():
+    spec = importlib.util.spec_from_file_location("reclaim_worktrees", RECLAIM)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_reclaim_reachable_from_remote_uses_single_contains_query(tmp_path, monkeypatch):
+    reclaim = _load_reclaim_module()
+    calls: list[list[str]] = []
+
+    def fake_git(args, cwd, timeout=30):
+        calls.append(args)
+        assert cwd == tmp_path
+        assert timeout == 30
+        if args == [
+            "for-each-ref",
+            "--contains=abc123",
+            "--format=%(refname)",
+            "refs/remotes",
+        ]:
+            return subprocess.CompletedProcess(["git", *args], 0, "refs/remotes/origin/main\n", "")
+        raise AssertionError(f"unexpected git call: {args}")
+
+    monkeypatch.setattr(reclaim, "git", fake_git)
+
+    assert reclaim.reachable_from_remote(tmp_path, "abc123") is True
+    assert calls == [
+        [
+            "for-each-ref",
+            "--contains=abc123",
+            "--format=%(refname)",
+            "refs/remotes",
+        ]
+    ]
 
 
 def test_reclaim_standing_grant_removes_clean_pushed_idle(tmp_path):
@@ -496,6 +537,32 @@ def test_reclaim_dry_run_removes_nothing(tmp_path):
     assert r.returncode == 0
     assert dead.exists()  # dry-run never deletes
     assert "dry-run" in r.stdout
+
+
+def test_reclaim_json_dry_run_reports_candidate_acceptance_status(tmp_path):
+    main, bare, wtroot = _wt_root_with(tmp_path)
+    dead = _add_wt(main, wtroot, "dead")
+    _age(dead, 5)
+    (main / "logs").mkdir(exist_ok=True)
+
+    r = _run_reclaim(
+        wtroot,
+        main,
+        apply=False,
+        extra_args=["--json"],
+        extra_env={"LIMEN_RECLAIM_STANDING_ACCEPTANCE": "0"},
+    )
+
+    assert r.returncode == 0, r.stderr
+    assert dead.exists()  # JSON dry-run never deletes
+    report = json.loads(r.stdout)
+    item = next(row for row in report["items"] if row["root"] == "dead")
+    assert item["path"] == str(dead.resolve())
+    assert item["action"] == "remove-worktree"
+    assert item["reason"] == "clean+merged+idle"
+    assert item["size_bytes"] > 0
+    assert item["accepted"] is False
+    assert item["acceptance_status"] == "missing-reclaim-acceptance"
 
 
 def test_reclaim_removes_generated_log_shell(tmp_path):
