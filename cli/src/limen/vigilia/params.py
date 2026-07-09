@@ -61,11 +61,14 @@ def _load_panel() -> dict[str, object]:
 @overload
 def get(key: str, default: T, cast: None = None) -> Union[T, str]: ...
 
+
 @overload
 def get(key: str, default: T, cast: Callable[[Any], T]) -> T: ...
 
+
 @overload
 def get(key: str, default: None = None, cast: None = None) -> Optional[object]: ...
+
 
 def get(key: str, default: object = None, cast: Optional[Callable[[Any], object]] = None) -> object:
     """Resolve a parameter.
