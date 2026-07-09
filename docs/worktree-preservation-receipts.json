@@ -2468,6 +2468,22 @@
       "root": "limen_jules-heal-rebase-organvm-domus-genoma-183-030e",
       "score_discount": 35,
       "status": "open_pr_preserved"
+    },
+    {
+      "branch": "limen/excav-0708-exporter-arm-cd3aa8ba",
+      "classification": "open draft PR preserves local worktree head",
+      "evidence_updated_utc": "2026-07-09T03:55:13Z",
+      "head": "b54c3925e87ea606e68b5e2b622967d961c376be",
+      "lane": "remote-pr-open",
+      "next_action": "Review draft PR #115, then merge, supersede, or archive this lane. Local checkout is no longer the only review surface.",
+      "pr_draft": false,
+      "pr_number": 115,
+      "pr_state": "OPEN",
+      "pr_url": "https://github.com/organvm/a-i-chat--exporter/pull/115",
+      "repo": "organvm/a-i-chat--exporter",
+      "root": "excav-0708-exporter-arm-cd3aa8ba",
+      "score_discount": 35,
+      "status": "open_pr_preserved"
     }
   ],
   "schema": 1
