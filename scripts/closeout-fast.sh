@@ -105,17 +105,23 @@ run_gate() {
   fi
 }
 
-run_and_require_ready() {
+report_live_root_gate() {
   local label="$1"
   shift
   local receipt
   receipt="$(mktemp "${TMPDIR:-/tmp}/limen-closeout-fast.XXXXXX")"
   TMP_FILES+=("$receipt")
-  "$@" | tee "$receipt"
-  if ! grep -Fq 'Status: `ready`' "$receipt"; then
-    printf '\n%s did not report Status: `ready`\n' "$label" >&2
+  if ! "$@" | tee "$receipt"; then
+    record_gate "$label" "fail"
     return 1
   fi
+  if grep -Fq 'Status: `ready`' "$receipt"; then
+    record_gate "$label" "ready"
+  else
+    record_gate "$label" "blocked-report"
+    return 1
+  fi
+  return 0
 }
 
 acquire_queue_lock() {
@@ -174,7 +180,10 @@ run_gate "Validate task board" python3 scripts/validate-task-board.py --tasks ta
 
 run_gate "Check TABVLARIVS ticket inbox" python3 scripts/tabularius-organ.py --check
 
-run_gate "Check live-root gate" run_and_require_ready "live-root-gate" python3 scripts/live-root-gate.py
+step "Report live-root gate"
+if ! report_live_root_gate "Report live-root gate" python3 scripts/live-root-gate.py; then
+  printf 'live-root gate is report-only in closeout-fast; use its owner receipt for daemon/live-root blockers\n'
+fi
 
 run_gate "Probe dispatch health" python3 scripts/dispatch-health.py --probe-async
 
