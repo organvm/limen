@@ -70,7 +70,7 @@ A *closeout* means **ZERO open or dangling items introduced by this task/session
 2. **An idempotent fixed point is reached** — re-running the full verification produces **no changes** (see [Definition of Done](#definition-of-done)). If a re-run still mutates state, you are not done.
 3. **All loose work you introduced or touched is committed across every affected repo** — no uncommitted diffs, no stranded branches; `git status` is clean wherever you touched.
 
-If gaps remain, **close them first**, then archive and hand off. A genuinely human-gated item is **filed in its own git-tracked owner** — a lever in `his-hand-levers.json`, or (for any token/secret/login/env atom) the credential organ + Wall #320 — **never recited back to the operator in a closeout, and never appended as a "but also this" tail.** The relay cites the registry and the green predicate; it does **not** enumerate his atoms. He reads owed work in the registry on his own cadence — **a closeout that hands him a list has failed, even when every item is technically homed.** If an atom is *already* filed, that is DONE: do not re-surface it. Run `/closeout` to execute this discipline.
+If gaps remain, **close them first**, then archive and hand off. A genuinely human-gated item is **filed in its own git-tracked owner** — a lever in `his-hand-levers.json`, or (for any token/secret/login/env atom) the credential organ + Wall #320 — **never recited back to the operator in a closeout, and never appended as a "but also this" tail.** The relay cites the registry and the green predicate; it does **not** enumerate his atoms. He reads owed work in the registry on his own cadence — **a closeout that hands him a list has failed, even when every item is technically homed.** If an atom is *already* filed, that is DONE: do not re-surface it. When the predicates are green at the fixed point, end with the terminal statement — **"CLOSEOUT COMPLETE — idempotent fixed point, zero dangling items"** — and **stop**: nothing follows it. A closeout that keeps talking past the terminal statement — any caveat tail — has failed. Run `/closeout` to execute this discipline.
 
 Point 1 has a shipped predicate — **`scripts/no-tasks-on-me.sh`** (exit `0` ⟺ nothing hangs on the ephemeral session). It proves every human-gated item lives in the git-tracked registry with a real owner (recall-only memory at `~/.claude/…` is **not** a durable home), that no preserved work is stranded on a local-only `*-staged-*` ref (each must be merged or cited by a lever), and that the registry stays PII-clean (it publishes). Credential/secret atoms live in a **separate** git-tracked home (the credential organ), so the closeout gate is **both** `scripts/no-tasks-on-me.sh` **and** `scripts/credential-wall.py --check` (exit `0` ⟺ every secret in use is homed). Both green ⟺ nothing hangs, and the relay then names the registry, never the atoms. Run them instead of re-auditing ownership by hand each session; a chat audit you have to repeat next session — or a "here's what's still open" list handed to the operator — *is* leaving the discipline hanging on him.
 
@@ -81,7 +81,7 @@ When asked to define "done" or a "goal", deliver an **executable predicate** —
 - **Write the predicate first.** Before doing the work, author a `done.sh` (or a test) that checks every concrete completion criterion: tests pass, build green, no dangling items, each owner records its own remaining work. Commit it (durable predicates only — not one-off throwaways; see [Edits Policy](#edits-policy)).
 - **It must be self-verifying, runnable, and idempotent.** Exit `0` ⟺ done.
 - **Do not claim completion — or write any closeout — until it exits 0.** Run it and summarize the output as proof. If it fails, keep iterating until it passes. If a higher-priority harness rule prevents running it, report the blocker rather than claiming verified completion.
-- For whole-system "done" in this repo, the predicate is already shipped: **`scripts/verify-whole.sh`** (lint → compile → contracts → `pytest web/api/tests cli/tests -q` → runtime/worker probes → dashboard build → `git diff --check`; prints `Whole-system verification passed`). A task-level `done.sh` should call it or a scoped subset — don't reinvent it.
+- For whole-system "done" in this repo, the predicate is already shipped: **`scripts/verify-whole.sh`** (lint → compile → contracts → `pytest web/api/tests cli/tests -q` → runtime/worker probes → dashboard build → `git diff --check`; prints `Whole-system verification passed`). A task-level `done.sh` should call it or a scoped subset — `scripts/verify-scoped.sh` is the shipped scoped subset; don't reinvent either.
 
 ## Engage the Real Problem First
 
@@ -99,6 +99,10 @@ correction (censor precedent `PREC-2026-07-04-friction-shallow-first`):
 - **Options are a decision, not a deliverable.** Pick the reversible best by the cascade
   (protocol → precedent → exploration → ideal-form) and proceed; present alternatives only when a
   genuine human-gated lever forces the choice.
+- **The registry owns the answer.** Never ask the operator — or guess — about a fact or framing a
+  registry already owns (`his-hand-levers.json`, `organ-ladder.json`, `pillars.yaml`, `tasks.yaml`,
+  `censor/precedents.jsonl`): query it and proceed. (Precedent: the "8 vs 10 organs" question was
+  asked while `organ-ladder.json` held the count.)
 
 ## Never Over-Claim Completion
 
@@ -144,7 +148,13 @@ For any search or recon whose scope spans multiple domains, **fan out parallel r
 
 ## Worktree Isolation & CI Gate Matrix
 
-Isolate work in a **git worktree so the live fleet is untouched** (see `GEMINI.md` for the swarm protocol). Then run the **full local gate matrix** before pushing:
+Isolate work in a **git worktree so the live fleet is untouched** (see `GEMINI.md` for the swarm protocol). Then verify before pushing — **scoped to the diff, never the whole world by default**:
+
+- **`scripts/verify-scoped.sh` is the default push gate.** It maps the changed paths (branch diff vs `origin/main` plus uncommitted/untracked work) to only the gates they implicate, runs those, and names every gate it skipped. A docs append must never pay for a Next.js build, a wrangler boot, and 1,200+ tests.
+- **The full matrix below is a pre-merge event, not a per-session tax.** Run it — or let CI run it — only when the diff touches deploy-trigger paths (the website guardrail `merge-policy.sh` enforces at merge time), when scoping cannot attribute the change, or on explicit request.
+- **`verify-whole.sh` is machine-serialized** via a lock file (`LIMEN_VERIFY_LOCK_FILE`; opt-out `LIMEN_VERIFY_NO_LOCK=1` for single-purpose CI runners): concurrent runs from parallel sessions wait instead of stampeding the host with simultaneous npm installs, workerd boots, and production builds.
+
+The full matrix, for when it *is* implicated:
 
 | Gate | Command |
 |------|---------|
@@ -158,9 +168,9 @@ Isolate work in a **git worktree so the live fleet is untouched** (see `GEMINI.m
 | Build | `npm run build` (in `web/app`) |
 | Whole-system | `scripts/verify-whole.sh` |
 
-- For each failure, **fix root-to-leaf and re-run the full matrix** — loop until every gate passes end-to-end. Do not chase one gate green while another regresses.
+- For each failure, **fix root-to-leaf and re-run the implicated gates** — loop until they pass end-to-end (the full matrix only when the diff implicates it). Do not chase one gate green while another regresses.
 - **Surface masked failures from dependency bumps** — a green that only passes because a check was skipped or a dependency silently changed behavior.
-- **Only after every gate is green locally**, push and open the PR, pasting the full green run as proof. **Then merge it yourself** the moment `scripts/merge-policy.sh <PR#>` exits `0` (CLEARED) — that predicate enforces the website guardrail; never merge on a HOLD/BLOCKED. See [Merge & Branch Protocol](#merge--branch-protocol).
+- **Only after the implicated gates are green locally**, push and open the PR, pasting the green run as proof. **Then merge it yourself** the moment `scripts/merge-policy.sh <PR#>` exits `0` (CLEARED) — that predicate enforces the website guardrail; never merge on a HOLD/BLOCKED. See [Merge & Branch Protocol](#merge--branch-protocol).
 
 ## Standing Autonomy & Compliant Gate Reroute
 
@@ -191,6 +201,10 @@ Concretely, from precedent:
   job that cannot pair with the extension does not fight it — fall back to headless Playwright
   (token/magic-link URLs carry their own identity), dry-run → screenshot → act, verify via the
   server's observed effect (never the acting session's optimistic DOM), and abort on any captcha.
+- **A genuinely human-gated gate is hit** → state **`BLOCKED: <atom>`** exactly **once**, file the
+  atom in its registry owner (a lever in `his-hand-levers.json`; credential atoms → the credential
+  organ + Wall #320), then leave it — **never loop on, poll, or re-surface a filed gate** — and
+  keep driving every other reversible lane to its verified end in the same session.
 
 Never present a reroutable gate as human work. Reduce every blocker to its single irreducible atom
 (if any), clear the rest through compliant mechanisms, and report what was done. The
