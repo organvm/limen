@@ -1359,3 +1359,31 @@ parameters:
     self_update: none
     owner: limen-daemon
     note: "Per-description character cap the Codex slimmer distills to. Lower it if Codex still warns that descriptions were shortened; raise it to preserve more of each description. The knob, not a hardcode."
+
+  # --- CAPACITY: GitHub Actions lane health check repo (capacity.py) ---
+  LIMEN_GITHUB_ACTIONS_REPO:
+    default: "organvm/limen"
+    env: LIMEN_GITHUB_ACTIONS_REPO
+    self_update: none
+    owner: arms-agents
+    note: "Default repo for GitHub Actions lane health probes in capacity.py. Override to point at the CI-status origin for a different repo."
+  LIMEN_GITHUB_ACTIONS_HEALTH_REPO:
+    default: ""                # derived: falls back to LIMEN_GITHUB_ACTIONS_REPO
+    env: LIMEN_GITHUB_ACTIONS_HEALTH_REPO
+    self_update: none
+    owner: arms-agents
+    note: "Optional override repo for the GitHub Actions workflow-status health check in capacity.py. Unset means use LIMEN_GITHUB_ACTIONS_REPO."
+
+  # --- MAIL STORY: private mail atom ledger (mail-story-ledger.py) ---
+  LIMEN_PRIVATE_MAIL_STORY:
+    default: "$LIMEN_ROOT/.limen-private/mail-story"
+    env: LIMEN_PRIVATE_MAIL_STORY
+    self_update: none
+    owner: continuity
+    note: "Private root for the mail-story atom ledger (mail-story-ledger.py). Structured to be git-ignored; committed receipts carry only redacted aggregates."
+  LIMEN_MAIL_ENVELOPE_INDEX:
+    default: "~/Library/Mail/V10/MailData/Envelope Index"
+    env: LIMEN_MAIL_ENVELOPE_INDEX
+    self_update: none
+    owner: continuity
+    note: "Apple Mail Envelope Index sqlite path read by mail-story-ledger.py. Read-only probe; the database is never mutated."
