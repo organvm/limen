@@ -545,7 +545,9 @@ def _session_value_admission_gate(
     tasks_path: Path | None = None,
     task_id: str | None = None,
 ) -> dict[str, Any]:
-    explicit_source = _explicit_task_source(tasks_path or Path(os.environ.get("LIMEN_TASKS", root / "tasks.yaml")), task_id)
+    explicit_source = _explicit_task_source(
+        tasks_path or Path(os.environ.get("LIMEN_TASKS", root / "tasks.yaml")), task_id
+    )
     if explicit_source:
         return {"allow": True, "exit_code": 0, "action": "explicit_task_id", "skipped": True}
     if not _truthy_env("LIMEN_SESSION_VALUE_GATE", True):
