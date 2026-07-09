@@ -14,10 +14,28 @@ fi
 [ -z "$ROOT" ] && exit 0
 GEN="$ROOT/scripts/session-lifecycle-pressure.py"
 [ -f "$GEN" ] || exit 0
+LOCK_DIR="${TMPDIR:-/tmp}/limen-session-lifecycle-pressure.lock"
+HOOK_TIMEOUT="${LIMEN_SESSION_LIFECYCLE_TIMEOUT:-45}"
+DEBT_TIMEOUT="${LIMEN_SESSION_WORKTREE_DEBT_TIMEOUT:-30}"
+
+run_pressure() {
+  if command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$HOOK_TIMEOUT" "$@"
+  elif command -v timeout >/dev/null 2>&1; then
+    timeout "$HOOK_TIMEOUT" "$@"
+  else
+    "$@"
+  fi
+}
 
 (
+  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    exit 0
+  fi
+  trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
   if command -v python3 >/dev/null 2>&1; then
-    python3 "$GEN" --write || true
+    export LIMEN_WORKTREE_DEBT_TIMEOUT="$DEBT_TIMEOUT"
+    run_pressure nice -n 10 python3 "$GEN" --write || true
   fi
 ) >/dev/null 2>&1 </dev/null &
 

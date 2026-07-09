@@ -10,6 +10,15 @@ step() {
   printf '\n==> %s\n' "$*"
 }
 
+cd "$ROOT"
+
+if [[ -z "${CI:-}" ]]; then
+  step "Check local closeout resource guard"
+  python3 scripts/closeout-resource-guard.py --mode verify-whole
+else
+  step "Skip local closeout resource guard in CI"
+fi
+
 ensure_web_app_deps() {
   # A fresh worktree (or clone) has no web/app/node_modules, so the surface-contract generation and
   # the dashboard build below fail with ERR_MODULE_NOT_FOUND (e.g. the 'yaml' package) — a local
@@ -26,8 +35,7 @@ ensure_web_app_deps() {
 }
 
 step "Compile Python modules and validate shell syntax"
-cd "$ROOT"
-python3 -m py_compile web/api/main.py cli/src/limen/*.py scripts/probe-runtime-adapter.py scripts/validate-lifecycle-adapters.py scripts/validate-task-board.py scripts/worktree-debt.py scripts/worktree-pr-receipts.py scripts/continuation-beat.py scripts/codex-token-accounting.py scripts/overnight-watch.py scripts/session-corpus-ledger.py scripts/corpus-feed.py scripts/prompt-lifecycle-ledger.py scripts/prompt-priority-map.py scripts/prompt-batch-review-ledger.py scripts/prompt-packet-ledger.py scripts/current-session-fanout-plan.py scripts/corpus-command-center.py scripts/capability-substrate-ledger.py scripts/consolidation-gates.py scripts/network-health.py scripts/dispatch-health.py scripts/always-working.py scripts/live-root-gate.py scripts/session-blockers-ledger.py scripts/session-lifecycle-pressure.py scripts/session-attack-paths.py scripts/conductor-tranche.py scripts/session-value-review.py scripts/enactment-audit.py scripts/antigravity-scratch-bridge.py scripts/reap_acceptance.py scripts/check-removal-acceptance.py scripts/cvstos-organ.py scripts/armed-valve-audit.py scripts/ship-gate.py scripts/heal-convergence.py scripts/async-run-one.py scripts/ask-gate.py
+python3 -m py_compile web/api/main.py cli/src/limen/*.py scripts/probe-runtime-adapter.py scripts/validate-lifecycle-adapters.py scripts/validate-task-board.py scripts/worktree-debt.py scripts/worktree-pr-receipts.py scripts/continuation-beat.py scripts/codex-token-accounting.py scripts/overnight-watch.py scripts/session-corpus-ledger.py scripts/corpus-feed.py scripts/prompt-lifecycle-ledger.py scripts/prompt-priority-map.py scripts/prompt-batch-review-ledger.py scripts/prompt-packet-ledger.py scripts/current-session-fanout-plan.py scripts/corpus-command-center.py scripts/capability-substrate-ledger.py scripts/consolidation-gates.py scripts/network-health.py scripts/dispatch-health.py scripts/always-working.py scripts/live-root-gate.py scripts/session-blockers-ledger.py scripts/session-lifecycle-pressure.py scripts/closeout-resource-guard.py scripts/session-attack-paths.py scripts/conductor-tranche.py scripts/session-value-review.py scripts/enactment-audit.py scripts/antigravity-scratch-bridge.py scripts/reap_acceptance.py scripts/check-removal-acceptance.py scripts/cvstos-organ.py scripts/armed-valve-audit.py scripts/ship-gate.py scripts/heal-convergence.py scripts/async-run-one.py scripts/ask-gate.py
 bash -n scripts/preflight-cloud-run.sh scripts/probe-local-runtime.sh scripts/probe-local-worker.sh scripts/heartbeat-loop.sh scripts/verify-whole.sh scripts/merge-policy.sh scripts/tests/merge-policy.test.sh scripts/tests/enactment-audit.test.sh scripts/tests/armed-valve-audit.test.sh scripts/tests/ship-gate.test.sh scripts/tests/heal-convergence.test.sh scripts/tests/ask-gate.test.sh scripts/hooks/session-lifecycle-pressure.sh scripts/netmode.sh
 if command -v plutil >/dev/null; then
   plutil -lint container/launchd/com.user.netmeter.plist

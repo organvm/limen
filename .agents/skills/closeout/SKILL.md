@@ -11,10 +11,10 @@ A closeout means **ZERO open or dangling items** — no caveats, no "still open"
 
 1. **Verify ground truth (read-only) across all owners.** Fan out parallel read-only explorers — one per repo / component / ledger — each returning a structured packet `{ found, not_found, confidence }`. Merge into one report and flag conflicts. Never guess a location or timeframe; verify each explicitly.
 2. **Close every gap.** For each open item, either resolve it now or record it in *its own owner's* record (the repo/ledger that owns it) with the cheapest path to resolution. Nothing parked in a throwaway list.
-3. **Reach an idempotent fixed point.** Run the done-predicate (`scripts/verify-whole.sh` or the task's `done.sh`). Re-run until it produces **no changes** and exits 0. If a re-run still mutates state, you are not done — return to step 2.
+3. **Reach an idempotent fixed point.** In interactive sessions, run focused lane predicate(s), then `scripts/closeout-fast.sh`, then cite the remote CI/global receipt for whole-repo proof. `scripts/verify-whole.sh` remains the full predicate for CI/default-branch proof or an explicit quiet-window local run; it is not the first interactive move. Re-run the chosen predicate until it produces **no changes** and exits 0. If a re-run still mutates state, you are not done — return to step 2.
 4. **Commit loose work across all repos.** `git add <path>` explicitly (**never `-A`**); commit; confirm `git status` is clean everywhere you touched. Push staged branches — but leave merges/deploys to Anthony.
 5. **Produce a relay handoff.** A concise RELAY/closeout note: what changed, the proof (predicate output), and only the genuinely human-gated remainder — each already recorded in its owner.
 
 ## Gate
 
-Do **not** declare closeout until: every owner records its own remaining work, the verification re-runs to a zero-change fixed point, and all loose work is committed. Closeout means ZERO open items.
+Do **not** declare closeout until: every owner records its own remaining work, the verification re-runs to a zero-change fixed point, and all loose work is committed. During closeout, observe active heartbeat, Claude, watchdog, or daemon automation as owner-owned runtime state; report it as the reason to defer a broad local gate, but do not stop those processes unless the operator explicitly asks for process control. Closeout means ZERO open items.
