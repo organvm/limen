@@ -1,44 +1,84 @@
-# Sovereign Systems — CHARTER (the virtual agency)
+# Sovereign Systems — CHARTER (the boutique service desk)
 
-> **Boundary:** an AI-run consulting *operations* agency that works under and for a human principal. It does
-> not sign contracts, make final delivery, or replace the human consultant. The principal directs it and owns
-> every output. See [KERNEL.md](KERNEL.md) for the full guardrails.
+> **Boundary:** this is AI-run consulting operations that augment Anthony’s hands-on client work. It does
+not sell itself, send proposals, take payment, or represent a client. It produces clean, structured
+working copy for Anthony to review and act on.
 
 ## What it rivals
 
-A boutique consulting agency — not one freelancer juggling admin and delivery, but a coordinated
-bench where scoping is rigorous, execution is tracked, communication is proactive, and the principal
-operates with the leverage a well-staffed agency provides. This organ supplies that bench as AI roles.
+A boutique agency standard: one principal plus a coordinated bench that keeps discovery, delivery,
+quality control, and continuity from slipping. This is not a replacement for human strategy. It is the
+operating floor that lets one person run multiple engagements with consistent institutional output.
 
 ## The org-chart (AI roles, human-supervised)
 
 | Role | Does | Human check |
 |---|---|---|
-| **Principal (the consultant)** | strategy, client relationship, negotiation, final delivery | — (this is the human, Anthony) |
-| **Engagement Manager** | maintains the single source of truth: delivery state, timeline, blockers | principal approves status reports |
-| **Solutions Architect** | drafts the scope of work (SOW) based on intake, maps requirements to deliverables | principal finalizes and prices |
-| **Delivery Lead** | breaks SOW into actionable tasks, assigns to lanes, tracks completion | principal reviews task outputs |
-| **QA / Standard Enforcer** | checks deliverables against the quality bar and client context | principal has final say on quality |
-| **Operations / Compliance** | ensures data privacy, billing triggers, and governance adherence | principal signs contracts/invoices |
-
-The point of the chart: each role is a workflow the conductor can run continuously, so the engagement is
-always tracked, always moving forward, and always meeting the standard — the leverage a boutique agency buys with headcount.
+| **Engagement Partner** *(the human)* | strategic accept/reject, final scope, commitments, external sends | — (this is the human) |
+| **Intake Steward** | collects context, captures constraints, builds one client posture record | partner confirms completeness and fairness |
+| **Scope Architect** | turns intake into engagement hypothesis, assumptions, exclusions, and effort assumptions | partner approves boundaries before proposal |
+| **Delivery Manager** | sequences work into milestones, tracks standing, and surfaces blockers | partner approves reprioritization and commitments |
+| **Quality Auditor** | runs deliverable checks against agreed standards and missing assumptions | partner signs off each handoff slice |
+| **Risk & Governance Sentinel** | enforces manual-gating: no auto-send, no auto-bill, no blind commitments | partner is final authority for all external action |
 
 ## The workflows it runs
 
-1. **Intake → Mandate.** Capture the client context and requirements. Output: a draft Scope of Work (SOW) and engagement blueprint.
-2. **Mandate → Execution.** Break the SOW into tracked deliverables and tasks. Output: an active project plan with assigned lanes.
-3. **Execution → Standing.** Continuously monitor progress against the timeline and budget. Output: living status dashboards and drafted client updates.
-4. **Standard → QA.** Review all draft work product against the defined quality bar and client constraints. Output: flagged issues or cleared drafts ready for the Principal.
-5. **Governance → Delivery.** Package the final deliverables, trigger billing milestones, and prepare the handoff. Output: a clean delivery package (never sent automatically).
+1. **Intake → posture.** Client need becomes one record with Member, Mandate, standing, standards, and
+   open risks. Output: a single source of truth for the engagement.
+2. **Standards → agreement.** Scope, exclusions, timeline, assumptions, and review gates are assembled into
+   a proposal-grade draft. Output: draft scope artifact for partner review.
+3. **Kickoff → plan.** Engagement milestones are translated into an executable sequence with owners and
+   deadlines. Output: a staged execution map (no one-act commits).
+4. **Delivery → review.** Work products are drafted, indexed, and evaluated against the standard. Output:
+   review-ready draft + quality notes + next-step list.
+5. **Handoff → archive.** Every engagement closure writes what was promised, done, deferred, and unresolved
+   into the project archive. Output: repeatable closeout package for the next cycle.
 
 ## Inputs / outputs
 
-- **Inputs:** client requirements, context, feedback, constraints.
-- **Outputs:** draft SOWs, project plans, status reports, task breakdowns, QA reports, and draft deliverables. All advisory-to-the-principal; none self-acting or auto-sent.
+- **Inputs:** live client context, scope statements, context constraints, deadlines, partner preferences.
+- **Outputs:** posture record, scope draft, delivery plan, review log, quality checklist, closeout archive.
 
-## First proof
+## First proof: the engagement validator
 
-The micro instance — Anthony's active engagements (Maddie, Rob, Derek) — is the first deployment, documented in
-[PLAYBOOK.md](PLAYBOOK.md): a repeatable playbook detailing the intake-to-delivery flow, showing how manual prototypes
-are structured to become autonomic. Real client data is protected; the *structure* is the deliverable.
+The first six executable rules are `validate-consulting.py`:
+
+- **Rule #1: Valid Posture** — engagement standing must name a recognised delivery posture in the
+  canonical sequence (DISCOVERY → PROPOSAL → ACCEPTANCE → EXECUTION → REVIEW → HOLD → ARCHIVED).
+  Stages may not be skipped and may not regress.
+- **Rule #2: Manual Mode** — no engagement may claim autonomic delivery. Every milestone must declare
+  explicit human gates. The `autonomic` flag is prohibited.
+- **Rule #3: 5-Primitive Completeness** — every engagement record must capture all five kernel
+  primitives: Member, Mandate, Standing, Standard, and Governance.
+- **Rule #4: Scope Integrity** — scope changes must be tracked. Each engagement must carry an explicit
+  scope boundary and a change log.
+- **Rule #5: No Overreach** — the engagement scope must not claim to provide legal, tax, or medical
+  advice. The consulting organ is delivery infrastructure, not professional services.
+- **Rule #6: Evidence Integrity** — every `standard.evidence` field must reference real artifacts or
+  clear statuses — no TODO, TBD, or placeholder text.
+
+Rules #1-6 are automatically checked by `verify-whole.sh` (the Sovereign Systems step). Run them
+manually:
+
+```bash
+python organs/consulting/validate-consulting.py path/to/engagement.yaml
+python organs/consulting/validate-consulting.py --fleet
+python organs/consulting/validate-consulting.py --fleet --quiet
+```
+
+The micro instance is currently five named deployments that all pass validation:
+
+- **Maddie** (wellness — scope stability under shifting priorities)
+- **Rob** (fitness + chess — cadence stability and funnel engineering)
+- **Derek** (education + narrative — cross-domain portability)
+- **Jessica** (HR + Styx — greenfield niche entry at DISCOVERY)
+- **John F.** (finance — minimal-signal capture at DISCOVERY)
+
+The same process is being proven against all five, with explicit manual checkpoints and no autonomous
+outward actions.
+
+## Constraint note for this task state
+
+This organ is intentionally in **working manual prototype** mode. The face is polished, but the operating
+contract is still: draft and stage internally, hand over external execution to Anthony, and keep escalation to
+human hand the default.

@@ -51,6 +51,97 @@ When instructions conflict, the higher rule wins:
 `tasks.yaml` is authoritative for *state*; `AGENTS.md` is authoritative for *protocol*. Where a
 tool charter restates a rule from this file, this file is the source of truth.
 
+## Correction Propagation
+
+Human corrections are system input, not local chat residue. When the human corrects an agent about
+workflow, priority, ownership, evidence, cadence, or acceptance criteria, the active agent must
+propagate that correction before treating the session as closed.
+
+Use the narrowest durable surface that future siblings will actually read:
+
+- If the correction changes cross-agent behavior, update `AGENTS.md` or the owning instruction
+  standard and run the instruction drift predicate.
+- If the correction creates or changes work, submit a TABVLARIVS ticket/task packet instead of
+  editing the board ad hoc.
+- If the correction changes a lane's acceptance criteria, update that task, packet, PR body, or
+  receipt target with the new predicate.
+- If a correction cannot be applied immediately, record a precise blocker with the owner, missing
+  gate, and next command.
+
+A response-only apology does not propagate. A session that receives a correction and leaves no
+durable protocol, ticket, receipt, or blocker has not closed the loop for the swarm.
+
+## Engineering Ownership
+
+The human supplies ideal forms, pain points, priorities, taste, and acceptance pressure. Agents own
+the engineering translation. Do not ask the human to choose routine coding mechanics, branch shape,
+test scope, cleanup strategy, dispatch implementation, or best-practice tradeoffs when the repo,
+protocol, and evidence make a defensible path available.
+
+Choose the smallest sound implementation, verify it, and record the result. Escalate only for real
+human gates: irreversible deletion of personal data, credential or account actions, paid overages,
+public identity claims, legal/medical/financial commitments, or product/values decisions that cannot
+be derived from existing doctrine.
+
+## Source of Truth and Local Cache
+
+For GitHub, profile, repo inventory, credential, and public proof surfaces, the remote owner is the
+source of truth. A local checkout is a disposable cache or staging area; it is not the golden state.
+
+- Read remote state first through the GitHub API, live deployed endpoint, pinned issue, or owner repo
+  receipt before trusting a local clone.
+- If local work is required, create it in an isolated worktree or scratch lane, push/open the remote
+  receipt, then reap the local cache once lifecycle custody is proven.
+- Do not fall back to local files when the canonical object is remote and queryable.
+- Do not let local clone presence, local profile copies, or stale generated artifacts define public
+  truth. If a remote cannot be updated, record the owner repo, missing gate, and next command.
+
+## Run-and-Gun Substrate
+
+The laptop must be able to operate alone as a thin control plane. External SSDs are the durable
+library and processing substrate, not random leftovers from a recovery event.
+
+- Keep the laptop as hot cache: active worktrees, small receipts, local tools, and enough context to
+  continue from the remote owner without needing a drive at a coffee shop.
+- Keep external drives as durable custody: complete private/raw data, processed/redacted corpora,
+  archived repo/org mirrors, photos/media packages, and restore-tested recovery copies.
+- At the desk, assume externals are plugged in and use them for hydration, archive, media processing,
+  and bulk scans; when unplugged, continue from remote receipts and cached indexes.
+- Do not move, delete, dedupe, or purge personal data without the relevant two-copy/restore gate and
+  an owner receipt.
+
+## Pain Point Ownership
+
+Every repeated pain point needs an owner. Missing scopes, stale profile metadata, disk pressure,
+credential/token hygiene, contribution imbalance, voice/temp failure, and queue/lane drift are not
+chat-only blockers.
+
+- Put each pain point in the repo that owns the fix: issue, task packet, PR, pinned wall, or receipt.
+- Credential, token, secret, API-key, login, and env-var problems belong to the credential wall owner;
+  never paste values into chat, tasks, commits, or PRs.
+- A blocker is incomplete unless it names the owning repo/surface, the failed predicate, and the next
+  command that would clear it.
+- If the same pain point appears twice, update the owner receipt instead of explaining it again.
+- Default toward productizing the fix: split private adapters from reusable public shells, publish a
+  redacted demo or method when safe, and route the outward-facing value surface through the owner repo.
+
+## Full Lifecycle Closure
+
+Every prompt, idea, viewpoint, branch, worktree, scratch root, and generated lane is work until it
+has a durable terminal receipt. "Nothing came of it" is not a closeout state.
+
+Valid closure forms are:
+
+- shipped/merged with predicate evidence;
+- open PR with owner, predicate, and merge condition;
+- owner task or plan committed and pushed for later work;
+- preservation receipt proving custody plus a concrete next owner/action;
+- explicit blocker naming the external gate and next command.
+
+Do not delete, reap, archive-away, or mark closed merely because a lane timed out, produced no diff,
+lost context, or looked stale. If a worktree produced no usable code, emit the plan/owner task that
+captures the prompt's intent, then close the worktree only after remote/archive custody is proven.
+
 ## Task States
 
 The canonical state set lives in code — `VALID_STATUSES` in `mcp/src/limen_mcp/server.py` — and
@@ -264,6 +355,8 @@ checks.
 - You are Claude. Read this file as part of your startup instructions.
 - You have access to the full filesystem — `$LIMEN_ROOT/tasks.yaml` is a regular file.
 - Support `limen` as a subagent: when asked, run the limen CLI or read/write tasks.yaml directly.
+- **Tier subagent fan-out by job.** Task/Workflow subagents inherit the session model; pick each agent's tier by its job (`.claude/agents/` types, or an explicit `model`/`effort`) so trivial workers never ride Opus. Authority: `cli/src/limen/model_selection.py`; details in CLAUDE.md → Parallel Exploration & Fan-Out.
+- **Fable plans, cheaper tiers build.** Fable's role is PLAN-ONLY: it does the deep analysis, emits a build packet into a worktree, and hands off to a cheaper tier (Opus/Sonnet/Haiku) that builds; building on Fable is prohibited. It is acceptance-gated (`scripts/fable-allotment.py accept ...`, `LIMEN_FABLE_ACCEPTANCE=<receipt>`) AND live runtime-capped against actual weekly tokens burned (40% deliberate / 50% hard, `scripts/fable-allotment.py balance` → `logs/fable-allotment.json`, enforced in `cli/src/limen/model_selection.py`). Full doctrine + caps: `docs/fable-allotment.md`.
 
 ### Gemini
 - You are Gemini CLI (v0.44.1+). Read `$LIMEN_ROOT/tasks.yaml` at session start.

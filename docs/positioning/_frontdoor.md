@@ -4,10 +4,10 @@
 
 Not demos. Live platforms — tested, deployed, and running. Each repo below is a working system someone can put to work today. Two doors:
 
-**Have a problem one of these solves? — Deploy it for your shop →**
+**[Have a problem one of these solves? — Deploy it for your shop](mailto:contact@4444j99.dev?subject=%5Bfront%20door%20%C2%B7%20deploy%5D%20%E2%80%94%20inbound) →**
 > Pick the depth that fits. We feed you the output, run it under your brand, build it for your exact world, or become your engine.
 
-**Hiring someone who ships at this level? — Work with the builder →**
+**[Hiring someone who ships at this level? — Work with the builder](mailto:contact@4444j99.dev?subject=%5Bfront%20door%20%C2%B7%20hire%5D%20%E2%80%94%20inbound) →**
 > Everything here is the portfolio. If you need a senior builder who owns systems end-to-end — data, infra, AI, deploy — this is the evidence.
 
 ---
@@ -34,6 +34,16 @@ A production platform that collects UCC-1 filings from all 50 Secretary-of-State
 
 → **Deploy this for your shop** · see [the ways to work together](docs/positioning/public-record-data-scrapper.md)
 
+### [Styx Peer-Audited Behavioral Market](https://github.com/organvm/peer-audited--behavioral-blockchain)
+
+A production-grade enforcement layer for commitments with real financial stakes: Stripe FBO escrow, a double-entry ledger, peer-audited proof review, bounty incentives, honeypot QA, and privacy-firewalled B2B funding where employers can sponsor engagement without seeing individual health data.
+
+`1,107 tests across workspaces` · `public pitch surface returns 200 OK` · `NestJS + Next.js + React Native + Tauri monorepo` · `Stripe escrow and double-entry ledger` · `CodeQL, secret scan, Terraform, beta-readiness, and e2e CI gates`
+
+**Solves:** Accountability and corporate-wellness programs spend money on intent but do not create follow-through. The proof is usually self-reported, the incentives are weak, and holding personal health data creates liability.
+
+→ **Deploy this for a commitment program** · see [the ways to work together](docs/positioning/peer-audited--behavioral-blockchain.md)
+
 ### [Autonomous Inbox-Triage & Draft System](https://github.com/organvm/universal-mail--automation)
 
 A production system that sweeps Gmail and Apple Mail across accounts, classifies every thread against a protocol ladder, tracks every owed reply in an obligations ledger, and composes voice-matched draft replies — draft-only, it never sends. Deploys as a Cloudflare Worker; runs keyless (IMAP app-password / Apple Mail osascript).
@@ -43,6 +53,26 @@ A production system that sweeps Gmail and Apple Mail across accounts, classifies
 **Solves:** Obligations fall through the cracks — the escalation you missed, the reply you owed a week ago — while triage burns the most expensive hours of the day. Every 'AI email tool' wants send authority nobody sane will give it.
 
 → **Run this on my inbox** · see [the ways to work together](docs/positioning/universal-mail--automation.md)
+
+### [Self-Healing Agent Fleet Infrastructure](https://github.com/organvm/limen)
+
+A living ladder of self-* organs (self-sustaining, self-routing, self-feeding, self-healing) that run autonomously on a heartbeat. The fleet maintains itself: monitors liveness, reaps stale work, syncs state, escalates failures. Built-in organs: proprioception, VIGILIA federation, branch-reap, clone-lifecycle, credential durability, health monitoring.
+
+`9-rung organ ladder (each self-* owns its own domain)` · `Heartbeat-driven autonomic loop (scripts/metabolize.sh)` · `Self-healing on regression (heal/ branch pattern)` · `Live: proprioception organ, VIGILIA federation, branch-reap, credential-wall` · `Zero manual upkeep — runs forever once seeded`
+
+**Solves:** Every agent fleet needs: health checks, credential refresh, stale-work cleanup, state reconciliation, failure escalation. If manual, each system costs ~2h/week ops. If ignored, cascading failures ripple through the fleet.
+
+→ **Adopt self-healing fleet ops** · see [the ways to work together](docs/positioning/limen.md)
+
+### [Portfolio & Case Studies — 16 Production Systems](https://github.com/organvm/portfolio)
+
+A public portfolio site showcasing 16 completed production systems — each with a case study, real architecture diagrams (p5.js interactive), live demos where applicable, and the decision trees behind the build. Built with Astro, deployed on Netlify, fully indexed and discoverable.
+
+`609 files · Astro + TypeScript · p5.js interactive visualizations` · `69 test files across the portfolio + content` · `16 case studies with architecture, decisions, and outcomes` · `Live demos & interactive diagrams` · `Netlify deployment + CI/CD` · `SEO-optimized content sites`
+
+**Solves:** A portfolio of demos and one-liners doesn't prove judgment. Seeing the tradeoffs, the decisions, the outcomes, and the architecture is the difference between 'built something' and 'ships production systems'.
+
+→ **Explore the case studies** · see [the ways to work together](docs/positioning/portfolio.md)
 
 ---
 

@@ -1,6 +1,6 @@
 # Live Root Gate
 
-Generated: `2026-06-28T20:12:30+00:00`
+Generated: `2026-07-08T01:43:15+00:00`
 
 Status: `blocked`
 
@@ -15,45 +15,42 @@ Status: `blocked`
 - Operator gate required: `True`.
 - Release reconcile allowed without human: `False`.
 - Launchd reload allowed without human: `False`.
-- Blocking gates: `live-root-not-release-branch`, `live-root-not-at-release`, `live-root-unique-commits`, `live-root-dirty`, `live-root-task-board-dirty`, `heartbeat-loaded-env-drift`.
+- Blocking gates: `live-root-not-at-release`, `live-root-unique-commits`, `live-root-dirty`, `live-root-task-board-dirty`.
 
 ## Live Root
 
 - Path: `~/Workspace/limen`.
-- Branch: `feature/ORG-artist-organ-face-0628`; release branch `main`.
-- HEAD: `84a3288eaaf91de93428aa8eae9dafbead39ba42`.
-- Release head: `e3bc1927c0a419f968cb78d5b8267e7214c2cac1`.
-- Matches release: `False`; ahead `1` behind `10`.
+- Branch: `main`; release branch `main`.
+- HEAD: `937814b19452dc5e93e0b6dc35524d6880b19a1d`.
+- Release head: `e30bbf34b41b809ee6a2344d350be1c01d34e357`.
+- Matches release: `False`; ahead `1` behind `0`.
 - Unique local commits: `1`; patch-equivalent commits: `0`.
 - Dirty entries: `6`.
 
 ### Local Commits
 
-- `84a3288 feat(artist): author KERNEL and CHARTER for A-MAVS-OLEVM`
+- `937814b1 limen: preserve async board state`
 
 ### Dirty Paths
 
-- `container/launchd/com.user.netmeter.plist`
-- `organs/artist/KERNEL.md`
-- `scripts/netmode.sh`
+- `cli/src/limen/worktree_debt.py`
+- `cli/tests/test_worktree_debt.py`
+- `docs/branch-reap-acceptance.jsonl`
+- `docs/consolidation/GATES.md`
+- `docs/worktree-preservation-receipts.json`
 - `tasks.yaml`
-- `organs/health/`
-- `organs/media/`
 
 ## Heartbeat
 
 - Plist: `~/Library/LaunchAgents/com.limen.heartbeat.plist` present `True`.
-- Loaded launchd state: `running` pid `24368`.
-
-### Loaded Env Drift
-
-- `LIMEN_DISPATCH_ASYNC`: plist `0`; loaded `None`.
+- Loaded launchd state: `running` pid `30310`.
+- Loaded env matches plist for tracked LIMEN_* keys.
 
 ## Verified Worktree
 
-- Path: `~/Workspace/limen-conductor-owner-state-20260628`.
-- Branch: `codex/conductor-owner-state-20260628`.
-- Matches release: `True`.
+- Path: `~/Workspace/limen`.
+- Branch: `main`.
+- Matches release: `False`.
 
 ## Stop Conditions
 

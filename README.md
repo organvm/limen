@@ -59,13 +59,20 @@ Mounts `./tasks.yaml` into the API container.
 
 | Command | Flags | Description |
 |---------|-------|-------------|
-| `limen init` | `--root`, `--budget` (default 100) | Scaffold a new `tasks.yaml` |
-| `limen dispatch` | `--agent`, `--budget`, `--dry-run/--live`, `--task`, `--limit` | Dispatch open tasks to agents (default: dry-run) |
-| `limen release-stale` | `--hours` (default 24), `--agent`, `--dry-run/--apply`, `--json-output`, `--report-file` | Reopen stale dispatched/in-progress tasks (default: dry-run) |
-| `limen doctor` | `--agent` (default jules), `--json-output`, `--report-file` | Report local readiness for dispatch and stale-claim recovery |
-| `limen qa` | `--agent` (default jules), `--json-output`, `--report-file` | Report QA lifecycle gates and steering queues (read-only) |
-| `limen status` | `--agent`, `--status` | Show the task board with budget tracking |
-| `limen harvest` | `--agent` | Check for completed dispatches and update task states |
+| `limen init` | `--root`, `--budget` (default 100) | Scaffold a new tasks.yaml in LIMEN_ROOT or current directory. |
+| `limen dispatch` | `--agent`, `--budget`, `--dry-run/--live`, `--task`, `--limit` | Read tasks.yaml and dispatch open tasks to agents. |
+| `limen release-stale` | `--hours` (default 24), `--agent`, `--dry-run/--apply`, `--json-output`, `--report-file` | Reopen dispatched/in-progress tasks whose latest event is stale. |
+| `limen doctor` | `--agent` (default jules), `--json-output`, `--report-file` | Report local readiness for dispatch and stale-claim recovery. |
+| `limen qa` | `--agent` (default jules), `--json-output`, `--report-file` | Report QA lifecycle gates and steering queues without mutating tasks. |
+| `limen status` | `--agent`, `--status` | Show the task board. |
+| `limen harvest` | `--agent` | Check for completed dispatches and update task states. |
+| `limen workstream` | `--from`, `--prompt`, `--prompt-file`, `--codex`, `--shell` | Create/reuse a repo worktree plus a private `.limen-workstream/README.md` and `kickstart.sh`. |
+
+The installer also creates a terminal-neutral shortcut in `~/.local/bin`:
+
+```bash
+workstream --prompt "objective and constraints" limen my-workstream
+```
 
 ## Architecture
 
@@ -210,6 +217,18 @@ Every AI agent reads `tasks.yaml` at session start, finds open tasks matching th
 - **Copilot** — GitHub Copilot coding agent lane. Dispatch assigns an existing GitHub issue to `copilot-swe-agent`; census marks it down until `LIMEN_COPILOT_ENABLED=1` or `LIMEN_COPILOT_HEALTH_REPO` confirms assignability.
 - **Warp/Oz** — paid service lanes via `LIMEN_WARP_DISPATCH_CMD`, `LIMEN_OZ_DISPATCH_CMD`, or the generic `agent-dispatch` adapter.
 - **GitHub Actions** — runner lane via `gh workflow run` against `LIMEN_GITHUB_ACTIONS_WORKFLOW` (default `limen-agent.yml`).
+
+## Support / Sponsor
+
+Limen and [MONETA](moneta/) — the sovereign Bitcoin licence mint that powers the Pro tiers,
+with no payment processor in the path — are free and open source. If this system or its
+organs help you, you can support the work here:
+
+- **[GitHub Sponsors](https://github.com/sponsors/organvm)**
+- **[Ko-fi](https://ko-fi.com/4444j99)**
+
+Sponsorship funds maintenance of the mint, the task fabric, and the published surfaces;
+nothing here is paywalled.
 
 ## Links
 

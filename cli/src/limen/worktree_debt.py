@@ -7,6 +7,8 @@ import time
 from pathlib import Path
 from typing import Any, TypedDict
 
+from limen.worktree_roots import iter_worktree_targets
+
 
 DEBT_REASONS = {
     "dirty",
@@ -14,6 +16,10 @@ DEBT_REASONS = {
     "not-merged-to-default",
     "unpushed-commits",
     "unresolved",
+}
+REAPABLE_REASONS = {
+    "clean+merged+idle",
+    "clean+pushed+idle",
 }
 
 DOCUMENTED_RESIDUE_LANES = {"documented-residue"}
@@ -30,6 +36,10 @@ REMOTE_PR_OPEN_LANES = {"remote-pr-open"}
 REMOTE_PR_OPEN_STATUSES = {"open_pr_preserved"}
 OWNER_BLOCKER_LANES = {"owner-blocker"}
 OWNER_BLOCKER_STATUSES = {"history_mismatch_patch_preserved", "private_patch_preserved"}
+GENERATED_LOG_SHELL_FILES = {
+    "logs/session-lifecycle-pressure.md",
+    "logs/session-lifecycle-pressure.json",
+}
 
 
 class WorktreeDebtItem(TypedDict):
@@ -37,12 +47,15 @@ class WorktreeDebtItem(TypedDict):
     path: str
     reason: str
     debt: bool
+    reapable: bool
 
 
 class WorktreeDebtReport(TypedDict):
     total: int
     debt: int
+    reapable: int
     by_reason: dict[str, int]
+    by_reapable_reason: dict[str, int]
     items: list[WorktreeDebtItem]
 
 
@@ -70,10 +83,10 @@ def _remote_default_ref(cwd: Path) -> str | None:
 
 
 def _reachable_from_remote(cwd: Path, head: str) -> bool:
-    refs = _git(["for-each-ref", "--format=%(refname)", "refs/remotes"], cwd)
+    refs = _git(["for-each-ref", f"--contains={head}", "--format=%(refname)", "refs/remotes"], cwd)
     if refs.returncode != 0:
         return False
-    return any(_git(["merge-base", "--is-ancestor", head, ref], cwd).returncode == 0 for ref in refs.stdout.split())
+    return bool(refs.stdout.strip())
 
 
 def _merged_into_default(cwd: Path, head: str) -> bool:
@@ -90,6 +103,30 @@ def _patch_equivalent_to_default(cwd: Path) -> bool:
         return False
     lines = [line.strip() for line in cherry.stdout.splitlines() if line.strip()]
     return bool(lines) and all(line.startswith("-") for line in lines)
+
+
+def _git_toplevel(cwd: Path) -> Path | None:
+    top = _git(["rev-parse", "--show-toplevel"], cwd)
+    if top.returncode != 0 or not top.stdout.strip():
+        return None
+    try:
+        return Path(top.stdout.strip()).resolve()
+    except OSError:
+        return Path(top.stdout.strip())
+
+
+def _flag(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"", "0", "false", "no", "off"}
+
+
+def _int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
 
 
 def _load_preservation_receipts(limen_root: Path) -> dict[str, dict[str, Any]]:
@@ -159,6 +196,17 @@ def _is_owner_blocker(path: Path, preservation_receipts: dict[str, dict[str, Any
     return has_private_receipt and (lane in OWNER_BLOCKER_LANES or status in OWNER_BLOCKER_STATUSES)
 
 
+def is_generated_log_shell(path: Path) -> bool:
+    """True for disposable non-git worktree shells containing only pressure receipts."""
+    if not path.is_dir():
+        return False
+    try:
+        files = {item.relative_to(path).as_posix() for item in path.rglob("*") if item.is_file()}
+    except OSError:
+        return False
+    return bool(files) and files <= GENERATED_LOG_SHELL_FILES
+
+
 def _classify(
     path: Path,
     now: float,
@@ -182,8 +230,13 @@ def _classify(
         return "remote-pr-open"
     if _is_owner_blocker(path, preservation_receipts):
         return "owner-blocker"
-    if _git(["rev-parse", "--is-inside-work-tree"], path).returncode != 0:
+    top = _git_toplevel(path)
+    if top is None:
+        if is_generated_log_shell(path):
+            return "generated-log-shell"
         return "not-a-git-dir"
+    if top != resolved:
+        return "self/live-checkout" if top in self_guard else "not-a-git-dir"
     age_h = (now - path.stat().st_mtime) / 3600.0
     if age_h < min_age_h:
         return f"active(<{min_age_h:g}h)"
@@ -194,22 +247,10 @@ def _classify(
     if not head or (not _reachable_from_remote(path, head) and not patch_equivalent):
         return "unpushed-commits"
     if not (_merged_into_default(path, head) or patch_equivalent):
+        if _flag("LIMEN_RECLAIM_PUSHED_OK", True):
+            return "clean+pushed+idle"
         return "not-merged-to-default"
     return "clean+merged+idle"
-
-
-def _scan_roots(limen_root: Path) -> list[tuple[Path, float]]:
-    home = os.environ.get("HOME", "/Users/4jp")
-    root = Path(os.environ.get("LIMEN_WORKTREE_ROOT", f"{home}/Workspace/.limen-worktrees"))
-    roots = [(root, float(os.environ.get("LIMEN_RECLAIM_MIN_AGE_H", "6")))]
-    if os.environ.get("LIMEN_RECLAIM_CLAUDE_WT", "1") == "1":
-        roots.append(
-            (
-                limen_root / ".claude" / "worktrees",
-                float(os.environ.get("LIMEN_RECLAIM_CLAUDE_AGE_H", "24")),
-            )
-        )
-    return [(path, age) for path, age in roots if path.is_dir()]
 
 
 def worktree_debt_report(limen_root: Path | None = None) -> WorktreeDebtReport:
@@ -225,20 +266,40 @@ def worktree_debt_report(limen_root: Path | None = None) -> WorktreeDebtReport:
     preservation_receipts = _load_preservation_receipts(root)
     items: list[WorktreeDebtItem] = []
     by_reason: dict[str, int] = {}
-    for scan_root, min_age_h in _scan_roots(root):
-        for path in sorted(p for p in scan_root.iterdir() if p.is_dir()):
-            reason = _classify(path, now, min_age_h, self_guard, preservation_receipts)
-            debt = reason in DEBT_REASONS
-            by_reason[reason] = by_reason.get(reason, 0) + 1
-            items.append({"name": path.name, "path": str(path), "reason": reason, "debt": debt})
+    by_reapable_reason: dict[str, int] = {}
+    for target in iter_worktree_targets(root):
+        path = target.path
+        reason = _classify(path, now, target.min_age_h, self_guard, preservation_receipts)
+        debt = reason in DEBT_REASONS
+        reapable = reason in REAPABLE_REASONS
+        by_reason[reason] = by_reason.get(reason, 0) + 1
+        if reapable:
+            by_reapable_reason[reason] = by_reapable_reason.get(reason, 0) + 1
+        items.append({"name": path.name, "path": str(path), "reason": reason, "debt": debt, "reapable": reapable})
 
     debt_count = sum(1 for item in items if item["debt"])
-    return {"total": len(items), "debt": debt_count, "by_reason": by_reason, "items": items}
+    reapable_count = sum(1 for item in items if item["reapable"])
+    return {
+        "total": len(items),
+        "debt": debt_count,
+        "reapable": reapable_count,
+        "by_reason": by_reason,
+        "by_reapable_reason": by_reapable_reason,
+        "items": items,
+    }
 
 
 def worktree_debt_exceeded(limit: int | None = None) -> tuple[bool, WorktreeDebtReport, int]:
     effective_limit = limit
     if effective_limit is None:
-        effective_limit = int(os.environ.get("LIMEN_WORKTREE_DEBT_MAX", "12"))
+        effective_limit = _int_env("LIMEN_WORKTREE_DEBT_MAX", 12)
     report = worktree_debt_report()
     return report["debt"] > effective_limit, report, effective_limit
+
+
+def worktree_reapable_exceeded(limit: int | None = None) -> tuple[bool, WorktreeDebtReport, int]:
+    effective_limit = limit
+    if effective_limit is None:
+        effective_limit = _int_env("LIMEN_WORKTREE_REAPABLE_MAX", 0)
+    report = worktree_debt_report()
+    return report["reapable"] > effective_limit, report, effective_limit

@@ -15,9 +15,12 @@ pr-status.json
 
 # Build and tooling artifacts
 node_modules/
+**/node_modules
+**/node_modules/
 web/app/.next/
 web/app/out/
-web/worker/.wrangler/
+.wrangler/
+**/.wrangler/
 
 # Generated private validation snapshots (rebuilt by generate:data)
 web/app/.generated/
@@ -29,6 +32,10 @@ web/app/public/
 .limen-reports/
 obligations-ledger.json
 .heal-probe-*.yaml
+
+# TABVLARIVS record-keeper: the ticket inbox/archive/rejected is runtime event state (one file per
+# unit of work, high churn). The board (tasks.yaml) is the committed projection; tickets are not.
+logs/tickets/
 
 # Next.js route source — protect from machine-global 'public/' ignore rules
 !web/app/app/public/
@@ -49,3 +56,6 @@ domus-genoma/
 # inbound positioning: internal price-anchor sheets are regenerable and must never sit as a
 # standing file in a public repo (scripts/generate-positioning.py rebuilds them from seeds).
 docs/positioning/*.internal.md
+# studium convergence logs are GENERATED and captured local worktree home paths (PII);
+# never track them in this public repo (studium re-derives them locally each run).
+studium/_converged/converge-log.jsonl

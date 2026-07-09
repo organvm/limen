@@ -35,6 +35,20 @@ gh api -X PUT repos/organvm/public-record-data-scrapper/topics \
 gh repo edit organvm/public-record-data-scrapper --description "50-state UCC public-records intelligence — fresh, enriched, scored MCA / financing leads via dashboard, REST API, and CLI."
 ```
 
+## Styx Peer-Audited Behavioral Market — `organvm/peer-audited--behavioral-blockchain`
+
+- **Recommended topics:** behavioral-economics, accountability, corporate-wellness, peer-review, fintech, stripe, escrow, double-entry-ledger, privacy, proof-of-completion, habit-tracking, incentive-design
+- **Recommended description:** Peer-audited behavioral market with Stripe escrow, double-entry ledger, proof review, bounty incentives, privacy-firewalled B2B funding, and 1,107 tests.
+
+```sh
+# apply topics (his hand — outward-facing public change):
+gh api -X PUT repos/organvm/peer-audited--behavioral-blockchain/topics \
+  -H 'Accept: application/vnd.github+json' \
+  -f 'names[]=behavioral-economics' -f 'names[]=accountability' -f 'names[]=corporate-wellness' -f 'names[]=peer-review' -f 'names[]=fintech' -f 'names[]=stripe' -f 'names[]=escrow' -f 'names[]=double-entry-ledger' -f 'names[]=privacy' -f 'names[]=proof-of-completion' -f 'names[]=habit-tracking' -f 'names[]=incentive-design'
+# apply description:
+gh repo edit organvm/peer-audited--behavioral-blockchain --description "Peer-audited behavioral market with Stripe escrow, double-entry ledger, proof review, bounty incentives, privacy-firewalled B2B funding, and 1,107 tests."
+```
+
 ## Autonomous Inbox-Triage & Draft System — `organvm/universal-mail--automation`
 
 - **Recommended topics:** email-automation, inbox-zero, gmail-automation, email-triage, productivity, workflow-automation, cloudflare-workers, email-management
@@ -47,4 +61,33 @@ gh api -X PUT repos/organvm/universal-mail--automation/topics \
   -f 'names[]=email-automation' -f 'names[]=inbox-zero' -f 'names[]=gmail-automation' -f 'names[]=email-triage' -f 'names[]=productivity' -f 'names[]=workflow-automation' -f 'names[]=cloudflare-workers' -f 'names[]=email-management'
 # apply description:
 gh repo edit organvm/universal-mail--automation --description "Autonomous inbox triage for Gmail + Apple Mail — classifies threads, tracks every owed reply, drafts voice-matched responses. Draft-only, never sends."
+```
+
+## Self-Healing Agent Fleet Infrastructure — `organvm/limen`
+
+- **Recommended topics:** agent-orchestration, autonomous-systems, fleet-management, self-healing, infrastructure-automation, zero-ops, heartbeat-driven, organ-architecture, agent-reliability
+- **Recommended description:** Self-healing agent fleet — autonomic organs for health, credentials, state sync, failure escalation. Zero ops work; runs on heartbeat.
+
+```sh
+# apply topics (his hand — outward-facing public change):
+gh api -X PUT repos/organvm/limen/topics \
+  -H 'Accept: application/vnd.github+json' \
+  -f 'names[]=agent-orchestration' -f 'names[]=autonomous-systems' -f 'names[]=fleet-management' -f 'names[]=self-healing' -f 'names[]=infrastructure-automation' -f 'names[]=zero-ops' -f 'names[]=heartbeat-driven' -f 'names[]=organ-architecture' -f 'names[]=agent-reliability'
+# apply description:
+gh repo edit organvm/limen --description "Self-healing agent fleet — autonomic organs for health, credentials, state sync, failure escalation. Zero ops work; runs on heartbeat."
+```
+
+## Portfolio & Case Studies — 16 Production Systems — `organvm/portfolio`
+
+- **Recommended topics:** portfolio, case-studies, system-design, architecture, production, astro, interactive-design, web-development, systems-thinking, engineering-decisions, technical-writing
+- ⚠ **Invalid topics (fix in seed):** p5.js
+- **Recommended description:** Production portfolio: 16 systems, real architecture decisions, interactive visualizations, case studies on building software at scale.
+
+```sh
+# apply topics (his hand — outward-facing public change):
+gh api -X PUT repos/organvm/portfolio/topics \
+  -H 'Accept: application/vnd.github+json' \
+  -f 'names[]=portfolio' -f 'names[]=case-studies' -f 'names[]=system-design' -f 'names[]=architecture' -f 'names[]=production' -f 'names[]=astro' -f 'names[]=interactive-design' -f 'names[]=web-development' -f 'names[]=systems-thinking' -f 'names[]=engineering-decisions' -f 'names[]=technical-writing'
+# apply description:
+gh repo edit organvm/portfolio --description "Production portfolio: 16 systems, real architecture decisions, interactive visualizations, case studies on building software at scale."
 ```

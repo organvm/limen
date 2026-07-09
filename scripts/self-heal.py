@@ -65,8 +65,10 @@ KINDS = {
             "PR {repo}#{num} has FAILING CI checks and merge-drain correctly refuses to merge "
             "it. Check out the PR branch, find the root cause of the red checks (lint / types / "
             "failing test / config), fix it, push to the SAME PR branch, and confirm every check "
-            "goes green. Do not open a new PR — repair the existing one so merge-drain lands it. "
-            "PR: {url}"
+            "goes green. If the branch ALSO rolls back base content its title/body never declared "
+            "(a poisoned/stale generated tree), restore base's side of those paths rather than "
+            "repairing on top of a rollback. Do not open a new PR — repair the existing one so "
+            "merge-drain lands it. PR: {url}"
         ),
     },
     "CONFLICT": {
@@ -76,10 +78,16 @@ KINDS = {
         "title": "rebase/resolve conflicts on {repo}#{num}",
         "context": (
             "PR {repo}#{num} is CONFLICTING with its base branch and merge-drain correctly "
-            "refuses to merge it. Check out the PR branch, rebase it onto the current base (or "
-            "merge base in), resolve every conflict preserving the PR's intent, push to the SAME "
-            "PR branch, and confirm it reports MERGEABLE with green CI. Do not open a new PR. "
-            "PR: {url}"
+            "refuses to merge it. FIRST check the PR's ORIGINAL diff (merge-base..head) against "
+            "its declared title/body intent: a branch generated from a broken tree can carry mass "
+            "deletions it never declared, and branch-side deletions the declaration does not name "
+            "are POISON to restore from base, never intent to preserve (session-meta#148 ate "
+            "ingest/ + 3 test suites this way). Then check out the PR branch, rebase it onto the "
+            "current base (or merge base in), resolve every conflict preserving the PR's declared "
+            "intent, push to the SAME PR branch, and confirm it reports MERGEABLE with green CI. "
+            "After resolving, verify diff-vs-base matches the declared intent; if nothing genuine "
+            "survives (all absorbed or superseded on base), close the PR as superseded instead of "
+            "pushing. Do not open a new PR. PR: {url}"
         ),
     },
     # STALE-BASE family — the #111 guard. A mergeable+green PR off an OLD base would silently REVERT
@@ -137,13 +145,13 @@ def assess(pr):
         d = json.loads(r.stdout)
         if d.get("state") != "OPEN" or d.get("isDraft"):
             return (repo, num, url, "SKIP")
+        if d.get("mergeable") == "CONFLICTING":
+            return (repo, num, url, "CONFLICT")
         states = [(c.get("conclusion") or c.get("state") or "") for c in (d.get("statusCheckRollup") or [])]
         if any(s in ("FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED") for s in states):
             return (repo, num, url, "CI-RED")
         if any(s in ("PENDING", "IN_PROGRESS", "QUEUED", "EXPECTED", "") for s in states):
             return (repo, num, url, "CI-PENDING")
-        if d.get("mergeable") == "CONFLICTING":
-            return (repo, num, url, "CONFLICT")
         if d.get("mergeable") == "MERGEABLE":
             # STALE-BASE GATE (identical to merge-drain.assess — one verdict): refuse a green+mergeable
             # PR off an old base that would silently revert work, and emit a rebase-to-current heal task.
@@ -194,15 +202,49 @@ def acquire_lock(timeout=15):
     return False
 
 
+def env_int(name, default):
+    try:
+        value = int(os.environ.get(name, str(default)) or str(default))
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+def parse_pr_spec(raw):
+    value = str(raw or "").strip()
+    if not value:
+        raise argparse.ArgumentTypeError("empty PR spec")
+    if "github.com/" in value:
+        tail = value.split("github.com/", 1)[1].strip("/")
+        parts = tail.split("/")
+        if len(parts) >= 4 and parts[2] in {"pull", "pulls"} and parts[3].isdigit():
+            repo = f"{parts[0]}/{parts[1]}"
+            num = int(parts[3])
+            return repo, num, f"https://github.com/{repo}/pull/{num}"
+    if "#" in value:
+        repo, num = value.rsplit("#", 1)
+        repo = repo.strip().strip("/")
+        if "/" in repo and num.strip().isdigit():
+            return repo, int(num), f"https://github.com/{repo}/pull/{int(num)}"
+    raise argparse.ArgumentTypeError(f"expected owner/repo#number or GitHub PR URL, got {raw!r}")
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--scan", type=int, default=int(os.environ.get("LIMEN_HEAL_SCAN", "30")),
+    ap.add_argument("--scan", type=int, default=env_int("LIMEN_HEAL_SCAN", 30),
                     help="assess WINDOW per run — how many PRs to classify this beat (rotates)")
-    ap.add_argument("--scan-max", type=int, default=int(os.environ.get("LIMEN_HEAL_SCAN_MAX", "500")),
+    ap.add_argument("--scan-max", type=int, default=env_int("LIMEN_HEAL_SCAN_MAX", 500),
                     help="cap on the cheap full-fleet enumeration the rotating window draws from")
-    ap.add_argument("--limit", type=int, default=int(os.environ.get("LIMEN_HEAL_LIMIT", "10")),
+    ap.add_argument("--limit", type=int, default=env_int("LIMEN_HEAL_LIMIT", 10),
                     help="max heal tasks to EMIT this run (headroom-scaled up to 3x on a full tank)")
     ap.add_argument("--tasks", default=os.environ.get("LIMEN_TASKS", str(ROOT / "tasks.yaml")))
+    ap.add_argument(
+        "--pr",
+        action="append",
+        type=parse_pr_spec,
+        default=[],
+        help="assess an explicit PR owner/repo#number or GitHub PR URL instead of the rotating search window",
+    )
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
@@ -210,12 +252,15 @@ def main():
     # assess a rotating window of --scan PRs this beat. Over a full rotation every red/conflict PR
     # gets seen → a heal task → merge-drain lands it. The cursor is per-organ so HEAL and MERGE
     # rotate independently. ([[self-star-ladder-shipped-live]])
-    allprs = enumerate_open_prs(OWNERS, gh, max_total=a.scan_max, want_url=True)
+    allprs = list(a.pr) if a.pr else enumerate_open_prs(OWNERS, gh, max_total=a.scan_max, want_url=True)
     if not allprs:
         print("[self-heal] no open PRs (or gh unavailable)")
         return 0
-    cursor = ROOT / "logs" / ".pr-scan-cursor.heal"
-    prs = rotating_window(allprs, a.scan, str(cursor), persist=not a.dry_run)
+    if a.pr:
+        prs = allprs
+    else:
+        cursor = ROOT / "logs" / ".pr-scan-cursor.heal"
+        prs = rotating_window(allprs, a.scan, str(cursor), persist=not a.dry_run)
     with cf.ThreadPoolExecutor(max_workers=10) as ex:
         rows = list(ex.map(assess, prs))
     b = collections.Counter(r[3] for r in rows)

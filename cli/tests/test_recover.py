@@ -1,0 +1,323 @@
+import datetime as dt
+import importlib.util
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.models import Budget, BudgetTrack, DispatchLogEntry, LimenFile, Portal, Task  # noqa: E402
+
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "recover.py"
+
+
+def test_recover_reopens_failed_jules_remote_session(tmp_path, monkeypatch):
+    tasks_path = tmp_path / "tasks.yaml"
+    now = dt.datetime.now(dt.timezone.utc)
+    lf = LimenFile(
+        portal=Portal(budget=Budget(daily=300, per_agent={}, track=BudgetTrack(date=str(now.date())))),
+        tasks=[
+            Task(
+                id="HEAL-rebase-organvm-public-record-data-scrapper-335",
+                title="rebase public record",
+                repo="organvm/public-record-data-scrapper",
+                target_agent="jules",
+                status="dispatched",
+                created=now.date(),
+                dispatch_log=[
+                    DispatchLogEntry(
+                        timestamp=now,
+                        agent="jules",
+                        session_id="16647959386662614769",
+                        status="dispatched",
+                    )
+                ],
+            )
+        ],
+    )
+    save_limen_file(tasks_path, lf)
+
+    spec = importlib.util.spec_from_file_location("recover_uut", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(module, "live_jules_sessions", lambda: {"16647959386662614769": "failed"})
+    monkeypatch.setattr(sys, "argv", ["recover", "--tasks", str(tasks_path), "--apply"])
+
+    assert module.main() == 0
+    task = load_limen_file(tasks_path).tasks[0]
+    assert task.status == "open"
+    assert task.target_agent == "codex"
+    assert "is failed" in task.dispatch_log[-1].output
+
+
+def test_recover_reopens_jules_session_awaiting_feedback(tmp_path, monkeypatch):
+    tasks_path = tmp_path / "tasks.yaml"
+    now = dt.datetime.now(dt.timezone.utc)
+    lf = LimenFile(
+        portal=Portal(budget=Budget(daily=300, per_agent={}, track=BudgetTrack(date=str(now.date())))),
+        tasks=[
+            Task(
+                id="HEAL-cifix-organvm-mirror-mirror-106",
+                title="fix mirror CI",
+                repo="organvm/mirror-mirror",
+                target_agent="jules",
+                status="dispatched",
+                created=now.date(),
+                dispatch_log=[
+                    DispatchLogEntry(
+                        timestamp=now,
+                        agent="jules",
+                        session_id="15175913208909090857",
+                        status="dispatched",
+                    )
+                ],
+            )
+        ],
+    )
+    save_limen_file(tasks_path, lf)
+
+    spec = importlib.util.spec_from_file_location("recover_uut_feedback", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(module, "live_jules_sessions", lambda: {"15175913208909090857": "awaiting_user_feedback"})
+    monkeypatch.setattr(sys, "argv", ["recover", "--tasks", str(tasks_path), "--apply"])
+
+    assert module.main() == 0
+    task = load_limen_file(tasks_path).tasks[0]
+    assert task.status == "open"
+    assert task.target_agent == "codex"
+    assert "awaiting_user_feedback" in task.dispatch_log[-1].output
+
+
+def test_recover_reopens_jules_session_awaiting_plan_approval(tmp_path, monkeypatch):
+    tasks_path = tmp_path / "tasks.yaml"
+    now = dt.datetime.now(dt.timezone.utc)
+    lf = LimenFile(
+        portal=Portal(budget=Budget(daily=300, per_agent={}, track=BudgetTrack(date=str(now.date())))),
+        tasks=[
+            Task(
+                id="REV-organvm-mirror-mirror-revenue-ship-0706",
+                title="Drive Mirror Mirror to deploy-ready",
+                repo="organvm/mirror-mirror",
+                target_agent="jules",
+                status="dispatched",
+                created=now.date(),
+                dispatch_log=[
+                    DispatchLogEntry(
+                        timestamp=now,
+                        agent="jules",
+                        session_id="10569058041124478902",
+                        status="dispatched",
+                    )
+                ],
+            )
+        ],
+    )
+    save_limen_file(tasks_path, lf)
+
+    spec = importlib.util.spec_from_file_location("recover_uut_plan_approval", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(module, "live_jules_sessions", lambda: {"10569058041124478902": "awaiting_plan_approval"})
+    monkeypatch.setattr(sys, "argv", ["recover", "--tasks", str(tasks_path), "--apply"])
+
+    assert module.main() == 0
+    task = load_limen_file(tasks_path).tasks[0]
+    assert task.status == "open"
+    assert task.target_agent == "codex"
+    assert "awaiting_plan_approval" in task.dispatch_log[-1].output
+
+
+def test_recover_task_id_limits_remote_reopen(tmp_path, monkeypatch):
+    tasks_path = tmp_path / "tasks.yaml"
+    now = dt.datetime.now(dt.timezone.utc)
+    lf = LimenFile(
+        portal=Portal(budget=Budget(daily=300, per_agent={}, track=BudgetTrack(date=str(now.date())))),
+        tasks=[
+            Task(
+                id="REV-organvm-mirror-mirror-revenue-ship-0706",
+                title="Drive Mirror Mirror to deploy-ready",
+                repo="organvm/mirror-mirror",
+                target_agent="jules",
+                status="dispatched",
+                created=now.date(),
+                dispatch_log=[
+                    DispatchLogEntry(
+                        timestamp=now,
+                        agent="jules",
+                        session_id="10569058041124478902",
+                        status="dispatched",
+                    )
+                ],
+            ),
+            Task(
+                id="HEAL-rebase-organvm-peer-audited--behavioral-blockchain-721",
+                title="rebase peer audited",
+                repo="organvm/peer-audited--behavioral-blockchain",
+                target_agent="jules",
+                status="dispatched",
+                created=now.date(),
+                dispatch_log=[
+                    DispatchLogEntry(
+                        timestamp=now,
+                        agent="jules",
+                        session_id="14435689243703333273",
+                        status="dispatched",
+                    )
+                ],
+            ),
+        ],
+    )
+    save_limen_file(tasks_path, lf)
+
+    spec = importlib.util.spec_from_file_location("recover_uut_task_id", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(
+        module,
+        "live_jules_sessions",
+        lambda: {
+            "10569058041124478902": "awaiting_plan_approval",
+            "14435689243703333273": "awaiting_plan_approval",
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["recover", "--tasks", str(tasks_path), "--task-id", "REV-organvm-mirror-mirror-revenue-ship-0706", "--apply"],
+    )
+
+    assert module.main() == 0
+    mirror, peer = load_limen_file(tasks_path).tasks
+    assert mirror.status == "open"
+    assert mirror.target_agent == "codex"
+    assert peer.status == "dispatched"
+    assert peer.target_agent == "jules"
+
+
+def test_recover_defaults_to_local_tasks_yaml(tmp_path, monkeypatch):
+    now = dt.datetime.now(dt.timezone.utc)
+    lf = LimenFile(
+        portal=Portal(budget=Budget(daily=300, per_agent={}, track=BudgetTrack(date=str(now.date())))),
+        tasks=[
+            Task(
+                id="HEAL-cifix-organvm-a-i-chat--exporter-49",
+                title="fix exporter CI",
+                repo="organvm/a-i-chat--exporter",
+                target_agent="jules",
+                status="failed",
+                created=now.date(),
+            )
+        ],
+    )
+    save_limen_file(tmp_path / "tasks.yaml", lf)
+
+    spec = importlib.util.spec_from_file_location("recover_uut_default_tasks", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("LIMEN_TASKS", raising=False)
+    monkeypatch.setattr(sys, "argv", ["recover", "--apply"])
+
+    assert module.main() == 0
+    task = load_limen_file(tmp_path / "tasks.yaml").tasks[0]
+    assert task.status == "open"
+    assert task.target_agent == "codex"
+
+
+def test_recover_reopens_first_noop_failure(tmp_path, monkeypatch):
+    tasks_path = tmp_path / "tasks.yaml"
+    now = dt.datetime.now(dt.timezone.utc)
+    lf = LimenFile(
+        portal=Portal(budget=Budget(daily=300, per_agent={}, track=BudgetTrack(date=str(now.date())))),
+        tasks=[
+            Task(
+                id="HEAL-cifix-organvm-domus-genoma-172",
+                title="fix domus CI",
+                repo="organvm/domus-genoma",
+                target_agent="codex",
+                status="failed",
+                labels=["noop", "tried:codex"],
+                created=now.date(),
+                dispatch_log=[
+                    DispatchLogEntry(
+                        timestamp=now,
+                        agent="codex",
+                        session_id="result-lifecycle-guard",
+                        status="failed",
+                        output="No-op result; failed for recovery instead of archived",
+                    )
+                ],
+            )
+        ],
+    )
+    save_limen_file(tasks_path, lf)
+
+    spec = importlib.util.spec_from_file_location("recover_uut_first_noop", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(sys, "argv", ["recover", "--tasks", str(tasks_path), "--apply"])
+
+    assert module.main() == 0
+    task = load_limen_file(tasks_path).tasks[0]
+    assert task.status == "open"
+    assert task.target_agent == "codex"
+    assert task.labels == ["noop"]
+    assert task.dispatch_log[-1].status == "open"
+
+
+def test_recover_escalates_repeated_noop_failures(tmp_path, monkeypatch):
+    tasks_path = tmp_path / "tasks.yaml"
+    now = dt.datetime.now(dt.timezone.utc)
+    lf = LimenFile(
+        portal=Portal(budget=Budget(daily=300, per_agent={}, track=BudgetTrack(date=str(now.date())))),
+        tasks=[
+            Task(
+                id="HEAL-cifix-organvm-domus-genoma-172",
+                title="fix domus CI",
+                repo="organvm/domus-genoma",
+                target_agent="codex",
+                status="failed",
+                labels=["noop", "tried:codex"],
+                created=now.date(),
+                dispatch_log=[
+                    DispatchLogEntry(
+                        timestamp=now,
+                        agent="codex",
+                        session_id="result-lifecycle-guard",
+                        status="failed",
+                        output="No-op result; failed for recovery instead of archived",
+                    ),
+                    DispatchLogEntry(
+                        timestamp=now,
+                        agent="limen",
+                        session_id="heal",
+                        status="open",
+                        output="recover: reopened failed -> fresh cascade",
+                    ),
+                    DispatchLogEntry(
+                        timestamp=now,
+                        agent="codex",
+                        session_id="result-lifecycle-guard",
+                        status="failed",
+                        output="no-op HEAL-cifix-organvm-domus-genoma-172: agent made no changes -- no PR opened",
+                    ),
+                ],
+            )
+        ],
+    )
+    save_limen_file(tasks_path, lf)
+
+    spec = importlib.util.spec_from_file_location("recover_uut_repeated_noop", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(sys, "argv", ["recover", "--tasks", str(tasks_path), "--apply"])
+
+    assert module.main() == 0
+    task = load_limen_file(tasks_path).tasks[0]
+    assert task.status == "needs_human"
+    assert task.target_agent == "codex"
+    assert task.labels == ["noop", "tried:codex"]
+    assert task.dispatch_log[-1].status == "needs_human"
+    assert "repeated no-op failures (2)" in task.dispatch_log[-1].output
+    assert "stop fresh cascade" in task.dispatch_log[-1].output

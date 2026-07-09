@@ -1,22 +1,24 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import subprocess
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
+import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import limen.dispatch as D
-from limen.capacity import PAID_AGENT_ORDER, capacity_census, format_capacity_census
+from limen.capacity import PAID_AGENT_ORDER, agent_status, capacity_census, format_capacity_census, select_lanes
 from limen.dispatch import dispatch_parallel, dispatch_tasks, release_stale_tasks
 from limen.doctor import qa_report, readiness_report, stale_tasks
 from limen.io import load_limen_file
-from limen.models import BudgetTrack, Task
+from limen.models import BudgetTrack, DispatchLogEntry, Task
 from limen.status import print_status
 
 
@@ -27,6 +29,17 @@ def load_route_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_dispatch_env(tmp_path: Path, monkeypatch) -> None:
+    """Dispatch selection consults LIMEN_ROOT-relative registries (value-repos.json, worktree
+    receipts), so ambient fleet state on the host silently changes selection semantics. Pin the
+    root to an empty per-test dir; tests that need a real root re-set LIMEN_ROOT themselves."""
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path / "hermetic-root"))
+    monkeypatch.setenv("LIMEN_DISPATCH_ADMISSION", "0")
+    for var in ("LIMEN_VALUE_REPOS", "LIMEN_VALUE_REPOS_FILE", "LIMEN_VALUE_GATE_STRICT"):
+        monkeypatch.delenv(var, raising=False)
 
 
 def write_board(path: Path, tasks: list[dict]) -> None:
@@ -54,6 +67,130 @@ def read_board(path: Path) -> dict:
     return yaml.safe_load(path.read_text())
 
 
+def _blocked_admission(*_args, **_kwargs):
+    return {
+        "allow": False,
+        "status": "blocked",
+        "exit_code": 10,
+        "reason": "session value gate requested packetization",
+        "next_command": "python3 scripts/prompt-packet-ledger.py --write",
+        "value_gate": {"action": "switch_to_packetization"},
+    }
+
+
+def test_serial_dispatch_admission_blocks_before_worker_and_budget(tmp_path: Path, monkeypatch, capsys) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "T1",
+                "title": "work",
+                "repo": "x/y",
+                "target_agent": "codex",
+                "status": "open",
+                "priority": "critical",
+                "created": str(date.today()),
+            }
+        ],
+    )
+    monkeypatch.setenv("LIMEN_DISPATCH_ADMISSION", "1")
+    monkeypatch.setattr(D, "dispatch_admission_check", _blocked_admission)
+    monkeypatch.setattr(D, "call_agent_dispatch", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError()))
+
+    dispatch_tasks(load_limen_file(tasks_path), tasks_path, agent="codex", dry_run=False)
+
+    out = capsys.readouterr().out
+    board = read_board(tasks_path)
+    assert "dispatch admission blocked" in out
+    assert "python3 scripts/prompt-packet-ledger.py --write" in out
+    assert board["tasks"][0]["status"] == "open"
+    assert board["portal"]["budget"]["track"]["spent"] == 0
+
+
+def test_parallel_dispatch_admission_blocks_before_reservation(tmp_path: Path, monkeypatch, capsys) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "T1",
+                "title": "work",
+                "repo": "x/y",
+                "target_agent": "codex",
+                "status": "open",
+                "priority": "critical",
+                "created": str(date.today()),
+            }
+        ],
+    )
+    monkeypatch.setenv("LIMEN_DISPATCH_ADMISSION", "1")
+    monkeypatch.setattr(D, "dispatch_admission_check", _blocked_admission)
+    monkeypatch.setattr(D, "call_agent_dispatch", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError()))
+
+    dispatch_parallel(load_limen_file(tasks_path), tasks_path, agents=["codex"], dry_run=False)
+
+    out = capsys.readouterr().out
+    board = read_board(tasks_path)
+    assert "dispatch admission blocked" in out
+    assert board["tasks"][0]["status"] == "open"
+    assert board["tasks"][0].get("dispatch_log") in (None, [])
+    assert board["portal"]["budget"]["track"]["spent"] == 0
+
+
+def test_parallel_selection_suppresses_chronic_push_rejection(tmp_path: Path, monkeypatch, capsys) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    now = datetime.now(timezone.utc)
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "CHRONIC",
+                "title": "loop",
+                "repo": "x/y",
+                "target_agent": "codex",
+                "status": "open",
+                "priority": "critical",
+                "created": str(date.today()),
+                "dispatch_log": [
+                    {
+                        "timestamp": now.isoformat(),
+                        "agent": "codex",
+                        "session_id": "a",
+                        "status": "failed",
+                        "output": "push rejected by remote",
+                    },
+                    {
+                        "timestamp": now.isoformat(),
+                        "agent": "codex",
+                        "session_id": "b",
+                        "status": "failed",
+                        "output": "non-fast-forward push rejected",
+                    },
+                ],
+            },
+            {
+                "id": "FRESH",
+                "title": "fresh",
+                "repo": "x/y",
+                "target_agent": "codex",
+                "status": "open",
+                "priority": "low",
+                "created": str(date.today()),
+            },
+        ],
+    )
+
+    monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+
+    dispatch_parallel(load_limen_file(tasks_path), tasks_path, agents=["codex"], per_agent_limit=2, dry_run=True)
+
+    out = capsys.readouterr().out
+    assert D.chronic_dispatch_reason(load_limen_file(tasks_path).tasks[0]) == "push-rejection-loop"
+    assert "codex: FRESH" in out
+    assert "codex: CHRONIC" not in out
+
+
 def test_capacity_census_lists_every_paid_lane(tmp_path: Path, monkeypatch) -> None:
     for binary in ("codex", "claude", "opencode", "agy", "gemini", "jules", "ollama", "gh", "agent-dispatch"):
         path = tmp_path / binary
@@ -78,20 +215,130 @@ def test_capacity_census_lists_every_paid_lane(tmp_path: Path, monkeypatch) -> N
     assert "github_actions" in text
 
 
+def test_isolated_lane_env_points_limen_root_at_worktree(tmp_path: Path, monkeypatch) -> None:
+    live_root = tmp_path / "live"
+    wt = tmp_path / "worktree"
+    monkeypatch.setenv("LIMEN_ROOT", str(live_root))
+    monkeypatch.setenv("LIMEN_TASKS", str(live_root / "tasks.yaml"))
+
+    env = D._lane_run_env("codex", wt)
+
+    assert env["LIMEN_LIVE_ROOT"] == str(live_root)
+    assert env["LIMEN_ROOT"] == str(wt)
+    assert env["LIMEN_TASKS"] == str(wt / "tasks.yaml")
+    assert env["PWD"] == str(wt)
+    assert env["OLDPWD"] == str(live_root)
+
+
+def test_auto_lane_selector_includes_github_actions_and_blocks_oz_without_warp_key(tmp_path: Path, monkeypatch) -> None:
+    gh = tmp_path / "gh"
+    gh.write_text("#!/bin/sh\nexit 0\n")
+    gh.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.delenv("WARP_API_KEY", raising=False)
+
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(tasks_path, [])
+    board = load_limen_file(tasks_path)
+
+    lanes = select_lanes("auto", board)
+
+    assert "github_actions" in lanes
+    assert "oz" not in lanes
+
+
+def test_auto_lane_selector_keeps_agy_up_on_weak_proxy_budget_saturation(tmp_path: Path, monkeypatch) -> None:
+    agy = tmp_path / "agy"
+    agy.write_text("#!/bin/sh\nexit 0\n")
+    agy.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    (logs / "usage.json").write_text(
+        json.dumps(
+            {
+                "vendors": {
+                    "agy": {
+                        "health": "exhausted",
+                        "signal": "dispatch-count",
+                        "limit_source": "operator board cap until live vendor meter",
+                        "remaining": 0,
+                        "headroom_pct": 0,
+                    }
+                }
+            }
+        )
+    )
+    tasks_path = tmp_path / "tasks.yaml"
+    tasks_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "1.0",
+                "portal": {
+                    "name": "Universal Task Intake",
+                    "budget": {
+                        "daily": 10,
+                        "unit": "runs",
+                        "per_agent": {"agy": 1},
+                        "track": {"date": "", "spent": 1, "per_agent": {"agy": 1}},
+                    },
+                },
+                "tasks": [],
+            },
+            sort_keys=False,
+        )
+    )
+    board = load_limen_file(tasks_path)
+
+    rows = {row["agent"]: row for row in capacity_census(board)}
+    lanes = select_lanes("auto", board)
+
+    assert rows["agy"]["reachable"] is True
+    assert rows["agy"]["remaining"] == 9
+    assert "agy" in lanes
+
+
+def test_github_actions_lane_requires_configured_workflow(tmp_path: Path, monkeypatch) -> None:
+    gh = tmp_path / "gh"
+    gh.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = workflow ] && [ "$2" = view ]; then\n'
+        "  echo 'workflow missing' >&2\n"
+        "  exit 1\n"
+        "fi\n"
+        "exit 0\n"
+    )
+    gh.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.delenv("WARP_API_KEY", raising=False)
+
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(tasks_path, [])
+    board = load_limen_file(tasks_path)
+
+    status = agent_status("github_actions")
+    lanes = select_lanes("auto", board)
+
+    assert status["reachable"] is False
+    assert "workflow=limen-agent.yml@organvm/limen unavailable" in status["detail"]
+    assert "github_actions" not in lanes
+
+
 def test_route_distributes_local_work_and_reaches_extended_fleet(tmp_path: Path) -> None:
-    """Ideal-form router (origin's local-first split + the extended-fleet graft): local-checkout
-    work spreads across LOCAL lanes by budget+refresh-runway (no single-lane serialization), and a
-    repo with NO local checkout but a GitHub issue still reaches the extended fleet (copilot/jules)
-    instead of being stranded. Supersedes the old fan-everything-round-robin assertion — which routed
-    local work to copilot/warp/oz the daemon can't dispatch (the 'don't strand' lesson origin learned)."""
+    """Ideal-form router: repo work spreads across repo-capable lanes by budget+refresh-runway.
+
+    Local checkout work may now include the jules remote batch-fill lane; copilot/warp/oz still stay
+    out of ordinary repo routing unless reached through the extended-fleet fallback.
+    """
     route = load_route_module()
     workdir = tmp_path / "work"
     checkout = workdir / "organvm" / "limen"
     (checkout / ".git").mkdir(parents=True)
     health = {agent: True for agent in PAID_AGENT_ORDER}
-    budget = {a: 10 for a in ("codex", "claude", "agy", "opencode")}
+    budget = {a: 10 for a in ("codex", "claude", "agy", "opencode", "jules")}
 
-    # Many local-checkout tasks must SPREAD across local lanes, never serialize onto one.
+    # Many local-checkout tasks must SPREAD across repo-capable lanes, never serialize onto one.
     tally: dict[str, int] = {}
     picks = []
     for i in range(8):
@@ -106,10 +353,11 @@ def test_route_distributes_local_work_and_reaches_extended_fleet(tmp_path: Path)
         vendor, _ = route.route_task(task, health, workdir, assigned=tally, budget=budget)
         tally[vendor] = tally.get(vendor, 0) + 1
         picks.append(vendor)
-    assert set(picks) <= {"codex", "claude", "agy", "opencode"}, f"local work leaked to {set(picks)}"
+    repo_worker_lanes = {"codex", "claude", "agy", "opencode", "gemini", "ollama", "jules"}
+    assert set(picks) <= repo_worker_lanes, f"repo work leaked to {set(picks)}"
     assert len(set(picks)) >= 2, f"work serialized onto {set(picks)}"
 
-    # A repo with NO local checkout but a GitHub issue reaches the extended fleet, not 'unroutable'.
+    # A repo with NO local checkout still reaches a local lane because dispatch.py clones on demand.
     remote = {
         "id": "REMOTE-1",
         "title": "Remote-only repo",
@@ -119,7 +367,8 @@ def test_route_distributes_local_work_and_reaches_extended_fleet(tmp_path: Path)
         "urls": ["https://github.com/someorg/no-local-here/issues/9"],
     }
     vendor, reason = route.route_task(remote, health, workdir, assigned={}, budget=budget)
-    assert vendor in ("copilot", "github_actions", "jules"), (vendor, reason)
+    assert vendor in repo_worker_lanes, (vendor, reason)
+    assert "clone" in reason
 
 
 def test_self_improve_weight_nudge_steers_local_split(monkeypatch) -> None:
@@ -199,7 +448,88 @@ def test_dispatch_skips_needs_human_label(tmp_path: Path, capsys) -> None:
     assert "HUMAN-GATE" not in output
 
 
-def test_dispatch_parallel_skips_needs_human_label(tmp_path: Path, capsys) -> None:
+def test_dispatch_skips_open_task_with_prior_done_log(tmp_path: Path, capsys, monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "REOPENED-DONE",
+                "title": "Already completed",
+                "repo": "organvm/limen",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-06-30",
+                "dispatch_log": [
+                    {
+                        "timestamp": "2026-06-30T00:00:00+00:00",
+                        "agent": "codex",
+                        "session_id": "prior",
+                        "status": "done",
+                    }
+                ],
+            }
+        ],
+    )
+
+    dispatch_tasks(load_limen_file(tasks_path), tasks_path, agent="codex", dry_run=True)
+
+    output = capsys.readouterr().out
+    assert "No open tasks for agent 'codex'" in output
+    assert "REOPENED-DONE" not in output
+
+
+def test_dispatch_bulk_gates_unmet_deps_but_explicit_task_overrides(tmp_path: Path, capsys) -> None:
+    # Serial bulk dispatch must gate on dependencies the same way dispatch_parallel does; an
+    # explicit --task is a human override that bypasses the gate.
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "DEP",
+                "title": "Predecessor — PR not yet merged",
+                # neutral slug: agent_can_run_task bars codex/claude from organvm/limen
+                "repo": "someorg/dispatch-lab",
+                "target_agent": "external",  # keep DEP out of the codex candidate set
+                "priority": "high",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-06-30",
+                "dispatch_log": [],
+            },
+            {
+                "id": "DEPENDENT",
+                "title": "Waits on DEP",
+                "repo": "someorg/dispatch-lab",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "depends_on": ["DEP"],
+                "created": "2026-06-30",
+                "dispatch_log": [],
+            },
+        ],
+    )
+
+    # BULK: DEP is unmerged, so DEPENDENT is withheld (matches the parallel path's gate).
+    dispatch_tasks(load_limen_file(tasks_path), tasks_path, agent="codex", dry_run=True)
+    bulk = capsys.readouterr().out
+    assert "DEPENDENT" not in bulk
+    assert "No open tasks for agent 'codex'" in bulk
+
+    # EXPLICIT single-task dispatch is a deliberate human override — it bypasses the deps gate.
+    dispatch_tasks(load_limen_file(tasks_path), tasks_path, agent="codex", dry_run=True, task_id="DEPENDENT")
+    override = capsys.readouterr().out
+    assert "DRY-RUN: 1 task(s)" in override
+
+
+def test_dispatch_parallel_skips_needs_human_label(tmp_path: Path, capsys, monkeypatch) -> None:
+    monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
     tasks_path = tmp_path / "tasks.yaml"
     write_board(
         tasks_path,
@@ -207,7 +537,7 @@ def test_dispatch_parallel_skips_needs_human_label(tmp_path: Path, capsys) -> No
             {
                 "id": "HUMAN-GATE",
                 "title": "Needs human",
-                "repo": "organvm/limen",
+                "repo": "someorg/dispatch-lab",
                 "target_agent": "any",
                 "priority": "critical",
                 "budget_cost": 1,
@@ -219,7 +549,7 @@ def test_dispatch_parallel_skips_needs_human_label(tmp_path: Path, capsys) -> No
             {
                 "id": "MACHINE-WORK",
                 "title": "Machine work",
-                "repo": "organvm/limen",
+                "repo": "someorg/dispatch-lab",
                 "target_agent": "any",
                 "priority": "critical",
                 "budget_cost": 1,
@@ -250,7 +580,7 @@ def test_dispatch_parallel_debt_gate_skips_routine_generated_buildout(tmp_path: 
             {
                 "id": "GEN-BUILDOUT",
                 "title": "Generated build-out",
-                "repo": "organvm/limen",
+                "repo": "someorg/dispatch-lab",
                 "target_agent": "any",
                 "priority": "critical",
                 "budget_cost": 1,
@@ -262,7 +592,7 @@ def test_dispatch_parallel_debt_gate_skips_routine_generated_buildout(tmp_path: 
             {
                 "id": "RECOVERY",
                 "title": "Recover lifecycle debt",
-                "repo": "organvm/limen",
+                "repo": "someorg/dispatch-lab",
                 "target_agent": "any",
                 "priority": "critical",
                 "budget_cost": 1,
@@ -280,6 +610,352 @@ def test_dispatch_parallel_debt_gate_skips_routine_generated_buildout(tmp_path: 
     assert "Lifecycle debt gate" in output
     assert "RECOVERY" in output
     assert "GEN-BUILDOUT" not in output
+
+
+def test_dispatch_parallel_skips_generated_buildout_outside_value_tier(tmp_path: Path, capsys, monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setenv("LIMEN_VALUE_REPOS", "someorg/value-lab")
+    monkeypatch.setenv("LIMEN_VALUE_REPOS_FILE", str(tmp_path / "no-such-tier.json"))
+    monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "GEN-NONVALUE",
+                "title": "Generated non-value build-out",
+                "repo": "organvm/site.github.io",
+                "target_agent": "any",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "labels": ["typing", "generated", "build-out"],
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            },
+            {
+                "id": "VALUE-WORK",
+                "title": "Value-tier work",
+                "repo": "someorg/value-lab",
+                "target_agent": "any",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "labels": ["lifecycle"],
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            },
+        ],
+    )
+
+    dispatch_parallel(load_limen_file(tasks_path), tasks_path, agents=["codex"], dry_run=True)
+
+    output = capsys.readouterr().out
+    assert "VALUE-WORK" in output
+    assert "GEN-NONVALUE" not in output
+
+
+def test_serial_dispatch_value_gate_withholds_generic_non_value_work(tmp_path: Path, capsys, monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_VALUE_REPOS", "organvm/value-repo")
+    monkeypatch.setenv("LIMEN_VALUE_REPOS_FILE", str(tmp_path / "missing-value-repos.json"))
+    monkeypatch.setenv("LIMEN_DISPATCH_CMD", "agent-stub")
+    monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "GENERIC-WORK",
+                "title": "Generic queue churn",
+                "repo": "organvm/generic-repo",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-07-08",
+                "dispatch_log": [],
+            },
+            {
+                "id": "VALUE-WORK",
+                "title": "Value-tier owner work",
+                "repo": "organvm/value-repo",
+                "target_agent": "codex",
+                "priority": "low",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-07-08",
+                "dispatch_log": [],
+            },
+        ],
+    )
+
+    dispatch_tasks(load_limen_file(tasks_path), tasks_path, agent="codex", dry_run=True)
+
+    output = capsys.readouterr().out
+    assert "VALUE-WORK" in output
+    assert "GENERIC-WORK" not in output
+
+
+def test_dispatch_parallel_value_gate_withholds_generic_non_value_work(tmp_path: Path, capsys, monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_VALUE_REPOS", "organvm/value-repo")
+    monkeypatch.setenv("LIMEN_VALUE_REPOS_FILE", str(tmp_path / "missing-value-repos.json"))
+    monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "GENERIC-WORK",
+                "title": "Generic queue churn",
+                "repo": "organvm/generic-repo",
+                "target_agent": "any",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-07-08",
+                "dispatch_log": [],
+            },
+            {
+                "id": "LIFECYCLE-WORK",
+                "title": "Preserve worktree lifecycle receipt",
+                "repo": "organvm/generic-repo",
+                "target_agent": "any",
+                "priority": "high",
+                "budget_cost": 1,
+                "status": "open",
+                "labels": ["lifecycle"],
+                "created": "2026-07-08",
+                "dispatch_log": [],
+            },
+        ],
+    )
+
+    dispatch_parallel(load_limen_file(tasks_path), tasks_path, agents=["codex"], dry_run=True)
+
+    output = capsys.readouterr().out
+    assert "LIFECYCLE-WORK" in output
+    assert "GENERIC-WORK" not in output
+
+
+def test_dispatch_parallel_reloads_under_queue_lock_before_reserve_write(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "DISPATCH-ME",
+                "title": "Dispatch me",
+                "repo": "someorg/dispatch-lab",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    stale = load_limen_file(tasks_path)
+    board = read_board(tasks_path)
+    board["tasks"].append(
+        {
+            "id": "CONCURRENT",
+            "title": "Concurrent task",
+            "repo": "someorg/dispatch-lab",
+            "target_agent": "agy",
+            "priority": "critical",
+            "budget_cost": 1,
+            "status": "open",
+            "created": "2026-06-20",
+            "dispatch_log": [],
+        }
+    )
+    tasks_path.write_text(yaml.safe_dump(board, sort_keys=False))
+    calls: list[str] = []
+
+    def fake_dispatch(agent, task, dry_run=False):
+        calls.append(task.id)
+        return True
+
+    monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+    monkeypatch.setattr(D, "call_agent_dispatch", fake_dispatch)
+
+    dispatch_parallel(stale, tasks_path, agents=["codex"], per_agent_limit=1, max_workers=1, dry_run=False)
+
+    tasks = {task["id"]: task for task in read_board(tasks_path)["tasks"]}
+    assert set(tasks) == {"DISPATCH-ME", "CONCURRENT"}
+    assert tasks["DISPATCH-ME"]["status"] == "dispatched"
+    assert tasks["CONCURRENT"]["status"] == "open"
+    assert calls == ["DISPATCH-ME"]
+
+
+def test_dispatch_parallel_does_not_dispatch_stale_open_task(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "ALREADY-DONE",
+                "title": "Already done",
+                "repo": "organvm/limen",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    stale = load_limen_file(tasks_path)
+    board = read_board(tasks_path)
+    board["tasks"][0]["status"] = "done"
+    tasks_path.write_text(yaml.safe_dump(board, sort_keys=False))
+    calls: list[str] = []
+
+    monkeypatch.setattr(D, "call_agent_dispatch", lambda agent, task, dry_run=False: calls.append(task.id) or True)
+    monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+
+    dispatch_parallel(stale, tasks_path, agents=["codex"], per_agent_limit=1, max_workers=1, dry_run=False)
+
+    tasks = {task["id"]: task for task in read_board(tasks_path)["tasks"]}
+    assert tasks["ALREADY-DONE"]["status"] == "done"
+    assert calls == []
+
+
+def _concurrent_fold(tasks_path: Path, task_id: str = "CONCURRENT-FOLD") -> None:
+    """Simulate a keeper/route write landing on tasks.yaml while a dispatch cycle holds a
+    stale in-memory snapshot (the lost-update wipe scenario)."""
+    board = read_board(tasks_path)
+    board["tasks"].append(
+        {
+            "id": task_id,
+            "title": "Folded while agents ran",
+            "repo": "organvm/limen",
+            "target_agent": "agy",
+            "priority": "critical",
+            "budget_cost": 1,
+            "status": "open",
+            "created": "2026-06-20",
+            "dispatch_log": [],
+        }
+    )
+    tasks_path.write_text(yaml.safe_dump(board, sort_keys=False))
+
+
+def test_dispatch_serial_commit_survives_concurrent_board_write(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Serial dispatch loads the board, runs agents for minutes, then saves — persisting that
+    stale snapshot erased every interim write (keeper folds, route stamps). The commit must
+    re-apply results onto a FRESH reload so concurrent writes survive."""
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "DISPATCH-ME",
+                "title": "Dispatch me",
+                "repo": "someorg/dispatch-lab",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    stale = load_limen_file(tasks_path)
+
+    def fold_then_succeed(agent, task, dry_run=False):
+        _concurrent_fold(tasks_path)
+        return True
+
+    monkeypatch.setattr(D, "_down_lanes", lambda: set())
+    monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+    monkeypatch.setattr(D, "call_agent_dispatch", fold_then_succeed)
+
+    dispatch_tasks(stale, tasks_path, agent="codex", dry_run=False)
+
+    tasks = {task["id"]: task for task in read_board(tasks_path)["tasks"]}
+    assert set(tasks) == {"DISPATCH-ME", "CONCURRENT-FOLD"}
+    assert tasks["DISPATCH-ME"]["status"] == "dispatched"
+    assert tasks["CONCURRENT-FOLD"]["status"] == "open"
+
+
+def test_dispatch_budget_reset_persist_survives_concurrent_board_write(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """The no-candidate budget-reset persist saved the caller's whole stale snapshot; it must
+    commit the reset via a fresh reload instead."""
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(tasks_path, [])
+    board = read_board(tasks_path)
+    board["portal"]["budget"]["track"] = {
+        "date": "2026-01-01",
+        "spent": 2,
+        "per_agent": {"codex": 2},
+        "per_agent_reset": {"codex": "2026-01-01T00:00:00+00:00"},
+    }
+    tasks_path.write_text(yaml.safe_dump(board, sort_keys=False))
+    stale = load_limen_file(tasks_path)
+
+    _concurrent_fold(tasks_path)
+
+    monkeypatch.setattr(D, "_down_lanes", lambda: set())
+    monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+
+    dispatch_tasks(stale, tasks_path, agent="codex", dry_run=False)
+
+    board = read_board(tasks_path)
+    assert "CONCURRENT-FOLD" in {task["id"] for task in board["tasks"]}
+    assert board["portal"]["budget"]["track"]["per_agent"]["codex"] == 0
+
+
+def test_release_stale_apply_survives_concurrent_board_write(
+    tmp_path: Path,
+) -> None:
+    """release-stale APPLY re-selects and mutates a FRESH board under the queue lock; saving
+    the caller's snapshot would erase concurrent writes."""
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "STALE-CLAIM",
+                "title": "Stale dispatched task",
+                "repo": "organvm/limen",
+                "target_agent": "jules",
+                "priority": "high",
+                "budget_cost": 1,
+                "status": "dispatched",
+                "created": "2026-06-01",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    stale = load_limen_file(tasks_path)
+
+    _concurrent_fold(tasks_path)
+
+    report = release_stale_tasks(stale, tasks_path, hours=24, dry_run=False)
+
+    tasks = {task["id"]: task for task in read_board(tasks_path)["tasks"]}
+    assert set(tasks) == {"STALE-CLAIM", "CONCURRENT-FOLD"}
+    assert tasks["STALE-CLAIM"]["status"] == "open"
+    assert report["status"] == "applied"
+    assert report["released"] == ["STALE-CLAIM"]
 
 
 def test_lane_run_env_keeps_lane_specific_isolation(tmp_path: Path, monkeypatch) -> None:
@@ -304,6 +980,87 @@ def test_lane_run_env_keeps_lane_specific_isolation(tmp_path: Path, monkeypatch)
     assert "ANTHROPIC_API_KEY" not in claude_env
     assert "CLAUDE_CODE_OAUTH_TOKEN" not in claude_env
 
+    monkeypatch.delenv("LIMEN_CLAUDE_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("LIMEN_CLAUDE_API_KEY", raising=False)
+    claude_keyless_env = D._lane_run_env("claude")
+    assert "ANTHROPIC_API_KEY" not in claude_keyless_env
+    assert "CLAUDE_CODE_OAUTH_TOKEN" not in claude_keyless_env
+
+    monkeypatch.setenv("LIMEN_CLAUDE_API_KEY", "fleet-api-key")
+    claude_api_env = D._lane_run_env("claude")
+    assert claude_api_env["ANTHROPIC_API_KEY"] == "fleet-api-key"
+    assert "CLAUDE_CODE_OAUTH_TOKEN" not in claude_api_env
+
+
+def test_failed_agent_result_names_lane_and_task(capsys) -> None:
+    task = Task(
+        id="LIMEN-FAIL-LANE",
+        title="Fail lane",
+        repo="organvm/limen",
+        target_agent="claude",
+        priority="high",
+        budget_cost=1,
+        status="open",
+        created="2026-07-06",
+    )
+    run = subprocess.CompletedProcess(["claude"], 1, stdout="", stderr="connector shadowed")
+
+    assert D._failed_agent_result("claude", task, run) is False
+    assert "FAILED agent claude on LIMEN-FAIL-LANE (1): connector shadowed" in capsys.readouterr().out
+
+
+def test_resolve_agent_binary_uses_opencode_clock_when_installed(monkeypatch) -> None:
+    monkeypatch.delenv("LIMEN_OPENCODE_BIN", raising=False)
+    monkeypatch.setattr(D.shutil, "which", lambda binary: f"/bin/{binary}" if binary == "opencode-clock" else None)
+
+    assert D._resolve_agent_binary("opencode") == "opencode-clock"
+
+
+def test_resolve_agent_binary_falls_back_when_wrapper_missing(monkeypatch) -> None:
+    monkeypatch.delenv("LIMEN_OPENCODE_BIN", raising=False)
+    monkeypatch.setattr(D.shutil, "which", lambda binary: None)
+
+    assert D._resolve_agent_binary("opencode") == "opencode"
+
+
+def test_path_like_repo_resolves_to_local_checkout(tmp_path: Path) -> None:
+    repo = tmp_path / "checkout"
+    (repo / ".git").mkdir(parents=True)
+    task = Task(id="LOCAL-PATH", title="local", repo=str(repo), target_agent="codex", created=date(2026, 7, 7))
+
+    assert D._resolve_repo_dir(task) == repo
+    assert D._clone_repo(task) == repo
+
+
+def test_jules_path_repo_derives_remote_slug(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "checkout"
+    (repo / ".git").mkdir(parents=True)
+    task = Task(id="JULES-PATH", title="jules", repo=str(repo), target_agent="jules", created=date(2026, 7, 7))
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(D, "_github_slug_from_local_repo", lambda path: "organvm/limen")
+
+    def fake_run_cmd(cmd, task, dry_run, cwd=None):
+        calls.append(cmd)
+        return "123456789012345"
+
+    monkeypatch.setattr(D, "_run_cmd", fake_run_cmd)
+
+    assert D._call_jules(task, dry_run=False) == "123456789012345"
+    assert calls[0][3:5] == ["--repo", "organvm/limen"]
+
+
+def test_jules_success_without_session_id_is_failure(monkeypatch, capsys) -> None:
+    task = Task(id="JULES-NO-ID", title="jules", repo="organvm/limen", target_agent="jules", created=date(2026, 7, 7))
+
+    def fake_run_capture(cmd, cwd=None, timeout=600, env=None):
+        return subprocess.CompletedProcess(cmd, 0, "Session is created.\n", "")
+
+    monkeypatch.setattr(D, "_run_capture", fake_run_capture)
+
+    assert D._run_cmd(["jules", "remote", "new"], task, dry_run=False) is False
+    assert "no session id" in capsys.readouterr().out
+
 
 def test_run_isolated_agent_retries_transient_claude_auth_blip(tmp_path: Path, monkeypatch) -> None:
     calls: list[dict] = []
@@ -319,6 +1076,337 @@ def test_run_isolated_agent_retries_transient_claude_auth_blip(tmp_path: Path, m
 
     assert D._run_isolated_agent("claude", task, tmp_path, ["claude"], 3) is True
     assert len(calls) == 2
+
+
+def test_dispatch_numeric_env_knobs_fail_open_when_malformed(tmp_path: Path, monkeypatch) -> None:
+    import datetime
+    import socket
+
+    class FakeSocket:
+        def close(self) -> None:
+            pass
+
+    oauth_timeouts: list[float] = []
+
+    def fake_create_connection(addr, timeout):
+        oauth_timeouts.append(timeout)
+        return FakeSocket()
+
+    monkeypatch.setattr(socket, "create_connection", fake_create_connection)
+    monkeypatch.setenv("LIMEN_OAUTH_PREFLIGHT_TIMEOUT", "not-a-float")
+    assert D._oauth_unreachable_lanes() == set()
+    assert oauth_timeouts == [3.0]
+
+    captured: dict[str, int] = {}
+
+    def fake_run_capture(cmd, cwd=None, timeout=600, env=None):
+        captured["timeout"] = timeout
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    task = Task(id="ENV-KNOBS", title="env", repo="x/y", target_agent="codex", created=date(2026, 6, 27))
+    monkeypatch.setattr(D, "_run_capture", fake_run_capture)
+    monkeypatch.setenv("LIMEN_DISPATCH_TIMEOUT", "not-an-int")
+    assert D._run_cmd(["codex"], task, dry_run=False) is True
+    assert captured["timeout"] == 600
+
+    monkeypatch.setattr(D, "_resolve_agent_binary", lambda agent: agent)
+    monkeypatch.setattr(D, "_resolve_repo_dir", lambda _task: tmp_path)
+    monkeypatch.setenv("LIMEN_LANE_TIMEOUT", "not-an-int")
+    assert D._isolated_local_run("codex", task, dry_run=True) is True
+
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(tasks_path, [])
+    limen = load_limen_file(tasks_path)
+    monkeypatch.setenv("LIMEN_ACCEL_TLEFT_FLOOR", "not-a-float")
+    monkeypatch.setenv("LIMEN_ACCEL_ASYNC_CEIL", "not-an-int")
+    assert D._accel_limit(limen, "jules", 2, datetime.datetime.now(datetime.timezone.utc)) >= 2
+
+
+def test_same_repo_pr_head_for_task_resolves_open_pr(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run_capture(cmd, cwd=None, timeout=600, env=None):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            json.dumps(
+                {
+                    "baseRefName": "master",
+                    "headRefName": "limen/fix-ci-175",
+                    "headRepositoryOwner": {"login": "organvm"},
+                    "state": "OPEN",
+                }
+            ),
+            "",
+        )
+
+    monkeypatch.setattr(D, "_run_capture", fake_run_capture)
+    task = Task(
+        id="HEAL-175",
+        title="fix failing CI on organvm/domus-genoma#175",
+        repo="organvm/domus-genoma",
+        target_agent="codex",
+        created=date(2026, 6, 27),
+    )
+
+    assert D._task_github_pr_ref(task) == ("organvm/domus-genoma", 175)
+    assert D._same_repo_pr_head_for_task(task) == {
+        "repo": "organvm/domus-genoma",
+        "number": "175",
+        "head_ref": "limen/fix-ci-175",
+        "base_ref": "master",
+    }
+    assert calls[0][:4] == ["gh", "pr", "view", "175"]
+
+
+def test_pr_repair_prompt_forbids_assumed_limen_workflow() -> None:
+    task = Task(
+        id="HEAL-172",
+        title="fix failing CI on organvm/domus-genoma#172",
+        repo="organvm/domus-genoma",
+        target_agent="codex",
+        urls=["https://github.com/organvm/domus-genoma/pull/172"],
+        created=date(2026, 6, 27),
+    )
+
+    prompt = D._build_prompt(task)
+
+    assert "statusCheckRollup" in prompt
+    assert "workflow list" in prompt
+    assert "do not assume" in prompt
+    assert "limen-agent.yml" in prompt
+
+
+def test_isolated_local_run_updates_same_repo_pr_head(tmp_path: Path, monkeypatch) -> None:
+    git_calls: list[list[str]] = []
+    pushed_pr_heads: list[tuple[str, Path]] = []
+    auto_merge_urls: list[str] = []
+    cleanups: list[tuple[str, bool]] = []
+
+    def fake_git_plumbing(args, cwd, timeout=120):
+        git_calls.append(args)
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    def fake_git(args, cwd, timeout=120):
+        if args == ["rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(args, 0, "base-head\n", "")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(D, "_resolve_agent_binary", lambda agent: agent)
+    monkeypatch.setattr(D, "_resolve_repo_dir", lambda _task: tmp_path)
+    monkeypatch.setattr(D, "_default_branch", lambda _repo: "master")
+    monkeypatch.setattr(
+        D,
+        "_same_repo_pr_head_for_task",
+        lambda _task: {
+            "repo": "organvm/domus-genoma",
+            "number": "175",
+            "head_ref": "limen/fix-ci-175",
+            "base_ref": "master",
+        },
+    )
+    monkeypatch.setattr(D, "_git_plumbing", fake_git_plumbing)
+    monkeypatch.setattr(D, "_git", fake_git)
+    monkeypatch.setattr(D, "_run_isolated_agent", lambda *args: True)
+    monkeypatch.setattr(D, "_commit_isolated_changes", lambda *args: True)
+    monkeypatch.setattr(
+        D,
+        "_push_existing_pr_head",
+        lambda task, wt, pr_head: pushed_pr_heads.append((pr_head["head_ref"], wt)) or True,
+    )
+    monkeypatch.setattr(
+        D,
+        "_arm_auto_merge",
+        lambda task, wt, url: auto_merge_urls.append(url),
+    )
+    monkeypatch.setattr(
+        D,
+        "_cleanup_isolated_worktree",
+        lambda repo_dir, wt, branch, base_ref, pushed, task=None: cleanups.append((base_ref, pushed)),
+    )
+    monkeypatch.setattr(D.secrets, "token_hex", lambda _n: "abcd")
+    monkeypatch.setattr(D, "_ISOLATION_ROOT", tmp_path / "worktrees")
+    task = Task(
+        id="HEAL-cifix-organvm-domus-genoma-175",
+        title="fix failing CI on organvm/domus-genoma#175",
+        repo="organvm/domus-genoma",
+        target_agent="codex",
+        created=date(2026, 6, 27),
+    )
+
+    result = D._isolated_local_run("codex", task, dry_run=False)
+
+    assert result == "https://github.com/organvm/domus-genoma/pull/175"
+    assert git_calls[0] == [
+        "fetch",
+        "origin",
+        "+refs/heads/limen/fix-ci-175:refs/remotes/origin/limen/fix-ci-175",
+    ]
+    assert git_calls[1] == [
+        "worktree",
+        "add",
+        "-b",
+        "limen/heal-cifix-organvm-domus-genoma-175-abcd",
+        str(tmp_path / "worktrees" / "heal-cifix-organvm-domus-genoma-175-abcd"),
+        "origin/limen/fix-ci-175",
+    ]
+    assert pushed_pr_heads == [
+        ("limen/fix-ci-175", tmp_path / "worktrees" / "heal-cifix-organvm-domus-genoma-175-abcd")
+    ]
+    assert auto_merge_urls == ["https://github.com/organvm/domus-genoma/pull/175"]
+    assert cleanups == [("origin/limen/fix-ci-175", True)]
+
+
+def test_isolated_local_run_treats_agent_committed_pr_head_as_work(tmp_path: Path, monkeypatch) -> None:
+    heads = iter(["base-head\n", "agent-commit\n"])
+    pushed_pr_heads: list[str] = []
+
+    def fake_git(args, cwd, timeout=120):
+        if args == ["rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(args, 0, next(heads), "")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(D, "_resolve_agent_binary", lambda agent: agent)
+    monkeypatch.setattr(D, "_resolve_repo_dir", lambda _task: tmp_path)
+    monkeypatch.setattr(D, "_default_branch", lambda _repo: "master")
+    monkeypatch.setattr(
+        D,
+        "_same_repo_pr_head_for_task",
+        lambda _task: {
+            "repo": "organvm/domus-genoma",
+            "number": "175",
+            "head_ref": "limen/fix-ci-175",
+            "base_ref": "master",
+        },
+    )
+    monkeypatch.setattr(D, "_git_plumbing", lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, "", ""))
+    monkeypatch.setattr(D, "_git", fake_git)
+    monkeypatch.setattr(D, "_run_isolated_agent", lambda *args: True)
+    monkeypatch.setattr(D, "_commit_isolated_changes", lambda *args: D._NOOP)
+    monkeypatch.setattr(
+        D,
+        "_push_existing_pr_head",
+        lambda task, wt, pr_head: pushed_pr_heads.append(pr_head["head_ref"]) or True,
+    )
+    monkeypatch.setattr(D, "_arm_auto_merge", lambda *args: None)
+    monkeypatch.setattr(D, "_cleanup_isolated_worktree", lambda *args, **kwargs: None)
+    monkeypatch.setattr(D.secrets, "token_hex", lambda _n: "abcd")
+    monkeypatch.setattr(D, "_ISOLATION_ROOT", tmp_path / "worktrees")
+    task = Task(
+        id="HEAL-cifix-organvm-domus-genoma-175",
+        title="fix failing CI on organvm/domus-genoma#175",
+        repo="organvm/domus-genoma",
+        target_agent="codex",
+        created=date(2026, 6, 27),
+    )
+
+    result = D._isolated_local_run("codex", task, dry_run=False)
+
+    assert result == "https://github.com/organvm/domus-genoma/pull/175"
+    assert pushed_pr_heads == ["limen/fix-ci-175"]
+
+
+def test_git_plumbing_retries_transient_config_lock(tmp_path: Path, monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_git(args, cwd, timeout=120):
+        calls.append(args)
+        if len(calls) == 1:
+            return subprocess.CompletedProcess(
+                args, 128, "", "error: could not lock config file .git/config: File exists"
+            )
+        return subprocess.CompletedProcess(args, 0, "ok", "")
+
+    monkeypatch.setattr(D, "_git", fake_git)
+    monkeypatch.setattr(D.time, "sleep", lambda _seconds: None)
+
+    result = D._git_plumbing(["worktree", "add"], tmp_path)
+
+    assert result.returncode == 0
+    assert len(calls) == 2
+
+
+def _git_ok(cwd: Path, *args: str) -> str:
+    result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True)
+    return result.stdout
+
+
+def _make_cleanup_repo(tmp_path: Path) -> tuple[Path, Path, str]:
+    repo = tmp_path / "repo"
+    wt = tmp_path / "wt"
+    repo.mkdir()
+    _git_ok(repo, "init", "-q", "-b", "main")
+    (repo / "README.md").write_text("base\n", encoding="utf-8")
+    _git_ok(repo, "add", "README.md")
+    _git_ok(repo, "-c", "user.email=t@example.com", "-c", "user.name=test", "commit", "-qm", "base")
+    branch = "limen/test-cleanup"
+    _git_ok(repo, "worktree", "add", "-q", "-b", branch, str(wt), "main")
+    return repo, wt, branch
+
+
+def test_cleanup_isolated_worktree_retains_clean_noop_branch_for_reclaim(tmp_path: Path) -> None:
+    repo, wt, branch = _make_cleanup_repo(tmp_path)
+    (wt / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+    (wt / "node_modules").mkdir()
+    (wt / "node_modules" / "dep.txt").write_text("generated\n", encoding="utf-8")
+
+    D._cleanup_isolated_worktree(repo, wt, branch, "main", pushed=False)
+
+    assert wt.exists()
+    assert not (wt / "node_modules").exists()
+    assert branch in _git_ok(repo, "branch", "--list", branch)
+
+
+def test_worktree_birth_receipt_is_written_to_private_gitdir(tmp_path: Path, monkeypatch) -> None:
+    repo, wt, branch = _make_cleanup_repo(tmp_path)
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path / "limen"))
+    task = Task(
+        id="BIRTH-1",
+        title="birth receipt",
+        repo="organvm/limen",
+        target_agent="codex",
+        created=date(2026, 7, 9),
+    )
+
+    D._record_worktree_birth(task, wt, branch, "origin/main", "main", existing_pr=False)
+
+    gitdir = Path(_git_ok(wt, "rev-parse", "--git-dir").strip())
+    if not gitdir.is_absolute():
+        gitdir = wt / gitdir
+    receipt = gitdir / "limen-worktree-birth.json"
+    payload = json.loads(receipt.read_text(encoding="utf-8"))
+    assert payload["task_id"] == "BIRTH-1"
+    assert payload["remote_branch"] == branch
+    assert not (wt / "limen-worktree-birth.json").exists()
+    assert "limen-worktree-birth.json" not in _git_ok(wt, "status", "--porcelain")
+
+
+def test_cleanup_isolated_worktree_preserves_dirty_failed_work(tmp_path: Path) -> None:
+    repo, wt, branch = _make_cleanup_repo(tmp_path)
+    (wt / "local.txt").write_text("local-only\n", encoding="utf-8")
+    (wt / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+    (wt / "node_modules").mkdir()
+    (wt / "node_modules" / "dep.txt").write_text("generated\n", encoding="utf-8")
+
+    D._cleanup_isolated_worktree(repo, wt, branch, "main", pushed=False)
+
+    assert wt.exists()
+    assert (wt / "local.txt").exists()
+    assert not (wt / "node_modules").exists()
+    assert branch in _git_ok(repo, "branch", "--list", branch)
+
+
+def test_cleanup_isolated_worktree_preserves_unpushed_commits(tmp_path: Path) -> None:
+    repo, wt, branch = _make_cleanup_repo(tmp_path)
+    (wt / "README.md").write_text("base\nlocal commit\n", encoding="utf-8")
+    _git_ok(wt, "add", "README.md")
+    _git_ok(wt, "-c", "user.email=t@example.com", "-c", "user.name=test", "commit", "-qm", "local work")
+
+    D._cleanup_isolated_worktree(repo, wt, branch, "main", pushed=False)
+
+    assert wt.exists()
+    assert D._unpreserved_work_reason(wt, "main") == "unpushed-commits"
 
 
 def test_noop_result_stays_recoverable_not_cancelled() -> None:
@@ -340,6 +1428,246 @@ def test_noop_result_stays_recoverable_not_cancelled() -> None:
     assert "noop" in task.labels
     assert "cancelled" not in task.labels
     assert task.dispatch_log[-1].status == "failed"
+
+
+def test_pr_open_receipt_blocks_duplicate_dispatch_and_noop_demotion() -> None:
+    import datetime
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    task = Task(
+        id="PR-OPEN",
+        title="already has a PR",
+        target_agent="opencode",
+        status="open",
+        created=date(2026, 6, 27),
+        labels=[],
+        dispatch_log=[
+            DispatchLogEntry(
+                timestamp=now,
+                agent="agy",
+                session_id="https://github.com/x/y/pull/99",
+                status="pr_open",
+                output="PR is open and green",
+            )
+        ],
+    )
+
+    assert D._dispatchable(task) is False
+
+    task.status = "dispatched"
+    D._apply_result(task, "opencode", D._NOOP, now, BudgetTrack(date="2026-06-27"))
+
+    assert task.status == "dispatched"
+    assert "noop" not in task.labels
+    assert task.dispatch_log[-1].status == "pr_open"
+    assert task.dispatch_log[-1].session_id == "result-lifecycle-guard"
+
+
+def test_blocked_result_is_terminal_failed_blocked() -> None:
+    import datetime
+
+    task = Task(
+        id="BLOCKED",
+        title="blocked attempt",
+        repo="organvm/missing",
+        target_agent="codex",
+        status="open",
+        created=date(2026, 6, 27),
+        labels=[],
+    )
+    track = BudgetTrack(date="2026-06-27")
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    D._apply_result(task, "codex", D._blocked_result("repo unavailable: organvm/missing"), now, track)
+
+    assert task.status == "failed_blocked"
+    assert task.target_agent == "codex"
+    assert "blocked:routing" in task.labels
+    assert track.spent == 0
+    assert task.dispatch_log[-1].status == "failed_blocked"
+    assert "repo unavailable" in str(task.dispatch_log[-1].output)
+
+
+def test_dispatch_parallel_records_blocked_without_counting_failure(tmp_path: Path, monkeypatch, capsys) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "BLOCKED-PARALLEL",
+                "title": "blocked parallel",
+                "repo": "organvm/missing",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-06-20",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        D,
+        "call_agent_dispatch",
+        lambda agent, task, dry_run=False: D._blocked_result("repo unavailable: organvm/missing"),
+    )
+    monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+
+    dispatch_parallel(load_limen_file(tasks_path), tasks_path, agents=["codex"], per_agent_limit=1, max_workers=1)
+
+    output = capsys.readouterr().out
+    task = read_board(tasks_path)["tasks"][0]
+    assert task["status"] == "failed_blocked"
+    assert task["dispatch_log"][-1]["status"] == "failed_blocked"
+    assert "1 blocked" in output
+    assert "0 failed" in output
+
+
+def test_failed_result_skips_down_lane_in_default_cascade(tmp_path: Path, monkeypatch) -> None:
+    import datetime
+
+    monkeypatch.delenv("LIMEN_DISPATCH_LANES", raising=False)
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setenv("LIMEN_OAUTH_PREFLIGHT", "0")
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    (logs / "usage.json").write_text(
+        json.dumps(
+            {
+                "vendors": {
+                    "gemini": {"health": "exhausted"},
+                    "jules": {"health": "ok"},
+                }
+            }
+        )
+    )
+
+    def fake_select_lanes(selector, board=None, *, down_lanes=None):
+        assert selector == "auto"
+        assert "gemini" in set(down_lanes or ())
+        return ["codex", "opencode", "agy", "claude", "jules"]
+
+    monkeypatch.setattr(D, "select_lanes", fake_select_lanes)
+    task = Task(
+        id="CASCADE",
+        title="cascade around down lane",
+        target_agent="claude",
+        status="open",
+        created=date(2026, 6, 27),
+        labels=[],
+    )
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    D._apply_result(task, "claude", False, now, BudgetTrack(date="2026-06-27"))
+
+    assert task.status == "open"
+    assert task.target_agent == "jules"
+    assert task.dispatch_log[-1].status == "failed->jules"
+    assert "tried:claude" in task.labels
+
+
+def test_default_cascade_uses_reachable_auto_lanes(monkeypatch) -> None:
+    import datetime
+
+    monkeypatch.delenv("LIMEN_DISPATCH_LANES", raising=False)
+    monkeypatch.setattr(D, "_down_lanes", lambda: {"codex", "gemini", "jules"})
+    monkeypatch.setattr(
+        D,
+        "select_lanes",
+        lambda selector, board=None, *, down_lanes=None: ["opencode", "agy", "claude"],
+    )
+    task = Task(
+        id="NO-UNREACHABLE",
+        title="do not fall to unreachable floor",
+        target_agent="claude",
+        status="open",
+        created=date(2026, 6, 27),
+        labels=[],
+    )
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    D._apply_result(task, "claude", False, now, BudgetTrack(date="2026-06-27"))
+
+    assert task.status == "failed"
+    assert task.target_agent == "claude"
+    assert task.dispatch_log[-1].status == "failed"
+    assert "tried:claude" in task.labels
+
+
+def test_agent_can_not_rerun_task_after_timeout_to_jules() -> None:
+    import datetime
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    task = Task(
+        id="SLOW-CODEX",
+        title="slow local task",
+        repo="organvm/domus-genoma",
+        target_agent="codex",
+        status="open",
+        created=date(2026, 7, 8),
+        labels=["slow"],
+        dispatch_log=[
+            DispatchLogEntry(
+                timestamp=now,
+                agent="codex",
+                session_id="cli",
+                status="timeout->jules",
+            )
+        ],
+    )
+
+    assert not D.agent_can_run_task("codex", task)
+    assert D.agent_can_run_task("jules", task)
+
+
+def test_late_result_does_not_reopen_already_done_task() -> None:
+    import datetime
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    task = Task(
+        id="DONE-LATE",
+        title="already done",
+        target_agent="opencode",
+        status="done",
+        created=date(2026, 6, 27),
+        labels=[],
+        dispatch_log=[
+            DispatchLogEntry(
+                timestamp=now,
+                agent="opencode",
+                session_id="cli",
+                status="done",
+                output="completed before async worker result arrived",
+            )
+        ],
+    )
+    track = BudgetTrack(date="2026-06-27")
+
+    D._apply_result(task, "opencode", D._NOOP, now, track)
+
+    assert task.status == "done"
+    assert "noop" not in task.labels
+    assert task.dispatch_log[-1].status == "done"
+    assert track.spent == 0
+
+
+def test_isolated_local_run_blocks_unavailable_repo_without_cascading(monkeypatch) -> None:
+    task = Task(
+        id="MISSING-REPO",
+        title="missing repo",
+        repo="organvm/missing",
+        target_agent="codex",
+        created=date(2026, 6, 27),
+    )
+    monkeypatch.setattr(D, "_resolve_agent_binary", lambda agent: agent)
+    monkeypatch.setattr(D, "_resolve_repo_dir", lambda task: None)
+    monkeypatch.setattr(D, "_repo_unavailable_reason", lambda repo: "repo unavailable: organvm/missing")
+    monkeypatch.setattr(D, "_clone_repo", lambda task: pytest.fail("unavailable repo should not clone"))
+
+    result = D._isolated_local_run("codex", task, dry_run=False)
+
+    assert D._is_blocked_result(result)
+    assert "organvm/missing" in D._blocked_reason(result)
 
 
 def test_release_stale_dry_run_does_not_mutate(tmp_path: Path) -> None:
@@ -401,6 +1729,42 @@ def test_release_stale_apply_reopens_task(tmp_path: Path) -> None:
     assert report["status"] == "applied"
     assert report["count"] == 1
     assert report["released"] == ["LIMEN-002"]
+    assert report["restored_done"] == []
+
+
+def test_release_stale_restores_prior_done_instead_of_reopening(tmp_path: Path) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "DONE-REOPENED",
+                "title": "Already done but active",
+                "repo": "4444J99/limen",
+                "target_agent": "jules",
+                "priority": "high",
+                "budget_cost": 1,
+                "status": "in_progress",
+                "created": "2026-06-01",
+                "dispatch_log": [
+                    {
+                        "timestamp": "2026-06-01T00:00:00+00:00",
+                        "agent": "jules",
+                        "session_id": "prior",
+                        "status": "done",
+                    }
+                ],
+            }
+        ],
+    )
+
+    report = release_stale_tasks(load_limen_file(tasks_path), tasks_path, hours=24, dry_run=False)
+
+    task = read_board(tasks_path)["tasks"][0]
+    assert task["status"] == "done"
+    assert task["dispatch_log"][-1]["status"] == "done"
+    assert report["released"] == []
+    assert report["restored_done"] == ["DONE-REOPENED"]
 
 
 def test_dispatch_limit_and_per_agent_budget(tmp_path: Path, monkeypatch) -> None:
