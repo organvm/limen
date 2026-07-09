@@ -1,0 +1,7 @@
+**Thesis for organvm/palimpsest:**
+
+organvm/palimpsest holds high latent value as both a consumer-facing, location-based exploration experience and a reusable spatial-data capability for the broader estate. While its end vision is a gamified AR treasure hunt layered on historical cartography, its core engine—an autopoietic pipeline designed to continuously ingest, georeference, and stack historical maps as time-layers under a live base map—can serve as a foundational organ for other civic, educational, or historical projects. The single best concrete first task is to build out Phase 1 (`plans/01-phase-1-demo.md`): creating a single-city web time-slider demo to prove out the base-map stacking and opacity controls before scaling the ingestion pipeline.
+
+**Thesis for organvm/cind-and-sol-foundation:**
+
+organvm/cind-and-sol-foundation holds high latent value as the philanthropic anchor and centralized US 501(c)(3) (and Panama operating entity) structure for the entire `organvm` ecosystem. It acts as the legal vessel to receive tax-deductible donations and grants (integrated with the `quaestor` engine), channeling surplus from other ventures into a living, physical "community as a healing bridge" campus. The single best concrete first task is to formalize the legal formation strategy (either US or Panama entity first) and publish the `site/index.html` landing page to establish the public credibility needed to begin grant-finding.
