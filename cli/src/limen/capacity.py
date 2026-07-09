@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-import json
 import os
+import json
 import re
 import shlex
 import shutil
 import subprocess
 from pathlib import Path
+from collections.abc import Iterable
+from datetime import datetime, timezone
 from typing import TypedDict, TypeVar
 
+from limen import census
 from limen.models import Task
 
 T = TypeVar("T")
@@ -52,33 +54,15 @@ class CapacityFillSnapshot(TypedDict):
     blockers: list[dict[str, str]]
 
 
-PAID_AGENT_ORDER: tuple[str, ...] = (
-    "codex",
-    "claude",
-    "opencode",
-    "agy",
-    "gemini",
-    # ollama: the LOCAL, UNMETERED floor of the cascade — the pilot light. It has no token
-    # budget and no rate-limit window, so when every metered/cloud vendor is spent (the exact
-    # "we didn't pace tokens perfectly between refreshes" case), the beat still has a lane that
-    # can produce. Self-activating: reachable only once a model is pulled (see agent_status).
-    "ollama",
-    "jules",
-    "copilot",
-    "warp",
-    "oz",
-    "github_actions",
-)
+# These six were once hand-maintained literals here; they are now DERIVED VIEWS of the single
+# vendor register in `census.py` (one record per vendor owns every fact). Editing a vendor — or
+# recording that one went dark (see census: gemini) — is a one-record edit there, not six here.
+# test_census locks each of these against its historical value so the derivation can never drift.
+# (ollama is the LOCAL, UNMETERED floor of the cascade — the pilot light: no budget, no window, so
+# when every metered/cloud vendor is spent the beat still has a lane that can produce. Reachable
+# only once a model is pulled — see agent_status / census ollama record.)
+PAID_AGENT_ORDER: tuple[str, ...] = census.paid_agent_order()
 
-AGENT_ALIASES: dict[str, str] = {
-    "actions": "github_actions",
-    "gha": "github_actions",
-    "github-actions": "github_actions",
-    "antigravity": "agy",
-}
-
-LOCAL_CHECKOUT_AGENTS = frozenset({"codex", "claude", "opencode", "agy", "gemini", "ollama"})
-ISSUE_ASSIGNMENT_AGENTS = frozenset({"copilot"})
 DEFAULT_FILL_AGENTS: tuple[str, ...] = ("jules", "claude", "opencode", "agy", "gemini", "codex", "copilot")
 DEFAULT_DAILY_TASK_TARGETS: dict[str, int] = {
     # Human contract: Claude should get a deliberately programmed/check-up batch daily.
@@ -86,33 +70,14 @@ DEFAULT_DAILY_TASK_TARGETS: dict[str, int] = {
 }
 BAD_USAGE_HEALTH = {"exhausted", "rate-limited", "low", "throttle"}
 
-_DEFAULT_BINARIES: dict[str, str] = {
-    "codex": "codex",
-    "claude": "claude",
-    "opencode": "opencode",
-    "agy": "agy",
-    "gemini": "gemini",
-    "ollama": "ollama",
-    "jules": "jules",
-    "copilot": "gh",
-    "warp": "warp",
-    "oz": "oz",
-    "github_actions": "gh",
-}
+AGENT_ALIASES: dict[str, str] = census.agent_aliases()
 
-_KINDS: dict[str, str] = {
-    "codex": "local-cli",
-    "claude": "local-cli",
-    "opencode": "local-cli",
-    "agy": "local-cli",
-    "gemini": "local-cli",
-    "ollama": "local-cli",
-    "jules": "cloud-cli",
-    "copilot": "github-issue",
-    "warp": "paid-service",
-    "oz": "paid-service",
-    "github_actions": "github-actions",
-}
+LOCAL_CHECKOUT_AGENTS = census.local_checkout_agents()
+ISSUE_ASSIGNMENT_AGENTS = census.issue_assignment_agents()
+
+_DEFAULT_BINARIES: dict[str, str] = census.default_binaries()
+
+_KINDS: dict[str, str] = census.kinds()
 
 _ISSUE_RE = re.compile(r"github\.com/([^/\s]+/[^/\s]+)/issues/(\d+)")
 
@@ -206,6 +171,26 @@ def ollama_model() -> str | None:
     return None
 
 
+_LOCAL_FLOOR_CLASSES_DEFAULT = ("scan", "verify", "link-check", "classify", "summarize")
+
+
+def local_floor_classes() -> set[str]:
+    """Job classes the local ollama floor may absorb — env-pinned (LIMEN_LOCAL_FLOOR_CLASSES,
+    comma-separated) with a conservative mechanical-grade default; mirrors the
+    LIMEN_CLAUDE_OPUS_CLASSES pattern in model_selection."""
+    raw = os.environ.get("LIMEN_LOCAL_FLOOR_CLASSES", "")
+    if raw.strip():
+        return {c.strip() for c in raw.split(",") if c.strip()}
+    return set(_LOCAL_FLOOR_CLASSES_DEFAULT)
+
+
+def local_floor_enabled() -> bool:
+    """The local-floor arm switch — DARK by default (operator rule 2026-07-09: nothing switches
+    over until the math maths). Arm with LIMEN_LOCAL_FLOOR=1 only after the parity gate passes
+    each class (`parity gate --model <floor> --class <c> --threshold 0.9`, organvm/manumissio)."""
+    return os.environ.get("LIMEN_LOCAL_FLOOR", "0").strip() == "1"
+
+
 def _truthy(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -253,6 +238,24 @@ def _copilot_assignable(binary: str, repo: str, actor: str) -> bool:
     except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
         pass
     return False
+
+
+def _github_actions_workflow_status(binary: str, workflow: str, repo: str) -> tuple[bool, str]:
+    try:
+        result = subprocess.run(
+            [binary, "workflow", "view", workflow, "--repo", repo],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            stdin=subprocess.DEVNULL,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+        return False, f"workflow={workflow}@{repo} unavailable ({exc})"
+    if result.returncode == 0:
+        return True, f"workflow={workflow}@{repo}"
+    detail = (result.stderr or result.stdout or "").strip().splitlines()
+    suffix = f": {detail[0]}" if detail else ""
+    return False, f"workflow={workflow}@{repo} unavailable{suffix}"
 
 
 def agent_status(agent: str) -> AgentStatus:
@@ -323,7 +326,13 @@ def agent_status(agent: str) -> AgentStatus:
             detail = f"{detail}; no model pulled — run `ollama pull qwen2.5-coder:7b` to light the floor lane"
     if agent == "github_actions" and ok:
         workflow = os.environ.get("LIMEN_GITHUB_ACTIONS_WORKFLOW", "limen-agent.yml")
-        detail = f"{detail}; workflow={workflow}"
+        health_repo = os.environ.get(
+            "LIMEN_GITHUB_ACTIONS_HEALTH_REPO",
+            os.environ.get("LIMEN_GITHUB_ACTIONS_REPO", "organvm/limen"),
+        )
+        workflow_ok, workflow_detail = _github_actions_workflow_status(binary, workflow, health_repo)
+        ok = ok and workflow_ok
+        detail = f"{detail}; {workflow_detail}"
     if agent == "copilot" and ok:
         actor = os.environ.get("LIMEN_COPILOT_ACTOR", "copilot-swe-agent")
         if _truthy(os.environ.get("LIMEN_COPILOT_ENABLED")):
@@ -379,13 +388,22 @@ def capacity_census(board: object = None, budget_limit: int | None = None) -> li
     if not isinstance(per_agent_spent, dict):
         per_agent_spent = {}
     daily_remaining = max(0, daily - total_spent) if daily else None
+    usage = _load_usage()
 
     rows: list[CapacityRow] = []
     for agent in PAID_AGENT_ORDER:
         status = agent_status(agent)
         cap = _int(per_agent_caps.get(agent), daily)
         spent = _int(per_agent_spent.get(agent), 0)
-        if daily_remaining is None:
+        weak_proxy = _weak_proxy_exhaustion(agent, _usage_vendor(agent, usage))
+        detail = str(status["detail"])
+        if weak_proxy:
+            remaining = daily_remaining
+            if detail:
+                detail = f"{detail}; weak dispatch-count proxy, using daily budget runway"
+            else:
+                detail = "weak dispatch-count proxy, using daily budget runway"
+        elif daily_remaining is None:
             remaining = max(0, cap - spent) if cap else None
         else:
             remaining = max(0, min(daily_remaining, cap - spent))
@@ -393,6 +411,7 @@ def capacity_census(board: object = None, budget_limit: int | None = None) -> li
         rows.append(
             {
                 **status,
+                "detail": detail,
                 "limit": cap,
                 "spent": spent,
                 "remaining": remaining,
@@ -400,6 +419,35 @@ def capacity_census(board: object = None, budget_limit: int | None = None) -> li
             }
         )
     return rows
+
+
+def select_lanes(
+    selector: str | None = "auto",
+    board: object = None,
+    *,
+    down_lanes: Iterable[str] | None = None,
+) -> list[str]:
+    """Resolve a lane selector through the canonical capacity registry.
+
+    ``auto`` means lanes that are reachable and have remaining board capacity.
+    ``all`` means every registered lane except live-down lanes. Explicit comma
+    lists normalize aliases and ignore unknown/down lanes.
+    """
+    raw = (selector or "auto").strip() or "auto"
+    down = {canonical_agent(agent.strip()) for agent in (down_lanes or []) if str(agent).strip()}
+    key = raw.lower()
+    if key == "all":
+        return [agent for agent in PAID_AGENT_ORDER if agent not in down]
+    if key == "auto":
+        rows = capacity_census(board)
+        return [str(row["agent"]) for row in rows if row.get("reachable") and str(row["agent"]) not in down]
+
+    lanes: list[str] = []
+    for item in raw.split(","):
+        agent = canonical_agent(item.strip())
+        if agent and agent in PAID_AGENT_ORDER and agent not in down and agent not in lanes:
+            lanes.append(agent)
+    return lanes
 
 
 def format_capacity_census(rows: list[CapacityRow]) -> str:
@@ -426,6 +474,23 @@ def _load_usage(root: Path | None = None) -> dict[str, object]:
     return data if isinstance(data, dict) else {}
 
 
+def _usage_vendor(agent: str, usage: dict[str, object]) -> dict[str, object]:
+    vendors = usage.get("vendors") if isinstance(usage, dict) else {}
+    info = vendors.get(agent) if isinstance(vendors, dict) else {}
+    return info if isinstance(info, dict) else {}
+
+
+def _weak_proxy_exhaustion(agent: str, info: dict[str, object]) -> bool:
+    """Agy's dispatch-count proxy is not a hard provider quota meter."""
+    if agent != "agy":
+        return False
+    if info.get("health") == "rate-limited" or info.get("recent_rate_limit"):
+        return False
+    signal = str(info.get("signal") or "")
+    source = str(info.get("limit_source") or "")
+    return signal in {"dispatch-count", "count", "runs"} and "operator board cap" in source
+
+
 def _parse_dt(value: object) -> datetime | None:
     if isinstance(value, datetime):
         return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
@@ -448,7 +513,7 @@ def _window_hours_from_usage(agent: str, usage: dict[str, object]) -> float:
         window = str(info.get("window") or "")
     else:
         window = ""
-    match = re.search(r"(\\d+(?:\\.\\d+)?)\\s*h", window)
+    match = re.search(r"(\d+(?:\.\d+)?)\s*h", window)
     if match:
         return float(match.group(1))
     if "today" in window or "day" in window or "24" in window:
@@ -470,29 +535,114 @@ def _progress_from_usage(agent: str, usage: dict[str, object], reset_at: datetim
     return max(0.0, min(1.0, elapsed / hours))
 
 
-def _daily_task_target(agent: str, board: object) -> int:
+def derived_floor_from_budget(agent: str, per_agent: dict[str, object]) -> int:
+    """Derive a daily task floor for *agent* from its per-agent budget cap.
+
+    Precedence (mirrors derived_daily_floor but accepts the budget map directly so
+    callers that already hold it — e.g. route.py — avoid re-reading the board):
+      (a) env ``LIMEN_<AGENT>_DAILY_TASKS`` (same convention as _daily_task_target)
+      (b) ``DEFAULT_DAILY_TASK_TARGETS[agent]``
+      (c) ``ceil(per_agent[agent] × frac)`` where frac = env LIMEN_LANE_FLOOR_FRAC
+          (default 0.25, clamped to (0, 1]; result floored at 1 when a budget exists)
+      (d) 0 (agent has no budget entry)
+    """
+    import math
+
     env_name = f"LIMEN_{agent.upper()}_DAILY_TASKS"
-    if os.environ.get(env_name):
-        return _int(os.environ.get(env_name), 0)
+    env_val = os.environ.get(env_name)
+    if env_val:
+        return _int(env_val, 0)
     if agent in DEFAULT_DAILY_TASK_TARGETS:
         return DEFAULT_DAILY_TASK_TARGETS[agent]
+    if not isinstance(per_agent, dict) or agent not in per_agent:
+        return 0
+    cap = _int(per_agent.get(agent), 0)
+    if cap <= 0:
+        return 0
+    raw_frac = os.environ.get("LIMEN_LANE_FLOOR_FRAC", "0.25")
+    try:
+        frac = float(raw_frac)
+    except (TypeError, ValueError):
+        frac = 0.25
+    frac = max(1e-9, min(1.0, frac))  # clamp to (0, 1]
+    return max(1, math.ceil(cap * frac))
+
+
+def derived_daily_floor(agent: str, board: object) -> int:
+    """Derive a daily task floor for *agent* from its budget config on *board*.
+
+    Precedence:
+      (a) env ``LIMEN_<AGENT>_DAILY_TASKS``
+      (b) ``DEFAULT_DAILY_TASK_TARGETS[agent]``
+      (c) ``ceil(per_agent[agent] × frac)`` where frac = LIMEN_LANE_FLOOR_FRAC (default 0.25)
+      (d) 0 (no budget entry for agent)
+    """
     budget = _budget_from_board(board)
     per_agent = _get(budget, "per_agent", {}) or {}
-    if isinstance(per_agent, dict) and agent in per_agent:
-        return _int(per_agent.get(agent), 0)
-    return 0
+    if not isinstance(per_agent, dict):
+        per_agent = {}
+    return derived_floor_from_budget(agent, per_agent)
 
 
-def _task_agent(task: object) -> str:
+def _daily_task_target(agent: str, board: object) -> int:
+    """Return the daily task target for *agent*.
+
+    Delegates to ``derived_daily_floor`` so that agents without an explicit
+    DEFAULT_DAILY_TASK_TARGETS entry (e.g. codex, jules) get a meaningful floor
+    derived from their per-agent budget cap rather than the raw cap itself.
+    This fixes the capacity-fill reporter: codex with a 100-task budget and
+    LIMEN_LANE_FLOOR_FRAC=0.25 targets 25/day instead of 100, so the
+    "underfilled" signal is honest when the lane has only processed 5.
+    """
+    return derived_daily_floor(agent, board)
+
+
+def _task_agent(task: Task | dict[str, object]) -> str:
     return canonical_agent(str(task_value(task, "target_agent", "") or ""))
 
 
-def _task_status(task: object) -> str:
+def _task_status(task: Task | dict[str, object]) -> str:
     return str(task_value(task, "status", "") or "")
 
 
-def _task_cost_int(task: object) -> int:
+def _task_cost_int(task: Task | dict[str, object]) -> int:
     return _int(task_value(task, "budget_cost", 1), 1)
+
+
+def _usage_consumed_runs(agent: str, usage: dict[str, object]) -> int:
+    vendors = usage.get("vendors") if isinstance(usage, dict) else {}
+    info = vendors.get(agent) if isinstance(vendors, dict) else {}
+    if not isinstance(info, dict):
+        return 0
+    signal = str(info.get("signal") or "")
+    if signal in {"count", "dispatch-count", "runs"}:
+        return _int(info.get("consumed"), 0)
+    return 0
+
+
+def _usage_health(agent: str, usage: dict[str, object]) -> str:
+    vendors = usage.get("vendors") if isinstance(usage, dict) else {}
+    info = vendors.get(agent) if isinstance(vendors, dict) else {}
+    return str(info.get("health") or "") if isinstance(info, dict) else ""
+
+
+def _lane_work_counts(board: object, agent: str) -> tuple[int, int]:
+    tasks = _get(board, "tasks", []) or []
+    if not isinstance(tasks, list):
+        return 0, 0
+    open_work = 0
+    active_work = 0
+    for task in tasks:
+        if not isinstance(task, (dict, Task)):
+            continue
+        status = _task_status(task)
+        task_agent = _task_agent(task)
+        cost = _task_cost_int(task)
+        if status == "open" and task_agent in {agent, "any"}:
+            open_work += cost
+        elif status in {"dispatched", "in_progress"} and task_agent == agent:
+            active_work += cost
+    return open_work, active_work
 
 
 def _dispatch_event_attempts(board: object, agent: str, day: str) -> int:
@@ -501,6 +651,8 @@ def _dispatch_event_attempts(board: object, agent: str, day: str) -> int:
         return 0
     touched: set[str] = set()
     for task in tasks:
+        if not isinstance(task, (dict, Task)):
+            continue
         task_id = str(task_value(task, "id", "") or "")
         log = task_value(task, "dispatch_log", []) or []
         if not isinstance(log, list):
@@ -518,39 +670,6 @@ def _dispatch_event_attempts(board: object, agent: str, day: str) -> int:
             if task_id:
                 touched.add(task_id)
     return len(touched)
-
-
-def _lane_work_counts(board: object, agent: str) -> tuple[int, int]:
-    tasks = _get(board, "tasks", []) or []
-    if not isinstance(tasks, list):
-        return 0, 0
-    open_work = 0
-    active_work = 0
-    for task in tasks:
-        status = _task_status(task)
-        task_agent = _task_agent(task)
-        cost = _task_cost_int(task)
-        if status == "open" and task_agent in {agent, "any"}:
-            open_work += cost
-        elif status in {"dispatched", "in_progress"} and task_agent == agent:
-            active_work += cost
-    return open_work, active_work
-
-
-def _usage_consumed_runs(agent: str, usage: dict[str, object]) -> int:
-    vendors = usage.get("vendors") if isinstance(usage, dict) else {}
-    info = vendors.get(agent) if isinstance(vendors, dict) else {}
-    if not isinstance(info, dict):
-        return 0
-    return _int(info.get("consumed"), 0)
-
-
-def _usage_health(agent: str, usage: dict[str, object]) -> str:
-    vendors = usage.get("vendors") if isinstance(usage, dict) else {}
-    info = vendors.get(agent) if isinstance(vendors, dict) else {}
-    if not isinstance(info, dict):
-        return "unknown"
-    return str(info.get("status") or "unknown").lower()
 
 
 def capacity_fill_snapshot(
