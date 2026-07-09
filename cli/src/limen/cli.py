@@ -320,8 +320,11 @@ def workstream(launch_codex, launch_shell, from_ref, prompt_text, prompt_file, n
     script = root / "scripts" / "start-worktree-session.sh"
     args = ["bash", str(script)]
     if launch_codex:
+        args.append("--control-plane")
         args.append("--codex")
     if launch_shell:
+        if "--control-plane" not in args:
+            args.append("--control-plane")
         args.append("--shell")
     if from_ref:
         args.extend(["--from", from_ref])
