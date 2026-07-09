@@ -532,6 +532,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "Idle minutes before codex-quicken treats a Codex session as no longer alive. Classifier-only; it never resumes or mutates sessions."
+  LIMEN_QUICKEN_ESCALATE_AFTER:
+    default: 2
+    env: LIMEN_QUICKEN_ESCALATE_AFTER
+    self_update: none
+    owner: continuity
+    note: "Breathe attempts before a re-stalled session escalates to its own ASK-quicken-escalate-<sid8> needs_human atom instead of receiving the identical continuation again (`all` mode only; an explicitly named SID is always honored)."
   LIMEN_BEAT_CONTINUATION:
     default: 6
     env: LIMEN_BEAT_CONTINUATION
@@ -724,6 +730,24 @@ parameters:
     self_update: none
     owner: continuity
     note: "Maximum consecutive one-shot monitor samples with the same latest tick and no active workers before WATCH_ALERT heartbeat-progress-stale."
+  LIMEN_OVERNIGHT_WATCH_HEAL:
+    default: 1
+    env: LIMEN_OVERNIGHT_WATCH_HEAL
+    self_update: none
+    owner: continuity
+    note: "Set 0 to disable the overnight monitor's bootstrap fallback that restores a booted-out heartbeat/watchdog launchd service (governor-pause and cooldown gated)."
+  LIMEN_OVERNIGHT_WATCH_HEAL_COOLDOWN_SEC:
+    default: 1200
+    env: LIMEN_OVERNIGHT_WATCH_HEAL_COOLDOWN_SEC
+    self_update: none
+    owner: continuity
+    note: "Minimum seconds between overnight monitor bootstrap heal attempts, so the healer never fights an operator cycling daemons."
+  LIMEN_WATCHDOG_LABEL:
+    default: com.limen.watchdog
+    env: LIMEN_WATCHDOG_LABEL
+    self_update: none
+    owner: continuity
+    note: "launchd label for the watchdog service the overnight monitor restores when it is booted out."
   LIMEN_OVERNIGHT_WATCH_EXPECT_DISPATCH_ASYNC:
     default: ""
     env: LIMEN_OVERNIGHT_WATCH_EXPECT_DISPATCH_ASYNC
@@ -774,6 +798,25 @@ parameters:
     self_update: none
     owner: health
     note: "Off-repo home of the medical chart (chart.json). Structurally uncommittable; the organ reads it and never mutates it. No PII reaches logs/, web/, or stdout."
+  # --- MAT: the daily-engine keeper (private training/day-spine engine) ---
+  LIMEN_BEAT_MAT:
+    default: 8                  # cadence: offer the mat organ a fire every 8 beats (it self-throttles to ~1/day)
+    env: LIMEN_BEAT_MAT
+    self_update: none
+    owner: mat
+    note: "Beat cadence for the daily-engine keeper. The organ's own ~20h throttle makes real fires ~daily regardless of tempo. Fail-open."
+  LIMEN_MAT_DIR:
+    default: "~/Workspace/_health-private/daily-mat-strength-brainstorms"
+    env: LIMEN_MAT_DIR
+    self_update: none
+    owner: mat
+    note: "Off-repo home of the private daily engine (mode-700). The organ invokes the tree's own tools (pull, compose, roadblocks); counts-only state reaches logs/. No content, titles, or PII leaves the tree."
+  LIMEN_MAT_THROTTLE_HOURS:
+    default: 20                 # organ-internal throttle between real fires
+    env: LIMEN_MAT_THROTTLE_HOURS
+    self_update: none
+    owner: mat
+    note: "Self-throttle window so beat-cadence offers collapse to ~one real fire per day."
   LIMEN_HEALTH_OVERDUE_DAYS:
     default: 14                 # a clinical follow-up is overdue 14 days past its due date
     env: LIMEN_HEALTH_OVERDUE_DAYS
@@ -996,6 +1039,19 @@ parameters:
     self_update: none
     owner: heal
     note: "How many PRs the factory classifies per beat (a rotating window over the full fleet), so each beat does a bounded slice rather than the whole backlog at once."
+  # --- LANE FLOORS (route proactive fill): ensure every healthy lane gets a daily minimum ---
+  LIMEN_LANE_FLOORS:
+    default: "1"                 # 1=enabled (under-floor lanes get a 0.5× load boost in _pick_local); 0=disabled
+    env: LIMEN_LANE_FLOORS
+    self_update: none
+    owner: route
+    note: "When 1, route.py's _pick_local halves the effective load of any lane below its derived daily floor so under-filled healthy lanes sort before above-floor lanes. Fixes the Jul 3-5 starvation (Jules 0 tasks, Codex 5/100 daily) where the raw budget-ratio ordering never prioritized empty lanes over partially-filled ones. Set 0 to restore prior budget-ratio-only ordering."
+  LIMEN_LANE_FLOOR_FRAC:
+    default: 0.25                # fraction of per-agent budget cap used as the daily floor (clamp to (0,1])
+    env: LIMEN_LANE_FLOOR_FRAC
+    self_update: none
+    owner: route
+    note: "Fraction of a lane's per-agent daily budget cap that becomes its daily task floor for the under-floor boost in route.py and capacity_fill reporting. E.g. codex budget=100 → floor=25. Parsed defensively; clamped to (0,1]; result floored at 1 when the lane has any budget. LIMEN_<AGENT>_DAILY_TASKS overrides per-agent. Derive-not-pin."
   # --- SELF-IMPROVE (route SI-weighting): clamp per-lane weight so no lane starves or swamps the fleet ---
   LIMEN_SI_WEIGHT_FLOOR:
     default: 0.25               # lower clamp: a down-weighted lane is still picked sometimes (never starved)
@@ -1546,12 +1602,26 @@ parameters:
     owner: tabularius
     note: "Beat gate for the heal-convergence report (scripts/heal-convergence.py --check) run each beat by metabolize.sh section 0g (RETRO-0708-HEAL-RECEIPT-OUTCOME; retro findings 1-2). CHRONIC rung: open heal PRs (title-prefixed '[limen HEAL-') grouped by (repo, failing check); >=3 PRs older than 48h on the SAME check = the healer is re-spending capacity on a wall (growth-auditor #16-#22 / theoria #492-#500 class) -> exit 1. COVERAGE rung: archived heal receipts must carry the {outcome: already_green|fixed|gave_up, failing_checks} field derived MECHANICALLY post-run by async-run-one.py (gh pr view of the target PR - never agent prose), reported as a ratio so the 855-emitted-vs-384-receipts gap class is a number. verify-whole runs the fixture test (fixture PRs + fixture clock - deterministic); live counts stay beat-side. Set 0 to silence."
 
+  LIMEN_CONTINUITY_CHECK:
+    default: "1"               # ON — detect silent dispatch lanes while queue + budget exist each beat
+    env: LIMEN_CONTINUITY_CHECK
+    self_update: none
+    owner: continuity
+    note: "Beat gate for the dispatch-continuity check (scripts/dispatch-continuity-check.py) run each beat by metabolize.sh section 0h (Jul 3–5 starvation precedent). Classifies each known lane as flowing / idle-ok / starved / unknown every beat. Two consecutive starved readings hang an idempotent ASK-lane-starved-<lane> needs_human atom. Fail-open — missing data yields 'unknown', never an alarm. Set 0 to silence."
+
+  LIMEN_CONTINUITY_WINDOW_H:
+    default: "24"              # hours of dispatch silence before a lane is considered potentially starved
+    env: LIMEN_CONTINUITY_WINDOW_H
+    self_update: none
+    owner: continuity
+    note: "Starvation window in hours for dispatch-continuity-check.py. A lane silent for longer than this value while holding open targeted tasks and a healthy budget is classified as 'starved'. Two consecutive starved beats hang a needs_human atom. Default 24h; lower for tighter detection, raise for noisy queues."
+
   LIMEN_ASK_GATE:
     default: "1"               # ON — report-only intake audit (observable-before-autonomous; keeper-seam enforcement arms later)
     env: LIMEN_ASK_GATE
     self_update: none
     owner: tabularius
-    note: "Beat gate for the intake ask audit (scripts/ask-gate.py --audit --since 7) run each beat by metabolize.sh section 0h (RETRO-0708-ASK-GATE; retro gap model + evolution 3). Encodes the measured drift predictors STRUCTURALLY: a task converges iff it names one executable done-predicate, is a single bounded objective (no (1)..(n) bundles), and is owned (repo + agent); narrative-success vocabulary and ungated armed-behavior deliverables surface as ADVISE findings. Verdicts: PASS / SPLIT (decompose into predicate-shaped children; --task-file offers the skeleton) / ADVISE. Report-only in the beat for now — the LIMEN_CENSOR_APPLY observable-before-autonomous pattern; the enforcement seam is ask-gate --task-file --check on every keeper ticket, to be armed once logs/ask-gate.json proves the predicate. Set 0 to silence."
+    note: "Beat gate for the intake ask audit (scripts/ask-gate.py --audit --since 7) run each beat by metabolize.sh section 0i (RETRO-0708-ASK-GATE; retro gap model + evolution 3). Encodes the measured drift predictors STRUCTURALLY: a task converges iff it names one executable done-predicate, is a single bounded objective (no (1)..(n) bundles), and is owned (repo + agent); narrative-success vocabulary and ungated armed-behavior deliverables surface as ADVISE findings. Verdicts: PASS / SPLIT (decompose into predicate-shaped children; --task-file offers the skeleton) / ADVISE. Report-only in the beat for now — the LIMEN_CENSOR_APPLY observable-before-autonomous pattern; the enforcement seam is ask-gate --task-file --check on every keeper ticket, to be armed once logs/ask-gate.json proves the predicate. Set 0 to silence."
 
   LIMEN_OMEGA:
     default: "1"               # ON — compute the autonomic fixed-point verdict each beat
@@ -1664,6 +1734,18 @@ parameters:
     self_update: none
     owner: limen-daemon
     note: "Per-description character cap the Codex slimmer distills to. Lower it if Codex still warns that descriptions were shortened; raise it to preserve more of each description. The knob, not a hardcode."
+  LIMEN_ROUTINE_FRESHNESS:
+    default: "1"               # ON — audit cloud-routine delivery freshness each beat
+    env: LIMEN_ROUTINE_FRESHNESS
+    self_update: none
+    owner: continuity
+    note: "Beat gate for the cloud-routine delivery freshness audit (scripts/routine-freshness-audit.py --throttle 21600) run by metabolize.sh step 0e. Closes the firing!=delivering gap (atom-backlog-triage 25-day silence precedent): probes rolling-issue comment timestamps via gh for the 13 routines in cloud-routines.json; any routine silent beyond 2x its max_silent_days gets a needs_human atom hung in the permanent queue. Self-throttled to ~6h. Fail-open, never fatal. 1=enabled; 0=skip."
+  LIMEN_ROUTINE_FRESHNESS_THROTTLE:
+    default: 21600
+    env: LIMEN_ROUTINE_FRESHNESS_THROTTLE
+    self_update: none
+    owner: continuity
+    note: "Throttle window in seconds for the cloud-routine delivery freshness audit. Skip the run if logs/routine-freshness.json is younger than this. Default 21600 (6h) so the organ does not flood the GitHub API each beat. Override with 0 (or pass --force) to force a run."
   LIMEN_ARCA:
     default: "1"               # ON — seal the private estate every beat
     env: LIMEN_ARCA

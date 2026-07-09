@@ -108,7 +108,18 @@ if [ "${LIMEN_HEAL_CONVERGENCE:-1}" = "1" ]; then
   python3 "$LIMEN_ROOT/scripts/heal-convergence.py" --check || echo "  ↑ CHRONIC heal non-convergence above — fix the named check at its root or park the repo with a chronic receipt"
 fi
 
-echo "── 0h. ask gate — every intake-window ask carries one done-predicate, or gets split ──"
+echo "── 0h. dispatch continuity — detect a silent lane while queue + budget exist ──"
+# The gap this closes (Jul 3–5 starvation precedent): Jules accepted zero tasks for 72h
+# while ~40 open tasks sat in the queue and the budget showed headroom. Daemon alive,
+# queue full, meter green — but the lane was dark. Nothing surfaced this until a human
+# noticed. This check runs every beat and classifies each lane as flowing / idle-ok /
+# starved. Two consecutive starved readings hang an idempotent ASK-lane-starved-<lane>
+# needs_human atom. Fail-open — missing data → "unknown", never an alarm.
+if [ "${LIMEN_CONTINUITY_CHECK:-1}" = "1" ]; then
+  python3 "$LIMEN_ROOT/scripts/dispatch-continuity-check.py" || echo "  (continuity skipped)"
+fi
+
+echo "── 0i. ask gate — every intake-window ask carries one done-predicate, or gets split ──"
 # The gap this closes (retro 06-24→07-08 gap model): asks converge iff they are
 # predicate-shaped, bounded, and owned; the five most-escalated themes were exactly the
 # narrative/multi-goal ones. Report-only for now (observable-before-autonomous — the
@@ -157,6 +168,17 @@ fi
 # back — surfaced HERE, never hidden. Set LIMEN_CODEX_SLIM=0 to disable.
 if [ "${LIMEN_CODEX_SLIM:-1}" = "1" ]; then
   python3 "$LIMEN_ROOT/scripts/codex-skill-slim.py" --apply --quiet || echo "  (codex-skill-slim skipped — no codex config/cache)"
+fi
+
+echo "── 0i. routine freshness — detect cloud routines that fire but stop delivering ──"
+# The gap this closes (atom-backlog-triage 25-day silence precedent): a cloud routine can FIRE
+# (its scheduler triggers it in claude.ai) without DELIVERING (writing a comment to its rolling
+# GitHub issue). This organ proves firing == delivering on every beat by querying rolling-issue
+# comment timestamps via gh; any routine silent beyond 2x its max_silent_days gets a needs_human
+# atom hung in the permanent queue. Self-throttled to ~6h so the beat never floods the network.
+# Fail-open, never fatal.
+if [ "${LIMEN_ROUTINE_FRESHNESS:-1}" = "1" ]; then
+  python3 "$LIMEN_ROOT/scripts/routine-freshness-audit.py" --throttle 21600 || echo "  (routine freshness skipped)"
 fi
 
 echo "── 1. drain (close completed Jules) ──"
