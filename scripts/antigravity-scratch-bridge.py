@@ -49,6 +49,7 @@ REMOTE_RE = re.compile(r"(?:github\.com[:/])([^/\s]+)/([^/\s]+?)(?:\.git)?$")
 SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 ACCEPTED_REDACTION_REVIEWS = {"accepted", "private_archive_only", "not_required_private_archive"}
 REAP_ACCEPTANCE_REQUIRED_FIELDS = REQUIRED_ACCEPTANCE_PROOF_FIELDS
+ARCHIVE_PRESERVED_REAP_DISPOSITIONS = {"bridge_required", "preserve_required"}
 
 
 def fmt_bytes(n: int) -> str:
@@ -462,6 +463,15 @@ def reap_permission(
     }
 
 
+def is_reap_candidate(row: dict[str, Any], preservation_history: list[dict[str, Any]]) -> bool:
+    disposition = row.get("disposition")
+    if disposition == "safe_reap_candidate":
+        return True
+    if disposition in ARCHIVE_PRESERVED_REAP_DISPOSITIONS:
+        return matching_preservation_event(row, preservation_history) is not None
+    return False
+
+
 def apply_safe_reap(
     report: dict[str, Any],
     min_idle_hours: float,
@@ -473,7 +483,7 @@ def apply_safe_reap(
     acceptance_history = acceptance_history or []
     results: list[dict[str, Any]] = []
     for row in report.get("roots", []):
-        if row.get("disposition") != "safe_reap_candidate":
+        if not is_reap_candidate(row, preservation_history):
             continue
         raw_path = Path(str(row.get("path", ""))).expanduser()
         try:
@@ -511,7 +521,7 @@ def apply_safe_reap(
             continue
 
         checked = classify_root(path, min_idle_hours)
-        if checked.get("disposition") != "safe_reap_candidate":
+        if not is_reap_candidate(checked, preservation_history):
             results.append(
                 {
                     "name": checked.get("name"),
@@ -1141,8 +1151,10 @@ def render_markdown(report: dict[str, Any]) -> str:
         "which reclassifies the root before removal, then requires a matching verified archive receipt "
         "and human redaction acceptance with `accepted_at`, `archive_proof`, and `redaction_proof` "
         "before writing a deletion receipt.",
-        "- `bridge_required`: preserve/carry the uncommitted delta first.",
-        "- `preserve_required`: push, archive, or receipt the local commit before deletion.",
+        "- `bridge_required`: preserve/carry the uncommitted delta first. After verified archive "
+        "preservation, deletion still requires the same human acceptance ledger.",
+        "- `preserve_required`: push, archive, or receipt the local commit before deletion. After verified "
+        "archive preservation, deletion still requires the same human acceptance ledger.",
         "- `container_review_required`: inspect nested repos; do not delete the parent as one blob.",
         "- `non_git_review_required`: classify the directory owner before deleting it.",
     ]

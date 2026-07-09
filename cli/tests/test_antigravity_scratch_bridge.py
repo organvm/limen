@@ -177,6 +177,30 @@ def test_apply_safe_reap_deletes_only_with_matching_archive_acceptance(tmp_path:
     assert not clean.exists()
 
 
+def test_apply_safe_reap_deletes_dirty_root_after_archive_acceptance(tmp_path: Path):
+    bridge = _load()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    dirty = _make_remote_preserved_repo(scratch, "dirty-root")
+    (dirty / "new_delta.py").write_text("unbridged work\n", encoding="utf-8")
+
+    report = bridge.build_report(scratch, min_idle_hours=0)
+    row = report["roots"][0]
+    assert row["disposition"] == "bridge_required"
+    preservation, acceptance = _accepted_reap_proof(row)
+
+    reap = bridge.apply_safe_reap(
+        report, min_idle_hours=0, preservation_history=preservation, acceptance_history=acceptance
+    )
+
+    assert reap["summary"]["reaped"] == 1
+    assert reap["summary"]["skipped"] == 0
+    assert reap["summary"]["failed"] == 0
+    assert reap["results"][0]["reason"] == "dirty-or-untracked"
+    assert reap["results"][0]["private_receipt_sha256"] == "abc123"
+    assert not dirty.exists()
+
+
 def test_apply_safe_reap_requires_acceptance_archive_and_redaction_proofs(tmp_path: Path):
     bridge = _load()
     scratch = tmp_path / "scratch"

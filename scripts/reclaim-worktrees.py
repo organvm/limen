@@ -29,7 +29,9 @@ checkout (LIMEN_ROOT) nor the worktree it is itself running from. It removes reg
 worktrees via `git worktree remove` (never rm) and standalone clones via rmtree. Bounded per
 run (LIMEN_RECLAIM_MAX); if it hits the cap it LOGS the remainder rather than silently dropping.
 
-Dry-run by default; pass --apply to execute. Self-throttles to once per
+Dry-run by default; pass --apply to execute. Pass --json for a machine-readable
+dry-run/apply report with exact candidate paths, actions, reasons, sizes, and
+acceptance status. Self-throttles to once per
 LIMEN_RECLAIM_EVERY_MIN minutes so it is cheap to call every beat.
 
 Env: LIMEN_WORKTREE_ROOT, LIMEN_RECLAIM_MIN_AGE_H (6), LIMEN_RECLAIM_CLAUDE_WT (1),
@@ -90,6 +92,7 @@ RECLAIM_ACCEPTANCE_DOC = LIMEN_ROOT / "docs" / "worktree-reclaim-acceptance.md"
 APPLY = "--apply" in sys.argv
 FORCE = "--force" in sys.argv  # ignore the throttle
 GENERATED_ONLY = "--generated-only" in sys.argv
+JSON_OUTPUT = "--json" in sys.argv
 REMOTE_MERGED_LANES = {"remote-merged"}
 REMOTE_MERGED_STATUSES = {"merged_pr_preserved"}
 ACCEPTED_ARCHIVE_STATUSES = {
@@ -214,13 +217,10 @@ def reclaim_generated_payloads(targets) -> dict[str, object]:
 
 
 def reachable_from_remote(cwd, head) -> bool:
-    r = git(["for-each-ref", "--format=%(refname)", "refs/remotes"], cwd)
+    r = git(["for-each-ref", f"--contains={head}", "--format=%(refname)", "refs/remotes"], cwd)
     if r.returncode != 0:
         return False
-    for ref in r.stdout.split():
-        if git(["merge-base", "--is-ancestor", head, ref], cwd).returncode == 0:
-            return True
-    return False
+    return bool(r.stdout.strip())
 
 
 def remote_default_ref(cwd) -> str | None:
@@ -322,6 +322,52 @@ def reclaim_accepted(path: Path, action: str, reason: str, acceptance_events) ->
     return False, "missing-reclaim-acceptance"
 
 
+def exact_path(path: Path) -> str:
+    try:
+        return str(path.resolve())
+    except OSError:
+        return str(path)
+
+
+def dir_size_bytes(path: Path) -> int:
+    try:
+        proc = subprocess.run(["du", "-sk", str(path)], capture_output=True, text=True, timeout=120)
+        if proc.returncode == 0 and proc.stdout.strip():
+            return int(proc.stdout.split()[0]) * 1024
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        pass
+    total = 0
+    for root, dirs, files in os.walk(path):
+        dirs[:] = [d for d in dirs if d not in {".git", "node_modules", ".venv", "venv"}]
+        for name in files:
+            try:
+                total += (Path(root) / name).stat().st_size
+            except OSError:
+                continue
+    return total
+
+
+def dry_run_item(target, action: str, reason: str, acceptance_events) -> dict[str, object]:
+    accepted = False
+    acceptance_status = "not-applicable"
+    if action != "skip":
+        accepted, acceptance_status = reclaim_accepted(target.path, action, reason, acceptance_events)
+    return {
+        "root": target.path.name,
+        "path": exact_path(target.path),
+        "source": getattr(target, "source", None),
+        "action": action,
+        "reason": reason,
+        "size_bytes": dir_size_bytes(target.path),
+        "accepted": accepted,
+        "acceptance_status": acceptance_status,
+    }
+
+
+def emit_json_report(report: dict[str, object]) -> None:
+    print(json.dumps(report, indent=2, sort_keys=True))
+
+
 def receipt_remote_merged(path: Path, preservation_receipts) -> bool:
     receipt = preservation_receipts.get(path.name)
     if not isinstance(receipt, dict):
@@ -381,6 +427,22 @@ def main():
     # from the target list; discovery must never block the heartbeat.
     targets = iter_worktree_targets(LIMEN_ROOT)
     if not targets:
+        if JSON_OUTPUT:
+            emit_json_report(
+                {
+                    "mode": "APPLY" if APPLY else "dry-run",
+                    "apply": APPLY,
+                    "generated_only": GENERATED_ONLY,
+                    "scanned": 0,
+                    "items": [],
+                    "removed": [],
+                    "skipped": {},
+                    "failed": {},
+                    "deferred_over_cap": [],
+                    "generated_reclaim": {"enabled": False, "cleaned": [], "failed": []},
+                }
+            )
+            return 0
         print("reclaim: no worktree roots present — nothing to do")
         return 0
     # self-throttle (skip silently if run recently, unless --force or dry-run inspection)
@@ -393,16 +455,35 @@ def main():
     if GENERATED_ONLY:
         cleaned = generated_reclaim.get("cleaned") or []
         gen_failed = generated_reclaim.get("failed") or []
+        if JSON_OUTPUT:
+            emit_json_report(
+                {
+                    "mode": "APPLY" if APPLY else "dry-run",
+                    "apply": APPLY,
+                    "generated_only": True,
+                    "scanned": len(targets),
+                    "items": [],
+                    "removed": [row.get("root") for row in cleaned],
+                    "skipped": {},
+                    "failed": {row.get("root"): row.get("detail") for row in gen_failed},
+                    "deferred_over_cap": [],
+                    "generated_reclaim": generated_reclaim,
+                }
+            )
+            return 0
         print(f"reclaim [generated-only]: {len(cleaned)} cleaned, {len(gen_failed)} failed")
         for row in cleaned[:20]:
             print(f"  generated-clean {row['detail']:14} {row['root']}")
         return 0
     preservation_receipts = load_preservation_receipts()
     reclaim_acceptance = load_reclaim_acceptance()
-    dirs = [(target.path, target.min_age_h) for target in targets]
+    dirs = [(target, target.path, target.min_age_h) for target in targets]
     removed, skipped, failed, deferred = [], [], [], []
-    for d, min_age_h in dirs:
+    report_items = []
+    for target, d, min_age_h in dirs:
         action, reason = classify(d, now, min_age_h, preservation_receipts)
+        if JSON_OUTPUT:
+            report_items.append(dry_run_item(target, action, reason, reclaim_acceptance))
         if action == "skip":
             skipped.append((d.name, reason))
             continue
@@ -430,6 +511,22 @@ def main():
         except Exception as e:  # fail open
             failed.append((d.name, str(e)[:120]))
 
+    json_report = {
+        "mode": "APPLY" if APPLY else "dry-run",
+        "apply": APPLY,
+        "generated_only": False,
+        "scanned": len(dirs),
+        "items": report_items,
+        "removed": [{"root": name, "detail": detail} for name, detail in removed],
+        "skipped": dict(skipped),
+        "failed": dict(failed),
+        "deferred_over_cap": deferred,
+        "generated_reclaim": generated_reclaim,
+    }
+    if JSON_OUTPUT and not APPLY:
+        emit_json_report(json_report)
+        return 0
+
     if APPLY:
         try:
             MARKER.parent.mkdir(parents=True, exist_ok=True)
@@ -452,6 +549,10 @@ def main():
                 )
         except Exception:
             pass  # logging must never break the beat
+
+    if JSON_OUTPUT:
+        emit_json_report(json_report)
+        return 0
 
     mode = "APPLY" if APPLY else "dry-run"
     print(
