@@ -58,6 +58,7 @@ python -m pytest web/api/tests cli/tests -q          # full test suite
 python -m pytest cli/tests/test_dispatch.py -q       # one test file
 python -m pytest cli/tests/test_dispatch.py::test_x  # one test
 python -m ruff check cli/src cli/tests web/api mcp   # lint (py311, line-length 120)
+scripts/closeout-fast.sh                             # interactive closeout smoke predicate
 scripts/verify-whole.sh                              # whole-system predicate (exit 0 ⟺ green)
 limen dispatch --agent jules         # dry-run preview; add --live to dispatch for real
 ```
@@ -74,6 +75,8 @@ If gaps remain, **close them first**, then archive and hand off. A genuinely hum
 
 Point 1 has a shipped predicate — **`scripts/no-tasks-on-me.sh`** (exit `0` ⟺ nothing hangs on the ephemeral session). It proves every human-gated item lives in the git-tracked registry with a real owner (recall-only memory at `~/.claude/…` is **not** a durable home), that no preserved work is stranded on a local-only `*-staged-*` ref (each must be merged or cited by a lever), and that the registry stays PII-clean (it publishes). Credential/secret atoms live in a **separate** git-tracked home (the credential organ), so the closeout gate is **both** `scripts/no-tasks-on-me.sh` **and** `scripts/credential-wall.py --check` (exit `0` ⟺ every secret in use is homed). Both green ⟺ nothing hangs, and the relay then names the registry, never the atoms. Run them instead of re-auditing ownership by hand each session; a chat audit you have to repeat next session — or a "here's what's still open" list handed to the operator — *is* leaving the discipline hanging on him.
 
+For interactive closeout, use focused lane predicates plus **`scripts/closeout-fast.sh`** and a remote CI/global receipt for whole-repo proof. **`scripts/verify-whole.sh`** is the full predicate for CI, default-branch proof, or an explicit quiet-window local run; locally it is guarded by `scripts/closeout-resource-guard.py` and requires `LIMEN_VERIFY_ALLOW_CONCURRENT=1` to proceed while active heartbeat, Claude, or heavy scan work is present. Closeout agents may report active automation as the reason a broad local gate is deferred, but they must not stop heartbeat, Claude, watchdog, or daemon processes unless the operator explicitly asks for process control.
+
 ## Definition of Done
 
 When asked to define "done" or a "goal", deliver an **executable predicate** — a script or test that *verifies* the condition — never hand-maintained prose.
@@ -81,7 +84,7 @@ When asked to define "done" or a "goal", deliver an **executable predicate** —
 - **Write the predicate first.** Before doing the work, author a `done.sh` (or a test) that checks every concrete completion criterion: tests pass, build green, no dangling items, each owner records its own remaining work. Commit it (durable predicates only — not one-off throwaways; see [Edits Policy](#edits-policy)).
 - **It must be self-verifying, runnable, and idempotent.** Exit `0` ⟺ done.
 - **Do not claim completion — or write any closeout — until it exits 0.** Run it and summarize the output as proof. If it fails, keep iterating until it passes. If a higher-priority harness rule prevents running it, report the blocker rather than claiming verified completion.
-- For whole-system "done" in this repo, the predicate is already shipped: **`scripts/verify-whole.sh`** (lint → compile → contracts → `pytest web/api/tests cli/tests -q` → runtime/worker probes → dashboard build → `git diff --check`; prints `Whole-system verification passed`). A task-level `done.sh` should call it or a scoped subset — `scripts/verify-scoped.sh` is the shipped scoped subset; don't reinvent either.
+- For whole-system "done" in this repo, the predicate is already shipped: **`scripts/verify-whole.sh`** (lint → compile → contracts → `pytest web/api/tests cli/tests -q` → runtime/worker probes → dashboard build → `git diff --check`; prints `Whole-system verification passed`). A task-level `done.sh` should call it or a scoped subset — `scripts/verify-scoped.sh` is the shipped scoped subset; don't reinvent either. In interactive sessions, prove the touched lane with focused predicates and `scripts/closeout-fast.sh`, then cite remote CI/global proof for the full gate unless the machine is in an explicit quiet window.
 
 ## Engage the Real Problem First
 

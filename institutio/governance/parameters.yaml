@@ -681,25 +681,31 @@ parameters:
     env: LIMEN_WORKTREE_DEBT_TIMEOUT
     self_update: none
     owner: continuity
-    note: "Timeout in seconds for the lifecycle-pressure worktree-debt scan. On timeout, hooks fail open with an explicit pressure receipt instead of crashing closeout."
+    note: "Timeout in seconds for explicit lifecycle-pressure worktree-debt scans. On timeout, hooks fail open with an explicit pressure receipt instead of crashing closeout. SessionEnd hooks lower this through LIMEN_SESSION_WORKTREE_DEBT_TIMEOUT."
+  LIMEN_VERIFY_ALLOW_CONCURRENT:
+    default: "0"
+    env: LIMEN_VERIFY_ALLOW_CONCURRENT
+    self_update: none
+    owner: continuity
+    note: "Explicit local override allowing scripts/verify-whole.sh to run even when the closeout resource guard observes active heartbeat, Claude, or heavy scan work."
   LIMEN_SESSION_LIFECYCLE_TIMEOUT:
     default: 45
     env: LIMEN_SESSION_LIFECYCLE_TIMEOUT
     self_update: none
     owner: continuity
-    note: "Hard process-group timeout for the low-priority SessionEnd lifecycle-pressure refresh. Timeout is fail-open and never kills an unrelated peer."
+    note: "Timeout in seconds for the SessionEnd lifecycle-pressure hook wrapper. The hook remains fail-open and writes only ignored pressure receipts. Timeout is fail-open and never kills an unrelated peer."
   LIMEN_SESSION_WORKTREE_DEBT_TIMEOUT:
     default: 30
     env: LIMEN_SESSION_WORKTREE_DEBT_TIMEOUT
     self_update: none
     owner: continuity
-    note: "Narrow worktree-debt subprocess timeout injected only by the SessionEnd lifecycle-pressure hook."
+    note: "Hook-local worktree debt timeout passed to session-lifecycle-pressure through LIMEN_WORKTREE_DEBT_TIMEOUT so SessionEnd cannot stack long scans. Injected only by the SessionEnd lifecycle-pressure hook."
   LIMEN_LIFECYCLE_SIZE_SCAN_MAX_ROOTS:
     default: 50
     env: LIMEN_LIFECYCLE_SIZE_SCAN_MAX_ROOTS
     self_update: none
     owner: continuity
-    note: "Maximum immediate worktree/private-corpus roots measured per lifecycle-pressure refresh. Larger denominators remain visible as partial size scans."
+    note: "Maximum top-level worktree/private-corpus roots that lifecycle-pressure size accounting walks before reporting partial bounded size data. Larger denominators remain visible as partial size scans."
   LIMEN_CLOSEOUT_RUN_LIFECYCLE_TESTS:
     default: "0"
     env: LIMEN_CLOSEOUT_RUN_LIFECYCLE_TESTS

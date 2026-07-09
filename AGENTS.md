@@ -31,8 +31,9 @@ For dispatch-mode sessions:
 2. **Read** `$LIMEN_ROOT/tasks.yaml` (fallback `./tasks.yaml`) — parse the budget and the full task list.
 3. **Claim** the highest-priority `open` task targeted at you (or `any`) that fits the remaining budget.
 4. **Update status** before (`dispatched` → `in_progress`) and after (`done` / `failed`) execution.
-5. **Verify** before reporting `done` — run the task predicate, or the repo predicate
-   (`scripts/verify-whole.sh`) when no narrower predicate is defined.
+5. **Verify** before reporting `done` — run the task predicate, or the interactive closeout path
+   (`scripts/closeout-fast.sh` plus focused lane predicates and a remote CI/global receipt) when
+   no narrower predicate is defined.
 6. **Close out** — release stale claims back to `open`, restore budget, commit `tasks.yaml`.
 
 Each step is detailed below.
@@ -329,6 +330,14 @@ chat-only blockers.
 
 Every prompt, idea, viewpoint, branch, worktree, scratch root, and generated lane is work until it
 has a durable terminal receipt. "Nothing came of it" is not a closeout state.
+
+Interactive closeout is resource-safe by default: run the focused lane predicate(s), run
+`scripts/closeout-fast.sh`, and cite the remote CI/global receipt for whole-repo proof.
+`scripts/verify-whole.sh` remains the canonical full predicate, but local use is for CI,
+default-branch proof, or an explicit quiet-window/override run (`LIMEN_VERIFY_ALLOW_CONCURRENT=1`).
+During closeout, agents may observe active heartbeat, Claude, or daemon automation and report it as
+the reason to defer a broad local gate; they must not stop those owner-owned processes unless the
+human explicitly asks for process control.
 
 Valid closure forms are:
 
