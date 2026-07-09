@@ -27,7 +27,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PYTHONPATH="$ROOT/cli/src${PYTHONPATH:+:$PYTHONPATH}"
-STAMP="${LIMEN_OMEGA_STAMP:-$ROOT/logs/omega.json}"
+STAMP="$ROOT/logs/omega.json"   # derived from ROOT; the test drives it via a temp-ROOT copy
 
 OFFLINE=0
 FULL=0
