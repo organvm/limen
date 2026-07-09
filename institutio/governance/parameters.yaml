@@ -785,6 +785,90 @@ parameters:
     self_update: none
     owner: continuity
     note: "Optional expected LIMEN_DISPATCH_LANES value for overnight monitor env-drift alerts."
+  LIMEN_DISPATCH_ADMISSION:
+    default: 1
+    env: LIMEN_DISPATCH_ADMISSION
+    self_update: none
+    owner: dispatch
+    note: "Master switch for the shared dispatch-admission check (handoff freshness + session-value gate); 0 disables the whole gate."
+  LIMEN_REQUIRE_HANDOFF:
+    default: 1
+    env: LIMEN_REQUIRE_HANDOFF
+    self_update: none
+    owner: dispatch
+    note: "Require a fresh handoff-relay packet before dispatch admission passes; 0 skips the handoff rung only."
+  LIMEN_REQUIRE_NEXT_ACTION_SOURCE:
+    default: 1
+    env: LIMEN_REQUIRE_NEXT_ACTION_SOURCE
+    self_update: none
+    owner: dispatch
+    note: "Require the admission packet to name a next-action source; 0 skips that rung."
+  LIMEN_HANDOFF_MAX_AGE_MIN:
+    default: 90
+    env: LIMEN_HANDOFF_MAX_AGE_MIN
+    self_update: none
+    owner: dispatch
+    note: "Maximum handoff-relay packet age (minutes) before admission refreshes it."
+  LIMEN_HANDOFF_RELAY_TIMEOUT:
+    default: 30
+    env: LIMEN_HANDOFF_RELAY_TIMEOUT
+    self_update: none
+    owner: dispatch
+    note: "Timeout (seconds) for the handoff-relay refresh subprocess inside admission."
+  LIMEN_DISPATCH_TASK_OVERRIDE_REASON:
+    default: ""
+    env: LIMEN_DISPATCH_TASK_OVERRIDE_REASON
+    self_update: none
+    owner: dispatch
+    note: "Free-text reason recorded when an explicit task id overrides the admission gate; paired with LIMEN_DISPATCH_TASK_OVERRIDE_PREDICATE."
+  LIMEN_DISPATCH_TASK_OVERRIDE_PREDICATE:
+    default: ""
+    env: LIMEN_DISPATCH_TASK_OVERRIDE_PREDICATE
+    self_update: none
+    owner: dispatch
+    note: "Executable predicate cited by an explicit-task admission override; both reason and predicate must be present."
+  LIMEN_ASYNC_VALUE_GATE_HOURS:
+    default: 1.5
+    env: LIMEN_ASYNC_VALUE_GATE_HOURS
+    self_update: none
+    owner: dispatch
+    note: "Legacy fallback window (hours) for the session-value gate; LIMEN_VALUE_GATE_HOURS wins when set."
+  LIMEN_ASYNC_VALUE_GATE_TIMEOUT:
+    default: 90
+    env: LIMEN_ASYNC_VALUE_GATE_TIMEOUT
+    self_update: none
+    owner: dispatch
+    note: "Legacy fallback timeout (seconds) for the session-value gate subprocess; LIMEN_VALUE_GATE_TIMEOUT wins when set."
+  LIMEN_OVERNIGHT_VALUE_GATE_HOURS:
+    default: 1.5
+    env: LIMEN_OVERNIGHT_VALUE_GATE_HOURS
+    self_update: none
+    owner: continuity
+    note: "Window (hours) the overnight monitor uses when it runs the session-value gate."
+  LIMEN_HIGH_MOTION_COMMIT_THRESHOLD:
+    default: 20
+    env: LIMEN_HIGH_MOTION_COMMIT_THRESHOLD
+    self_update: none
+    owner: continuity
+    note: "Commits-without-receipts count at which session-value-review flags high-motion-no-receipts."
+  LIMEN_SESSION_VALUE_GATE:
+    default: 1
+    env: LIMEN_SESSION_VALUE_GATE
+    self_update: none
+    owner: continuity
+    note: "Set 0 to disable the shared session-value admission gate inside dispatch_admission_check (explicit task ids always bypass it)."
+  LIMEN_VALUE_GATE_HOURS:
+    default: ""
+    env: LIMEN_VALUE_GATE_HOURS
+    self_update: none
+    owner: continuity
+    note: "Window (hours) for the shared dispatch-admission session-value gate; falls back to LIMEN_ASYNC_VALUE_GATE_HOURS, then the admission default."
+  LIMEN_VALUE_GATE_TIMEOUT:
+    default: 90
+    env: LIMEN_VALUE_GATE_TIMEOUT
+    self_update: none
+    owner: continuity
+    note: "Timeout (seconds) for the session-value-review subprocess inside dispatch admission; falls back to LIMEN_ASYNC_VALUE_GATE_TIMEOUT."
   LIMEN_OVERNIGHT_WATCH_INTERVAL_SEC:
     default: 300
     env: LIMEN_OVERNIGHT_WATCH_INTERVAL_SEC
