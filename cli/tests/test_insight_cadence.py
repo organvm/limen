@@ -123,10 +123,7 @@ def test_suggestion_coverage_flags_unaudited_snapshot(tmp_path, monkeypatch):
     monkeypatch.setenv("LIMEN_INSIGHTS_ARCHIVE", str(archive))
     monkeypatch.setattr(insight_cadence, "LIMEN_ROOT", root)
 
-    flagged = [
-        i for i in insight_cadence._gather_insights()
-        if i["source"] == "insights-suggestions.jsonl"
-    ]
+    flagged = [i for i in insight_cadence._gather_insights() if i["source"] == "insights-suggestions.jsonl"]
     assert any("2026-02-02T0000" in i["title"] for i in flagged), "uncovered snapshot must be flagged"
     assert not any("2026-01-01T0000" in i["title"] for i in flagged), "covered snapshot must not be flagged"
 
@@ -134,8 +131,5 @@ def test_suggestion_coverage_flags_unaudited_snapshot(tmp_path, monkeypatch):
 def test_suggestion_coverage_fails_open_without_archive(tmp_path, monkeypatch):
     monkeypatch.setenv("LIMEN_INSIGHTS_ARCHIVE", str(tmp_path / "absent"))
     monkeypatch.setattr(insight_cadence, "LIMEN_ROOT", tmp_path)
-    flagged = [
-        i for i in insight_cadence._gather_insights()
-        if i["source"] == "insights-suggestions.jsonl"
-    ]
+    flagged = [i for i in insight_cadence._gather_insights() if i["source"] == "insights-suggestions.jsonl"]
     assert flagged == []
