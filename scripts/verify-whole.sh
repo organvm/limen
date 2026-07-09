@@ -6,24 +6,131 @@ AMBIENT_PYTHONPATH="${PYTHONPATH:-}"
 PYTHONPATH_VALUE="$ROOT/cli/src${AMBIENT_PYTHONPATH:+:$AMBIENT_PYTHONPATH}"
 export PYTHONPATH="$PYTHONPATH_VALUE"
 
+# Machine-wide serialization. One run boots uvicorn AND wrangler-dev (workerd), runs npm
+# installs, the full pytest suite, a MONETA vitest+tsc pass, and a Next.js production
+# build — N concurrent runs from parallel sessions/worktrees exhaust the host. Waiting on
+# the lock is strictly cheaper than thrashing. LIMEN_VERIFY_NO_LOCK=1 opts out (CI runners
+# are single-purpose and already serialized).
+if [[ "${LIMEN_VERIFY_NO_LOCK:-0}" != "1" ]]; then
+  VERIFY_LOCK_FILE="${LIMEN_VERIFY_LOCK_FILE:-${TMPDIR:-/tmp}/limen-verify-whole.lock}"
+  exec 9>"$VERIFY_LOCK_FILE"
+  # flock(2) on fd 9: the lock lives on the open file description this shell holds, so it
+  # is held for the life of the script and released on any exit, crash included.
+  if ! python3 -c 'import fcntl; fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)' 2>/dev/null; then
+    printf 'Another verify-whole run holds %s — waiting for it to finish…\n' "$VERIFY_LOCK_FILE"
+    python3 -c 'import fcntl; fcntl.flock(9, fcntl.LOCK_EX)'
+  fi
+fi
+
 step() {
   printf '\n==> %s\n' "$*"
 }
 
+ensure_web_app_deps() {
+  # A fresh worktree (or clone) has no web/app/node_modules, so the surface-contract generation and
+  # the dashboard build below fail with ERR_MODULE_NOT_FOUND (e.g. the 'yaml' package) — a local
+  # false-red that looks like a code regression but is only missing deps. Install once, idempotently,
+  # mirroring the MONETA step's `npm ci || npm install`. CI already runs `npm ci` first, so there the
+  # node_modules dir exists and this is a no-op.
+  [[ -d "$ROOT/web/app/node_modules" ]] && return 0
+  if ! command -v npm >/dev/null; then
+    printf 'npm not found on PATH — cannot install web/app dependencies for the surface/build steps\n' >&2
+    return 1
+  fi
+  printf 'Installing web/app dependencies (node_modules missing in this checkout)…\n'
+  ( cd "$ROOT/web/app" && npm ci --silent >/dev/null 2>&1 || npm install --silent >/dev/null 2>&1 )
+}
+
 step "Compile Python modules and validate shell syntax"
 cd "$ROOT"
-python3 -m py_compile web/api/main.py cli/src/limen/*.py scripts/probe-runtime-adapter.py scripts/validate-lifecycle-adapters.py scripts/validate-task-board.py scripts/worktree-debt.py scripts/session-corpus-ledger.py scripts/prompt-lifecycle-ledger.py scripts/prompt-priority-map.py scripts/prompt-batch-review-ledger.py scripts/prompt-packet-ledger.py scripts/capability-substrate-ledger.py scripts/consolidation-gates.py scripts/network-health.py scripts/dispatch-health.py scripts/live-root-gate.py scripts/session-blockers-ledger.py scripts/session-lifecycle-pressure.py scripts/session-attack-paths.py scripts/conductor-tranche.py scripts/session-value-review.py
-bash -n scripts/preflight-cloud-run.sh scripts/probe-local-runtime.sh scripts/probe-local-worker.sh scripts/verify-whole.sh scripts/merge-policy.sh scripts/tests/merge-policy.test.sh scripts/hooks/session-lifecycle-pressure.sh scripts/netmode.sh
-plutil -lint container/launchd/com.user.netmeter.plist
+# File sets DERIVE from the GATES registry (institutio/governance/gates.yaml) — the
+# hand-maintained argv lists drifted three times in one day; check-gates.py ratchet
+# `verify_whole_derives` now fails any literal list reintroduced here.
+# shellcheck disable=SC2046
+python3 -m py_compile $(python3 scripts/verify.py --print-files py-syntax)
+# shellcheck disable=SC2046
+bash -n $(python3 scripts/verify.py --print-files bash-syntax)
+if command -v plutil >/dev/null; then
+  plutil -lint container/launchd/com.user.netmeter.plist
+  plutil -lint container/launchd/com.limen.overnight-watch.plist
+fi
+
+step "Validate Cvrsvs Honorvm seed contracts"
+CVRSV_SEED="${LIMEN_WORKSPACE_ROOT:-$HOME/Workspace}/organvm/cvrsvs-honorvm/seed.yaml"
+if [[ -f "$CVRSV_SEED" ]]; then
+  python3 organs/governance/validate-seed.py "$CVRSV_SEED" --strict-graph --quiet
+fi
+
+step "Validate Sovereign Systems consulting engagement records"
+python3 organs/consulting/validate-consulting.py --fleet --quiet
+
+step "Validate A-MAVS-OLEVM artist chamber governance records"
+python3 organs/artist/validate-artist.py --fleet --quiet
+
+step "Validate Koinonia social organ relationship-posture briefs"
+python3 organs/social/validate-social.py --fleet --quiet
 
 step "Verify the merge-policy predicate (verdict matrix regression test)"
 bash scripts/tests/merge-policy.test.sh
+
+step "Verify the trusted-Bash hook decision matrix (permission-hang killer, hermetic)"
+bash scripts/tests/allow-trusted-cd-git.test.sh
+
+step "Verify the resolver selection fixtures (verify.py implicates exactly the registered gates)"
+bash scripts/tests/verify-resolver.test.sh
+
+step "Verify the enactment predicate (declared-ON fleet flags are actually wired live, not just merged)"
+bash scripts/tests/enactment-audit.test.sh
+
+step "Verify the sync-release unpark valve preserves parked dirt to origin before resting on release"
+bash scripts/tests/sync-release.test.sh
+
+step "Verify the armed-valve predicate (parked levers vs silently-off valves)"
+bash scripts/tests/armed-valve-audit.test.sh
+# The registry-completeness rung is the code contract (repo-deterministic — no env or
+# network); the env/url liveness rungs run in the beat via metabolize.sh step 0e.
+python3 scripts/armed-valve-audit.py --check --contract --offline --stamp /dev/null
+
+step "Verify the ship-gate predicate (product-facing done requires a reachable artifact)"
+bash scripts/tests/ship-gate.test.sh
+# The fixture test is the code contract (local http.server, fixture board — deterministic);
+# the live artifact probes run in the beat via metabolize.sh step 0f.
+
+step "Verify the heal-convergence predicate (chronic heal stalls trip; receipts carry outcomes)"
+bash scripts/tests/heal-convergence.test.sh
+# Fixture rungs only here (fixture PRs + fixture clock + fixture receipts — deterministic);
+# the live open-heal-PR count and chronic gate run in the beat via metabolize.sh step 0g.
+
+step "Verify the worktree-commit-guard hook (live-main commit deny matrix, hermetic fixture)"
+bash scripts/tests/worktree-commit-guard.test.sh
+
+step "Verify the ask-gate predicate (intake asks are predicate-shaped, bounded, owned)"
+bash scripts/tests/ask-gate.test.sh
+# Fixture rung only (--task-file cases — deterministic); the live intake-window audit
+# runs report-only in the beat via metabolize.sh step 0h.
+# The wiring rung is the code contract (CI-safe, deterministic); the liveness rung reads live-host
+# daemon state and is surfaced in the beat log by metabolize.sh, so it is not a hard gate here.
+python3 scripts/enactment-audit.py --check --wiring-only
+
+step "Verify the omega fixed-point predicate (composes every gate's --check; SKIP is never a silent PASS)"
+bash scripts/tests/omega.test.sh
+# The tally/exit/stamp contract is the deterministic code rung (stubbed children — no live board or
+# network); the live fixed-point verdict runs offline in the beat via metabolize.sh step 0i.
 
 step "Verify session orientation and lifecycle-pressure hooks"
 bash scripts/done-session-orient.sh
 
 step "Verify agent-instruction docs match the canonical task-state vocabulary"
 python3 scripts/check-agent-docs.py
+
+step "Verify dispatch admission cannot be bypassed by overnight launch paths"
+python3 scripts/check-dispatch-admission.py
+
+step "Verify the gate registry matches the workflows and consumers (GATES drift predicate)"
+python3 scripts/check-gates.py
+
+step "Verify local removal acceptance contracts require archive and redaction proof"
+python3 scripts/check-removal-acceptance.py
 
 step "Validate task-board statuses match the canonical vocabulary"
 python3 scripts/validate-task-board.py
@@ -42,6 +149,7 @@ for path in sorted(Path(".github/workflows").glob("*.yml")) + sorted(Path(".gith
 PY
 
 step "Generate static and private surface contracts"
+ensure_web_app_deps
 (
   cd "$ROOT/web/app"
   npm run generate:data
@@ -57,6 +165,17 @@ node scripts/validate-contract-schemas.mjs
 step "Run API and CLI tests"
 env -u LIMEN_API_TOKEN -u LIMEN_OWNER_TOKEN -u LIMEN_CLIENT_TOKEN \
   PYTHONPATH="$PYTHONPATH_VALUE" python3 -m pytest web/api/tests cli/tests -q
+
+step "Verify MONETA sovereign-mint licence tests (vitest + tsc)"
+if command -v npm >/dev/null; then
+  (
+    cd "$ROOT/moneta"
+    npm ci --silent >/dev/null 2>&1 || npm install --silent >/dev/null 2>&1
+    npm test
+  )
+else
+  printf 'Skipping MONETA tests — npm not found on PATH.\n'
+fi
 
 step "Probe local runtime adapter over HTTP"
 PYTHONPATH="$PYTHONPATH_VALUE" scripts/probe-local-runtime.sh

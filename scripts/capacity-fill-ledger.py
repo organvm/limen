@@ -5,6 +5,7 @@ Read-only on tasks.yaml. This records whether each paid lane is actually being
 fed productively against its own reset window, instead of relying on the operator
 to remember which subscriptions should have been used today.
 """
+
 from __future__ import annotations
 
 import argparse

@@ -35,6 +35,7 @@ VALID_AGENTS = {
     "any",
 }
 VALID_DISPATCH_AGENTS = VALID_AGENTS - {"any"}
+MAX_TASK_LIST_LENGTH = 20
 TASK_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._/-]*$"
 TASK_ID_RE = re.compile(TASK_ID_PATTERN)
 LABEL_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._/-]*$"
@@ -62,11 +63,34 @@ def validate_label_list(value: list[str] | None) -> list[str] | None:
         return None
     if not isinstance(value, list):
         raise ValueError("labels must be a list")
+    if len(value) > MAX_TASK_LIST_LENGTH:
+        raise ValueError(f"labels must have at most {MAX_TASK_LIST_LENGTH} items")
     for label in value:
         if not isinstance(label, str):
             raise ValueError("each label must be a string")
         if len(label) > 64 or not LABEL_RE.match(label):
             raise ValueError("labels must be 1-64 characters and contain only letters, numbers, '.', '_', '-', or '/'")
+    return value
+
+
+def reject_bool_integer(value: Any, field_name: str) -> Any:
+    if isinstance(value, bool):
+        raise ValueError(f"{field_name} must be an integer, not a boolean")
+    return value
+
+
+def validate_url_list(value: list[str] | None) -> list[str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise ValueError("urls must be a list")
+    if len(value) > MAX_TASK_LIST_LENGTH:
+        raise ValueError(f"urls must have at most {MAX_TASK_LIST_LENGTH} items")
+    for url in value:
+        if not isinstance(url, str):
+            raise ValueError("each url must be a string")
+        if not is_valid_url(url):
+            raise ValueError(f"invalid URL format: {url}")
     return value
 
 
@@ -123,8 +147,8 @@ class TaskCreate(BaseModel):
     priority: str = "medium"
     budget_cost: int = Field(default=1, ge=1, le=100)
     status: str = "open"
-    labels: list[str] = Field(default_factory=list, max_length=20)
-    urls: list[str] = Field(default_factory=list, max_length=20)
+    labels: list[str] = Field(default_factory=list, max_length=MAX_TASK_LIST_LENGTH)
+    urls: list[str] = Field(default_factory=list, max_length=MAX_TASK_LIST_LENGTH)
     context: str = Field(default="", max_length=10000)
 
     @field_validator("priority")
@@ -140,6 +164,11 @@ class TaskCreate(BaseModel):
         if v not in VALID_STATUSES:
             raise ValueError(f"status must be one of {', '.join(sorted(VALID_STATUSES))}")
         return v
+
+    @field_validator("budget_cost", mode="before")
+    @classmethod
+    def validate_budget_cost(cls, v: Any) -> Any:
+        return reject_bool_integer(v, "budget_cost")
 
     @field_validator("target_agent")
     @classmethod
@@ -166,14 +195,7 @@ class TaskCreate(BaseModel):
     @field_validator("urls", mode="before")
     @classmethod
     def validate_urls(cls, v: list[str]) -> list[str]:
-        if not isinstance(v, list):
-            raise ValueError("urls must be a list")
-        for url in v:
-            if not isinstance(url, str):
-                raise ValueError("each url must be a string")
-            if not is_valid_url(url):
-                raise ValueError(f"invalid URL format: {url}")
-        return v
+        return validate_url_list(v)
 
 
 class TaskUpdate(BaseModel):
@@ -182,8 +204,8 @@ class TaskUpdate(BaseModel):
     agent: str | None = Field(default=None, max_length=128)
     session_id: str | None = Field(default=None, max_length=128)
     context: str | None = Field(default=None, max_length=10000)
-    urls: list[str] | None = None
-    labels: list[str] | None = None
+    urls: list[str] | None = Field(default=None, max_length=MAX_TASK_LIST_LENGTH)
+    labels: list[str] | None = Field(default=None, max_length=MAX_TASK_LIST_LENGTH)
 
     @field_validator("status")
     @classmethod
@@ -207,16 +229,7 @@ class TaskUpdate(BaseModel):
     @field_validator("urls", mode="before")
     @classmethod
     def validate_urls(cls, v: list[str] | None) -> list[str] | None:
-        if v is None:
-            return None
-        if not isinstance(v, list):
-            raise ValueError("urls must be a list")
-        for url in v:
-            if not isinstance(url, str):
-                raise ValueError("each url must be a string")
-            if not is_valid_url(url):
-                raise ValueError(f"invalid URL format: {url}")
-        return v
+        return validate_url_list(v)
 
 
 class AssignmentRequest(BaseModel):
@@ -240,6 +253,13 @@ class AssignmentRequest(BaseModel):
         if v is not None and v not in VALID_STATUSES:
             raise ValueError(f"status must be one of {', '.join(sorted(VALID_STATUSES))}")
         return v
+
+    @field_validator("budget_cost", mode="before")
+    @classmethod
+    def validate_budget_cost(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        return reject_bool_integer(v, "budget_cost")
 
     @field_validator("target_agent")
     @classmethod
@@ -288,6 +308,11 @@ class DispatchRequest(BaseModel):
         if v not in VALID_DISPATCH_AGENTS:
             raise ValueError(f"agent must be one of {', '.join(sorted(VALID_DISPATCH_AGENTS))}")
         return v
+
+    @field_validator("limit", mode="before")
+    @classmethod
+    def validate_limit(cls, v: Any) -> Any:
+        return reject_bool_integer(v, "limit")
 
     @field_validator("session_id")
     @classmethod
@@ -783,7 +808,7 @@ def qa_status(data: dict[str, Any], agent: str = "jules") -> dict[str, Any]:
 def surface_manifest(data: dict[str, Any], persona: str = "owner") -> dict[str, Any]:
     raw = summary(data)
     stale_count = len(release_stale_candidates(data, 24))
-    manifest = {
+    manifest: dict[str, Any] = {
         "status": "ok",
         "persona": persona,
         "generated_at": now_iso(),

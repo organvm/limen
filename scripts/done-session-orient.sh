@@ -30,11 +30,11 @@ ok()   { echo "✓ $*"; }
 ok "artifacts present and executable"
 
 # 2. generators run, print digests, write cached fallbacks, exit 0
-pressure="$(python3 "$PRESSURE_GEN" --write)" || fail "lifecycle pressure generator exited non-zero"
+pressure="$(LIMEN_ROOT="$ROOT" python3 "$PRESSURE_GEN" --write)" || fail "lifecycle pressure generator exited non-zero"
 printf '%s' "$pressure" | grep -q "Lifecycle pressure" || fail "pressure generator printed no lifecycle pressure line"
 [ -f "logs/session-lifecycle-pressure.json" ] || fail "pressure generator did not write logs/session-lifecycle-pressure.json"
 [ -f "logs/session-lifecycle-pressure.md" ] || fail "pressure generator did not write logs/session-lifecycle-pressure.md"
-out="$(python3 "$GEN")" || fail "generator exited non-zero"
+out="$(LIMEN_ROOT="$ROOT" python3 "$GEN")" || fail "generator exited non-zero"
 printf '%s' "$out" | grep -q "Session orientation" || fail "generator printed no digest header"
 printf '%s' "$out" | grep -q "Lifecycle pressure" || fail "generator omitted lifecycle pressure section"
 [ -f "$DIGEST" ] || fail "generator did not write $DIGEST"
@@ -49,21 +49,44 @@ if grep -Eiq "$DENY" "$PRESSURE_GEN"; then fail "PII deny-list hit in pressure s
 if grep -Eiq "$DENY" "logs/session-lifecycle-pressure.md"; then fail "PII deny-list hit in pressure digest"; fi
 ok "PII-free: no clinical literal in generator source or digest"
 
-# 4. idempotent — two consecutive runs are byte-identical (counts are stable within a tick)
-a="$(python3 "$GEN")"; b="$(python3 "$GEN")"
+# 4. idempotent — two consecutive runs are byte-identical for a stable input snapshot
+tasks_snapshot="$(mktemp)"
+echo "● retained verification snapshot: $tasks_snapshot"
+cp "tasks.yaml" "$tasks_snapshot"
+git_section=""
+branch="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+if [ -n "$branch" ]; then
+  dirty="clean"
+  if [ -n "$(git -C "$ROOT" status --porcelain 2>/dev/null || true)" ]; then
+    dirty="dirty"
+  fi
+  counts="$(git -C "$ROOT" rev-list --left-right --count origin/main...HEAD 2>/dev/null || true)"
+  pos=""
+  set -- $counts
+  if [ "$#" -eq 2 ]; then
+    behind="$1"
+    ahead="$2"
+    pos=" · ahead $ahead/behind $behind of main"
+  fi
+  git_section="**Git** — $branch$pos · $dirty"
+fi
+a="$(LIMEN_ROOT="$ROOT" LIMEN_ORIENT_TASKS="$tasks_snapshot" LIMEN_ORIENT_GIT_SECTION="$git_section" LIMEN_ORIENT_NO_WRITE=1 python3 "$GEN")"
+b="$(LIMEN_ROOT="$ROOT" LIMEN_ORIENT_TASKS="$tasks_snapshot" LIMEN_ORIENT_GIT_SECTION="$git_section" LIMEN_ORIENT_NO_WRITE=1 python3 "$GEN")"
 [ "$a" = "$b" ] || fail "generator output not idempotent across two runs"
 ok "idempotent across consecutive runs"
 
 # 5. fail-open — empty LIMEN_ROOT yields exit 0 and an (almost) empty digest, never a crash
-tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+tmp="$(mktemp -d)"
+echo "● retained empty-root fixture: $tmp"
 LIMEN_ROOT="$tmp" python3 "$GEN" >/dev/null 2>&1 || fail "generator crashed on empty root (not fail-open)"
 ok "generator fails open on a missing/empty root"
 
-# 6. hook fails open outside a project — emits nothing, exits 0
+# 6. hook fails open with a stale Claude project dir — the executable may live in the
+#    stable Limen checkout while Claude reports a since-reaped worktree.
 hk="$(CLAUDE_PROJECT_DIR=/nonexistent-$$ bash "$HOOK" 2>/dev/null)"; rc=$?
-[ "$rc" -eq 0 ] || fail "hook non-zero outside a project (rc=$rc)"
-[ -z "$hk" ] || fail "hook emitted output outside a project (should be silent)"
-ok "hook is a clean no-op outside a project"
+[ "$rc" -eq 0 ] || fail "hook non-zero with stale project dir (rc=$rc)"
+printf '%s' "$hk" | grep -q "Session orientation" || fail "hook did not fall back to stable Limen root"
+ok "hook survives a stale Claude project dir"
 
 # 7. lint the generator + syntax-check the hook
 if command -v ruff >/dev/null 2>&1 || python3 -m ruff --version >/dev/null 2>&1; then

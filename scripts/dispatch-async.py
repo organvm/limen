@@ -15,25 +15,91 @@ LIMEN_DISPATCH_ASYNC=1. The synchronous dispatch-parallel.py is left completely 
 Concurrency: at most LIMEN_ASYNC_MAX (default 12) background runs at once; per-agent in-flight count
 is tracked via <task-id>__<agent>.running markers so budgets aren't blown between reserve & harvest.
 
-Usage: dispatch-async.py --lanes codex,claude,opencode,jules --per-lane 8 --max 12 [--dry-run]
+Usage: dispatch-async.py --lanes auto --per-lane 8 --max 12 [--task-id TASK] [--dry-run]
 """
+
 import argparse
 import datetime
+import hashlib
 import json
 import os
+import re
+import signal
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
+from limen.capacity import _weak_proxy_exhaustion, select_lanes  # noqa: E402
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.models import DispatchLogEntry  # noqa: E402
-from limen.dispatch import _queue_lock, _apply_result, _down_lanes, _PRIORITY_ORDER, _deps_met  # noqa: E402
+from limen.dispatch import (  # noqa: E402
+    _ASYNC_LANES,
+    _apply_result,
+    _deps_met,
+    _dispatchable,
+    _down_lanes,
+    _has_done_transition,
+    _queue_lock,
+    _reset_budget_if_needed,
+    _restore_done_status,
+    _restore_pr_open_status,
+    _routine_generated_buildout_allowed,
+    _superseded_by_rebase_task,
+    _value_tier_repos,
+    agent_can_run_task,
+    chronic_dispatch_reason,
+    dispatch_admission_check,
+    print_dispatch_admission_block,
+    run_always_working_before_dispatch,
+    sort_value_gate_candidates,
+)
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 TASKS = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
 RUNS = ROOT / "logs" / "async-runs"
+RECEIPT_ARCHIVE = ROOT / ".limen-private" / "async-runs" / "archive"
 WORKER = ROOT / "scripts" / "async-run-one.py"
+_TOKEN_RE = re.compile(r"(github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{12,})")
+_EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+
+
+def _truthy_env(name: str, default: bool = True) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _int_or_default(raw: object, default: int) -> int:
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    return _int_or_default(os.environ.get(name), default)
+
+
+def _disk_free_gib() -> float | None:
+    path = Path(os.environ.get("LIMEN_DISK_PRESSURE_PATH", str(ROOT)))
+    try:
+        return shutil.disk_usage(path).free / (1024**3)
+    except OSError:
+        return None
+
+
+def _disk_pressure_active() -> bool:
+    if not _truthy_env("LIMEN_DISK_PRESSURE_VALUE_ONLY", True):
+        return False
+    floor = _env_int(
+        "LIMEN_DISK_FLOOR_GIB",
+        _env_int("LIMEN_ALWAYS_WORKING_MIN_FREE_GIB", 45),
+    )
+    free = _disk_free_gib()
+    return free is not None and free < floor
 
 
 def _now():
@@ -47,6 +113,114 @@ def _clear_running_markers(task_id: str) -> None:
             marker.unlink(missing_ok=True)
 
 
+def _running_marker_info(marker: Path) -> dict[str, object]:
+    raw = marker.read_text().strip()
+    try:
+        data = json.loads(raw)
+        started = datetime.datetime.fromisoformat(str(data.get("started_at") or ""))
+        pid = data.get("pid")
+        return {"started_at": started, "pid": int(pid) if pid is not None else None}
+    except Exception:
+        return {"started_at": datetime.datetime.fromisoformat(raw), "pid": None}
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _worker_has_defunct_child(pid: int) -> bool:
+    try:
+        proc = subprocess.run(
+            ["ps", "-axo", "pid=,ppid=,stat="],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    for line in proc.stdout.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) < 3:
+            continue
+        try:
+            ppid = int(parts[1])
+        except ValueError:
+            continue
+        if ppid == pid and "Z" in parts[2]:
+            return True
+    return False
+
+
+def _kill_worker_group(pid: int | None) -> None:
+    if pid is None:
+        return
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
+def _redact_receipt_value(value: object) -> object:
+    if isinstance(value, str):
+        redacted = _TOKEN_RE.sub("[REDACTED_TOKEN]", value)
+        redacted = _EMAIL_RE.sub("[REDACTED_EMAIL]", redacted)
+        if len(redacted) > 4000:
+            redacted = f"{redacted[:4000]}...[TRUNCATED {len(redacted) - 4000} chars]"
+        return redacted
+    if isinstance(value, list):
+        return [_redact_receipt_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _redact_receipt_value(item) for key, item in value.items()}
+    return value
+
+
+def _archive_result_receipt(
+    receipt_path: Path,
+    raw: bytes,
+    now: datetime.datetime,
+    *,
+    parsed: object | None,
+    reason: str,
+    parse_error: str | None = None,
+) -> Path:
+    day_dir = RECEIPT_ARCHIVE / now.strftime("%Y-%m-%d")
+    day_dir.mkdir(parents=True, exist_ok=True)
+    stamp = now.strftime("%Y%m%dT%H%M%SZ")
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", receipt_path.name)
+    out = day_dir / f"{stamp}-{safe_name}"
+    counter = 1
+    while out.exists():
+        out = day_dir / f"{stamp}-{counter}-{safe_name}"
+        counter += 1
+    try:
+        source = str(receipt_path.relative_to(ROOT))
+    except ValueError:
+        source = str(receipt_path)
+    archive = {
+        "archived_at": now.isoformat(),
+        "source": source,
+        "reason": reason,
+        "raw_sha256": hashlib.sha256(raw).hexdigest(),
+        "raw_bytes": len(raw),
+        "receipt": _redact_receipt_value(parsed) if parsed is not None else None,
+    }
+    if parse_error:
+        archive["parse_error"] = _redact_receipt_value(parse_error)
+        archive["raw_preview"] = _redact_receipt_value(raw.decode("utf-8", errors="replace"))
+    out.write_text(json.dumps(archive, indent=2, sort_keys=True) + "\n")
+    return out
+
+
 def harvest() -> int:
     """Apply finished background runs to tasks.yaml under the lock. Returns count applied."""
     RUNS.mkdir(parents=True, exist_ok=True)
@@ -55,150 +229,556 @@ def harvest() -> int:
         return 0
     now = _now()
     applied = 0
-    with _queue_lock(TASKS):
+    with _queue_lock(TASKS) as got:
+        if not got:
+            # Lock timed out — skip this pass (honor the contract). The .result.json files are only
+            # unlinked INSIDE the lock below, so returning here preserves them for the next beat.
+            return applied
         lf = load_limen_file(TASKS)
         byid = {t.id: t for t in lf.tasks}
         track = lf.portal.budget.track
         for rf in files:
+            raw = b""
             try:
-                data = json.loads(rf.read_text())
-            except Exception:
+                raw = rf.read_bytes()
+                data = json.loads(raw.decode("utf-8"))
+            except Exception as exc:
+                _archive_result_receipt(
+                    rf,
+                    raw,
+                    now,
+                    parsed=None,
+                    reason="malformed-result",
+                    parse_error=str(exc),
+                )
+                rf.unlink(missing_ok=True)
+                continue
+            if not isinstance(data, dict):
+                _archive_result_receipt(
+                    rf,
+                    raw,
+                    now,
+                    parsed=data,
+                    reason="malformed-result",
+                    parse_error="result receipt JSON root is not an object",
+                )
                 rf.unlink(missing_ok=True)
                 continue
             t = byid.get(data.get("task_id"))
             if t is not None and data.get("result") != "__notask__":
-                _apply_result(t, data.get("agent"), data.get("result"), now, track)
+                _apply_result(t, data.get("agent"), data.get("result"), now, track, charge_budget=False)
                 applied += 1
             if data.get("task_id"):
                 _clear_running_markers(str(data.get("task_id")))
+            _archive_result_receipt(rf, raw, now, parsed=data, reason="harvested")
             rf.unlink(missing_ok=True)
         if applied:
             save_limen_file(TASKS, lf)
     return applied
 
 
+def inspect_harvest() -> int:
+    """Count result files without applying or deleting them."""
+    RUNS.mkdir(parents=True, exist_ok=True)
+    return len(list(RUNS.glob("*.result.json")))
+
+
 def reap_stale(max_age_s: int):
     """Free slots from DEAD workers. A .running marker older than max_age with no result file means
     the detached worker crashed/was-killed before finishing (OOM, host sleep, SIGKILL). Remove the
     marker and reopen the task so it's retried — otherwise it would leak a concurrency slot forever.
-    A live slow worker is younger than max_age (call_agent_dispatch caps the agent at its timeout)."""
+    Also reopen markerless async reservations after the same grace window: a worker that exits between
+    board reservation and result publication can leave tasks.yaml stuck at dispatched with no .running
+    marker for the normal reaper to see. A live slow worker is younger than max_age (call_agent_dispatch
+    caps the agent at its timeout)."""
     RUNS.mkdir(parents=True, exist_ok=True)
     now = _now()
+    defunct_grace_s = max(1, _env_int("LIMEN_ASYNC_DEFUNCT_GRACE", 120))
     reaped = []
+    marker_task_ids = set()
+    result_task_ids = {rf.name[: -len(".result.json")] for rf in RUNS.glob("*.result.json")}
     for m in RUNS.glob("*__*.running"):
+        tid, agent = m.name[: -len(".running")].rsplit("__", 1)
+        marker_task_ids.add(tid)
         try:
-            age = (now - datetime.datetime.fromisoformat(m.read_text().strip())).total_seconds()
+            info = _running_marker_info(m)
+            age = (now - info["started_at"]).total_seconds()  # type: ignore[operator]
         except Exception:
             age = max_age_s + 1  # unreadable/empty marker → treat as stale
+            info = {"pid": None}
+        pid = info.get("pid")
+        dead_pid = isinstance(pid, int) and not _pid_alive(pid)
+        zombie_stuck = isinstance(pid, int) and age > defunct_grace_s and _worker_has_defunct_child(pid)
         if age > max_age_s:
-            tid, agent = m.name[:-len(".running")].rsplit("__", 1)
             # if the worker DID finish (result file present), let harvest handle it; don't reap
             if not (RUNS / f"{tid}.result.json").exists():
-                reaped.append((tid, agent))
-                m.unlink(missing_ok=True)
-    if reaped:
-        with _queue_lock(TASKS):
+                # Defer the marker unlink until the reopen is committed under the lock (below), so a
+                # lock timeout can't leave the slot leaked (marker gone, task still 'dispatched').
+                reaped.append((tid, agent, m, pid if isinstance(pid, int) else None))
+        elif dead_pid or zombie_stuck:
+            if not (RUNS / f"{tid}.result.json").exists():
+                reaped.append((tid, agent, m, pid if isinstance(pid, int) else None))
+    markerless = []
+    try:
+        lf_preview = load_limen_file(TASKS)
+        for t in lf_preview.tasks:
+            if t.status != "dispatched" or t.id in marker_task_ids or t.id in result_task_ids:
+                continue
+            if not t.dispatch_log:
+                continue
+            last = t.dispatch_log[-1]
+            if last.session_id != "async-reserve" or last.status != "dispatched":
+                continue
+            stamp = t.updated or last.timestamp
+            if stamp and (now - stamp).total_seconds() > max_age_s:
+                markerless.append((t.id, last.agent or t.target_agent))
+    except Exception:
+        markerless = []
+    applied_markerless = []
+    if reaped or markerless:
+        for _tid, _agent, _m, pid in reaped:
+            _kill_worker_group(pid)
+        with _queue_lock(TASKS) as got:
+            if not got:
+                # Lock busy — keep the markers (not yet unlinked) so a later beat retries the reap;
+                # unlinking without reopening would leak the concurrency slot forever.
+                return []
             lf = load_limen_file(TASKS)
             byid = {t.id: t for t in lf.tasks}
-            for tid, agent in reaped:
+            changed = False
+            for tid, agent, _m, _pid in reaped:
                 t = byid.get(tid)
                 if t is not None and t.status == "dispatched":
-                    t.status = "open"  # dead worker left no result → retry on a later beat
-                    t.updated = now
-                    t.dispatch_log.append(DispatchLogEntry(
-                        timestamp=now,
+                    if _has_done_transition(t):
+                        _restore_done_status(
+                            t,
+                            now,
+                            agent=agent,
+                            session_id="async-reap-stale",
+                            output=(
+                                "dispatch-async: stale worker marker reaped after prior done; restored terminal status"
+                            ),
+                        )
+                        changed = True
+                    elif _restore_pr_open_status(
+                        t,
+                        now,
                         agent=agent,
                         session_id="async-reap-stale",
-                        status="open",
-                        output=f"dispatch-async: stale worker marker older than {max_age_s}s reaped; task reopened",
-                    ))
-            save_limen_file(TASKS, lf)
-    return [tid for tid, _agent in reaped]
+                        output="dispatch-async: stale worker marker reaped after prior open PR; restored PR-open status",
+                    ):
+                        changed = True
+                    else:
+                        t.status = "open"  # dead worker left no result → retry on a later beat
+                        t.updated = now
+                        t.dispatch_log.append(
+                            DispatchLogEntry(
+                                timestamp=now,
+                                agent=agent,
+                                session_id="async-reap-stale",
+                                status="open",
+                                output=f"dispatch-async: stale worker marker older than {max_age_s}s reaped; task reopened",
+                            )
+                        )
+                        changed = True
+            if markerless:
+                fresh_marker_task_ids = {
+                    m.name[: -len(".running")].rsplit("__", 1)[0] for m in RUNS.glob("*__*.running")
+                }
+                fresh_result_task_ids = {rf.name[: -len(".result.json")] for rf in RUNS.glob("*.result.json")}
+                for tid, agent in markerless:
+                    t = byid.get(tid)
+                    if (
+                        t is None
+                        or t.status != "dispatched"
+                        or tid in fresh_marker_task_ids
+                        or tid in fresh_result_task_ids
+                        or not t.dispatch_log
+                    ):
+                        continue
+                    last = t.dispatch_log[-1]
+                    stamp = t.updated or last.timestamp
+                    if (
+                        last.session_id != "async-reserve"
+                        or last.status != "dispatched"
+                        or not stamp
+                        or (now - stamp).total_seconds() <= max_age_s
+                    ):
+                        continue
+                    if _has_done_transition(t):
+                        _restore_done_status(
+                            t,
+                            now,
+                            agent=agent,
+                            session_id="async-reap-stale",
+                            output="dispatch-async: markerless stale async reservation restored terminal status",
+                        )
+                        applied_markerless.append(tid)
+                        changed = True
+                    elif _restore_pr_open_status(
+                        t,
+                        now,
+                        agent=agent,
+                        session_id="async-reap-stale",
+                        output="dispatch-async: markerless stale async reservation restored PR-open status",
+                    ):
+                        applied_markerless.append(tid)
+                        changed = True
+                    else:
+                        t.status = "open"
+                        t.updated = now
+                        t.dispatch_log.append(
+                            DispatchLogEntry(
+                                timestamp=now,
+                                agent=agent,
+                                session_id="async-reap-stale",
+                                status="open",
+                                output=(
+                                    f"dispatch-async: markerless async reservation older than {max_age_s}s "
+                                    "reaped; task reopened"
+                                ),
+                            )
+                        )
+                        applied_markerless.append(tid)
+                        changed = True
+            if changed:
+                save_limen_file(TASKS, lf)
+        # reopen is committed → now safe to remove the markers that freed these slots
+        for _tid, _agent, m, _pid in reaped:
+            m.unlink(missing_ok=True)
+    return [tid for tid, _agent, _m, _pid in reaped] + applied_markerless
+
+
+def inspect_stale(max_age_s: int) -> list[str]:
+    """Return stale marker task ids without deleting markers or reopening tasks."""
+    RUNS.mkdir(parents=True, exist_ok=True)
+    now = _now()
+    stale = []
+    for m in RUNS.glob("*__*.running"):
+        try:
+            info = _running_marker_info(m)
+            age = (now - info["started_at"]).total_seconds()  # type: ignore[operator]
+        except Exception:
+            age = max_age_s + 1
+        if age > max_age_s:
+            tid, _agent = m.name[: -len(".running")].rsplit("__", 1)
+            if not (RUNS / f"{tid}.result.json").exists():
+                stale.append(tid)
+    return stale
+
+
+def default_max_age_s() -> int:
+    """Keep stale reaping above the local lane timeout so live bounded workers are not reopened."""
+    env = os.environ.get("LIMEN_ASYNC_MAX_AGE")
+    if env is not None:
+        return max(1, _int_or_default(env, 2100))
+    lane_timeout = max(1, _env_int("LIMEN_LANE_TIMEOUT", 1800))
+    return max(1200, lane_timeout + 300)
 
 
 def _running_total() -> int:
     return len(list(RUNS.glob("*.running")))
 
 
+def _running_local() -> int:
+    """In-flight LOCAL-lane runs only. The concurrency cap bounds LOCAL host pressure (each local run
+    holds a worktree + a ThreadPoolExecutor slot). An async/remote run (jules, github_actions, ...)
+    executes OFF-BOX — a `jules remote new` session runs on Google's VM — so it must NOT consume a
+    local slot, or a backlog of local work starves the remote lanes out of the cap entirely (the root
+    cause of 'zero jules remote sessions launched'). Remote lanes stay bounded by their per-agent
+    budget, not this local cap."""
+    total = 0
+    for m in RUNS.glob("*__*.running"):
+        agent = m.name[: -len(".running")].rsplit("__", 1)[1]
+        if agent not in _ASYNC_LANES:
+            total += 1
+    return total
+
+
 def _running_for(agent: str) -> int:
     return len(list(RUNS.glob(f"*__{agent}.running")))
 
 
-def reserve_and_launch(agents, per_agent, cap, dry):
-    """Reserve open tasks (under lock) up to the concurrency cap + per-agent budget, then spawn
-    detached workers. Returns the list of (agent, task_id) launched/would-launch."""
-    now = _now()
+def _running_task_ids() -> set[str]:
+    ids: set[str] = set()
+    for marker in RUNS.glob("*__*.running"):
+        task_part = marker.name[: -len(".running")].rsplit("__", 1)[0]
+        if task_part:
+            ids.add(task_part)
+    return ids
+
+
+def _result_task_ids() -> set[str]:
+    return {rf.name[: -len(".result.json")] for rf in RUNS.glob("*.result.json")}
+
+
+def _claimed_task_ids() -> set[str]:
+    return _running_task_ids() | _result_task_ids()
+
+
+def _usage_by_agent() -> dict[str, dict[str, object]]:
+    path = ROOT / "logs" / "usage.json"
+    try:
+        vendors = (json.loads(path.read_text(encoding="utf-8")) or {}).get("vendors", {})
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(vendors, dict):
+        return {}
+    return {str(agent): info for agent, info in vendors.items() if isinstance(info, dict)}
+
+
+def _usage_remaining_by_agent(usage: dict[str, dict[str, object]]) -> dict[str, int]:
+    """Live usage runway from logs/usage.json.
+
+    The task board budget is a reservation ledger; usage telemetry is the live provider/run
+    meter. Remote lanes such as Jules must satisfy both. Without this cap, a reserve override can
+    make a lane selectable and then reserve every board-budget slot even when the rolling provider
+    window only has a few runs left.
+    """
+    remaining: dict[str, int] = {}
+    for agent, info in usage.items():
+        if "remaining" not in info:
+            continue
+        try:
+            value = int(float(info["remaining"]))
+        except (TypeError, ValueError):
+            continue
+        remaining[str(agent)] = max(0, value)
+    return remaining
+
+
+def _weak_proxy_agents(usage: dict[str, dict[str, object]]) -> set[str]:
+    return {agent for agent, info in usage.items() if _weak_proxy_exhaustion(agent, info)}
+
+
+def _pick_reservations(lf, agents, per_agent, cap, dry, now, usage_remaining, weak_proxy_agents, task_id=None):
     picked = []
-    with _queue_lock(TASKS):
-        lf = load_limen_file(TASKS)
-        track = lf.portal.budget.track
-        daily = lf.portal.budget.daily
-        slots = max(0, cap - _running_total())
-        spent = track.spent
-        id2 = {t.id: t for t in lf.tasks}  # for dependency resolution
-        for agent in agents:
-            if slots <= 0:
-                break
-            capa = lf.portal.budget.per_agent.get(agent)
-            aspent = track.per_agent.get(agent, 0) + _running_for(agent)  # count in-flight vs budget
-            rem = daily - spent if capa is None else max(0, min(daily - spent, capa - aspent))
+    picked_ids = set(_claimed_task_ids())
+    reset_changed = _reset_budget_if_needed(lf, now)
+    track = lf.portal.budget.track
+    daily = lf.portal.budget.daily
+    value_repos = _value_tier_repos()
+    disk_pressure = _disk_pressure_active()
+    # The cap counts only LOCAL in-flight runs; remote/async lanes run off-box and are budgeted
+    # separately below (see _running_local).
+    slots = max(0, cap - _running_local())
+    spent = track.spent
+    id2 = {t.id: t for t in lf.tasks}  # for dependency resolution
+    states = []
+    for agent in agents:
+        is_async = agent in _ASYNC_LANES  # remote lane (jules, ...) — off-box, not gated by the local cap
+        running_for_agent = _running_for(agent)
+        launch_room = max(0, per_agent - running_for_agent)
+        if launch_room <= 0:
+            continue
+        capa = lf.portal.budget.per_agent.get(agent)
+        aspent = track.per_agent.get(agent, 0) + running_for_agent  # count in-flight vs budget
+        if agent in weak_proxy_agents:
+            agent_rem = None
+        else:
+            agent_rem = None if capa is None else max(0, capa - aspent)
+        live_rem = usage_remaining.get(agent) if is_async else None
+        if live_rem is not None:
+            agent_rem = live_rem if agent_rem is None else min(agent_rem, live_rem)
+        rem = daily - spent if agent_rem is None else max(0, min(daily - spent, agent_rem))
+        if rem <= 0:
+            continue
+        cands = [
+            t
+            for t in lf.tasks
+            if _dispatchable(t)
+            and (task_id is None or t.id == task_id)
+            and (t.target_agent == agent or t.target_agent == "any")
+            and agent_can_run_task(agent, t)
+            and t.budget_cost <= rem
+            and _deps_met(t, id2)
+            and (task_id is not None or not _superseded_by_rebase_task(t, id2))
+            and _routine_generated_buildout_allowed(t)
+        ]
+        cands = sort_value_gate_candidates(cands, value_repos, disk_pressure=disk_pressure)
+        states.append(
+            {
+                "agent": agent,
+                "is_async": is_async,
+                "agent_rem": agent_rem,
+                "launch_room": launch_room,
+                "cands": cands,
+                "index": 0,
+                "taken": 0,
+            }
+        )
+    while states:
+        progressed = False
+        for state in states:
+            if state["taken"] >= state["launch_room"]:
+                continue
+            if daily - spent <= 0:
+                continue
+            if not state["is_async"] and slots <= 0:
+                continue  # local slot budget spent — but a later async lane may still launch off-box
+
+            agent_rem = state["agent_rem"]
+            rem = daily - spent if agent_rem is None else max(0, min(daily - spent, agent_rem))
             if rem <= 0:
                 continue
-            cands = [t for t in lf.tasks
-                     if t.status == "open" and (t.target_agent == agent or t.target_agent == "any")
-                     and t.budget_cost <= rem and _deps_met(t, id2)]
-            cands.sort(key=lambda t: _PRIORITY_ORDER.get(t.priority, 99))
-            taken = 0
-            for t in cands:
-                if slots <= 0 or taken >= per_agent:
-                    break
-                picked.append((agent, t.id))
-                if not dry:
-                    t.status = "dispatched"
-                    t.updated = now
-                    t.dispatch_log.append(DispatchLogEntry(
+
+            cands = state["cands"]
+            t = None
+            while state["index"] < len(cands):
+                cand = cands[state["index"]]
+                state["index"] += 1
+                if cand.id in picked_ids or cand.budget_cost > rem:
+                    continue
+                if task_id is None and chronic_dispatch_reason(cand):
+                    continue
+                t = cand
+                break
+            if t is None:
+                continue
+
+            agent = state["agent"]
+            picked.append((agent, t.id))
+            picked_ids.add(t.id)
+            if agent_rem is not None:
+                state["agent_rem"] = max(0, agent_rem - t.budget_cost)
+            spent += t.budget_cost
+            if not dry:
+                track.spent = spent
+                track.per_agent[agent] = track.per_agent.get(agent, 0) + t.budget_cost
+                t.status = "dispatched"
+                t.updated = now
+                t.dispatch_log.append(
+                    DispatchLogEntry(
                         timestamp=now,
                         agent=agent,
                         session_id="async-reserve",
                         status="dispatched",
                         output="dispatch-async: reserved before detached worker launch",
-                    ))
-                slots -= 1
-                taken += 1
-        if not dry and picked:
-            save_limen_file(TASKS, lf)
+                    )
+                )
+            if not state["is_async"]:
+                slots -= 1  # only local runs consume a local concurrency slot
+            state["taken"] += 1
+            progressed = True
+        if not progressed:
+            break
+    return picked, reset_changed
+
+
+def reserve_and_launch(agents, per_agent, cap, dry, task_id=None, *, admission_checked: bool = False):
+    """Reserve open tasks (under lock) up to the concurrency cap + per-agent budget, then spawn
+    detached workers. Returns the list of (agent, task_id) launched/would-launch."""
+    if should_reserve(per_agent, cap) and not admission_checked:
+        admission = dispatch_admission_check(TASKS, task_id=task_id)
+        if not admission.get("allow", False):
+            print_dispatch_admission_block("async", admission)
+            return []
+    if not run_always_working_before_dispatch(TASKS, dry_run=dry):
+        print("── async: always-working gate blocked reservation")
+        return []
+    now = _now()
+    usage = _usage_by_agent()
+    usage_remaining = _usage_remaining_by_agent(usage)
+    weak_proxy_agents = _weak_proxy_agents(usage)
     if dry:
+        lf = load_limen_file(TASKS)
+        picked, _reset_changed = _pick_reservations(
+            lf, agents, per_agent, cap, dry, now, usage_remaining, weak_proxy_agents, task_id=task_id
+        )
         return picked
+    with _queue_lock(TASKS) as got:
+        if not got:
+            # Lock busy — reserve nothing this round. Returning BEFORE `picked` is used to spawn
+            # detached workers (below) prevents launching workers for tasks never persisted as
+            # 'dispatched', which would double-dispatch. Self-corrects next beat.
+            return []
+        lf = load_limen_file(TASKS)
+        picked, reset_changed = _pick_reservations(
+            lf, agents, per_agent, cap, dry, now, usage_remaining, weak_proxy_agents, task_id=task_id
+        )
+        if not dry and (picked or reset_changed):
+            save_limen_file(TASKS, lf)
     # outside the lock: write markers + spawn detached workers (fast; we never wait on them)
     for agent, tid in picked:
-        (RUNS / f"{tid}__{agent}.running").write_text(now.isoformat())
         logf = open(RUNS / f"{tid}.log", "a")
-        subprocess.Popen(
+        proc = subprocess.Popen(
             [sys.executable, str(WORKER), "--agent", agent, "--task-id", tid],
-            stdout=logf, stderr=logf, stdin=subprocess.DEVNULL, start_new_session=True,
+            stdout=logf,
+            stderr=logf,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
             env={**os.environ, "PYTHONPATH": str(ROOT / "cli" / "src")},
+        )
+        (RUNS / f"{tid}__{agent}.running").write_text(
+            json.dumps({"started_at": now.isoformat(), "agent": agent, "task_id": tid, "pid": proc.pid})
         )
     return picked
 
 
+def should_reserve(per_agent: int, cap: int) -> bool:
+    """Whether this invocation may reserve new async work after harvest/reap.
+
+    Closeout and harvest-only probes deliberately call ``--per-lane 0 --max 0``. Those passes must
+    not run pre-dispatch writers such as always-working; otherwise a read-mostly harvest check
+    dirties the live root without launching anything.
+    """
+    return per_agent > 0 and cap > 0
+
+
+def resolve_lanes(selector: str, down: set[str]) -> list[str]:
+    try:
+        board = load_limen_file(TASKS)
+        _reset_budget_if_needed(board, _now())
+    except Exception:
+        board = None
+    lanes = select_lanes(selector, board, down_lanes=down)
+    if lanes:
+        return lanes
+    if selector.strip().lower() == "auto":
+        return [agent for agent in ("codex",) if agent not in down]
+    return []
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--lanes", default="codex,opencode,agy,claude,gemini,jules")
-    ap.add_argument("--per-lane", type=int, default=int(os.environ.get("LIMEN_LOCAL_LIMIT", "8")))
-    ap.add_argument("--max", type=int, default=int(os.environ.get("LIMEN_ASYNC_MAX", "12")))
+    ap.add_argument("--lanes", default="auto")
+    ap.add_argument("--per-lane", type=int, default=max(1, _env_int("LIMEN_LOCAL_LIMIT", 8)))
+    ap.add_argument("--max", type=int, default=max(1, _env_int("LIMEN_ASYNC_MAX", 12)))
+    ap.add_argument("--task-id", help="Reserve and launch only this task id")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
     down = _down_lanes()
-    lanes = [x.strip() for x in a.lanes.split(",") if x.strip() and x.strip() not in down]
+    lanes = resolve_lanes(a.lanes, down)
     if down:
         print(f"── skipping down lanes: {sorted(down)}")
-    reaped = reap_stale(int(os.environ.get("LIMEN_ASYNC_MAX_AGE", "1200")))
-    applied = harvest()
+    max_age = default_max_age_s()
+    if a.dry_run:
+        reaped = inspect_stale(max_age)
+        applied = inspect_harvest()
+    else:
+        reaped = reap_stale(max_age)
+        applied = harvest()
     running = _running_total()
-    launched = reserve_and_launch(lanes, a.per_lane, a.max, a.dry_run)
+    reserve_allowed = True
+    admission = {"allow": True}
+    if should_reserve(a.per_lane, a.max):
+        admission = dispatch_admission_check(TASKS, task_id=a.task_id)
+        if not admission.get("allow", False):
+            reserve_allowed = False
+            print_dispatch_admission_block("async", admission)
+    if should_reserve(a.per_lane, a.max) and reserve_allowed:
+        launched = (
+            reserve_and_launch(lanes, a.per_lane, a.max, a.dry_run, task_id=a.task_id, admission_checked=True)
+            if should_reserve(a.per_lane, a.max)
+            else []
+        )
+    else:
+        launched = []
     verb = "would launch" if a.dry_run else "launched"
-    print(f"── async: reaped {len(reaped)} dead · harvested {applied} · {running} still running · "
-          f"{verb} {len(launched)} (cap {a.max}) → {[t for _, t in launched]}")
+    print(
+        f"── async: reaped {len(reaped)} dead · harvested {applied} · {running} still running · "
+        f"{verb} {len(launched)} (cap {a.max}) → {[t for _, t in launched]}"
+    )
     return 0
 
 
