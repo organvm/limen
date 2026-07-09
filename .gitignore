@@ -36,6 +36,8 @@ obligations-ledger.json
 # TABVLARIVS record-keeper: the ticket inbox/archive/rejected is runtime event state (one file per
 # unit of work, high churn). The board (tasks.yaml) is the committed projection; tickets are not.
 logs/tickets/
+logs/closeout-fast.json
+logs/closeout-fast.md
 
 # Next.js route source — protect from machine-global 'public/' ignore rules
 !web/app/app/public/
