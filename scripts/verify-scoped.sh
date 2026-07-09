@@ -96,6 +96,14 @@ if matches '^scripts/(enactment-audit\.py|tests/enactment-audit\.test\.sh)'; the
   bash scripts/tests/enactment-audit.test.sh
 fi
 
+# --- Gate: no-hardcode ratchet (new LIMEN_* vars must be declared in the parameter panel) ---
+if matches '^(institutio/governance/parameters\.yaml|scripts/check-params\.py|scripts/|cli/|web/)'; then
+  step "No-hardcode gate (VIGILIA parameter panel ratchet)"
+  python3 scripts/check-params.py
+else
+  skip "no-hardcode gate"
+fi
+
 # --- Gate: task board ---
 if matches '^tasks\.yaml$'; then
   step "Validate task-board statuses"
