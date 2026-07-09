@@ -106,9 +106,15 @@ PYEOF
 pass "codex=KEEP, opencode=CANCEL-CANDIDATE, Fable-at-cap named, no contradictions"
 
 echo "── 4. pytest gate for the tier/cap logic ──"
-"${PY[@]}" -m pytest cli/tests -q \
-  -k "model_selection or tier or dispatch or fable or vendor_cancel or session_guard" \
-  >/dev/null 2>&1 || fail "pytest tier/cap suite failed (run without -q for detail)"
+# Scope to the Fable cap + advisor + session-guard suites (the units this predicate owns). A broader
+# `-k dispatch` sweep pulls slow, environment-sensitive dispatch integration tests into a tight gate;
+# the full suite is covered by verify-whole / CI, not here.
+"${PY[@]}" -m pytest \
+  cli/tests/test_claude_tier.py \
+  cli/tests/test_fable_allotment.py \
+  cli/tests/test_fable_session_guard.py \
+  cli/tests/test_vendor_cancel_advisor.py \
+  -q >/dev/null 2>&1 || fail "pytest tier/cap suite failed (run the four Fable test files for detail)"
 pass "tier/cap pytest suite green"
 
 echo "── 5. fixed point: balance write is idempotent ──"
