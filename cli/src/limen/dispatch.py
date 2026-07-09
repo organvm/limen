@@ -470,7 +470,8 @@ def _handoff_next_action_source(root: Path) -> bool:
 def _prompt_batch_source(root: Path) -> bool:
     lifecycle = root / ".limen-private" / "session-corpus" / "lifecycle"
     index = _load_json_file(lifecycle / "prompt-batch-review-ledger.json")
-    coverage = index.get("coverage") if isinstance(index.get("coverage"), dict) else {}
+    raw_coverage = index.get("coverage")
+    coverage = raw_coverage if isinstance(raw_coverage, dict) else {}
     queue = index.get("review_queue") if isinstance(index.get("review_queue"), list) else []
     try:
         open_batches = int(coverage.get("open_review_batches") or 0)
@@ -488,7 +489,8 @@ def _product_ledger_source(root: Path) -> bool:
 def _always_working_source(root: Path, tasks_path: Path | None) -> bool:
     lifecycle = root / ".limen-private" / "session-corpus" / "lifecycle"
     index = _load_json_file(lifecycle / "always-working.json")
-    items = index.get("items") if isinstance(index.get("items"), list) else []
+    raw_items = index.get("items")
+    items = raw_items if isinstance(raw_items, list) else []
     if any(isinstance(item, dict) and item.get("assignment_packet") for item in items):
         return True
     if tasks_path is None:
