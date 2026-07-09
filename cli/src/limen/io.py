@@ -331,3 +331,24 @@ def save_limen_file(path: Path, limen: LimenFile, *, allow_shrink: bool = False)
             )
 
     atomic_write_text(path, text)
+
+
+def write_initial_limen_text(path: Path, text: str) -> None:
+    """Create a brand-new board file through the canonical atomic writer.
+
+    This is the bootstrap-only escape hatch for ``limen init``. It must not be used for live board
+    mutations; those belong to TABVLARIVS.
+    """
+    path = Path(path)
+    if path.exists():
+        raise FileExistsError(path)
+    atomic_write_text(path, text)
+
+
+def restore_limen_text(path: Path, text: str) -> None:
+    """Emergency restore for an unloadable/collapsed board.
+
+    Collapse recovery cannot load the current board into a ``LimenFile`` for ticket folding. Keep
+    that repair explicitly in the IO layer instead of creating another ad hoc writer.
+    """
+    atomic_write_text(path, text)

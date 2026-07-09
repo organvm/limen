@@ -28,6 +28,8 @@ from limen.tabularius import (
     _archive,
     _inbox,
     _rejected,
+    apply_limen_file_sync,
+    apply_tickets_sync,
     drain_once,
     new_ticket_id,
     pending_count,
@@ -154,6 +156,36 @@ def test_status_ticket_sets_status_and_appends_dispatch_log(tmp_path):
     assert len(t1.dispatch_log) == 1
     entry = t1.dispatch_log[0]
     assert entry.agent == "claude" and entry.status == "done" and entry.output == "shipped PR #999"
+
+
+def test_apply_tickets_sync_seals_status_without_inbox_round_trip(tmp_path):
+    board = _seed_board(tmp_path)
+    tk = _ticket(INTENT_STATUS, task_id="T-1", log={"status": "in_progress", "output": "reserved"})
+
+    result = apply_tickets_sync(board, [tk])
+
+    assert result.applied == 1 and result.wrote is True
+    t1 = {t.id: t for t in load_limen_file(board).tasks}["T-1"]
+    assert t1.status == "in_progress"
+    assert t1.dispatch_log[-1].session_id == "sess-1"
+    assert pending_count(board) == 0
+    assert (_archive(board) / f"{tk.ticket_id}.json").exists()
+
+
+def test_apply_limen_file_sync_archives_projection_delta_tickets(tmp_path):
+    board = _seed_board(tmp_path)
+    lf = load_limen_file(board)
+    lf.tasks[0].target_agent = "codex"
+    lf.tasks.append(Task.model_validate(_task("T-new", status="open", target_agent="any")))
+
+    result = apply_limen_file_sync(board, lf, agent="route", session_id="sync-seal")
+
+    assert result.applied == 2 and result.wrote is True
+    loaded = {t.id: t for t in load_limen_file(board).tasks}
+    assert loaded["T-0"].target_agent == "codex"
+    assert loaded["T-new"].target_agent == "any"
+    archived = list(_archive(board).glob("*.json"))
+    assert len(archived) == 2
 
 
 def test_partial_patch_preserves_other_fields(tmp_path):

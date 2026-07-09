@@ -32,8 +32,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.capacity import _weak_proxy_exhaustion, select_lanes  # noqa: E402
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.models import DispatchLogEntry  # noqa: E402
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 from limen.dispatch import (  # noqa: E402
     _ASYNC_LANES,
     _apply_result,
@@ -270,7 +271,7 @@ def harvest() -> int:
             _archive_result_receipt(rf, raw, now, parsed=data, reason="harvested")
             rf.unlink(missing_ok=True)
         if applied:
-            save_limen_file(TASKS, lf)
+            apply_limen_file_sync(TASKS, lf, agent="dispatch-async", session_id="harvest")
     return applied
 
 
@@ -439,7 +440,7 @@ def reap_stale(max_age_s: int):
                         applied_markerless.append(tid)
                         changed = True
             if changed:
-                save_limen_file(TASKS, lf)
+                apply_limen_file_sync(TASKS, lf, agent="dispatch-async", session_id="reap-stale")
         # reopen is committed → now safe to remove the markers that freed these slots
         for _tid, _agent, m, _pid in reaped:
             m.unlink(missing_ok=True)
@@ -687,7 +688,7 @@ def reserve_and_launch(agents, per_agent, cap, dry, task_id=None):
             lf, agents, per_agent, cap, dry, now, usage_remaining, weak_proxy_agents, task_id=task_id
         )
         if not dry and (picked or reset_changed):
-            save_limen_file(TASKS, lf)
+            apply_limen_file_sync(TASKS, lf, agent="dispatch-async", session_id="reserve")
     # outside the lock: write markers + spawn detached workers (fast; we never wait on them)
     for agent, tid in picked:
         logf = open(RUNS / f"{tid}.log", "a")
