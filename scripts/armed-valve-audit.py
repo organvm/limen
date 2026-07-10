@@ -46,11 +46,16 @@ import sys
 import urllib.request
 from pathlib import Path
 
+import yaml
+
 SCRIPT_ROOT = Path(__file__).resolve().parent.parent
 ROOT = Path(os.environ.get("LIMEN_ROOT", SCRIPT_ROOT))
+SENSORS_REGISTRY = SCRIPT_ROOT / "institutio" / "governance" / "sensors.yaml"
+
 
 def gate_re(prefix):
     return re.compile(r"\$\{(" + re.escape(prefix) + r"[A-Z0-9_]+):-([^}]*)\}")
+
 
 # beat gates that select cadence/limits/paths, not behavior valves — never audited
 NON_VALVE_RE = re.compile(
@@ -75,6 +80,30 @@ def discover_gates(sources, prefix="LIMEN_"):
             default = default.strip()
             if default in ("0", "1") and not NON_VALVE_RE.match(name):
                 gates.setdefault(name, default)
+    return gates
+
+
+def discover_registry_gates(registry=SENSORS_REGISTRY, prefix="LIMEN_"):
+    """Sensor gates declared in the SENSORS registry → {name: default}.
+
+    When metabolize.sh derives its sensor loop from institutio/governance/sensors.yaml, the
+    ``${LIMEN_*_CHECK:-1}`` gate literals leave the shell (beat-sensors.py reads each gate
+    dynamically). Without reading the registry here, ~19 sensor valves would silently drop out of the
+    audit — a coverage regression that hides a later silent-off. Fail-open: an unreadable/absent
+    registry yields no gates (the shell sources still cover the non-sensor valves).
+    """
+    gates = {}
+    try:
+        data = yaml.safe_load(Path(registry).read_text(errors="replace")) or {}
+    except (OSError, ValueError):
+        return gates
+    for spec in (data.get("sensors") or {}).values():
+        if not isinstance(spec, dict):
+            continue
+        name = spec.get("gate")
+        default = str(spec.get("default", "1")).strip()
+        if name and str(name).startswith(prefix) and default in ("0", "1") and not NON_VALVE_RE.match(name):
+            gates.setdefault(str(name), default)
     return gates
 
 
@@ -140,14 +169,23 @@ def audit(registry, gates, env, levers_text, offline=False):
     for name, default in sorted(gates.items()):
         if name in classified:
             if name in safety and env.get(name, default) != "1":
-                rows.append(dict(id=name, verdict="SAFE-OFF", note=f"default={default}", what="safety-class; off is the design"))
+                rows.append(
+                    dict(id=name, verdict="SAFE-OFF", note=f"default={default}", what="safety-class; off is the design")
+                )
             continue
         # classification derives from the CODE default only — env must never hide a
         # gate from the registry check, or --contract flaps between hosts and CI
         if default == "1":
             rows.append(dict(id=name, verdict="ARMED", note=f"default={default}", what=""))
         else:
-            rows.append(dict(id=name, verdict="UNCLASSIFIED", note=f"default={default}", what="new disarmed-by-default gate — classify in spec/armed-valves.json"))
+            rows.append(
+                dict(
+                    id=name,
+                    verdict="UNCLASSIFIED",
+                    note=f"default={default}",
+                    what="new disarmed-by-default gate — classify in spec/armed-valves.json",
+                )
+            )
     return rows
 
 
@@ -173,17 +211,33 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Separate parked levers from silently-off valves.")
     ap.add_argument("--check", action="store_true", help="gate mode: exit 1 on any SILENT-OFF")
     ap.add_argument("--offline", action="store_true", help="skip url probes (CI-safe, deterministic)")
-    ap.add_argument("--contract", action="store_true",
-                    help="registry-completeness rung only (repo-deterministic): exit 1 on any "
-                         "UNCLASSIFIED gate; env/url liveness rungs are the beat's job")
+    ap.add_argument(
+        "--contract",
+        action="store_true",
+        help="registry-completeness rung only (repo-deterministic): exit 1 on any "
+        "UNCLASSIFIED gate; env/url liveness rungs are the beat's job",
+    )
     # code inputs pin to the script's own repo (a dev worktree audits ITS contract,
     # never the runtime root's — the prompt-lifecycle-ledger live-root lesson);
     # only the stamp lands in the runtime root's logs/.
     ap.add_argument("--registry", default=str(SCRIPT_ROOT / "spec" / "armed-valves.json"))
-    ap.add_argument("--sources", nargs="*", default=[str(SCRIPT_ROOT / "scripts" / "metabolize.sh"), str(SCRIPT_ROOT / "scripts" / "heartbeat-loop.sh")])
-    ap.add_argument("--gate-prefix", default="LIMEN_",
-                    help="env-var namespace to derive gates from (tests use a fixture prefix "
-                         "so the governed namespace never gains undeclared tokens)")
+    ap.add_argument(
+        "--sources",
+        nargs="*",
+        default=[str(SCRIPT_ROOT / "scripts" / "metabolize.sh"), str(SCRIPT_ROOT / "scripts" / "heartbeat-loop.sh")],
+    )
+    ap.add_argument(
+        "--sensors-registry",
+        default=str(SENSORS_REGISTRY),
+        help="SENSORS registry (sensors.yaml) — sensor gates the beat derives from it, "
+        "which no longer appear as ${LIMEN_*} literals in the shell sources",
+    )
+    ap.add_argument(
+        "--gate-prefix",
+        default="LIMEN_",
+        help="env-var namespace to derive gates from (tests use a fixture prefix "
+        "so the governed namespace never gains undeclared tokens)",
+    )
     ap.add_argument("--env-file", default=str(Path.home() / ".limen.env"))
     ap.add_argument("--levers", default=str(SCRIPT_ROOT / "his-hand-levers.json"))
     ap.add_argument("--stamp", default=str(ROOT / "logs" / "armed-valve-audit.json"))
@@ -192,6 +246,10 @@ def main(argv=None):
 
     registry = json.loads(Path(args.registry).read_text())
     gates = discover_gates(args.sources, prefix=args.gate_prefix)
+    # Fold in sensor gates the beat DERIVES from the SENSORS registry (they left the shell literals when
+    # metabolize.sh flipped to the derive-runner). Shell-discovered gates win on any overlap.
+    for name, default in discover_registry_gates(args.sensors_registry, prefix=args.gate_prefix).items():
+        gates.setdefault(name, default)
     env = env_view(args.env_file)
     levers_text = lever_citations(args.levers)
 
@@ -211,15 +269,21 @@ def main(argv=None):
     if args.contract:
         unclassified = [r for r in rows if r["verdict"] == "UNCLASSIFIED"]
         if args.check and unclassified:
-            print(f"armed-valve-audit: RED — registry lags the code; {len(unclassified)} "
-                  "unclassified gate(s): " + ", ".join(r["id"] for r in unclassified), file=sys.stderr)
+            print(
+                f"armed-valve-audit: RED — registry lags the code; {len(unclassified)} "
+                "unclassified gate(s): " + ", ".join(r["id"] for r in unclassified),
+                file=sys.stderr,
+            )
             return 1
         return 0
 
     silent = [r for r in rows if r["verdict"] == "SILENT-OFF"]
     if args.check and silent:
-        print(f"armed-valve-audit: RED — {len(silent)} deliverable valve(s) silently off: "
-              + ", ".join(r["id"] for r in silent), file=sys.stderr)
+        print(
+            f"armed-valve-audit: RED — {len(silent)} deliverable valve(s) silently off: "
+            + ", ".join(r["id"] for r in silent),
+            file=sys.stderr,
+        )
         return 1
     return 0
 

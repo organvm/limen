@@ -80,3 +80,25 @@ env -u VALVEFIX_TEST_VALVE python3 "$audit" --check --contract --offline --gate-
   || { echo "FAIL: complete registry failed contract mode (SILENT-OFF must not trip --contract)" >&2; exit 1; }
 
 echo "armed-valve-audit.test: contract cases pass"
+
+# case 7: a sensor gate declared ONLY in the SENSORS registry (sensors.yaml) — NOT in any shell source —
+# must still be audited. This is the regression the metabolize derive-flip introduced: the gate literals
+# left the shell for the registry, and a shell-only audit went blind to ~19 sensor valves.
+cat > "$work/sensors.yaml" <<'YAML'
+sensors:
+  fixture-sensor:
+    gate: VALVEFIX_TEST_SENSORGATE
+    default: "1"
+    source: [metabolize]
+    steps:
+      - command: "true"
+        severity: advisory
+        escalation: "x"
+YAML
+out="$(env -u VALVEFIX_TEST_VALVE python3 "$audit" --offline --json --gate-prefix VALVEFIX_ \
+    --registry "$work/registry.json" --sources "$work/beat.sh" --sensors-registry "$work/sensors.yaml" \
+    --env-file "$work/env-armed" --levers "$work/levers-empty.json" --stamp "$work/stamp.json")"
+grep -q "VALVEFIX_TEST_SENSORGATE" <<<"$out" \
+  || { echo "FAIL: sensor gate declared only in the registry was not audited: $out" >&2; exit 1; }
+
+echo "armed-valve-audit.test: registry-derive case passes"
