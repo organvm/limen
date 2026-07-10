@@ -19,6 +19,9 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "generate-backlog.py"
 
+sys.path.insert(0, str(ROOT / "cli" / "src"))
+from limen.tabularius import drain_once  # noqa: E402
+
 
 def _board(path: Path, repos: list[str], n_open_per_repo: int = 1) -> None:
     tasks = []
@@ -95,6 +98,7 @@ def _run(
 
 
 def _count_generated(path: Path) -> int:
+    drain_once(path)
     doc = yaml.safe_load(path.read_text())
     return sum(1 for t in doc["tasks"] if str(t["id"]).startswith("GEN-"))
 
@@ -164,6 +168,7 @@ def test_spreads_across_distinct_repos(tmp_path: Path):
     p = tmp_path / "tasks.yaml"
     _board(p, [f"o/r{i}" for i in range(20)], n_open_per_repo=1)
     _run(p, "--floor", "100", "--max-new", "12", "--apply")
+    drain_once(p)
     doc = yaml.safe_load(p.read_text())
     gen_repos = [t["repo"] for t in doc["tasks"] if str(t["id"]).startswith("GEN-")]
     assert len(gen_repos) == 12
@@ -184,6 +189,7 @@ def test_value_tier_gate_fail_closed_and_filters(tmp_path: Path):
     p2 = tmp_path / "tasks2.yaml"
     _board(p2, [f"o/r{i}" for i in range(20)], n_open_per_repo=1)
     _run(p2, "--floor", "100", "--max-new", "12", "--apply", value_repos="o/r3")
+    drain_once(p2)
     doc = yaml.safe_load(p2.read_text())
     gen_repos = {t["repo"] for t in doc["tasks"] if str(t["id"]).startswith("GEN-")}
     assert gen_repos == {"o/r3"}, f"gate leaked to non-tier repos: {gen_repos}"

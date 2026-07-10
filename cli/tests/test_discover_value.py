@@ -22,6 +22,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "discover-value.py"
 _THINK = {"codex", "claude", "opencode"}
 
+sys.path.insert(0, str(ROOT / "cli" / "src"))
+from limen.tabularius import drain_once  # noqa: E402
+
 
 def _board(path: Path, busy_repos: list[str]) -> None:
     """A board where `busy_repos` already have an active task (so they're NOT dark)."""
@@ -63,6 +66,7 @@ def _run(path: Path, *args: str, org_repos: str = "", ranked: str = "", headroom
 
 
 def _generated(path: Path) -> list[dict]:
+    drain_once(path)
     doc = yaml.safe_load(path.read_text()) or {}
     return [t for t in doc.get("tasks", []) if str(t["id"]).startswith("DISCOVER-")]
 

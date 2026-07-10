@@ -50,7 +50,15 @@ from typing import Any
 from pydantic import BaseModel
 
 from limen.io import BoardCollapseError, load_limen_file, queue_lock, save_limen_file
-from limen.materialize import EV_BOARD_META, EV_BOARD_ORDER, EV_TASK_UPSERT, Event, fold
+from limen.materialize import (
+    EV_BOARD_META,
+    EV_BOARD_ORDER,
+    EV_TASK_REMOVE,
+    EV_TASK_UPSERT,
+    Event,
+    diff_boards,
+    fold,
+)
 from limen.models import LimenFile, Task
 
 # --- ticket intents (a superset of materialize's Event tags, plus the status convenience) --------
@@ -172,6 +180,37 @@ def submit_task_upsert(
         intent=INTENT_UPSERT,
         task_id=tid,
         patch=fields,
+    )
+    return submit_ticket(board_path, ticket)
+
+
+def submit_task_status(
+    board_path: Path,
+    task_id: str,
+    *,
+    status: str,
+    agent: str,
+    session_id: str = "unknown",
+    output: str | None = None,
+    patch: dict[str, Any] | None = None,
+    now: datetime | None = None,
+) -> Path:
+    """Append a status-transition ticket for an existing task.
+
+    This is the async form for workers that can tolerate the keeper folding the transition on the
+    next beat. Synchronous dispatch/result paths should use ``apply_tickets_sync`` so a reservation
+    is visible before the worker process continues.
+    """
+    now = now or datetime.now(timezone.utc)
+    ticket = Ticket(
+        ticket_id=new_ticket_id(session_id, now),
+        timestamp=now,
+        agent=agent,
+        session_id=session_id,
+        intent=INTENT_STATUS,
+        task_id=task_id,
+        patch=patch,
+        log={"status": status, "output": output},
     )
     return submit_ticket(board_path, ticket)
 
@@ -377,6 +416,123 @@ def _parse_pending(inbox: Path) -> tuple[list[tuple[Path, Ticket]], list[tuple[P
     return good, bad
 
 
+def _ticket_from_event(event: Event, *, agent: str, session_id: str, now: datetime) -> Ticket:
+    etype = str(event.get("type") or "")
+    if etype == EV_BOARD_META:
+        return Ticket(
+            ticket_id=new_ticket_id(session_id, now),
+            timestamp=now,
+            agent=agent,
+            session_id=session_id,
+            intent=INTENT_META,
+            patch=dict(event.get("data") or {}),
+        )
+    if etype == EV_BOARD_ORDER:
+        return Ticket(
+            ticket_id=new_ticket_id(session_id, now),
+            timestamp=now,
+            agent=agent,
+            session_id=session_id,
+            intent=INTENT_ORDER,
+            patch=dict(event.get("data") or {}),
+        )
+    if etype == EV_TASK_UPSERT:
+        return Ticket(
+            ticket_id=new_ticket_id(session_id, now),
+            timestamp=now,
+            agent=agent,
+            session_id=session_id,
+            intent=INTENT_UPSERT,
+            task_id=str(event["task_id"]),
+            patch=dict(event.get("data") or {}),
+        )
+    if etype == EV_TASK_REMOVE:
+        return Ticket(
+            ticket_id=new_ticket_id(session_id, now),
+            timestamp=now,
+            agent=agent,
+            session_id=session_id,
+            intent=INTENT_REMOVE,
+            task_id=str(event["task_id"]),
+        )
+    raise ValueError(f"unknown event type: {etype!r}")
+
+
+def _write_ticket_json(ticket: Ticket, dest_dir: Path) -> Path:
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"{ticket.ticket_id}.json"
+    fd, tmp = tempfile.mkstemp(dir=dest_dir, prefix=f".{ticket.ticket_id}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(ticket.model_dump_json())
+            f.flush()
+            os.fsync(f.fileno())
+        os.link(tmp, dest)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+    return dest
+
+
+def _archive_ticket_objects(board_path: Path, tickets: list[Ticket]) -> None:
+    for ticket in tickets:
+        try:
+            _write_ticket_json(ticket, _archive(board_path))
+        except FileExistsError:
+            pass
+
+
+def _reject_ticket_objects(board_path: Path, rejected: list[tuple[Ticket, str]]) -> None:
+    rejected_dir = _rejected(board_path)
+    rejected_dir.mkdir(parents=True, exist_ok=True)
+    for ticket, reason in rejected:
+        try:
+            _write_ticket_json(ticket, rejected_dir)
+            (rejected_dir / f"{ticket.ticket_id}.json.reason.txt").write_text(reason)
+        except OSError:
+            pass
+
+
+def apply_limen_file_sync(
+    board_path: Path,
+    limen: LimenFile,
+    *,
+    agent: str,
+    session_id: str = "unknown",
+    allow_shrink: bool = False,
+    before: LimenFile | None = None,
+    now: datetime | None = None,
+) -> DrainResult:
+    """Keeper-owned synchronous board seal for legacy callers during the cutover.
+
+    Callers may still compute a full ``LimenFile`` while Step 2.2 burns down, but they no longer
+    write it directly. TABVLARIVS derives ticket-shaped deltas from the current projection to the
+    supplied projection, seals the board through the collapse guard, and archives those tickets as
+    the event receipt. This preserves existing synchronous APIs while removing caller-owned board
+    writes.
+    """
+    board_path = Path(board_path)
+    now = now or datetime.now(timezone.utc)
+    previous = before
+    if previous is None and board_path.exists():
+        previous = load_limen_file(board_path)
+    events = diff_boards(previous, limen)
+    tickets = [_ticket_from_event(event, agent=agent, session_id=session_id, now=now) for event in events]
+    if not tickets:
+        return DrainResult(note="no board change")
+    save_limen_file(board_path, limen, allow_shrink=allow_shrink)
+    _archive_ticket_objects(board_path, tickets)
+    return DrainResult(
+        pending=len(tickets),
+        applied=len(tickets),
+        wrote=True,
+        note="sealed",
+        applied_ids=[ticket.ticket_id for ticket in tickets],
+    )
+
+
 def _apply(ticket: Ticket, tasks: OrderedDict[str, dict[str, Any]], meta: dict[str, Any]) -> None:
     """Fold one ticket onto the in-memory board state (mutates `tasks`/`meta` in place).
 
@@ -441,6 +597,82 @@ def _apply(ticket: Ticket, tasks: OrderedDict[str, dict[str, Any]], meta: dict[s
         return
 
     raise ValueError(f"unknown ticket intent: {ticket.intent!r}")
+
+
+def apply_tickets_sync(
+    board_path: Path,
+    tickets: list[Ticket],
+    *,
+    dry_run: bool = False,
+    lock_timeout: int = 20,
+) -> DrainResult:
+    """Apply an in-memory ticket batch synchronously through the keeper.
+
+    This is for reservation/result paths where the caller must know the board was sealed before it
+    continues. Unlike ``submit_ticket`` + a later beat, this does not leave future reservations in
+    the inbox if the queue lock is busy; it simply defers the whole batch.
+    """
+    board_path = Path(board_path)
+    pending = len(tickets)
+    if pending == 0:
+        return DrainResult(note="empty batch")
+    for ticket in tickets:
+        if ticket.intent not in _INTENTS:
+            raise ValueError(f"unknown ticket intent: {ticket.intent!r}")
+    ordered = sorted(tickets, key=lambda ticket: (ticket.timestamp, ticket.ticket_id))
+    if dry_run:
+        return DrainResult(pending=pending, applied=pending, note=f"dry-run: {pending} applicable")
+
+    with queue_lock(board_path, timeout=lock_timeout) as locked:
+        if not locked:
+            return DrainResult(pending=pending, deferred=True, note="queue lock held; deferred")
+
+        board = load_limen_file(board_path)
+        board_json = board.model_dump(mode="json", exclude_none=True)
+        tasks: OrderedDict[str, dict[str, Any]] = OrderedDict((t["id"], t) for t in board_json.get("tasks", []))
+        meta: dict[str, Any] = {"version": board_json.get("version", "1.0"), "portal": board_json.get("portal")}
+
+        applied: list[Ticket] = []
+        rejected: list[tuple[Ticket, str]] = []
+        for ticket in ordered:
+            try:
+                _apply(ticket, tasks, meta)
+                applied.append(ticket)
+            except Exception as exc:
+                rejected.append((ticket, f"apply failed: {exc}"))
+
+        wrote = False
+        if applied:
+            events: list[Event] = [
+                {"type": EV_BOARD_META, "data": {"version": meta["version"], "portal": meta["portal"]}}
+            ]
+            for tid, fields in tasks.items():
+                events.append({"type": EV_TASK_UPSERT, "task_id": tid, "data": fields})
+            if meta.get("order"):
+                events.append({"type": EV_BOARD_ORDER, "data": {"ids": meta["order"]}})
+            try:
+                new_board = fold(events)
+                save_limen_file(board_path, new_board)
+                wrote = True
+            except BoardCollapseError as exc:
+                rejected.extend((ticket, f"batch rejected by collapse-guard: {exc}") for ticket in applied)
+                applied = []
+            except Exception as exc:
+                rejected.extend((ticket, f"batch rejected by board validation: {exc}") for ticket in applied)
+                applied = []
+
+        _archive_ticket_objects(board_path, applied)
+        _reject_ticket_objects(board_path, rejected)
+
+    return DrainResult(
+        pending=pending,
+        applied=len(applied),
+        rejected=len(rejected),
+        wrote=wrote,
+        note=("sealed" if wrote else "no board change"),
+        applied_ids=[ticket.ticket_id for ticket in applied],
+        rejected_ids=[ticket.ticket_id for ticket, _ in rejected],
+    )
 
 
 def _move(paths: list[Path], dest_dir: Path) -> None:

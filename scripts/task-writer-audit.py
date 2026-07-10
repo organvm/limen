@@ -27,6 +27,10 @@ ALLOWED_DIRECT_WRITERS = {
 }
 BOARD_NAME_HINTS = {"board", "tasks", "tasks_file", "tasks_yaml"}
 BOARD_SOURCE_HINTS = {"LIMEN_TASKS", "tasks.yaml"}
+GENERIC_PATH_NAMES = {"path", "p"}
+ALLOWED_NON_BOARD_SAVES = {
+    ("cli/src/limen/cli.py", "out"),  # `limen channels --emit` writes a filtered board artifact.
+}
 
 OWNER_PACKETS = {
     "TAB-STATUS-DISPATCH-RESULTS": {
@@ -123,7 +127,10 @@ def board_path_names(tree: ast.AST) -> set[str]:
         if value is None or not source_hint(value):
             continue
         for target in targets:
-            names.update(assigned_names(target))
+            for name in assigned_names(target):
+                if name.lower() in GENERIC_PATH_NAMES:
+                    continue
+                names.add(name)
     return names
 
 
@@ -152,9 +159,12 @@ def direct_writer_calls(path: Path) -> list[dict[str, object]]:
         if not isinstance(node, ast.Call):
             continue
         name = call_name(node.func)
-        if name in {"save_limen_file", "atomic_write_text"} and node.args and looks_like_board_arg(
-            node.args[0], names
-        ):
+        if name == "save_limen_file" and node.args:
+            arg = ast.unparse(node.args[0])
+            if (rel(path), arg) not in ALLOWED_NON_BOARD_SAVES:
+                rows.append({"path": rel(path), "line": getattr(node, "lineno", None), "call": name})
+            continue
+        if name == "atomic_write_text" and node.args and looks_like_board_arg(node.args[0], names):
             rows.append({"path": rel(path), "line": getattr(node, "lineno", None), "call": name})
             continue
         if name.endswith(".write_text") and isinstance(node.func, ast.Attribute):
@@ -170,11 +180,26 @@ def owner_packet(path: str) -> str:
         return "TAB-STATUS-HARVEST-RESULTS"
     if path in {"scripts/dispatch-async.py", "scripts/heal-dispatch.py"}:
         return "TAB-STATUS-ASYNC-HEAL"
-    if path in {"scripts/quicken.py", "scripts/rewrite-owners.py", "scripts/route.py", "scripts/self-improve.py"}:
+    if path in {
+        "scripts/quicken.py",
+        "scripts/rewrite-owners.py",
+        "scripts/route.py",
+        "scripts/self-improve.py",
+        "scripts/rebalance.py",
+        "scripts/reclassify-needs-human.py",
+    }:
         return "TAB-ROUTE-RESIDUE-MUTATORS"
-    if path in {"scripts/mine-backlog.py", "scripts/self-heal.py"}:
+    if path in {
+        "scripts/discover-value.py",
+        "scripts/generate-backlog.py",
+        "scripts/generate-organ-backlog.py",
+        "scripts/generate-revenue-backlog.py",
+        "scripts/ingest-backlog.py",
+        "scripts/mine-backlog.py",
+        "scripts/self-heal.py",
+    }:
         return "TAB-CREATION-FALLBACKS"
-    if path in {"cli/src/limen/cli.py", "scripts/heal-board.py", "scripts/usage-telemetry.py"}:
+    if path in {"cli/src/limen/cli.py", "scripts/heal-board.py", "scripts/recover.py", "scripts/usage-telemetry.py"}:
         return "TAB-MAINTENANCE-BOARD-FALLBACKS"
     return "TAB-UNCLASSIFIED-WRITER"
 

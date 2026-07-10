@@ -31,7 +31,8 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parent.parent))
 
@@ -180,7 +181,7 @@ def main() -> int:
     if not changed:
         print("\n(nothing to flip after fresh re-read — already applied.)")
         return 0
-    save_limen_file(path, fresh)
+    apply_limen_file_sync(path, fresh, agent="reclassify-needs-human", session_id="reclassify")
     print(f"\napplied: flipped {changed} tasks needs_human->open -> {path} (route+dispatch separately).")
     return 0
 

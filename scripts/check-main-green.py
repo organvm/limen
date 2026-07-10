@@ -13,9 +13,9 @@ trunk-health proxy for pr-gate. This sensor reads it (`gh run list --workflow ci
 - **DETECT (always on):** on a RED verdict it exits non-zero so the beat surfaces ``↑ main trunk RED``
   — closing the silence gap. Verdict is cached (throttled `gh`) so it surfaces every beat cheaply.
 - **HEAL (dark until armed, ``LIMEN_MAIN_GREEN_APPLY=1``):** emit ONE idempotent
-  ``HEAL-mainred-organvm-limen-<sha>`` task via the daemon's queue-lock (the same safe shared-append
-  path self-heal.py uses) — a single canonical task all lanes converge on, closing the duplicate-work
-  gap. Observable-before-autonomous: detection ships armed, emission ships dark.
+  ``HEAL-mainred-organvm-limen-<sha>`` task via the daemon's queue-lock and TABVLARIVS-owned seal
+  path — a single canonical task all lanes converge on, closing the duplicate-work gap.
+  Observable-before-autonomous: detection ships armed, emission ships dark.
 
 - **BLAST RADIUS + WEDGE (integrated from PR #882):** the ci.yml verdict says WHETHER trunk is red;
   a scan of open PRs says HOW MANY fresh PRs it is actually blocking and on which required check
@@ -42,8 +42,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.models import Task  # noqa: E402
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 LOCKD = ROOT / "logs" / ".queue.lock.d"
@@ -260,7 +261,7 @@ def _emit_heal_task(head_sha: str, url: str, tasks_path: Path, impact_note: str 
                 dispatch_log=[],
             )
         )
-        save_limen_file(tasks_path, lf)
+        apply_limen_file_sync(tasks_path, lf, agent="check-main-green", session_id="main-green-heal")
         return tid
     finally:
         try:

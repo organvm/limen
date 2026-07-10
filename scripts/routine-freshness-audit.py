@@ -191,8 +191,9 @@ def hang_down_atoms(down_rows: list[dict]) -> dict:
         from datetime import datetime as _datetime
         from datetime import timezone as _tz
 
-        from limen.io import load_limen_file, queue_lock, save_limen_file
+        from limen.io import load_limen_file, queue_lock
         from limen.models import Task
+        from limen.tabularius import apply_limen_file_sync
     except Exception as e:
         res["error"] = f"ledger unavailable ({e}); atoms not hung"
         return res
@@ -265,7 +266,7 @@ def hang_down_atoms(down_rows: list[dict]) -> dict:
                 res["created"].append(tid)
 
         if changed:
-            save_limen_file(LEDGER, lf)
+            apply_limen_file_sync(LEDGER, lf, agent="routine-freshness", session_id="routine-ask")
 
     return res
 

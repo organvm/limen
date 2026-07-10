@@ -37,8 +37,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.dispatch import _restore_done_status  # noqa: E402
-from limen.io import atomic_write_text, load_limen_file, queue_lock, save_limen_file  # noqa: E402
+from limen.io import load_limen_file, queue_lock, restore_limen_text  # noqa: E402
 from limen.models import DispatchLogEntry, Task  # noqa: E402
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 BOARD = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
@@ -187,7 +188,7 @@ def repair_lifecycle(*, check: bool, dry_run: bool) -> int:
         fresh = load_limen_file(BOARD)
         reopened, reconciled = _apply_lifecycle_repairs(fresh.tasks, now)
         if reopened or reconciled:
-            save_limen_file(BOARD, fresh)
+            apply_limen_file_sync(BOARD, fresh, agent="heal-board", session_id="lifecycle-repair")
     cleared = sum(_clear_async_markers(task_id) for task_id in reopened)
     parts = []
     if reopened:
@@ -248,7 +249,7 @@ def main(argv: list[str] | None = None) -> int:
             preserved.write_text(BOARD.read_text(errors="ignore"))
     except OSError:
         pass
-    atomic_write_text(BOARD, snap)
+    restore_limen_text(BOARD, snap)
     print(f"heal-board: RESTORED {BOARD.name} from HEAD — {s_total} tasks ({s_active} active); "
           f"collapsed board preserved to {preserved.relative_to(ROOT)}")
     return 0

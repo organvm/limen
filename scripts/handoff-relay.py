@@ -14,7 +14,6 @@ the single next action. ``session-orient`` injects it at SessionStart.
 
 Fail-open and beat-safe: a missing source degrades a field to null, never crashes the beat.
 """
-
 from __future__ import annotations
 
 import argparse

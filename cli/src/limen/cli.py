@@ -15,7 +15,7 @@ from limen.doctor import (
 )
 from limen.dispatch import dispatch_tasks, release_stale_tasks
 from limen.harvest import harvest_results
-from limen.io import load_limen_file, load_limen_text
+from limen.io import load_limen_file, load_limen_text, write_initial_limen_text
 from limen.status import print_status
 
 
@@ -83,7 +83,7 @@ portal:
       per_agent: {{}}
 tasks: []
 """
-    tasks_file.write_text(content)
+    write_initial_limen_text(tasks_file, content)
     click.echo(f"Created {tasks_file} with daily budget of {budget}")
     ag = target / "AGENTS.md"
     if not ag.exists():

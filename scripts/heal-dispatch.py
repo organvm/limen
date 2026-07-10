@@ -25,8 +25,9 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.models import DispatchLogEntry  # noqa: E402
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 LOCKD = ROOT / "logs" / ".queue.lock.d"
@@ -144,7 +145,7 @@ def main():
         for i in escalated:
             print(f"    escalate: {i}")
         if args.apply:
-            save_limen_file(path, lf)
+            apply_limen_file_sync(path, lf, agent="heal-dispatch", session_id="heal-dispatch")
             print("  APPLIED -> tasks.yaml")
         else:
             print("  dry-run (pass --apply)")

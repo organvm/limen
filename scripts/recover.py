@@ -20,9 +20,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.models import DispatchLogEntry  # noqa: E402
 from limen.dispatch import _has_done_transition, _restore_done_status  # noqa: E402
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 
 CASCADE_TOP = "codex"
 NOOP_RECOVERY_ESCALATION_THRESHOLD = 2
@@ -167,7 +168,7 @@ def main() -> int:
         f"{len(escalated_noop)} repeated-noop escalated"
     )
     if args.apply:
-        save_limen_file(path, lf)
+        apply_limen_file_sync(path, lf, agent="recover", session_id="recover")
         print("  APPLIED -> tasks.yaml")
     else:
         print("  dry-run (pass --apply)")

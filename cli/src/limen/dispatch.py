@@ -26,8 +26,9 @@ from limen.capacity import (
     ollama_model,
     select_lanes,
 )
-from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
+from limen.io import load_limen_file, queue_lock as _queue_lock
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
+from limen.tabularius import apply_limen_file_sync
 from limen.doctor import stale_tasks
 from limen.model_selection import (  # the shared model vocabulary — also used by the non-bypassable `claude` shim
     _CLAUDE_TIER_ORDER,
@@ -2754,7 +2755,7 @@ def _commit_dispatch_results(
             ft = fid.get(tid)
             if ft is not None:
                 _apply_result(ft, agent, res, now, ftrack)
-        save_limen_file(tasks_path, fresh)
+        apply_limen_file_sync(tasks_path, fresh, agent="dispatch", session_id="serial-results")
 
 
 def dispatch_tasks(
@@ -3310,10 +3311,10 @@ def dispatch_parallel(
         )
         if not picked:
             if reset:
-                save_limen_file(tasks_path, fresh)
+                apply_limen_file_sync(tasks_path, fresh, agent="dispatch-parallel", session_id="reserve-reset")
             print(f"── PARALLEL: nothing to dispatch for {agents} within budget")
             return
-        save_limen_file(tasks_path, fresh)  # reserve commit (atomic vs supervisor writes)
+        apply_limen_file_sync(tasks_path, fresh, agent="dispatch-parallel", session_id="reserve")
         limen = fresh
 
     # ── RUN: concurrent agent executions (worktree→PR / jules), no tasks.yaml access here
@@ -3369,7 +3370,7 @@ def dispatch_parallel(
                 n_pr += 1
             else:
                 n_fail += 1
-        save_limen_file(tasks_path, fresh)
+        apply_limen_file_sync(tasks_path, fresh, agent="dispatch-parallel", session_id="results")
     print(
         f"── PARALLEL done: {len(results)} ran · {n_pr} dispatched/PR · {n_noop} no-op · "
         f"{n_fail} failed→cascade · {n_blocked} blocked · {n_rl} rate-limited · {n_to} timeout→jules"
@@ -3453,7 +3454,7 @@ def release_stale_tasks(
                     )
                 )
                 released.append(task.id)
-            save_limen_file(tasks_path, fresh)
+            apply_limen_file_sync(tasks_path, fresh, agent="release-stale", session_id="release-stale")
     else:
         for task in candidates:
             print(f"  {task.id} {task.status} {task.target_agent} — {task.title}")

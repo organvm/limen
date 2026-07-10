@@ -44,8 +44,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling scripts/ for _pr_scan
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.models import Task  # noqa: E402
+from limen.tabularius import pending_task_ids, submit_task_upsert  # noqa: E402
 from _pr_scan import enumerate_open_prs, rotating_window, scaled_limit, stale_base_verdict  # noqa: E402
 
 # DERIVED from env so the conductor survives relocation; same defaults as merge-drain.py.
@@ -295,29 +296,17 @@ def main():
             print("| (none — every sick PR already has an open heal task) |  |  |  |")
         return 0
 
-    # LIVE: acquire the daemon's queue-lock, RELOAD fresh under it, dedupe by stable id, append
-    # validated Task objects, save atomically. This is the ONLY safe shared-append path.
-    if not acquire_lock():
-        print("[self-heal] queue lock held by daemon — skipping this pass (retry next tick)")
-        return 0
-    try:
-        lf = load_limen_file(tasks_path)
-        existing = {t.id for t in lf.tasks}
-        emitted = []
-        for verdict, repo, num, url in sick:
-            tid = task_id(KINDS[verdict]["slug"], repo, num)
-            if tid in existing:
-                continue
-            existing.add(tid)
-            lf.tasks.append(build_task(verdict, repo, num, url, stamp))
-            emitted.append(tid)
-        if emitted:
-            save_limen_file(tasks_path, lf)
-    finally:
-        try:
-            LOCKD.rmdir()
-        except OSError:
-            pass
+    lf = load_limen_file(tasks_path)
+    existing = {t.id for t in lf.tasks} | pending_task_ids(tasks_path)
+    emitted = []
+    session_id = os.environ.get("LIMEN_SESSION_ID", "self-heal")
+    for verdict, repo, num, url in sick:
+        tid = task_id(KINDS[verdict]["slug"], repo, num)
+        if tid in existing:
+            continue
+        existing.add(tid)
+        submit_task_upsert(tasks_path, build_task(verdict, repo, num, url, stamp), agent="self-heal", session_id=session_id)
+        emitted.append(tid)
 
     ts = datetime.datetime.now().strftime("%F %T")
     summary = (f"[self-heal] {ts} window={len(prs)}/{len(allprs)} ready={b['READY']} ci-red={b['CI-RED']} "

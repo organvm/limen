@@ -3,8 +3,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from limen.io import save_limen_file
 from limen.models import LimenFile, DispatchLogEntry
+from limen.tabularius import apply_limen_file_sync
 
 
 def _get_jules_sessions(harvest_dir: Path) -> dict[str, str]:
@@ -160,7 +160,7 @@ def harvest_results(
         updated.extend(check_jules_harvest(limen, harvest_dir))
 
     if updated:
-        save_limen_file(tasks_path, limen)
+        apply_limen_file_sync(tasks_path, limen, agent=agent or "harvest", session_id="harvest")
         print(f"Harvested {len(updated)} task(s): {', '.join(updated)}")
     else:
         print("No completed tasks to harvest")
