@@ -1228,6 +1228,37 @@ parameters:
     self_update: none
     owner: heal
     note: "How many PRs the factory classifies per beat (a rotating window over the full fleet), so each beat does a bounded slice rather than the whole backlog at once."
+  # --- TRUNK-CI HEALTH (heal voice): alarm when the PR queue is wedged on a red required check ---
+  LIMEN_TRUNK_CI_APPLY:
+    default: "0"                 # 0=probe+state only (DARK); 1=arm the self-owned issue mirror
+    env: LIMEN_TRUNK_CI_APPLY
+    self_update: none
+    owner: heal
+    note: "Arm the trunk-ci-health issue mirror. Default 0 (observable-before-autonomous, like LIMEN_CENSOR_ISSUES_APPLY): the probe + logs/trunk-ci-health.json always run in the HEAL beat; only at 1 does it open/close the self-owned <!-- trunk-ci-alarm --> issue when a required check is wedged across FRESH PRs."
+  LIMEN_TRUNK_CI_WEDGE_K:
+    default: 5                   # >= K fresh PRs sharing one failing required check = trunk-red fingerprint
+    env: LIMEN_TRUNK_CI_WEDGE_K
+    self_update: none
+    owner: heal
+    note: "Wedge threshold: the minimum number of FRESH open PRs that must share a single failing REQUIRED check before trunk-ci-health declares the queue wedged (the trunk-red fingerprint vs N independent PR problems)."
+  LIMEN_TRUNK_CI_FRESH_HOURS:
+    default: 36                  # only PRs updated within this window count (excludes chronic stale backlog)
+    env: LIMEN_TRUNK_CI_FRESH_HOURS
+    self_update: none
+    owner: heal
+    note: "Freshness window (h) for the wedge count: a pile of stale fleet PRs each failing pr-gate on its own stale base is chronic backlog, not an acute trunk break — only recently-updated PRs count."
+  LIMEN_TRUNK_CI_TIMEOUT:
+    default: 90                  # seconds: cap the gh-probing run inside the HEAL beat
+    env: LIMEN_TRUNK_CI_TIMEOUT
+    self_update: none
+    owner: heal
+    note: "Hard timeout (s) for trunk-ci-health.py inside the HEAL beat so a slow gh enumeration never wedges the heartbeat (fail-open like the sibling self-heal timeout)."
+  LIMEN_TRUNK_CI_REPO:
+    default: "organvm/limen"     # the repo whose trunk + PR queue is monitored
+    env: LIMEN_TRUNK_CI_REPO
+    self_update: none
+    owner: heal
+    note: "The repo trunk-ci-health monitors (branch protection + open-PR check rollup). Parameterized so the same sensor can watch another repo's trunk without code changes."
   # --- LANE FLOORS (route proactive fill): ensure every healthy lane gets a daily minimum ---
   LIMEN_LANE_FLOORS:
     default: "1"                 # 1=enabled (under-floor lanes get a 0.5× load boost in _pick_local); 0=disabled

@@ -465,6 +465,12 @@ while true; do
                       # fail-open. Redirects existing budgeted dispatch from receipt-churn to real PR repair; off with
                       # LIMEN_SELF_HEAL=0.
                       [ "${LIMEN_SELF_HEAL:-1}" = "1" ] && timeout "${LIMEN_SELF_HEAL_TIMEOUT:-150}" python3 "$LIMEN_ROOT/scripts/self-heal.py" --scan "${LIMEN_SELF_HEAL_SCAN:-30}" 2>&1 | tail -1 || true; }
+  # TRUNK-CI HEALTH — the wedge sensor self-heal is blind to: when a cluster of FRESH PRs share one
+  # failing REQUIRED check, the base (trunk) is red, not N independent PRs (the 2026-07-10 silent
+  # queue-wedge). Probe-only + state file by default; the auto-issue mirror is DARK until
+  # LIMEN_TRUNK_CI_APPLY=1 (observable-before-autonomous). Timeout-wrapped, fail-open.
+  due_voice heal "$C_HEAL" && { TRUNK_CI_ARG=""; [ "${LIMEN_TRUNK_CI_APPLY:-0}" = "1" ] && TRUNK_CI_ARG="--apply"
+                      timeout "${LIMEN_TRUNK_CI_TIMEOUT:-90}" python3 "$LIMEN_ROOT/scripts/trunk-ci-health.py" $TRUNK_CI_ARG 2>&1 | tail -1 || true; }
   due_voice heal "$C_HEAL"    && stamp heal
   # DISK PRESSURE — when the data volume is past high-water, run hygiene (clone-maintenance:
   # capture→reap→node_modules) EVERY beat, not just every C_HYGIENE, until it drains back under
