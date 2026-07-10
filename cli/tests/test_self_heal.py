@@ -16,6 +16,8 @@ from pathlib import Path
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from limen.tabularius import drain_once  # noqa: E402
+
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "self-heal.py"
 
 
@@ -30,6 +32,11 @@ def _load(tmp_path, monkeypatch):
 
 def _board(path):
     path.write_text(yaml.safe_dump({"version": "1.0", "portal": {"name": "t"}, "tasks": []}, sort_keys=False))
+
+
+def _doc(path):
+    drain_once(path)
+    return yaml.safe_load(path.read_text())
 
 
 # canned PR universe: one CI-RED, one CONFLICT, one READY, one CI-PENDING.
@@ -95,7 +102,7 @@ def test_classifies_and_emits_cifix_and_rebase(tmp_path, monkeypatch):
     _board(p)
     rc = _run(m, monkeypatch, p)
     assert rc == 0
-    doc = yaml.safe_load(p.read_text())
+    doc = _doc(p)
     ids = {t["id"] for t in doc["tasks"]}
     # CI-RED PR → cifix task ; CONFLICT PR → rebase task ; READY/PENDING → nothing.
     assert "HEAL-cifix-organvm-exporter-54" in ids
@@ -136,9 +143,9 @@ def test_idempotent_no_duplicate_on_rerun(tmp_path, monkeypatch):
     p = tmp_path / "tasks.yaml"
     _board(p)
     _run(m, monkeypatch, p)
-    first = len(yaml.safe_load(p.read_text())["tasks"])
+    first = len(_doc(p)["tasks"])
     _run(m, monkeypatch, p)  # second pass, same sick PRs
-    second = len(yaml.safe_load(p.read_text())["tasks"])
+    second = len(_doc(p)["tasks"])
     assert first == second == 2, "re-running must not emit duplicate heal tasks"
 
 
@@ -147,7 +154,7 @@ def test_respects_limit_cap(tmp_path, monkeypatch):
     p = tmp_path / "tasks.yaml"
     _board(p)
     _run(m, monkeypatch, p, "--limit", "1")
-    assert len(yaml.safe_load(p.read_text())["tasks"]) == 1, "must emit at most --limit tasks"
+    assert len(_doc(p)["tasks"]) == 1, "must emit at most --limit tasks"
 
 
 def test_explicit_pr_bypasses_rotating_search_window(tmp_path, monkeypatch):
@@ -164,7 +171,7 @@ def test_explicit_pr_bypasses_rotating_search_window(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["self-heal", "--tasks", str(p), "--pr", "organvm/scale#6"])
 
     assert m.main() == 0
-    ids = {t["id"] for t in yaml.safe_load(p.read_text())["tasks"]}
+    ids = {t["id"] for t in _doc(p)["tasks"]}
     assert ids == {"HEAL-rebase-organvm-scale-6"}
 
 
@@ -193,7 +200,7 @@ def test_conflict_wins_over_stale_failing_checks(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["self-heal", "--tasks", str(p), "--pr", "organvm/domus-genoma#185"])
 
     assert m.main() == 0
-    ids = {t["id"] for t in yaml.safe_load(p.read_text())["tasks"]}
+    ids = {t["id"] for t in _doc(p)["tasks"]}
     assert ids == {"HEAL-rebase-organvm-domus-genoma-185"}
 
 
@@ -243,7 +250,7 @@ def test_stale_core_pr_emits_rebase_not_merged(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "gh", _fake_gh_stale)
     monkeypatch.setattr(sys, "argv", ["self-heal", "--tasks", str(p)])
     assert m.main() == 0
-    doc = yaml.safe_load(p.read_text())
+    doc = _doc(p)
     ids = {t["id"] for t in doc["tasks"]}
     assert ids == {"HEAL-rebase-stale-organvm-limen-11"}, "stale-core PR → one rebase-stale heal task"
     t = doc["tasks"][0]
