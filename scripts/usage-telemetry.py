@@ -124,7 +124,7 @@ def _census_vendor_limits():
 _FALLBACK_VENDOR_LIMITS = {
     "codex":    {"limit": 100_000_000, "unit": "tokens", "window": "5h rolling", "source": "ESTIMATE - tune to plan (/status)", "trust": "estimate", "pool": "openai-plan"},
     "claude":   {"limit": 100_000_000, "unit": "tokens", "window": "5h rolling", "source": "ESTIMATE - tune to plan (/status)", "trust": "estimate", "pool": "claude-plan"},
-    "opencode": {"limit": 100,        "unit": "runs",   "window": "today",      "source": "operator board cap until live vendor meter", "trust": "calibrated"},
+    "opencode": {"limit": 100,        "unit": "runs",   "window": "today",      "source": "operator board cap until live vendor meter", "trust": "calibrated", "pool": "opencode-plan"},
     "agy":      {"limit": 100,        "unit": "runs",   "window": "today",      "source": "operator board cap until live vendor meter", "trust": "calibrated"},
     "gemini":   {"limit": 10,         "unit": "runs",   "window": "24h",        "source": "operator board cap until live vendor meter", "trust": "calibrated"},
     "jules":    {"limit": 100,        "unit": "runs",   "window": "24h",        "source": "known hard cap",                 "trust": "measured"},
