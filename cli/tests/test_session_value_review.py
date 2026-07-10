@@ -274,6 +274,7 @@ def test_session_value_gate_switches_after_repeated_high_motion_without_receipts
         "python3 scripts/resolve-codex-family-batch.py prompt-batch-medium-family-015 --write"
     ]
 
+
 def test_session_value_gate_routes_hash_review_to_hash_resolver():
     review = _load()
     snapshot = {
