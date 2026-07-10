@@ -2252,3 +2252,135 @@ def test_qa_report_derives_lifecycle_without_mutation_or_private_fields(tmp_path
     assert mechanisms["assign-next"]["command"] == "POST /api/tasks/{task_id}/assign"
     assert mechanisms["archive-done"]["command"] == "POST /api/tasks/{task_id}/archive"
     assert tasks_path.read_text() == before
+
+
+# ── opencode model tiering (free floor / subscription rung) ──────────────────────────────────
+# The opencode lane is multi-model: a free floor (anonymous gateway models, always reachable) + the
+# opencode Zen SUBSCRIPTION rung. The tier is DERIVED from the task's classes against the declared
+# census ladder (dispatch._vendor_tier_for) and resolved to a live model that FAILS OPEN to the free
+# floor (so the lane never blocks when the subscription isn't authed). These mirror test_claude_tier.
+
+# The VERIFIED unauthed `opencode models` list — all free (big-pickle via the seeded free-set).
+_OC_MODELS = [
+    "opencode/big-pickle",
+    "opencode/deepseek-v4-flash-free",
+    "opencode/hy3-free",
+    "opencode/mimo-v2.5-free",
+    "opencode/nemotron-3-ultra-free",
+    "opencode/north-mini-code-free",
+]
+
+
+def _oc_task(type_="code", labels=None, opencode_tier=None):
+    return Task(
+        id="OC1", title="t", target_agent="opencode", type=type_,
+        labels=labels or [], opencode_tier=opencode_tier, created=date(2026, 7, 10),
+    )
+
+
+@pytest.fixture
+def _oc(monkeypatch, tmp_path):
+    """Clean opencode tiering env + an empty LIMEN_ROOT (no ledger → no waste-class escalation), so
+    tier derivation is deterministic from the declared ladder alone. Mocks the live model list."""
+    for k in (
+        "LIMEN_OPENCODE_MODEL", "LIMEN_OPENCODE_TIER_SELECT", "LIMEN_OPENCODE_SUB_MODEL",
+        "LIMEN_OPENCODE_FREE_MODEL", "LIMEN_OPENCODE_SUB_CLASSES", "LIMEN_OPENCODE_FREE_SET",
+        "LIMEN_OPENCODE_MODEL_FALLBACK", "LIMEN_OPENCODE_BIN",
+    ):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setattr(D, "_opencode_list_models", lambda: list(_OC_MODELS))
+    return monkeypatch
+
+
+def test_opencode_classification_robust_to_big_pickle(_oc):
+    # every "-free" model classifies free; the un-suffixed anomaly (big-pickle) is caught by the
+    # seeded free-set, so the "-free" substring is never the SOLE classifier.
+    assert all(D._opencode_is_free(m) for m in _OC_MODELS if "-free" in m)
+    assert D._opencode_is_free("opencode/big-pickle") is True
+    assert D._opencode_is_free("anthropic/claude-sonnet-4-5") is False  # a subscription model
+    # the operator can redefine the free-set (dropping the seed) via env.
+    _oc.setenv("LIMEN_OPENCODE_FREE_SET", "opencode/other")
+    assert D._opencode_is_free("opencode/big-pickle") is False
+
+
+def test_opencode_pick_prefers_code_basename_not_provider_prefix(_oc):
+    # the provider prefix "opencode/" contains the substring "code"; the code-preference must match
+    # the model BASENAME, else every model matches at index 0.
+    assert D._opencode_pick_in_tier(_OC_MODELS, want_free=True) == "opencode/north-mini-code-free"
+    assert D._opencode_pick_in_tier(_OC_MODELS, want_free=False) is None  # no subscription model here
+
+
+def test_opencode_free_floor_is_default_for_verifiable_class(_oc):
+    assert D._vendor_tier_for("opencode", _oc_task(type_="code")) == "free"
+    assert D._opencode_model(_oc_task(type_="code")) == "opencode/north-mini-code-free"
+
+
+def test_opencode_sub_rung_reserved_by_class(_oc):
+    assert D._vendor_tier_for("opencode", _oc_task(labels=["deploy"])) == "sub"
+    assert D._vendor_tier_for("opencode", _oc_task(labels=["cloudflare"])) == "sub"
+
+
+def test_opencode_sub_classes_env_override_replaces_reserve(_oc):
+    _oc.setenv("LIMEN_OPENCODE_SUB_CLASSES", "migration")
+    assert D._vendor_tier_for("opencode", _oc_task(labels=["migration"])) == "sub"
+    assert D._vendor_tier_for("opencode", _oc_task(labels=["deploy"])) == "free"  # replaced, not added
+
+
+def test_opencode_sub_degrades_to_free_when_rung_empty(_oc):
+    # tier resolves 'sub' but only free models are enumerated (auth.json absent) → free floor, never
+    # None/blocked. The key fail-open-to-floor path (no Claude analogue).
+    assert D._vendor_tier_for("opencode", _oc_task(labels=["deploy"])) == "sub"
+    assert D._opencode_model(_oc_task(labels=["deploy"])) == "opencode/north-mini-code-free"
+
+
+def test_opencode_sub_selected_when_subscription_present(_oc):
+    _oc.setattr(D, "_opencode_list_models", lambda: _OC_MODELS + ["opencode/zen-code-pro", "anthropic/claude-x"])
+    # a sub-class task takes the code-specialized subscription model over a non-code one.
+    assert D._opencode_model(_oc_task(labels=["deploy"])) == "opencode/zen-code-pro"
+
+
+def test_opencode_hard_pin_wins(_oc):
+    _oc.setenv("LIMEN_OPENCODE_MODEL", "opencode/HARD-PIN")
+    assert D._opencode_model(_oc_task(labels=["deploy"])) == "opencode/HARD-PIN"
+
+
+def test_opencode_per_rung_env_pins(_oc):
+    _oc.setenv("LIMEN_OPENCODE_SUB_MODEL", "opencode/sub-pin")
+    _oc.setenv("LIMEN_OPENCODE_FREE_MODEL", "opencode/free-pin")
+    assert D._opencode_model(_oc_task(labels=["deploy"])) == "opencode/sub-pin"   # sub rung
+    assert D._opencode_model(_oc_task(type_="code")) == "opencode/free-pin"        # free floor
+
+
+def test_opencode_per_task_pin_overrides_class(_oc):
+    assert D._vendor_tier_for("opencode", _oc_task(type_="code", opencode_tier="sub")) == "sub"
+
+
+def test_opencode_retry_breadcrumb_bumps_one_rung(_oc):
+    # a prior failed attempt on this lane (tried:opencode) bumps the free floor up one rung.
+    assert D._vendor_tier_for("opencode", _oc_task(type_="code", labels=["tried:opencode"])) == "sub"
+
+
+def test_opencode_feature_flag_off_is_legacy_free_first(_oc):
+    _oc.setenv("LIMEN_OPENCODE_TIER_SELECT", "0")
+    # legacy path ignores the class → always a free model, even for a sub-reserved class.
+    assert D._opencode_model(_oc_task(labels=["deploy"])) == "opencode/north-mini-code-free"
+
+
+def test_opencode_fail_open_on_empty_query(_oc):
+    _oc.setattr(D, "_opencode_list_models", lambda: [])
+    assert D._opencode_model(_oc_task()) == "opencode/north-mini-code-free"  # env-overridable fallback
+    _oc.setenv("LIMEN_OPENCODE_MODEL_FALLBACK", "opencode/custom-fallback")
+    assert D._opencode_model(_oc_task()) == "opencode/custom-fallback"
+
+
+def test_agent_argv_threads_task_into_opencode_model(_oc):
+    _oc.setattr(D, "_opencode_list_models", lambda: _OC_MODELS + ["opencode/zen-code-pro"])
+    argv = D._agent_argv("opencode", _oc_task(labels=["deploy"]))
+    assert argv[:1] == ["run"]
+    assert "-m" in argv and argv[argv.index("-m") + 1] == "opencode/zen-code-pro"
+
+
+def test_vendor_tier_for_returns_none_without_declared_ladder(_oc):
+    # a lane with no census `tiers` ladder (e.g. gemini) has its choice owned elsewhere → None.
+    assert D._vendor_tier_for("gemini", _oc_task()) is None

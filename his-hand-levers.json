@@ -451,6 +451,15 @@
       "unlocks": "required-check protection on the governed repos; the GITVS branch_protection resource (class A/G) goes green",
       "source_task": "GITVS estate (institutio/github/estate.yaml branch_protection) + #257",
       "issue": 257
+    },
+    {
+      "id": "L-OPENCODE-SUB-AUTH",
+      "label": "Log opencode into the Zen SUBSCRIPTION once on this host: run `opencode auth login` (interactive OAuth) so ~/.local/share/opencode/auth.json is written and `opencode models` enumerates the subscription models. The opencode lane's tier ladder (census Vendor.tiers free|sub -> dispatch._vendor_tier_for / _opencode_model) already routes the deploy/cloudflare specialty + ledger-waste classes to the `sub` rung — but until auth.json exists that rung DEGRADES to the free floor (fail-open; the lane never blocks, it just runs free-only). No fleet code can perform an interactive vendor OAuth, so this is the one irreducible atom. Durability follow-on (NOT blocking): once auth.json exists, capture it into op:// + a creds-hydrate `file` sink so it survives a host rebuild.",
+      "owner": "yours",
+      "cost": "~2 min, interactive OAuth (a vendor mint the organ cannot perform); REVERSIBLE via `opencode auth logout`",
+      "unlocks": "the opencode subscription (Zen) models on the `sub` tier — the paid rung the tier ladder already routes to; the lane stops silently running free-only",
+      "source_task": "opencode multi-model tier ladder (feat/opencode-tier-ladder, 2026-07-10)",
+      "issue": 928
     }
   ]
 }

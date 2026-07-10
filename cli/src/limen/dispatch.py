@@ -1457,34 +1457,154 @@ def _call_warp_oz(agent: str, task: Task, dry_run: bool) -> bool | str:
 #   - opencode/agy: edit by default in run/-p mode (verified READY headless).
 #   - gemini: requires GEMINI_API_KEY / settings.json auth (not configured;
 #     lane is wired but will fail until auth is set).
-def _opencode_model() -> str:
-    """Resolve the opencode lane model by DERIVING it from `opencode models`, never by
-    pinning a model name ("names are outputs, not inputs"). Order:
-      1. explicit LIMEN_OPENCODE_MODEL override (an input only by deliberate choice);
-      2. query the models the account actually exposes → pick a PAID one if authed
-         (opencode auth login wrote a credential), else a free coding model. Self-tunes
-         to whatever exists today and survives any model rename — nothing pinned.
-      3. last-resort ONLY if the query fails: a single env-overridable constant.
-    """
-    env = os.environ.get("LIMEN_OPENCODE_MODEL")
-    if env:
-        return env
+# ── opencode model tiering (free floor / subscription rung) ─────────────────────────────────
+# opencode is a MULTI-model lane: a FREE floor (anonymous gateway models, always reachable) and a
+# SUBSCRIPTION rung (the opencode Zen models, reachable once auth.json is minted). The ladder is
+# DECLARED data on the census (`Vendor.tiers`); the picker CONSUMES it via the generic
+# `_vendor_tier_for` engine and resolves the chosen rung to a live model — closing census
+# Increment-2 for opencode. Names are outputs: the model list is derived from `opencode models` at
+# call-time, never pinned. ([[model-tiering-policy]] [[derive-never-pin-hardcodes]] [[value-is-discovered-never-assumed]])
+
+# A model is FREE if it carries a free marker OR is in the operator's declared free-set. The
+# `-free` suffix is the strong signal, but `opencode/big-pickle` is present unauthed with NO suffix,
+# so the marker is never the SOLE classifier — the free-set seeds that one verified anomaly.
+_OPENCODE_FREE_MARKERS = ("-free", "/free-", ":free")
+_OPENCODE_FREE_SET_DEFAULT = ("opencode/big-pickle",)
+
+
+def _opencode_free_set() -> set[str]:
+    """Operator-declared free model names lacking a -free marker (comma-separated
+    LIMEN_OPENCODE_FREE_SET). Fail-open to the seeded default (the one verified anomaly)."""
+    raw = os.environ.get("LIMEN_OPENCODE_FREE_SET")
+    if raw is not None:
+        return {m.strip() for m in raw.split(",") if m.strip()}
+    return set(_OPENCODE_FREE_SET_DEFAULT)
+
+
+def _opencode_is_free(model: str) -> bool:
+    """Classify a model id into the free floor (True) or the subscription rung (False)."""
+    if model in _opencode_free_set():
+        return True
+    return any(mk in model for mk in _OPENCODE_FREE_MARKERS)
+
+
+def _opencode_list_models() -> list[str]:
+    """The live `opencode models` list, parsed to model-id lines. Fail-open to []. We deliberately
+    do NOT read opencode's auth.json from Python — that read trips the macOS TCC 'access data from
+    other apps' prompt every beat; the subscription rung enumerates itself once auth.json exists."""
     binv = os.environ.get("LIMEN_OPENCODE_BIN", "opencode")
     try:
         r = subprocess.run([binv, "models"], capture_output=True, text=True, timeout=20)
-        models = [ln.strip() for ln in r.stdout.splitlines() if "/" in ln and " " not in ln.strip()]
-        # Prefer a FREE coding model (works with no auth). We deliberately DON'T read
-        # opencode's auth.json from Python — that read trips the macOS TCC "access data from
-        # other apps" prompt on every beat. After `opencode auth login`, set
-        # LIMEN_OPENCODE_MODEL=<paid model> to use the paid tier.
-        free = [m for m in models if "-free" in m]
-        if free:
-            return next((m for m in free if "code" in m), free[0])
+        return [ln.strip() for ln in r.stdout.splitlines() if "/" in ln and " " not in ln.strip()]
+    except Exception:
+        return []
+
+
+def _opencode_pick_in_tier(models: list[str], want_free: bool) -> str | None:
+    """Pick within a tier: prefer a code-specialized model, else the first in-tier one; None if the
+    tier is empty (the caller degrades to the floor). The 'code' match is on the model BASENAME
+    (after the last '/'), never the full id — the provider prefix `opencode/` itself contains the
+    substring 'code', so a naive `"code" in m` would match every model at index 0."""
+    tier = [m for m in models if _opencode_is_free(m) == want_free]
+    if not tier:
+        return None
+    return next((m for m in tier if "code" in m.rsplit("/", 1)[-1]), tier[0])
+
+
+def _tier_overrides(vendor: str) -> dict[str, list[str]]:
+    """Optional operator OVERRIDE map logs/model-tiers.json → one vendor's {rung: [classes]}.
+    Fail-open to {} (→ the declared-ladder default). Same read pattern as _claude_tier_overrides."""
+    try:
+        root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+        return json.loads((root / "logs" / "model-tiers.json").read_text()).get(vendor) or {}
+    except Exception:
+        return {}
+
+
+def _vendor_tier_for(vendor: str, task: Task | None) -> str | None:
+    """DERIVE the tier (rung name) for a task on any vendor with a DECLARED census ladder
+    (`Vendor.tiers`, floor-first). The generalized analogue of `_claude_tier_for`:
+      • default = the FLOOR rung (cheapest, always-reachable), so verifiable work stays cheap and
+        escalates via the existing lane cascade;
+      • pre-assign a HIGHER rung only for its declared `reserve` classes (failure not cheaply caught
+        here) or classes the ledger has DISCOVERED this lane wastes on (waste_classes);
+      • a per-task `<vendor>_tier` pin and the logs/model-tiers.json override layer on top;
+      • a retry breadcrumb (`tried:<vendor>` label) bumps ONE rung.
+    Returns None when the vendor declares no ladder (choice owned elsewhere). Fail-open → floor."""
+    ladder = census.tiers().get(vendor) or ()
+    if not ladder:
+        return None
+    names = [r.name for r in ladder]
+    floor = names[0]
+    if task is None:
+        return floor
+    pin = getattr(task, f"{vendor}_tier", None)
+    if pin in names:
+        return str(pin)
+    classes = _task_classes(task)
+    override = _tier_overrides(vendor)
+    chosen = floor
+    # the HIGHEST declared rung whose reserve/override classes the task carries wins. A rung's reserve
+    # set is the declared `TierRung.reserve`, REPLACEABLE by env `LIMEN_<VENDOR>_<RUNG>_CLASSES`
+    # (e.g. LIMEN_OPENCODE_SUB_CLASSES) — never inherited config — and the logs/model-tiers.json
+    # override ADDS to it. Mirrors model_selection._claude_opus_classes().
+    for rung in ladder[1:]:
+        env_reserve = os.environ.get(f"LIMEN_{vendor.upper()}_{rung.name.upper()}_CLASSES")
+        reserve = (
+            {c.strip() for c in env_reserve.split(",") if c.strip()}
+            if env_reserve is not None
+            else set(rung.reserve)
+        )
+        if classes & (reserve | set(override.get(rung.name) or [])):
+            chosen = rung.name
+    # ledger-DISCOVERED waste on the floor → at least the next rung up (mirrors claude's sonnet rung).
+    waste = set((_ledger_lanes().get(vendor) or {}).get("waste_classes") or [])
+    if chosen == floor and len(names) > 1 and (classes & waste):
+        chosen = names[1]
+    # retry breadcrumb: a prior failed attempt on this lane bumps one rung (capped at the top).
+    if f"tried:{vendor}" in (getattr(task, "labels", None) or []):
+        chosen = names[min(names.index(chosen) + 1, len(names) - 1)]
+    return chosen
+
+
+def _opencode_model(task: Task | None = None) -> str | None:
+    """Resolve the opencode lane model by DERIVING it from live `opencode models`, never by pinning
+    ("names are outputs"). Order mirrors _claude_model / _codex_model:
+      1. LIMEN_OPENCODE_MODEL — a hard pin, always wins (any rung);
+      2. feature flag LIMEN_OPENCODE_TIER_SELECT (default on; off → legacy free-first behavior);
+      3. derive the rung for THIS task (`_vendor_tier_for`), honor a per-rung env pin
+         (LIMEN_OPENCODE_SUB_MODEL / LIMEN_OPENCODE_FREE_MODEL), else pick within the live rung
+         (prefer code-specialized). A `sub` rung that resolves to nothing — no subscription model
+         enumerated, e.g. auth.json absent — DEGRADES to the free floor, never blocks.
+      4. last-resort ONLY if the query is empty: an env-overridable free constant.
+    Fail-open everywhere → the free floor, never a benched lane."""
+    env = os.environ.get("LIMEN_OPENCODE_MODEL")
+    if env:
+        return env
+    fallback = os.environ.get("LIMEN_OPENCODE_MODEL_FALLBACK", "opencode/north-mini-code-free")
+    if os.environ.get("LIMEN_OPENCODE_TIER_SELECT", "1") != "1":
+        # legacy path: free-first, exactly today's behavior (preserves the flag-off contract).
+        models = _opencode_list_models()
+        return _opencode_pick_in_tier(models, want_free=True) or (models[0] if models else fallback)
+    try:
+        tier = _vendor_tier_for("opencode", task) or "free"
+        pin = os.environ.get(f"LIMEN_OPENCODE_{tier.upper()}_MODEL")
+        if pin:
+            return pin
+        models = _opencode_list_models()
+        if tier == "sub":
+            chosen = _opencode_pick_in_tier(models, want_free=False)
+            if chosen:
+                return chosen
+            # sub rung empty (subscription not reachable yet) → degrade to the free floor.
+        chosen = _opencode_pick_in_tier(models, want_free=True)
+        if chosen:
+            return chosen
         if models:
             return models[0]
     except Exception:
         pass
-    return os.environ.get("LIMEN_OPENCODE_MODEL_FALLBACK", "opencode/north-mini-code-free")
+    return fallback
 
 
 _LOCAL_AGENTS: dict[str, list[str]] = {
@@ -1535,12 +1655,13 @@ def _call_configured_paid_service(agent: str, task: Task, dry_run: bool) -> bool
 def _agent_argv(agent: str, task: Task | None = None) -> list[str]:
     """Static lane flags + any LAZILY-derived per-run flags, so nothing is pinned or
     resolved at import time. opencode's/codex's model is derived here (only when it actually
-    runs); claude's TIER is derived per task (the earned-tier ladder) — names are outputs.
-    `task` is optional (codex/opencode ignore it) so existing callers stay valid."""
+    runs); claude's and opencode's TIER is derived per task (the earned/declared ladder) — names
+    are outputs. `task` is optional (codex ignores it; opencode + claude derive their tier from it)
+    so existing callers stay valid."""
     model: str | None = None
     flags = list(_LOCAL_AGENTS[agent])
     if agent == "opencode":
-        model = _opencode_model()
+        model = _opencode_model(task)
         if model:
             flags += ["-m", model]
     elif agent == "codex":

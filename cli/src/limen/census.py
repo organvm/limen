@@ -34,9 +34,14 @@ head or a chat):
             that every dispatchable ianva target is a canonical vendor; ``cline`` is the one MCP-only
             target, documented).
   * DONE (Increment-1) — per-vendor model choice is homed on ``Vendor.tiering`` and projected by
-            :func:`tiering`; ``test_census`` drift-guards it against a closed sentinel set. Remaining
-            Increment-2: make ``dispatch._codex_model``/``_opencode_model`` (the non-Claude analogue of
-            ``model_selection``) CONSUME :func:`tiering` instead of hard-coding who owns each.
+            :func:`tiering`; ``test_census`` drift-guards it against a closed sentinel set.
+  * DONE (Increment-2, opencode) — the declared per-vendor tier LADDER is homed on ``Vendor.tiers``
+            (floor-first :class:`TierRung`\\s) and projected by :func:`tiers`. ``dispatch._opencode_model``
+            now CONSUMES it via the generic ``_vendor_tier_for`` engine (free floor → subscription rung),
+            replacing its hard-coded free-preference. Remaining: fold ``dispatch._codex_model`` and the
+            claude ladder onto the same engine so all three consume the register. (Claude's model
+            RESOLUTION stays in ``model_selection`` — that module is pure-stdlib and cannot import this
+            register; the engine lives in ``dispatch``, which already imports both.)
 """
 
 from __future__ import annotations
@@ -79,6 +84,21 @@ class Status:
 
 
 @dataclass(frozen=True)
+class TierRung:
+    """One rung of a vendor's DECLARED model-tier ladder (see :attr:`Vendor.tiers`).
+
+    ``reserve`` names the work-classes whose failure is NOT cheaply caught on this lane, so a task
+    carrying one selects this rung (or higher) instead of the cheaper floor — the same 'escalate
+    only on undetectable-failure classes' doctrine the Claude ladder uses. An empty ``reserve`` marks
+    the FLOOR rung (the cheapest, always-reachable default). The generic per-task engine
+    ``dispatch._vendor_tier_for`` consumes these; the vendor's own picker resolves a rung to a model.
+    """
+
+    name: str  # rung id (e.g. "free", "sub")
+    reserve: tuple[str, ...] = ()  # work-classes that reserve this rung; () == the floor
+
+
+@dataclass(frozen=True)
 class Vendor:
     """One provider of dispatchable work-capacity, with every scattered fact homed here."""
 
@@ -95,6 +115,7 @@ class Vendor:
     budget: Budget
     status: Status
     doc: str = ""
+    tiers: tuple[TierRung, ...] = ()  # declared model-tier ladder, floor-first (() == none declared)
 
 
 # ── THE REGISTER ─────────────────────────────────────────────────────────────────────────────
@@ -140,12 +161,18 @@ VENDORS: tuple[Vendor, ...] = (
         kind="local-cli",
         local_checkout=True,
         issue_assignment=False,
-        auth_mode="opencode_auth",  # own auth.json / free model
+        auth_mode="opencode_auth",  # own auth.json (opencode Zen subscription) / anonymous free models
         cred_ref=None,
         meter="dispatch_count",
-        tiering="dispatch_adhoc",  # _opencode_model
-        budget=Budget(100, "runs", "today", "operator board cap until live vendor meter", "calibrated"),
-        status=Status(True, "live", "free-model lane; deploy/cloudflare specialty"),
+        tiering="dispatch_adhoc",  # _opencode_model consumes the declared `tiers` ladder below
+        budget=Budget(100, "runs", "today", "operator board cap until live vendor meter", "calibrated", "opencode-plan"),
+        status=Status(True, "live", "free+subscription (opencode Zen) tiered lane; deploy/cloudflare specialty"),
+        # Declared tier ladder (floor-first), consumed by dispatch._vendor_tier_for: the FREE floor
+        # (anonymous gateway models, always reachable) and the SUB rung (the opencode Zen subscription
+        # models, reachable once auth.json is minted — lever L-OPENCODE-SUB-AUTH). `sub` is reserved for
+        # the lane's deploy/cloudflare specialty + undetectable-failure classes; env-overridable via
+        # LIMEN_OPENCODE_SUB_CLASSES, never inherited config. Until auth lands, `sub` degrades to `free`.
+        tiers=(TierRung("free"), TierRung("sub", ("deploy", "cloudflare", "synthesis", "ambiguous-root-cause"))),
     ),
     Vendor(
         name="agy",
@@ -341,6 +368,14 @@ def kinds() -> dict[str, str]:
 def tiering() -> dict[str, str]:
     """name -> which model-selection layer owns its model choice (drift-guard for dispatch)."""
     return {v.name: v.tiering for v in VENDORS}
+
+
+def tiers() -> dict[str, tuple[TierRung, ...]]:
+    """name -> declared model-tier ladder (floor-first :class:`TierRung`\\s). An empty tuple == no
+    declared ladder (model choice owned elsewhere per :func:`tiering`). The generic per-task tier
+    engine ``dispatch._vendor_tier_for`` consumes this to derive a rung, then the vendor's own picker
+    resolves that rung to a concrete model."""
+    return {v.name: v.tiers for v in VENDORS}
 
 
 def lane_cascade() -> list[str]:

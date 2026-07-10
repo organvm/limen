@@ -1,5 +1,12 @@
 # Vendor Lane Audit — 2026-06-19 (read-only)
 
+> **Correction 2026-07-10 (opencode):** the "opencode = free-model lane" characterization below is
+> superseded. opencode is a MULTI-model lane — a free floor **and** the opencode Zen subscription — and
+> now carries a declared tier ladder (`census.Vendor.tiers` free|sub, consumed by
+> `dispatch._vendor_tier_for`/`_opencode_model`). The subscription models enumerate once
+> `opencode auth login` writes `auth.json` (lever **L-OPENCODE-SUB-AUTH**); until then the `sub` rung
+> degrades to the free floor. Live truth is the census record, not this dated snapshot.
+
 Mandate: use ALL 6 vendors, never serialize. Audit found the fleet is effectively
 serialized onto **codex** (now exhausted), with agy/gemini/claude/jules idle.
 
