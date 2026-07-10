@@ -304,16 +304,17 @@ def load_reclaim_acceptance():
 
 
 STANDING_ACCEPTANCE = os.environ.get("LIMEN_RECLAIM_STANDING_ACCEPTANCE", "1") != "0"
-# The operator's push-first rule (2026-07-09, LIMEN_RECLAIM_PUSHED_OK, declared in
-# institutio/governance/parameters.yaml). Preservation — not merge — is the loss-free bar: a
-# clean, idle worktree whose HEAD is reachable from any remote ref (reachable_from_remote) has
-# every committed byte on origin and is re-cloneable, so removing the LOCAL checkout loses zero
-# work. The branch stays on origin, resumable, and its PR/babysitting lifecycle is unaffected.
-# This drains the pushed-but-unmerged worktree backlog (the dominant boot-disk pin — hundreds of
-# roots classed "not-merged-to-default") that the merged-only gate kept forever. Set 0 to restore
-# the conservative merged-only policy. The unpushed/dirty guardrails are unchanged — unpreserved
-# work is NEVER reaped.
-PUSHED_OK = os.environ.get("LIMEN_RECLAIM_PUSHED_OK", "1") != "0"
+# PUSHED-REAP ESCAPE HATCH (LIMEN_RECLAIM_PUSHED_OK, declared in parameters.yaml). DEFAULT OFF —
+# the standing policy is merge-before-reap: pushed preservation is not closure, so a pushed-but-
+# unmerged worktree is KEPT as "not-merged-to-default" (enacted by test_reclaim_keeps_clean_pushed_
+# unmerged_branch — the executable predicate wins over any aspirational default). This env is the
+# opt-in lever that flips that class to reapable: when set, a clean, idle worktree whose HEAD is
+# reachable from any remote ref (reachable_from_remote ⇒ every byte on origin, re-cloneable) is
+# reaped as clean+pushed+idle — removing only the disposable LOCAL checkout; the branch and its
+# PR/babysitting lifecycle continue on origin. This is how the pushed-but-unmerged backlog (the
+# dominant boot-disk pin — hundreds of roots) drains toward the free-space target when the operator
+# elects it. The unpushed/dirty/active guardrails are unchanged — unpreserved work is NEVER reaped.
+PUSHED_OK = os.environ.get("LIMEN_RECLAIM_PUSHED_OK", "0") != "0"
 # Operator standing grant (2026-07-09, docs/removal-acceptance-covenant.md §Standing grant):
 # the loss-free class — clean tree + idle past min-age + preserved on the remote (merged into the
 # default, patch-equivalent to it, a merged-PR receipt, or pushed-but-unmerged per PUSHED_OK) — is
