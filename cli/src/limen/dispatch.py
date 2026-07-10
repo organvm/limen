@@ -16,10 +16,13 @@ from typing import Any, TypedDict
 
 from limen import census
 from limen.capacity import (
+    DEFAULT_GITHUB_ACTIONS_WORKFLOW,
     canonical_agent,
     capacity_census,
     format_capacity_census,
     github_issue_ref,
+    local_floor_classes,
+    local_floor_enabled,
     ollama_model,
     select_lanes,
 )
@@ -32,11 +35,14 @@ from limen.model_selection import (  # the shared model vocabulary — also used
     _claude_fable_acceptance_present,
     _claude_fable_classes,
     _claude_opus_classes,
+    _fable_capped_tier,
     _fable_fallback_tier,
+    _fable_reserve_receipt_present,
     _guard_fable_model_pin,
     _resolve_claude_model,
 )
 from limen.worktree_debt import worktree_debt_exceeded
+from limen.worktree_roots import default_worktrees_root
 
 
 def _int_or_default(raw: object, default: int) -> int:
@@ -307,7 +313,7 @@ def run_always_working_before_dispatch(tasks_path: Path, *, dry_run: bool = Fals
         )
     except subprocess.TimeoutExpired:
         print("Always-working gate timed out before dispatch reservation")
-        return os.environ.get("LIMEN_ALWAYS_WORKING_HARD_GATE", "1") != "1"
+        return os.environ.get("LIMEN_ALWAYS_WORKING_TIMEOUT_HARD_GATE", "0") != "1"
     except OSError as exc:
         print(f"Always-working gate failed before dispatch reservation: {exc}")
         return os.environ.get("LIMEN_ALWAYS_WORKING_HARD_GATE", "1") != "1"
@@ -471,7 +477,8 @@ def _handoff_next_action_source(root: Path) -> bool:
 def _prompt_batch_source(root: Path) -> bool:
     lifecycle = root / ".limen-private" / "session-corpus" / "lifecycle"
     index = _load_json_file(lifecycle / "prompt-batch-review-ledger.json")
-    coverage = index.get("coverage") if isinstance(index.get("coverage"), dict) else {}
+    raw_coverage = index.get("coverage")
+    coverage = raw_coverage if isinstance(raw_coverage, dict) else {}
     queue = index.get("review_queue") if isinstance(index.get("review_queue"), list) else []
     try:
         open_batches = int(coverage.get("open_review_batches") or 0)
@@ -489,7 +496,8 @@ def _product_ledger_source(root: Path) -> bool:
 def _always_working_source(root: Path, tasks_path: Path | None) -> bool:
     lifecycle = root / ".limen-private" / "session-corpus" / "lifecycle"
     index = _load_json_file(lifecycle / "always-working.json")
-    items = index.get("items") if isinstance(index.get("items"), list) else []
+    raw_items = index.get("items")
+    items = raw_items if isinstance(raw_items, list) else []
     if any(isinstance(item, dict) and item.get("assignment_packet") for item in items):
         return True
     if tasks_path is None:
@@ -546,7 +554,9 @@ def _session_value_admission_gate(
     tasks_path: Path | None = None,
     task_id: str | None = None,
 ) -> dict[str, Any]:
-    explicit_source = _explicit_task_source(tasks_path or Path(os.environ.get("LIMEN_TASKS", root / "tasks.yaml")), task_id)
+    explicit_source = _explicit_task_source(
+        tasks_path or Path(os.environ.get("LIMEN_TASKS", root / "tasks.yaml")), task_id
+    )
     if explicit_source:
         return {"allow": True, "exit_code": 0, "action": "explicit_task_id", "skipped": True}
     if not _truthy_env("LIMEN_SESSION_VALUE_GATE", True):
@@ -1380,7 +1390,7 @@ def _call_github_actions(task: Task, dry_run: bool) -> bool | str:
         print(f"  SKIP {task.id}: github_actions lane needs task.repo")
         return False
     gh = os.environ.get("LIMEN_GITHUB_ACTIONS_BIN", "gh")
-    workflow = os.environ.get("LIMEN_GITHUB_ACTIONS_WORKFLOW", "limen-agent.yml")
+    workflow = os.environ.get("LIMEN_GITHUB_ACTIONS_WORKFLOW", DEFAULT_GITHUB_ACTIONS_WORKFLOW)
     cmd = [
         gh,
         "workflow",
@@ -1600,12 +1610,16 @@ def _next_lane(current: str) -> str | None:
     return cascade[i + 1] if i + 1 < len(cascade) else None
 
 
-def _fallback_dispatch_lane() -> str | None:
+def _fallback_dispatch_lane(*, exclude: set[str] | None = None) -> str | None:
+    excluded = exclude or set()
     cascade = _lane_cascade()
     for agent in cascade:
-        if agent in _LOCAL_AGENTS:
+        if agent not in excluded and agent in _LOCAL_AGENTS:
             return agent
-    return cascade[0] if cascade else "any"
+    for agent in cascade:
+        if agent not in excluded:
+            return agent
+    return "any"
 
 
 _REMOTE_SERVICE_LANES = {"jules", "copilot", "github_actions", "warp", "oz"}
@@ -1613,6 +1627,31 @@ _REMOTE_SERVICE_LANES = {"jules", "copilot", "github_actions", "warp", "oz"}
 
 def _cascade_or_requeue(agent: str) -> str:
     return _next_lane(agent) or _fallback_dispatch_lane() or "any"
+
+
+def _local_floor_allowed_for_task(task: Task) -> bool:
+    try:
+        if not local_floor_enabled():
+            return False
+        if not task.repo:
+            return False
+        classes = _task_classes(task)
+        if not classes & local_floor_classes():
+            return False
+        if classes & (_claude_opus_classes() | _claude_fable_classes()):
+            return False
+        return ollama_model() is not None
+    except Exception:
+        return False
+
+
+def _remote_service_failure_lane(task: Task, agent: str) -> str:
+    floor_allowed = _local_floor_allowed_for_task(task)
+    next_lane = _next_lane(agent)
+    if next_lane and (next_lane != "ollama" or floor_allowed):
+        return next_lane
+    fallback = _fallback_dispatch_lane(exclude=set() if floor_allowed else {"ollama"})
+    return fallback or ("ollama" if floor_allowed else "any")
 
 
 def _agy_live_root_registry_task(task: Task) -> bool:
@@ -1625,6 +1664,13 @@ def _agy_live_root_registry_task(task: Task) -> bool:
     fields = [task.id or "", task.title or "", task.context or "", *(task.urls or [])]
     text = "\n".join(str(field) for field in fields).lower()
     return str(task.id or "").startswith("DISCOVER-") and ("value-repos.json" in text or "discovery.md" in text)
+
+
+def _limen_registry_promotion_task(task: Task) -> bool:
+    """Registry promotion edits Limen-owned files, so local checkout lanes need a bridge first."""
+    fields = [task.id or "", task.title or "", task.context or "", *(task.urls or [])]
+    text = "\n".join(str(field) for field in fields).lower()
+    return str(task.id or "").startswith("DISCOVER-") and "value-repos.json" in text
 
 
 def _limen_repo_task(task: Task) -> bool:
@@ -1647,6 +1693,10 @@ def _agent_timed_out_on_task(agent: str, task: Task) -> bool:
 def agent_can_run_task(agent: str, task: Task) -> bool:
     agent = canonical_agent(agent)
     if _agent_timed_out_on_task(agent, task):
+        return False
+    if agent == "ollama" and not _local_floor_allowed_for_task(task):
+        return False
+    if agent in _LOCAL_AGENTS and _limen_registry_promotion_task(task):
         return False
     if agent in {"agy", "antigravity"} and (_agy_live_root_registry_task(task) or _limen_repo_task(task)):
         return False
@@ -1874,7 +1924,7 @@ def _clone_repo(task: Task) -> Path | None:
 # local branch are removed; the only surviving artifacts are the remote branch +
 # PR. This is the universal default for ALL local lanes (codex/opencode/agy/
 # claude/gemini) — set LIMEN_ISOLATION=off only for a deliberate in-place run.
-_ISOLATION_ROOT = Path(os.environ.get("LIMEN_WORKTREES", Path.home() / "Workspace" / ".limen-worktrees"))
+_ISOLATION_ROOT = default_worktrees_root()
 _GENERATED_CLEAN_PATHS = (
     "node_modules",
     ".venv",
@@ -2190,6 +2240,15 @@ def _run_isolated_agent(
         return _failed_agent_result(agent, task, run)
     if agent in ("agy", "antigravity"):
         _bridge_agy_scratch(task, wt)
+    if agent == "ollama":
+        # `ollama run` answers on stdout and cannot edit files — without an artifact the run
+        # hits the no-changes trap in _commit_isolated_changes and false-fails as _NOOP.
+        # Persist the report so the commit -> PR -> ledger-grading path sees the real work.
+        out = (run.stdout or "").strip()
+        if out:
+            reports = wt / "reports"
+            reports.mkdir(exist_ok=True)
+            (reports / f"{task.id}.md").write_text(out + "\n")
     return True
 
 
@@ -2238,6 +2297,44 @@ def _push_existing_pr_head(task: Task, wt: Path, pr_head: dict[str, str]) -> boo
         return False
     print(f"  updated existing PR head {task.id}: {pr_head['repo']}#{pr_head['number']} ({head_ref})")
     return True
+
+
+def _record_worktree_birth(
+    task: Task,
+    wt: Path,
+    branch: str,
+    checkout_ref: str,
+    pr_base: str,
+    *,
+    existing_pr: bool,
+) -> None:
+    """Record the remote owner contract for a new disposable checkout outside the work tree."""
+    gitdir = _git(["rev-parse", "--git-dir"], wt)
+    if gitdir.returncode != 0 or not gitdir.stdout.strip():
+        return
+    gitdir_path = Path(gitdir.stdout.strip())
+    if not gitdir_path.is_absolute():
+        gitdir_path = wt / gitdir_path
+    payload = {
+        "schema": "limen.worktree_birth.v1",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "task_id": task.id,
+        "repo": task.repo,
+        "root": str(wt),
+        "checkout_ref": checkout_ref,
+        "local_branch": branch,
+        "remote_branch": branch,
+        "pr_base": pr_base,
+        "existing_pr": existing_pr,
+        "done_predicate": "remote branch pushed and PR/open-PR receipt recorded",
+        "cleanup_owner": "scripts/reclaim-worktrees.py + docs/worktree-reclaim-acceptance.jsonl",
+    }
+    try:
+        gitdir_path.mkdir(parents=True, exist_ok=True)
+        (gitdir_path / "limen-worktree-birth.json").write_text(json.dumps(payload, sort_keys=True) + "\n")
+    except OSError:
+        return
+    _record_worktree_lifecycle(task, wt, branch, "created", "remote-receipt-required", "not-run", False)
 
 
 def _unpreserved_work_reason(wt: Path, base_ref: str) -> str:
@@ -2508,6 +2605,7 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
     if add.returncode != 0:
         print(f"  FAILED worktree add {task.id}: {add.stderr.strip()[:300]}")
         return False
+    _record_worktree_birth(task, wt, branch, checkout_ref, pr_base, existing_pr=bool(pr_head))
 
     pushed = False
     try:
@@ -2844,16 +2942,15 @@ def _apply_result(
         tried = f"tried:{agent}"
         if tried not in task.labels:
             task.labels.append(tried)
-        next_lane = _next_lane(agent)
-        if next_lane:
-            entry.status = f"failed->{next_lane}"
-            task.target_agent = next_lane
-            task.status = "open"
-        elif agent in _REMOTE_SERVICE_LANES:
-            fallback = _fallback_dispatch_lane() or "any"
+        if agent in _REMOTE_SERVICE_LANES:
+            fallback = _remote_service_failure_lane(task, agent)
             entry.status = f"failed->{fallback}"
             entry.output = "remote/service lane failed; reopened to healthy fleet cascade"
             task.target_agent = fallback
+            task.status = "open"
+        elif next_lane := _next_lane(agent):
+            entry.status = f"failed->{next_lane}"
+            task.target_agent = next_lane
             task.status = "open"
         else:
             entry.status = "failed"
@@ -3004,6 +3101,15 @@ def _claude_tier_overrides() -> dict[str, list[str]]:
         return {}
 
 
+def _earned_fable_tier() -> str:
+    """A Fable selection that already cleared the acceptance receipt, resolved against the LIVE
+    weekly cap (`logs/fable-allotment.json`): 'fable' when the cap still allows it, else the
+    fallback tier (Opus). This is the runtime backstop the receipt gate alone cannot provide —
+    it enforces the 40% deliberate / 50% hard ladder against actual tokens burned this week."""
+    capped = _fable_capped_tier(_fable_reserve_receipt_present())
+    return capped if capped is not None else "fable"
+
+
 def _claude_tier_for(task: Task | None) -> str:
     """DERIVE the Claude tier for a task. Default = haiku (verifiable → escalate via the existing
     cascade). Pre-assign a higher tier ONLY where failure is undetectable:
@@ -3012,18 +3118,21 @@ def _claude_tier_for(task: Task | None) -> str:
       • sonnet— classes the ledger has DISCOVERED this lane wastes on (waste_classes): work that
                 shipped low-value yet passed whatever gate exists ⇒ failure not caught cheaply here.
     A per-task `claude_tier` pin and an optional logs/model-tiers.json override layer on top.
-    Fail-open → haiku, never block."""
+    Fable is additionally gated by the LIVE weekly cap (`_earned_fable_tier`): a valid receipt is
+    necessary-not-sufficient once the week's Fable spend is at/over cap. Fail-open → haiku."""
     if task is None:
         return "haiku"
     pin = task.claude_tier
     if pin in _CLAUDE_TIER_ORDER:
         if pin == "fable" and not _claude_fable_acceptance_present():
             return _fable_fallback_tier()
+        if pin == "fable":
+            return _earned_fable_tier()
         return str(pin)
     classes = _task_classes(task)
     override = _claude_tier_overrides()
     if classes & (_claude_fable_classes() | set(override.get("fable") or [])):
-        return "fable" if _claude_fable_acceptance_present() else _fable_fallback_tier()
+        return _earned_fable_tier() if _claude_fable_acceptance_present() else _fable_fallback_tier()
     if classes & (_claude_opus_classes() | set(override.get("opus") or [])):
         return "opus"
     lane_data = _ledger_lanes().get("claude") or {}

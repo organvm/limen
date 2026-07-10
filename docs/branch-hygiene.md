@@ -23,7 +23,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `worktree-ianva-doorway` — f4c0c076 fix(ianva): never echo bearer to stdout; untrack generated/ golden files
 - `worktree-linear-conjuring-bear` — 92c21f2e chore(gitignore): ignore .wrangler/ cache at any depth, not just web/worker
 
-## Live-work branches (132) — decide each
+## Live-work branches (192) — decide each
 
 - `_pr198` — 4cd0dbaa fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `capture/main-2026-07-02T01-03-35Z` — 71b48852 capture: off-disk sync 2026-07-02T01:03:35Z (main behind origin → side ref, HEAD untouched)
@@ -38,8 +38,13 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `discover-organvm-browser-state` — 7fb6478b docs: preserve gens discovery thesis
 - `discovery-organvm-palimpsest` — 73808950 feat: discover organvm/palimpsest and add to value-repos
 - `docs/quicken-residue` — 1890688b docs: QUICKEN residue — irreducible human atoms (daemon capture)
+- `docs/reap-acceptance-0709-final-20260709115323` — 00cd21ce docs: accept reap of final aged straggler (4th in-session round, standing grant noted) — operator in-session
+- `docs/reap-acceptance-0709-final2-20260709115636` — cdef6573 docs: accept reap of final aged straggler (4th in-session round, standing grant noted) — operator in-session
 - `feat/bhagavad-gita-arcs-5-8` — 13a810c3 feat(studium): author metamorphoses books 2 and 3 arcs
 - `feat/censor-monthly-tier` — a89dd048 censor: add MONTHLY cadence (2592000s) to TIER_SECONDS
+- `feat/depends-on-sequencer` — b83a5d0b feat: seq-depends.py — append depends_on edges via the keeper (concern 11)
+- `feat/outbound-valve-registry` — c281b297 feat: tiered outbound valve registry (concern 4) — all tiers coexist, configurable
+- `feat/receipt-classifier` — 45672027 feat: receipt-classifier.py — flag receipt-only diffs behind shipped-X claims (concern 9)
 - `feat/studium-deepen-bhagavad-gita` — b79d0fae studium: deepen bhagavad-gita — chapters 2-4 (3 arcs)
 - `feat/studium-deepen-mahabharata-books-5-8` — fd8dbae6 studium: deepen mahabharata — parvas 5-8 (Udyoga, Bhishma, Drona, Karna)
 - `feat/studium-deepen-metamorphoses-batch-1` — 2bf80117 limen: REV-organvm-a-i-chat--exporter-revenue-launch-post-0623 done
@@ -54,11 +59,15 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `feature/ORG-education-organ-face-0630` — 9d174794 feat(education): author polished macro and micro face for education organ
 - `feature/tale-of-genji-chapters-2-5` — 50a31de4 studium: author Tale of Genji chapters 2-5
 - `fix/616-format` — e020757c style: ruff format test_corpus_command_center.py (CI format-check gate)
+- `fix/dispatch-admission-ci-768` — 96f6c10b Merge remote-tracking branch 'origin/main' into fix/dispatch-admission-ci-768
 - `fix/heartbeat-refresh-web-wedge` — 0a512024 fix(heartbeat): stop refresh-web piping into tail — it wedges the daemon (regression reintroduced in loop refactor)
+- `heal-pr-621` — af456827 Build the first working vertical slice of the health organ
 - `heal/608-declare-param` — a63e6db7 chore(governance): declare LIMEN_WORKSPACE_UNIT_TIMEOUT_SEC for preserve_workspace()
 - `heal/ci-ruff-semicolons` — 04b05097 fix(ci): clear ruff E702/E703 in test_sync_reclaim.py — unjams the merge backlog
+- `heal/dispatch-admission` — 0681e396 limen: gate dispatch admission
 - `heal/health-office-staged-0625` — ff43850e health office — the executive health office (autopoietic; PII strictly off-repo)
 - `heal/marker-and-tcc-registry-2026-06-24` — e6248bdd heal: swallow Claude Code's benign install_failed update marker (false ⚠ on /doctor)
+- `limen/aw-credential-wall-token-hygiene-e729c093` — 5552f173 docs(credentials): add token tombstone audit receipt
 - `limen/capfill-claude-20260629-13-2b0f` — 69e10c5a fix: add CapacityFill TypedDicts and correct mypy type annotations
 - `limen/csf-caeb31d8-plan-10-b131e64c-38bd` — 705fcee4 limen: record current-session private boundary packet
 - `limen/gen-organvm-limen-docs-0624-0129` — e454a603 Real usage docs for organvm/limen
@@ -80,6 +89,54 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `limen/gen-organvm-limen-typing-0627-ccac` — d280f1d1 fix: tighten types in limen's most-imported modules
 - `limen/gh-organvm-limen-262-0a16` — 3ebc05c2 docs(levers): L-IANVA-LOCAL — launchd plist staged, ONE command to bootstrap (#262)
 - `limen/gh-organvm-limen-352-b4c3` — 18129a47 fix(cli): type-modernization — PEP 604 syntax and TypedDict definitions
+- `limen/heal-cifix-organvm-limen-376-7a338dd4` — c331f297 Aeneid film companion (empire/fate/sacrifice)
+- `limen/heal-cifix-organvm-limen-388-3f07b6de` — aa9b5c1f Make the consulting organ's macro + micro face excellent
+- `limen/heal-cifix-organvm-limen-388-52a7d7fb` — aa9b5c1f Make the consulting organ's macro + micro face excellent
+- `limen/heal-cifix-organvm-limen-403-06ee30f8` — 7436bda2 Tighten types in organvm/limen
+- `limen/heal-cifix-organvm-limen-404-5c945b9f` — 4a09aa67 Tighten types in organvm/limen
+- `limen/heal-cifix-organvm-limen-407-d89f6362` — 9ba34eb0 Claude daily capacity-fill packet 01
+- `limen/heal-cifix-organvm-limen-408-2e00f83a` — a5bb3adc Agy daily capacity-fill packet 13
+- `limen/heal-cifix-organvm-limen-408-49717d79` — a5bb3adc Agy daily capacity-fill packet 13
+- `limen/heal-cifix-organvm-limen-410-a19bea30` — 15b3ab83 Agy daily capacity-fill packet 11
+- `limen/heal-cifix-organvm-limen-412-2e191c19` — 6ceb44ed Gemini daily capacity-fill packet 04
+- `limen/heal-cifix-organvm-limen-415-7db396da` — 20cd1a3f OpenCode daily capacity-fill packet 01
+- `limen/heal-cifix-organvm-limen-416-2dce14dc` — 04f14e28 Agy daily capacity-fill packet 02
+- `limen/heal-cifix-organvm-limen-419-3fb355e2` — 199ec2ac Jules daily capacity-fill packet 02
+- `limen/heal-cifix-organvm-limen-419-68eb0e65` — 199ec2ac Jules daily capacity-fill packet 02
+- `limen/heal-cifix-organvm-limen-419-7595de98` — 199ec2ac Jules daily capacity-fill packet 02
+- `limen/heal-cifix-organvm-limen-428-2ae62246` — e4fa19a8 fix(ci): repair PR 428 gate failures
+- `limen/heal-cifix-organvm-limen-430-955f9dd1` — e752ed9d fix(ci): clear PR gate regressions
+- `limen/heal-cifix-organvm-limen-430-b979134a` — 1a6b2a2e fix(ci): declare new limen parameters
+- `limen/heal-cifix-organvm-limen-431-6ee61f31` — 7d6834ef fix(ci): format VLTIMA prior excavation test
+- `limen/heal-cifix-organvm-limen-432-06bf02c7` — 47c47550 fix(ci): repair PR 432 checks
+- `limen/heal-cifix-organvm-limen-439-b17fd83a` — b13ba0f0 fix(ci): repair PR 439 gates
+- `limen/heal-cifix-organvm-limen-442-1b11af92` — 2beac417 fix(ci): format async dispatch test
+- `limen/heal-cifix-organvm-limen-443-4e67ed4e` — ad12cd64 fix(ci): repair PR 443 gate failures
+- `limen/heal-cifix-organvm-limen-447-c5187efb` — d7caf8ff Gemini daily capacity-fill packet 10
+- `limen/heal-cifix-organvm-limen-447-cef5ffb6` — d7caf8ff Gemini daily capacity-fill packet 10
+- `limen/heal-cifix-organvm-limen-452-1091876d` — 793e4afe Make organvm/limen CI green
+- `limen/heal-cifix-organvm-limen-490-8e65bdf4` — f70008a7 Recover closed PR task: Add GitHub Copilot coding agent as a Limen dispatch lane
+- `limen/heal-rebase-organvm-limen-375-ccfaf493` — 8ff5af35 Beowulf film companion (wyrd/heroic doom)
+- `limen/heal-rebase-organvm-limen-394-80d251b9` — 05596a46 Deepen the financial organ toward a usable institution
+- `limen/heal-rebase-organvm-limen-492-41c51751` — af3b7d83 limen: record PR #492 URL in dispatch_log
+- `limen/heal-rebase-organvm-limen-492-761f7b2b` — af3b7d83 limen: record PR #492 URL in dispatch_log
+- `limen/heal-rebase-organvm-limen-516-616e9aa4` — a0a46938 Raise test coverage in organvm/limen
+- `limen/heal-rebase-organvm-limen-516-a8f9be47` — a0a46938 Raise test coverage in organvm/limen
+- `limen/heal-rebase-organvm-limen-617-244af5eb` — 0c796729 Build the first working vertical slice of the social organ
+- `limen/heal-rebase-organvm-limen-621-700b2d32` — af456827 Build the first working vertical slice of the health organ
+- `limen/heal-rebase-organvm-limen-621-92b25510` — af456827 Build the first working vertical slice of the health organ
+- `limen/heal-rebase-organvm-limen-630-790853f9` — f124ddd2 Make the financial organ's macro + micro face excellent
+- `limen/heal-rebase-organvm-limen-630-d878401c` — f124ddd2 Make the financial organ's macro + micro face excellent
+- `limen/heal-rebase-stale-organvm-limen-620-913107b3` — b79d6404 Build the first working vertical slice of the legal organ
+- `limen/jules-aw-mail-historical-backlog-083a` — 539cb717 Continue historical mail backlog in resumable batches
+- `limen/jules-aw-mail-historical-backlog-1f7d` — 2525ea4e Continue historical mail backlog in resumable batches
+- `limen/jules-aw-mail-historical-backlog-3a0b` — 78e1083a Continue historical mail backlog in resumable batches
+- `limen/jules-aw-mail-historical-backlog-43fd` — a6c30366 Continue historical mail backlog in resumable batches
+- `limen/jules-aw-mail-historical-backlog-4c02` — 778790b6 Continue historical mail backlog in resumable batches
+- `limen/jules-aw-mail-historical-backlog-51e4` — a59d5fa8 Continue historical mail backlog in resumable batches
+- `limen/jules-aw-mail-historical-backlog-9f1d` — fd91625a Continue historical mail backlog in resumable batches
+- `limen/jules-aw-mail-historical-backlog-c97e` — a9797d4a Continue historical mail backlog in resumable batches
+- `limen/jules-aw-mail-historical-backlog-e50f` — 4cbf2f03 Continue historical mail backlog in resumable batches
 - `limen/org-artist-organ-face-0704-2152` — 0bf299b0 artist: polish macro and micro faces (ORG-artist-organ-face-0704)
 - `limen/org-artist-organ-face-0704-54ed` — f0ca6297 chore(artist): mark ORG-artist-organ-face-0704 as done
 - `limen/org-governance-organ-deepen-0628-90ee` — 3b2001f6 feat: operationalize cvrsvs-honorvm rule as executable validator
@@ -141,10 +198,13 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `limen/vigilia-face-dd81` — 93754f97 The face — one pane that renders the C-suite from the seat (CCO)
 - `limen/vigilia-vitals-7fb7` — efa6864a feat(vitals): add CFO's don't-crash executive for memory pressure reaction
 - `live-snapshot-pre-main-2026-06-21` — f8e17798 snapshot: live working state before moving to released main
+- `pr-426` — 4817ba40 OpenCode daily capacity-fill packet 15
 - `pr-428` — 1245df4f Jules daily capacity-fill packet 09
 - `pr-432` — f6baee2b OpenCode daily capacity-fill packet 01
 - `pr-438` — f045aee6 Agy daily capacity-fill packet 01
+- `pr-440` — 6775009f fix: resolve mypy errors in task typing
 - `pr-445` — 99c28280 Agy daily capacity-fill packet 04
+- `pr-669-governance-deepen` — 3dc75166 ci: declare async archive parameters
 - `promote-domus-genoma` — 6bbd51f7 limen: promote organvm/domus-genoma to ranked value tier
 - `registry-update` — c2490e09 docs(registry): credential CLOSED (keyless lane); Exporter funnel verified BUILT
 - `studium-beowulf-fitts-2-4` — cd8625b8 studium: author Beowulf fitts 2-4 music arcs and essays

@@ -2,9 +2,19 @@
 
 `scripts/reclaim-worktrees.py --apply` removes registered worktrees, standalone
 worktree-like clones, or generated residue only after the loss-free reclaim gate
-passes and a matching line exists in `docs/worktree-reclaim-acceptance.jsonl`.
-Do not create that JSONL as a cleanup shortcut. It is the human acceptance
-ledger for irreversible local worktree/root removal.
+passes. The merged loss-free classes (`clean+merged+idle` and
+`receipt-remote-merged+clean+idle`) are pre-accepted under the operator standing grant
+`standing-grant-2026-07-09`
+(`docs/removal-acceptance-covenant.md` §Standing grant; disable with
+`LIMEN_RECLAIM_STANDING_ACCEPTANCE=0`). Every other class additionally requires
+a matching line in `docs/worktree-reclaim-acceptance.jsonl`. Do not create that
+JSONL as a cleanup shortcut. It is the human acceptance ledger for irreversible
+local worktree/root removal outside the standing-grant class.
+
+Antigravity/Agy scratch roots are not covered by this worktree standing grant.
+Even when a scratch clone is clean, merged, and idle, physical scratch-root
+removal belongs to `scripts/antigravity-scratch-bridge.py` plus
+`docs/antigravity-scratch-reap-acceptance.jsonl`.
 
 Each JSONL event must be one object with:
 
@@ -30,3 +40,7 @@ Accepted archive statuses and redaction reviews are code-defined in
 `scripts/reclaim-worktrees.py`. Use `not_required_clean_merged_remote` and
 `not_required_remote_only` only when the worktree/root is clean, idle, and
 already preserved by its merged remote/default lifecycle.
+
+Pushed-but-unmerged branches and open PRs are not a removal class. They stay as
+`not-merged-to-default` until the PR is merged or the local patch is proven
+patch-equivalent to the remote default branch.

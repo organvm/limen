@@ -67,6 +67,43 @@ def read_board(path: Path) -> dict:
     return yaml.safe_load(path.read_text())
 
 
+def test_always_working_timeout_fails_open_by_default(tmp_path: Path, monkeypatch, capsys) -> None:
+    root = tmp_path / "root"
+    script = root / "scripts" / "always-working.py"
+    tasks_path = root / "tasks.yaml"
+    script.parent.mkdir(parents=True)
+    script.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    tasks_path.write_text("version: '1.0'\ntasks: []\n", encoding="utf-8")
+    monkeypatch.setenv("LIMEN_ROOT", str(root))
+    monkeypatch.delenv("LIMEN_ALWAYS_WORKING_TIMEOUT_HARD_GATE", raising=False)
+
+    def timeout_capture(*_args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="always-working", timeout=kwargs.get("timeout", 1))
+
+    monkeypatch.setattr(D, "_run_capture", timeout_capture)
+
+    assert D.run_always_working_before_dispatch(tasks_path) is True
+    assert "Always-working gate timed out before dispatch reservation" in capsys.readouterr().out
+
+
+def test_always_working_timeout_can_be_hard_gated(tmp_path: Path, monkeypatch) -> None:
+    root = tmp_path / "root"
+    script = root / "scripts" / "always-working.py"
+    tasks_path = root / "tasks.yaml"
+    script.parent.mkdir(parents=True)
+    script.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    tasks_path.write_text("version: '1.0'\ntasks: []\n", encoding="utf-8")
+    monkeypatch.setenv("LIMEN_ROOT", str(root))
+    monkeypatch.setenv("LIMEN_ALWAYS_WORKING_TIMEOUT_HARD_GATE", "1")
+
+    def timeout_capture(*_args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="always-working", timeout=kwargs.get("timeout", 1))
+
+    monkeypatch.setattr(D, "_run_capture", timeout_capture)
+
+    assert D.run_always_working_before_dispatch(tasks_path) is False
+
+
 def _blocked_admission(*_args, **_kwargs):
     return {
         "allow": False,
@@ -325,6 +362,25 @@ def test_github_actions_lane_requires_configured_workflow(tmp_path: Path, monkey
     assert "github_actions" not in lanes
 
 
+def test_github_actions_lane_uses_configured_executor_workflow(tmp_path: Path, monkeypatch) -> None:
+    gh = tmp_path / "gh"
+    gh.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = workflow ] && [ "$2" = view ] && [ "$3" = custom-agent.yml ]; then\n'
+        "  exit 0\n"
+        "fi\n"
+        "exit 1\n"
+    )
+    gh.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.setenv("LIMEN_GITHUB_ACTIONS_WORKFLOW", "custom-agent.yml")
+
+    status = agent_status("github_actions")
+
+    assert status["reachable"] is True
+    assert "workflow=custom-agent.yml@organvm/limen" in status["detail"]
+
+
 def test_route_distributes_local_work_and_reaches_extended_fleet(tmp_path: Path) -> None:
     """Ideal-form router: repo work spreads across repo-capable lanes by budget+refresh-runway.
 
@@ -568,10 +624,12 @@ def test_dispatch_parallel_skips_needs_human_label(tmp_path: Path, capsys, monke
 
 
 def test_dispatch_parallel_debt_gate_skips_routine_generated_buildout(tmp_path: Path, capsys, monkeypatch) -> None:
+    # Patch _worktree_debt_gate directly (not worktree_debt_exceeded) so the gate fires even
+    # when LIMEN_WORKTREE_DEBT_GATE=0 leaks in from test_async_dispatch._load().
     monkeypatch.setattr(
         D,
-        "worktree_debt_exceeded",
-        lambda: (True, {"debt": 13, "total": 13, "by_reason": {}, "items": []}, 12),
+        "_worktree_debt_gate",
+        lambda: (True, "13 preserved worktree roots exceed cap 12; skipping routine generated build-out this dispatch"),
     )
     tasks_path = tmp_path / "tasks.yaml"
     write_board(
@@ -1175,7 +1233,7 @@ def test_pr_repair_prompt_forbids_assumed_limen_workflow() -> None:
     assert "statusCheckRollup" in prompt
     assert "workflow list" in prompt
     assert "do not assume" in prompt
-    assert "limen-agent.yml" in prompt
+    assert "Limen-owned workflow file" in prompt
 
 
 def test_isolated_local_run_updates_same_repo_pr_head(tmp_path: Path, monkeypatch) -> None:
@@ -1356,6 +1414,30 @@ def test_cleanup_isolated_worktree_retains_clean_noop_branch_for_reclaim(tmp_pat
     assert wt.exists()
     assert not (wt / "node_modules").exists()
     assert branch in _git_ok(repo, "branch", "--list", branch)
+
+
+def test_worktree_birth_receipt_is_written_to_private_gitdir(tmp_path: Path, monkeypatch) -> None:
+    repo, wt, branch = _make_cleanup_repo(tmp_path)
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path / "limen"))
+    task = Task(
+        id="BIRTH-1",
+        title="birth receipt",
+        repo="organvm/limen",
+        target_agent="codex",
+        created=date(2026, 7, 9),
+    )
+
+    D._record_worktree_birth(task, wt, branch, "origin/main", "main", existing_pr=False)
+
+    gitdir = Path(_git_ok(wt, "rev-parse", "--git-dir").strip())
+    if not gitdir.is_absolute():
+        gitdir = wt / gitdir
+    receipt = gitdir / "limen-worktree-birth.json"
+    payload = json.loads(receipt.read_text(encoding="utf-8"))
+    assert payload["task_id"] == "BIRTH-1"
+    assert payload["remote_branch"] == branch
+    assert not (wt / "limen-worktree-birth.json").exists()
+    assert "limen-worktree-birth.json" not in _git_ok(wt, "status", "--porcelain")
 
 
 def test_cleanup_isolated_worktree_preserves_dirty_failed_work(tmp_path: Path) -> None:
@@ -1540,6 +1622,112 @@ def test_failed_result_skips_down_lane_in_default_cascade(tmp_path: Path, monkey
     assert task.target_agent == "jules"
     assert task.dispatch_log[-1].status == "failed->jules"
     assert "tried:claude" in task.labels
+
+
+def test_remote_service_failure_skips_unarmed_ollama_floor(monkeypatch) -> None:
+    import datetime
+
+    monkeypatch.setattr(D, "_lane_cascade", lambda: ["jules", "ollama", "opencode"])
+    monkeypatch.setattr(D, "local_floor_enabled", lambda: False)
+
+    task = Task(
+        id="REMOTE-FAIL",
+        title="remote service failure",
+        repo="organvm/limen",
+        type="code",
+        target_agent="jules",
+        status="open",
+        created=date(2026, 7, 9),
+        labels=[],
+    )
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    D._apply_result(task, "jules", False, now, BudgetTrack(date="2026-07-09"))
+
+    assert task.status == "open"
+    assert task.target_agent == "opencode"
+    assert task.dispatch_log[-1].status == "failed->opencode"
+    assert task.dispatch_log[-1].output == "remote/service lane failed; reopened to healthy fleet cascade"
+    assert "tried:jules" in task.labels
+
+
+def test_remote_service_failure_can_use_armed_matching_ollama_floor(monkeypatch) -> None:
+    import datetime
+
+    monkeypatch.setattr(D, "_lane_cascade", lambda: ["jules", "ollama", "opencode"])
+    monkeypatch.setattr(D, "local_floor_enabled", lambda: True)
+    monkeypatch.setattr(D, "local_floor_classes", lambda: {"scan"})
+    monkeypatch.setattr(D, "ollama_model", lambda: "qwen3:8b")
+
+    task = Task(
+        id="REMOTE-FLOOR",
+        title="remote service floor fallback",
+        repo="organvm/limen",
+        type="scan",
+        target_agent="jules",
+        status="open",
+        created=date(2026, 7, 9),
+        labels=[],
+    )
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    D._apply_result(task, "jules", False, now, BudgetTrack(date="2026-07-09"))
+
+    assert task.status == "open"
+    assert task.target_agent == "ollama"
+    assert task.dispatch_log[-1].status == "failed->ollama"
+    assert "tried:jules" in task.labels
+
+
+def test_agent_can_run_task_blocks_unarmed_ollama_code(monkeypatch) -> None:
+    monkeypatch.setattr(D, "local_floor_enabled", lambda: False)
+
+    task = Task(
+        id="HEAL-rebase-org-repo-1",
+        title="rebase/resolve conflicts",
+        repo="organvm/example",
+        type="code",
+        target_agent="ollama",
+        status="open",
+        created=date(2026, 7, 9),
+    )
+
+    assert not D.agent_can_run_task("ollama", task)
+
+
+def test_agent_can_run_task_allows_armed_ollama_floor_class(monkeypatch) -> None:
+    monkeypatch.setattr(D, "local_floor_enabled", lambda: True)
+    monkeypatch.setattr(D, "local_floor_classes", lambda: {"scan"})
+    monkeypatch.setattr(D, "ollama_model", lambda: "qwen3:8b")
+
+    task = Task(
+        id="SCAN-org-repo-1",
+        title="scan repository links",
+        repo="organvm/example",
+        type="scan",
+        target_agent="ollama",
+        status="open",
+        created=date(2026, 7, 9),
+    )
+
+    assert D.agent_can_run_task("ollama", task)
+
+
+def test_local_lanes_do_not_run_value_registry_promotion_tasks() -> None:
+    task = Task(
+        id="DISCOVER-organvm-example",
+        title="Discover latent value",
+        repo="organvm/example",
+        type="research",
+        target_agent="any",
+        status="open",
+        created=date(2026, 7, 9),
+        context='append "organvm/example" to value-repos.json after writing DISCOVERY.md',
+    )
+
+    assert not D.agent_can_run_task("claude", task)
+    assert not D.agent_can_run_task("codex", task)
+    assert D.agent_can_run_task("jules", task)
 
 
 def test_default_cascade_uses_reachable_auto_lanes(monkeypatch) -> None:

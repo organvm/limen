@@ -160,8 +160,11 @@ def test_parked_on_pushed_branch_unparks(checkout, tmp_path):
     assert _git("rev-parse", "work", cwd=clone).stdout.strip() == work_sha  # branch ref survives
 
 
-def test_parked_with_unpushed_commit_fails_open(checkout, tmp_path):
-    """A parked branch carrying a commit origin does not have must NEVER be auto-switched away."""
+def test_parked_with_unpushed_commit_preserves_then_unparks(checkout, tmp_path):
+    """PRESERVE-THEN-UNPARK (2026-07-09): a parked branch carrying an unpushed commit is not
+    abandoned and not left stuck — the valve PUSHES the commit to origin (his push-first rule),
+    then rests HEAD on the release. The old fail-open ('not safe on origin/work') stranded the
+    daemon for 5 days."""
     clone, bare = checkout
     _git("switch", "-q", "-c", "work", cwd=clone)
     _git("push", "-q", "-u", "origin", "work", cwd=clone)
@@ -169,14 +172,15 @@ def test_parked_with_unpushed_commit_fails_open(checkout, tmp_path):
     _origin_advance(bare, tmp_path, "rel.txt", "r\n", "release advances")
     r = _run_sync(clone)
     assert r.returncode == 0
-    assert "not safe on origin/work" in r.stdout, r.stdout + r.stderr
-    assert _git("rev-parse", "--abbrev-ref", "HEAD", cwd=clone).stdout.strip() == "work"
-    assert _git("rev-parse", "HEAD", cwd=clone).stdout.strip() == local_sha
+    assert "UNPARKED" in r.stdout, r.stdout + r.stderr
+    assert _git("rev-parse", "--abbrev-ref", "HEAD", cwd=clone).stdout.strip() == "main"
+    _git("fetch", "-q", "origin", "work", cwd=clone)
+    assert _git("rev-parse", "origin/work", cwd=clone).stdout.strip() == local_sha  # pushed, preserved
 
 
-def test_parked_with_tracked_dirt_fails_open(checkout, tmp_path):
-    """Tracked dirt beyond tasks.yaml is potential session work -> capture.sh owns landing it;
-    the valve must not carry or drop it."""
+def test_parked_with_tracked_dirt_preserves_then_unparks(checkout, tmp_path):
+    """Tracked dirt beyond tasks.yaml is session work — the valve COMMITS it onto the branch and
+    pushes (preserve), then rests HEAD on the release. It is neither carried onto main nor dropped."""
     clone, bare = checkout
     _git("switch", "-q", "-c", "work", cwd=clone)
     _git("push", "-q", "-u", "origin", "work", cwd=clone)
@@ -184,9 +188,11 @@ def test_parked_with_tracked_dirt_fails_open(checkout, tmp_path):
     (clone / "base.txt").write_text("uncommitted session work\n")  # tracked file, dirty
     r = _run_sync(clone)
     assert r.returncode == 0
-    assert "tracked dirt beyond tasks.yaml" in r.stdout, r.stdout + r.stderr
-    assert _git("rev-parse", "--abbrev-ref", "HEAD", cwd=clone).stdout.strip() == "work"
-    assert (clone / "base.txt").read_text() == "uncommitted session work\n"  # dirt untouched
+    assert "UNPARKED" in r.stdout, r.stdout + r.stderr
+    assert _git("rev-parse", "--abbrev-ref", "HEAD", cwd=clone).stdout.strip() == "main"
+    _git("fetch", "-q", "origin", "work", cwd=clone)
+    preserved = _git("show", "origin/work:base.txt", cwd=clone).stdout
+    assert "uncommitted session work" in preserved  # dirt committed + pushed, not dropped
 
 
 def test_parked_unpark_preserves_live_tasks_yaml(checkout, tmp_path):
@@ -268,7 +274,7 @@ def _add_wt(main: Path, wtroot: Path, name: str, branch_from="origin/main"):
     return path
 
 
-def _run_reclaim(wtroot: Path, limen_root: Path, apply=True, extra_env=None):
+def _run_reclaim(wtroot: Path, limen_root: Path, apply=True, extra_env=None, extra_args=None):
     env = {
         **os.environ,
         "LIMEN_WORKTREE_ROOT": str(wtroot),
@@ -283,6 +289,8 @@ def _run_reclaim(wtroot: Path, limen_root: Path, apply=True, extra_env=None):
     args = ["python3", str(RECLAIM)]
     if apply:
         args += ["--apply", "--force"]
+    if extra_args:
+        args += list(extra_args)
     return subprocess.run(args, capture_output=True, text=True, env=env)
 
 
@@ -316,12 +324,24 @@ def _write_reclaim_acceptance(
     path.write_text(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
 
 
-def test_reclaim_requires_acceptance_for_clean_pushed_idle(tmp_path):
+def test_reclaim_standing_grant_removes_clean_pushed_idle(tmp_path):
+    # covenant standing grant 2026-07-09: the loss-free class needs no ledger event
     main, bare, wtroot = _wt_root_with(tmp_path)
     dead = _add_wt(main, wtroot, "dead-task")  # clean, on origin/main, will be aged
     _age(dead, 5)
     (main / "logs").mkdir(exist_ok=True)
     r = _run_reclaim(wtroot, main, apply=True)
+    assert r.returncode == 0, r.stderr
+    assert not dead.exists(), r.stdout
+    assert "reclaimed" in r.stdout
+
+
+def test_reclaim_requires_acceptance_when_standing_grant_disabled(tmp_path):
+    main, bare, wtroot = _wt_root_with(tmp_path)
+    dead = _add_wt(main, wtroot, "dead-task")  # clean, on origin/main, will be aged
+    _age(dead, 5)
+    (main / "logs").mkdir(exist_ok=True)
+    r = _run_reclaim(wtroot, main, apply=True, extra_env={"LIMEN_RECLAIM_STANDING_ACCEPTANCE": "0"})
     assert r.returncode == 0, r.stderr
     assert dead.exists(), r.stdout
     assert "missing-reclaim-acceptance" in r.stdout
@@ -354,7 +374,7 @@ def test_reclaim_keeps_dirty_unpushed_and_active(tmp_path):
     _git("commit", "-q", "-m", "unpushed", cwd=unpushed)
     _age(unpushed, 5)
 
-    active = _add_wt(main, wtroot, "active")  # clean+pushed but freshly touched (recent mtime)
+    active = _add_wt(main, wtroot, "active")  # clean but freshly touched (recent mtime)
 
     r = _run_reclaim(wtroot, main, apply=True)
     assert r.returncode == 0, r.stderr
@@ -363,6 +383,8 @@ def test_reclaim_keeps_dirty_unpushed_and_active(tmp_path):
 
 
 def test_reclaim_keeps_clean_pushed_unmerged_branch(tmp_path):
+    # Merge-before-reap rule (2026-07-09): pushed preservation is not closure. The branch must
+    # merge before the local checkout is eligible for removal.
     main, bare, wtroot = _wt_root_with(tmp_path)
     (main / "logs").mkdir(exist_ok=True)
 
@@ -379,7 +401,25 @@ def test_reclaim_keeps_clean_pushed_unmerged_branch(tmp_path):
     assert "not-merged-to-default" in r.stdout
 
 
-def test_reclaim_removes_clean_idle_remote_merged_receipt(tmp_path):
+def test_reclaim_keeps_pushed_unmerged_without_escape_hatch(tmp_path):
+    # Pushed-but-unmerged worktrees are kept as not-merged-to-default.
+    main, bare, wtroot = _wt_root_with(tmp_path)
+    (main / "logs").mkdir(exist_ok=True)
+
+    branch = _add_wt(main, wtroot, "pushed-unmerged-off")
+    _git("checkout", "-q", "-b", "feature-off", cwd=branch)
+    _commit(branch, "feature.txt", "unique work\n", "feature")
+    _git("push", "-q", "origin", "HEAD:feature-off", cwd=branch)
+    _age(branch, 5)
+
+    r = _run_reclaim(wtroot, main, apply=True)
+
+    assert r.returncode == 0, r.stderr
+    assert branch.exists(), r.stdout
+    assert "not-merged-to-default" in r.stdout
+
+
+def test_reclaim_removes_clean_idle_remote_merged_receipt_under_standing_grant(tmp_path):
     main, bare, wtroot = _wt_root_with(tmp_path)
     (main / "logs").mkdir(exist_ok=True)
     receipts = main / "docs" / "worktree-preservation-receipts.json"
@@ -406,8 +446,6 @@ def test_reclaim_removes_clean_idle_remote_merged_receipt(tmp_path):
         ),
         encoding="utf-8",
     )
-    _write_reclaim_acceptance(main, "receipt-merged", reason="receipt-remote-merged+clean+idle")
-
     r = _run_reclaim(wtroot, main, apply=True)
 
     assert r.returncode == 0, r.stderr
@@ -484,6 +522,23 @@ def test_reclaim_dry_run_removes_nothing(tmp_path):
     assert r.returncode == 0
     assert dead.exists()  # dry-run never deletes
     assert "dry-run" in r.stdout
+
+
+def test_reclaim_check_json_reports_reapable_candidates_without_deleting(tmp_path):
+    main, bare, wtroot = _wt_root_with(tmp_path)
+    dead = _add_wt(main, wtroot, "dead")
+    _age(dead, 5)
+    (main / "logs").mkdir(exist_ok=True)
+
+    r = _run_reclaim(wtroot, main, apply=False, extra_args=["--check", "--json"])
+
+    assert r.returncode == 0, r.stderr
+    payload = json.loads(r.stdout)
+    assert dead.exists()
+    assert payload["mode"] == "check"
+    assert payload["reapable_count"] == 1
+    assert payload["would_reclaim"][0]["root"] == "dead"
+    assert payload["would_reclaim"][0]["reason"] == "clean+merged+idle"
 
 
 def test_reclaim_removes_generated_log_shell(tmp_path):

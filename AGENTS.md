@@ -92,6 +92,8 @@ source of truth. A local checkout is a disposable cache or staging area; it is n
   receipt before trusting a local clone.
 - If local work is required, create it in an isolated worktree or scratch lane, push/open the remote
   receipt, then reap the local cache once lifecycle custody is proven.
+- Reaping local caches requires merged or patch-equivalent remote custody. A pushed branch or open PR
+  is not enough to delete the local checkout; merge it first, or solve the reason it cannot merge.
 - Do not fall back to local files when the canonical object is remote and queryable.
 - Do not let local clone presence, local profile copies, or stale generated artifacts define public
   truth. If a remote cannot be updated, record the owner repo, missing gate, and next command.
@@ -109,6 +111,27 @@ library and processing substrate, not random leftovers from a recovery event.
   and bulk scans; when unplugged, continue from remote receipts and cached indexes.
 - Do not move, delete, dedupe, or purge personal data without the relevant two-copy/restore gate and
   an owner receipt.
+
+## Autonomy Continuation
+
+When the human explicitly says to keep working until usage is spent or everything is done, that is an
+operating order, not motivation text.
+
+- Do not leave `logs/AUTONOMY_PAUSED` in place unless a higher-priority safety gate requires it. If
+  the policy already permits dispatch, remove the stale pause marker, verify the heartbeat LaunchAgent
+  is loaded, and record any remaining blocker in the owning receipt.
+- Fan out all healthy remote lanes according to live usage telemetry. Jules is a remote lane; do not
+  count Jules against local CPU or disk concurrency. If Jules is exhausted or rate-limited, record that
+  from `logs/usage.json` and use the remaining healthy lanes.
+- Keep local lanes bounded by host pressure and local concurrency (`LIMEN_LOCAL_LIMIT`,
+  `--local-per-lane`, and `--max`), but do not convert a local cap into a global fleet cap.
+- If disk pressure is part of the correction, dry-run proof is not enough. Run the accepted reclaim
+  path until it reaches a fixed point, deleting only roots the reclaim script classifies as clean,
+  merged or patch-equivalent, idle, and remote-preserved. Anything left must be owner-routed by its
+  concrete reason (`dirty`, `unpushed`, `not-merged-to-default`, `active`, `not-a-git-dir`), not
+  explained away in chat.
+- A zero-launch dispatch command is not progress. If a lane filter launches nothing, inspect the board
+  and usage telemetry, then dispatch the actual eligible lanes or record the exact blocker.
 
 ## Pain Point Ownership
 
@@ -139,8 +162,9 @@ Valid closure forms are:
 - explicit blocker naming the external gate and next command.
 
 Do not delete, reap, archive-away, or mark closed merely because a lane timed out, produced no diff,
-lost context, or looked stale. If a worktree produced no usable code, emit the plan/owner task that
-captures the prompt's intent, then close the worktree only after remote/archive custody is proven.
+lost context, looked stale, or was merely pushed to a remote branch. If a worktree produced no usable
+code, emit the plan/owner task that captures the prompt's intent, then close the worktree only after
+the work is merged or proven patch-equivalent to the remote default branch.
 
 ## Task States
 
@@ -356,7 +380,7 @@ checks.
 - You have access to the full filesystem — `$LIMEN_ROOT/tasks.yaml` is a regular file.
 - Support `limen` as a subagent: when asked, run the limen CLI or read/write tasks.yaml directly.
 - **Tier subagent fan-out by job.** Task/Workflow subagents inherit the session model; pick each agent's tier by its job (`.claude/agents/` types, or an explicit `model`/`effort`) so trivial workers never ride Opus. Authority: `cli/src/limen/model_selection.py`; details in CLAUDE.md → Parallel Exploration & Fan-Out.
-- **Fable is opt-in and acceptance-gated.** Treat it as the reserved top tier above Opus, not as the default Claude model. Before any Fable run, record `scripts/fable-allotment.py accept ...`, export `LIMEN_FABLE_ACCEPTANCE=<receipt>`, and keep the run inside `docs/fable-allotment.md`'s weekly caps.
+- **Fable plans, cheaper tiers build.** Fable's role is PLAN-ONLY: it does the deep analysis, emits a build packet into a worktree, and hands off to a cheaper tier (Opus/Sonnet/Haiku) that builds; building on Fable is prohibited. It is acceptance-gated (`scripts/fable-allotment.py accept ...`, `LIMEN_FABLE_ACCEPTANCE=<receipt>`) AND live runtime-capped against actual weekly tokens burned (40% deliberate / 50% hard, `scripts/fable-allotment.py balance` → `logs/fable-allotment.json`, enforced in `cli/src/limen/model_selection.py`). Full doctrine + caps: `docs/fable-allotment.md`.
 
 ### Gemini
 - You are Gemini CLI (v0.44.1+). Read `$LIMEN_ROOT/tasks.yaml` at session start.

@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "cli" / "src"))
 
 from limen import worktree_debt as wd  # noqa: E402
+from limen import worktree_roots as wr  # noqa: E402
 from limen.worktree_debt import worktree_debt_report  # noqa: E402
 
 
@@ -99,6 +100,27 @@ def test_generated_log_shell_is_visible_but_not_debt(tmp_path: Path, monkeypatch
     assert report["items"][0]["reason"] == "generated-log-shell"
     assert report["items"][0]["debt"] is False
     assert report["debt"] == 0
+
+
+def test_antigravity_scratch_is_managed_by_bridge_not_worktree_debt(tmp_path: Path, monkeypatch):
+    worktrees = tmp_path / ".limen-worktrees"
+    worktrees.mkdir()
+    scratch = tmp_path / "agy-scratch"
+    root = scratch / "clean-merged-root"
+    root.mkdir(parents=True)
+    monkeypatch.setenv("LIMEN_WORKTREE_ROOT", str(worktrees))
+    monkeypatch.setenv("LIMEN_RECLAIM_CLAUDE_WT", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_AGY_SCRATCH", "1")
+    monkeypatch.setenv("LIMEN_AGY_SCRATCH_ROOT", str(scratch))
+
+    report = worktree_debt_report(tmp_path)
+
+    assert report["items"][0]["name"] == "clean-merged-root"
+    assert report["items"][0]["reason"] == "antigravity-scratch-managed"
+    assert report["items"][0]["debt"] is False
+    assert report["items"][0]["reapable"] is False
+    assert report["debt"] == 0
+    assert report["reapable"] == 0
 
 
 def test_remote_superseded_receipt_is_visible_but_not_debt(tmp_path: Path, monkeypatch):
@@ -277,6 +299,94 @@ def test_clean_git_root_still_classifies_without_receipt(tmp_path: Path, monkeyp
     assert report["items"][0]["name"] == "git-root"
     assert report["items"][0]["reason"] == "unpushed-commits"
     assert report["items"][0]["debt"] is True
+    assert report["items"][0]["reapable"] is False
+
+
+def test_default_worktree_root_uses_limen_worktrees_env(tmp_path: Path, monkeypatch):
+    scratch = tmp_path / "scratch" / "limen-worktrees"
+    monkeypatch.delenv("LIMEN_WORKTREE_ROOT", raising=False)
+    monkeypatch.setenv("LIMEN_WORKTREES", str(scratch))
+
+    assert wr.effective_worktree_root() == scratch
+
+
+def test_clean_pushed_unmerged_root_is_debt(tmp_path: Path, monkeypatch):
+    source = tmp_path / "source"
+    source.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=source, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=source, check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=source, check=True)
+    (source / "README.md").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=source, check=True)
+    subprocess.run(["git", "commit", "-qm", "base"], cwd=source, check=True)
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "clone", "-q", "--bare", str(source), str(bare)], cwd=tmp_path, check=True)
+    main = tmp_path / "main"
+    subprocess.run(["git", "clone", "-q", str(bare), str(main)], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=main, check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=main, check=True)
+
+    worktrees = tmp_path / ".limen-worktrees"
+    branch = worktrees / "pushed-branch"
+    worktrees.mkdir()
+    subprocess.run(["git", "worktree", "add", "-q", str(branch), "-b", "feature"], cwd=main, check=True)
+    (branch / "feature.txt").write_text("feature\n", encoding="utf-8")
+    subprocess.run(["git", "add", "feature.txt"], cwd=branch, check=True)
+    subprocess.run(["git", "commit", "-qm", "feature"], cwd=branch, check=True)
+    subprocess.run(["git", "push", "-q", "origin", "HEAD:feature"], cwd=branch, check=True)
+    subprocess.run(["git", "fetch", "-q", "origin", "feature:refs/remotes/origin/feature"], cwd=branch, check=True)
+
+    monkeypatch.setenv("LIMEN_WORKTREE_ROOT", str(worktrees))
+    monkeypatch.setenv("LIMEN_RECLAIM_CLAUDE_WT", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_REPO_LOCAL_WT", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_REGISTERED_WT", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_MIN_AGE_H", "0")
+
+    report = worktree_debt_report(tmp_path)
+
+    assert report["debt"] == 1
+    assert report["reapable"] == 0
+    assert report["items"][0]["reason"] == "not-merged-to-default"
+    assert report["items"][0]["debt"] is True
+    assert report["items"][0]["reapable"] is False
+
+
+def test_clean_pushed_unmerged_root_is_debt_without_escape_hatch(tmp_path: Path, monkeypatch):
+    source = tmp_path / "source"
+    source.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=source, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=source, check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=source, check=True)
+    (source / "README.md").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=source, check=True)
+    subprocess.run(["git", "commit", "-qm", "base"], cwd=source, check=True)
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "clone", "-q", "--bare", str(source), str(bare)], cwd=tmp_path, check=True)
+    main = tmp_path / "main"
+    subprocess.run(["git", "clone", "-q", str(bare), str(main)], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=main, check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=main, check=True)
+
+    worktrees = tmp_path / ".limen-worktrees"
+    branch = worktrees / "pushed-branch"
+    worktrees.mkdir()
+    subprocess.run(["git", "worktree", "add", "-q", str(branch), "-b", "feature"], cwd=main, check=True)
+    (branch / "feature.txt").write_text("feature\n", encoding="utf-8")
+    subprocess.run(["git", "add", "feature.txt"], cwd=branch, check=True)
+    subprocess.run(["git", "commit", "-qm", "feature"], cwd=branch, check=True)
+    subprocess.run(["git", "push", "-q", "origin", "HEAD:feature"], cwd=branch, check=True)
+    subprocess.run(["git", "fetch", "-q", "origin", "feature:refs/remotes/origin/feature"], cwd=branch, check=True)
+
+    monkeypatch.setenv("LIMEN_WORKTREE_ROOT", str(worktrees))
+    monkeypatch.setenv("LIMEN_RECLAIM_CLAUDE_WT", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_REPO_LOCAL_WT", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_REGISTERED_WT", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_MIN_AGE_H", "0")
+    report = worktree_debt_report(tmp_path)
+
+    assert report["debt"] == 1
+    assert report["reapable"] == 0
+    assert report["items"][0]["reason"] == "not-merged-to-default"
 
 
 def test_nested_live_checkout_child_is_not_independent_worktree_debt(tmp_path: Path, monkeypatch):

@@ -43,8 +43,13 @@ ensure_web_app_deps() {
 
 step "Compile Python modules and validate shell syntax"
 cd "$ROOT"
-python3 -m py_compile web/api/main.py cli/src/limen/*.py scripts/probe-runtime-adapter.py scripts/validate-lifecycle-adapters.py scripts/validate-task-board.py scripts/worktree-debt.py scripts/worktree-pr-receipts.py scripts/continuation-beat.py scripts/codex-token-accounting.py scripts/overnight-watch.py scripts/handoff-relay.py scripts/session-corpus-ledger.py scripts/corpus-feed.py scripts/prompt-lifecycle-ledger.py scripts/prompt-priority-map.py scripts/prompt-batch-review-ledger.py scripts/prompt-packet-ledger.py scripts/current-session-fanout-plan.py scripts/corpus-command-center.py scripts/capability-substrate-ledger.py scripts/consolidation-gates.py scripts/network-health.py scripts/dispatch-health.py scripts/dispatch-admission.py scripts/check-dispatch-admission.py scripts/always-working.py scripts/live-root-gate.py scripts/session-blockers-ledger.py scripts/session-lifecycle-pressure.py scripts/session-attack-paths.py scripts/conductor-tranche.py scripts/session-value-review.py scripts/enactment-audit.py scripts/antigravity-scratch-bridge.py scripts/reap_acceptance.py scripts/check-removal-acceptance.py scripts/cvstos-organ.py scripts/armed-valve-audit.py scripts/ship-gate.py scripts/heal-convergence.py scripts/async-run-one.py scripts/ask-gate.py
-bash -n scripts/preflight-cloud-run.sh scripts/probe-local-runtime.sh scripts/probe-local-worker.sh scripts/heartbeat-loop.sh scripts/verify-whole.sh scripts/merge-policy.sh scripts/omega.sh scripts/tests/merge-policy.test.sh scripts/tests/enactment-audit.test.sh scripts/tests/armed-valve-audit.test.sh scripts/tests/ship-gate.test.sh scripts/tests/heal-convergence.test.sh scripts/tests/ask-gate.test.sh scripts/tests/omega.test.sh scripts/hooks/session-lifecycle-pressure.sh scripts/netmode.sh
+# File sets DERIVE from the GATES registry (institutio/governance/gates.yaml) — the
+# hand-maintained argv lists drifted three times in one day; check-gates.py ratchet
+# `verify_whole_derives` now fails any literal list reintroduced here.
+# shellcheck disable=SC2046
+python3 -m py_compile $(python3 scripts/verify.py --print-files py-syntax)
+# shellcheck disable=SC2046
+bash -n $(python3 scripts/verify.py --print-files bash-syntax)
 if command -v plutil >/dev/null; then
   plutil -lint container/launchd/com.user.netmeter.plist
   plutil -lint container/launchd/com.limen.overnight-watch.plist
@@ -68,8 +73,17 @@ python3 organs/social/validate-social.py --fleet --quiet
 step "Verify the merge-policy predicate (verdict matrix regression test)"
 bash scripts/tests/merge-policy.test.sh
 
+step "Verify the trusted-Bash hook decision matrix (permission-hang killer, hermetic)"
+bash scripts/tests/allow-trusted-cd-git.test.sh
+
+step "Verify the resolver selection fixtures (verify.py implicates exactly the registered gates)"
+bash scripts/tests/verify-resolver.test.sh
+
 step "Verify the enactment predicate (declared-ON fleet flags are actually wired live, not just merged)"
 bash scripts/tests/enactment-audit.test.sh
+
+step "Verify the sync-release unpark valve preserves parked dirt to origin before resting on release"
+bash scripts/tests/sync-release.test.sh
 
 step "Verify the armed-valve predicate (parked levers vs silently-off valves)"
 bash scripts/tests/armed-valve-audit.test.sh
@@ -86,6 +100,9 @@ step "Verify the heal-convergence predicate (chronic heal stalls trip; receipts 
 bash scripts/tests/heal-convergence.test.sh
 # Fixture rungs only here (fixture PRs + fixture clock + fixture receipts — deterministic);
 # the live open-heal-PR count and chronic gate run in the beat via metabolize.sh step 0g.
+
+step "Verify the worktree-commit-guard hook (live-main commit deny matrix, hermetic fixture)"
+bash scripts/tests/worktree-commit-guard.test.sh
 
 step "Verify the ask-gate predicate (intake asks are predicate-shaped, bounded, owned)"
 bash scripts/tests/ask-gate.test.sh
@@ -108,6 +125,9 @@ python3 scripts/check-agent-docs.py
 
 step "Verify dispatch admission cannot be bypassed by overnight launch paths"
 python3 scripts/check-dispatch-admission.py
+
+step "Verify the gate registry matches the workflows and consumers (GATES drift predicate)"
+python3 scripts/check-gates.py
 
 step "Verify local removal acceptance contracts require archive and redaction proof"
 python3 scripts/check-removal-acceptance.py
@@ -228,6 +248,10 @@ PY
 fi
 
 step "Check diff hygiene"
-git diff --check
+# Exclude daemon-OWNED live state (canonical list: scripts/capture.sh:46 RUNTIME_GLOBS). The heartbeat
+# rewrites tasks.yaml every beat under queue_lock, so an unrelated session's whole-system predicate must
+# not fail — or loop re-polling toward an unreachable "clean tree" fixed point — on churn it does not own.
+# Pinned to exact names (NOT a broad '*.lock', which would wrongly drop tracked lockfiles).
+git diff --check -- ':(exclude)tasks.yaml' ':(exclude)tasks.yaml.lock'
 
 printf '\nWhole-system verification passed\n'

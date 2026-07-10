@@ -55,6 +55,11 @@ export LIMEN_WORKDIR="${LIMEN_WORKDIR:-$HOME/Workspace}"
 export LIMEN_ISOLATION="${LIMEN_ISOLATION:-worktree}"
 export GEMINI_CLI_TRUST_WORKSPACE="${GEMINI_CLI_TRUST_WORKSPACE:-true}"
 export PYTHONPATH="$LIMEN_ROOT/cli/src"
+# macOS 26.6 fork-safety mitigation — defuse Apple's Network.framework atfork child
+# handler that SIGSEGVs in os_log on the child side of fork()+exec() (any subprocess with
+# cwd=/preexec_fn). Must precede every python in the daemon loop; see metabolize.sh for the
+# full note and fork-oslog crash report 2026-07-09. Mechanism-cure = posix_spawn (no cwd=).
+export OS_ACTIVITY_MODE="${OS_ACTIVITY_MODE:-disable}"
 cd "$LIMEN_ROOT" || exit 1
 
 [ -f "$HOME/.limen.env" ] && { set -a; . "$HOME/.limen.env"; set +a; }
@@ -256,6 +261,7 @@ while true; do
   c=$(( c + 1 ))
   worked=0
   VITALS_PRESSURE=0
+  VITALS_THROTTLE=0
   echo "──── beat $c $(date '+%F %T') ────"
   MODE="$(python3 "$LIMEN_ROOT/scripts/autonomy-governor.py" mode 2>/dev/null || echo paused)"
   if [ "$MODE" = "paused" ]; then
@@ -280,15 +286,19 @@ while true; do
     sleep "$beat"
     continue
   fi
-  # VITALS GATE (VIGILIA build #1) — memory pressure is a NORMAL idle beat, not a crash.
-  # The autonomic CFO: under kernel memory pressure, stop opening new dispatch lanes (and shed
-  # ollama under critical), mirroring the offline gate one scale up. This is the hand that was
-  # missing at the 08:47 kernel panic. Fail-OPEN: any fault → 'ok' → the beat proceeds.
+  # VITALS GATE (VIGILIA build #1) — memory pressure is a NORMAL condition, not a crash.
+  # The autonomic CFO, graduated: at >= warn dispatch CONTINUES at a reduced cap (a 16 GB host
+  # lives at warn under normal load — a full idle beat here starved the fleet for a night,
+  # 2026-07-08: 273 skipped beats with budget unused); only >= critical idles the beat and
+  # sheds ollama. Fail-OPEN: any fault → 'ok' → the beat proceeds.
   if [ "${LIMEN_VIGILIA:-1}" = "1" ]; then
     _vitals="$(python3 -m limen.vigilia vitals-gate 2>/dev/null || echo ok)"
     if [ "$_vitals" = "shed" ]; then
-      echo "  vitals: memory pressure ≥ warn — skip dispatch-heavy work; light organs still fire"
+      echo "  vitals: memory pressure ≥ critical — skip dispatch-heavy work; light organs still fire"
       VITALS_PRESSURE=1
+    elif [ "$_vitals" = "throttle" ]; then
+      echo "  vitals: memory pressure ≥ warn — dispatch throttled (cap ÷ ${LIMEN_VITALS_THROTTLE_DIVISOR:-2})"
+      VITALS_THROTTLE=1
     fi
   fi
   EFFECTIVE_LANES="$LANES"
@@ -409,9 +419,14 @@ while true; do
         echo "── vitals-pressure: dispatch skipped; merge/heal/status organs already ran ──"
       else
         _dt0=$SECONDS
+        _async_max="${LIMEN_ASYNC_MAX:-12}"
+        if [ "$VITALS_THROTTLE" = "1" ]; then
+          _async_max=$(( _async_max / ${LIMEN_VITALS_THROTTLE_DIVISOR:-2} ))
+          [ "$_async_max" -lt 1 ] && _async_max=1
+        fi
         if [ "${LIMEN_DISPATCH_ASYNC:-0}" = "1" ]; then
           out="$(dispatch_bounded python3 "$LIMEN_ROOT/scripts/dispatch-async.py" --lanes "$DISPATCH_LANES" \
-                  --per-lane "$LOCAL_LIMIT" --max "${LIMEN_ASYNC_MAX:-12}" 2>&1)"; _drc=$?
+                  --per-lane "$LOCAL_LIMIT" --max "$_async_max" 2>&1)"; _drc=$?
         else
           out="$(dispatch_bounded python3 "$LIMEN_ROOT/scripts/dispatch-parallel.py" --lanes "$DISPATCH_LANES" \
                   --per-lane "$LOCAL_LIMIT" --workers "${LIMEN_WORKERS:-8}" 2>&1)"; _drc=$?
@@ -465,6 +480,13 @@ while true; do
     [ -n "$_dfree" ] && [ "$_dfree" -le "${LIMEN_DISK_FREE_FLOOR_GIB:-15}" ] 2>/dev/null && HYG_CAD=1
   fi
   due_voice hygiene "$HYG_CAD" && bash "$LIMEN_ROOT/scripts/clone-maintenance.sh" 2>&1 | tail -3 || true
+  # CLONE-REAP — the actual eviction. clone-maintenance.sh only *reports* reapable clones; reap-clones.py
+  # removes the loss-free pushed-mirror class (adversarially-audited gate + standing grant). Beat-wired
+  # 2026-07-09 so the reclaim engine is ALIVE instead of a script that never ran (the round-two storage
+  # deadlock: ~/Workspace crept back because nothing autonomously reaped it). Self-gates on disk pressure
+  # + idle age; inert above the free-floor. Disarm --apply with LIMEN_REAP_CLONES_APPLY=0.
+  REAP_CLONES_ARG=""; [ "${LIMEN_REAP_CLONES_APPLY:-1}" = "1" ] && REAP_CLONES_ARG="--apply"
+  due_voice hygiene "$HYG_CAD" && timeout "${LIMEN_REAP_CLONES_TIMEOUT:-300}" python3 "$LIMEN_ROOT/scripts/reap-clones.py" $REAP_CLONES_ARG 2>&1 | tail -3 || true
   due_voice hygiene "$HYG_CAD" && bash "$LIMEN_ROOT/scripts/heal-claude-update-marker.sh" 2>&1 | tail -1 || true
   due_voice hygiene "$HYG_CAD" && stamp hygiene
   python3 "$LIMEN_ROOT/scripts/emit-tick.py" 2>&1 | tail -1 || true   # tick voice — every beat

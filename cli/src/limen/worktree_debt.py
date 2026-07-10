@@ -17,6 +17,9 @@ DEBT_REASONS = {
     "unpushed-commits",
     "unresolved",
 }
+REAPABLE_REASONS = {
+    "clean+merged+idle",
+}
 
 DOCUMENTED_RESIDUE_LANES = {"documented-residue"}
 DOCUMENTED_RESIDUE_STATUSES = {
@@ -43,12 +46,15 @@ class WorktreeDebtItem(TypedDict):
     path: str
     reason: str
     debt: bool
+    reapable: bool
 
 
 class WorktreeDebtReport(TypedDict):
     total: int
     debt: int
+    reapable: int
     by_reason: dict[str, int]
+    by_reapable_reason: dict[str, int]
     items: list[WorktreeDebtItem]
 
 
@@ -108,23 +114,41 @@ def _git_toplevel(cwd: Path) -> Path | None:
         return Path(top.stdout.strip())
 
 
+def _flag(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"", "0", "false", "no", "off"}
+
+
+def _int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 def _load_preservation_receipts(limen_root: Path) -> dict[str, dict[str, Any]]:
     path = limen_root / "docs" / "worktree-preservation-receipts.json"
     try:
         data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
     except (OSError, ValueError):
         return {}
-    receipts: dict[str, dict[str, Any]] = {}
-    for receipt in data.get("receipts") or []:
-        if not isinstance(receipt, dict):
-            continue
-        root = receipt.get("root")
-        if root:
-            receipts[str(root)] = receipt
+    if not isinstance(data, dict):
+        return {}
+    receipts: dict[str, dict[str, object]] = {}
+    items = data.get("receipts")
+    if isinstance(items, list):
+        for receipt in items:
+            if not isinstance(receipt, dict):
+                continue
+            root = receipt.get("root")
+            if isinstance(root, str) and root:
+                receipts[root] = receipt
     return receipts
 
 
-def _is_documented_residue(path: Path, preservation_receipts: dict[str, dict[str, Any]]) -> bool:
+def _is_documented_residue(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
     receipt = preservation_receipts.get(path.name)
     if not receipt:
         return False
@@ -138,7 +162,7 @@ def _is_documented_residue(path: Path, preservation_receipts: dict[str, dict[str
     )
 
 
-def _is_remote_superseded(path: Path, preservation_receipts: dict[str, dict[str, Any]]) -> bool:
+def _is_remote_superseded(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
     receipt = preservation_receipts.get(path.name)
     if not receipt:
         return False
@@ -147,7 +171,7 @@ def _is_remote_superseded(path: Path, preservation_receipts: dict[str, dict[str,
     return lane in REMOTE_SUPERSEDED_LANES or status in REMOTE_SUPERSEDED_STATUSES
 
 
-def _is_remote_merged(path: Path, preservation_receipts: dict[str, dict[str, Any]]) -> bool:
+def _is_remote_merged(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
     receipt = preservation_receipts.get(path.name)
     if not receipt:
         return False
@@ -156,7 +180,7 @@ def _is_remote_merged(path: Path, preservation_receipts: dict[str, dict[str, Any
     return lane in REMOTE_MERGED_LANES or status in REMOTE_MERGED_STATUSES
 
 
-def _is_remote_pr_open(path: Path, preservation_receipts: dict[str, dict[str, Any]]) -> bool:
+def _is_remote_pr_open(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
     receipt = preservation_receipts.get(path.name)
     if not receipt:
         return False
@@ -165,7 +189,7 @@ def _is_remote_pr_open(path: Path, preservation_receipts: dict[str, dict[str, An
     return lane in REMOTE_PR_OPEN_LANES or status in REMOTE_PR_OPEN_STATUSES
 
 
-def _is_owner_blocker(path: Path, preservation_receipts: dict[str, dict[str, Any]]) -> bool:
+def _is_owner_blocker(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
     receipt = preservation_receipts.get(path.name)
     if not receipt:
         return False
@@ -186,12 +210,25 @@ def is_generated_log_shell(path: Path) -> bool:
     return bool(files) and files <= GENERATED_LOG_SHELL_FILES
 
 
+def _agy_scratch_root() -> Path:
+    home = os.environ.get("HOME", "/Users/4jp")
+    return Path(os.environ.get("LIMEN_AGY_SCRATCH_ROOT", f"{home}/.gemini/antigravity-cli/scratch")).expanduser()
+
+
+def _inside_agy_scratch_root(path: Path) -> bool:
+    try:
+        path.resolve().relative_to(_agy_scratch_root().resolve())
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def _classify(
     path: Path,
     now: float,
     min_age_h: float,
     self_guard: set[Path],
-    preservation_receipts: dict[str, dict[str, Any]],
+    preservation_receipts: dict[str, dict[str, object]],
 ) -> str:
     try:
         resolved = path.resolve()
@@ -199,6 +236,8 @@ def _classify(
         return "unresolved"
     if resolved in self_guard:
         return "self/live-checkout"
+    if _inside_agy_scratch_root(path):
+        return "antigravity-scratch-managed"
     if _is_documented_residue(path, preservation_receipts):
         return "documented-residue"
     if _is_remote_superseded(path, preservation_receipts):
@@ -243,20 +282,40 @@ def worktree_debt_report(limen_root: Path | None = None) -> WorktreeDebtReport:
     preservation_receipts = _load_preservation_receipts(root)
     items: list[WorktreeDebtItem] = []
     by_reason: dict[str, int] = {}
+    by_reapable_reason: dict[str, int] = {}
     for target in iter_worktree_targets(root):
         path = target.path
         reason = _classify(path, now, target.min_age_h, self_guard, preservation_receipts)
         debt = reason in DEBT_REASONS
+        reapable = reason in REAPABLE_REASONS
         by_reason[reason] = by_reason.get(reason, 0) + 1
-        items.append({"name": path.name, "path": str(path), "reason": reason, "debt": debt})
+        if reapable:
+            by_reapable_reason[reason] = by_reapable_reason.get(reason, 0) + 1
+        items.append({"name": path.name, "path": str(path), "reason": reason, "debt": debt, "reapable": reapable})
 
     debt_count = sum(1 for item in items if item["debt"])
-    return {"total": len(items), "debt": debt_count, "by_reason": by_reason, "items": items}
+    reapable_count = sum(1 for item in items if item["reapable"])
+    return {
+        "total": len(items),
+        "debt": debt_count,
+        "reapable": reapable_count,
+        "by_reason": by_reason,
+        "by_reapable_reason": by_reapable_reason,
+        "items": items,
+    }
 
 
 def worktree_debt_exceeded(limit: int | None = None) -> tuple[bool, WorktreeDebtReport, int]:
     effective_limit = limit
     if effective_limit is None:
-        effective_limit = int(os.environ.get("LIMEN_WORKTREE_DEBT_MAX", "12"))
+        effective_limit = _int_env("LIMEN_WORKTREE_DEBT_MAX", 12)
     report = worktree_debt_report()
     return report["debt"] > effective_limit, report, effective_limit
+
+
+def worktree_reapable_exceeded(limit: int | None = None) -> tuple[bool, WorktreeDebtReport, int]:
+    effective_limit = limit
+    if effective_limit is None:
+        effective_limit = _int_env("LIMEN_WORKTREE_REAPABLE_MAX", 0)
+    report = worktree_debt_report()
+    return report["reapable"] > effective_limit, report, effective_limit

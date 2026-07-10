@@ -14,6 +14,7 @@ never force-removes the isolated root or branch itself.
 Dry-run by default (prints the plan); --apply does real worktree→PR. --limit N bounds it.
 Idempotent-ish: skips sessions whose task is already done and empty-diff sessions (no PR).
 """
+
 import argparse
 import os
 import re
@@ -27,11 +28,12 @@ from limen.dispatch import _resolve_repo_dir, _git, _default_branch  # noqa: E40
 from limen.io import load_limen_file  # noqa: E402
 from limen.models import DispatchLogEntry, Task  # noqa: E402
 from limen.tabularius import apply_limen_file_sync  # noqa: E402
+from limen.worktree_roots import default_worktrees_root  # noqa: E402
 import datetime  # noqa: E402
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 TASKS = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
-WT_ROOT = Path(os.environ.get("LIMEN_WORKTREES", Path.home() / "Workspace" / ".limen-worktrees"))
+WT_ROOT = Path(os.environ.get("LIMEN_WORKTREES") or default_worktrees_root())
 JULES = os.environ.get("LIMEN_JULES_BIN", "jules")
 _TASK_ID_RE = re.compile(r"Complete task (\S+?):")
 _GENERATED_CLEAN_PATHS = (
@@ -70,8 +72,7 @@ def completed_sessions(sid_map: dict | None = None):
     (completed sessions never matched → never landed as PRs). sid_map is the robust primary matcher;
     the regex stays as a fallback for sessions we have no local record of."""
     sid_map = sid_map or {}
-    r = subprocess.run([JULES, "remote", "list", "--session"],
-                       capture_output=True, text=True, timeout=90)
+    r = subprocess.run([JULES, "remote", "list", "--session"], capture_output=True, text=True, timeout=90)
     out = []
     for line in r.stdout.splitlines():
         parts = line.split()
@@ -101,8 +102,9 @@ def land_one(task: Task, sid: str, apply: bool) -> str:
         return f"FAIL {task.id}: worktree add ({add.stderr.strip()[:120]})"
     # apply the jules session patch directly into the isolated worktree (the staged-diff check
     # below is the real signal — a failed pull just yields an empty diff → no-op, never a crash)
-    subprocess.run([JULES, "remote", "pull", "--session", sid, "--apply"],
-                   cwd=str(wt), capture_output=True, text=True, timeout=180)
+    subprocess.run(
+        [JULES, "remote", "pull", "--session", sid, "--apply"], cwd=str(wt), capture_output=True, text=True, timeout=180
+    )
     _git(["add", "-A"], wt)
     retain = (
         f"local root retained: {wt}; branch retained: {branch}; "
@@ -113,9 +115,18 @@ def land_one(task: Task, sid: str, apply: bool) -> str:
         generated_cleanup = purge_generated_payloads(wt)
         return f"no-op {task.id}: jules session {sid} produced no diff; generated cleanup {generated_cleanup}; {retain}"
     msg = f"{task.title}\n\nlimen task {task.id} (jules session {sid})"
-    c = _git(["-c", f"user.name={os.environ.get('LIMEN_COMMIT_NAME', '4444J99')}",
-              "-c", f"user.email={os.environ.get('LIMEN_COMMIT_EMAIL', '4444J99@users.noreply.github.com')}",
-              "commit", "-m", msg], wt)
+    c = _git(
+        [
+            "-c",
+            f"user.name={os.environ.get('LIMEN_COMMIT_NAME', '4444J99')}",
+            "-c",
+            f"user.email={os.environ.get('LIMEN_COMMIT_EMAIL', '4444J99@users.noreply.github.com')}",
+            "commit",
+            "-m",
+            msg,
+        ],
+        wt,
+    )
     if c.returncode != 0:
         generated_cleanup = purge_generated_payloads(wt)
         return f"FAIL {task.id}: commit ({c.stderr.strip()[:120]}); generated cleanup {generated_cleanup}; {retain}"
@@ -123,10 +134,26 @@ def land_one(task: Task, sid: str, apply: bool) -> str:
     if p.returncode != 0:
         generated_cleanup = purge_generated_payloads(wt)
         return f"FAIL {task.id}: push ({p.stderr.strip()[:120]}); generated cleanup {generated_cleanup}; {retain}"
-    pr = subprocess.run(["gh", "pr", "create", "--repo", task.repo, "--head", branch,
-                         "--base", base, "--title", f"[limen jules {task.id}] {task.title}"[:100],
-                         "--body", f"Lands completed jules session {sid}.\n\nlimen task {task.id}"],
-                        capture_output=True, text=True, timeout=120)
+    pr = subprocess.run(
+        [
+            "gh",
+            "pr",
+            "create",
+            "--repo",
+            task.repo,
+            "--head",
+            branch,
+            "--base",
+            base,
+            "--title",
+            f"[limen jules {task.id}] {task.title}"[:100],
+            "--body",
+            f"Lands completed jules session {sid}.\n\nlimen task {task.id}",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
     if pr.returncode != 0:
         generated_cleanup = purge_generated_payloads(wt)
         return f"FAIL {task.id}: pr create ({pr.stderr.strip()[:120]}); generated cleanup {generated_cleanup}; {retain}"
@@ -144,9 +171,12 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--limit", type=int, default=3)
-    ap.add_argument("--recover", action="store_true",
-                    help="also re-land jules tasks marked done that NEVER got a PR (the "
-                         "harvest gap: harvest closed them without applying the diff)")
+    ap.add_argument(
+        "--recover",
+        action="store_true",
+        help="also re-land jules tasks marked done that NEVER got a PR (the "
+        "harvest gap: harvest closed them without applying the diff)",
+    )
     args = ap.parse_args()
 
     lf = load_limen_file(TASKS)
@@ -158,7 +188,7 @@ def main() -> int:
     # only — jules-land stores PR urls in session_id too, and those are not sessions.
     sid_map: dict[str, str] = {}
     for t in lf.tasks:
-        for e in (t.dispatch_log or []):
+        for e in t.dispatch_log or []:
             sid = str(e.session_id or "")
             if sid.isdigit():
                 sid_map[sid] = t.id
@@ -184,9 +214,15 @@ def main() -> int:
             pr_url = landed_pr_url(msg, sid)
             t.status = "done"
             t.updated = now
-            t.dispatch_log.append(DispatchLogEntry(
-                timestamp=now, agent="jules", session_id=pr_url, status="done",
-                output=f"jules-land: landed session {sid} as PR"))
+            t.dispatch_log.append(
+                DispatchLogEntry(
+                    timestamp=now,
+                    agent="jules",
+                    session_id=pr_url,
+                    status="done",
+                    output=f"jules-land: landed session {sid} as PR",
+                )
+            )
             apply_limen_file_sync(TASKS, lf, agent="jules-land", session_id="landed-pr")
             done += 1
     if args.apply and done:

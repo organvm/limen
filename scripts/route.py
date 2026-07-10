@@ -57,11 +57,15 @@ from limen.capacity import (  # noqa: E402
     capacity_census,
     derived_floor_from_budget,
     format_capacity_census,
+    local_floor_classes,
+    local_floor_enabled,
+    ollama_model,
     select_lanes,
     task_has_github_issue,
 )
 from limen.io import load_limen_file, queue_lock  # noqa: E402
 from limen.tabularius import apply_limen_file_sync  # noqa: E402
+from limen.model_selection import _claude_fable_classes, _claude_opus_classes  # noqa: E402
 from limen.dispatch import _down_lanes, _reset_budget_if_needed  # noqa: E402
 from limen.workstream import UNASSIGNED, assign_channel  # noqa: E402
 
@@ -478,6 +482,71 @@ def _capable_agents(
     return agents, reasons
 
 
+def _existing_assignment_usable(task: dict, agent: str | None, health: dict[str, bool], workdir: Path) -> bool:
+    """True when an existing ``target_agent`` can still run this open task.
+
+    Routing uses live usage/runway signals. Recomputing every open row on every beat can otherwise
+    reshuffle hundreds of still-valid assignments as telemetry changes by a few tokens, creating board
+    churn with no new work. Keep a healthy/capable assignment sticky; route only empty, down, or
+    incapable assignments to a new lane.
+    """
+    if not agent or agent in {"any", "unroutable", "human"}:
+        return False
+    if not health.get(agent):
+        return False
+
+    repo = task.get("repo")
+    labels = set(task.get("labels") or [])
+    if repo and "slow" in labels and health.get("jules"):
+        return agent == "jules"
+
+    if agent == "ollama":
+        return _local_floor_lane(task, health) == "ollama"
+    if agent in LOCAL_CHECKOUT_AGENTS:
+        return bool(repo)
+    if agent == "jules":
+        return bool(repo)
+    if agent in ISSUE_ASSIGNMENT_AGENTS:
+        return task_has_github_issue(task)
+    if agent == "github_actions":
+        return bool(repo)
+    if agent in ("warp", "oz"):
+        return bool(repo) or _local_checkout(repo, workdir) is not None
+    return False
+
+
+def _local_floor_lane(task: dict, health: dict[str, bool]) -> str | None:
+    """Route a cheap mechanical-class task to the unmetered local ollama floor — DARK by default.
+
+    Only fires when LIMEN_LOCAL_FLOOR=1 (the arm is the parity gate's decision — see
+    organvm/manumissio; operator rule 2026-07-09: nothing switches over until the math maths)
+    AND the floor is actually lit (ollama healthy + a model pulled). Reserved opus/fable classes
+    never route local. A class the value ledger has graded wasted on the ollama lane falls back
+    automatically (self-correcting rollback, same source as _ledger_bias). Fail-soft: any error
+    -> None, i.e. today's routing byte-identical."""
+    try:
+        if not local_floor_enabled():
+            return None
+        if not task.get("repo") or not health.get("ollama"):
+            return None  # the isolated run needs a worktree; the lane must be up
+        classes = _task_classes(task)
+        if not classes & local_floor_classes():
+            return None
+        if classes & (set(_claude_opus_classes()) | set(_claude_fable_classes())):
+            return None  # reserved tiers never drop to the floor
+        try:
+            lanes = json.loads((ROOT / "logs" / "ledger.json").read_text()).get("lanes", {})
+            if classes & set((lanes.get("ollama") or {}).get("waste_classes") or []):
+                return None
+        except Exception:
+            pass  # no ledger yet -> no rollback signal
+        if ollama_model() is None:
+            return None
+        return "ollama"
+    except Exception:
+        return None
+
+
 def route_task(
     task: dict,
     health: dict[str, bool],
@@ -505,6 +574,9 @@ def route_task(
     # if jules is down (never strand — [[no-never-happens-again]]).
     if repo and "slow" in set(task.get("labels") or []) and health.get("jules"):
         return "jules", "slow (timed out on a sync local lane) -> jules async remote (no wall-clock cap)"
+    floor = _local_floor_lane(task, health)
+    if floor:
+        return floor, "local floor class -> ollama (unmetered; armed by parity gate)"
     if repo:
         lane = _pick_repo_worker(task, health, assigned, budget, runway)
         if lane:
@@ -595,7 +667,12 @@ def main() -> int:
     for t in opens:
         # pass the running tally as the assigned-so-far counts so load spreads across lanes,
         # and the live runway so the split steers toward the freshest refresh window.
-        vendor, reason = route_task(t, health, workdir, assigned=tally, budget=budget, runway=runway)
+        current = str(t.get("target_agent") or "")
+        if _existing_assignment_usable(t, current, health, workdir):
+            vendor = current
+            reason = f"existing target_agent {current} is still healthy/capable (sticky route)"
+        else:
+            vendor, reason = route_task(t, health, workdir, assigned=tally, budget=budget, runway=runway)
         tally[vendor] += 1
         print(f"| {t['id']} | {t.get('repo', '-')} | {vendor} | {reason} |")
         if vendor not in ("unroutable",):
@@ -623,7 +700,7 @@ def main() -> int:
             if task.status != "open":
                 continue
             v = assignments.get(task.id)
-            if v:
+            if v and task.target_agent != v:
                 task.target_agent = v
                 applied += 1
             # PURPOSE partition (workstream) — the axis ABOVE target_agent, without which the

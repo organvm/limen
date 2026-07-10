@@ -5,17 +5,18 @@ for "the slowest of N agents gates the whole beat / 900s gates every beat").
 Each beat this does TWO fast, non-blocking things:
   (1) HARVEST — apply any finished background runs (logs/async-runs/*.result.json) to tasks.yaml
       under the queue-lock (reload-fresh + _apply_result, same as the sync commit).
-  (2) RESERVE + LAUNCH — pick open tasks per lane within budget + a GLOBAL CONCURRENCY CAP, mark
+  (2) RESERVE + LAUNCH — pick open tasks per lane within live runway + a LOCAL host slot cap, mark
       them dispatched, then SPAWN detached async-run-one workers and RETURN IMMEDIATELY.
 
 Agents run in the background; their results land on a later beat. Beats stay fast regardless of how
 slow any single agent is. Opt-in: the heartbeat calls this instead of dispatch-parallel.py when
 LIMEN_DISPATCH_ASYNC=1. The synchronous dispatch-parallel.py is left completely unchanged.
 
-Concurrency: at most LIMEN_ASYNC_MAX (default 12) background runs at once; per-agent in-flight count
-is tracked via <task-id>__<agent>.running markers so budgets aren't blown between reserve & harvest.
+Concurrency: at most LIMEN_ASYNC_MAX (default 12) LOCAL background runs at once; remote lanes such as
+Jules are bounded by provider runway, not host slots. Per-agent in-flight count is tracked via
+<task-id>__<agent>.running markers so budgets aren't blown between reserve & harvest.
 
-Usage: dispatch-async.py --lanes auto --per-lane 8 --max 12 [--task-id TASK] [--dry-run]
+Usage: dispatch-async.py --lanes auto --per-lane 8 --local-per-lane 3 --max 12 [--task-id TASK] [--dry-run]
 """
 
 import argparse
@@ -46,8 +47,10 @@ from limen.dispatch import (  # noqa: E402
     _reset_budget_if_needed,
     _restore_done_status,
     _restore_pr_open_status,
+    _routine_generated_buildout,
     _routine_generated_buildout_allowed,
     _superseded_by_rebase_task,
+    _worktree_debt_gate,
     _value_tier_repos,
     agent_can_run_task,
     chronic_dispatch_reason,
@@ -64,6 +67,7 @@ RECEIPT_ARCHIVE = ROOT / ".limen-private" / "async-runs" / "archive"
 WORKER = ROOT / "scripts" / "async-run-one.py"
 _TOKEN_RE = re.compile(r"(github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{12,})")
 _EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+_SAFE_STEM_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
 def _truthy_env(name: str, default: bool = True) -> bool:
@@ -107,10 +111,58 @@ def _now():
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+def _run_stem(task_id: str) -> str:
+    """Return a filename-safe stem while leaving legacy safe task ids unchanged."""
+    if _SAFE_STEM_RE.fullmatch(task_id):
+        return task_id
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", task_id).strip("._-") or "task"
+    digest = hashlib.sha1(task_id.encode("utf-8")).hexdigest()[:12]
+    return f"{slug[:80]}--{digest}"
+
+
+def _run_log_path(task_id: str) -> Path:
+    return RUNS / f"{_run_stem(task_id)}.log"
+
+
+def _result_path(task_id: str) -> Path:
+    return RUNS / f"{_run_stem(task_id)}.result.json"
+
+
+def _running_marker_path(task_id: str, agent: str) -> Path:
+    return RUNS / f"{_run_stem(task_id)}__{agent}.running"
+
+
+def _marker_task_agent(marker: Path) -> tuple[str, str]:
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8"))
+        task_id = str(data.get("task_id") or "")
+        agent = str(data.get("agent") or "")
+        if task_id and agent:
+            return task_id, agent
+    except (OSError, ValueError):
+        pass
+    return marker.name[: -len(".running")].rsplit("__", 1)
+
+
+def _result_task_id(result_file: Path) -> str:
+    try:
+        data = json.loads(result_file.read_text(encoding="utf-8"))
+        task_id = str(data.get("task_id") or "")
+        if task_id:
+            return task_id
+    except (OSError, ValueError):
+        pass
+    return result_file.name[: -len(".result.json")]
+
+
 def _clear_running_markers(task_id: str) -> None:
     prefix = f"{task_id}__"
     for marker in RUNS.glob("*.running"):
-        if marker.name.startswith(prefix):
+        try:
+            marker_task_id, _agent = _marker_task_agent(marker)
+        except ValueError:
+            marker_task_id = ""
+        if marker_task_id == task_id or marker.name.startswith(prefix):
             marker.unlink(missing_ok=True)
 
 
@@ -297,9 +349,9 @@ def reap_stale(max_age_s: int):
     defunct_grace_s = max(1, _env_int("LIMEN_ASYNC_DEFUNCT_GRACE", 120))
     reaped = []
     marker_task_ids = set()
-    result_task_ids = {rf.name[: -len(".result.json")] for rf in RUNS.glob("*.result.json")}
+    result_task_ids = {_result_task_id(rf) for rf in RUNS.glob("*.result.json")}
     for m in RUNS.glob("*__*.running"):
-        tid, agent = m.name[: -len(".running")].rsplit("__", 1)
+        tid, agent = _marker_task_agent(m)
         marker_task_ids.add(tid)
         try:
             info = _running_marker_info(m)
@@ -312,12 +364,12 @@ def reap_stale(max_age_s: int):
         zombie_stuck = isinstance(pid, int) and age > defunct_grace_s and _worker_has_defunct_child(pid)
         if age > max_age_s:
             # if the worker DID finish (result file present), let harvest handle it; don't reap
-            if not (RUNS / f"{tid}.result.json").exists():
+            if not _result_path(tid).exists():
                 # Defer the marker unlink until the reopen is committed under the lock (below), so a
                 # lock timeout can't leave the slot leaked (marker gone, task still 'dispatched').
                 reaped.append((tid, agent, m, pid if isinstance(pid, int) else None))
         elif dead_pid or zombie_stuck:
-            if not (RUNS / f"{tid}.result.json").exists():
+            if not _result_path(tid).exists():
                 reaped.append((tid, agent, m, pid if isinstance(pid, int) else None))
     markerless = []
     try:
@@ -383,10 +435,8 @@ def reap_stale(max_age_s: int):
                         )
                         changed = True
             if markerless:
-                fresh_marker_task_ids = {
-                    m.name[: -len(".running")].rsplit("__", 1)[0] for m in RUNS.glob("*__*.running")
-                }
-                fresh_result_task_ids = {rf.name[: -len(".result.json")] for rf in RUNS.glob("*.result.json")}
+                fresh_marker_task_ids = {_marker_task_agent(m)[0] for m in RUNS.glob("*__*.running")}
+                fresh_result_task_ids = {_result_task_id(rf) for rf in RUNS.glob("*.result.json")}
                 for tid, agent in markerless:
                     t = byid.get(tid)
                     if (
@@ -462,8 +512,8 @@ def inspect_stale(max_age_s: int) -> list[str]:
         except Exception:
             age = max_age_s + 1
         if age > max_age_s:
-            tid, _agent = m.name[: -len(".running")].rsplit("__", 1)
-            if not (RUNS / f"{tid}.result.json").exists():
+            tid, _agent = _marker_task_agent(m)
+            if not _result_path(tid).exists():
                 stale.append(tid)
     return stale
 
@@ -490,27 +540,27 @@ def _running_local() -> int:
     budget, not this local cap."""
     total = 0
     for m in RUNS.glob("*__*.running"):
-        agent = m.name[: -len(".running")].rsplit("__", 1)[1]
+        _task_id, agent = _marker_task_agent(m)
         if agent not in _ASYNC_LANES:
             total += 1
     return total
 
 
 def _running_for(agent: str) -> int:
-    return len(list(RUNS.glob(f"*__{agent}.running")))
+    return sum(1 for marker in RUNS.glob("*__*.running") if _marker_task_agent(marker)[1] == agent)
 
 
 def _running_task_ids() -> set[str]:
     ids: set[str] = set()
     for marker in RUNS.glob("*__*.running"):
-        task_part = marker.name[: -len(".running")].rsplit("__", 1)[0]
+        task_part = _marker_task_agent(marker)[0]
         if task_part:
             ids.add(task_part)
     return ids
 
 
 def _result_task_ids() -> set[str]:
-    return {rf.name[: -len(".result.json")] for rf in RUNS.glob("*.result.json")}
+    return {_result_task_id(rf) for rf in RUNS.glob("*.result.json")}
 
 
 def _claimed_task_ids() -> set[str]:
@@ -538,6 +588,9 @@ def _usage_remaining_by_agent(usage: dict[str, dict[str, object]]) -> dict[str, 
     """
     remaining: dict[str, int] = {}
     for agent, info in usage.items():
+        if info.get("health") == "rate-limited" or info.get("recent_rate_limit"):
+            remaining[str(agent)] = 0
+            continue
         if "remaining" not in info:
             continue
         try:
@@ -552,36 +605,57 @@ def _weak_proxy_agents(usage: dict[str, dict[str, object]]) -> set[str]:
     return {agent for agent, info in usage.items() if _weak_proxy_exhaustion(agent, info)}
 
 
-def _pick_reservations(lf, agents, per_agent, cap, dry, now, usage_remaining, weak_proxy_agents, task_id=None):
+def _effectively_unbounded_remaining(lf) -> int:
+    """Enough budget units to let scheduler knobs, not the stale board cap, bound this beat."""
+    total = 0
+    for task in getattr(lf, "tasks", []) or []:
+        if _dispatchable(task):
+            total += int(getattr(task, "budget_cost", 1) or 1)
+    return max(total, 1)
+
+
+def _pick_reservations(
+    lf,
+    agents,
+    per_agent,
+    cap,
+    dry,
+    now,
+    usage_remaining,
+    weak_proxy_agents,
+    task_id=None,
+    local_per_agent=None,
+):
     picked = []
     picked_ids = set(_claimed_task_ids())
     reset_changed = _reset_budget_if_needed(lf, now)
     track = lf.portal.budget.track
-    daily = lf.portal.budget.daily
+    unbounded_remaining = _effectively_unbounded_remaining(lf)
     value_repos = _value_tier_repos()
     disk_pressure = _disk_pressure_active()
+    debt_blocked, debt_message = (False, "") if task_id else _worktree_debt_gate()
+    if debt_message and not dry:
+        print(f"── async: {debt_message}")
     # The cap counts only LOCAL in-flight runs; remote/async lanes run off-box and are budgeted
     # separately below (see _running_local).
     slots = max(0, cap - _running_local())
-    spent = track.spent
     id2 = {t.id: t for t in lf.tasks}  # for dependency resolution
     states = []
     for agent in agents:
         is_async = agent in _ASYNC_LANES  # remote lane (jules, ...) — off-box, not gated by the local cap
         running_for_agent = _running_for(agent)
-        launch_room = max(0, per_agent - running_for_agent)
+        lane_per_agent = per_agent if is_async else min(per_agent, local_per_agent or per_agent)
+        launch_room = max(0, lane_per_agent - running_for_agent)
         if launch_room <= 0:
             continue
-        capa = lf.portal.budget.per_agent.get(agent)
-        aspent = track.per_agent.get(agent, 0) + running_for_agent  # count in-flight vs budget
+        # Board counters are a reservation ledger, not the physical provider ceiling. The only hard
+        # launch ceiling here is live usage headroom when a real meter exists. Weak proxy rows such
+        # as Agy's dispatch-count estimate are pacing signals only, so they must not cap work.
         if agent in weak_proxy_agents:
             agent_rem = None
         else:
-            agent_rem = None if capa is None else max(0, capa - aspent)
-        live_rem = usage_remaining.get(agent) if is_async else None
-        if live_rem is not None:
-            agent_rem = live_rem if agent_rem is None else min(agent_rem, live_rem)
-        rem = daily - spent if agent_rem is None else max(0, min(daily - spent, agent_rem))
+            agent_rem = usage_remaining.get(agent)
+        rem = unbounded_remaining if agent_rem is None else max(0, agent_rem)
         if rem <= 0:
             continue
         cands = [
@@ -594,6 +668,7 @@ def _pick_reservations(lf, agents, per_agent, cap, dry, now, usage_remaining, we
             and t.budget_cost <= rem
             and _deps_met(t, id2)
             and (task_id is not None or not _superseded_by_rebase_task(t, id2))
+            and not (debt_blocked and _routine_generated_buildout(t))
             and _routine_generated_buildout_allowed(t)
         ]
         cands = sort_value_gate_candidates(cands, value_repos, disk_pressure=disk_pressure)
@@ -613,13 +688,11 @@ def _pick_reservations(lf, agents, per_agent, cap, dry, now, usage_remaining, we
         for state in states:
             if state["taken"] >= state["launch_room"]:
                 continue
-            if daily - spent <= 0:
-                continue
             if not state["is_async"] and slots <= 0:
                 continue  # local slot budget spent — but a later async lane may still launch off-box
 
             agent_rem = state["agent_rem"]
-            rem = daily - spent if agent_rem is None else max(0, min(daily - spent, agent_rem))
+            rem = unbounded_remaining if agent_rem is None else max(0, agent_rem)
             if rem <= 0:
                 continue
 
@@ -642,9 +715,8 @@ def _pick_reservations(lf, agents, per_agent, cap, dry, now, usage_remaining, we
             picked_ids.add(t.id)
             if agent_rem is not None:
                 state["agent_rem"] = max(0, agent_rem - t.budget_cost)
-            spent += t.budget_cost
             if not dry:
-                track.spent = spent
+                track.spent += t.budget_cost
                 track.per_agent[agent] = track.per_agent.get(agent, 0) + t.budget_cost
                 t.status = "dispatched"
                 t.updated = now
@@ -665,8 +737,16 @@ def _pick_reservations(lf, agents, per_agent, cap, dry, now, usage_remaining, we
             break
     return picked, reset_changed
 
-
-def reserve_and_launch(agents, per_agent, cap, dry, task_id=None, *, admission_checked: bool = False):
+def reserve_and_launch(
+    agents,
+    per_agent,
+    cap,
+    dry,
+    task_id=None,
+    *,
+    admission_checked: bool = False,
+    local_per_agent=None,
+):
     """Reserve open tasks (under lock) up to the concurrency cap + per-agent budget, then spawn
     detached workers. Returns the list of (agent, task_id) launched/would-launch."""
     if should_reserve(per_agent, cap) and not admission_checked:
@@ -684,7 +764,16 @@ def reserve_and_launch(agents, per_agent, cap, dry, task_id=None, *, admission_c
     if dry:
         lf = load_limen_file(TASKS)
         picked, _reset_changed = _pick_reservations(
-            lf, agents, per_agent, cap, dry, now, usage_remaining, weak_proxy_agents, task_id=task_id
+            lf,
+            agents,
+            per_agent,
+            cap,
+            dry,
+            now,
+            usage_remaining,
+            weak_proxy_agents,
+            task_id=task_id,
+            local_per_agent=local_per_agent,
         )
         return picked
     with _queue_lock(TASKS) as got:
@@ -695,13 +784,22 @@ def reserve_and_launch(agents, per_agent, cap, dry, task_id=None, *, admission_c
             return []
         lf = load_limen_file(TASKS)
         picked, reset_changed = _pick_reservations(
-            lf, agents, per_agent, cap, dry, now, usage_remaining, weak_proxy_agents, task_id=task_id
+            lf,
+            agents,
+            per_agent,
+            cap,
+            dry,
+            now,
+            usage_remaining,
+            weak_proxy_agents,
+            task_id=task_id,
+            local_per_agent=local_per_agent,
         )
         if not dry and (picked or reset_changed):
             apply_limen_file_sync(TASKS, lf, agent="dispatch-async", session_id="reserve")
     # outside the lock: write markers + spawn detached workers (fast; we never wait on them)
     for agent, tid in picked:
-        logf = open(RUNS / f"{tid}.log", "a")
+        logf = open(_run_log_path(tid), "a")
         proc = subprocess.Popen(
             [sys.executable, str(WORKER), "--agent", agent, "--task-id", tid],
             stdout=logf,
@@ -710,7 +808,7 @@ def reserve_and_launch(agents, per_agent, cap, dry, task_id=None, *, admission_c
             start_new_session=True,
             env={**os.environ, "PYTHONPATH": str(ROOT / "cli" / "src")},
         )
-        (RUNS / f"{tid}__{agent}.running").write_text(
+        _running_marker_path(tid, agent).write_text(
             json.dumps({"started_at": now.isoformat(), "agent": agent, "task_id": tid, "pid": proc.pid})
         )
     return picked
@@ -721,9 +819,10 @@ def should_reserve(per_agent: int, cap: int) -> bool:
 
     Closeout and harvest-only probes deliberately call ``--per-lane 0 --max 0``. Those passes must
     not run pre-dispatch writers such as always-working; otherwise a read-mostly harvest check
-    dirties the live root without launching anything.
+    dirties the live root without launching anything. ``--max 0`` alone means "no local host slots";
+    it must not suppress remote-only lanes such as Jules.
     """
-    return per_agent > 0 and cap > 0
+    return per_agent > 0
 
 
 def resolve_lanes(selector: str, down: set[str]) -> list[str]:
@@ -744,7 +843,20 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lanes", default="auto")
     ap.add_argument("--per-lane", type=int, default=max(1, _env_int("LIMEN_LOCAL_LIMIT", 8)))
-    ap.add_argument("--max", type=int, default=max(1, _env_int("LIMEN_ASYNC_MAX", 12)))
+    ap.add_argument(
+        "--local-per-lane",
+        type=int,
+        default=max(0, _env_int("LIMEN_ASYNC_LOCAL_PER_LANE", _env_int("LIMEN_LOCAL_LIMIT", 8))),
+        help="Per-lane launch room for local host lanes; remote lanes use --per-lane.",
+    )
+    ap.add_argument(
+        "--max",
+        "--local-max",
+        dest="max",
+        type=int,
+        default=max(0, _env_int("LIMEN_ASYNC_MAX", 12)),
+        help="Local host slot ceiling. Remote lanes such as Jules do not consume it.",
+    )
     ap.add_argument("--task-id", help="Reserve and launch only this task id")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
@@ -769,7 +881,15 @@ def main() -> int:
             print_dispatch_admission_block("async", admission)
     if should_reserve(a.per_lane, a.max) and reserve_allowed:
         launched = (
-            reserve_and_launch(lanes, a.per_lane, a.max, a.dry_run, task_id=a.task_id, admission_checked=True)
+            reserve_and_launch(
+                lanes,
+                a.per_lane,
+                a.max,
+                a.dry_run,
+                task_id=a.task_id,
+                admission_checked=True,
+                local_per_agent=a.local_per_lane,
+            )
             if should_reserve(a.per_lane, a.max)
             else []
         )
@@ -778,7 +898,8 @@ def main() -> int:
     verb = "would launch" if a.dry_run else "launched"
     print(
         f"── async: reaped {len(reaped)} dead · harvested {applied} · {running} still running · "
-        f"{verb} {len(launched)} (cap {a.max}) → {[t for _, t in launched]}"
+        f"{verb} {len(launched)} (local cap {a.max}, local per-lane {a.local_per_lane}) → "
+        f"{[t for _, t in launched]}"
     )
     return 0
 

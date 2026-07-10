@@ -20,23 +20,26 @@ def load_candidates(name: str = "worktree_reclaim_candidates_under_test"):
     return module
 
 
-def test_candidate_rows_include_only_clean_merged_idle(tmp_path: Path) -> None:
+def test_candidate_rows_include_only_remote_preserved_loss_free_classes(tmp_path: Path) -> None:
     mod = load_candidates()
     worktree = tmp_path / "accepted-worktree"
     clone = tmp_path / "accepted-clone"
+    pushed = tmp_path / "retained-pushed"
     dirty = tmp_path / "dirty-root"
-    for path in (worktree, clone, dirty):
+    for path in (worktree, clone, pushed, dirty):
         path.mkdir()
     (worktree / ".git").write_text("gitdir: /tmp/example\n", encoding="utf-8")
     (clone / ".git").mkdir()
+    (pushed / ".git").write_text("gitdir: /tmp/example-pushed\n", encoding="utf-8")
 
     report = {
-        "total": 3,
+        "total": 4,
         "debt": 1,
-        "by_reason": {"clean+merged+idle": 2, "dirty": 1},
+        "by_reason": {"clean+merged+idle": 2, "not-merged-to-default": 1, "dirty": 1},
         "items": [
             {"name": worktree.name, "path": str(worktree), "reason": "clean+merged+idle", "debt": False},
             {"name": clone.name, "path": str(clone), "reason": "clean+merged+idle", "debt": False},
+            {"name": pushed.name, "path": str(pushed), "reason": "not-merged-to-default", "debt": True},
             {"name": dirty.name, "path": str(dirty), "reason": "dirty", "debt": True},
         ],
     }
@@ -63,7 +66,9 @@ def test_packet_governance_cites_agent_score_authorities() -> None:
     assert gate["prompt_attack_path"]["score"] == 32
     assert "scripts/score-dispatch.py" in gate["authority_sources"]
     assert "cli/src/limen/capacity.py" in gate["authority_sources"]
-    assert gate["agent_policy"]["destructive_cleanup_lane"] == "human-acceptance-then-reclaim-worktrees"
+    assert (
+        gate["agent_policy"]["destructive_cleanup_lane"] == "standing-grant-or-human-acceptance-then-reclaim-worktrees"
+    )
 
 
 def test_render_markdown_makes_non_destructive_gate_explicit(tmp_path: Path) -> None:
@@ -88,6 +93,7 @@ def test_render_markdown_makes_non_destructive_gate_explicit(tmp_path: Path) -> 
 
     assert "candidate packet, not acceptance" in text
     assert "Authority Gate" in text
+    assert "Pushed but unmerged roots retained" in text
     assert "docs/worktree-reclaim-acceptance.jsonl" in text
     assert "scripts/session-attack-paths.py" in text
 

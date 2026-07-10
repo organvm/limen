@@ -20,6 +20,16 @@ export LIMEN_TASKS="${LIMEN_TASKS:-$LIMEN_ROOT/tasks.yaml}"
 export LIMEN_WORKDIR="${LIMEN_WORKDIR:-$HOME/Workspace}"
 export LIMEN_ISOLATION="${LIMEN_ISOLATION:-worktree}"
 export PYTHONPATH="$LIMEN_ROOT/cli/src"
+# macOS 26.6 fork-safety mitigation. Apple's Network.framework (loaded at startup into
+# EVERY python here — 3.14/3.13/3.9 alike) registers a pthread_atfork child handler
+# (nw_settings_child_has_forked) that SIGSEGVs in os_log on the child side of a
+# fork()+exec() — i.e. any subprocess call that passes cwd=/preexec_fn (~32 fleet files).
+# It's a timing race, so it kills a fraction of the thousands of fork+exec/beat. Quieting
+# os_activity defuses the os_log path the handler crashes in. Must be set BEFORE any python
+# launches (the framework loads before user code runs), so it lives here, above the first
+# python invocation. Mechanism-certain cure = keep subprocess on posix_spawn (no cwd=);
+# this env var is the zero-blast-radius mitigation. See fork-oslog crash report 2026-07-09.
+export OS_ACTIVITY_MODE="${OS_ACTIVITY_MODE:-disable}"
 cd "$LIMEN_ROOT" || exit 1
 if [ -z "${LIMEN_WORKTREES:-}" ]; then
   if [ -d /Volumes/Scratch ] && [ -w /Volumes/Scratch ]; then
@@ -68,6 +78,18 @@ if [ "${LIMEN_CARTRIDGE_CHECK:-1}" = "1" ]; then
   python3 "$LIMEN_ROOT/scripts/cartridge-connected.py" || echo "  ↑ cartridge UNPLUGGED (above) — bring domus-genoma current, then re-point chezmoi at it"
 fi
 
+echo "── 0c'. verify config hydrates from the CURRENT cartridge (no wedge / no stale / no orphan) ──"
+# cartridge-connected proves the right REMOTE is wired; it cannot see three states that still read
+# green there but silently disable hydration: (1) a strict-missingkey template error aborts the whole
+# `chezmoi status`/apply run (the wedge that let a subagent's ~/.claude statusline write become a
+# durable-looking local orphan, 2026-07-09); (2) the source checkout parked on a stale branch serves
+# old config so a master-fixed template is still broken locally; (3) a managed target edited on disk
+# but never re-added (the auto-capture hook only fires on the Edit tool). Fail-open only for an absent
+# chezmoi; a wedged pipeline / stale cartridge / .claude orphan is the actionable non-zero.
+if [ "${LIMEN_CHEZMOI_DRIFT_CHECK:-1}" = "1" ]; then
+  python3 "$LIMEN_ROOT/scripts/chezmoi-drift.py" || echo "  ↑ config is NOT hydrating from the current cartridge (above) — nothing is local; reconcile per the hint"
+fi
+
 echo "── 0d. verify enactment — every declared-ON fleet flag is actually LIVE (not just merged) ──"
 # The gap this closes (memory: enacted-not-declared): a flag can be declared ON in parameters.yaml
 # and merged, yet be dark in the RUNNING beat — either wired nowhere (TABVLARIVS #576 shipped its
@@ -77,6 +99,20 @@ echo "── 0d. verify enactment — every declared-ON fleet flag is actually L
 # un-enacted switch shows up HERE, not by the operator asking five times. Fail-open, never fatal.
 if [ "${LIMEN_ENACTMENT_CHECK:-1}" = "1" ]; then
   python3 "$LIMEN_ROOT/scripts/enactment-audit.py" --check || echo "  ↑ un-enacted fleet flag above — wire it in heartbeat-loop.sh, or kickstart the daemon (launchctl kickstart -k gui/\$(id -u)/com.limen.heartbeat)"
+fi
+
+echo "── 0e. refresh the weekly Fable balance meter + surface an over-cap / unaccepted Fable run ──"
+# The Fable runtime backstop (docs/fable-allotment.md): Fable is PLAN-ONLY and ~111x Opus cost. The
+# receipt organ gates INTENDED spend at accept-time; this refreshes the LIVE weekly meter
+# (logs/fable-allotment.json, read by model_selection's cap gate) and surfaces an over-cap or
+# unaccepted Fable session HERE in the beat log — like creds-hydrate --verify — instead of only on a
+# manual audit. Fail-open, never fatal: a measurement hiccup can't break the beat.
+if [ "${LIMEN_FABLE_BALANCE:-1}" = "1" ]; then
+  python3 "$LIMEN_ROOT/scripts/fable-allotment.py" balance >/dev/null 2>&1 || echo "  (fable balance meter skipped — see logs)"
+  if [ -n "${LIMEN_LATEST_SESSION_JSONL:-}" ] && [ -f "${LIMEN_LATEST_SESSION_JSONL}" ]; then
+    python3 "$LIMEN_ROOT/scripts/claude-workflow-guard.py" audit-transcript "${LIMEN_LATEST_SESSION_JSONL}" >/dev/null \
+      || echo "  ↑ unaccepted / over-budget Fable run above — accept it (scripts/fable-allotment.py accept …) or drop off Fable (docs/fable-allotment.md)"
+  fi
 fi
 
 echo "── 0e. armed-valve audit — parked levers vs silently-off valves ──"
@@ -106,6 +142,31 @@ echo "── 0g. heal convergence — the healer must converge, not re-spend cap
 # check >48h. Receipts now carry a mechanically-derived outcome (async-run-one.py). Fail-open.
 if [ "${LIMEN_HEAL_CONVERGENCE:-1}" = "1" ]; then
   python3 "$LIMEN_ROOT/scripts/heal-convergence.py" --check || echo "  ↑ CHRONIC heal non-convergence above — fix the named check at its root or park the repo with a chronic receipt"
+fi
+
+echo "── 0g2. fork-safety — the macOS 26.6 atfork/os_log crash must stay fixed, provably ──"
+# The gap this closes: "python keeps crashing" was root-caused to Apple's Network.framework
+# pthread_atfork child handler segfaulting in os_log on the child side of fork()+exec(). The
+# fix (OS_ACTIVITY_MODE=disable, set above) shipped, but the crash is a timing RACE — "no
+# recurrence" was a hope, not a predicate (Definition of Done + sensor-without-effector laws).
+# This asserts, every beat, that the mitigation is still present in the beat scripts AND that no
+# .ips crash report matching the atfork/os_log signature is newer than the mitigation commit. A
+# recurrence exits non-zero here (the effector) and is the documented trigger to arm the dark
+# posix_spawn escalation (LIMEN_FORK_SAFE). macOS-only signal; fail-open on non-darwin / no git.
+if [ "${LIMEN_FORK_SAFETY_CHECK:-1}" = "1" ]; then
+  python3 "$LIMEN_ROOT/scripts/check-fork-safety.py" --check || echo "  ↑ fork/os_log crash RECURRED or mitigation removed above — restore OS_ACTIVITY_MODE=disable, or arm the posix_spawn escalation (LIMEN_FORK_SAFE=1; see scripts/check-fork-safety.py)"
+fi
+
+echo "── 0g3. trunk-green — main's required CI must stay green, or nothing can merge ──"
+# The gap this closes (2026-07-10): main's REQUIRED pr-gate silently went red (non-hermetic tests)
+# and NO sensor detected it — it blocked every PR until a human noticed and a reactive lane fixed it
+# in parallel with a duplicate. pr-gate runs on pull_request only; ci.yml runs the SAME suite on
+# push:[main], so the latest completed CI run on main is the trunk-health proxy. On RED this exits
+# non-zero (the beat surfaces it) and — once armed (LIMEN_MAIN_GREEN_APPLY=1) — emits ONE idempotent
+# HEAL-mainred task so lanes converge instead of duplicating. Detection ships armed; emission dark
+# (observable-before-autonomous). Throttled gh + fail-open offline; never fatal to the beat.
+if [ "${LIMEN_MAIN_GREEN_CHECK:-1}" = "1" ]; then
+  python3 "$LIMEN_ROOT/scripts/check-main-green.py" || echo "  ↑ main trunk RED above — a heal PR is needed (arm LIMEN_MAIN_GREEN_APPLY=1 to auto-emit one canonical HEAL-mainred task); see scripts/check-main-green.py"
 fi
 
 echo "── 0h. dispatch continuity — detect a silent lane while queue + budget exist ──"
@@ -179,6 +240,16 @@ echo "── 0i. routine freshness — detect cloud routines that fire but stop 
 # Fail-open, never fatal.
 if [ "${LIMEN_ROUTINE_FRESHNESS:-1}" = "1" ]; then
   python3 "$LIMEN_ROOT/scripts/routine-freshness-audit.py" --throttle 21600 || echo "  (routine freshness skipped)"
+fi
+
+echo "── 0j. session walk — full-horizon census of BOTH vendor session estates ──"
+# QUICKEN breathes the recent stalled tail (3-day horizon); this organ answers the whole
+# question "has EVERY session been walked from first prompt to implementation?" across
+# ~/.claude/projects AND ~/.codex/sessions, all projects, all time. Unwalked user sessions
+# land in logs/session-walk-residue.md with resume pointers, and --walk drains a bounded
+# few per beat (journaled; 2-strike give-up). Fail-open, never fatal.
+if [ "${LIMEN_SESSION_WALK:-1}" = "1" ]; then
+  python3 "$LIMEN_ROOT/scripts/session-walk-census.py" --walk "${LIMEN_SESSION_WALK_CAP:-2}" || echo "  (session walk skipped)"
 fi
 
 echo "── 1. drain (close completed Jules) ──"

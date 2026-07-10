@@ -7,15 +7,18 @@ accumulate (the dispatch root hit 91 dirs / 3.4 GB; the interactive root leaked 
 those:
 
   • clean working tree (no uncommitted or untracked changes), AND
-  • HEAD is reachable from some remote ref, or every local patch is equivalent to default, AND
-  • HEAD/content is already merged into the remote default branch (the work finished its PR/base lifecycle), AND
-    OR a clean+idle preservation receipt proves the PR is merged with no private patch marker, AND
+  • HEAD/content is already merged into the remote default branch, every local patch is equivalent
+    to default, or a clean+idle preservation receipt proves the PR is merged with no private patch
+    marker, AND
   • idle for >= the root's min-age (so a task/session mid-run is never touched).
   • --apply also requires a matching human acceptance/redaction/archive event in
     docs/worktree-reclaim-acceptance.jsonl immediately before physical removal.
 
 It scans every known creation site (the historical blind spot — see worktree-lifecycle-blind-spot):
-  • LIMEN_WORKTREE_ROOT (~/Workspace/.limen-worktrees) — dispatch throwaway, min-age 6h.
+  • LIMEN_WORKTREE_ROOT (Scratch-first, or $LIMEN_WORKDIR/.limen-worktrees fallback) — dispatch
+    throwaway, min-age 6h.
+  • LIMEN_RECLAIM_LEGACY_WORKTREE_ROOTS (default: ~/Workspace/.limen-worktrees) — historical
+    dispatch throwaway roots scanned for cleanup after Scratch migration, min-age 6h.
   • LIMEN_ROOT/.claude/worktrees — EnterWorktree / bg-job / interactive cells, min-age 24h.
   • LIMEN_AGY_SCRATCH_ROOT (~/.gemini/antigravity-cli/scratch) — Antigravity/Agy scratch clones,
     min-age LIMEN_AGY_SCRATCH_MIN_IDLE_H.
@@ -29,10 +32,13 @@ checkout (LIMEN_ROOT) nor the worktree it is itself running from. It removes reg
 worktrees via `git worktree remove` (never rm) and standalone clones via rmtree. Bounded per
 run (LIMEN_RECLAIM_MAX); if it hits the cap it LOGS the remainder rather than silently dropping.
 
-Dry-run by default; pass --apply to execute. Self-throttles to once per
+Dry-run by default; pass --apply to execute. Use --check --json for a structured non-mutating
+candidate receipt. Self-throttles to once per
 LIMEN_RECLAIM_EVERY_MIN minutes so it is cheap to call every beat.
 
 Env: LIMEN_WORKTREE_ROOT, LIMEN_RECLAIM_MIN_AGE_H (6), LIMEN_RECLAIM_CLAUDE_WT (1),
+     LIMEN_RECLAIM_LEGACY_DISPATCH_WT, LIMEN_RECLAIM_LEGACY_WORKTREE_ROOTS,
+     LIMEN_RECLAIM_LEGACY_DISPATCH_AGE_H,
      LIMEN_RECLAIM_CLAUDE_AGE_H (24), LIMEN_RECLAIM_REPO_LOCAL_WT, LIMEN_RECLAIM_REPO_LOCAL_AGE_H,
      LIMEN_RECLAIM_AGY_SCRATCH, LIMEN_AGY_SCRATCH_ROOT, LIMEN_AGY_SCRATCH_MIN_IDLE_H,
      LIMEN_RECLAIM_REGISTERED_WT, LIMEN_RECLAIM_REGISTERED_AGE_H, LIMEN_RECLAIM_MAIN_REPOS,
@@ -83,13 +89,19 @@ MAX_REMOVE = _int_env("LIMEN_RECLAIM_MAX", 50)
 EVERY_MIN = _float_env("LIMEN_RECLAIM_EVERY_MIN", 30)
 GENERATED_RECLAIM_MAX = _int_env("LIMEN_RECLAIM_GENERATED_MAX", 80)
 LIMEN_ROOT = Path(os.environ.get("LIMEN_ROOT", f"{HOME}/Workspace/limen"))
+AGY_SCRATCH_ROOT = Path(
+    os.environ.get("LIMEN_AGY_SCRATCH_ROOT", f"{HOME}/.gemini/antigravity-cli/scratch")
+)
 LOG = LIMEN_ROOT / "logs" / "reclaim-worktrees.jsonl"
 MARKER = LIMEN_ROOT / "logs" / ".reclaim-last"
 RECLAIM_ACCEPTANCE = LIMEN_ROOT / "docs" / "worktree-reclaim-acceptance.jsonl"
 RECLAIM_ACCEPTANCE_DOC = LIMEN_ROOT / "docs" / "worktree-reclaim-acceptance.md"
-APPLY = "--apply" in sys.argv
+CHECK = "--check" in sys.argv
+JSON_OUT = "--json" in sys.argv
+APPLY = "--apply" in sys.argv and not CHECK
 FORCE = "--force" in sys.argv  # ignore the throttle
 GENERATED_ONLY = "--generated-only" in sys.argv
+HELP = "--help" in sys.argv or "-h" in sys.argv
 REMOTE_MERGED_LANES = {"remote-merged"}
 REMOTE_MERGED_STATUSES = {"merged_pr_preserved"}
 ACCEPTED_ARCHIVE_STATUSES = {
@@ -214,13 +226,10 @@ def reclaim_generated_payloads(targets) -> dict[str, object]:
 
 
 def reachable_from_remote(cwd, head) -> bool:
-    r = git(["for-each-ref", "--format=%(refname)", "refs/remotes"], cwd)
+    r = git(["for-each-ref", f"--contains={head}", "--format=%(refname)", "refs/remotes"], cwd)
     if r.returncode != 0:
         return False
-    for ref in r.stdout.split():
-        if git(["merge-base", "--is-ancestor", head, ref], cwd).returncode == 0:
-            return True
-    return False
+    return bool(r.stdout.strip())
 
 
 def remote_default_ref(cwd) -> str | None:
@@ -249,6 +258,14 @@ def patch_equivalent_to_default(cwd) -> bool:
         return False
     lines = [line.strip() for line in r.stdout.splitlines() if line.strip()]
     return bool(lines) and all(line.startswith("-") for line in lines)
+
+
+def inside_agy_scratch_root(path: Path) -> bool:
+    try:
+        path.resolve().relative_to(AGY_SCRATCH_ROOT.expanduser().resolve())
+        return True
+    except (OSError, ValueError):
+        return False
 
 
 def load_preservation_receipts():
@@ -286,7 +303,28 @@ def load_reclaim_acceptance():
     return events
 
 
+STANDING_ACCEPTANCE = os.environ.get("LIMEN_RECLAIM_STANDING_ACCEPTANCE", "1") != "0"
+# PUSHED-REAP ESCAPE HATCH (LIMEN_RECLAIM_PUSHED_OK, declared in parameters.yaml). DEFAULT OFF —
+# the standing policy is merge-before-reap: pushed preservation is not closure, so a pushed-but-
+# unmerged worktree is KEPT as "not-merged-to-default" (enacted by test_reclaim_keeps_clean_pushed_
+# unmerged_branch — the executable predicate wins over any aspirational default). This env is the
+# opt-in lever that flips that class to reapable: when set, a clean, idle worktree whose HEAD is
+# reachable from any remote ref (reachable_from_remote ⇒ every byte on origin, re-cloneable) is
+# reaped as clean+pushed+idle — removing only the disposable LOCAL checkout; the branch and its
+# PR/babysitting lifecycle continue on origin. This is how the pushed-but-unmerged backlog (the
+# dominant boot-disk pin — hundreds of roots) drains toward the free-space target when the operator
+# elects it. The unpushed/dirty/active guardrails are unchanged — unpreserved work is NEVER reaped.
+PUSHED_OK = os.environ.get("LIMEN_RECLAIM_PUSHED_OK", "0") != "0"
+# Operator standing grant (2026-07-09, docs/removal-acceptance-covenant.md §Standing grant):
+# the loss-free class — clean tree + idle past min-age + preserved on the remote (merged into the
+# default, patch-equivalent to it, a merged-PR receipt, or pushed-but-unmerged per PUSHED_OK) — is
+# pre-accepted for removal without a per-root ledger event.
+STANDING_ACCEPTANCE_REASONS = {"clean+merged+idle", "receipt-remote-merged+clean+idle", "clean+pushed+idle"}
+
+
 def reclaim_accepted(path: Path, action: str, reason: str, acceptance_events) -> tuple[bool, str]:
+    if STANDING_ACCEPTANCE and reason in STANDING_ACCEPTANCE_REASONS:
+        return True, "standing-grant-2026-07-09"
     try:
         resolved = str(path.resolve())
     except OSError:
@@ -346,6 +384,8 @@ def classify(d: Path, now: float, min_age_h: float, preservation_receipts=None):
             return "skip", "self/live-checkout"
     except Exception:
         return "skip", "unresolved"
+    if inside_agy_scratch_root(d):
+        return "skip", "antigravity-scratch-uses-bridge-acceptance"
     if git(["rev-parse", "--is-inside-work-tree"], d).returncode != 0:
         if is_generated_log_shell(d):
             return "remove-residue", "generated-log-shell"
@@ -363,11 +403,24 @@ def classify(d: Path, now: float, min_age_h: float, preservation_receipts=None):
     if not head or (not reachable_from_remote(d, head) and not patch_equivalent):
         return "skip", "unpushed-commits"
     if not (merged_into_default(d, head) or patch_equivalent):
+        # Reaching here means reachable_from_remote is True (else line above returned
+        # unpushed-commits): the HEAD is preserved on origin, just not merged to default. Under the
+        # operator's push-first rule this LOCAL checkout is loss-free to remove — the branch stays
+        # on origin, resumable. Without PUSHED_OK, keep the conservative merged-only gate.
+        if PUSHED_OK:
+            return ("remove-worktree" if is_wt else "remove-clone"), "clean+pushed+idle"
         return "skip", "not-merged-to-default"
     return ("remove-worktree" if is_wt else "remove-clone"), "clean+merged+idle"
 
 
 def main():
+    if HELP:
+        print(
+            "usage: reclaim-worktrees.py [--check] [--json] [--apply] [--force] [--generated-only]\n\n"
+            "Dry-run by default. Use --check --json for structured inspection and --apply to remove "
+            "accepted clean, idle, remote-preserved worktrees."
+        )
+        return 0
     # Every known creation site, each with its own idle gate. Missing roots simply disappear
     # from the target list; discovery must never block the heartbeat.
     targets = iter_worktree_targets(LIMEN_ROOT)
@@ -380,10 +433,24 @@ def main():
             print(f"reclaim: ran < {EVERY_MIN}min ago — skip (set --force to override)")
             return 0
     now = time.time()
-    generated_reclaim = reclaim_generated_payloads(targets) if APPLY else {"enabled": False, "cleaned": [], "failed": []}
+    generated_reclaim = (
+        reclaim_generated_payloads(targets) if APPLY else {"enabled": False, "cleaned": [], "failed": []}
+    )
     if GENERATED_ONLY:
         cleaned = generated_reclaim.get("cleaned") or []
         gen_failed = generated_reclaim.get("failed") or []
+        if JSON_OUT:
+            print(
+                json.dumps(
+                    {
+                        "mode": "generated-only-apply" if APPLY else "generated-only-check",
+                        "generated_reclaim": generated_reclaim,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
         print(f"reclaim [generated-only]: {len(cleaned)} cleaned, {len(gen_failed)} failed")
         for row in cleaned[:20]:
             print(f"  generated-clean {row['detail']:14} {row['root']}")
@@ -392,6 +459,7 @@ def main():
     reclaim_acceptance = load_reclaim_acceptance()
     dirs = [(target.path, target.min_age_h) for target in targets]
     removed, skipped, failed, deferred = [], [], [], []
+    would_reclaim = []
     for d, min_age_h in dirs:
         action, reason = classify(d, now, min_age_h, preservation_receipts)
         if action == "skip":
@@ -401,7 +469,12 @@ def main():
             deferred.append(d.name)
             continue  # bounded — but NOT silent (logged below)
         if not APPLY:
+            accepted, accept_reason = reclaim_accepted(d, action, reason, reclaim_acceptance)
+            if not accepted:
+                skipped.append((d.name, accept_reason))
+                continue
             removed.append((d.name, f"would-{action}:{reason}"))
+            would_reclaim.append({"root": d.name, "path": str(d), "action": action, "reason": reason})
             continue
         accepted, accept_reason = reclaim_accepted(d, action, reason, reclaim_acceptance)
         if not accepted:
@@ -444,7 +517,28 @@ def main():
         except Exception:
             pass  # logging must never break the beat
 
-    mode = "APPLY" if APPLY else "dry-run"
+    mode = "APPLY" if APPLY else "check" if CHECK else "dry-run"
+    if JSON_OUT:
+        print(
+            json.dumps(
+                {
+                    "mode": mode,
+                    "apply": APPLY,
+                    "scanned": len(dirs),
+                    "reclaimed": [{"root": root, "detail": detail} for root, detail in removed] if APPLY else [],
+                    "would_reclaim": would_reclaim,
+                    "kept_safe": [{"root": root, "reason": reason} for root, reason in skipped],
+                    "failed": [{"root": root, "reason": reason} for root, reason in failed],
+                    "deferred_over_cap": deferred,
+                    "generated_reclaim": generated_reclaim,
+                    "reapable_count": len(removed) if not APPLY else 0,
+                    "reclaimed_count": len(removed) if APPLY else 0,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     print(
         f"reclaim [{mode}]: {len(removed)} reclaimed, {len(skipped)} kept-safe, "
         f"{len(failed)} failed, {len(deferred)} deferred-over-cap (of {len(dirs)})"
