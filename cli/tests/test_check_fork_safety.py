@@ -35,9 +35,20 @@ def run(reports_dir: Path, *extra, env=None):
     if env:
         child_env.update(env)
     return subprocess.run(
-        [sys.executable, str(PREDICATE), "--check",
-         "--reports-dir", str(reports_dir), "--since", str(BOUNDARY), *extra],
-        capture_output=True, text=True, cwd=ROOT, env=child_env,
+        [
+            sys.executable,
+            str(PREDICATE),
+            "--check",
+            "--reports-dir",
+            str(reports_dir),
+            "--since",
+            str(BOUNDARY),
+            *extra,
+        ],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        env=child_env,
     )
 
 
@@ -89,8 +100,7 @@ def test_red_when_mitigation_removed(tmp_path):
 
 def test_no_pii_only_names_and_frames(tmp_path):
     # The report must never echo crash-report bodies — only basenames/frames/times.
-    _ips(tmp_path, "Python-new.ips", BOUNDARY + 5000,
-         body="SECRET_TOKEN=hunter2 ... nw_settings_child_has_forked\n")
+    _ips(tmp_path, "Python-new.ips", BOUNDARY + 5000, body="SECRET_TOKEN=hunter2 ... nw_settings_child_has_forked\n")
     r = run(tmp_path)
     assert "hunter2" not in r.stdout
     assert "Python-new.ips" in r.stdout

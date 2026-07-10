@@ -94,9 +94,21 @@ def mitigation_boundary(override=None):
         return ov, "override"
     try:
         out = subprocess.run(
-            ["git", "-C", str(ROOT), "log", "-1", "--format=%at", "-S", MITIGATION_TOKEN,
-             "--", "scripts/metabolize.sh"],
-            capture_output=True, text=True, timeout=15,
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "log",
+                "-1",
+                "--format=%at",
+                "-S",
+                MITIGATION_TOKEN,
+                "--",
+                "scripts/metabolize.sh",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         val = out.stdout.strip()
         if out.returncode == 0 and val:
@@ -178,8 +190,11 @@ def _stamp(payload):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="macOS fork/os_log crash predicate")
     ap.add_argument("--check", action="store_true", help="gate mode: exit 1 on failure")
-    ap.add_argument("--reports-dir", default=os.environ.get("LIMEN_CRASH_REPORTS_DIR"),
-                    help="crash-report root (default ~/Library/Logs/DiagnosticReports)")
+    ap.add_argument(
+        "--reports-dir",
+        default=os.environ.get("LIMEN_CRASH_REPORTS_DIR"),
+        help="crash-report root (default ~/Library/Logs/DiagnosticReports)",
+    )
     ap.add_argument("--since", default=None, help="override boundary (epoch or ISO-8601)")
     args = ap.parse_args(argv)
 
@@ -189,8 +204,7 @@ def main(argv=None):
     matches, recurrences = scan_crashes(reports_dir, boundary)
 
     boundary_iso = (
-        datetime.datetime.fromtimestamp(boundary).isoformat(timespec="seconds")
-        if boundary is not None else None
+        datetime.datetime.fromtimestamp(boundary).isoformat(timespec="seconds") if boundary is not None else None
     )
     failed = (not mit_ok) or bool(recurrences)
 
@@ -216,8 +230,10 @@ def main(argv=None):
     if boundary is None:
         print("  ⚠ mitigation boundary UNDERIVABLE (no git, no marker) — crash clause fails OPEN")
     else:
-        print(f"  • boundary {boundary_iso} (via {source}); "
-              f"{len(matches)} known crash(es), {len(recurrences)} after boundary")
+        print(
+            f"  • boundary {boundary_iso} (via {source}); "
+            f"{len(matches)} known crash(es), {len(recurrences)} after boundary"
+        )
     for e in recurrences:
         print(f"    ↳ RECURRENCE {e['name']} @ {e['mtime_iso']} [{e['frame']}]")
 
@@ -225,8 +241,10 @@ def main(argv=None):
         if not mit_ok:
             print("  RESULT: RED — mitigation removed; restore OS_ACTIVITY_MODE=disable in the beat scripts")
         if recurrences:
-            print("  RESULT: RED — crash recurred DESPITE mitigation; arm the posix_spawn escalation "
-                  "(LIMEN_FORK_SAFE=1) — see scripts/check-fork-safety.py docstring")
+            print(
+                "  RESULT: RED — crash recurred DESPITE mitigation; arm the posix_spawn escalation "
+                "(LIMEN_FORK_SAFE=1) — see scripts/check-fork-safety.py docstring"
+            )
     else:
         print("  RESULT: GREEN")
 
