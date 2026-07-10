@@ -11,6 +11,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 
 CLI_SRC = Path(__file__).resolve().parents[1] / "src"
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "dispatch-async.py"
@@ -18,6 +20,21 @@ sys.path.insert(0, str(CLI_SRC))
 
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.models import Budget, BudgetTrack, DispatchLogEntry, LimenFile, Portal, Task  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _restore_environ():
+    """`_load` sets LIMEN_* via os.environ directly (needed so the freshly exec'd dispatch-async
+    module picks them up at import). Those writes are NOT monkeypatch and would otherwise leak
+    process-wide — e.g. LIMEN_WORKTREE_DEBT_GATE=0 disabling the debt gate for later test files
+    (test_dispatch / test_generate_backlog) and LIMEN_ROOT/TASKS repointing later assertions.
+    Snapshot + restore around every test in this module so the leaks stay contained here."""
+    saved = os.environ.copy()
+    try:
+        yield
+    finally:
+        os.environ.clear()
+        os.environ.update(saved)
 
 
 def _load(tmp_path, n_open=6, agent="codex"):
@@ -207,10 +224,13 @@ def test_agy_skips_limen_registry_discovery_tasks(tmp_path):
     ]
     save_limen_file(tmp_path / "tasks.yaml", lf)
 
+    # agy skips registry-discovery tasks — it has been observed ignoring cwd for them (52efa2fd).
+    # And since ac8677b5 ("keep registry promotion off local lanes"), local checkout lanes like
+    # codex are ALSO kept off DISCOVER tasks that edit Limen's own value-repos.json — those need a
+    # bridge first (agent_can_run_task: agent in _LOCAL_AGENTS and _limen_registry_promotion_task).
+    # So neither an agy-only nor an agy+codex pass reserves this task.
     assert da.reserve_and_launch(["agy"], per_agent=4, cap=4, dry=True) == []
-    assert da.reserve_and_launch(["agy", "codex"], per_agent=4, cap=4, dry=True) == [
-        ("codex", "DISCOVER-organvm-browser-state")
-    ]
+    assert da.reserve_and_launch(["agy", "codex"], per_agent=4, cap=4, dry=True) == []
 
 
 def test_agy_codex_and_claude_skip_limen_repo_tasks(tmp_path):

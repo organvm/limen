@@ -69,7 +69,7 @@ DEFAULT_DAILY_TASK_TARGETS: dict[str, int] = {
     "claude": 15,
 }
 DEFAULT_GITHUB_ACTIONS_WORKFLOW = "limen-agent.yml"
-BAD_USAGE_HEALTH = {"exhausted", "rate-limited", "low"}
+BAD_USAGE_HEALTH = {"exhausted", "rate-limited", "low", "throttle"}
 
 AGENT_ALIASES: dict[str, str] = census.agent_aliases()
 
