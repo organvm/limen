@@ -127,12 +127,13 @@ DEFAULT_MAP: list[dict] = [
     },
     {
         # Parked — PHANTOM env var, retired 2026-06-25 (same investigation). opencode derives its model from
-        # `opencode models` (see dispatch._opencode_model): paid tier comes from `opencode auth login` writing
-        # opencode's OWN auth.json, else it falls back to a FREE coding model — it never reads OPENROUTER_API_KEY.
-        # No fleet code reads OPENROUTER_API_KEY (grep of cli/src: zero consumers), no opencode provider auth
-        # exists on this host, and op://Personal/OpenRouter API Key never resolved (only-ever-tried ref, always
-        # failed). The opencode lane runs on its free model regardless. Enable only if an OpenRouter key is
-        # minted AND opencode is configured to consume the env var.
+        # `opencode models` (see dispatch._opencode_model), which now TIERS: a free floor + a subscription
+        # (opencode Zen) `sub` rung (census Vendor.tiers, consumed by dispatch._vendor_tier_for). The `sub` rung
+        # is reached by `opencode auth login` writing opencode's OWN auth.json — the interactive vendor mint homed
+        # as lever L-OPENCODE-SUB-AUTH, NOT this OpenRouter key. opencode never reads OPENROUTER_API_KEY: no fleet
+        # code reads it (grep of cli/src: zero consumers), and op://Personal/OpenRouter API Key never resolved
+        # (only-ever-tried ref, always failed). Until auth.json exists the `sub` rung degrades to the free floor.
+        # Enable this entry only if an OpenRouter key is ever minted AND opencode is configured to consume it.
         "lane": "opencode (openrouter)",
         "ref": "op://Personal/OpenRouter API Key/credential",
         "env": ["OPENROUTER_API_KEY"],

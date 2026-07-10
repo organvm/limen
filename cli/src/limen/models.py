@@ -53,6 +53,10 @@ class Task(BaseModel):
     # LIMEN_CLAUDE_MODEL still wins above it). Fable still requires LIMEN_FABLE_ACCEPTANCE.
     # None → derive the tier. See dispatch._claude_model.
     claude_tier: str | None = None
+    # Optional per-task opencode tier pin ("free"|"sub") — the symmetric escape hatch that overrides
+    # the declared-ladder derivation for THIS task (the env LIMEN_OPENCODE_MODEL still wins above it).
+    # None → derive the rung from the task's classes. See dispatch._opencode_model / _vendor_tier_for.
+    opencode_tier: str | None = None
     # task ids that must have a MERGED PR before this task is eligible to dispatch. Lets a
     # dependent increment be seeded NOW and auto-build only once its predecessor lands in the
     # base branch (avoids parallel-built PRs that conflict / reference not-yet-created code).

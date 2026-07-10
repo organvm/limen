@@ -102,6 +102,32 @@ def test_vendor_tiering_is_derived():
     assert set(t.values()) == {"model_selection", "dispatch_adhoc", "none"}
 
 
+def test_vendor_tiers_ladder_is_declared_and_projected():
+    """Increment-2 (opencode): the per-vendor model-tier LADDER is DECLARED data on Vendor.tiers,
+    floor-first, and projected by census.tiers(). opencode declares [free, sub] with the free floor
+    first (empty reserve) and the subscription rung reserving its deploy/cloudflare specialty. Every
+    vendor is projected; a declared ladder is always floor-first (only the first rung has no reserve).
+    """
+    ladders = census.tiers()
+    assert set(ladders) == set(census.paid_agent_order())  # every vendor projected, exactly once
+    oc = ladders["opencode"]
+    assert [r.name for r in oc] == ["free", "sub"]  # floor-first
+    assert oc[0].reserve == ()  # the free floor is the default rung
+    assert "deploy" in oc[1].reserve and "cloudflare" in oc[1].reserve  # sub reserves the specialty
+    # a lane with no declared ladder (choice owned elsewhere per tiering()) projects an empty tuple.
+    assert ladders["gemini"] == ()
+    # structural invariant: for any declared ladder, exactly the FIRST rung is the floor (no reserve).
+    for name, ladder in ladders.items():
+        if ladder:
+            assert ladder[0].reserve == (), f"{name}: first rung must be the floor"
+
+
+def test_opencode_budget_pool_is_the_subscription():
+    """opencode's Budget now carries pool='opencode-plan' (the Zen subscription window), mirroring
+    claude-plan/openai-plan, so verify-budget-gauge sees the shared ceiling."""
+    assert census.budgets()["opencode"].pool == "opencode-plan"
+
+
 def test_capacity_canonical_agent_still_resolves_aliases():
     """capacity.canonical_agent reads AGENT_ALIASES; the derivation must keep it working."""
     assert capacity.canonical_agent("antigravity") == "agy"
