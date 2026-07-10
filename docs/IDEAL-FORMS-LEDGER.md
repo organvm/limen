@@ -57,17 +57,28 @@ measures the **distance from ideal** at a moment in time, and carries a **status
 
 ### IF-SENSOR-REGISTRY — the beat sensors are declared data, all consumers derive
 - **Ideal form:** the beat's continuous-runtime sensors live in one registry
-  (`institutio/governance/sensors.yaml`, VIGILIA's third axis beside GATES + PARAMETERS); the beat
-  loop, `omega.sh`, and `armed-valve-audit.py` all **derive** from it; `check-sensors.py` holds it in
-  parity. Adding a sensor is one registry entry, never a hand-wired shell block in three places.
-- **Distance:** Phase 1 shipped 2026-07-10 (#884) — the registry (19 sensors), `beat-sensors.py`
-  (`--list`/`--run`; dry-run reproduces the shell sequence), and `check-sensors.py` (wired into pr-gate)
-  are live and drift-checked. But the live beat still **duplicates** the sensors: `metabolize.sh` runs
-  the 18 hand-wired `── 0x ──` blocks, `omega.sh` hardcodes its rungs, `armed-valve-audit.py` greps the
-  shell.
-- **Status:** PARTIAL — declared + drift-checked (Phase 1). Phase 2 flips `metabolize.sh`/`omega.sh`/
-  `armed-valve-audit.py` to derive from the registry — the high-blast-radius change on the live daemon,
-  landed after equivalence is proven.
+  (`institutio/governance/sensors.yaml`, VIGILIA's third axis beside GATES + PARAMETERS); the beat loop
+  and every consumer that reads a sensor gate **derive** from it; `check-sensors.py` holds it in parity.
+  Adding a sensor is one registry entry, never a hand-wired shell block in three places.
+- **Distance:** DONE for the beat. Phase 1 (#884) shipped the registry (now 20 sensors), `beat-sensors.py`
+  (`--list`/`--run`), and `check-sensors.py` (pr-gate). Phase 2 landed the consumer flips: `metabolize.sh`
+  **derives** its whole sensor loop from the registry — dark-first behind `LIMEN_BEAT_DERIVE` (#914,
+  proven byte-equivalent by a 23-script test + an observed real-sensor run), then default-on with the 20
+  hand-wired `── 0x ──` blocks deleted (#935, −227 lines). Two consumers that read sensor gates from the
+  old shell location were repointed to the registry so they didn't go blind: `check-params.py`
+  (`registry_referenced_tokens`, #935) and `armed-valve-audit.py` (`discover_registry_gates`, #938 —
+  healing an ARMED 45→26 coverage regression). `check-sensors.py` D-parity now passes with **zero gate
+  literals in the shell**, purely via derive-runner detection.
+- **Deliberately NOT derived:** `omega.sh`. It is a *distinct* predicate (the autonomic fixed-point
+  conjunction), not a beat-sensor consumer — it hardcodes 11 rungs, only 5 overlap the sensors, and it
+  runs them with different flags (`--contract --offline`). It greps no shell gates, so the derive-flip
+  didn't regress it. Forcing it to derive would couple two conceptually-separate predicates for a
+  marginal DRY gain — out of scope by design, not an unfinished lane.
+- **Status:** DONE (2026-07-10). The beat sensor estate is registry-owned; adding a sensor is one entry.
+- **Follow-up (tracked, not blocking):** promote the three *domain-agnostic* predicates
+  (`check-fork-safety.py`, `check-test-hygiene.py`, `check-main-green.py`) to the ecosystem layer
+  (`organvm-engine/contextmd`, per `docs/agent-instruction-standard.md`) so the pattern becomes cross-repo
+  law — dark-first, once proven in limen. The registry itself is limen-intrinsic and stays here.
 - **Owner:** Claude + tabularius.
 
 ### IF-LEDGER-OF-IDEALS — this ledger (self)
