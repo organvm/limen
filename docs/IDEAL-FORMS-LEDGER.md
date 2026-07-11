@@ -66,9 +66,11 @@ measures the **distance from ideal** at a moment in time, and carries a **status
   proven byte-equivalent by a 23-script test + an observed real-sensor run), then default-on with the 20
   hand-wired `── 0x ──` blocks deleted (#935, −227 lines). Two consumers that read sensor gates from the
   old shell location were repointed to the registry so they didn't go blind: `check-params.py`
-  (`registry_referenced_tokens`, #935) and `armed-valve-audit.py` (`discover_registry_gates`, #938 —
-  healing an ARMED 45→26 coverage regression). `check-sensors.py` D-parity now passes with **zero gate
-  literals in the shell**, purely via derive-runner detection.
+  (`registry_referenced_tokens`, #935) and `armed-valve-audit.py` (`discover_sensor_valves`, which reads
+  each sensor's gate + `armed_valve_type` from the registry — a fleet lane landed this, healing the
+  ARMED 45→26 coverage regression #935 introduced; a thinner in-flight fix, #938, was closed as
+  superseded). `check-sensors.py` D-parity now passes with **zero gate literals in the shell**, purely
+  via derive-runner detection.
 - **Deliberately NOT derived:** `omega.sh`. It is a *distinct* predicate (the autonomic fixed-point
   conjunction), not a beat-sensor consumer — it hardcodes 11 rungs, only 5 overlap the sensors, and it
   runs them with different flags (`--contract --offline`). It greps no shell gates, so the derive-flip
