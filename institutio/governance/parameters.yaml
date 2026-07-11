@@ -1913,6 +1913,12 @@ parameters:
     self_update: none
     owner: observatory
     note: "Arms the OBSERVATORY human-gated proposal write: 0 (default) records the daily experiment only in the organ-owned logs/observatory/proposals.jsonl; 1 additionally homes the lever in his-hand-levers.json (idempotent by id). Never auto-applies a public surface change."
+  OBSERVATORY_CAPTURE:
+    default: 0
+    env: OBSERVATORY_CAPTURE
+    self_update: none
+    owner: observatory
+    note: "Arms P3-CAPTURE — the live-homepage fetch (surface.capture_site, stdlib urllib, no new dep). 0 (default) = README-only surface features, byte-identical. 1 = for a winner/control with a declared homepage, fetch it and merge site_* first-impression features (demo above fold, visible CTA, outcome-in-headline) into the snapshot. Read-only against public web surfaces; fail-open on unreachable/blocked/JS-only sites."
   LIMEN_MARKETPLACE_APPLY:
     default: 0
     env: LIMEN_MARKETPLACE_APPLY
