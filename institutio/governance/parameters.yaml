@@ -1919,6 +1919,12 @@ parameters:
     self_update: none
     owner: observatory
     note: "Arms P3-CAPTURE — the live-homepage fetch (surface.capture_site, stdlib urllib, no new dep). 0 (default) = README-only surface features, byte-identical. 1 = for a winner/control with a declared homepage, fetch it and merge site_* first-impression features (demo above fold, visible CTA, outcome-in-headline) into the snapshot. Read-only against public web surfaces; fail-open on unreachable/blocked/JS-only sites."
+  OBSERVATORY_LLM:
+    default: 0
+    env: OBSERVATORY_LLM
+    self_update: none
+    owner: observatory
+    note: "Arms P2-LLM — the optional evidence-constrained interpretation of the daily brief (observatory/interpret.py). 0 (default) = fully deterministic brief, byte-identical. 1 = ask a synthesis-class model (Opus via model_selection) to explain, in the evidence's own terms, why the top mechanisms win and how to transfer them; attaches a bounded 'interpretation' string to the brief. Reached via a bounded `claude -p` subprocess (opt-in, consumes budget), fail-open on missing binary / timeout / non-zero exit / empty output — the deterministic core is never mutated."
   LIMEN_MARKETPLACE_APPLY:
     default: 0
     env: LIMEN_MARKETPLACE_APPLY
