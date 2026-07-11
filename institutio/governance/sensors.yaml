@@ -20,8 +20,9 @@
 #
 # Consumers: metabolize.sh runs `scripts/beat-sensors.py --run --source metabolize` (the whole sensor
 # loop derives from here — the hand-wired blocks are gone); check-params.py and armed-valve-audit.py read
-# these gates from this registry instead of grepping the shell. omega.sh is NOT a consumer (a distinct
-# fixed-point predicate, out of scope by design). Drift-check: scripts/check-sensors.py.
+# these gates from this registry instead of grepping the shell; omega.sh derives its registry-declared
+# fixed-point rungs via `beat-sensors.py --list-omega`/`--run-omega` (the `omega_eligible` capability).
+# Drift-check: scripts/check-sensors.py.
 
 schema_version: 0.2
 

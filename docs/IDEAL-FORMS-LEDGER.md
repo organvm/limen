@@ -71,16 +71,20 @@ measures the **distance from ideal** at a moment in time, and carries a **status
   ARMED 45→26 coverage regression #935 introduced; a thinner in-flight fix, #938, was closed as
   superseded). `check-sensors.py` D-parity now passes with **zero gate literals in the shell**, purely
   via derive-runner detection.
-- **Deliberately NOT derived:** `omega.sh`. It is a *distinct* predicate (the autonomic fixed-point
-  conjunction), not a beat-sensor consumer — it hardcodes 11 rungs, only 5 overlap the sensors, and it
-  runs them with different flags (`--contract --offline`). It greps no shell gates, so the derive-flip
-  didn't regress it. Forcing it to derive would couple two conceptually-separate predicates for a
-  marginal DRY gain — out of scope by design, not an unfinished lane.
-- **Status:** DONE (2026-07-10). The beat sensor estate is registry-owned; adding a sensor is one entry.
+- **`omega.sh` derives too.** A fleet lane took the convergence past the metabolize loop: sensors carry
+  an `omega_eligible` capability (registry-declared fixed-point checks, each with a label/tier/command),
+  and `omega.sh` derives those rungs via `beat-sensors.py --list-omega` / `--run-omega` rather than
+  hardcoding them. Same capability shape extends the registry to `schema_version 0.2`: `armed_valve_type`
+  (behavior-valve classification, read by `armed-valve-audit.py`'s `discover_sensor_valves`), `args_when`
+  (conditional argv like `--apply`), and scheduled `cadence`/`timeout`. So every consumer that reads a
+  sensor fact now derives it from the registry — the ideal form is fully realized, not partially.
+- **Status:** DONE (2026-07-11). The beat sensor estate is registry-owned across all consumers
+  (metabolize loop, `check-params`, `armed-valve-audit`, `omega.sh`); adding a sensor — or a fixed-point
+  rung, or a conditional valve — is one registry entry, and consumers work unchanged if an id is renamed.
 - **Follow-up (tracked, not blocking):** promote the three *domain-agnostic* predicates
   (`check-fork-safety.py`, `check-test-hygiene.py`, `check-main-green.py`) to the ecosystem layer
-  (`organvm-engine/contextmd`, per `docs/agent-instruction-standard.md`) so the pattern becomes cross-repo
-  law — dark-first, once proven in limen. The registry itself is limen-intrinsic and stays here.
+  (`organvm-engine`, per `docs/agent-instruction-standard.md`) so the pattern becomes cross-repo law —
+  dark-first, once proven in limen. The registry itself is limen-intrinsic and stays here.
 - **Owner:** Claude + tabularius.
 
 ### IF-LEDGER-OF-IDEALS — this ledger (self)
