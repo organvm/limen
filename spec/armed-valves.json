@@ -1,5 +1,5 @@
 {
-  "_doc": "Classification registry for armed-valve-audit.py (RETRO-0708-ARMED-VALVE-AUDIT; PREC-2026-07-08-armed-valve-outcome). The AUDIT DERIVES the valve list from the beat sources (metabolize.sh / heartbeat-loop.sh ${LIMEN_*:-default} gates) — this file only holds what derivation cannot: WHICH disarmed-by-default valves are 'deliverable-IS-the-behavior' (a dry-run there is an UNMET ask) vs 'safety' (off-by-default is the design), plus external non-env probes (a URL that must serve, an artifact that must carry the rail). A discovered gate classified nowhere surfaces as UNCLASSIFIED — new valves self-surface, the registry never silently lags the code.",
+  "_doc": "Classification registry for armed-valve-audit.py (RETRO-0708-ARMED-VALVE-AUDIT; PREC-2026-07-08-armed-valve-outcome). The audit derives valves from beat-source gates and generic sensors.yaml capabilities. This file holds only non-sensor classifications and external probes (a URL that must serve, an artifact that must carry the rail). A discovered gate classified nowhere surfaces as UNCLASSIFIED — new valves self-surface, the registry never silently lags the code.",
   "deliverable": [
     {
       "id": "LIMEN_DISPATCH",

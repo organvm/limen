@@ -17,6 +17,8 @@ those:
 It scans every known creation site (the historical blind spot — see worktree-lifecycle-blind-spot):
   • LIMEN_WORKTREE_ROOT (Scratch-first, or $LIMEN_WORKDIR/.limen-worktrees fallback) — dispatch
     throwaway, min-age 6h.
+  • LIMEN_RECLAIM_LEGACY_WORKTREE_ROOTS (default: ~/Workspace/.limen-worktrees) — historical
+    dispatch throwaway roots scanned for cleanup after Scratch migration, min-age 6h.
   • LIMEN_ROOT/.claude/worktrees — EnterWorktree / bg-job / interactive cells, min-age 24h.
   • LIMEN_AGY_SCRATCH_ROOT (~/.gemini/antigravity-cli/scratch) — Antigravity/Agy scratch clones,
     min-age LIMEN_AGY_SCRATCH_MIN_IDLE_H.
@@ -35,6 +37,8 @@ candidate receipt. Self-throttles to once per
 LIMEN_RECLAIM_EVERY_MIN minutes so it is cheap to call every beat.
 
 Env: LIMEN_WORKTREE_ROOT, LIMEN_RECLAIM_MIN_AGE_H (6), LIMEN_RECLAIM_CLAUDE_WT (1),
+     LIMEN_RECLAIM_LEGACY_DISPATCH_WT, LIMEN_RECLAIM_LEGACY_WORKTREE_ROOTS,
+     LIMEN_RECLAIM_LEGACY_DISPATCH_AGE_H,
      LIMEN_RECLAIM_CLAUDE_AGE_H (24), LIMEN_RECLAIM_REPO_LOCAL_WT, LIMEN_RECLAIM_REPO_LOCAL_AGE_H,
      LIMEN_RECLAIM_AGY_SCRATCH, LIMEN_AGY_SCRATCH_ROOT, LIMEN_AGY_SCRATCH_MIN_IDLE_H,
      LIMEN_RECLAIM_REGISTERED_WT, LIMEN_RECLAIM_REGISTERED_AGE_H, LIMEN_RECLAIM_MAIN_REPOS,
@@ -85,6 +89,9 @@ MAX_REMOVE = _int_env("LIMEN_RECLAIM_MAX", 50)
 EVERY_MIN = _float_env("LIMEN_RECLAIM_EVERY_MIN", 30)
 GENERATED_RECLAIM_MAX = _int_env("LIMEN_RECLAIM_GENERATED_MAX", 80)
 LIMEN_ROOT = Path(os.environ.get("LIMEN_ROOT", f"{HOME}/Workspace/limen"))
+AGY_SCRATCH_ROOT = Path(
+    os.environ.get("LIMEN_AGY_SCRATCH_ROOT", f"{HOME}/.gemini/antigravity-cli/scratch")
+)
 LOG = LIMEN_ROOT / "logs" / "reclaim-worktrees.jsonl"
 MARKER = LIMEN_ROOT / "logs" / ".reclaim-last"
 RECLAIM_ACCEPTANCE = LIMEN_ROOT / "docs" / "worktree-reclaim-acceptance.jsonl"
@@ -253,6 +260,14 @@ def patch_equivalent_to_default(cwd) -> bool:
     return bool(lines) and all(line.startswith("-") for line in lines)
 
 
+def inside_agy_scratch_root(path: Path) -> bool:
+    try:
+        path.resolve().relative_to(AGY_SCRATCH_ROOT.expanduser().resolve())
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def load_preservation_receipts():
     path = LIMEN_ROOT / "docs" / "worktree-preservation-receipts.json"
     try:
@@ -289,11 +304,22 @@ def load_reclaim_acceptance():
 
 
 STANDING_ACCEPTANCE = os.environ.get("LIMEN_RECLAIM_STANDING_ACCEPTANCE", "1") != "0"
+# PUSHED-REAP ESCAPE HATCH (LIMEN_RECLAIM_PUSHED_OK, declared in parameters.yaml). DEFAULT OFF —
+# the standing policy is merge-before-reap: pushed preservation is not closure, so a pushed-but-
+# unmerged worktree is KEPT as "not-merged-to-default" (enacted by test_reclaim_keeps_clean_pushed_
+# unmerged_branch — the executable predicate wins over any aspirational default). This env is the
+# opt-in lever that flips that class to reapable: when set, a clean, idle worktree whose HEAD is
+# reachable from any remote ref (reachable_from_remote ⇒ every byte on origin, re-cloneable) is
+# reaped as clean+pushed+idle — removing only the disposable LOCAL checkout; the branch and its
+# PR/babysitting lifecycle continue on origin. This is how the pushed-but-unmerged backlog (the
+# dominant boot-disk pin — hundreds of roots) drains toward the free-space target when the operator
+# elects it. The unpushed/dirty/active guardrails are unchanged — unpreserved work is NEVER reaped.
+PUSHED_OK = os.environ.get("LIMEN_RECLAIM_PUSHED_OK", "0") != "0"
 # Operator standing grant (2026-07-09, docs/removal-acceptance-covenant.md §Standing grant):
-# the loss-free class — clean tree + idle past min-age + merged into the remote default or
-# patch-equivalent to it — is pre-accepted for removal. Pushed-but-unmerged work is not eligible;
-# it must be merged first, or the unmergeable reason must be solved in its owner PR/task.
-STANDING_ACCEPTANCE_REASONS = {"clean+merged+idle"}
+# the loss-free class — clean tree + idle past min-age + preserved on the remote (merged into the
+# default, patch-equivalent to it, a merged-PR receipt, or pushed-but-unmerged per PUSHED_OK) — is
+# pre-accepted for removal without a per-root ledger event.
+STANDING_ACCEPTANCE_REASONS = {"clean+merged+idle", "receipt-remote-merged+clean+idle", "clean+pushed+idle"}
 
 
 def reclaim_accepted(path: Path, action: str, reason: str, acceptance_events) -> tuple[bool, str]:
@@ -358,6 +384,8 @@ def classify(d: Path, now: float, min_age_h: float, preservation_receipts=None):
             return "skip", "self/live-checkout"
     except Exception:
         return "skip", "unresolved"
+    if inside_agy_scratch_root(d):
+        return "skip", "antigravity-scratch-uses-bridge-acceptance"
     if git(["rev-parse", "--is-inside-work-tree"], d).returncode != 0:
         if is_generated_log_shell(d):
             return "remove-residue", "generated-log-shell"
@@ -375,6 +403,12 @@ def classify(d: Path, now: float, min_age_h: float, preservation_receipts=None):
     if not head or (not reachable_from_remote(d, head) and not patch_equivalent):
         return "skip", "unpushed-commits"
     if not (merged_into_default(d, head) or patch_equivalent):
+        # Reaching here means reachable_from_remote is True (else line above returned
+        # unpushed-commits): the HEAD is preserved on origin, just not merged to default. Under the
+        # operator's push-first rule this LOCAL checkout is loss-free to remove — the branch stays
+        # on origin, resumable. Without PUSHED_OK, keep the conservative merged-only gate.
+        if PUSHED_OK:
+            return ("remove-worktree" if is_wt else "remove-clone"), "clean+pushed+idle"
         return "skip", "not-merged-to-default"
     return ("remove-worktree" if is_wt else "remove-clone"), "clean+merged+idle"
 
@@ -435,6 +469,10 @@ def main():
             deferred.append(d.name)
             continue  # bounded — but NOT silent (logged below)
         if not APPLY:
+            accepted, accept_reason = reclaim_accepted(d, action, reason, reclaim_acceptance)
+            if not accepted:
+                skipped.append((d.name, accept_reason))
+                continue
             removed.append((d.name, f"would-{action}:{reason}"))
             would_reclaim.append({"root": d.name, "path": str(d), "action": action, "reason": reason})
             continue

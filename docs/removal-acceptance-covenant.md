@@ -23,8 +23,9 @@ ownership proof for a proposed removal.
 The operator directed (2026-07-09, after the acceptance loop deadlocked at 646
 pooled roots / ~38 GiB with `removed: []` on every beat) that the loss-free
 worktree class is **pre-accepted for removal**: a root whose tree is clean,
-whose HEAD is merged into the remote default branch, and which is idle past
-its min-age. `scripts/reclaim-worktrees.py` honors this as
+whose HEAD is merged into the remote default branch or whose preservation
+receipt proves a merged remote PR, and which is idle past its min-age.
+`scripts/reclaim-worktrees.py` honors this as
 `standing-grant-2026-07-09` (disable with
 `LIMEN_RECLAIM_STANDING_ACCEPTANCE=0`). The classifier's own checks (dirty,
 unpushed, active) remain the guardrails, and every removal is
@@ -39,11 +40,17 @@ cannot merge must be solved, before any local checkout is removed. The
 `unpushed-commits` and `dirty` guardrails are unchanged — a root whose work is
 not yet on origin is **never** reaped.
 
+This standing grant does not apply to Antigravity/Agy scratch roots. Those roots
+must use the `antigravity_scratch` surface and its archive/redaction acceptance
+ledger, even when a generic worktree classifier can prove the clone is clean,
+merged, and idle.
+
 ## Checked Surfaces
 
 | Surface | Tool | Acceptance doc | Acceptance ledger | Terminal action |
 |---|---|---|---|---|
 | branch | `scripts/reap-branches.py` | `docs/branch-reap-acceptance.md` | `docs/branch-reap-acceptance.jsonl` | `git branch -D` |
+| remote_branch | `scripts/reap-remote-branches.py` | `docs/remote-branch-reap-acceptance.md` | `docs/remote-branch-reap-acceptance.jsonl` | `git push origin --delete` (remote ref, not reflog-recoverable; double-dark: `LIMEN_REMOTE_REAP_APPLY=1`) |
 | clone | `scripts/reap-clones.py` | `docs/clone-reap-acceptance.md` | `docs/clone-reap-acceptance.jsonl` | remove standalone clone root |
 | worktree | `scripts/reclaim-worktrees.py` | `docs/worktree-reclaim-acceptance.md` | `docs/worktree-reclaim-acceptance.jsonl` | remove worktree or generated residue root |
 | antigravity_scratch | `scripts/antigravity-scratch-bridge.py` | `docs/antigravity-scratch-reap-acceptance.md` | `docs/antigravity-scratch-reap-acceptance.jsonl` | remove Antigravity scratch root |

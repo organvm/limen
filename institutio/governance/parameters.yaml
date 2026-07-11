@@ -48,6 +48,18 @@ parameters:
     self_update: none
     owner: dispatch
     note: "Per-lane launch room for local async workers. Remote lanes such as Jules use live provider runway and --per-lane; this knob prevents a remote burst command from becoming 100 local OpenCode/Agy processes."
+  LIMEN_FACTS_APPLY:
+    default: 0
+    env: LIMEN_FACTS_APPLY
+    self_update: none
+    owner: identity
+    note: "Arms identity.py `need` to APPEND a pending row to personal-facts.yaml (and file an L-FACT lever) for an un-homed personal-fact class. Dry-run (0) by default — surfaces the pending row without writing. The write path is single-writer/scrubbed: class-NAME only, never a value."
+  LIMEN_IDENTITY_VERIFY:
+    default: 1
+    env: LIMEN_IDENTITY_VERIFY
+    self_update: none
+    owner: identity
+    note: "Toggles the beat's personal-fact presence check (identity.py verify, sensor 0a2 in sensors.yaml). 1=on: a blank applicable&required atom surfaces in the beat log, never chat. Sibling of LIMEN_CREDS_HYDRATE — creds rotate, identity atoms don't."
   LIMEN_DISPATCH_ASYNC:
     default: 1
     env: LIMEN_DISPATCH_ASYNC
@@ -223,12 +235,54 @@ parameters:
     self_update: none
     owner: limen-daemon
     note: "Timeout in seconds for the pre-dispatch always-working reconciliation gate."
+  LIMEN_ALWAYS_WORKING_TIMEOUT_HARD_GATE:
+    default: "0"
+    env: LIMEN_ALWAYS_WORKING_TIMEOUT_HARD_GATE
+    self_update: none
+    owner: limen-daemon
+    note: "Whether an always-working timeout alone blocks dispatch reservation. The broader hard gate still blocks non-timeout failures; default 0 preserves live dispatch if lifecycle reconciliation exceeds its timeout."
   LIMEN_ALWAYS_WORKING_TARGET_FREE_GIB:
     default: 200
     env: LIMEN_ALWAYS_WORKING_TARGET_FREE_GIB
     self_update: none
     owner: continuity
     note: "Local-system free-space target used by always-working to keep the laptop as hot cache instead of durable storage."
+  LIMEN_ESTATE_SCAN_SECONDS:
+    default: 75
+    env: LIMEN_ESTATE_SCAN_SECONDS
+    self_update: none
+    owner: continuity
+    note: "Maximum wall-clock seconds for estate-closeout-audit.py to spend discovering local Git roots before marking the local estate scan bounded."
+  LIMEN_ESTATE_MAX_ROOTS:
+    default: 1400
+    env: LIMEN_ESTATE_MAX_ROOTS
+    self_update: none
+    owner: continuity
+    note: "Maximum local Git roots estate-closeout-audit.py records during whole-estate discovery before marking the inventory bounded."
+  LIMEN_ESTATE_LOCAL_DETAIL_LIMIT:
+    default: 900
+    env: LIMEN_ESTATE_LOCAL_DETAIL_LIMIT
+    self_update: none
+    owner: continuity
+    note: "Maximum discovered local Git roots estate-closeout-audit.py probes in detail for dirty, branch, upstream, PR, and deletion eligibility."
+  LIMEN_ESTATE_LOCAL_PR_PROBE_LIMIT:
+    default: 120
+    env: LIMEN_ESTATE_LOCAL_PR_PROBE_LIMIT
+    self_update: none
+    owner: continuity
+    note: "Maximum local roots estate-closeout-audit.py probes through GitHub PR lookup while classifying local custody."
+  LIMEN_ESTATE_PR_LIMIT:
+    default: 1000
+    env: LIMEN_ESTATE_PR_LIMIT
+    self_update: none
+    owner: continuity
+    note: "Maximum open GitHub PRs estate-closeout-audit.py collects across owned estate organizations before declaring remote PR classification bounded."
+  LIMEN_ESTATE_PR_CLASSIFY_LIMIT:
+    default: 120
+    env: LIMEN_ESTATE_PR_CLASSIFY_LIMIT
+    self_update: none
+    owner: continuity
+    note: "Maximum open GitHub PRs estate-closeout-audit.py deep-classifies for mergeability, CI, conflict, and owner-gate state."
   LIMEN_PROFILE_REPO:
     default: "$LIMEN_WORKSPACE_ROOT/organvm/4444J99"
     env: LIMEN_PROFILE_REPO
@@ -277,6 +331,18 @@ parameters:
     self_update: none
     owner: continuity
     note: "External archive SSD root used for durable custody receipts and run-and-gun substrate checks."
+  LIMEN_OPENCODE_DB:
+    default: "$HOME/.local/share/opencode/opencode.db"
+    env: LIMEN_OPENCODE_DB
+    self_update: none
+    owner: continuity
+    note: "OpenCode SQLite history database used by opencode-db-corpus-intake.py for private prompt-corpus preservation receipts. Protected agent state; never deleted by the intake tool."
+  LIMEN_OPENCODE_DB_ARCHIVE_ROOT:
+    default: "/Volumes/Archive4T/limen-private/opencode-db-intake"
+    env: LIMEN_OPENCODE_DB_ARCHIVE_ROOT
+    self_update: none
+    owner: continuity
+    note: "External archive destination for verified OpenCode DB backups written by opencode-db-corpus-intake.py before any local retention decision."
   LIMEN_INGRESS_ROOT:
     default: "/Volumes/Ingress"
     env: LIMEN_INGRESS_ROOT
@@ -409,6 +475,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "Timeout in seconds for the opt-in lifecycle pytest tranche in closeout-fast."
+  LIMEN_CLOSEOUT_QUEUE_LOCK_TIMEOUT:
+    default: 30
+    env: LIMEN_CLOSEOUT_QUEUE_LOCK_TIMEOUT
+    self_update: none
+    owner: continuity
+    note: "Seconds closeout-fast waits for the shared queue lock while it validates tasks.yaml and live-root-gate against a stable board snapshot."
   LIMEN_VERIFY_LOCK_FILE:
     default: "${TMPDIR:-/tmp}/limen-verify-whole.lock"
     env: LIMEN_VERIFY_LOCK_FILE
@@ -421,6 +493,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "Opt-out of the verify-whole.sh machine-wide lock for single-purpose runners (CI), where serialization is already guaranteed by the runner itself."
+  LIMEN_PUSH_GUARD:
+    default: "on"
+    env: LIMEN_PUSH_GUARD
+    self_update: none
+    owner: continuity
+    note: "DATA_ONLY push guard (issue #872 / PREC-2026-07-10-direct-push-lane-rots-main). When on (default), the autonomic direct-push lanes (scripts/capture.sh, scripts/continuation-beat.py) refuse to stage SOURCE (code/config that belongs behind pr-gate) onto a repo's `main` when that repo has .github/workflows/pr-gate.yml — so no uncommitted .py in the live checkout ever reaches protected main un-CI'd. Refused source is left on disk (reversible) and surfaced; route it via PR. `off` disables the guard. Non-main branches and ungated repos are unaffected either way."
   LIMEN_RECLAIM_GENERATED:
     default: "1"
     env: LIMEN_RECLAIM_GENERATED
@@ -439,6 +517,18 @@ parameters:
     self_update: none
     owner: continuity
     note: "Heartbeat timeout in seconds for generated-only reclaim."
+  LIMEN_RECLAIM_GENERATED_STATE_LIMIT:
+    default: 500
+    env: LIMEN_RECLAIM_GENERATED_STATE_LIMIT
+    self_update: none
+    owner: continuity
+    note: "Maximum git roots scanned by reclaim-generated-state.py per run when cleaning ignored generated dependency/build/cache directories."
+  LIMEN_RECLAIM_GENERATED_STATE_TIMEOUT:
+    default: 180
+    env: LIMEN_RECLAIM_GENERATED_STATE_TIMEOUT
+    self_update: none
+    owner: continuity
+    note: "Per-root timeout in seconds for reclaim-generated-state.py git/size checks."
   LIMEN_RECLAIM_TIMEOUT:
     default: 300
     env: LIMEN_RECLAIM_TIMEOUT
@@ -451,6 +541,30 @@ parameters:
     self_update: none
     owner: continuity
     note: "Honor the covenant standing grant (2026-07-09): clean+merged+idle worktree roots are pre-accepted for removal without a per-root ledger event. Set 0 to restore per-root human acceptance for that class (docs/removal-acceptance-covenant.md)."
+  LIMEN_RECLAIM_PUSHED_OK:
+    default: "0"
+    env: LIMEN_RECLAIM_PUSHED_OK
+    self_update: none
+    owner: continuity
+    note: "Pushed-reap escape hatch — DEFAULT OFF. The standing policy is merge-before-reap (pushed preservation is not closure), so a clean, idle, pushed-but-unmerged worktree is KEPT as not-merged-to-default (enacted by test_reclaim_keeps_clean_pushed_unmerged_branch). Set 1 to flip that class to reapable: reachable_from_remote ⇒ every byte is on origin and re-cloneable, so removing the local checkout loses zero work and the branch + its PR/babysitting lifecycle continue on origin. This is the opt-in lever that drains the pushed-but-unmerged backlog (the dominant boot-disk pin — hundreds of roots) toward the free-space target; classified clean+pushed+idle under the standing grant. Enabling it is an operator policy decision (it overrides merge-before-reap), homed as a lever, not defaulted on. The unpushed/dirty/active guardrails are unchanged — unpreserved work is NEVER reaped."
+  LIMEN_CLONE_REAP_STANDING_ACCEPTANCE:
+    default: "1"
+    env: LIMEN_CLONE_REAP_STANDING_ACCEPTANCE
+    self_update: none
+    owner: continuity
+    note: "Round-two covenant standing grant (2026-07-09): a local clone whose loss-free verdict is 'pushed-mirror' (classify() proves every local byte is on the live remote, re-cloneable, nothing unpushed/untracked — adversarially audited against 14 data-loss paths) is pre-accepted for reap without a per-clone ledger event. Matches the worktree sibling (LIMEN_RECLAIM_STANDING_ACCEPTANCE). Set 0 to restore the docs/clone-reap-acceptance.jsonl per-clone gate."
+  LIMEN_REAP_CLONES_APPLY:
+    default: "1"
+    env: LIMEN_REAP_CLONES_APPLY
+    self_update: none
+    owner: continuity
+    note: "Beat-wire clone-reap in --apply mode (2026-07-09): the hygiene voice runs scripts/reap-clones.py so the reclaim engine is ALIVE, not a script that never ran. reap-clones self-gates on disk pressure + idle age + the loss-free pushed-mirror gate, so it is inert above the free-floor and only removes the pushed-mirror class. Set 0 to run it in dry-run/report mode only."
+  LIMEN_REAP_CLONES_TIMEOUT:
+    default: "300"
+    env: LIMEN_REAP_CLONES_TIMEOUT
+    self_update: none
+    owner: continuity
+    note: "Seconds budget for the beat-wired clone-reap voice (scripts/reap-clones.py) before the hygiene voice times it out. Bounded + fail-open like the sibling reclaim timeouts."
   LIMEN_DISK_PRESSURE_PATH:
     default: "$LIMEN_ROOT"
     env: LIMEN_DISK_PRESSURE_PATH
@@ -1535,6 +1649,24 @@ parameters:
     note: "Gate for the metabolize 0c' step (scripts/chezmoi-drift.py). cartridge-connected proves the right REMOTE is wired but reads green through three states that silently disable config hydration: a strict-missingkey template error that aborts the whole `chezmoi status`/apply run; the source checkout parked on a stale branch serving old config; a managed target edited on disk but never re-added (the auto-capture hook only fires on the Edit tool). Any lets a local orphan look durable — the failure that made a subagent's ~/.claude statusline write survive as a local file (2026-07-09). =0 skips it. Fail-open only when chezmoi is absent; wedge/stale/.claude-orphan is the actionable non-zero. See host-is-factory-system-is-cartridge."
 
   # --- WORKTREE LIFECYCLE / parallel CELLS (scripts/cells.sh + scripts/reclaim-worktrees.py) ---
+  LIMEN_RECLAIM_LEGACY_DISPATCH_WT:
+    default: "auto"
+    env: LIMEN_RECLAIM_LEGACY_DISPATCH_WT
+    self_update: none
+    owner: limen-daemon
+    note: "Whether reclaim/debt discovery scans historical dispatch worktree roots after the active Scratch migration. Auto means enabled in live sessions and disabled when a test/probe supplies an explicit LIMEN_WORKTREE_ROOT."
+  LIMEN_RECLAIM_LEGACY_DISPATCH_AGE_H:
+    default: "$LIMEN_RECLAIM_MIN_AGE_H"
+    env: LIMEN_RECLAIM_LEGACY_DISPATCH_AGE_H
+    self_update: none
+    owner: limen-daemon
+    note: "Min idle hours before a legacy dispatch-root child can be reclaimed. Defaults to the dispatch reclaim age so old roots follow the same loss-free lifecycle gates."
+  LIMEN_RECLAIM_LEGACY_WORKTREE_ROOTS:
+    default: "$HOME/Workspace/.limen-worktrees"
+    env: LIMEN_RECLAIM_LEGACY_WORKTREE_ROOTS
+    self_update: none
+    owner: limen-daemon
+    note: "Colon-separated historical dispatch worktree roots scanned for cleanup after migration to LIMEN_WORKTREE_ROOT; the active dispatch root is skipped if listed here."
   LIMEN_RECLAIM_CLAUDE_WT:
     default: "1"               # ON — sweep .claude/worktrees too (the historical ~50GB blind spot)
     env: LIMEN_RECLAIM_CLAUDE_WT
@@ -1685,12 +1817,90 @@ parameters:
     self_update: none
     owner: limen-daemon
     note: "Extra branch names (space-separated) reap-branches.py NEVER deletes, on top of the built-in trunks (main/master/develop/trunk) and the default branch. Empty by default."
+  LIMEN_REMOTE_REAP_APPLY:
+    default: 0
+    env: LIMEN_REMOTE_REAP_APPLY
+    self_update: none
+    owner: gitvs
+    note: "DOUBLE-DARK arming for scripts/reap-remote-branches.py: even with --apply, a remote branch is deleted only when this is 1. Defaults 0 (unlike the local reaper's LIMEN_BRANCH_REAP_APPLY=1) because a remote delete is NOT reflog-recoverable — arm it deliberately."
+  LIMEN_REMOTE_REAP_MAX:
+    default: 100
+    env: LIMEN_REMOTE_REAP_MAX
+    self_update: none
+    owner: gitvs
+    note: "Max remote branches reap-remote-branches.py deletes per run; the remainder is logged and taken next run. Bounds the blast radius of the irreversible remote delete."
+  LIMEN_REMOTE_REAP_EVERY_MIN:
+    default: 30
+    env: LIMEN_REMOTE_REAP_EVERY_MIN
+    self_update: none
+    owner: gitvs
+    note: "Self-throttle: reap-remote-branches.py --apply skips if it ran within this many minutes (--force overrides). Keeps the estate-wide remote sweep off the tight beat."
+  LIMEN_REMOTE_REAP_GRACE_MIN:
+    default: 1440
+    env: LIMEN_REMOTE_REAP_GRACE_MIN
+    self_update: none
+    owner: gitvs
+    note: "--check only: a landed remote branch younger than this many minutes is digesting, not lingering. Default 1440 (24h), WIDER than the local reaper's 60m — a remote delete is not reflog-recoverable and other clones/CI may still hold the ref."
+  LIMEN_REMOTE_REAP_PROTECT:
+    default: ""
+    env: LIMEN_REMOTE_REAP_PROTECT
+    self_update: none
+    owner: gitvs
+    note: "Extra branch names (space-separated) reap-remote-branches.py NEVER deletes, on top of the built-in trunks (main/master/develop/trunk) and the default branch. Empty by default."
   LIMEN_REAP_CORE:
     default: "limen session-meta sovereign-systems--elevate-align portfolio portvs universal-mail--automation"
     env: LIMEN_REAP_CORE
     self_update: none
     owner: limen-daemon
     note: "Space-separated CORE repos reap-clones.py never removes even when they are a clean pushed mirror (the operator lives in them / the conductor needs them local)."
+  LIMEN_GITVS_OWNERS:
+    default: ""
+    env: LIMEN_GITVS_OWNERS
+    self_update: none
+    owner: gitvs
+    note: "Comma-separated GitHub owners GITVS (scripts/gitvs.py) enumerates when observing the estate. Empty ⇒ DERIVED from the estate.yaml class-match globs ('names are outputs' — never pin a repo list), falling back to the conductor owner organvm."
+  LIMEN_GITVS_ESTATE:
+    default: "institutio/github/estate.yaml"
+    env: LIMEN_GITVS_ESTATE
+    self_update: none
+    owner: gitvs
+    note: "Path to the GITVS estate registry (the desired-state resource graph). Overridable so scripts/tests/gitvs.test.sh can point the parity predicate at drift fixtures; production reads the committed institutio/github/estate.yaml."
+  LIMEN_BEAT_GITVS:
+    default: 8
+    env: LIMEN_BEAT_GITVS
+    self_update: none
+    owner: gitvs
+    note: "Cadence (every N beats) of the GitHub estate sensor declared in sensors.yaml. The generic scheduled runner resolves this environment override; heartbeat-loop.sh contains no sensor-specific cadence constant."
+  LIMEN_GITVS:
+    default: 1
+    env: LIMEN_GITVS
+    self_update: none
+    owner: gitvs
+    note: "Master on/off for the registry-declared GitHub estate reconciliation sensor. When the derive canary is armed, 1 runs the DRY report on its declared cadence and 0 disables it. Mutation remains a separate registry-classified gate (LIMEN_GITVS_APPLY)."
+  LIMEN_GITVS_APPLY:
+    default: 0
+    env: LIMEN_GITVS_APPLY
+    self_update: none
+    owner: gitvs
+    note: "Arms the GITVS reconcile effector: 0 (default) reports the plan only; 1 invokes each reachable delegate/reap adapter using the exact argv declared in estate.yaml. Ships DARK — adapters may retain their own dark-arming, and any adapter with a registry-declared approval lever remains human-gated."
+  LIMEN_GITVS_TIMEOUT:
+    default: 120
+    env: LIMEN_GITVS_TIMEOUT
+    self_update: none
+    owner: gitvs
+    note: "Per-run timeout (seconds) resolved by the generic sensor runner for GitHub estate reconciliation and by each delegate/reap adapter it dispatches. The runner kills the full command group on overrun and the beat continues fail-open."
+  LIMEN_MARKETPLACE_APPLY:
+    default: 0
+    env: LIMEN_MARKETPLACE_APPLY
+    self_update: none
+    owner: gitvs
+    note: "DOUBLE-DARK arming for scripts/sync-marketplace-config.py: even with --apply, it opens a cross-repo config PR only when this is 1. Defaults 0 — a config PR touches OTHER repos (the fan-out), so arm it deliberately. The conductor's own configs live in-repo and need no push."
+  LIMEN_MARKETPLACE_MAX:
+    default: 20
+    env: LIMEN_MARKETPLACE_MAX
+    self_update: none
+    owner: gitvs
+    note: "Max repos scripts/sync-marketplace-config.py pushes a config PR to per run; the rest are taken next run (a bounded rotating fan-out, not a 301-repo stampede)."
   LIMEN_REAP_VERIFY_REMOTE:
     default: "1"
     env: LIMEN_REAP_VERIFY_REMOTE
@@ -1721,6 +1931,12 @@ parameters:
     self_update: none
     owner: limen-daemon
     note: "Maximum clean merged local worktree roots allowed to linger after the reaper should be able to remove them. Default 0 makes clean+merged+idle residue fail focused lifecycle gates until reclaim applies or an owner blocker is recorded. Pushed-but-unmerged roots are not reapable; they remain not-merged-to-default until merged or patch-equivalent."
+  LIMEN_LIFECYCLE_PRESSURE_THROTTLE:
+    default: 1800             # 30 min — skip the session-lifecycle-pressure census if the snapshot is younger
+    env: LIMEN_LIFECYCLE_PRESSURE_THROTTLE
+    self_update: none
+    owner: limen-daemon
+    note: "Throttle window (seconds) for scripts/session-lifecycle-pressure.py. The SessionEnd hook runs it every session, and its census shells out to several git commands PER worktree — on a large estate (hundreds of debt roots) that grinds the CPU for a minute+ each session-end (the machine 'crawls'). The pressure snapshot changes slowly, so the census is skipped when logs/session-lifecycle-pressure.json is younger than this. 0 = always run (old behavior); --throttle overrides per-call. Reversible: set 0 to restore per-event census."
   LIMEN_BRANCH_PREFIX:
     default: null              # DERIVED per scope — cells.sh sets cell-<slug>- for a cell's own conductor
     env: LIMEN_BRANCH_PREFIX
@@ -1802,6 +2018,87 @@ parameters:
     self_update: none
     owner: tabularius
     note: "Beat gate for the heal-convergence report (scripts/heal-convergence.py --check) run each beat by metabolize.sh section 0g (RETRO-0708-HEAL-RECEIPT-OUTCOME; retro findings 1-2). CHRONIC rung: open heal PRs (title-prefixed '[limen HEAL-') grouped by (repo, failing check); >=3 PRs older than 48h on the SAME check = the healer is re-spending capacity on a wall (growth-auditor #16-#22 / theoria #492-#500 class) -> exit 1. COVERAGE rung: archived heal receipts must carry the {outcome: already_green|fixed|gave_up, failing_checks} field derived MECHANICALLY post-run by async-run-one.py (gh pr view of the target PR - never agent prose), reported as a ratio so the 855-emitted-vs-384-receipts gap class is a number. verify-whole runs the fixture test (fixture PRs + fixture clock - deterministic); live counts stay beat-side. Set 0 to silence."
+
+  LIMEN_FORK_SAFETY_CHECK:
+    default: "1"               # ON — prove the macOS 26.6 atfork/os_log crash stays fixed each beat
+    env: LIMEN_FORK_SAFETY_CHECK
+    self_update: none
+    owner: tabularius
+    note: "Beat gate for the fork-safety predicate (scripts/check-fork-safety.py --check) run each beat by metabolize.sh section 0g2. The macOS 26.6 crash ('python keeps crashing') is Apple's Network.framework pthread_atfork child handler segfaulting in os_log on the child side of fork()+exec(); the OS_ACTIVITY_MODE=disable mitigation (#831/#229) fixes the os_log layer. Because the crash is a timing RACE, 'no recurrence' was a hope, not a predicate. This asserts every beat that the mitigation is still present in the beat scripts AND that no .ips crash report (scans ~/Library/Logs/DiagnosticReports/ + Retired/) matching the atfork/os_log signature is newer than the mitigation boundary (git author-date of the OS_ACTIVITY_MODE commit — derived, never hardcoded). A recurrence exits non-zero (the effector) and is the documented trigger to arm LIMEN_FORK_SAFE. macOS-only signal; fail-open on non-darwin / no git. Set 0 to silence."
+
+  LIMEN_FORK_SAFE:
+    default: "0"               # OFF (DARK) — posix_spawn escalation, armed only if the fork-safety predicate fires
+    env: LIMEN_FORK_SAFE
+    self_update: none
+    owner: tabularius
+    note: "Dark escalation for the macOS 26.6 fork/os_log crash (see LIMEN_FORK_SAFETY_CHECK). When 1, a cli/src/sitecustomize.py shim rewrites qualifying subprocess.Popen calls to a /bin/sh -c 'cd; exec' wrapper with cwd=None AND close_fds=False so CPython takes the posix_spawn path (which runs no atfork handlers). This is INVASIVE and PARTIAL — it cannot cover start_new_session group-kill callers (dispatch.py:_run_capture), and on macOS close_fds=True (the default) forks near-universally, so the OS_ACTIVITY_MODE mitigation is strictly more complete. Off-by-default is the design: arm ONLY if the beat predicate ever reports a post-mitigation recurrence. Not built until then."
+
+  LIMEN_CRASH_REPORTS_DIR:
+    default: ""                # empty = OS default (~/Library/Logs/DiagnosticReports); set only for tests
+    env: LIMEN_CRASH_REPORTS_DIR
+    self_update: none
+    owner: tabularius
+    note: "Override for the crash-report scan root used by scripts/check-fork-safety.py (also settable via its --reports-dir flag). Empty (the default) scans the macOS default ~/Library/Logs/DiagnosticReports/ plus its Retired/ rotation subdir. Set to a temp directory in tests to inject fabricated .ips reports deterministically; never set on the live host."
+
+  LIMEN_CREDS_HYDRATE:
+    default: "1"               # ON — hydrate fleet creds from 1Password each beat (sensor 0a)
+    env: LIMEN_CREDS_HYDRATE
+    self_update: none
+    owner: tabularius
+    note: "Gate for the creds-hydrate beat sensor (institutio/governance/sensors.yaml section 0a): refresh ~/.limen.env from the op:// source of truth so a one-time login never repeats, then --verify each materialized cred against its service. Read by the beat-sensors runner via the SENSORS registry (was previously only an undeclared shell hardcode; declared here when the hand-wired blocks were derived away). 0 disables the hydration pass."
+  LIMEN_BEAT_DERIVE:
+    default: "1"               # ON — beat DERIVES its sensor loop from sensors.yaml; 0 = skip the sensor pass (escape hatch)
+    env: LIMEN_BEAT_DERIVE
+    self_update: none
+    owner: governance
+    note: "The continuous metabolize sensor loop is registry-derived and default-on after #935; the deleted hand-wired blocks are not a fallback, so 0 skips that pass as an escape hatch. The same generic runner now owns scheduled heartbeat cadence, timeout, conditional argv, voice stamps, Omega eligibility, and armed-valve metadata from sensors.yaml. Keep the integration drain in place until the bounded scheduled canary is receipted."
+
+  LIMEN_MAIN_GREEN_CHECK:
+    default: "1"               # ON — detect a RED main trunk each beat (§0g3)
+    env: LIMEN_MAIN_GREEN_CHECK
+    self_update: none
+    owner: tabularius
+    note: "Beat gate for the trunk-green sensor (scripts/check-main-green.py) run each beat by metabolize.sh section 0g3. Closes the 2026-07-10 gap where main's REQUIRED pr-gate silently went red (non-hermetic tests) and no sensor detected it. pr-gate runs on pull_request only; ci.yml runs the same suite on push:[main], so the latest completed CI run on main is the trunk-health proxy. On RED the sensor exits non-zero so the beat surfaces it. Throttled gh (LIMEN_MAIN_GREEN_THROTTLE) + fail-open offline. Set 0 to silence."
+
+  LIMEN_MAIN_GREEN_APPLY:
+    default: "0"               # OFF (DARK) — detection-only until armed; then auto-emits one heal task
+    env: LIMEN_MAIN_GREEN_APPLY
+    self_update: none
+    owner: tabularius
+    note: "Effector arm for the trunk-green sensor (observable-before-autonomous, the LIMEN_CENSOR_APPLY pattern). When 0 (default) a RED main is only detected + surfaced in the beat log. When 1, check-main-green.py also emits ONE idempotent SYMPTOM-scoped HEAL-mainred-organvm-limen task (id scoped to the symptom, not the head SHA — the SHA lives in the title/context) via the daemon's queue-lock (the safe shared-append path self-heal.py uses) so every lane AND every successive red commit converges on a single canonical heal task instead of duplicating (the #869-vs-#871 gap, limen#895); a recurrence after a prior heal re-opens the same ticket. Arm after watching the detection log prove out."
+
+  LIMEN_MAIN_GREEN_THROTTLE:
+    default: "1800"            # seconds between live gh queries; cached verdict surfaces every beat
+    env: LIMEN_MAIN_GREEN_THROTTLE
+    self_update: none
+    owner: tabularius
+    note: "Throttle window (seconds) for check-main-green.py's `gh run list` call. Within the window the cached verdict (logs/main-green.json) is reused so a RED trunk still surfaces every beat without re-querying GitHub each tick. Also settable via --throttle. Default 1800 (30 min)."
+
+  LIMEN_MAIN_GREEN_WORKFLOW:
+    default: "ci.yml"          # the workflow that runs on push:[main] and mirrors pr-gate's suite
+    env: LIMEN_MAIN_GREEN_WORKFLOW
+    self_update: none
+    owner: tabularius
+    note: "Which workflow check-main-green.py reads as the main-trunk-health proxy. Default ci.yml (runs the same pytest as pr-gate, on push:[main]); pr-gate.yml itself runs on pull_request only so it never runs on main."
+
+  LIMEN_MAIN_GREEN_REPO:
+    default: "organvm/limen"   # the repo whose main trunk is watched
+    env: LIMEN_MAIN_GREEN_REPO
+    self_update: none
+    owner: tabularius
+    note: "Repo (owner/name) whose main-branch CI check-main-green.py watches and, when armed, emits the HEAL-mainred task for. Default organvm/limen. Derived so the sensor survives relocation."
+  LIMEN_MAIN_GREEN_WEDGE_K:
+    default: 5                 # >= K fresh PRs sharing one failing required check = queue-wedge blast radius
+    env: LIMEN_MAIN_GREEN_WEDGE_K
+    self_update: none
+    owner: tabularius
+    note: "Blast-radius threshold (integrated from PR #882): the minimum number of FRESH open PRs that must share a single failing REQUIRED check before check-main-green reports a queue wedge — quantifying the RED alarm's urgency and catching a wedge that persists even when trunk ci.yml is green (a required check diverging from ci.yml)."
+  LIMEN_MAIN_GREEN_FRESH_HOURS:
+    default: 36                # only PRs updated within this window count toward the wedge (excludes chronic backlog)
+    env: LIMEN_MAIN_GREEN_FRESH_HOURS
+    self_update: none
+    owner: tabularius
+    note: "Freshness window (h) for the wedge blast-radius scan: a pile of stale fleet PRs each failing pr-gate on its own stale base is chronic backlog, not an acute trunk break — only recently-updated PRs count toward wedged_prs."
 
   LIMEN_CONTINUITY_CHECK:
     default: "1"               # ON — detect silent dispatch lanes while queue + budget exist each beat
@@ -1961,6 +2258,30 @@ parameters:
     self_update: none
     owner: dispatch
     note: "Master gate for the dispatch admission check (cli/src/limen/dispatch.py): before a task is dispatched, admission requires fresh evidence that dispatching produces value (handoff recency + session-value review + a sourced next_action). 1=enforce; 0=admit everything (prior behavior). Verified by scripts/check-dispatch-admission.py."
+  LIMEN_OPENCODE_MODEL:
+    default: ""
+    env: LIMEN_OPENCODE_MODEL
+    self_update: none
+    owner: dispatch
+    note: "Optional operator override. It is usable only when the exact value is present and code-capable in the current `opencode models --verbose` catalog; blank derives from live capabilities."
+  LIMEN_OPENCODE_CATALOG_TIMEOUT:
+    default: 30
+    env: LIMEN_OPENCODE_CATALOG_TIMEOUT
+    self_update: none
+    owner: dispatch
+    note: "Seconds allowed for live OpenCode capability discovery before the affected task records failed_blocked. No named fallback is synthesized."
+  LIMEN_WARP_MODEL_OVERRIDE:
+    default: ""
+    env: LIMEN_WARP_MODEL_OVERRIDE
+    self_update: none
+    owner: dispatch
+    note: "Optional Warp model override. Blank delegates to Warp Auto; nonblank must appear in the current `oz model list --output-format json` catalog before dispatch."
+  LIMEN_WARP_CATALOG_TIMEOUT:
+    default: 30
+    env: LIMEN_WARP_CATALOG_TIMEOUT
+    self_update: none
+    owner: dispatch
+    note: "Seconds allowed to validate an explicit Warp override against the current Oz catalog. Normal provider-Auto dispatch does not need catalog enumeration."
   LIMEN_REQUIRE_HANDOFF:
     default: "1"               # ON — admission requires a fresh handoff relay record
     env: LIMEN_REQUIRE_HANDOFF

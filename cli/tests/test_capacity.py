@@ -9,6 +9,7 @@ Functions covered:
 from __future__ import annotations
 
 import sys
+import json
 from datetime import date
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from limen.capacity import (
     format_capacity_census,
     github_issue_ref,
     ollama_model,
+    select_lanes,
     task_has_github_issue,
     task_value,
 )
@@ -490,6 +492,80 @@ def test_capacity_census_agent_cap_overspent_clamps_remaining() -> None:
     rows = capacity_census(board)
     codex_row = next(r for r in rows if r["agent"] == "codex")
     assert codex_row["remaining"] == 0
+
+
+def test_capacity_census_uses_current_live_meter_over_stale_board_spend(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs" / "usage.json").write_text(
+        json.dumps(
+            {
+                "generated": "2026-07-10T07:24:23+00:00",
+                "vendors": {
+                    "jules": {
+                        "signal": "dispatch-count",
+                        "unit": "runs",
+                        "possible": 100,
+                        "consumed": 89,
+                        "remaining": 11,
+                        "health": "throttle",
+                        "headroom_pct": 11,
+                    },
+                    "opencode": {
+                        "signal": "db-meter",
+                        "unit": "tokens",
+                        "possible": 50_000_000,
+                        "consumed": 30_000_000,
+                        "remaining": 20_000_000,
+                        "health": "ok",
+                        "headroom_pct": 40,
+                    },
+                },
+            }
+        )
+    )
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setattr(
+        "limen.capacity.agent_status",
+        lambda agent: {
+            "agent": agent,
+            "kind": "cloud-cli",
+            "reachable": True,
+            "detail": "test binary",
+            "command": ["test"],
+        },
+    )
+    board = {
+        "portal": {
+            "budget": {
+                "daily": 600,
+                "per_agent": {"jules": 100, "opencode": 100},
+                "track": {
+                    "date": "2026-07-10",
+                    "spent": 244,
+                    "per_agent": {"jules": 122, "opencode": 122},
+                },
+            }
+        }
+    }
+
+    rows = capacity_census(board)
+    jules_row = next(r for r in rows if r["agent"] == "jules")
+
+    assert jules_row["limit"] == 100
+    assert jules_row["spent"] == 89
+    assert jules_row["remaining"] == 11
+    assert jules_row["reachable"] is True
+    assert "live usage meter" in jules_row["detail"]
+    opencode_row = next(r for r in rows if r["agent"] == "opencode")
+    assert opencode_row["limit"] == 50_000_000
+    assert opencode_row["spent"] == 30_000_000
+    assert opencode_row["remaining"] == 20_000_000
+    assert opencode_row["reachable"] is True
+    auto = select_lanes("auto", board)
+    assert "jules" in auto
+    assert "opencode" in auto
 
 
 def test_capacity_census_dict_board_shape() -> None:

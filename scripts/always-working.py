@@ -62,6 +62,11 @@ T7RECOVERY_ROOT = Path(os.environ.get("LIMEN_T7RECOVERY_ROOT", "/Volumes/T7Recov
 T7_LIFEBOAT_ROOT = T7RECOVERY_ROOT / "CleanUnique-Lifeboat-2026-06-13"
 ESTATE_CUSTODY_DOC = ROOT / "docs" / "estate-custody-primitives.md"
 ESTATE_CUSTODY_RECEIPT = ROOT / "docs" / "estate-custody-implementation-receipts.json"
+GENERATED_STATE_RECLAIM_LOG = ROOT / "logs" / "reclaim-generated-state.jsonl"
+TOOL_CACHE_RECLAIM_LOG = ROOT / "logs" / "reclaim-tool-caches.jsonl"
+OLLAMA_MODEL_RECLAIM_LOG = ROOT / "logs" / "reclaim-ollama-models.jsonl"
+OPENCODE_DB_INTAKE_DOC = ROOT / "docs" / "opencode-db-corpus-intake.md"
+SUBSTRATE_STORAGE_INDEX = PRIVATE_ROOT / "lifecycle" / "substrate-storage-pressure.json"
 WORKTREE_RECLAIM_CANDIDATES_DOC = ROOT / "docs" / "worktree-reclaim-candidates.md"
 WORKTREE_RECLAIM_CANDIDATES_JSON = ROOT / "docs" / "worktree-reclaim-candidates.json"
 STORAGE_OPERATING_MANUAL = ARCHIVE4T_ROOT / "_OPERATIONS" / "STORAGE-OPERATING-MANUAL-2026-06-15.md"
@@ -136,6 +141,74 @@ def load_json(path: Path, default: Any) -> Any:
         return json.loads(path.read_text(encoding="utf-8", errors="replace"))
     except (OSError, ValueError, TypeError):
         return default
+
+
+def load_last_jsonl(path: Path) -> dict[str, Any]:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return {}
+    for line in reversed(lines):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(data, dict):
+            return data
+    return {}
+
+
+def reclaim_log_summary(path: Path, extra_fields: tuple[str, ...]) -> dict[str, Any]:
+    latest: dict[str, Any] = {}
+    total_kib = 0
+    apply_events = 0
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        lines = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        latest = data
+        if data.get("apply") is True:
+            apply_events += 1
+            try:
+                total_kib += int(data.get("total_reclaimed_kib") or data.get("reclaimed_kib") or 0)
+            except (TypeError, ValueError):
+                pass
+    summary = {
+        "present": bool(latest),
+        "generated_at": latest.get("generated_at"),
+        "apply": latest.get("apply"),
+        "apply_events": apply_events,
+        "latest_reclaimed_size": latest.get("total_reclaimed_size") or latest.get("reclaimed_size"),
+        "latest_reclaimed_kib": latest.get("total_reclaimed_kib") or latest.get("reclaimed_kib"),
+        "cumulative_reclaimed_kib": total_kib,
+        "cumulative_reclaimed_size": fmt_kib(total_kib),
+    }
+    for field in extra_fields:
+        summary[field] = latest.get(field)
+    return summary
+
+
+def fmt_kib(value: int) -> str:
+    amount = float(value) * 1024
+    units = ("B", "KiB", "MiB", "GiB", "TiB")
+    for unit in units:
+        if amount < 1024 or unit == units[-1]:
+            return f"{int(amount)} {unit}" if unit == "B" else f"{amount:.1f} {unit}"
+        amount /= 1024
+    return f"{value} KiB"
 
 
 def iso_age_hours(generated: Any) -> float | None:
@@ -293,6 +366,36 @@ def disk_receipt() -> dict[str, Any]:
         "used_pct": round(usage.used / usage.total * 100, 1) if usage.total else None,
         "tmp_ok": tmp_ok,
         "tmp_error": tmp_error,
+    }
+
+
+def _short_command_receipt(args: list[str], *, timeout: int = 90) -> dict[str, Any]:
+    result = run_command(args, timeout=timeout)
+    text = (result.get("stderr") or result.get("stdout") or "").strip()
+    return {
+        "returncode": result.get("returncode"),
+        "ok": result.get("returncode") == 0,
+        "timed_out": bool(result.get("timed_out")),
+        "summary": text[:500],
+    }
+
+
+def substrate_lifecycle_receipt() -> dict[str, Any]:
+    cvstos = _short_command_receipt([sys.executable, str(ROOT / "scripts" / "cvstos-organ.py"), "--check"])
+    worktree_debt = _short_command_receipt(
+        [sys.executable, str(ROOT / "scripts" / "worktree-debt.py"), "--fail-over-cap"]
+    )
+    return {
+        "cvstos": cvstos,
+        "worktree_debt": worktree_debt,
+        "predicate_ok": bool(cvstos["ok"] and worktree_debt["ok"]),
+        "generated_state_reclaim": reclaim_log_summary(
+            GENERATED_STATE_RECLAIM_LOG, ("changed_roots", "failed_roots")
+        ),
+        "tool_cache_reclaim": reclaim_log_summary(TOOL_CACHE_RECLAIM_LOG, ("existing_paths", "failed_paths")),
+        "ollama_model_reclaim": reclaim_log_summary(
+            OLLAMA_MODEL_RECLAIM_LOG, ("model_count", "loaded_models", "blocked_reason", "failed")
+        ),
     }
 
 
@@ -745,7 +848,10 @@ def estate_custody_receipt() -> dict[str, Any]:
     reclaim_candidates = load_json(WORKTREE_RECLAIM_CANDIDATES_JSON, {})
     implementation_receipts = receipt.get("receipts") if isinstance(receipt, dict) else []
     implementation_status = str(receipt.get("status") or "") if isinstance(receipt, dict) else ""
-    implementation_complete = implementation_status == "complete" and bool(implementation_receipts)
+    implementation_complete = bool(implementation_receipts) and (
+        receipt.get("complete") is True
+        or implementation_status in {"complete", "owner_receipts_complete"}
+    )
     if missing_volumes or missing_docs or missing_layers:
         status = STATUS_BLOCKED
         verdict = "external estate custody is missing required mounted evidence"
@@ -1017,28 +1123,76 @@ def tabularius_receipt() -> dict[str, Any]:
 def substrate_receipt() -> dict[str, Any]:
     disk = disk_receipt()
     target_free_gib = float(os.environ.get("LIMEN_ALWAYS_WORKING_TARGET_FREE_GIB", "200"))
-    open_substrate = (disk["free_gib"] < target_free_gib) or not disk["tmp_ok"]
+    lifecycle = substrate_lifecycle_receipt()
+    storage_pressure = load_json(SUBSTRATE_STORAGE_INDEX, {})
+    shortfall_gib = round(max(target_free_gib - float(disk["free_gib"]), 0.0), 1)
+    open_substrate = bool(shortfall_gib > 0 or not disk["tmp_ok"] or not lifecycle["predicate_ok"])
+    owner_gated = bool(
+        shortfall_gib > 0
+        and disk["tmp_ok"]
+        and lifecycle["predicate_ok"]
+        and isinstance(storage_pressure, dict)
+        and storage_pressure.get("status") == "needs-owner-gates"
+    )
+    if not lifecycle["predicate_ok"]:
+        verdict = "substrate lifecycle predicate is failing"
+    elif shortfall_gib > 0:
+        last_reclaim = lifecycle["generated_state_reclaim"]
+        last_tool_reclaim = lifecycle["tool_cache_reclaim"]
+        last_ollama_reclaim = lifecycle["ollama_model_reclaim"]
+        reclaim_parts = []
+        if last_reclaim.get("present") and last_reclaim.get("cumulative_reclaimed_size"):
+            reclaim_parts.append(f"generated-state {last_reclaim['cumulative_reclaimed_size']}")
+        if last_tool_reclaim.get("present") and last_tool_reclaim.get("cumulative_reclaimed_size"):
+            reclaim_parts.append(f"tool-cache {last_tool_reclaim['cumulative_reclaimed_size']}")
+        if last_ollama_reclaim.get("present") and last_ollama_reclaim.get("cumulative_reclaimed_size"):
+            reclaim_parts.append(f"ollama-models {last_ollama_reclaim['cumulative_reclaimed_size']}")
+        suffix = f"; recorded reclaim freed {', '.join(reclaim_parts)}" if reclaim_parts else ""
+        if owner_gated:
+            verdict = f"internal free space is {shortfall_gib} GiB below target{suffix}; remaining bytes require owner gates"
+        else:
+            verdict = f"internal free space is {shortfall_gib} GiB below target{suffix}"
+    elif not disk["tmp_ok"]:
+        verdict = "temp writes are failing"
+    else:
+        verdict = "disk/temp substrate predicate is green"
     return {
         "id": "SUBSTRATE-DISK-TEMP",
         "workstream": "substrate",
         "priority": PRIORITY["substrate"],
-        "status": STATUS_ASSIGNED if open_substrate else STATUS_DONE,
+        "status": STATUS_BLOCKED if owner_gated else (STATUS_ASSIGNED if open_substrate else STATUS_DONE),
         "title": "Keep disk/temp/voice substrate from starving the swarm",
-        "verdict": "disk/temp pressure needs owner work" if open_substrate else "disk/temp above configured target",
-        "evidence": {**disk, "target_free_gib": target_free_gib},
+        "verdict": verdict,
+        "evidence": {
+            **disk,
+            "target_free_gib": target_free_gib,
+            "shortfall_gib": shortfall_gib,
+            "lifecycle": lifecycle,
+            "storage_pressure_status": storage_pressure.get("status") if isinstance(storage_pressure, dict) else None,
+        },
         "existing_receipts": [
             relpath(ROOT / "logs" / "heartbeat.out.log"),
+            relpath(GENERATED_STATE_RECLAIM_LOG),
+            relpath(TOOL_CACHE_RECLAIM_LOG),
+            relpath(OLLAMA_MODEL_RECLAIM_LOG),
+            relpath(ROOT / "docs" / "substrate-storage-pressure.md"),
+            relpath(OPENCODE_DB_INTAKE_DOC),
             relpath(ROOT / "scripts" / "cvstos-organ.py"),
             relpath(ROOT / "scripts" / "dispatch-health.py"),
+            relpath(ROOT / "scripts" / "opencode-db-corpus-intake.py"),
+            relpath(ROOT / "scripts" / "reclaim-generated-state.py"),
+            relpath(ROOT / "scripts" / "reclaim-ollama-models.py"),
+            relpath(ROOT / "scripts" / "reclaim-tool-caches.py"),
             relpath(ROOT / "scripts" / "reclaim-worktrees.py"),
             relpath(ROOT / "scripts" / "reap-clones.py"),
+            relpath(ROOT / "scripts" / "substrate-storage-pressure.py"),
             relpath(ROOT / "scripts" / "worktree-debt.py"),
         ],
         "assignment_packet": {
             "lane_fit": "codex-local",
             "repo": relpath(ROOT),
-            "task": "Audit disk/temp pressure, worktree debt, and disposable local clone lifecycle before spawning more lanes.",
-            "predicate": "python3 scripts/cvstos-organ.py --check && python3 scripts/worktree-debt.py --fail-over-cap",
+            "task": "Reclaim ignored generated state, preserve or owner-route local-only payloads, and keep Scratch as the active work substrate.",
+            "predicate": "python3 scripts/reclaim-generated-state.py --apply && python3 scripts/reclaim-tool-caches.py --apply && python3 scripts/reclaim-ollama-models.py --apply && python3 scripts/substrate-storage-pressure.py --write && python3 scripts/cvstos-organ.py --check && python3 scripts/worktree-debt.py --fail-over-cap",
             "receipt_target": relpath(ROOT / "logs" / "cvstos-organ-state.json"),
             "stop_condition": "free disk is at target, temp writes are usable, and reclaimable worktree debt is owner-routed",
         },

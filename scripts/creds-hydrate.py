@@ -126,13 +126,13 @@ DEFAULT_MAP: list[dict] = [
         "enabled": False,
     },
     {
-        # Parked — PHANTOM env var, retired 2026-06-25 (same investigation). opencode derives its model from
-        # `opencode models` (see dispatch._opencode_model): paid tier comes from `opencode auth login` writing
-        # opencode's OWN auth.json, else it falls back to a FREE coding model — it never reads OPENROUTER_API_KEY.
-        # No fleet code reads OPENROUTER_API_KEY (grep of cli/src: zero consumers), no opencode provider auth
-        # exists on this host, and op://Personal/OpenRouter API Key never resolved (only-ever-tried ref, always
-        # failed). The opencode lane runs on its free model regardless. Enable only if an OpenRouter key is
-        # minted AND opencode is configured to consume the env var.
+        # Parked — PHANTOM env var, retired 2026-06-25 (same investigation). OpenCode discovers its
+        # currently reachable capabilities from `opencode models --verbose`; an interactive
+        # `opencode auth login` may change that live catalog by writing OpenCode's own auth.json.
+        # Neither reachability nor pricing is inferred from a model name or a fixed free/paid ladder.
+        # No fleet code reads OPENROUTER_API_KEY (grep of cli/src: zero consumers), and the attempted
+        # 1Password reference never resolved. Enable only if OpenCode is deliberately configured to
+        # consume this environment variable; its own interactive authentication is a separate lever.
         "lane": "opencode (openrouter)",
         "ref": "op://Personal/OpenRouter API Key/credential",
         "env": ["OPENROUTER_API_KEY"],
@@ -273,6 +273,23 @@ DEFAULT_MAP: list[dict] = [
         "lane": "ianva (cloud connector bearer)",
         "ref": "op://Personal/IANVA Bearer Token/credential",
         "env": ["IANVA_BEARER_TOKEN"],
+        "enabled": False,
+    },
+    {
+        # VOX program (organvm/vox) — the ElevenLabs API key vox's real clone/synth engine reads as
+        # ELEVEN_API_KEY when VOX_ENGINE != mock. Registered here so the credential's INFORMATION has its
+        # canonical home (env-var name + op:// provenance); VOX-4's deliverable IS this registration, not a
+        # login step. enabled=False by design: vox + in-my-head ship VOX_ENGINE=mock by default, so nothing
+        # in the running fleet needs the key today — parking it keeps --verify from reddening the beat over
+        # an un-minted vendor key (same treatment as the openai/openrouter/claude/ianva parked lanes). The
+        # one remaining atom is a genuine vendor MINT the organ cannot perform (create the ElevenLabs
+        # account + API key) — homed as credential-labelled issue #898 + the Wall index #320, never recited
+        # in chat. Activation: mint the key into `op://Personal/ElevenLabs API Key`, flip enabled=True, and
+        # add a --verify probe against ElevenLabs (GET https://api.elevenlabs.io/v1/user, `xi-api-key`
+        # header — extend the probe auth modes if needed; today's are query/bearer). See spec/vox-program.md.
+        "lane": "vox (elevenlabs voice clone)",
+        "ref": "op://Personal/ElevenLabs API Key/credential",
+        "env": ["ELEVEN_API_KEY"],
         "enabled": False,
     },
 ]

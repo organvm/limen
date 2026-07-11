@@ -466,6 +466,14 @@ while true; do
                       # LIMEN_SELF_HEAL=0.
                       [ "${LIMEN_SELF_HEAL:-1}" = "1" ] && timeout "${LIMEN_SELF_HEAL_TIMEOUT:-150}" python3 "$LIMEN_ROOT/scripts/self-heal.py" --scan "${LIMEN_SELF_HEAL_SCAN:-30}" 2>&1 | tail -1 || true; }
   due_voice heal "$C_HEAL"    && stamp heal
+  # Scheduled registry sensors — cadence, timeout, conditional argv, voice id, and gate all come
+  # from sensors.yaml. The runner knows no sensor names, so a rename or a newly-declared scheduled
+  # sensor needs no shell edit. Dark-first: this path stays behind the existing derive flag until
+  # dry canaries and one explicitly feature-flagged live beat prove parity.
+  if [ "${LIMEN_BEAT_DERIVE:-0}" = "1" ]; then
+    python3 "$LIMEN_ROOT/scripts/beat-sensors.py" --run --source heartbeat --scheduled-only \
+      --beat "$c" --loop-max "$MAX" --voice-dir "$VOICED" || true
+  fi
   # DISK PRESSURE — when the data volume is past high-water, run hygiene (clone-maintenance:
   # capture→reap→node_modules) EVERY beat, not just every C_HYGIENE, until it drains back under
   # target. Reclaim intensity tracks real fullness instead of a fixed clock (the "creeps back to
@@ -480,6 +488,13 @@ while true; do
     [ -n "$_dfree" ] && [ "$_dfree" -le "${LIMEN_DISK_FREE_FLOOR_GIB:-15}" ] 2>/dev/null && HYG_CAD=1
   fi
   due_voice hygiene "$HYG_CAD" && bash "$LIMEN_ROOT/scripts/clone-maintenance.sh" 2>&1 | tail -3 || true
+  # CLONE-REAP — the actual eviction. clone-maintenance.sh only *reports* reapable clones; reap-clones.py
+  # removes the loss-free pushed-mirror class (adversarially-audited gate + standing grant). Beat-wired
+  # 2026-07-09 so the reclaim engine is ALIVE instead of a script that never ran (the round-two storage
+  # deadlock: ~/Workspace crept back because nothing autonomously reaped it). Self-gates on disk pressure
+  # + idle age; inert above the free-floor. Disarm --apply with LIMEN_REAP_CLONES_APPLY=0.
+  REAP_CLONES_ARG=""; [ "${LIMEN_REAP_CLONES_APPLY:-1}" = "1" ] && REAP_CLONES_ARG="--apply"
+  due_voice hygiene "$HYG_CAD" && timeout "${LIMEN_REAP_CLONES_TIMEOUT:-300}" python3 "$LIMEN_ROOT/scripts/reap-clones.py" $REAP_CLONES_ARG 2>&1 | tail -3 || true
   due_voice hygiene "$HYG_CAD" && bash "$LIMEN_ROOT/scripts/heal-claude-update-marker.sh" 2>&1 | tail -1 || true
   due_voice hygiene "$HYG_CAD" && stamp hygiene
   python3 "$LIMEN_ROOT/scripts/emit-tick.py" 2>&1 | tail -1 || true   # tick voice — every beat

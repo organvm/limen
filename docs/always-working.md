@@ -1,10 +1,10 @@
 # Always-Working Reconciliation
 
-Generated: `2026-07-09T22:36:59+00:00`
+Generated: `2026-07-10T18:02:07+00:00`
 Status: `needs-work`
-Required open: `6`
+Required open: `3`
 Blocked: `1`
-Done from receipt: `4`
+Done from receipt: `7`
 
 ## Contract
 
@@ -19,25 +19,25 @@ Done from receipt: `4`
 - ID: `SUBSTRATE-DISK-TEMP`
 - Workstream: `substrate`
 - Status: `assigned_from_existing_work`
-- Verdict: disk/temp pressure needs owner work
+- Verdict: substrate lifecycle predicate is failing
 - Lane fit: `codex-local`
-- Predicate: `python3 scripts/cvstos-organ.py --check && python3 scripts/worktree-debt.py --fail-over-cap`
+- Predicate: `python3 scripts/reclaim-generated-state.py --apply && python3 scripts/reclaim-tool-caches.py --apply && python3 scripts/reclaim-ollama-models.py --apply && python3 scripts/substrate-storage-pressure.py --write && python3 scripts/cvstos-organ.py --check && python3 scripts/worktree-debt.py --fail-over-cap`
 - Receipt target: `~/Workspace/limen/logs/cvstos-organ-state.json`
 
 ## Workstreams
 
 | Priority | ID | Status | Verdict |
 |---:|---|---|---|
-| 0 | `SUBSTRATE-DISK-TEMP` | `assigned_from_existing_work` | disk/temp pressure needs owner work |
-| 5 | `ESTATE-CUSTODY` | `assigned_from_existing_work` | estate doctrine exists; implementation receipt is not complete |
+| 0 | `SUBSTRATE-DISK-TEMP` | `assigned_from_existing_work` | substrate lifecycle predicate is failing |
+| 5 | `ESTATE-CUSTODY` | `done_from_receipt` | run-and-gun laptop cache and external estate custody have implementation receipts |
 | 10 | `PUBLIC-FACE-PROFILE` | `blocked` | visible profile README is current; GitHub sidebar bio/link needs profile-settings scope |
-| 15 | `PUBLIC-FACE-CONTRIBUTION-BALANCE` | `assigned_from_existing_work` | GitHub activity mix needs owner action: commits 73.7%, PRs 13.7%, issues 11.8%, reviews 0.8% |
+| 15 | `PUBLIC-FACE-CONTRIBUTION-BALANCE` | `assigned_from_existing_work` | GitHub activity mix needs owner action: commits 74.1%, PRs 13.6%, issues 11.4%, reviews 0.9% |
 | 18 | `CREDENTIAL-WALL-TOKEN-HYGIENE` | `done_from_receipt` | credential wall and historical token tombstone receipt are present |
 | 20 | `MAIL-ACTIVE-FLAGGED` | `assigned_from_existing_work` | 131 active flagged non-deleted messages require classification |
-| 30 | `MAIL-HISTORICAL-BACKLOG` | `done_from_receipt` | 500 historical messages atomized in this bounded batch; 83150 indexed non-deleted messages remain for future batches |
-| 40 | `REPO-BOIL-UP` | `assigned_from_existing_work` | broad repo surface ledger exists, but it is stale for current boil-up work |
+| 30 | `MAIL-HISTORICAL-BACKLOG` | `done_from_receipt` | 500 historical messages atomized in this bounded batch; 83705 indexed non-deleted messages remain for future batches |
+| 40 | `REPO-BOIL-UP` | `done_from_receipt` | fresh repo surface ledger covers broad repo estate; 42 duplicate remote group(s) recorded |
 | 50 | `PROMPT-PACKETS` | `done_from_receipt` | packet ledger clear from receipts |
-| 60 | `VALUE-REPOS` | `assigned_from_existing_work` | value repo product ledger exists, but it is stale for current funded-lane steering |
+| 60 | `VALUE-REPOS` | `done_from_receipt` | top 5 value repos have owner receipts; 15 value repos are sell-ready in the product ledger |
 | 70 | `TABVLARIVS-STATUS-WRITERS` | `done_from_receipt` | status-mutator tier is recorded closed |
 
 ## Assignment Packets
@@ -46,39 +46,27 @@ Done from receipt: `4`
 
 - Lane fit: `codex-local`
 - Repo/root: `~/Workspace/limen`
-- Task: Audit disk/temp pressure, worktree debt, and disposable local clone lifecycle before spawning more lanes.
-- Predicate: `python3 scripts/cvstos-organ.py --check && python3 scripts/worktree-debt.py --fail-over-cap`
+- Task: Reclaim ignored generated state, preserve or owner-route local-only payloads, and keep Scratch as the active work substrate.
+- Predicate: `python3 scripts/reclaim-generated-state.py --apply && python3 scripts/reclaim-tool-caches.py --apply && python3 scripts/reclaim-ollama-models.py --apply && python3 scripts/substrate-storage-pressure.py --write && python3 scripts/cvstos-organ.py --check && python3 scripts/worktree-debt.py --fail-over-cap`
 - Receipt target: `~/Workspace/limen/logs/cvstos-organ-state.json`
 - Stop condition: free disk is at target, temp writes are usable, and reclaimable worktree debt is owner-routed
 - Existing receipts:
   - `~/Workspace/limen/logs/heartbeat.out.log`
+  - `~/Workspace/limen/logs/reclaim-generated-state.jsonl`
+  - `~/Workspace/limen/logs/reclaim-tool-caches.jsonl`
+  - `~/Workspace/limen/logs/reclaim-ollama-models.jsonl`
+  - `~/Workspace/limen/docs/substrate-storage-pressure.md`
+  - `~/Workspace/limen/docs/opencode-db-corpus-intake.md`
   - `~/Workspace/limen/scripts/cvstos-organ.py`
   - `~/Workspace/limen/scripts/dispatch-health.py`
+  - `~/Workspace/limen/scripts/opencode-db-corpus-intake.py`
+  - `~/Workspace/limen/scripts/reclaim-generated-state.py`
+  - `~/Workspace/limen/scripts/reclaim-ollama-models.py`
+  - `~/Workspace/limen/scripts/reclaim-tool-caches.py`
   - `~/Workspace/limen/scripts/reclaim-worktrees.py`
   - `~/Workspace/limen/scripts/reap-clones.py`
+  - `~/Workspace/limen/scripts/substrate-storage-pressure.py`
   - `~/Workspace/limen/scripts/worktree-debt.py`
-
-### ESTATE-CUSTODY
-
-- Lane fit: `codex-conductor`
-- Repo/root: `~/Workspace/limen`
-- Task: Build the run-and-gun estate lifecycle: external SSDs hold durable private/raw data, processed/redacted corpora, repo/org mirrors, photos/media packages, and recovery copies; the laptop stays a thin hot cache. Route every pain point to an owner repo and a reusable public shell when private data can be redacted. Use the worktree reclaim candidate packet as the score-gated cleanup input; do not delete local roots without acceptance/redaction proof.
-- Predicate: `test -f docs/estate-custody-primitives.md && python3 scripts/worktree-reclaim-candidates.py --write --limit 50 && python3 scripts/substrate-ledger.py --write && python3 scripts/vltima-prior-excavations.py --write`
-- Receipt target: `~/Workspace/limen/docs/estate-custody-implementation-receipts.json`
-- Stop condition: external estate cleanup, prompt chronology, repo/org custody, photos processing, and pain-point productization each have owner receipts without destructive local-only action
-- Existing receipts:
-  - `/Volumes/Archive4T/_OPERATIONS/STORAGE-OPERATING-MANUAL-2026-06-15.md`
-  - `/Volumes/Archive4T/_OPERATIONS/LOCAL-DISK-EXPULSION-POLICY-2026-06-15.md`
-  - `~/Workspace/limen/docs/vltima-absorb-cadence.md`
-  - `~/Workspace/limen/docs/vltima-prior-excavations.md`
-  - `~/Workspace/limen/docs/photos-universe-recovery-2026-06-29.md`
-  - `~/Workspace/limen/docs/estate-custody-primitives.md`
-  - `~/Workspace/limen/docs/worktree-reclaim-candidates.md`
-  - `~/Workspace/limen/docs/worktree-reclaim-candidates.json`
-  - `https://github.com/organvm/limen/issues/685`
-  - `https://github.com/organvm/limen/issues/688`
-  - `https://github.com/organvm/media-ark/issues/56`
-  - `https://github.com/organvm/portvs/issues/2`
 
 ### PUBLIC-FACE-PROFILE
 
@@ -124,32 +112,4 @@ Done from receipt: `4`
   - `~/Workspace/limen/obligations-ledger.json`
   - `~/Workspace/limen/scripts/mail-story-ledger.py`
   - `~/Workspace/limen/scripts/mail-beat.sh`
-
-### REPO-BOIL-UP
-
-- Lane fit: `agy-or-opencode-readonly`
-- Repo/root: `~/Workspace/limen`
-- Task: Harvest existing repo-surface and consolidation receipts, then assign only missing classifications.
-- Predicate: `python3 scripts/repo-surface-ledger.py --scan-root ~/Workspace --max-depth 6 --write`
-- Receipt target: `~/Workspace/limen/docs/repo-surface-ledger.md`
-- Stop condition: all discovered roots are classified or recorded with blocker/gate
-- Existing receipts:
-  - `~/Workspace/limen/docs/repo-surface-ledger.md`
-  - `~/Workspace/limen/docs/consolidation/GATES.md`
-  - `~/Workspace/limen/docs/consolidation/EXECUTION-MANIFEST.md`
-  - `~/Workspace/limen/scripts/repo-surface-ledger.py`
-  - `~/Workspace/limen/scripts/salvage-yard-map.py`
-
-### VALUE-REPOS
-
-- Lane fit: `jules-or-opencode-repo-specific`
-- Repo/root: `organvm/a-i-chat--exporter,organvm/my-knowledge-base,organvm/public-record-data-scrapper,organvm/peer-audited--behavioral-blockchain,organvm/mirror-mirror`
-- Task: Harvest existing PRs/tasks for top value repos, then assign only clean bounded ship predicates.
-- Predicate: `python3 scripts/product-ledger.py --write`
-- Receipt target: `~/Workspace/limen/docs/product-ledger.md`
-- Stop condition: top value repo has shipped PR, open PR with predicate, owner task, or blocker
-- Existing receipts:
-  - `~/Workspace/limen/value-repos.json`
-  - `~/Workspace/limen/docs/product-ledger.md`
-  - `~/Workspace/limen/docs/positioning/_frontdoor.md`
 

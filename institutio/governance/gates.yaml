@@ -228,6 +228,11 @@ gates:
     scoped: false
     owner: lifecycle
     note: "Local removal acceptance contracts require archive and redaction proof."
+  reap-remote-branches-test:
+    command: "bash scripts/tests/reap-remote-branches.test.sh"
+    paths: ["scripts/reap-remote-branches.py", "scripts/tests/reap-remote-branches.test.sh"]
+    owner: gitvs
+    note: "Safety regression for the REMOTE-branch reaper: classify() KEEP-by-default invariants (protected/checked-out/open-PR/not-landed never reap) and the double-dark arming gate (unarmed --apply stays dry-run). A remote delete is not reflog-recoverable, so these must never regress."
   task-board:
     command: "python3 scripts/validate-task-board.py"
     paths: ["tasks.yaml", "scripts/validate-task-board.py"]
@@ -258,6 +263,35 @@ gates:
     ci_job: "pr-gate.yml:pr-gate"
     owner: governance
     note: "This registry's own drift predicate: schema, command existence, deploy-trigger parity, CI mirrors, consumer ratchets."
+  check-test-hygiene:
+    command: "python3 scripts/check-test-hygiene.py"
+    paths: ["cli/tests/**", "web/api/tests/**", "scripts/check-test-hygiene.py", "institutio/governance/test-hygiene-baseline.txt"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "Keeps the suite order-independent so pr-gate can't silently go red: every test root must carry the autouse os.environ-restore conftest, and no NEW direct os.environ writes may appear beyond the baseline (use monkeypatch)."
+  check-sensors:
+    command: "python3 scripts/check-sensors.py"
+    paths: ["institutio/governance/sensors.yaml", "scripts/check-sensors.py", "scripts/beat-sensors.py", "scripts/metabolize.sh", "scripts/heartbeat-loop.sh"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "SENSORS registry drift: the beat's continuous-runtime sensors are declared data (sensors.yaml), the third VIGILIA axis beside GATES + PARAMETERS. Asserts schema, that every step's script exists, every gate is declared (panel or baseline), and every registry gate appears in the beat sources — a drifted sensor is a red check, not a memory chore."
+
+  # ── GitHub estate (GITVS — the GitHub custodian) ────────────────────────────
+  gitvs-parity:
+    command: "python3 scripts/gitvs.py doctor --offline --parity-only"
+    paths: ["scripts/gitvs.py", "institutio/github/estate.yaml", "scripts/setup-rulesets.py", "scripts/reap-branches.py", "scripts/sync-marketplace-config.py"]
+    owner: gitvs
+    note: "The GitHub-estate registry's own drift predicate (deterministic class-H rung): schema, wiring-integrity (every status:active resource type + active integration is wired + its delegate/reap effector scripts exist — the sensor-without-effector law), required_checks name real .github/workflows jobs. Cheap + deterministic, so scoped: runs whenever its inputs change; the live A–G posture rungs run in the beat, never as a PR gate."
+  gitvs-test:
+    command: "bash scripts/tests/gitvs.test.sh"
+    paths: ["scripts/gitvs.py", "institutio/github/estate.yaml", "scripts/tests/gitvs.test.sh"]
+    owner: gitvs
+    note: "Parity + drift fixtures for the GITVS predicate: an unwired active resource type, a bad required_check, and a missing effector script must each red the doctor; a clean estate must pass."
+  sync-marketplace-config-test:
+    command: "bash scripts/tests/sync-marketplace-config.test.sh"
+    paths: ["scripts/sync-marketplace-config.py", "scripts/tests/sync-marketplace-config.test.sh", "institutio/github/estate.yaml"]
+    owner: gitvs
+    note: "Safety regression for the GITVS config-push effector: the DOUBLE-DARK gate holds (--apply without LIMEN_MARKETPLACE_APPLY opens no PR), a missing conductor config source reddens, and the real estate's active integrations are all satisfied at the root."
 
   # ── python estate ───────────────────────────────────────────────────────────
   ruff-lint:
@@ -336,3 +370,17 @@ gates:
     scoped: false
     owner: runtime
     note: "Boots wrangler-dev (workerd) and probes the Worker contract over HTTP; CI=1 guards against interactive login."
+
+  # ── personal-facts registry drift nets (PERSONA-FEDERATA) ───────────────────
+  personal-facts-drift:
+    command: "python3 scripts/check-personal-facts.py"
+    paths: ["institutio/governance/personal-facts.yaml", "scripts/identity.py", "scripts/fill-*.py"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: identity
+    note: "Registry self-coherence: required fields, tier/verify enums, crown-jewel⇒op-only rule, single-home, consumer files exist. A drifted personal-facts.yaml is RED."
+  fact-wall:
+    command: "python3 scripts/fact-wall.py --check"
+    paths: ["scripts/fill-*.py", "institutio/governance/personal-facts.yaml"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: identity
+    note: "A form-filler may only consume personal-fact classes the registry HOMES. An un-homed atom in a CONSUMES manifest is RED before any fill — the phi.pdf chat-ask defect killed at the root."
