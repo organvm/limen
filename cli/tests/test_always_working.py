@@ -84,6 +84,7 @@ def test_always_working_reconciles_existing_work_before_assignment(monkeypatch, 
     (root / "logs").mkdir()
     (root / "logs" / "heartbeat.out.log").write_text("", encoding="utf-8")
     (root / "scripts" / "cvstos-organ.py").write_text("", encoding="utf-8")
+    (root / "scripts" / "worktree-debt.py").write_text("", encoding="utf-8")
     (root / "scripts" / "dispatch-health.py").write_text("", encoding="utf-8")
     _mail_index(mail_index)
 
@@ -174,6 +175,162 @@ def test_always_working_reconciles_existing_work_before_assignment(monkeypatch, 
     assert snapshot["next_item_id"] == "PUBLIC-FACE-PROFILE"
     assert snapshot["contract"]["first_run_forbidden"] is True
     assert mod._task_from_item({"id": "SUBSTRATE", "priority": 0, "workstream": "substrate"})["priority"] == "critical"
+
+
+def test_substrate_receipt_reports_free_space_shortfall_after_reclaim(monkeypatch, tmp_path):
+    mod = _load("always_working_substrate_shortfall_uut", ALWAYS_WORKING)
+    root = tmp_path / "limen"
+    (root / "scripts").mkdir(parents=True)
+    (root / "logs").mkdir()
+    (root / "logs" / "heartbeat.out.log").write_text("", encoding="utf-8")
+    (root / "logs" / "reclaim-generated-state.jsonl").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-07-10T00:00:00Z",
+                "apply": True,
+                "changed_roots": 113,
+                "failed_roots": 0,
+                "total_reclaimed_size": "26.6 GiB",
+                "total_reclaimed_kib": 27892121,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (root / "logs" / "reclaim-tool-caches.jsonl").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-07-10T00:05:00Z",
+                "apply": True,
+                "existing_paths": 17,
+                "failed_paths": 0,
+                "total_reclaimed_size": "4.7 GiB",
+                "total_reclaimed_kib": 4915200,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (root / "logs" / "reclaim-ollama-models.jsonl").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-07-10T00:06:00Z",
+                "apply": True,
+                "model_count": 2,
+                "loaded_models": [],
+                "blocked_reason": "",
+                "failed": [],
+                "reclaimed_size": "9.3 GiB",
+                "reclaimed_kib": 9751756,
+                "total_reclaimed_size": "9.3 GiB",
+                "total_reclaimed_kib": 9751756,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(mod, "ROOT", root)
+    monkeypatch.setattr(
+        mod,
+        "SUBSTRATE_STORAGE_INDEX",
+        root / ".limen-private" / "session-corpus" / "lifecycle" / "substrate-storage-pressure.json",
+    )
+    monkeypatch.setattr(mod, "GENERATED_STATE_RECLAIM_LOG", root / "logs" / "reclaim-generated-state.jsonl")
+    monkeypatch.setattr(mod, "TOOL_CACHE_RECLAIM_LOG", root / "logs" / "reclaim-tool-caches.jsonl")
+    monkeypatch.setattr(mod, "OLLAMA_MODEL_RECLAIM_LOG", root / "logs" / "reclaim-ollama-models.jsonl")
+    monkeypatch.setattr(
+        mod, "disk_receipt", lambda: {"free_gib": 78.0, "used_pct": 82.0, "tmp_ok": True, "tmp_error": ""}
+    )
+    monkeypatch.setattr(
+        mod,
+        "run_command",
+        lambda *args, **kwargs: {"returncode": 0, "stdout": "ok", "stderr": "", "timed_out": False},
+    )
+
+    receipt = mod.substrate_receipt()
+
+    assert receipt["status"] == mod.STATUS_ASSIGNED
+    assert receipt["evidence"]["shortfall_gib"] == 122.0
+    assert receipt["evidence"]["lifecycle"]["predicate_ok"] is True
+    assert receipt["evidence"]["lifecycle"]["generated_state_reclaim"]["cumulative_reclaimed_size"] == "26.6 GiB"
+    assert receipt["evidence"]["lifecycle"]["tool_cache_reclaim"]["cumulative_reclaimed_size"] == "4.7 GiB"
+    assert receipt["evidence"]["lifecycle"]["ollama_model_reclaim"]["cumulative_reclaimed_size"] == "9.3 GiB"
+    assert "generated-state 26.6 GiB, tool-cache 4.7 GiB, ollama-models 9.3 GiB" in receipt["verdict"]
+
+
+def test_substrate_receipt_blocks_when_storage_pressure_needs_owner_gates(monkeypatch, tmp_path):
+    mod = _load("always_working_substrate_owner_gate_uut", ALWAYS_WORKING)
+    root = tmp_path / "limen"
+    private = root / ".limen-private" / "session-corpus"
+    storage_index = private / "lifecycle" / "substrate-storage-pressure.json"
+    storage_index.parent.mkdir(parents=True)
+    storage_index.write_text(
+        json.dumps(
+            {
+                "status": "needs-owner-gates",
+                "internal_free_gib": 93.0,
+                "target_free_gib": 200.0,
+                "shortfall_gib": 107.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / "logs").mkdir()
+    (root / "logs" / "reclaim-generated-state.jsonl").write_text(
+        json.dumps({"apply": True, "total_reclaimed_size": "26.6 GiB"}) + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(mod, "ROOT", root)
+    monkeypatch.setattr(mod, "PRIVATE_ROOT", private)
+    monkeypatch.setattr(mod, "SUBSTRATE_STORAGE_INDEX", storage_index)
+    monkeypatch.setattr(mod, "GENERATED_STATE_RECLAIM_LOG", root / "logs" / "reclaim-generated-state.jsonl")
+    monkeypatch.setattr(mod, "TOOL_CACHE_RECLAIM_LOG", root / "logs" / "reclaim-tool-caches.jsonl")
+    monkeypatch.setattr(mod, "OLLAMA_MODEL_RECLAIM_LOG", root / "logs" / "reclaim-ollama-models.jsonl")
+    monkeypatch.setattr(
+        mod, "disk_receipt", lambda: {"free_gib": 93.0, "used_pct": 80.0, "tmp_ok": True, "tmp_error": ""}
+    )
+    monkeypatch.setattr(
+        mod,
+        "run_command",
+        lambda *args, **kwargs: {"returncode": 0, "stdout": "ok", "stderr": "", "timed_out": False},
+    )
+
+    receipt = mod.substrate_receipt()
+
+    assert receipt["status"] == mod.STATUS_BLOCKED
+    assert receipt["evidence"]["storage_pressure_status"] == "needs-owner-gates"
+    assert "remaining bytes require owner gates" in receipt["verdict"]
+
+
+def test_substrate_receipt_blocks_when_lifecycle_predicate_fails(monkeypatch, tmp_path):
+    mod = _load("always_working_substrate_predicate_uut", ALWAYS_WORKING)
+    root = tmp_path / "limen"
+    monkeypatch.setattr(mod, "ROOT", root)
+    monkeypatch.setattr(mod, "GENERATED_STATE_RECLAIM_LOG", root / "logs" / "reclaim-generated-state.jsonl")
+    monkeypatch.setattr(mod, "TOOL_CACHE_RECLAIM_LOG", root / "logs" / "reclaim-tool-caches.jsonl")
+    monkeypatch.setattr(mod, "OLLAMA_MODEL_RECLAIM_LOG", root / "logs" / "reclaim-ollama-models.jsonl")
+    monkeypatch.setattr(
+        mod, "disk_receipt", lambda: {"free_gib": 250.0, "used_pct": 40.0, "tmp_ok": True, "tmp_error": ""}
+    )
+
+    def fake_run(args, **kwargs):
+        script = str(args[1]) if len(args) > 1 else ""
+        return {
+            "returncode": 1 if script.endswith("worktree-debt.py") else 0,
+            "stdout": "",
+            "stderr": "debt over cap" if script.endswith("worktree-debt.py") else "ok",
+            "timed_out": False,
+        }
+
+    monkeypatch.setattr(mod, "run_command", fake_run)
+
+    receipt = mod.substrate_receipt()
+
+    assert receipt["status"] == mod.STATUS_ASSIGNED
+    assert receipt["verdict"] == "substrate lifecycle predicate is failing"
+    assert receipt["evidence"]["lifecycle"]["worktree_debt"]["ok"] is False
 
 
 def test_profile_receipt_accepts_computed_laurel_positioning(monkeypatch, tmp_path):
@@ -393,6 +550,67 @@ def test_estate_custody_receipt_requires_implementation_receipts(monkeypatch, tm
     assert receipt["evidence"]["volumes"]["Archive4T"] is True
     assert receipt["evidence"]["implementation_receipt_complete"] is False
     assert "thin hot cache" in receipt["assignment_packet"]["task"]
+
+
+def test_estate_custody_receipt_accepts_owner_receipts_complete(monkeypatch, tmp_path):
+    mod = _load("always_working_estate_complete_uut", ALWAYS_WORKING)
+    root = tmp_path / "limen"
+    archive = tmp_path / "Archive4T"
+    ingress = tmp_path / "Ingress"
+    scratch = tmp_path / "Scratch"
+    t7 = tmp_path / "T7Recovery"
+    lifeboat = t7 / "CleanUnique-Lifeboat-2026-06-13"
+
+    for path in (
+        archive / "_OPERATIONS",
+        ingress,
+        scratch,
+        lifeboat / "00_SUBSTRATE",
+        lifeboat / "10_PROFILE",
+        lifeboat / "20_TEXT",
+        lifeboat / "30_CODE",
+        lifeboat / "_MANIFESTS",
+        root / "docs",
+    ):
+        path.mkdir(parents=True, exist_ok=True)
+    storage_manual = archive / "_OPERATIONS" / "STORAGE-OPERATING-MANUAL-2026-06-15.md"
+    disk_policy = archive / "_OPERATIONS" / "LOCAL-DISK-EXPULSION-POLICY-2026-06-15.md"
+    for path in (
+        storage_manual,
+        disk_policy,
+        root / "docs" / "vltima-absorb-cadence.md",
+        root / "docs" / "vltima-prior-excavations.md",
+        root / "docs" / "photos-universe-recovery-2026-06-29.md",
+        root / "docs" / "estate-custody-primitives.md",
+    ):
+        path.write_text("# receipt\n", encoding="utf-8")
+    (root / "docs" / "estate-custody-implementation-receipts.json").write_text(
+        json.dumps(
+            {
+                "status": "owner_receipts_complete",
+                "complete": True,
+                "receipts": [{"type": "doctrine", "path": "docs/estate-custody-primitives.md"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(mod, "ROOT", root)
+    monkeypatch.setattr(mod, "ARCHIVE4T_ROOT", archive)
+    monkeypatch.setattr(mod, "INGRESS_ROOT", ingress)
+    monkeypatch.setattr(mod, "SCRATCH_ROOT", scratch)
+    monkeypatch.setattr(mod, "T7RECOVERY_ROOT", t7)
+    monkeypatch.setattr(mod, "T7_LIFEBOAT_ROOT", lifeboat)
+    monkeypatch.setattr(mod, "ESTATE_CUSTODY_DOC", root / "docs" / "estate-custody-primitives.md")
+    monkeypatch.setattr(mod, "ESTATE_CUSTODY_RECEIPT", root / "docs" / "estate-custody-implementation-receipts.json")
+    monkeypatch.setattr(mod, "STORAGE_OPERATING_MANUAL", storage_manual)
+    monkeypatch.setattr(mod, "LOCAL_DISK_EXPULSION_POLICY", disk_policy)
+
+    receipt = mod.estate_custody_receipt()
+
+    assert receipt["status"] == mod.STATUS_DONE
+    assert receipt["evidence"]["implementation_receipt_status"] == "owner_receipts_complete"
+    assert receipt["evidence"]["implementation_receipt_complete"] is True
 
 
 def test_mail_active_flagged_done_when_story_ledger_covers_current_flags(monkeypatch, tmp_path):

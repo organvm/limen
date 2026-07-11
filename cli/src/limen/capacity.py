@@ -68,7 +68,8 @@ DEFAULT_DAILY_TASK_TARGETS: dict[str, int] = {
     # Human contract: Claude should get a deliberately programmed/check-up batch daily.
     "claude": 15,
 }
-BAD_USAGE_HEALTH = {"exhausted", "rate-limited", "low", "throttle"}
+DEFAULT_GITHUB_ACTIONS_WORKFLOW = "limen-agent.yml"
+BAD_USAGE_HEALTH = {"exhausted", "rate-limited", "low"}
 
 AGENT_ALIASES: dict[str, str] = census.agent_aliases()
 
@@ -325,7 +326,7 @@ def agent_status(agent: str) -> AgentStatus:
             ok = False
             detail = f"{detail}; no model pulled — run `ollama pull qwen2.5-coder:7b` to light the floor lane"
     if agent == "github_actions" and ok:
-        workflow = os.environ.get("LIMEN_GITHUB_ACTIONS_WORKFLOW", "limen-agent.yml")
+        workflow = os.environ.get("LIMEN_GITHUB_ACTIONS_WORKFLOW", DEFAULT_GITHUB_ACTIONS_WORKFLOW)
         health_repo = os.environ.get(
             "LIMEN_GITHUB_ACTIONS_HEALTH_REPO",
             os.environ.get("LIMEN_GITHUB_ACTIONS_REPO", "organvm/limen"),
@@ -376,10 +377,50 @@ def _int(value: object, default: int = 0) -> int:
         return default
 
 
+def _usage_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(float(str(value)))
+    except (TypeError, ValueError):
+        return None
+
+
+def _usage_generated_date(usage: dict[str, object]) -> str:
+    generated = usage.get("generated")
+    if not generated:
+        return ""
+    return str(generated)[:10]
+
+
+def _live_usage_capacity(
+    agent: str,
+    info: dict[str, object],
+    usage: dict[str, object],
+    track_date: str,
+) -> tuple[int, int, int] | None:
+    """Return (cap, spent, remaining) from a current live meter.
+
+    ``capacity_census`` answers whether a lane has provider headroom. Task launch volume is still
+    bounded separately by dispatch's local slot caps and per-lane limits, so token/percent meters are
+    valid reachability gates even though task ``budget_cost`` is not measured in tokens.
+    """
+    if not track_date or _usage_generated_date(usage) != track_date:
+        return None
+    cap = _usage_int(info.get("possible"))
+    remaining = _usage_int(info.get("remaining"))
+    if cap is None or cap <= 0 or remaining is None:
+        return None
+    consumed = _usage_int(info.get("consumed"))
+    spent = consumed if consumed is not None else max(0, cap - remaining)
+    return cap, max(0, spent), max(0, remaining)
+
+
 def capacity_census(board: object = None, budget_limit: int | None = None) -> list[CapacityRow]:
     budget = _budget_from_board(board)
     daily = _int(budget_limit if budget_limit is not None else _get(budget, "daily", 0))
     track = _get(budget, "track", {})
+    track_date = str(_get(track, "date", "") or "")
     total_spent = _int(_get(track, "spent", 0))
     per_agent_caps = _get(budget, "per_agent", {}) or {}
     per_agent_spent = _get(track, "per_agent", {}) or {}
@@ -395,9 +436,16 @@ def capacity_census(board: object = None, budget_limit: int | None = None) -> li
         status = agent_status(agent)
         cap = _int(per_agent_caps.get(agent), daily)
         spent = _int(per_agent_spent.get(agent), 0)
-        weak_proxy = _weak_proxy_exhaustion(agent, _usage_vendor(agent, usage))
+        usage_info = _usage_vendor(agent, usage)
+        live_usage_capacity = _live_usage_capacity(agent, usage_info, usage, track_date)
+        weak_proxy = _weak_proxy_exhaustion(agent, usage_info)
         detail = str(status["detail"])
-        if weak_proxy:
+        remaining: int | None  # unified across branches: live meter (int), daily runway, or None
+        if live_usage_capacity is not None:
+            cap, spent, remaining = live_usage_capacity
+            meter = f"live usage meter: remaining={remaining}/{cap}, consumed={spent}"
+            detail = f"{detail}; {meter}" if detail else meter
+        elif weak_proxy:
             remaining = daily_remaining
             if detail:
                 detail = f"{detail}; weak dispatch-count proxy, using daily budget runway"

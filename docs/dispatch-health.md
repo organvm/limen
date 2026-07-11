@@ -1,6 +1,6 @@
 # Dispatch Health
 
-Generated: `2026-07-09T21:47:44+00:00`
+Generated: `2026-07-10T14:02:38+00:00`
 
 Status: `blocked`
 
@@ -26,7 +26,7 @@ Status: `blocked`
 - Plist LIMEN_DISPATCH_LANES: `auto`.
 - Plist LIMEN_ASYNC_MAX: `10`.
 - Plist LIMEN_LANES: `codex,opencode,agy,claude,gemini`.
-- Loaded launchd state: `running` pid `12898`.
+- Loaded launchd state: `running` pid `75477`.
 - Loaded LIMEN_ROOT: `/Users/4jp/Workspace/limen`.
 - Loaded LIMEN_WORKTREES: `/Volumes/Scratch/limen-worktrees`.
 - Loaded LIMEN_WORKTREE_ROOT: `/Volumes/Scratch/limen-worktrees`.
@@ -34,15 +34,16 @@ Status: `blocked`
 - Loaded LIMEN_DISPATCH_LANES: `auto`.
 - Loaded LIMEN_ASYNC_MAX: `10`.
 - Loaded LIMEN_LANES: `codex,opencode,agy,claude,gemini`.
-- Watchdog dry-run healthy: `True`; `[watchdog] 2026-07-09T21:47:44.988476+00:00 HEALTHY sig=healthy`.
+- Watchdog dry-run healthy: `True`; `[watchdog] 2026-07-10T14:02:39.008815+00:00 HEALTHY sig=healthy`.
 
 ## Async Dispatch
 
 - Async dry-run requested: `True`.
 - Async dry-run lanes: `auto`; max `10`.
 - Async dry-run ok: `True`; timed out `False`.
-- Async dry-run summary: `-- async: reaped 0 dead ; harvested 0 ; 6 still running ; would launch 4 (local cap 10, local per-lane 8) -> ['HEAL-rebase-organvm-domus-genoma-177', 'HEAL-rebase-organvm-domus-genoma-176', 'HEAL-rebase-organvm-a-i-chat--exporter-31', 'GH-organvm-limen-829']`.
-- Async skipped down lanes: `jules`.
+- Async dry-run summary: `-- async: reaped 0 dead ; harvested 0 ; 0 still running ; would launch 0 (local cap 10, local per-lane 8) -> []`.
+- Async skipped down lanes: `gemini, jules`.
+  - `gemini`: usage health `exhausted`; signal `dispatch-count`; remaining `0` of `10`; headroom `0%`.
   - `jules`: usage health `exhausted`; signal `dispatch-count`; remaining `0` of `100`; headroom `0%`.
 
 ## Prompt Packet Gate
@@ -59,25 +60,26 @@ Status: `blocked`
 
 - Reconciliation index present: `True`.
 - Reconciliation status: `needs-work`.
-- Required open workstreams: `6`.
+- Required open workstreams: `3`.
 - Blocked workstreams: `1`.
-- Done from receipt: `4`.
+- Done from receipt: `7`.
 - Next item: `SUBSTRATE-DISK-TEMP` (`assigned_from_existing_work`).
 - Public reconciliation: `~/Workspace/limen/docs/always-working.md`.
-  - `SUBSTRATE-DISK-TEMP`: `substrate` / `assigned_from_existing_work`; disk/temp pressure needs owner work.
-  - `ESTATE-CUSTODY`: `estate-custody` / `assigned_from_existing_work`; estate doctrine exists; implementation receipt is not complete.
-  - `PUBLIC-FACE-CONTRIBUTION-BALANCE`: `contribution-balance` / `assigned_from_existing_work`; GitHub activity mix needs owner action: commits 73.7%, PRs 13.7%, issues 11.8%, reviews 0.8%.
+  - `SUBSTRATE-DISK-TEMP`: `substrate` / `assigned_from_existing_work`; substrate lifecycle predicate is failing.
+  - `PUBLIC-FACE-CONTRIBUTION-BALANCE`: `contribution-balance` / `assigned_from_existing_work`; GitHub activity mix needs owner action: commits 74.2%, PRs 13.5%, issues 11.4%, reviews 0.9%.
   - `MAIL-ACTIVE-FLAGGED`: `mail-active` / `assigned_from_existing_work`; 131 active flagged non-deleted messages require classification.
-  - `REPO-BOIL-UP`: `repo-boil-up` / `assigned_from_existing_work`; broad repo surface ledger exists, but it is stale for current boil-up work.
 
 ## Live Root
 
 - Live root: `~/Workspace/limen`.
 - Branch: `main`; status `## main...origin/main`.
-- HEAD: `c934586c1cd407f751cf2e715018b80cdcdaab71`.
-- origin/main: `c934586c1cd407f751cf2e715018b80cdcdaab71`.
+- HEAD: `377000e1347ff10844f72d5779942fe7cb480fff`.
+- origin/main: `377000e1347ff10844f72d5779942fe7cb480fff`.
 - Matches origin/main: `True`; ahead `0` behind `0`.
 - Dirty entries: `0`.
+- Ignored generated receipt dirty entries: `2`.
+  - `docs/dispatch-health.md`
+  - `docs/live-root-gate.md`
 
 ## Verified Worktree
 
@@ -87,7 +89,7 @@ Status: `blocked`
 
 ## Blockers
 
-- `always-working-required-work-open`: 6 required promise workstream(s) remain open; next item SUBSTRATE-DISK-TEMP.
+- `always-working-required-work-open`: 3 required promise workstream(s) remain open; next item SUBSTRATE-DISK-TEMP.
 
 ## Commands
 

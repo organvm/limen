@@ -112,6 +112,15 @@ bash scripts/tests/ask-gate.test.sh
 # daemon state and is surfaced in the beat log by metabolize.sh, so it is not a hard gate here.
 python3 scripts/enactment-audit.py --check --wiring-only
 
+step "Verify the single-home reference-integrity predicate (a re-owned email is caught, never left to prose)"
+bash scripts/tests/identity-reconcile.test.sh
+
+step "Verify the signature-artifact fill (homed signature auto-embeds; absent -> hand-sign fallback)"
+bash scripts/tests/fill-phi-signature.test.sh
+
+step "Verify his-hand issue sync never re-mints a stamped lever (the #892/#827 duplicate-storm guard)"
+bash scripts/tests/sync-hishand-dedup.test.sh
+
 step "Verify the omega fixed-point predicate (composes every gate's --check; SKIP is never a silent PASS)"
 bash scripts/tests/omega.test.sh
 # The tally/exit/stamp contract is the deterministic code rung (stubbed children — no live board or
@@ -248,6 +257,10 @@ PY
 fi
 
 step "Check diff hygiene"
-git diff --check
+# Exclude daemon-OWNED live state (canonical list: scripts/capture.sh:46 RUNTIME_GLOBS). The heartbeat
+# rewrites tasks.yaml every beat under queue_lock, so an unrelated session's whole-system predicate must
+# not fail — or loop re-polling toward an unreachable "clean tree" fixed point — on churn it does not own.
+# Pinned to exact names (NOT a broad '*.lock', which would wrongly drop tracked lockfiles).
+git diff --check -- ':(exclude)tasks.yaml' ':(exclude)tasks.yaml.lock'
 
 printf '\nWhole-system verification passed\n'
