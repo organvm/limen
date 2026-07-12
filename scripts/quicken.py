@@ -435,6 +435,7 @@ def _hang_asks(entries: list[dict]) -> dict:
         sys.path.insert(0, str(ROOT / "cli" / "src"))
         from datetime import date, datetime, timezone
         from limen.io import load_limen_file, queue_lock, save_limen_file
+        from limen.intake import contract_fields, github_issue_owner_contract
         from limen.models import Task
     except Exception as e:  # never dead-stop the apply if the cli pkg isn't importable
         res["error"] = f"ledger unavailable ({e}); residue digest still written"
@@ -452,6 +453,7 @@ def _hang_asks(entries: list[dict]) -> dict:
         changed = False
         for entry in entries:
             tid = entry["tid"]
+            contract = contract_fields(github_issue_owner_contract("organvm/limen", tid))
             ex = index.get(tid)
             if ex and ex.status != "done":
                 refreshed = False
@@ -464,6 +466,10 @@ def _hang_asks(entries: list[dict]) -> dict:
                 if "quicken-residue" not in (ex.labels or []):
                     ex.labels = list(ex.labels or []) + ["quicken-residue"]
                     refreshed = True
+                if (ex.predicate, ex.receipt_target) != (contract["predicate"], contract["receipt_target"]):
+                    ex.predicate = contract["predicate"]
+                    ex.receipt_target = contract["receipt_target"]
+                    refreshed = True
                 if refreshed:
                     ex.updated = now
                     changed = True
@@ -475,12 +481,14 @@ def _hang_asks(entries: list[dict]) -> dict:
                     Task(
                         id=tid,
                         title=entry["title"],
+                        repo="organvm/limen",
                         type="ops",
                         target_agent="human",
                         priority="high",
                         status="needs_human",
                         labels=entry["labels"],
                         context=entry["context"],
+                        **contract,
                         created=date.today(),
                         updated=now,
                     )

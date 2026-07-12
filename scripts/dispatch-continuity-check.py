@@ -274,6 +274,7 @@ def _upsert_starved_atom(lane: str, info: dict) -> None:
         sys.path.insert(0, str(ROOT / "cli" / "src"))
         from datetime import date  # noqa: PLC0415
         from limen.io import load_limen_file, queue_lock, save_limen_file  # noqa: PLC0415
+        from limen.intake import contract_fields, github_issue_owner_contract  # noqa: PLC0415
         from limen.models import Task  # noqa: PLC0415
     except Exception as e:
         print(f"  [continuity] ledger import failed ({e}); starved atom not hung", flush=True)
@@ -303,11 +304,17 @@ def _upsert_starved_atom(lane: str, info: dict) -> None:
             return
         lf = load_limen_file(LEDGER)
         index = {t.id: t for t in lf.tasks}
+        contract = contract_fields(github_issue_owner_contract("organvm/limen", tid))
         changed = False
         ex = index.get(tid)
         if ex and ex.status != "done":
             if ex.context != ctx:
                 ex.context = ctx
+                ex.updated = now
+                changed = True
+            if (ex.predicate, ex.receipt_target) != (contract["predicate"], contract["receipt_target"]):
+                ex.predicate = contract["predicate"]
+                ex.receipt_target = contract["receipt_target"]
                 ex.updated = now
                 changed = True
             if ex.status != "needs_human":
@@ -319,12 +326,14 @@ def _upsert_starved_atom(lane: str, info: dict) -> None:
                 Task(
                     id=tid,
                     title=f"Lane '{lane}' starved: silent >{gap_str} with open queue + ok budget",
+                    repo="organvm/limen",
                     type="ops",
                     target_agent="human",
                     priority="high",
                     status="needs_human",
                     labels=["dispatch-continuity", "needs-human"],
                     context=ctx,
+                    **contract,
                     created=date.today(),
                     updated=now,
                 )

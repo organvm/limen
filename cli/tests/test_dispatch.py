@@ -18,7 +18,7 @@ from limen.capacity import PAID_AGENT_ORDER, agent_status, capacity_census, form
 from limen.dispatch import dispatch_parallel, dispatch_tasks, release_stale_tasks
 from limen.doctor import qa_report, readiness_report, stale_tasks
 from limen.io import load_limen_file
-from limen.models import BudgetTrack, DispatchLogEntry, Task
+from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
 from limen.status import print_status
 
 
@@ -645,6 +645,83 @@ def test_dispatch_parallel_skips_needs_human_label(tmp_path: Path, capsys, monke
     assert "HUMAN-GATE" not in output
 
 
+def test_parallel_selection_normalizes_only_selected_legacy_task(monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_VALUE_GATE", "0")
+    board = LimenFile.model_validate(
+        {
+            "portal": {"budget": {"daily": 10, "per_agent": {"codex": 10}, "track": {"date": ""}}},
+            "tasks": [
+                {
+                    "id": "SELECTED",
+                    "title": "Selected legacy task",
+                    "repo": "someorg/dispatch-lab",
+                    "target_agent": "codex",
+                    "priority": "critical",
+                    "status": "open",
+                    "created": "2026-07-12",
+                },
+                {
+                    "id": "UNSELECTED",
+                    "title": "Unselected legacy task",
+                    "repo": "someorg/dispatch-lab",
+                    "target_agent": "codex",
+                    "priority": "low",
+                    "status": "open",
+                    "created": "2026-07-12",
+                },
+            ],
+        }
+    )
+
+    picked = D._select_parallel_reservations(
+        board,
+        ["codex"],
+        1,
+        datetime.now(timezone.utc),
+        dry_run=False,
+        debt_blocked=False,
+    )
+
+    assert picked == [("codex", "SELECTED")]
+    selected, unselected = board.tasks
+    assert selected.predicate and selected.receipt_target
+    assert selected.status == "dispatched"
+    assert unselected.predicate is None and unselected.receipt_target is None
+    assert unselected.status == "open"
+
+
+def test_parallel_selection_fails_closed_when_legacy_owner_cannot_be_derived(monkeypatch, capsys) -> None:
+    monkeypatch.setenv("LIMEN_VALUE_GATE", "0")
+    board = LimenFile.model_validate(
+        {
+            "portal": {"budget": {"daily": 10, "per_agent": {"codex": 10}, "track": {"date": ""}}},
+            "tasks": [
+                {
+                    "id": "NO-OWNER",
+                    "title": "Missing owner repo",
+                    "target_agent": "codex",
+                    "priority": "critical",
+                    "status": "open",
+                    "created": "2026-07-12",
+                }
+            ],
+        }
+    )
+
+    picked = D._select_parallel_reservations(
+        board,
+        ["codex"],
+        1,
+        datetime.now(timezone.utc),
+        dry_run=False,
+        debt_blocked=False,
+    )
+
+    assert picked == []
+    assert board.tasks[0].status == "open"
+    assert "INTAKE BLOCKED NO-OWNER" in capsys.readouterr().out
+
+
 def test_dispatch_parallel_debt_gate_skips_routine_generated_buildout(tmp_path: Path, capsys, monkeypatch) -> None:
     # Patch _worktree_debt_gate directly (not worktree_debt_exceeded) so the gate fires even
     # when LIMEN_WORKTREE_DEBT_GATE=0 leaks in from test_async_dispatch._load().
@@ -958,6 +1035,11 @@ def test_dispatch_serial_commit_survives_concurrent_board_write(
 
     def fold_then_succeed(agent, task, dry_run=False):
         _concurrent_fold(tasks_path)
+        concurrent = read_board(tasks_path)
+        dispatched = next(row for row in concurrent["tasks"] if row["id"] == "DISPATCH-ME")
+        dispatched["predicate"] = "pytest -q concurrent-owner-check"
+        dispatched["receipt_target"] = "git:someorg/dispatch-lab:receipts/concurrent-owner.json"
+        tasks_path.write_text(yaml.safe_dump(concurrent, sort_keys=False))
         return True
 
     monkeypatch.setattr(D, "_down_lanes", lambda: set())
@@ -969,6 +1051,8 @@ def test_dispatch_serial_commit_survives_concurrent_board_write(
     tasks = {task["id"]: task for task in read_board(tasks_path)["tasks"]}
     assert set(tasks) == {"DISPATCH-ME", "CONCURRENT-FOLD"}
     assert tasks["DISPATCH-ME"]["status"] == "dispatched"
+    assert tasks["DISPATCH-ME"]["predicate"] == "pytest -q concurrent-owner-check"
+    assert tasks["DISPATCH-ME"]["receipt_target"].endswith("concurrent-owner.json")
     assert tasks["CONCURRENT-FOLD"]["status"] == "open"
 
 
