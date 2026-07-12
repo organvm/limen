@@ -35,6 +35,24 @@ EXPECTED_ACTIONS = {
 }
 EXPECTED_CHILDREN = 29
 EXPECTED_PREREQUISITES = {978, 982}
+APPLICATION_SCHEMA = "limen.ask_gate_migration.application.v1"
+APPLICATION_HELPER = "scripts/apply-ask-gate-migration.py"
+EXPECTED_APPLICATION_PHASES = [
+    {
+        "name": "children",
+        "count": 29,
+        "intent": "task.upsert",
+        "patch": "full_task",
+        "append_log": True,
+    },
+    {
+        "name": "parents",
+        "count": 52,
+        "intent": "task.upsert",
+        "patch": "predicate + receipt_target + status_patch",
+        "append_log": True,
+    },
+]
 VALID_STATUSES = {
     "open",
     "dispatched",
@@ -302,6 +320,11 @@ def verify_receipt(payload: dict[str, Any]) -> list[str]:
             errors.append(f"{task_id}: split action must name two or three children")
         if action != "split" and child_ids:
             errors.append(f"{task_id}: only split actions may name replacements")
+        if action == "split":
+            predicate = str(row.get("predicate") or "")
+            for needle in ("tasks.yaml", "validate_intake_contract", *child_ids):
+                if needle not in predicate:
+                    errors.append(f"{task_id}: split archive predicate does not prove {needle}")
         replacements.update(child_ids)
     if dict(actions) != EXPECTED_ACTIONS:
         errors.append(f"action counts mismatch: {dict(actions)}")
@@ -362,9 +385,60 @@ def verify_receipt(payload: dict[str, Any]) -> list[str]:
         if needle not in superseded_predicate:
             errors.append(f"GH-organvm-limen-775 predicate missing {needle}")
 
+    for task_id in ("GH-organvm-limen-793", "GH-organvm-limen-817", "GH-organvm-limen-872"):
+        row = tasks.get(task_id) or {}
+        predicate = str(row.get("predicate") or "")
+        if row.get("action") != "done" or "stateReason" not in predicate or "COMPLETED" not in predicate:
+            errors.append(f"{task_id}: done predicate must require stateReason COMPLETED")
+
+    application = payload.get("application_contract") or {}
+    if application.get("schema_version") != APPLICATION_SCHEMA:
+        errors.append(f"application_contract.schema_version must be {APPLICATION_SCHEMA}")
+    if application.get("helper") != APPLICATION_HELPER or not (ROOT / APPLICATION_HELPER).is_file():
+        errors.append(f"application_contract.helper must name tracked {APPLICATION_HELPER}")
+    if application.get("default_mode") != "dry-run":
+        errors.append("application_contract.default_mode must be dry-run")
+    if application.get("live_prerequisites") != ["typed_intake", "terminal_discovery_dispositions"]:
+        errors.append("application_contract.live_prerequisites must name both merged-PR gates in order")
+    identity = application.get("apply_identity") or {}
+    if any(identity.get(field) != "required" for field in ("timestamp", "session_id", "agent")):
+        errors.append("application_contract.apply_identity must require timestamp, session_id, and agent")
+    phases = application.get("phases")
+    if not isinstance(phases, list) or len(phases) != 2:
+        errors.append("application_contract.phases must contain children then parents")
+    else:
+        for expected, phase in zip(EXPECTED_APPLICATION_PHASES, phases, strict=True):
+            if not isinstance(phase, dict):
+                errors.append("application_contract phase must be an object")
+                continue
+            for key, value in expected.items():
+                if phase.get(key) != value:
+                    errors.append(f"application_contract.{expected['name']}.{key} must be {value!r}")
+        parent_phase = phases[1] if isinstance(phases[1], dict) else {}
+        child_phase = phases[0] if isinstance(phases[0], dict) else {}
+        if parent_phase.get("requires") != "children completion_gate":
+            errors.append("parent application phase must require the child completion gate")
+        owner_gate = str(parent_phase.get("owner_state_gate") or "")
+        for needle in ("all 52 predicates", "done", "superseded", "split", "normalize", "needs_human"):
+            if needle not in owner_gate:
+                errors.append(f"parent owner-state gate must prove {needle}")
+        child_gate = str(child_phase.get("completion_gate") or "")
+        for needle in ("archive", "exact typed", "zero pending", "rejected"):
+            if needle not in child_gate:
+                errors.append(f"child completion gate must prove {needle}")
+    if application.get("rejection_policy") != "fail_closed":
+        errors.append("application_contract.rejection_policy must be fail_closed")
+    if application.get("direct_board_write") != "forbidden":
+        errors.append("application_contract must forbid direct board writes")
+    if application.get("deterministic_ticket_ids") is not True:
+        errors.append("application_contract must require deterministic ticket IDs")
+
     safety = payload.get("safety") or {}
-    if safety.get("board_mutation") != "forbidden" or safety.get("ticket_creation") != "forbidden":
-        errors.append("safety must explicitly forbid board mutation and ticket creation")
+    if (
+        safety.get("board_mutation") != "forbidden"
+        or safety.get("ticket_creation") != "forbidden_without_explicit_apply_and_live_gates"
+    ):
+        errors.append("safety must forbid board mutation and gate ticket creation behind explicit apply")
     _walk_public_safe(payload, "$", errors)
     return errors
 

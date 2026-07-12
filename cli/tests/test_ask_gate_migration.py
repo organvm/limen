@@ -62,3 +62,34 @@ def test_verifier_rejects_supersession_drift() -> None:
     broken["tasks"]["GH-organvm-limen-775"]["receipt_target"] = "https://github.com/organvm/limen/issues/775"
     errors = verifier.verify_receipt(broken)
     assert any("canonical issue #790" in error for error in errors)
+
+
+def test_verifier_rejects_split_archive_without_admitted_children() -> None:
+    verifier = _module()
+    payload = json.loads(RECEIPT.read_text(encoding="utf-8"))
+    broken = copy.deepcopy(payload)
+    broken["tasks"]["DISCOVER-organvm-arca"]["predicate"] = "test -f docs/ask-gate-migration-2026-07-12.json"
+    errors = verifier.verify_receipt(broken)
+    assert any("split archive predicate" in error for error in errors)
+
+
+def test_verifier_rejects_terminal_issue_without_completed_reason() -> None:
+    verifier = _module()
+    payload = json.loads(RECEIPT.read_text(encoding="utf-8"))
+    broken = copy.deepcopy(payload)
+    broken["tasks"]["GH-organvm-limen-793"]["predicate"] = (
+        'test "$(gh issue view 793 --repo organvm/limen --json state --jq .state)" = CLOSED'
+    )
+    errors = verifier.verify_receipt(broken)
+    assert any("stateReason COMPLETED" in error for error in errors)
+
+
+def test_verifier_rejects_application_phase_or_rejection_drift() -> None:
+    verifier = _module()
+    payload = json.loads(RECEIPT.read_text(encoding="utf-8"))
+    broken = copy.deepcopy(payload)
+    broken["application_contract"]["phases"].reverse()
+    broken["application_contract"]["rejection_policy"] = "continue"
+    errors = verifier.verify_receipt(broken)
+    assert any("application_contract.children.name" in error for error in errors)
+    assert any("rejection_policy" in error for error in errors)

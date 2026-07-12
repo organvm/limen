@@ -108,7 +108,7 @@
     "DISCOVER-organvm-arca": {
       "source_status": "open",
       "action": "split",
-      "predicate": "python3 -c 'import json; d=json.load(open(\"docs/ask-gate-migration-2026-07-12.json\")); assert d[\"tasks\"][\"DISCOVER-organvm-arca\"][\"action\"] == \"split\"'",
+      "predicate": "python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,\"cli/src\"); from limen.intake import validate_intake_contract; from limen.io import load_limen_file; b={t.id:t for t in load_limen_file(Path(\"tasks.yaml\")).tasks}; ids=(\"DISCOVER-organvm-arca-THESIS\",\"DISCOVER-organvm-arca-RANK\"); assert all(i in b for i in ids); [validate_intake_contract(b[i],is_new=True) for i in ids]'",
       "receipt_target": "git:organvm/limen:docs/ask-gate-migration-2026-07-12.json#DISCOVER-organvm-arca",
       "terminal_disposition": "replaced_by_children",
       "status_patch": {
@@ -123,7 +123,7 @@
     "DISCOVER-organvm-collaboratory": {
       "source_status": "open",
       "action": "split",
-      "predicate": "python3 -c 'import json; d=json.load(open(\"docs/ask-gate-migration-2026-07-12.json\")); assert d[\"tasks\"][\"DISCOVER-organvm-collaboratory\"][\"action\"] == \"split\"'",
+      "predicate": "python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,\"cli/src\"); from limen.intake import validate_intake_contract; from limen.io import load_limen_file; b={t.id:t for t in load_limen_file(Path(\"tasks.yaml\")).tasks}; ids=(\"DISCOVER-organvm-collaboratory-THESIS\",\"DISCOVER-organvm-collaboratory-RANK\"); assert all(i in b for i in ids); [validate_intake_contract(b[i],is_new=True) for i in ids]'",
       "receipt_target": "git:organvm/limen:docs/ask-gate-migration-2026-07-12.json#DISCOVER-organvm-collaboratory",
       "terminal_disposition": "replaced_by_children",
       "status_patch": {
@@ -138,7 +138,7 @@
     "DISCOVER-organvm-content-engine--asset-amplifier--a-organvm-legacy": {
       "source_status": "open",
       "action": "split",
-      "predicate": "python3 -c 'import json; d=json.load(open(\"docs/ask-gate-migration-2026-07-12.json\")); assert d[\"tasks\"][\"DISCOVER-organvm-content-engine--asset-amplifier--a-organvm-legacy\"][\"action\"] == \"split\"'",
+      "predicate": "python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,\"cli/src\"); from limen.intake import validate_intake_contract; from limen.io import load_limen_file; b={t.id:t for t in load_limen_file(Path(\"tasks.yaml\")).tasks}; ids=(\"DISCOVER-organvm-content-engine--asset-amplifier--a-organvm-legacy-THESIS\",\"DISCOVER-organvm-content-engine--asset-amplifier--a-organvm-legacy-RANK\"); assert all(i in b for i in ids); [validate_intake_contract(b[i],is_new=True) for i in ids]'",
       "receipt_target": "git:organvm/limen:docs/ask-gate-migration-2026-07-12.json#DISCOVER-organvm-content-engine--asset-amplifier--a-organvm-legacy",
       "terminal_disposition": "replaced_by_children",
       "status_patch": {
@@ -153,7 +153,7 @@
     "DISCOVER-organvm-daily-engine": {
       "source_status": "open",
       "action": "split",
-      "predicate": "python3 -c 'import json; d=json.load(open(\"docs/ask-gate-migration-2026-07-12.json\")); assert d[\"tasks\"][\"DISCOVER-organvm-daily-engine\"][\"action\"] == \"split\"'",
+      "predicate": "python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,\"cli/src\"); from limen.intake import validate_intake_contract; from limen.io import load_limen_file; b={t.id:t for t in load_limen_file(Path(\"tasks.yaml\")).tasks}; ids=(\"DISCOVER-organvm-daily-engine-THESIS\",\"DISCOVER-organvm-daily-engine-RANK\"); assert all(i in b for i in ids); [validate_intake_contract(b[i],is_new=True) for i in ids]'",
       "receipt_target": "git:organvm/limen:docs/ask-gate-migration-2026-07-12.json#DISCOVER-organvm-daily-engine",
       "terminal_disposition": "replaced_by_children",
       "status_patch": {
@@ -168,7 +168,7 @@
     "DISCOVER-organvm-hokage-chess--4444j99": {
       "source_status": "open",
       "action": "split",
-      "predicate": "python3 -c 'import json; d=json.load(open(\"docs/ask-gate-migration-2026-07-12.json\")); assert d[\"tasks\"][\"DISCOVER-organvm-hokage-chess--4444j99\"][\"action\"] == \"split\"'",
+      "predicate": "python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,\"cli/src\"); from limen.intake import validate_intake_contract; from limen.io import load_limen_file; b={t.id:t for t in load_limen_file(Path(\"tasks.yaml\")).tasks}; ids=(\"DISCOVER-organvm-hokage-chess--4444j99-THESIS\",\"DISCOVER-organvm-hokage-chess--4444j99-RANK\"); assert all(i in b for i in ids); [validate_intake_contract(b[i],is_new=True) for i in ids]'",
       "receipt_target": "git:organvm/limen:docs/ask-gate-migration-2026-07-12.json#DISCOVER-organvm-hokage-chess--4444j99",
       "terminal_disposition": "replaced_by_children",
       "status_patch": {
@@ -183,7 +183,7 @@
     "DISCOVER-organvm-micro-tato": {
       "source_status": "open",
       "action": "split",
-      "predicate": "python3 -c 'import json; d=json.load(open(\"docs/ask-gate-migration-2026-07-12.json\")); assert d[\"tasks\"][\"DISCOVER-organvm-micro-tato\"][\"action\"] == \"split\"'",
+      "predicate": "python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,\"cli/src\"); from limen.intake import validate_intake_contract; from limen.io import load_limen_file; b={t.id:t for t in load_limen_file(Path(\"tasks.yaml\")).tasks}; ids=(\"DISCOVER-organvm-micro-tato-THESIS\",\"DISCOVER-organvm-micro-tato-RANK\"); assert all(i in b for i in ids); [validate_intake_contract(b[i],is_new=True) for i in ids]'",
       "receipt_target": "git:organvm/limen:docs/ask-gate-migration-2026-07-12.json#DISCOVER-organvm-micro-tato",
       "terminal_disposition": "replaced_by_children",
       "status_patch": {
@@ -198,7 +198,7 @@
     "DISCOVER-organvm-micro-tato-play": {
       "source_status": "open",
       "action": "split",
-      "predicate": "python3 -c 'import json; d=json.load(open(\"docs/ask-gate-migration-2026-07-12.json\")); assert d[\"tasks\"][\"DISCOVER-organvm-micro-tato-play\"][\"action\"] == \"split\"'",
+      "predicate": "python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,\"cli/src\"); from limen.intake import validate_intake_contract; from limen.io import load_limen_file; b={t.id:t for t in load_limen_file(Path(\"tasks.yaml\")).tasks}; ids=(\"DISCOVER-organvm-micro-tato-play-THESIS\",\"DISCOVER-organvm-micro-tato-play-RANK\"); assert all(i in b for i in ids); [validate_intake_contract(b[i],is_new=True) for i in ids]'",
       "receipt_target": "git:organvm/limen:docs/ask-gate-migration-2026-07-12.json#DISCOVER-organvm-micro-tato-play",
       "terminal_disposition": "replaced_by_children",
       "status_patch": {
@@ -213,7 +213,7 @@
     "DISCOVER-organvm-organvm-iii-ergon.github.io": {
       "source_status": "open",
       "action": "split",
-      "predicate": "python3 -c 'import json; d=json.load(open(\"docs/ask-gate-migration-2026-07-12.json\")); assert d[\"tasks\"][\"DISCOVER-organvm-organvm-iii-ergon.github.io\"][\"action\"] == \"split\"'",
+      "predicate": "python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,\"cli/src\"); from limen.intake import validate_intake_contract; from limen.io import load_limen_file; b={t.id:t for t in load_limen_file(Path(\"tasks.yaml\")).tasks}; ids=(\"DISCOVER-organvm-organvm-iii-ergon.github.io-THESIS\",\"DISCOVER-organvm-organvm-iii-ergon.github.io-RANK\"); assert all(i in b for i in ids); [validate_intake_contract(b[i],is_new=True) for i in ids]'",
       "receipt_target": "git:organvm/limen:docs/ask-gate-migration-2026-07-12.json#DISCOVER-organvm-organvm-iii-ergon.github.io",
       "terminal_disposition": "replaced_by_children",
       "status_patch": {
@@ -228,7 +228,7 @@
     "DISCOVER-organvm-pages--theoria-copy--kerygma": {
       "source_status": "open",
       "action": "split",
-      "predicate": "python3 -c 'import json; d=json.load(open(\"docs/ask-gate-migration-2026-07-12.json\")); assert d[\"tasks\"][\"DISCOVER-organvm-pages--theoria-copy--kerygma\"][\"action\"] == \"split\"'",
+      "predicate": "python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,\"cli/src\"); from limen.intake import validate_intake_contract; from limen.io import load_limen_file; b={t.id:t for t in load_limen_file(Path(\"tasks.yaml\")).tasks}; ids=(\"DISCOVER-organvm-pages--theoria-copy--kerygma-THESIS\",\"DISCOVER-organvm-pages--theoria-copy--kerygma-RANK\"); assert all(i in b for i in ids); [validate_intake_contract(b[i],is_new=True) for i in ids]'",
       "receipt_target": "git:organvm/limen:docs/ask-gate-migration-2026-07-12.json#DISCOVER-organvm-pages--theoria-copy--kerygma",
       "terminal_disposition": "replaced_by_children",
       "status_patch": {
@@ -243,7 +243,7 @@
     "DISCOVER-organvm-pages--theoria-copy--koinonia": {
       "source_status": "open",
       "action": "split",
-      "predicate": "python3 -c 'import json; d=json.load(open(\"docs/ask-gate-migration-2026-07-12.json\")); assert d[\"tasks\"][\"DISCOVER-organvm-pages--theoria-copy--koinonia\"][\"action\"] == \"split\"'",
+      "predicate": "python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,\"cli/src\"); from limen.intake import validate_intake_contract; from limen.io import load_limen_file; b={t.id:t for t in load_limen_file(Path(\"tasks.yaml\")).tasks}; ids=(\"DISCOVER-organvm-pages--theoria-copy--koinonia-THESIS\",\"DISCOVER-organvm-pages--theoria-copy--koinonia-RANK\"); assert all(i in b for i in ids); [validate_intake_contract(b[i],is_new=True) for i in ids]'",
       "receipt_target": "git:organvm/limen:docs/ask-gate-migration-2026-07-12.json#DISCOVER-organvm-pages--theoria-copy--koinonia",
       "terminal_disposition": "replaced_by_children",
       "status_patch": {
@@ -258,7 +258,7 @@
     "DISCOVER-organvm-pages--theoria-copy--poiesis": {
       "source_status": "open",
       "action": "split",
-      "predicate": "python3 -c 'import json; d=json.load(open(\"docs/ask-gate-migration-2026-07-12.json\")); assert d[\"tasks\"][\"DISCOVER-organvm-pages--theoria-copy--poiesis\"][\"action\"] == \"split\"'",
+      "predicate": "python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,\"cli/src\"); from limen.intake import validate_intake_contract; from limen.io import load_limen_file; b={t.id:t for t in load_limen_file(Path(\"tasks.yaml\")).tasks}; ids=(\"DISCOVER-organvm-pages--theoria-copy--poiesis-THESIS\",\"DISCOVER-organvm-pages--theoria-copy--poiesis-RANK\"); assert all(i in b for i in ids); [validate_intake_contract(b[i],is_new=True) for i in ids]'",
       "receipt_target": "git:organvm/limen:docs/ask-gate-migration-2026-07-12.json#DISCOVER-organvm-pages--theoria-copy--poiesis",
       "terminal_disposition": "replaced_by_children",
       "status_patch": {
@@ -273,7 +273,7 @@
     "DISCOVER-organvm-pages--theoria-copy--taxis": {
       "source_status": "open",
       "action": "split",
-      "predicate": "python3 -c 'import json; d=json.load(open(\"docs/ask-gate-migration-2026-07-12.json\")); assert d[\"tasks\"][\"DISCOVER-organvm-pages--theoria-copy--taxis\"][\"action\"] == \"split\"'",
+      "predicate": "python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,\"cli/src\"); from limen.intake import validate_intake_contract; from limen.io import load_limen_file; b={t.id:t for t in load_limen_file(Path(\"tasks.yaml\")).tasks}; ids=(\"DISCOVER-organvm-pages--theoria-copy--taxis-THESIS\",\"DISCOVER-organvm-pages--theoria-copy--taxis-RANK\"); assert all(i in b for i in ids); [validate_intake_contract(b[i],is_new=True) for i in ids]'",
       "receipt_target": "git:organvm/limen:docs/ask-gate-migration-2026-07-12.json#DISCOVER-organvm-pages--theoria-copy--taxis",
       "terminal_disposition": "replaced_by_children",
       "status_patch": {
@@ -288,7 +288,7 @@
     "DISCOVER-organvm-studium-generale": {
       "source_status": "open",
       "action": "split",
-      "predicate": "python3 -c 'import json; d=json.load(open(\"docs/ask-gate-migration-2026-07-12.json\")); assert d[\"tasks\"][\"DISCOVER-organvm-studium-generale\"][\"action\"] == \"split\"'",
+      "predicate": "python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,\"cli/src\"); from limen.intake import validate_intake_contract; from limen.io import load_limen_file; b={t.id:t for t in load_limen_file(Path(\"tasks.yaml\")).tasks}; ids=(\"DISCOVER-organvm-studium-generale-THESIS\",\"DISCOVER-organvm-studium-generale-RANK\"); assert all(i in b for i in ids); [validate_intake_contract(b[i],is_new=True) for i in ids]'",
       "receipt_target": "git:organvm/limen:docs/ask-gate-migration-2026-07-12.json#DISCOVER-organvm-studium-generale",
       "terminal_disposition": "replaced_by_children",
       "status_patch": {
@@ -499,7 +499,7 @@
     "GH-organvm-limen-793": {
       "source_status": "open",
       "action": "done",
-      "predicate": "test \"$(gh issue view 793 --repo organvm/limen --json state --jq .state)\" = CLOSED",
+      "predicate": "test \"$(gh issue view 793 --repo organvm/limen --json state,stateReason --jq '.state + \":\" + .stateReason')\" = CLOSED:COMPLETED",
       "receipt_target": "https://github.com/organvm/limen/issues/793",
       "terminal_disposition": "done_from_durable_receipt",
       "status_patch": {
@@ -511,7 +511,7 @@
     "GH-organvm-limen-817": {
       "source_status": "open",
       "action": "done",
-      "predicate": "test \"$(gh issue view 817 --repo organvm/limen --json state --jq .state)\" = CLOSED",
+      "predicate": "test \"$(gh issue view 817 --repo organvm/limen --json state,stateReason --jq '.state + \":\" + .stateReason')\" = CLOSED:COMPLETED",
       "receipt_target": "https://github.com/organvm/limen/issues/817",
       "terminal_disposition": "done_from_durable_receipt",
       "status_patch": {
@@ -555,7 +555,7 @@
     "GH-organvm-limen-872": {
       "source_status": "open",
       "action": "done",
-      "predicate": "test \"$(gh issue view 872 --repo organvm/limen --json state --jq .state)\" = CLOSED",
+      "predicate": "test \"$(gh issue view 872 --repo organvm/limen --json state,stateReason --jq '.state + \":\" + .stateReason')\" = CLOSED:COMPLETED",
       "receipt_target": "https://github.com/organvm/limen/issues/872",
       "terminal_disposition": "done_from_durable_receipt",
       "status_patch": {
@@ -647,7 +647,7 @@
     "SOVEREIGN-0708-GPG-CURRENT": {
       "source_status": "open",
       "action": "split",
-      "predicate": "python3 -c 'import json; d=json.load(open(\"docs/ask-gate-migration-2026-07-12.json\")); assert d[\"tasks\"][\"SOVEREIGN-0708-GPG-CURRENT\"][\"action\"] == \"split\"'",
+      "predicate": "python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,\"cli/src\"); from limen.intake import validate_intake_contract; from limen.io import load_limen_file; b={t.id:t for t in load_limen_file(Path(\"tasks.yaml\")).tasks}; ids=(\"SOVEREIGN-0708-GPG-DISCOVERABILITY\",\"SOVEREIGN-0708-GPG-ESCROW\",\"SOVEREIGN-0708-GPG-UID\"); assert all(i in b for i in ids); [validate_intake_contract(b[i],is_new=True) for i in ids]'",
       "receipt_target": "git:organvm/limen:docs/ask-gate-migration-2026-07-12.json#SOVEREIGN-0708-GPG-CURRENT",
       "terminal_disposition": "replaced_by_children",
       "status_patch": {
@@ -1439,17 +1439,53 @@
       "dispatch_log": []
     }
   ],
+  "application_contract": {
+    "schema_version": "limen.ask_gate_migration.application.v1",
+    "helper": "scripts/apply-ask-gate-migration.py",
+    "default_mode": "dry-run",
+    "apply_identity": {
+      "timestamp": "required",
+      "session_id": "required",
+      "agent": "required"
+    },
+    "live_prerequisites": [
+      "typed_intake",
+      "terminal_discovery_dispositions"
+    ],
+    "phases": [
+      {
+        "name": "children",
+        "count": 29,
+        "intent": "task.upsert",
+        "patch": "full_task",
+        "append_log": true,
+        "completion_gate": "all deterministic child tickets archived by TABVLARIVS; all 29 exact typed child packets present; zero pending or rejected child tickets"
+      },
+      {
+        "name": "parents",
+        "count": 52,
+        "intent": "task.upsert",
+        "patch": "predicate + receipt_target + status_patch",
+        "append_log": true,
+        "requires": "children completion_gate",
+        "owner_state_gate": "re-execute all 52 predicates; done, superseded, and split must pass while normalize and needs_human must remain nonterminal",
+        "completion_gate": "all parent typed contracts and terminal status patches present with append-only migration logs"
+      }
+    ],
+    "rejection_policy": "fail_closed",
+    "direct_board_write": "forbidden",
+    "deterministic_ticket_ids": true
+  },
   "application_order": [
-    "Merge prerequisite PR #978.",
-    "Merge prerequisite PR #982.",
-    "Re-read current remote issue and task state; abort any action whose owner receipt or status changed.",
-    "Submit partial parent upserts and full child upserts through TABVLARIVS only.",
-    "Run the keeper dry-run, inspect rejection reasons, then drain through the single-writer path.",
-    "Verify this receipt, typed intake, board schema, frozen-set coverage, and an empty ticket inbox."
+    "Execute the live MERGED predicates for prerequisite PR #978 and PR #982; any nonzero predicate blocks both phases.",
+    "Compile and submit all 29 full child task.upsert tickets through TABVLARIVS, with explicit timestamp, agent, and session identity.",
+    "Drain the keeper, then require every deterministic child ticket in the archive, every exact typed child packet on the board, and zero pending or rejected child tickets.",
+    "Only after the child completion gate, re-execute all 52 owner predicates and abort stale dispositions; then compile and submit all 52 partial parent task.upsert tickets with append-only dispatch logs.",
+    "Drain the keeper again, verify all parent contracts/statuses/logs, validate board schema and frozen-set coverage, and require an empty ticket inbox."
   ],
   "safety": {
     "board_mutation": "forbidden",
-    "ticket_creation": "forbidden",
+    "ticket_creation": "forbidden_without_explicit_apply_and_live_gates",
     "issue_mutation": "forbidden",
     "producer_mutation": "forbidden",
     "content_boundary": "Counts, public identifiers, executable predicates, and durable owner receipts only; no credential values or local corpus material."
