@@ -234,10 +234,10 @@ def test_exact_head_selector_ignores_prior_pending_and_non_push_runs():
     assert m.select_completed_push_run(runs[:3], head_sha=current) is None
 
 
-def test_exact_head_check_requires_success_for_current_origin_main(monkeypatch, capsys):
+def test_exact_head_check_requires_success_for_current_remote_main(monkeypatch, capsys):
     m = _load()
     current = "a" * 40
-    monkeypatch.setattr(m, "_origin_main_head", lambda: current)
+    monkeypatch.setattr(m, "_remote_main_head", lambda: current)
     monkeypatch.setattr(m, "_gh_main_runs", lambda: [_run_row("b" * 40), _run_row(current)])
     assert m.exact_head_check() == 0
     assert "EXACT-HEAD GREEN" in capsys.readouterr().out
@@ -250,7 +250,19 @@ def test_exact_head_check_requires_success_for_current_origin_main(monkeypatch, 
 def test_exact_head_check_fails_closed_without_matching_completed_run(monkeypatch, capsys):
     m = _load()
     current = "a" * 40
-    monkeypatch.setattr(m, "_origin_main_head", lambda: current)
+    monkeypatch.setattr(m, "_remote_main_head", lambda: current)
     monkeypatch.setattr(m, "_gh_main_runs", lambda: [_run_row(current, status="in_progress")])
     assert m.exact_head_check() == 1
     assert "no completed" in capsys.readouterr().out
+
+
+def test_remote_main_head_reads_owner_ref_not_cached_tracking_ref(monkeypatch):
+    m = _load()
+    current = "c" * 40
+
+    def fake_run(args, **kwargs):
+        assert args[-4:] == ["ls-remote", "--exit-code", "origin", "refs/heads/main"]
+        return subprocess.CompletedProcess(args, 0, f"{current}\trefs/heads/main\n", "")
+
+    monkeypatch.setattr(m.subprocess, "run", fake_run)
+    assert m._remote_main_head() == current

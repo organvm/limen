@@ -140,11 +140,24 @@ def _provider_headroom() -> dict[str, Any]:
         if isinstance(raw_vendors, dict):
             for name, value in list(raw_vendors.items())[:20]:
                 if isinstance(value, dict):
-                    vendors[str(name)] = {
+                    projected = {
                         key: value.get(key)
-                        for key in ("remaining", "spent", "state", "status", "reset_at")
+                        for key in (
+                            "remaining",
+                            "spent",
+                            "consumed",
+                            "state",
+                            "status",
+                            "health",
+                            "headroom_pct",
+                            "effective_reserve_pct",
+                        )
                         if key in value
                     }
+                    reset_at = value.get("resets_at", value.get("reset_at"))
+                    if reset_at is not None:
+                        projected["resets_at"] = reset_at
+                    vendors[str(name)] = projected
     return {"generated": generated, "vendors": vendors}
 
 
@@ -272,8 +285,17 @@ def _provider_available(agent: str, provider_headroom: dict[str, Any]) -> bool:
     remaining = value.get("remaining")
     if isinstance(remaining, (int, float)) and not isinstance(remaining, bool) and remaining <= 0:
         return False
-    state = str(value.get("state") or value.get("status") or "").strip().lower().replace("-", "_")
-    return state not in {"down", "disabled", "exhausted", "rate_limited", "unavailable", "blocked"}
+    state = str(value.get("health") or value.get("state") or value.get("status") or "")
+    state = state.strip().lower().replace("-", "_")
+    return state not in {
+        "down",
+        "disabled",
+        "exhausted",
+        "low",
+        "rate_limited",
+        "unavailable",
+        "blocked",
+    }
 
 
 def _dispatchable_next(
@@ -385,6 +407,16 @@ def check() -> int:
         if field not in data:
             print(f"handoff-relay --check: FAIL — missing '{field}'")
             return 1
+    provider = data.get("provider_headroom")
+    try:
+        provider_generated = dt.datetime.fromisoformat(str(provider["generated"]))
+        provider_age_min = (_now() - provider_generated).total_seconds() / 60
+    except Exception:
+        print("handoff-relay --check: FAIL — provider headroom timestamp missing or unparseable")
+        return 1
+    if provider_age_min > FRESH_MAX_MINUTES:
+        print(f"handoff-relay --check: FAIL — provider headroom stale ({provider_age_min:.0f}m > {FRESH_MAX_MINUTES}m)")
+        return 1
     na = (
         (data.get("dispatchable_next") or {}).get("id")
         if data.get("dispatchable_next")

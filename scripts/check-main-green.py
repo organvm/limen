@@ -131,31 +131,39 @@ def _gh_latest_main_run() -> dict | None:
     return select_completed_push_run(runs) if runs is not None else None
 
 
-def _origin_main_head() -> str | None:
-    """Return the checkout's full ``origin/main`` identity without mutating refs."""
+def _remote_main_head() -> str | None:
+    """Return the remote owner's full ``main`` identity without mutating local refs.
+
+    ``origin/main`` is only a cache and may lag GitHub indefinitely. ``ls-remote`` reads the
+    canonical remote ref without fetching objects or changing the checkout, so an old green local
+    tracking ref can never prove the current remote head.
+    """
     try:
         out = subprocess.run(
-            ["git", "-C", str(ROOT), "rev-parse", "origin/main"],
+            ["git", "-C", str(ROOT), "ls-remote", "--exit-code", "origin", "refs/heads/main"],
             capture_output=True,
             text=True,
             timeout=10,
         )
     except (OSError, subprocess.SubprocessError):
         return None
-    head = (out.stdout or "").strip()
-    return head if out.returncode == 0 and len(head) == 40 else None
+    fields = (out.stdout or "").strip().split()
+    if out.returncode != 0 or len(fields) != 2 or fields[1] != "refs/heads/main":
+        return None
+    head = fields[0]
+    return head if len(head) == 40 and all(char in "0123456789abcdef" for char in head.lower()) else None
 
 
 def exact_head_check() -> int:
-    """Fail closed unless current ``origin/main`` has a successful completed CI push run.
+    """Fail closed unless current remote ``main`` has a successful completed CI push run.
 
     This is Omega's live main-green predicate.  It deliberately bypasses the throttle cache and
     wedge/task-emission logic: a cached prior head cannot prove the current head, and a predicate
     must not mutate board state while checking it.
     """
-    head = _origin_main_head()
+    head = _remote_main_head()
     if head is None:
-        print("check-main-green: EXACT-HEAD FAIL — origin/main is unavailable")
+        print("check-main-green: EXACT-HEAD FAIL — remote main is unavailable")
         return 1
     runs = _gh_main_runs()
     if runs is None:

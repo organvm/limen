@@ -109,16 +109,18 @@ rows = []
 for raw in sensor_path.read_text(encoding="utf-8").splitlines():
     if not raw:
         continue
-    parts = raw.split("\t", 3)
-    if len(parts) != 4:
+    parts = raw.split("\t", 5)
+    if len(parts) != 6:
         raise SystemExit(f"invalid omega sensor row: {raw!r}")
-    sensor_id, check_index, tier, label = parts
+    sensor_id, check_index, tier, label, command, timeout = parts
     rows.append(
         {
             "check_index": int(check_index),
             "id": sensor_id,
             "label": label,
             "tier": tier,
+            "command": command,
+            "timeout": int(timeout),
         }
     )
 normalized = json.dumps(
@@ -210,7 +212,7 @@ fi
 #      sensor is added or renamed. ``rung`` owns offline handling, so every live check remains an
 #      explicit SKIP rather than a fake pass.
 if [[ "$SENSOR_DISCOVERY_OK" == "1" ]]; then
-  while IFS=$'\t' read -r sensor_id check_index tier label; do
+  while IFS=$'\t' read -r sensor_id check_index tier label _command _timeout; do
     [[ -n "$sensor_id" ]] || continue
     rung "$label" "$tier" python3 "$ROOT/scripts/beat-sensors.py" --run-omega "$sensor_id" "$check_index"
   done < "$SENSOR_OMEGA_ROWS"

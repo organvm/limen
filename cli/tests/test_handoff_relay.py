@@ -33,8 +33,13 @@ def _configure(mod, monkeypatch, tmp_path, board):
             {
                 "generated": "2026-07-12T12:00:00+00:00",
                 "vendors": {
-                    "codex": {"remaining": 3, "status": "healthy"},
-                    "gemini": {"remaining": 0, "status": "exhausted"},
+                    "codex": {
+                        "remaining": 3,
+                        "health": "ok",
+                        "headroom_pct": 30,
+                        "resets_at": 1783885841,
+                    },
+                    "gemini": {"remaining": 0, "health": "exhausted"},
                 },
             }
         ),
@@ -116,6 +121,8 @@ def test_build_splits_ostensible_from_dispatchable_and_preserves_aliases(monkeyp
     }
     assert payload["provider_headroom"]["generated"] == "2026-07-12T12:00:00+00:00"
     assert payload["provider_headroom"]["vendors"]["gemini"]["remaining"] == 0
+    assert payload["provider_headroom"]["vendors"]["gemini"]["health"] == "exhausted"
+    assert payload["provider_headroom"]["vendors"]["codex"]["resets_at"] == 1783885841
     assert payload["budget_remaining"]["overnight_spent"] == 1
     assert payload["budget_remaining"]["overnight_cap"] == 100
 
@@ -141,6 +148,21 @@ def test_dispatchable_next_applies_terminal_dependency_budget_and_human_gates():
     assert mod._dispatchable_next(tasks, budget, providers)["id"] == "READY"
 
 
+def test_dispatchable_next_rejects_live_low_health_even_with_remaining_capacity():
+    mod = _load()
+    tasks = [_task("LOW", priority="high", agent="jules"), _task("READY", agent="codex")]
+    budget = {"remaining": 3, "per_agent": {}}
+    providers = {
+        "generated": "now",
+        "vendors": {
+            "jules": {"remaining": 5, "health": "low"},
+            "codex": {"remaining": 5, "health": "ok"},
+        },
+    }
+
+    assert mod._dispatchable_next(tasks, budget, providers)["id"] == "READY"
+
+
 def test_check_requires_fresh_truthful_schema(monkeypatch, tmp_path, capsys):
     mod = _load()
     _configure(mod, monkeypatch, tmp_path, _board([_task("READY")]))
@@ -153,6 +175,23 @@ def test_check_requires_fresh_truthful_schema(monkeypatch, tmp_path, capsys):
     mod.HANDOFF.write_text(json.dumps(payload), encoding="utf-8")
     assert mod.check() == 1
     assert "missing 'board_budget'" in capsys.readouterr().out
+
+
+def test_check_rejects_missing_or_stale_provider_truth(monkeypatch, tmp_path, capsys):
+    mod = _load()
+    _configure(mod, monkeypatch, tmp_path, _board([_task("READY")]))
+    assert mod.write() == 0
+    payload = json.loads(mod.HANDOFF.read_text(encoding="utf-8"))
+
+    payload["provider_headroom"]["generated"] = None
+    mod.HANDOFF.write_text(json.dumps(payload), encoding="utf-8")
+    assert mod.check() == 1
+    assert "timestamp missing or unparseable" in capsys.readouterr().out
+
+    payload["provider_headroom"]["generated"] = "2026-07-12T08:00:00+00:00"
+    mod.HANDOFF.write_text(json.dumps(payload), encoding="utf-8")
+    assert mod.check() == 1
+    assert "provider headroom stale" in capsys.readouterr().out
 
 
 def test_handoff_refresh_is_wired_across_heartbeat_metabolize_and_session_end():

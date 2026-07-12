@@ -40,14 +40,16 @@ import sys
 import os
 if "--list-omega" in sys.argv:
     rows = [
-        "arbitrary.future.id\t0\tdet\tarbitrary registry parity",
-        "arbitrary.future.id\t1\tlive\tarbitrary registry posture",
+        "arbitrary.future.id\t0\tdet\tarbitrary registry parity\tpython3 scripts/future.py --check\t30",
+        "arbitrary.future.id\t1\tlive\tarbitrary registry posture\tpython3 scripts/future.py --live\t45",
     ]
     mode = os.environ.get("OMEGA_TEST_SENSOR_MODE")
     if mode == "reverse":
         rows.reverse()
     elif mode == "added":
-        rows.append("new.sensor.id\t0\tdet\tnew registry contract")
+        rows.append("new.sensor.id\t0\tdet\tnew registry contract\tpython3 scripts/new.py\t60")
+    elif mode == "command":
+        rows[0] = "arbitrary.future.id\t0\tdet\tarbitrary registry parity\tpython3 scripts/renamed.py --check\t30"
     print("\n".join(rows))
     raise SystemExit(0)
 if "--run-omega" in sys.argv:
@@ -98,6 +100,13 @@ if [ "$added_hash" != "$base_hash" ]; then
   check "changed" "changed" "case1b added sensor changes hash"
 else
   check "unchanged" "changed" "case1b added sensor changes hash"
+fi
+OMEGA_TEST_SENSOR_MODE=command bash "$work/scripts/omega.sh" --offline --quiet >/dev/null
+command_hash="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["contract_hash"])' "$work/logs/omega.json")"
+if [ "$command_hash" != "$base_hash" ]; then
+  check "changed" "changed" "case1b command changes hash"
+else
+  check "unchanged" "changed" "case1b command changes hash"
 fi
 
 # ── Case 1c: strict rejects the same otherwise-green offline run because live rungs SKIP ──────────
