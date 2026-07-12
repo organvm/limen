@@ -41,6 +41,12 @@ OWNER_PACKETS = {
         "predicate": "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_tabularius.py -q",
         "disposition": "convert harvest/Jules landing result application to task.status tickets",
     },
+    "TAB-HUMAN-ATOM-STATUS-WRITERS": {
+        "tier": "human-atom-status",
+        "owner": "codex-integrator",
+        "predicate": "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_tabularius.py -q",
+        "disposition": "convert continuity/routine needs_human atom upserts to keeper-owned status/upsert tickets",
+    },
     "TAB-STATUS-ASYNC-HEAL": {
         "tier": "status-result",
         "owner": "codex-integrator",
@@ -168,6 +174,8 @@ def owner_packet(path: str) -> str:
         return "TAB-STATUS-DISPATCH-RESULTS"
     if path in {"cli/src/limen/harvest.py", "scripts/jules-land.py"}:
         return "TAB-STATUS-HARVEST-RESULTS"
+    if path in {"scripts/dispatch-continuity-check.py", "scripts/routine-freshness-audit.py"}:
+        return "TAB-HUMAN-ATOM-STATUS-WRITERS"
     if path in {"scripts/dispatch-async.py", "scripts/heal-dispatch.py"}:
         return "TAB-STATUS-ASYNC-HEAL"
     if path in {"scripts/quicken.py", "scripts/rewrite-owners.py", "scripts/route.py", "scripts/self-improve.py"}:
