@@ -64,8 +64,9 @@ content-addressed receipt. A passing receipt requires:
 - complete prospective sample coverage with no gap over ten minutes, with each sample bound to
   exactly one newly appended ordinary watch row and the previous observation hash;
 - a newly first-observed typed `done` or owner-blocked event, whose predicate passes and whose
-  durable receipt target resolves, with no rolling activity gap over 90 minutes including both
-  trial boundaries;
+  durable receipt target resolves, whose dispatch timestamp is inside the already-observed trial
+  interval (never pre-window or future-dated), with no rolling activity gap over 90 minutes
+  including both trial boundaries;
 - a fresh warm handoff at the end;
 - at least one newly observed `in_progress` event whose provider-native session is independently
   present in a supported source (currently Jules remote sessions or a GitHub Actions run);
@@ -81,12 +82,24 @@ removal or rewriting, and confirms that credited proof IDs first appeared after
 the sealed baseline. Pre-seeded future timestamps, self-consistent sample lies,
 source truncation, and rewritten source prefixes do not count.
 
+Predicate proof never invokes a shell. It executes only classified read-only
+GitHub/Git/test commands or tracked repository check scripts as direct argument
+vectors; shell pipes, backgrounding, control operators, redirection, and mutating
+GitHub operations are rejected before execution.
+
 Trial start and finalization intentionally have no backfill arguments; finalization
 also refuses to run before the marker's real end time. Trial start refuses to replace an active
 marker. Prompt authority is fail-closed: while issue
 [`#957`](https://github.com/organvm/limen/issues/957) remains `partial:all`, or while its
 source cursor cannot prove a fresh exact scan, `--start-trial` fails instead of
 manufacturing a zero-operator receipt.
+
+The prompt scan may be at most the narrow clock-skew tolerance ahead of the
+sample; the ten-minute sample-gap allowance is not a prompt-freshness allowance.
+At finalization and every later receipt check, the terminal handoff, prompt cursor,
+and private prompt snapshot must still byte-match their recorded live custody.
+Repeating `--finalize-trial` against that unchanged terminal state returns the same
+receipt with `changed:false`, exits successfully, and writes no bytes.
 
 Verify it with:
 

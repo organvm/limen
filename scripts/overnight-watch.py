@@ -1355,12 +1355,22 @@ def _task_source_errors(value: Any) -> list[str]:
     return errors
 
 
-def _predicate_proof(command: str) -> dict[str, Any] | None:
-    if not _predicate_is_observation_only(command):
-        return None
+def _task_event_within_observation(
+    entry: dict[str, Any],
+    *,
+    window_start: dt.datetime,
+    observed_at: dt.datetime,
+) -> bool:
+    event_time = parse_iso(str(entry.get("timestamp") or ""))
+    if event_time is None:
+        return False
+    return window_start <= event_time <= observed_at
+
+
+def _run_predicate_argv(argv: list[str]) -> tuple[int, str, str] | None:
     try:
         proc = subprocess.Popen(
-            ["/bin/sh", "-lc", command],
+            argv,
             cwd=ROOT,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -1374,18 +1384,7 @@ def _predicate_proof(command: str) -> dict[str, Any] | None:
         return None
     except (OSError, subprocess.SubprocessError, UnboundLocalError):
         return None
-    if proc.returncode != 0:
-        return None
-    return {
-        "predicate_hash": canonical_hash(command),
-        "result_hash": canonical_hash(
-            {
-                "returncode": proc.returncode,
-                "stdout": stdout or "",
-                "stderr": stderr or "",
-            }
-        ),
-    }
+    return proc.returncode, stdout or "", stderr or ""
 
 
 def _gh_read_only(argv: list[str]) -> bool:
@@ -1432,28 +1431,133 @@ def _tracked_check_script(argv: list[str]) -> bool:
     return tracked.returncode == 0
 
 
-def _predicate_is_observation_only(command: str) -> bool:
-    if re.search(r"[;`\n\r<>]|&&|\|\|", command):
-        return False
-    substitutions = re.findall(r"\$\(([^()]*)\)", command)
-    without_substitutions = re.sub(r"\$\([^()]*\)", "VALUE", command)
-    if "$(" in without_substitutions or any(
-        not _gh_read_only(shlex.split(substitution)) for substitution in substitutions
-    ):
-        return False
-    try:
-        argv = shlex.split(without_substitutions)
-    except ValueError:
-        return False
+def _extract_single_substitution(command: str) -> tuple[str, str | None] | None:
+    start = command.find("$(")
+    if start < 0:
+        return command, None
+    depth = 1
+    quote = ""
+    escaped = False
+    index = start + 2
+    while index < len(command):
+        char = command[index]
+        if escaped:
+            escaped = False
+        elif char == "\\" and quote != "'":
+            escaped = True
+        elif quote:
+            if char == quote:
+                quote = ""
+        elif char in {"'", '"'}:
+            quote = char
+        elif command.startswith("$(", index):
+            return None
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                break
+        index += 1
+    if depth != 0 or command.find("$(", index + 1) >= 0:
+        return None
+    inner = command[start + 2 : index]
+    return f"{command[:start]}VALUE{command[index + 1 :]}", inner
+
+
+def _has_unquoted_shell_control(command: str) -> bool:
+    quote = ""
+    escaped = False
+    for char in command:
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\" and quote != "'":
+            escaped = True
+            continue
+        if quote:
+            if char == quote:
+                quote = ""
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            continue
+        if char in ";|&<>`(){}\n\r":
+            return True
+    return bool(quote or escaped)
+
+
+def _direct_observation_command(argv: list[str]) -> bool:
     if not argv:
         return False
-    if argv[0] in {"test", "["}:
-        return not any("$" in value for value in argv)
+    if argv[0] == "test":
+        return True
+    if argv[0] == "[":
+        return len(argv) >= 2 and argv[-1] == "]"
     if _gh_read_only(argv):
         return True
     if argv[0] == "git" and len(argv) >= 2:
         return argv[1] in {"diff", "log", "ls-files", "ls-remote", "merge-base", "rev-parse", "show", "status"}
     return _tracked_check_script(argv)
+
+
+def _classify_observation_predicate(command: str) -> dict[str, Any] | None:
+    extracted = _extract_single_substitution(command)
+    if extracted is None:
+        return None
+    outer, inner = extracted
+    if _has_unquoted_shell_control(outer):
+        return None
+    try:
+        outer_argv = shlex.split(outer)
+    except ValueError:
+        return None
+    if inner is None:
+        return {"outer": outer_argv, "inner": None}
+    if outer_argv.count("VALUE") != 1 or not outer_argv or outer_argv[0] not in {"test", "["}:
+        return None
+    if _has_unquoted_shell_control(inner):
+        return None
+    try:
+        inner_argv = shlex.split(inner)
+    except ValueError:
+        return None
+    if not _gh_read_only(inner_argv):
+        return None
+    return {"outer": outer_argv, "inner": inner_argv}
+
+
+def _predicate_is_observation_only(command: str) -> bool:
+    classified = _classify_observation_predicate(command)
+    if classified is None:
+        return False
+    if classified["inner"] is not None:
+        return True
+    return _direct_observation_command(classified["outer"])
+
+
+def _predicate_proof(command: str) -> dict[str, Any] | None:
+    classified = _classify_observation_predicate(command)
+    if classified is None:
+        return None
+    outer_argv = list(classified["outer"])
+    results: list[dict[str, Any]] = []
+    inner_argv = classified["inner"]
+    if inner_argv is not None:
+        inner_result = _run_predicate_argv(inner_argv)
+        if inner_result is None or inner_result[0] != 0:
+            return None
+        inner_rc, inner_stdout, inner_stderr = inner_result
+        outer_argv[outer_argv.index("VALUE")] = inner_stdout.strip()
+        results.append({"returncode": inner_rc, "stdout": inner_stdout, "stderr": inner_stderr})
+    elif not _direct_observation_command(outer_argv):
+        return None
+    outer_result = _run_predicate_argv(outer_argv)
+    if outer_result is None or outer_result[0] != 0:
+        return None
+    outer_rc, outer_stdout, outer_stderr = outer_result
+    results.append({"returncode": outer_rc, "stdout": outer_stdout, "stderr": outer_stderr})
+    return {"predicate_hash": canonical_hash(command), "result_hash": canonical_hash(results)}
 
 
 def _github_api_proof(endpoint: str) -> dict[str, Any] | None:
@@ -1847,7 +1951,7 @@ def prompt_authority_snapshot(
     fresh = False
     if last_scan_at:
         age_sec = int((captured_at - last_scan_at).total_seconds())
-        fresh = -TRIAL_EDGE_TOLERANCE_SEC <= age_sec <= TRIAL_PROMPT_MAX_AGE_SEC
+        fresh = -TRIAL_CLOCK_TOLERANCE_SEC <= age_sec <= TRIAL_PROMPT_MAX_AGE_SEC
     else:
         errors += 1
     return {
@@ -1907,7 +2011,7 @@ def _prompt_snapshot_errors(value: Any, captured_at: dt.datetime | None = None) 
         computed_age = int((actual_time - last_scan_at).total_seconds())
         if value.get("age_sec") != computed_age:
             errors.append("prompt authority age is not derived from scan time")
-        computed_fresh = -TRIAL_EDGE_TOLERANCE_SEC <= computed_age <= TRIAL_PROMPT_MAX_AGE_SEC
+        computed_fresh = -TRIAL_CLOCK_TOLERANCE_SEC <= computed_age <= TRIAL_PROMPT_MAX_AGE_SEC
         if value.get("fresh") is not computed_fresh:
             errors.append("prompt authority freshness claim is invalid")
     if not all(value.get(key) is True for key in ("present", "validation_ok", "exact_all", "fresh")):
@@ -2079,7 +2183,11 @@ def _observation_errors(value: Any, *, marker: dict[str, Any]) -> list[str]:
     return errors
 
 
-def _read_observation_chain(marker: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
+def _read_observation_chain(
+    marker: dict[str, Any],
+    *,
+    require_terminal_live_custody: bool = False,
+) -> tuple[list[dict[str, Any]], list[str]]:
     baseline = marker.get("baseline") if isinstance(marker.get("baseline"), dict) else {}
     prefix = baseline.get("observation_ledger") if isinstance(baseline.get("observation_ledger"), dict) else {}
     errors = [f"observation ledger {error}" for error in _custody_errors(prefix)]
@@ -2172,6 +2280,16 @@ def _read_observation_chain(marker: dict[str, Any]) -> tuple[list[dict[str, Any]
         last_ids = set((rows[-1].get("task_source") or {}).get("event_ids") or [])
         if not last_ids.issubset(current_task_ids):
             errors.append("task source was rewritten or truncated after the last observation")
+        if require_terminal_live_custody:
+            terminal_prompt = rows[-1].get("prompt_authority") or {}
+            terminal_prompt_custody = terminal_prompt.get("source_custody") or {}
+            prompt_paths = _prompt_paths(PROMPT_ATOM_SNAPSHOT)
+            for name in ("cursor", "snapshot"):
+                if _file_custody(prompt_paths[name]) != terminal_prompt_custody.get(name):
+                    errors.append(f"terminal prompt {name} custody no longer matches the live authoritative file")
+            terminal_handoff = rows[-1].get("handoff") or {}
+            if _file_custody(LOGS / "handoff.json") != terminal_handoff.get("source_custody"):
+                errors.append("terminal handoff custody no longer matches the live authoritative file")
     return rows, errors
 
 
@@ -2224,6 +2342,8 @@ def append_trial_observation(snapshot: dict[str, Any]) -> dict[str, Any] | None:
         session_proofs: list[dict[str, Any]] = []
         for event_id in new_ids:
             entry = (task_ledger.get("all_events") or {}).get(event_id) or {}
+            if not _task_event_within_observation(entry, window_start=start, observed_at=observed_at):
+                continue
             if entry.get("status") == "done":
                 proof = _prove_terminal_event(entry)
                 if proof:
@@ -2301,7 +2421,10 @@ def build_trial_receipt(active_marker: dict[str, Any]) -> dict[str, Any]:
     monotonic_elapsed_ns = time.monotonic_ns() - int(active_marker.get("monotonic_start_ns") or 0)
     if monotonic_elapsed_ns < (TRIAL_DURATION_SEC - TRIAL_CLOCK_TOLERANCE_SEC) * 1_000_000_000:
         raise TrialContractError("trial cannot be finalized before eight hours of monotonic custody")
-    observations, source_errors = _read_observation_chain(active_marker)
+    observations, source_errors = _read_observation_chain(
+        active_marker,
+        require_terminal_live_custody=True,
+    )
     bounded = [
         (observed_at, record)
         for record in observations
@@ -2513,6 +2636,12 @@ def maybe_finalize_trial() -> dict[str, Any] | None:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         marker = load_json(marker_path)
         if not marker.get("active"):
+            if marker.get("active") is False:
+                receipt = load_json(TRIAL_PATH)
+                ok, receipt_errors = check_trial_receipt(TRIAL_PATH)
+                if ok:
+                    return {"receipt": receipt, "changed": False, "already_finalized": True}
+                return {"error": "; ".join(receipt_errors) or "terminal trial receipt is invalid"}
             return None
         errors = _active_marker_errors(marker)
         if errors:

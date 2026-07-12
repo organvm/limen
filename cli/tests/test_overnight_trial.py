@@ -63,6 +63,7 @@ def _write_prompt_authority(
     stale: bool = False,
     unsupported: int = 0,
     unresolved: int = 0,
+    future_seconds: int = 0,
 ):
     at = at.astimezone(dt.timezone.utc).replace(microsecond=0)
     source = module.PROMPT_ATOM_SNAPSHOT
@@ -89,7 +90,9 @@ def _write_prompt_authority(
         "adapter_gaps": [],
         "source_families": {"fixture": {"discovered": 1, "converged": 1, "pending": 0, "errors": 0, "unsupported": 0}},
         "files": {},
-        "last_scan_at": (at - dt.timedelta(minutes=20) if stale else at).isoformat(timespec="seconds"),
+        "last_scan_at": (
+            at - dt.timedelta(minutes=20) if stale else at + dt.timedelta(seconds=future_seconds)
+        ).isoformat(timespec="seconds"),
     }
     cursor_path = source.parent / "source-cursor.json"
     cursor_path.write_text(json.dumps(cursor, sort_keys=True), encoding="utf-8")
@@ -218,13 +221,15 @@ def _run_trial(
     seam_session: str = "12345678901234567890",
     omit_samples: set[int] | None = None,
     operator_at: int | None = None,
+    event_timestamp_offsets: dict[int, int] | None = None,
 ):
     marker = _start(module, start)
     operator_count = 0
     for minute in range(5, 481, 5):
         at = start + dt.timedelta(minutes=minute)
         if minute in value_minutes:
-            _append_task_event(module, at, minute, "done")
+            offset = (event_timestamp_offsets or {}).get(minute, 0)
+            _append_task_event(module, at + dt.timedelta(seconds=offset), minute, "done")
         if minute == 30:
             _append_task_event(
                 module,
@@ -243,7 +248,7 @@ def _run_trial(
     return marker, module.maybe_finalize_trial()
 
 
-def test_trial_passes_rebuilds_and_is_byte_idempotent(tmp_path, monkeypatch):
+def test_trial_passes_rebuilds_and_is_byte_idempotent(tmp_path, monkeypatch, capsys):
     start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
     module, clock = _fresh_module(tmp_path, monkeypatch, start)
     _install_proof_stubs(module, monkeypatch)
@@ -261,6 +266,15 @@ def test_trial_passes_rebuilds_and_is_byte_idempotent(tmp_path, monkeypatch):
     assert second == result["receipt"]
     assert module.TRIAL_PATH.read_bytes() == first_bytes
     assert module.check_trial_receipt() == (True, [])
+    terminal_bytes = module.TRIAL_WINDOW_PATH.read_bytes()
+    repeated = module.maybe_finalize_trial()
+    assert repeated and repeated["changed"] is False and repeated["already_finalized"] is True
+    assert repeated["receipt"] == result["receipt"]
+    assert module.main(["--finalize-trial", "--json"]) == 0
+    advertised = json.loads(capsys.readouterr().out)
+    assert advertised["changed"] is False
+    assert module.TRIAL_PATH.read_bytes() == first_bytes
+    assert module.TRIAL_WINDOW_PATH.read_bytes() == terminal_bytes
     serialized = module.TRIAL_PATH.read_text()
     assert "TRIAL-" not in serialized
     assert "session-" not in serialized
@@ -295,6 +309,23 @@ def test_preseeded_future_events_and_samples_cannot_count(tmp_path, monkeypatch)
     assert receipt["value_done_events"] == 0
     assert receipt["seam_count"] == 0
     assert receipt["pass"] is False
+
+
+@pytest.mark.parametrize("offset_seconds", [-(62 * 60), 2 * 60])
+def test_pre_window_or_future_task_timestamp_cannot_earn_credit(tmp_path, monkeypatch, offset_seconds):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+
+    _, result = _run_trial(
+        module,
+        clock,
+        start,
+        event_timestamp_offsets={60: offset_seconds},
+    )
+
+    assert result["receipt"]["value_done_events"] == 4
+    assert result["receipt"]["pass"] is False
 
 
 def test_finalize_refuses_before_due_time(tmp_path, monkeypatch):
@@ -353,6 +384,19 @@ def test_stored_prompt_freshness_lie_is_rejected(tmp_path, monkeypatch):
     assert "prompt authority freshness claim is invalid" in errors
 
 
+def test_prompt_scan_ten_minutes_in_future_is_rejected(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    _write_prompt_authority(module, start, future_seconds=10 * 60)
+
+    snapshot = module.prompt_authority_snapshot(start)
+
+    assert snapshot["age_sec"] == -(10 * 60)
+    assert snapshot["fresh"] is False
+    with pytest.raises(module.TrialContractError, match="fresh exact all/all"):
+        module.start_trial()
+
+
 def test_arbitrary_session_string_does_not_count_as_seam(tmp_path, monkeypatch):
     start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
     module, clock = _fresh_module(tmp_path, monkeypatch, start)
@@ -405,7 +449,19 @@ def test_real_predicate_and_receipt_proof_are_both_required(tmp_path, monkeypatc
 
 @pytest.mark.parametrize(
     "predicate",
-    ["sh -c 'rm -rf /tmp/x'", "gh issue close 1 --repo organvm/limen", "test -f tasks.yaml && touch x"],
+    [
+        "sh -c 'rm -rf /tmp/x'",
+        "gh issue close 1 --repo organvm/limen",
+        "test -f tasks.yaml && touch x",
+        "test -f tasks.yaml | touch x",
+        "test -f tasks.yaml & touch x",
+        "test -f tasks.yaml > result",
+        "test -f tasks.yaml < result",
+        "(test -f tasks.yaml)",
+        "{ test -f tasks.yaml; }",
+        "test -f tasks.yaml\ntouch x",
+        "test -f `touch x`",
+    ],
 )
 def test_mutating_predicates_are_never_executed(tmp_path, monkeypatch, predicate):
     start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
@@ -413,6 +469,26 @@ def test_mutating_predicates_are_never_executed(tmp_path, monkeypatch, predicate
 
     assert module._predicate_is_observation_only(predicate) is False
     assert module._predicate_proof(predicate) is None
+
+
+@pytest.mark.parametrize(
+    "predicate",
+    [
+        "gh run view 123 --repo organvm/limen --json conclusion --jq .conclusion",
+        'test "$(gh pr view 980 --repo organvm/limen --json state --jq .state)" = MERGED',
+        "gh run list --repo organvm/limen --json conclusion --jq '[.[] | select(.conclusion == \"success\")] | length'",
+    ],
+)
+def test_safe_predicate_classification_never_executes(tmp_path, monkeypatch, predicate):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    monkeypatch.setattr(
+        module,
+        "_run_predicate_argv",
+        lambda _argv: pytest.fail("classification must not execute a command"),
+    )
+
+    assert module._predicate_is_observation_only(predicate) is True
 
 
 def test_rolling_value_gap_over_ninety_minutes_fails(tmp_path, monkeypatch):
@@ -448,7 +524,10 @@ def test_operator_journal_delta_fails_trial(tmp_path, monkeypatch):
     assert result["receipt"]["pass"] is False
 
 
-@pytest.mark.parametrize("source", ["watch", "observation", "tasks", "prompt"])
+@pytest.mark.parametrize(
+    "source",
+    ["watch", "observation", "tasks", "prompt", "cursor", "snapshot", "handoff"],
+)
 def test_source_rewrite_or_truncation_breaks_checker(tmp_path, monkeypatch, source):
     start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
     module, clock = _fresh_module(tmp_path, monkeypatch, start)
@@ -475,9 +554,15 @@ def test_source_rewrite_or_truncation_breaks_checker(tmp_path, monkeypatch, sour
         board = _load_board(module)
         board["tasks"] = board["tasks"][1:]
         module.TASKS_PATH.write_text(json.dumps(board), encoding="utf-8")
-    else:
+    elif source == "prompt":
         events = module.PROMPT_ATOM_SNAPSHOT.parent / "prompt-events.jsonl"
         events.write_text("", encoding="utf-8")
+    elif source == "cursor":
+        (module.PROMPT_ATOM_SNAPSHOT.parent / "source-cursor.json").write_text("{}\n", encoding="utf-8")
+    elif source == "snapshot":
+        module.PROMPT_ATOM_SNAPSHOT.write_text("{}\n", encoding="utf-8")
+    else:
+        (module.LOGS / "handoff.json").write_text('{"rewritten":true}\n', encoding="utf-8")
 
     ok, errors = module.check_trial_receipt()
 
