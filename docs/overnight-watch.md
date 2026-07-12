@@ -83,8 +83,9 @@ the sealed baseline. Pre-seeded future timestamps, self-consistent sample lies,
 source truncation, and rewritten source prefixes do not count.
 
 Predicate proof never invokes a shell. It executes only classified read-only
-GitHub/Git/test commands or tracked repository check scripts as direct argument
-vectors; shell pipes, backgrounding, control operators, redirection, mutating
+GitHub, Git, and fixed-system `test`/`[` commands as direct argument vectors;
+arbitrary Python/shell/check scripts are not trial evidence. Shell pipes,
+backgrounding, control operators, redirection, mutating
 GitHub mutations, API field/input/method options, browser/help viewers, and unsafe
 attached or abbreviated flags are rejected before execution. Git output, pager,
 config, signature, external-diff, help, and version options receive the same
@@ -94,6 +95,10 @@ transport, helper, pager, and tracing variables; deny every transport protocol a
 promisor lazy fetch; force a signature-free built-in display format; and disable
 replacement refs, hooks, fsmonitor, text conversion, external diffs, credential
 helpers, pagers, and optional index writes.
+GitHub receipt/API proofs and Jules session-seam probes likewise resolve their
+executables only from the fixed trusted tool path and run with a minimal
+allowlisted environment; inherited `PATH`, shell/Python startup hooks, and
+`LIMEN_JULES_BIN` cannot select or initialize a proof producer.
 
 Trial start and finalization intentionally have no backfill arguments; finalization
 also refuses to run before the marker's real end time. Trial start refuses to replace an active
@@ -115,7 +120,10 @@ successfully, and writes no terminal bytes; substituted, missing, writable,
 symlinked, ancestor-symlinked, or rewritten custody sidecars fail closed. Every
 custody path component from the trusted Limen root is checked with no-follow
 metadata and realpath containment, so moving the configured receipt root and
-replacing it with a symlink also invalidates the receipt.
+replacing it with a symlink also invalidates the receipt. The same canonical-file
+check covers the prospective anchor, active/terminal marker, final receipt,
+watch and observation ledgers, `tasks.yaml`, and all prompt event, outcome,
+cursor, and snapshot sources; a byte-identical symlink redirect is not custody.
 
 Verify it with:
 

@@ -65,6 +65,14 @@ def _terminal_sidecar_state(module, receipt: dict) -> dict[str, tuple[bytes, int
     return state
 
 
+def _write_fake_executable(path: Path, marker: Path, *, stdout: str = "") -> None:
+    path.write_text(
+        f"#!/bin/sh\n: > {shlex.quote(str(marker))}\nprintf '%s\\n' {shlex.quote(stdout)}\n",
+        encoding="utf-8",
+    )
+    path.chmod(0o700)
+
+
 def _write_prompt_authority(
     module,
     at: dt.datetime,
@@ -542,6 +550,118 @@ def test_gh_mutation_or_external_view_flags_are_rejected_without_execution(tmp_p
     assert calls == []
 
 
+def test_non_git_predicate_families_do_not_execute_inherited_path_or_startup_hooks(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    markers = {}
+    for name in ("[", "bash", "check-fake.py", "gh", "python", "python3", "sh", "test", "zsh"):
+        marker = tmp_path / f"{name.replace('[', 'bracket')}-invoked"
+        markers[name] = marker
+        _write_fake_executable(fake_bin / name, marker, stdout="forged")
+    python_startup = tmp_path / "python-startup"
+    python_startup.mkdir()
+    python_startup_marker = tmp_path / "python-startup-invoked"
+    (python_startup / "sitecustomize.py").write_text(
+        f"from pathlib import Path\nPath({str(python_startup_marker)!r}).touch()\n",
+        encoding="utf-8",
+    )
+    bash_startup_marker = tmp_path / "bash-startup-invoked"
+    bash_startup = tmp_path / "bash-startup.sh"
+    bash_startup.write_text(f": > {shlex.quote(str(bash_startup_marker))}\n", encoding="utf-8")
+    zsh_startup_marker = tmp_path / "zsh-startup-invoked"
+    zsh_startup = tmp_path / "zsh-startup"
+    zsh_startup.mkdir()
+    (zsh_startup / ".zshenv").write_text(
+        f": > {shlex.quote(str(zsh_startup_marker))}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PATH", f"{fake_bin}{module.os.pathsep}{module.os.environ.get('PATH', '')}")
+    monkeypatch.setenv("PYTHONPATH", str(python_startup))
+    monkeypatch.setenv("BASH_ENV", str(bash_startup))
+    monkeypatch.setenv("ENV", str(bash_startup))
+    monkeypatch.setenv("ZDOTDIR", str(zsh_startup))
+    monkeypatch.setenv("GH_CONFIG_DIR", str(tmp_path / "untrusted-gh-config"))
+    monkeypatch.setenv("GH_HOST", "forged.example.invalid")
+    monkeypatch.setenv("SSL_CERT_FILE", str(tmp_path / "forged-ca.pem"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "untrusted-xdg"))
+
+    trusted_gh = module._trusted_fixed_executable("gh")
+    if trusted_gh is not None:
+        gh_result = module._run_predicate_argv(["gh", "--version"])
+        assert gh_result is not None and gh_result[0] == 0
+    assert module._predicate_proof("test -f tasks.yaml") is not None
+    assert module._predicate_proof("[ -f tasks.yaml ]") is not None
+    for predicate in (
+        "python scripts/check-agent-docs.py --check",
+        "python3 scripts/check-agent-docs.py --check",
+        "bash scripts/verify-whole.sh",
+        "sh scripts/verify-whole.sh",
+        "zsh scripts/verify-whole.sh",
+        "check-fake.py --check",
+    ):
+        assert module._predicate_is_observation_only(predicate) is False
+        assert module._predicate_proof(predicate) is None
+
+    assert not any(marker.exists() for marker in markers.values())
+    assert python_startup_marker.exists() is False
+    assert bash_startup_marker.exists() is False
+    assert zsh_startup_marker.exists() is False
+    proof_environment = module._trusted_tool_environment()
+    for name in (
+        "BASH_ENV",
+        "ENV",
+        "GH_CONFIG_DIR",
+        "GH_HOST",
+        "PYTHONPATH",
+        "SSL_CERT_FILE",
+        "XDG_CONFIG_HOME",
+        "ZDOTDIR",
+    ):
+        assert name not in proof_environment
+
+
+def test_receipt_and_jules_proofs_do_not_execute_inherited_path_tools(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    fake_gh_marker = tmp_path / "fake-gh-invoked"
+    fake_jules_marker = tmp_path / "fake-jules-invoked"
+    _write_fake_executable(fake_bin / "gh", fake_gh_marker, stdout='{"sha":"forged"}')
+    _write_fake_executable(
+        fake_bin / "jules",
+        fake_jules_marker,
+        stdout="123456789012  forged session  in progress",
+    )
+    monkeypatch.setenv("PATH", f"{fake_bin}{module.os.pathsep}{module.os.environ.get('PATH', '')}")
+    monkeypatch.setenv("LIMEN_JULES_BIN", str(fake_bin / "jules"))
+    original_resolver = module._trusted_fixed_executable
+
+    def deny_remote_tools(name, *, system_only=False):
+        if name in {"gh", "jules"}:
+            return "/bin/false"
+        return original_resolver(name, system_only=system_only)
+
+    monkeypatch.setattr(module, "_trusted_fixed_executable", deny_remote_tools)
+
+    assert module._github_api_proof("repos/organvm/limen") is None
+    assert module._receipt_target_proof("git:organvm/limen:docs/receipt.json") is None
+    assert (
+        module._prove_session_event(
+            {
+                "event_id": "a" * 64,
+                "agent": "jules",
+                "session_id": "123456789012",
+            }
+        )
+        is None
+    )
+    assert fake_gh_marker.exists() is False
+    assert fake_jules_marker.exists() is False
+
+
 @pytest.mark.parametrize(
     "predicate",
     [
@@ -935,6 +1055,52 @@ def test_source_rewrite_or_truncation_breaks_checker(tmp_path, monkeypatch, sour
     assert errors
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "receipt",
+        "marker",
+        "anchor",
+        "observation",
+        "watch",
+        "tasks",
+        "prompt_events",
+        "prompt_outcomes",
+        "prompt_cursor",
+        "prompt_snapshot",
+    ],
+)
+def test_byte_identical_source_symlink_redirect_fails_closed(tmp_path, monkeypatch, source):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+    _run_trial(module, clock, start)
+    terminal_marker = json.loads(module.TRIAL_WINDOW_PATH.read_text())
+    active_marker = terminal_marker["active_marker"]
+    prompt_paths = module._prompt_paths(module.PROMPT_ATOM_SNAPSHOT)
+    paths = {
+        "receipt": module.TRIAL_PATH,
+        "marker": module.TRIAL_WINDOW_PATH,
+        "anchor": module._trial_anchor_path(active_marker),
+        "observation": module.TRIAL_OBSERVATION_PATH,
+        "watch": module.RECEIPT_JSONL,
+        "tasks": module.TASKS_PATH,
+        "prompt_events": prompt_paths["events"],
+        "prompt_outcomes": prompt_paths["outcomes"],
+        "prompt_cursor": prompt_paths["cursor"],
+        "prompt_snapshot": prompt_paths["snapshot"],
+    }
+    selected = paths[source]
+    preserved = selected.with_name(f"{selected.name}.preserved")
+    selected.rename(preserved)
+    selected.symlink_to(preserved)
+
+    ok, errors = module.check_trial_receipt()
+
+    assert ok is False
+    assert any("symlink" in error for error in errors)
+
+
 def test_live_terminal_projections_may_advance_after_immutable_custody(tmp_path, monkeypatch, capsys):
     start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
     module, clock = _fresh_module(tmp_path, monkeypatch, start)
@@ -1076,7 +1242,7 @@ def test_configured_terminal_root_replacement_symlink_fails_closed(tmp_path, mon
     ok, errors = module.check_trial_receipt()
 
     assert ok is False
-    assert any("terminal custody directory component" in error and "symlink" in error for error in errors)
+    assert any("component" in error and "symlink" in error for error in errors)
     repeated = module.maybe_finalize_trial()
     assert repeated and "error" in repeated
 

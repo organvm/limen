@@ -16,6 +16,7 @@ import fcntl
 import hashlib
 import json
 import os
+import pwd
 import re
 import shlex
 import shutil
@@ -1083,12 +1084,30 @@ def _jsonl_bytes(payload: bytes) -> tuple[list[dict[str, Any]], int]:
 
 
 def _append_jsonl(path: Path, value: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-    with os.fdopen(fd, "a", encoding="utf-8") as handle:
-        handle.write(json.dumps(value, sort_keys=True) + "\n")
-        handle.flush()
-        os.fsync(handle.fileno())
+    parent_errors = _trusted_custody_path_errors(
+        path.parent,
+        label="trial append parent",
+        final_directory=True,
+    )
+    file_errors = _trusted_canonical_file_errors(
+        path,
+        label="trial append ledger",
+        allow_missing=True,
+    )
+    if parent_errors or file_errors:
+        raise TrialContractError("; ".join([*parent_errors, *file_errors]))
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    directory_fd = os.open(path.parent, directory_flags)
+    try:
+        file_flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(path.name, file_flags, 0o600, dir_fd=directory_fd)
+        with os.fdopen(fd, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(value, sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 def _trial_windows(start: dt.datetime, end: dt.datetime) -> list[tuple[dt.datetime, dt.datetime]]:
@@ -1109,11 +1128,48 @@ class TrialContractError(RuntimeError):
 
 
 def _write_json_atomic(path: Path, value: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    parent_errors = _trusted_custody_path_errors(
+        path.parent,
+        label="trial JSON parent",
+        final_directory=True,
+    )
+    if parent_errors:
+        raise TrialContractError("; ".join(parent_errors))
+    existing_errors = _trusted_canonical_file_errors(
+        path,
+        label="trial JSON output",
+        allow_missing=True,
+    )
+    if existing_errors:
+        raise TrialContractError("; ".join(existing_errors))
     payload = json.dumps(value, indent=2, sort_keys=True) + "\n"
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    temporary.write_text(payload, encoding="utf-8")
-    os.replace(temporary, path)
+    temporary_name = f".{path.name}.{os.getpid()}.tmp"
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    directory_fd = os.open(path.parent, directory_flags)
+    created = False
+    try:
+        file_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(temporary_name, file_flags, 0o600, dir_fd=directory_fd)
+        created = True
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(
+            temporary_name,
+            path.name,
+            src_dir_fd=directory_fd,
+            dst_dir_fd=directory_fd,
+        )
+        created = False
+        os.fsync(directory_fd)
+    finally:
+        if created:
+            try:
+                os.unlink(temporary_name, dir_fd=directory_fd)
+            except OSError:
+                pass
+        os.close(directory_fd)
 
 
 def _content_hash_valid(value: dict[str, Any]) -> bool:
@@ -1127,14 +1183,30 @@ def _trial_anchor_path(marker: dict[str, Any]) -> Path:
 
 
 def _anchor_created_ns(path: Path) -> int:
-    stat = path.stat()
-    birth = getattr(stat, "st_birthtime", None)
-    return int((birth if birth is not None else stat.st_ctime) * 1_000_000_000)
+    metadata = path.lstat()
+    birth = getattr(metadata, "st_birthtime", None)
+    return int((birth if birth is not None else metadata.st_ctime) * 1_000_000_000)
 
 
 def _write_trial_anchor(marker: dict[str, Any]) -> None:
     path = _trial_anchor_path(marker)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    configured_errors = _trusted_custody_path_errors(
+        path.parent.parent,
+        label="prospective anchor configured root",
+        final_directory=True,
+    )
+    if configured_errors:
+        raise TrialContractError("; ".join(configured_errors))
+    if path.parent.is_symlink():
+        raise TrialContractError("prospective anchor directory is a symlink")
+    path.parent.mkdir(mode=0o700, exist_ok=True)
+    anchor_root_errors = _trusted_custody_path_errors(
+        path.parent,
+        label="prospective anchor directory",
+        final_directory=True,
+    )
+    if anchor_root_errors:
+        raise TrialContractError("; ".join(anchor_root_errors))
     payload = {
         "trial_id": marker.get("content_hash"),
         "started_at": marker.get("started_at"),
@@ -1142,15 +1214,30 @@ def _write_trial_anchor(marker: dict[str, Any]) -> None:
         "monotonic_start_ns": marker.get("monotonic_start_ns"),
     }
     material = (json.dumps(payload, sort_keys=True) + "\n").encode("utf-8")
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o400)
-    with os.fdopen(fd, "wb") as handle:
-        handle.write(material)
-        handle.flush()
-        os.fsync(handle.fileno())
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    directory_fd = os.open(path.parent, directory_flags)
+    try:
+        file_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(path.name, file_flags, 0o400, dir_fd=directory_fd)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(material)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 def _trial_anchor_errors(marker: dict[str, Any]) -> list[str]:
     path = _trial_anchor_path(marker)
+    path_errors = _trusted_canonical_file_errors(
+        path,
+        label="prospective trial anchor",
+    )
+    if path_errors:
+        if path_errors == ["prospective trial anchor is missing"]:
+            return ["prospective trial anchor is missing or malformed"]
+        return path_errors
     expected = {
         "trial_id": marker.get("content_hash"),
         "started_at": marker.get("started_at"),
@@ -1369,20 +1456,105 @@ def _task_event_within_observation(
     return window_start <= event_time <= observed_at
 
 
+_TRUSTED_EXECUTION_DIRS = tuple(Path(value) for value in ("/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"))
+
+
+def _trusted_execution_path() -> str:
+    return os.pathsep.join(str(path) for path in _TRUSTED_EXECUTION_DIRS if path.is_dir())
+
+
+def _trusted_fixed_executable(name: str, *, system_only: bool = False) -> str | None:
+    directories = _TRUSTED_EXECUTION_DIRS[:2] if system_only else _TRUSTED_EXECUTION_DIRS
+    for directory in directories:
+        candidate = directory / name
+        if not candidate.is_file() or not os.access(candidate, os.X_OK):
+            continue
+        resolved = candidate.resolve()
+        if resolved.is_file() and os.access(resolved, os.X_OK):
+            return str(resolved)
+    return None
+
+
 def _trusted_git_executable() -> str | None:
-    candidate = shutil.which("git", path=os.defpath)
-    if not candidate:
+    return _trusted_fixed_executable("git", system_only=True)
+
+
+def _trusted_tool_environment() -> dict[str, str]:
+    allowed = {
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "JULES_API_KEY",
+        "TMPDIR",
+        "TZ",
+    }
+    environment = {name: value for name, value in os.environ.items() if name in allowed}
+    account = pwd.getpwuid(os.getuid())
+    environment.update(
+        {
+            "GH_NO_UPDATE_NOTIFIER": "1",
+            "GH_PAGER": "",
+            "GH_PROMPT_DISABLED": "1",
+            "HOME": account.pw_dir,
+            "LANG": "C",
+            "LC_ALL": "C",
+            "NO_COLOR": "1",
+            "PAGER": "",
+            "PATH": _trusted_execution_path(),
+            "USER": account.pw_name,
+        }
+    )
+    return environment
+
+
+def _execute_fixed_argv(
+    execution_argv: list[str],
+    *,
+    environment: dict[str, str],
+    timeout: int = TRIAL_PREDICATE_TIMEOUT_SEC,
+) -> tuple[int, str, str] | None:
+    try:
+        proc = subprocess.Popen(
+            execution_argv,
+            cwd=ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+            env=environment,
+        )
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.communicate()
         return None
-    resolved = Path(candidate).resolve()
-    if not resolved.is_file() or not os.access(resolved, os.X_OK):
+    except (OSError, subprocess.SubprocessError, UnboundLocalError):
         return None
-    return str(resolved)
+    return proc.returncode, stdout or "", stderr or ""
+
+
+def _run_trusted_tool_argv(
+    name: str,
+    argv: list[str],
+    *,
+    timeout: int = TRIAL_PREDICATE_TIMEOUT_SEC,
+) -> tuple[int, str, str] | None:
+    executable = _trusted_fixed_executable(name)
+    if not executable:
+        return None
+    return _execute_fixed_argv(
+        [executable, *argv],
+        environment=_trusted_tool_environment(),
+        timeout=timeout,
+    )
 
 
 def _run_predicate_argv(argv: list[str]) -> tuple[int, str, str] | None:
+    if not argv:
+        return None
     execution_argv = list(argv)
     environment = os.environ.copy()
-    if argv and argv[0] == "git":
+    if argv[0] == "git":
         trusted_git = _trusted_git_executable()
         if not trusted_git:
             return None
@@ -1458,24 +1630,20 @@ def _run_predicate_argv(argv: list[str]) -> tuple[int, str, str] | None:
             execution_argv = [*git_prefix, argv[1], "--no-ext-diff", "--no-textconv", *argv[2:]]
         else:
             execution_argv = [*git_prefix, *argv[1:]]
-    try:
-        proc = subprocess.Popen(
-            execution_argv,
-            cwd=ROOT,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            start_new_session=True,
-            env=environment,
-        )
-        stdout, stderr = proc.communicate(timeout=TRIAL_PREDICATE_TIMEOUT_SEC)
-    except subprocess.TimeoutExpired:
-        os.killpg(proc.pid, signal.SIGKILL)
-        proc.communicate()
+    elif argv[0] == "gh":
+        return _run_trusted_tool_argv("gh", argv[1:])
+    elif argv[0] in {"test", "["}:
+        executable = _trusted_fixed_executable(argv[0], system_only=True)
+        if not executable:
+            return None
+        execution_argv[0] = executable
+        environment = {"LANG": "C", "LC_ALL": "C", "PATH": _trusted_execution_path()}
+    else:
         return None
-    except (OSError, subprocess.SubprocessError, UnboundLocalError):
-        return None
-    return proc.returncode, stdout or "", stderr or ""
+    return _execute_fixed_argv(
+        execution_argv,
+        environment=environment,
+    )
 
 
 def _gh_read_only(argv: list[str]) -> bool:
@@ -1513,27 +1681,6 @@ def _gh_read_only(argv: list[str]) -> bool:
         ("run", "list"),
         ("run", "view"),
     }
-
-
-def _tracked_check_script(argv: list[str]) -> bool:
-    script = ""
-    if argv and argv[0] in {"python", "python3", "bash", "sh", "zsh"} and len(argv) >= 2:
-        script = argv[1]
-    elif argv and argv[0].endswith((".py", ".sh")):
-        script = argv[0]
-    if not script or script.startswith("-"):
-        return False
-    candidate = (ROOT / script).resolve() if not Path(script).is_absolute() else Path(script).resolve()
-    try:
-        relative = candidate.relative_to(ROOT.resolve())
-    except ValueError:
-        return False
-    name = candidate.name.lower()
-    check_shaped = "--check" in argv or name.startswith(("check-", "verify")) or "-gate" in name
-    if not candidate.is_file() or not check_shaped:
-        return False
-    tracked = run(["git", "-C", str(ROOT), "ls-files", "--error-unmatch", str(relative)], timeout=5)
-    return tracked.returncode == 0
 
 
 def _git_read_only(argv: list[str]) -> bool:
@@ -1674,7 +1821,7 @@ def _direct_observation_command(argv: list[str]) -> bool:
         return True
     if argv[0] == "git":
         return _git_read_only(argv)
-    return _tracked_check_script(argv)
+    return False
 
 
 def _classify_observation_predicate(command: str) -> dict[str, Any] | None:
@@ -1737,11 +1884,11 @@ def _predicate_proof(command: str) -> dict[str, Any] | None:
 
 
 def _github_api_proof(endpoint: str) -> dict[str, Any] | None:
-    proc = run(["gh", "api", endpoint], timeout=30)
-    if proc.returncode != 0:
+    result = _run_trusted_tool_argv("gh", ["api", endpoint], timeout=30)
+    if result is None or result[0] != 0:
         return None
     try:
-        payload = json.loads(proc.stdout or "{}")
+        payload = json.loads(result[1] or "{}")
     except ValueError:
         return None
     return {"endpoint_hash": canonical_hash(endpoint), "object_hash": canonical_hash(payload)}
@@ -1752,11 +1899,11 @@ def _receipt_target_proof(target: str) -> dict[str, Any] | None:
     if git_match:
         repo = git_match.group("repo")
         path = git_match.group("path")
-        remote = run(["gh", "api", f"repos/{repo}/contents/{path}"])
-        if remote.returncode != 0:
+        remote = _run_trusted_tool_argv("gh", ["api", f"repos/{repo}/contents/{path}"], timeout=30)
+        if remote is None or remote[0] != 0:
             return None
         try:
-            payload = json.loads(remote.stdout or "{}")
+            payload = json.loads(remote[1] or "{}")
         except ValueError:
             return None
         object_id = str(payload.get("sha") or "") if isinstance(payload, dict) else ""
@@ -1776,9 +1923,9 @@ def _receipt_target_proof(target: str) -> dict[str, Any] | None:
         kind = declared.group("kind")
         key = declared.group("key")
         if kind == "pull-request":
-            proc = run(
+            result = _run_trusted_tool_argv(
+                "gh",
                 [
-                    "gh",
                     "pr",
                     "list",
                     "--repo",
@@ -1793,9 +1940,9 @@ def _receipt_target_proof(target: str) -> dict[str, Any] | None:
                 timeout=30,
             )
         else:
-            proc = run(
+            result = _run_trusted_tool_argv(
+                "gh",
                 [
-                    "gh",
                     "issue",
                     "list",
                     "--repo",
@@ -1810,7 +1957,7 @@ def _receipt_target_proof(target: str) -> dict[str, Any] | None:
                 timeout=30,
             )
         try:
-            objects = json.loads(proc.stdout or "[]") if proc.returncode == 0 else []
+            objects = json.loads(result[1] or "[]") if result is not None and result[0] == 0 else []
         except ValueError:
             objects = []
         if not isinstance(objects, list) or not objects:
@@ -1870,12 +2017,13 @@ def _prove_session_event(entry: dict[str, Any]) -> dict[str, Any] | None:
         if str(cli_src) not in sys.path:
             sys.path.insert(0, str(cli_src))
         try:
-            from limen.jules_remote import probe_jules_remote_sessions
-
-            remote = probe_jules_remote_sessions()
+            from limen.jules_remote import parse_jules_remote_sessions
         except (ImportError, ModuleNotFoundError):
             return None
-        session = remote.sessions.get(session_id) if remote.available else None
+        remote = _run_trusted_tool_argv("jules", ["remote", "list", "--session"], timeout=90)
+        if remote is None or remote[0] != 0:
+            return None
+        session = parse_jules_remote_sessions(remote[1]).get(session_id)
         if session is None:
             return None
         return {
@@ -2078,9 +2226,17 @@ def prompt_authority_snapshot(
     source = path or PROMPT_ATOM_SNAPSHOT
     paths = _prompt_paths(source)
     cursor_path = paths["cursor"]
+    path_errors = [
+        error
+        for name, path_value in paths.items()
+        for error in _trusted_canonical_file_errors(
+            path_value,
+            label=f"prompt {name} source",
+        )
+    ]
     snapshot = load_json(source)
     cursor = load_json(cursor_path)
-    errors = 0
+    errors = len(path_errors)
     if not snapshot:
         errors += 1
     if not cursor:
@@ -2091,7 +2247,7 @@ def prompt_authority_snapshot(
     if not operator_valid:
         errors += 1
     validation_ok = bool((snapshot.get("validation") or {}).get("ok"))
-    exact = validation_ok and _prompt_scope_exact(snapshot, cursor)
+    exact = not path_errors and validation_ok and _prompt_scope_exact(snapshot, cursor)
     expected_cursor_digest = str(snapshot.get("source_cursor_digest") or "")
     actual_cursor_digest = _cursor_digest(cursor) if cursor else ""
     if not re.fullmatch(r"[0-9a-f]{64}", expected_cursor_digest) or expected_cursor_digest != actual_cursor_digest:
@@ -2235,6 +2391,14 @@ def _active_marker_errors(marker: Any) -> list[str]:
     for name, path in (("watch_ledger", RECEIPT_JSONL), ("observation_ledger", TRIAL_OBSERVATION_PATH)):
         custody = baseline.get(name)
         errors.extend(f"{name} {error}" for error in _custody_errors(custody))
+        allow_missing = isinstance(custody, dict) and custody.get("present") is False
+        errors.extend(
+            _trusted_canonical_file_errors(
+                path,
+                label=name,
+                allow_missing=allow_missing,
+            )
+        )
         if isinstance(custody, dict) and not _prefix_matches(path, custody):
             errors.append(f"{name} prefix was rewritten or truncated")
     return errors
@@ -2265,8 +2429,30 @@ def start_trial() -> tuple[dict[str, Any], bool]:
     marker_path = TRIAL_WINDOW_PATH
     reference = utc_now().astimezone(dt.timezone.utc).replace(microsecond=0)
     lock_path = marker_path.with_suffix(marker_path.suffix + ".lock")
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as lock:
+    prompt_paths = _prompt_paths(PROMPT_ATOM_SNAPSHOT)
+    configured_paths = {
+        "trial task source": (TASKS_PATH, False),
+        "trial watch ledger": (RECEIPT_JSONL, True),
+        "trial observation ledger": (TRIAL_OBSERVATION_PATH, True),
+        "trial receipt": (TRIAL_PATH, True),
+        "trial marker": (marker_path, True),
+        "trial marker lock": (lock_path, True),
+        **{f"prompt {name} source": (path, False) for name, path in prompt_paths.items()},
+    }
+    path_errors = [
+        error
+        for label, (path, allow_missing) in configured_paths.items()
+        for error in _trusted_canonical_file_errors(
+            path,
+            label=label,
+            allow_missing=allow_missing,
+        )
+    ]
+    if path_errors:
+        raise TrialContractError("trial source paths are not canonical: " + "; ".join(sorted(set(path_errors))))
+    lock_flags = os.O_RDWR | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    lock_fd = os.open(lock_path, lock_flags, 0o600)
+    with os.fdopen(lock_fd, "a+", encoding="utf-8") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         existing = load_json(marker_path)
         if existing.get("active") is True:
@@ -2363,6 +2549,25 @@ def _read_observation_chain(marker: dict[str, Any]) -> tuple[list[dict[str, Any]
     baseline = marker.get("baseline") if isinstance(marker.get("baseline"), dict) else {}
     prefix = baseline.get("observation_ledger") if isinstance(baseline.get("observation_ledger"), dict) else {}
     errors = [f"observation ledger {error}" for error in _custody_errors(prefix)]
+    watch_prefix = baseline.get("watch_ledger") if isinstance(baseline.get("watch_ledger"), dict) else {}
+    source_paths = {
+        "observation ledger": (TRIAL_OBSERVATION_PATH, prefix.get("present") is False),
+        "watch ledger": (RECEIPT_JSONL, watch_prefix.get("present") is False),
+        "task source": (TASKS_PATH, False),
+        **{f"prompt {name} source": (path, False) for name, path in _prompt_paths(PROMPT_ATOM_SNAPSHOT).items()},
+    }
+    path_errors = [
+        error
+        for label, (path, allow_missing) in source_paths.items()
+        for error in _trusted_canonical_file_errors(
+            path,
+            label=label,
+            allow_missing=allow_missing,
+        )
+    ]
+    errors.extend(path_errors)
+    if path_errors:
+        return [], errors
     try:
         payload = TRIAL_OBSERVATION_PATH.read_bytes()
     except OSError:
@@ -2378,7 +2583,7 @@ def _read_observation_chain(marker: dict[str, Any]) -> tuple[list[dict[str, Any]
     previous_time = parse_iso(str(marker.get("window_start") or ""))
     previous_monotonic = int(marker.get("monotonic_start_ns") or 0)
     previous_task = baseline.get("task_source") if isinstance(baseline.get("task_source"), dict) else {}
-    previous_watch = baseline.get("watch_ledger") if isinstance(baseline.get("watch_ledger"), dict) else {}
+    previous_watch = watch_prefix
     current_watch_bytes = RECEIPT_JSONL.read_bytes() if RECEIPT_JSONL.exists() else b""
     current_task_ledger = _load_task_event_ledger()
     current_task_ids = set((current_task_ledger.get("all_events") or {}).keys())
@@ -2508,6 +2713,37 @@ def _trusted_custody_path_errors(path: Path, *, label: str, final_directory: boo
     return errors
 
 
+def _trusted_canonical_file_errors(
+    path: Path,
+    *,
+    label: str,
+    allow_missing: bool = False,
+) -> list[str]:
+    parent_errors = _trusted_custody_path_errors(
+        path.parent,
+        label=f"{label} parent",
+        final_directory=True,
+    )
+    if parent_errors:
+        return parent_errors
+    try:
+        metadata = path.lstat()
+    except OSError:
+        return [] if allow_missing else [f"{label} is missing"]
+    if stat.S_ISLNK(metadata.st_mode):
+        return [f"{label} is a symlink"]
+    if not stat.S_ISREG(metadata.st_mode):
+        return [f"{label} is not a regular file"]
+    try:
+        expected = path.parent.resolve(strict=True) / path.name
+        actual = path.resolve(strict=True)
+    except OSError:
+        return [f"{label} realpath custody is unavailable"]
+    if actual != expected:
+        return [f"{label} realpath escaped its trusted component chain"]
+    return []
+
+
 def _terminal_custody_path(trial_id: str, name: str, digest: str) -> Path:
     if name not in {"handoff", "prompt_cursor", "prompt_snapshot"} or not re.fullmatch(r"[0-9a-f]{64}", digest):
         raise TrialContractError("terminal custody path components are invalid")
@@ -2544,6 +2780,10 @@ def _terminal_live_custody_errors(value: dict[str, Any]) -> list[str]:
     sources = value.get("sources") if isinstance(value.get("sources"), dict) else {}
     errors: list[str] = []
     for name, path in _terminal_source_paths().items():
+        path_errors = _trusted_canonical_file_errors(path, label=f"terminal {name} source")
+        errors.extend(path_errors)
+        if path_errors:
+            continue
         expected = sources.get(name)
         live = _file_custody(path)
         if (
@@ -2698,6 +2938,13 @@ def _preserve_terminal_custody(trial_id: str, value: dict[str, Any]) -> None:
 
 
 def append_trial_observation(snapshot: dict[str, Any]) -> dict[str, Any] | None:
+    marker_path_errors = _trusted_canonical_file_errors(
+        TRIAL_WINDOW_PATH,
+        label="active trial marker",
+        allow_missing=True,
+    )
+    if marker_path_errors:
+        raise TrialContractError("; ".join(marker_path_errors))
     marker = load_json(TRIAL_WINDOW_PATH)
     if marker.get("active") is not True:
         return None
@@ -2721,8 +2968,16 @@ def append_trial_observation(snapshot: dict[str, Any]) -> dict[str, Any] | None:
         raise TrialContractError("watch snapshot is not a current wall-clock observation")
 
     lock_path = TRIAL_OBSERVATION_PATH.with_suffix(TRIAL_OBSERVATION_PATH.suffix + ".lock")
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as lock:
+    lock_errors = _trusted_canonical_file_errors(
+        lock_path,
+        label="trial observation lock",
+        allow_missing=True,
+    )
+    if lock_errors:
+        raise TrialContractError("; ".join(lock_errors))
+    lock_flags = os.O_RDWR | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    lock_fd = os.open(lock_path, lock_flags, 0o600)
+    with os.fdopen(lock_fd, "a+", encoding="utf-8") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         rows, chain_errors = _read_observation_chain(marker)
         if chain_errors:
@@ -3053,8 +3308,22 @@ def finalize_trial(
 def maybe_finalize_trial() -> dict[str, Any] | None:
     marker_path = TRIAL_WINDOW_PATH
     lock_path = marker_path.with_suffix(marker_path.suffix + ".lock")
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as lock:
+    marker_path_errors = _trusted_canonical_file_errors(
+        marker_path,
+        label="trial marker",
+        allow_missing=True,
+    )
+    lock_path_errors = _trusted_canonical_file_errors(
+        lock_path,
+        label="trial marker lock",
+        allow_missing=True,
+    )
+    path_errors = [*marker_path_errors, *lock_path_errors]
+    if path_errors:
+        return {"error": "; ".join(sorted(set(path_errors)))}
+    lock_flags = os.O_RDWR | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    lock_fd = os.open(lock_path, lock_flags, 0o600)
+    with os.fdopen(lock_fd, "a+", encoding="utf-8") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         marker = load_json(marker_path)
         if not marker.get("active"):
@@ -3093,9 +3362,24 @@ def check_trial_receipt(
 ) -> tuple[bool, list[str]]:
     output = path or TRIAL_PATH
     terminal_path = TRIAL_WINDOW_PATH
-    receipt = load_json(output)
-    marker = load_json(terminal_path)
-    errors = _terminal_marker_errors(marker, receipt)
+    receipt_path_errors = _trusted_canonical_file_errors(output, label="terminal trial receipt")
+    marker_path_errors = _trusted_canonical_file_errors(terminal_path, label="terminal trial marker")
+    errors = [*receipt_path_errors, *marker_path_errors]
+    authoritative_paths = {
+        "trial observation ledger": TRIAL_OBSERVATION_PATH,
+        "trial watch ledger": RECEIPT_JSONL,
+        "trial task source": TASKS_PATH,
+        **{f"prompt {name} source": path for name, path in _prompt_paths(PROMPT_ATOM_SNAPSHOT).items()},
+        **{f"terminal {name} source": path for name, path in _terminal_source_paths().items()},
+    }
+    errors.extend(
+        error
+        for label, source_path in authoritative_paths.items()
+        for error in _trusted_canonical_file_errors(source_path, label=label)
+    )
+    receipt = {} if receipt_path_errors else load_json(output)
+    marker = {} if marker_path_errors else load_json(terminal_path)
+    errors.extend(_terminal_marker_errors(marker, receipt))
     active_marker = marker.get("active_marker") if isinstance(marker.get("active_marker"), dict) else {}
     if receipt.get("schema_version") != TRIAL_SCHEMA_VERSION:
         errors.append("trial receipt schema mismatch")
