@@ -12,7 +12,16 @@ export CI=1
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/limen-worker-probe.XXXXXX")"
+# shellcheck disable=SC2329  # invoked by EXIT trap
+early_cleanup() {
+  rm -rf -- "$TMP_DIR"
+}
+trap early_cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 chmod 700 "$TMP_DIR"
+
 ENV_FILE="$TMP_DIR/.dev.vars"
 BOARD_FILE="$TMP_DIR/tasks.yaml"
 SERVER_LOG="$TMP_DIR/wrangler.log"
@@ -23,15 +32,6 @@ WRANGLER_CLI="$ROOT/web/worker/node_modules/wrangler/wrangler-dist/cli.js"
 ATTEMPTS="${LIMEN_PROBE_ATTEMPTS:-80}"
 RETRY_DELAY="${LIMEN_PROBE_RETRY_DELAY:-0.25}"
 TERM_GRACE="${LIMEN_PROBE_TERM_GRACE:-2}"
-
-# shellcheck disable=SC2329  # invoked by EXIT trap
-early_cleanup() {
-  rm -rf -- "$TMP_DIR"
-}
-trap early_cleanup EXIT
-trap 'exit 129' HUP
-trap 'exit 130' INT
-trap 'exit 143' TERM
 
 port_available() {
   python3 - "$1" <<'PY'

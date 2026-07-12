@@ -3,7 +3,16 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/limen-runtime-probe.XXXXXX")"
+# shellcheck disable=SC2329  # invoked by EXIT trap
+early_cleanup() {
+  rm -rf -- "$TMP_DIR"
+}
+trap early_cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 chmod 700 "$TMP_DIR"
+
 TASKS_PATH="$TMP_DIR/tasks.yaml"
 SERVER_LOG="$TMP_DIR/uvicorn.log"
 PROBE_LOG="$TMP_DIR/probe.log"
@@ -13,15 +22,6 @@ CLIENT_TOKEN="${LIMEN_PROBE_CLIENT_TOKEN:-client-probe-token}"
 ATTEMPTS="${LIMEN_PROBE_ATTEMPTS:-40}"
 RETRY_DELAY="${LIMEN_PROBE_RETRY_DELAY:-0.25}"
 TERM_GRACE="${LIMEN_PROBE_TERM_GRACE:-2}"
-
-# shellcheck disable=SC2329  # invoked by EXIT trap
-early_cleanup() {
-  rm -rf -- "$TMP_DIR"
-}
-trap early_cleanup EXIT
-trap 'exit 129' HUP
-trap 'exit 130' INT
-trap 'exit 143' TERM
 
 cat > "$TASKS_PATH" <<'YAML'
 version: '1.0'
