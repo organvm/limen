@@ -3164,6 +3164,69 @@ def test_detached_codex_attachment_keeps_all_scope_partial(
     assert sources.validate_source_adapter_cursor(cursor) == []
 
 
+def test_removed_codex_attachment_contract_resets_stale_cursor_to_gap(tmp_path: Path, monkeypatch):
+    sources = _load()
+    attachments = tmp_path / ".codex" / "attachments"
+    attachment = attachments / "opaque-parent" / "detached.json"
+    attachment.parent.mkdir(parents=True)
+    attachment.write_text(json.dumps({"role": "user", "content": "detached prompt"}), encoding="utf-8")
+    lifecycle = sources.load_lifecycle_module()
+    lifecycle.LOCAL_SOURCES = [("codex-attachments", attachments, ("*",))]
+    lifecycle.OPENCODE_DB = tmp_path / "missing-opencode.db"
+    lifecycle.AGY_CLI_CONVERSATIONS = tmp_path / "missing-agy"
+    lifecycle.HOME = tmp_path / "missing-home"
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    key = sources.cursor_unit_key("codex-attachments", attachment)
+    signature = sources.file_signature(attachment)
+    assert signature is not None
+    stale_contract = json.loads(json.dumps(sources.source_adapter_contract()))
+    stale_contract["digest"] = "a" * 64
+    stale_contract["exclusion_ids"] = sorted([*stale_contract["exclusion_ids"], "codex-attachment-v1"])
+    stale_contract["exclusion_sources"]["codex-attachment-v1"] = "codex-attachments"
+    cursor_path = tmp_path / "cursor.json"
+    cursor_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "scanner_version": sources.SCANNER_VERSION,
+                "scope": "partial:all",
+                "target_scope": "all",
+                "all_baseline_complete": False,
+                "source_adapter_contract": stale_contract,
+                "files": {},
+                "unsupported_units": {},
+                "unresolved_units": [],
+                "excluded_unit_receipts": {
+                    key: {
+                        "version": sources.SOURCE_ADAPTER_CONTRACT_VERSION,
+                        "disposition": "excluded",
+                        "contract_id": "codex-attachment-v1",
+                        "contract_digest": stale_contract["digest"],
+                        "signature": signature,
+                        "related_signatures": {},
+                    }
+                },
+                "adapted_unit_receipts": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=cursor_path),
+        days=None,
+        max_files=1,
+    )
+
+    assert events == []
+    assert cursor["replace_files"] is True
+    assert cursor["excluded_unit_receipts"] == {}
+    assert cursor["unsupported_units"][key] == signature
+    assert cursor["scope"] == "partial:all"
+    assert cursor["adapter_gaps"] == ["codex-attachments"]
+    assert sources.validate_source_adapter_cursor(cursor) == []
+
+
 @pytest.mark.parametrize(
     ("relative", "payload", "expected_contract"),
     [
