@@ -62,7 +62,7 @@ fi
 
 j="$(mktemp)"; trap 'rm -f "$j"' EXIT
 gh pr view "$PR" "${repo_args[@]+"${repo_args[@]}"}" \
-  --json number,title,url,state,isDraft,mergeStateStatus,baseRefName,headRefName,files,statusCheckRollup \
+  --json number,title,url,state,isDraft,mergeStateStatus,baseRefName,headRefName,headRefOid,files,statusCheckRollup \
   > "$j" 2>/dev/null || { echo "merge-policy: cannot read PR #$PR (wrong repo?)." >&2; exit 3; }
 
 title=$(jq -r '.title' "$j")
@@ -71,6 +71,7 @@ state=$(jq -r '.state' "$j")
 base=$(jq -r '.baseRefName' "$j")
 mss=$(jq -r '.mergeStateStatus' "$j")
 draft=$(jq -r '.isDraft' "$j")
+head=$(jq -r '.headRefOid // empty' "$j")
 
 # Only an OPEN PR can be merged — guard against a false CLEARED on an already-merged/closed PR.
 if [ "$state" != "OPEN" ]; then
@@ -78,6 +79,19 @@ if [ "$state" != "OPEN" ]; then
   echo "  $url"
   echo "VERDICT: BLOCKED — PR is $state, nothing to merge."
   exit 3
+fi
+
+# Bind the rollup above to one exact PR head. A push racing this predicate invalidates the
+# association between the checks we inspected and the code GitHub would merge; fail closed and let
+# the next invocation inspect the new head. Missing head identity is equally non-authoritative.
+if [ -z "$head" ]; then
+  echo "VERDICT: HOLD — PR head identity is unavailable; cannot associate checks with exact code."
+  exit 2
+fi
+head_now=$(gh pr view "$PR" "${repo_args[@]+"${repo_args[@]}"}" --json headRefOid -q .headRefOid 2>/dev/null || true)
+if [ -z "$head_now" ] || [ "$head_now" != "$head" ]; then
+  echo "VERDICT: HOLD — PR head changed while checks were inspected; re-run on the new exact head."
+  exit 2
 fi
 
 deploy_hits=$(jq -r '.files[].path' "$j" | grep -E "$DEPLOY_RE" || true)
@@ -97,7 +111,7 @@ total_checks=$(jq '[.statusCheckRollup[]?] | length' "$j")
 
 echo "PR #$PR — $title"
 echo "  $url"
-echo "  base=$base  mergeState=$mss  draft=$draft"
+echo "  base=$base  head=${head:0:12}  mergeState=$mss  draft=$draft"
 if [ "$sensitive" = 1 ]; then
   if [ -n "$deploy_hits" ]; then
     echo "  WEBSITE-SENSITIVE — diff touches deploy-trigger paths:"

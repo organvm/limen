@@ -23,6 +23,8 @@ cat > "$stubdir/gh" <<STUB
 #!/usr/bin/env bash
 # fake gh: emit the current fixture for any 'pr view ... --json ...' call.
 case "\$*" in
+  *"pr view"*"--json headRefOid"*"-q .headRefOid"*)
+    if [ -n "\${GH_RECHECK_HEAD:-}" ]; then printf '%s\n' "\$GH_RECHECK_HEAD"; else jq -r .headRefOid "$fixture"; fi ;;
   *"pr view"*"--json"*) cat "$fixture" ;;
   *) exit 1 ;;
 esac
@@ -37,7 +39,7 @@ DOC_FILES='[{"path":"docs/x.md"}]'
 WEB_FILES='[{"path":"web/api/main.py"}]'
 
 mkjson() { # state isDraft mss files rollup
-  printf '{"number":1,"title":"t","url":"http://x","state":"%s","isDraft":%s,"mergeStateStatus":"%s","baseRefName":"main","headRefName":"f","files":%s,"statusCheckRollup":%s}\n' \
+  printf '{"number":1,"title":"t","url":"http://x","state":"%s","isDraft":%s,"mergeStateStatus":"%s","baseRefName":"main","headRefName":"f","headRefOid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","files":%s,"statusCheckRollup":%s}\n' \
     "$1" "$2" "$3" "$4" "$5" > "$fixture"
 }
 
@@ -78,6 +80,14 @@ mkjson OPEN false UNSTABLE "$WEB_FILES" "$PENDING"; check "website-sensitive + p
 mkjson OPEN false CLEAN    "$WEB_FILES" "$NONE";    check "website-sensitive + 0 checks" 2
 mkjson OPEN false UNSTABLE "$DOC_FILES" "$PENDING"; check "non-deploy + pending"        2
 mkjson OPEN false WEIRDNEW "$DOC_FILES" "$GREEN";   check "unrecognized state (fail-safe)" 2
+
+# The check rollup must remain attached to the exact head captured in the first PR snapshot.
+export GH_RECHECK_HEAD=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+mkjson OPEN false CLEAN "$DOC_FILES" "$GREEN"; check "head changed during predicate" 2
+unset GH_RECHECK_HEAD
+mkjson OPEN false CLEAN "$DOC_FILES" "$GREEN"
+jq '.headRefOid = ""' "$fixture" > "$fixture.tmp" && mv "$fixture.tmp" "$fixture"
+check "head identity unavailable" 2
 
 # Resolver unavailable ⇒ website-sensitive (fail toward caution). With a broken python3 the
 # deploy regex cannot derive from the GATES registry, so a docs-only PR with zero checks —

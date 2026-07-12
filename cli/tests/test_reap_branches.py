@@ -99,6 +99,22 @@ def test_ancestor_reported_before_pr_merged():
     assert v.reason == "landed-ancestor"
 
 
+def test_exact_branch_allowlist_never_broadens_scope():
+    selected, missing = reap.exact_branch_allowlist(
+        ["main", "landed-one", "landed-two"],
+        ["landed-two", "missing", "landed-two"],
+    )
+
+    assert selected == ["landed-two"]
+    assert missing == ["missing"]
+
+
+def test_empty_branch_allowlist_preserves_default_scope():
+    branches = ["main", "landed-one", "landed-two"]
+
+    assert reap.exact_branch_allowlist(branches, []) == (branches, [])
+
+
 # ----------------------------------------------------------------- gather_facts() on real repos
 def _git(cwd: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True)
