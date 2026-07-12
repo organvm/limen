@@ -466,10 +466,6 @@ def _hang_asks(entries: list[dict]) -> dict:
                 if "quicken-residue" not in (ex.labels or []):
                     ex.labels = list(ex.labels or []) + ["quicken-residue"]
                     refreshed = True
-                if (ex.predicate, ex.receipt_target) != (contract["predicate"], contract["receipt_target"]):
-                    ex.predicate = contract["predicate"]
-                    ex.receipt_target = contract["receipt_target"]
-                    refreshed = True
                 if refreshed:
                     ex.updated = now
                     changed = True

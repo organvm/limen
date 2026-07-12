@@ -264,10 +264,6 @@ def hang_down_atoms(down_rows: list[dict]) -> dict:
                 if "routine-freshness" not in (ex.labels or []):
                     ex.labels = list(ex.labels or []) + ["routine-freshness"]
                     refreshed = True
-                if (ex.predicate, ex.receipt_target) != (contract["predicate"], contract["receipt_target"]):
-                    ex.predicate = contract["predicate"]
-                    ex.receipt_target = contract["receipt_target"]
-                    refreshed = True
                 if refreshed:
                     ex.updated = now_dt
                     changed = True

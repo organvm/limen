@@ -312,11 +312,6 @@ def _upsert_starved_atom(lane: str, info: dict) -> None:
                 ex.context = ctx
                 ex.updated = now
                 changed = True
-            if (ex.predicate, ex.receipt_target) != (contract["predicate"], contract["receipt_target"]):
-                ex.predicate = contract["predicate"]
-                ex.receipt_target = contract["receipt_target"]
-                ex.updated = now
-                changed = True
             if ex.status != "needs_human":
                 ex.status = "needs_human"
                 ex.updated = now
