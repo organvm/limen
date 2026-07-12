@@ -181,9 +181,10 @@ rung "heal-convergence (no chronic wall)" live python3 "$ROOT/scripts/heal-conve
 
 # 8. overnight-trial — the most recent unattended overnight run met its content-addressed contract.
 #    The producer verifies eight-hour coverage, every 90-minute value/blocker window, a warm handoff,
-#    at least one vendor/session seam, zero prompts, zero alerts, and evaluator/input hashes.
+#    at least one structured session seam, zero operator interventions, zero alerts, and
+#    evaluator/input hashes reconstructed from the exact bounded source receipts.
 if [[ -f "$ROOT/logs/overnight-trial.json" ]]; then
-  rung "overnight-trial (last run passed)" live python3 "$ROOT/scripts/overnight-watch.py" --check-trial
+  rung "overnight-trial (last run passed)" live env LIMEN_ROOT="$ROOT" python3 "$ROOT/scripts/overnight-watch.py" --check-trial
 else
   skip_rung "overnight-trial (last run passed)" live "no logs/overnight-trial.json yet — run one trial"
 fi

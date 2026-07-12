@@ -140,31 +140,65 @@ PY
 
 # ── Case 3: overnight-trial receipt is content-addressed, not a bare pass boolean ────────────────
 cp "$real_watch" "$work/scripts/overnight-watch.py"
-python3 - "$work/scripts/overnight-watch.py" "$work/logs/overnight-trial.json" <<'PY'
+LIMEN_ROOT="$work" python3 - "$work/scripts/overnight-watch.py" <<'PY'
 import datetime as dt
-import hashlib, json, sys
-script, output = sys.argv[1:]
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+script = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("omega_watch_fixture", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
 start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
-window_starts = [0, 90, 180, 270, 360, 390]
-windows = [
-    {"index": i, "start": (start + dt.timedelta(minutes=offset)).isoformat(),
-     "end": (start + dt.timedelta(minutes=offset + 90)).isoformat(),
-     "sample_count": 18, "value_receipts": 1, "owner_blockers": 0, "pass": True}
-    for i, offset in enumerate(window_starts, start=1)
-]
-d = {
-    "schema_version": "overnight-trial.v1", "window_start": "2026-07-01T00:00:00+00:00",
-    "window_end": "2026-07-01T08:00:00+00:00", "duration_seconds": 28800, "hours": 8,
-    "value_window_seconds": 5400, "window_count": 6, "windows": windows, "sample_count": 97,
-    "value_receipts": 6, "owner_blockers": 0, "seam_count": 1, "vendor_seams": 1,
-    "handoff_fresh": True, "operator_prompts": 0, "operator_prompt_samples_complete": True,
-    "watch_alerts": 0, "coverage_ok": True, "duration_ok": True, "windows_ok": True,
-    "evaluator_hash": hashlib.sha256(open(script, "rb").read()).hexdigest(), "input_hash": "0" * 64,
-    "pass": True,
+tasks = []
+for index, minute in enumerate((60, 150, 240, 330, 420), start=1):
+    tasks.append({
+        "id": f"VALUE-{index}", "status": "done", "target_agent": "codex",
+        "predicate": f"python3 check-{index}.py", "receipt_target": f"git:organvm/limen:docs/r-{index}.json",
+        "dispatch_log": [{"timestamp": (start + dt.timedelta(minutes=minute)).isoformat(),
+                          "agent": "codex", "session_id": f"s-{index}", "status": "done",
+                          "output": "verified durable receipt"}],
+    })
+tasks.append({
+    "id": "SEAM-1", "status": "in_progress", "target_agent": "codex",
+    "predicate": "python3 seam.py", "receipt_target": "git:organvm/limen:docs/seam.json",
+    "dispatch_log": [{"timestamp": (start + dt.timedelta(minutes=30)).isoformat(),
+                      "agent": "codex", "session_id": "session-seam", "status": "in_progress",
+                      "output": "execution started"}],
+})
+module.TASKS_PATH.write_text(json.dumps({"version": 1, "tasks": tasks}))
+
+def prompt(at):
+    return {
+        "schema_version": module.TRIAL_PROMPT_AUTHORITY_SCHEMA_VERSION,
+        "captured_at": at.isoformat(timespec="seconds"), "present": True,
+        "validation_ok": True, "exact_all": True, "fresh": True,
+        "last_scan_at": at.isoformat(timespec="seconds"), "age_sec": 0,
+        "operator_occurrences": 7, "snapshot_digest": "1" * 64,
+        "cursor_digest": "2" * 64, "error_count": 0,
+    }
+
+baseline = {"task_events": module.task_event_snapshot(start), "prompt_authority": prompt(start)}
+active = {
+    "schema_version": module.TRIAL_MARKER_SCHEMA_VERSION, "active": True,
+    "started_at": start.isoformat(timespec="seconds"),
+    "window_start": start.isoformat(timespec="seconds"),
+    "window_end": (start + dt.timedelta(hours=8)).isoformat(timespec="seconds"),
+    "evaluator_hash": module.evaluator_hash(), "baseline": baseline,
 }
-d["content_hash"] = hashlib.sha256(json.dumps(d, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-d["generated_at"] = "2026-07-01T08:00:00+00:00"
-json.dump(d, open(output, "w"), indent=2, sort_keys=True)
+active["content_hash"] = module.canonical_hash(active)
+module.TRIAL_WINDOW_PATH.write_text(json.dumps(active))
+rows = []
+for minute in range(0, 481, 5):
+    at = start + dt.timedelta(minutes=minute)
+    rows.append({"timestamp": at.isoformat(timespec="seconds"), "status": "ok", "alerts": [],
+                 "handoff_relay": {"ok": True, "check_returncode": 0},
+                 "task_events": module.task_event_snapshot(at), "prompt_authority": prompt(at)})
+module.RECEIPT_JSONL.write_text("".join(json.dumps(row, sort_keys=True) + "\n" for row in rows))
+result = module.maybe_finalize_trial(now=start + dt.timedelta(hours=8))
+assert result["receipt"]["pass"] is True, result
 PY
 set +e
 LIMEN_ROOT="$work" python3 "$work/scripts/overnight-watch.py" --check-trial >/dev/null 2>&1; rc=$?

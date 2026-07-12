@@ -55,15 +55,26 @@ The active window is recorded in `logs/overnight-trial-window.json`. Finalizatio
 writes `logs/overnight-trial.json`, a counts-only, content-addressed receipt. A
 passing receipt requires:
 
-- full eight-hour sample coverage;
-- durable value or an owner-routed blocker in every 90-minute window;
+- a prospective, single active marker whose evaluator remains unchanged for exactly eight hours;
+- complete sample coverage with no gap over ten minutes;
+- a newly appended typed `done` event or typed owner-blocked event in every 90-minute window;
 - a fresh warm handoff at the end;
-- at least one vendor/session seam;
-- complete zero-operator-prompt instrumentation; and
+- at least one newly appended structured `in_progress` session event;
+- a fresh, validated, exact `all/all` prompt-atom snapshot on every sample, with zero increase in
+  `coverage.operator_occurrences`; and
 - zero watch alerts.
 
 The receipt contains only window/count summaries plus SHA-256 hashes of the
 evaluator and normalized inputs. Re-finalizing the same window is byte-idempotent.
+The checker reconstructs the receipt from the exact bounded watch log and current
+append-only task dispatch history; a self-consistent but fabricated hash is rejected.
+
+Trial start intentionally has no backfill arguments and refuses to replace an active
+marker. Prompt authority is fail-closed: while issue
+[`#957`](https://github.com/organvm/limen/issues/957) remains `partial:all`, or while its
+source cursor cannot prove a fresh exact scan, `--start-trial` fails instead of
+manufacturing a zero-operator receipt.
+
 Verify it with:
 
 ```bash

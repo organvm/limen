@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fcntl
 import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import statistics
 import subprocess
@@ -24,9 +26,16 @@ import time
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 LOGS = ROOT / "logs"
+TASKS_PATH = ROOT / "tasks.yaml"
+PRIVATE_SESSION_CORPUS = Path(
+    os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus")
+)
+PROMPT_ATOM_SNAPSHOT = PRIVATE_SESSION_CORPUS / "prompt-atoms" / "prompt-atom-ledger.json"
 HEARTBEAT_LOG = LOGS / "heartbeat.out.log"
 ASYNC_RUNS = LOGS / "async-runs"
 STATE_PATH = Path(os.environ.get("LIMEN_OVERNIGHT_WATCH_STATE", LOGS / "overnight-watch-state.json"))
@@ -62,9 +71,14 @@ PLIST_DRIFT_KEYS = ("LIMEN_ASYNC_MAX", "LIMEN_DISPATCH_ASYNC", "LIMEN_DISPATCH_L
 VITALS_SKIP_MARKER = "vitals-pressure: dispatch skipped"
 TAIL_BYTES = 192 * 1024
 TRIAL_SCHEMA_VERSION = "overnight-trial.v1"
+TRIAL_MARKER_SCHEMA_VERSION = "overnight-trial-window.v1"
+TRIAL_TASK_EVENT_SCHEMA_VERSION = "overnight-task-events.v1"
+TRIAL_PROMPT_AUTHORITY_SCHEMA_VERSION = "overnight-prompt-authority.v1"
 TRIAL_DURATION_SEC = 8 * 60 * 60
 TRIAL_VALUE_WINDOW_SEC = 90 * 60
 TRIAL_EDGE_TOLERANCE_SEC = 10 * 60
+TRIAL_MAX_SAMPLE_GAP_SEC = 10 * 60
+TRIAL_PROMPT_MAX_AGE_SEC = 10 * 60
 
 EXPECT_DISPATCH_ASYNC = os.environ.get("LIMEN_OVERNIGHT_WATCH_EXPECT_DISPATCH_ASYNC", "")
 EXPECT_DISPATCH_LANES = os.environ.get("LIMEN_OVERNIGHT_WATCH_EXPECT_DISPATCH_LANES", "")
@@ -276,17 +290,6 @@ def evaluator_hash() -> str:
     except OSError:
         return "unavailable"
     return hashlib.sha256(payload).hexdigest()
-
-
-def operator_prompt_snapshot() -> dict[str, Any]:
-    """Count operator prompts emitted by this unattended one-shot producer.
-
-    The watch process has no interactive input path: it either writes a receipt or exits with a
-    machine-readable alert. Recording the invariant on every sample makes old/uninstrumented
-    samples fail closed instead of being interpreted as zero prompts.
-    """
-
-    return {"count": 0, "source": "noninteractive-one-shot"}
 
 
 def token_snapshot() -> dict[str, Any]:
@@ -533,8 +536,9 @@ def build_snapshot(*, refresh_handoff: bool = True, record_gate: bool = True) ->
     launchd = launchd_snapshot()
     children = heartbeat_child_processes(launchd.get("pid"))
 
+    captured_at = utc_now().replace(microsecond=0)
     snapshot: dict[str, Any] = {
-        "timestamp": iso_now(),
+        "timestamp": captured_at.isoformat(timespec="seconds"),
         "root": str(ROOT),
         "log_age_sec": log_age(HEARTBEAT_LOG),
         "heartbeat": heartbeat,
@@ -549,7 +553,8 @@ def build_snapshot(*, refresh_handoff: bool = True, record_gate: bool = True) ->
             "max_stale_ticks": MAX_STALE_TICKS,
         },
         "token_report": token_snapshot(),
-        "operator_prompts": operator_prompt_snapshot(),
+        "task_events": task_event_snapshot(captured_at),
+        "prompt_authority": prompt_authority_snapshot(captured_at),
     }
     snapshot["handoff_relay"] = handoff_relay_snapshot(refresh=refresh_handoff)
     snapshot["value_gate"] = session_value_gate_snapshot(record_gate=record_gate)
@@ -984,22 +989,6 @@ def write_receipts(snapshot: dict[str, Any]) -> None:
     update_alert(snapshot)
 
 
-def load_jsonl(path: Path) -> list[dict[str, Any]]:
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return []
-    records: list[dict[str, Any]] = []
-    for line in lines:
-        try:
-            value = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(value, dict):
-            records.append(value)
-    return records
-
-
 def _record_time(record: dict[str, Any], key: str = "timestamp") -> dt.datetime | None:
     return parse_iso(str(record.get(key) or ""))
 
@@ -1009,60 +998,6 @@ def _bounded_int(value: Any) -> int:
         return max(0, int(value or 0))
     except (TypeError, ValueError):
         return 0
-
-
-def _value_vector(record: dict[str, Any]) -> dict[str, int]:
-    value_gate = record.get("value_gate") if isinstance(record.get("value_gate"), dict) else {}
-    gate = value_gate.get("gate") if isinstance(value_gate.get("gate"), dict) else {}
-    evidence = gate.get("evidence") if isinstance(gate.get("evidence"), dict) else {}
-    pressures = gate.get("pressures") if isinstance(gate.get("pressures"), dict) else {}
-    return {
-        "batch_receipts": _bounded_int(evidence.get("batch_receipts")),
-        "prompt_events_recorded": _bounded_int(evidence.get("prompt_events_recorded")),
-        "done_or_routed_roots": _bounded_int(pressures.get("done_or_routed_roots")),
-        "value_commits": _bounded_int(pressures.get("value_commits")),
-    }
-
-
-def _owner_route_signature(record: dict[str, Any]) -> str:
-    dispatch = record.get("dispatch_control") if isinstance(record.get("dispatch_control"), dict) else {}
-    if dispatch.get("allow_dispatch", True):
-        return ""
-    value_gate = record.get("value_gate") if isinstance(record.get("value_gate"), dict) else {}
-    gate = value_gate.get("gate") if isinstance(value_gate.get("gate"), dict) else {}
-    evidence = gate.get("evidence") if isinstance(gate.get("evidence"), dict) else {}
-    next_action = gate.get("next_action") if isinstance(gate.get("next_action"), dict) else {}
-    command = str(next_action.get("command") or dispatch.get("next_command") or "").strip()
-    owner = str(
-        next_action.get("owner")
-        or next_action.get("repo")
-        or evidence.get("next_product_owner")
-        or evidence.get("owner")
-        or ""
-    ).strip()
-    source = str(next_action.get("source") or "").strip()
-    if not command or not (owner or source):
-        return ""
-    return canonical_hash(
-        {
-            "action": gate.get("action") or value_gate.get("action") or "blocked",
-            "command": command,
-            "owner": owner,
-            "source": source,
-        }
-    )
-
-
-def _latest_at_or_before(
-    records: list[tuple[dt.datetime, dict[str, Any]]],
-    moment: dt.datetime,
-) -> dict[str, Any] | None:
-    latest = None
-    for timestamp, record in records:
-        if timestamp > moment:
-            break
-        latest = record
-    return latest
 
 
 def _trial_windows(start: dt.datetime, end: dt.datetime) -> list[tuple[dt.datetime, dt.datetime]]:
@@ -1078,304 +1013,733 @@ def _trial_windows(start: dt.datetime, end: dt.datetime) -> list[tuple[dt.dateti
     return windows
 
 
-def _trial_seam_count(
-    records: list[tuple[dt.datetime, dict[str, Any]]],
-    start: dt.datetime,
-    end: dt.datetime,
-) -> int:
-    seams: set[str] = set()
-    prior_sessions: int | None = None
-    prior_lanes = ""
-    prior_async = ""
-    for timestamp, record in records:
-        in_window = start < timestamp <= end
-        heartbeat = record.get("heartbeat") if isinstance(record.get("heartbeat"), dict) else {}
-        async_line = heartbeat.get("latest_async") if isinstance(heartbeat.get("latest_async"), dict) else {}
-        async_raw = str(async_line.get("raw") or "")
-        if in_window and _bounded_int(async_line.get("launched")) > 0 and async_raw and async_raw != prior_async:
-            seams.add(canonical_hash({"kind": "launch", "raw_hash": canonical_hash(async_raw)}))
-        if async_raw:
-            prior_async = async_raw
+class TrialContractError(RuntimeError):
+    """The unattended-trial lifecycle cannot advance truthfully."""
 
-        token = record.get("token_report") if isinstance(record.get("token_report"), dict) else {}
-        sessions = token.get("session_count")
+
+def _write_json_atomic(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(value, indent=2, sort_keys=True) + "\n"
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temporary.write_text(payload, encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def _content_hash_valid(value: dict[str, Any]) -> bool:
+    claimed = str(value.get("content_hash") or "")
+    deterministic = {key: item for key, item in value.items() if key != "content_hash"}
+    return bool(re.fullmatch(r"[0-9a-f]{64}", claimed)) and claimed == canonical_hash(deterministic)
+
+
+def _event_digest(event_ids: list[str]) -> str:
+    return canonical_hash(sorted(event_ids))
+
+
+def _task_event_payload(
+    task: dict[str, Any],
+    log: dict[str, Any],
+    *,
+    log_index: int,
+    status: str,
+) -> dict[str, Any]:
+    return {
+        "task_id": str(task.get("id") or ""),
+        "log_index": log_index,
+        "timestamp": str(log.get("timestamp") or ""),
+        "status": status,
+        "agent": str(log.get("agent") or ""),
+        "session_id": str(log.get("session_id") or ""),
+        "predicate_hash": canonical_hash(str(task.get("predicate") or "")),
+        "receipt_target_hash": canonical_hash(str(task.get("receipt_target") or "")),
+        "output_hash": canonical_hash(str(log.get("output") or "")),
+    }
+
+
+def _typed_terminal_event(task: dict[str, Any], log: dict[str, Any]) -> bool:
+    predicate = str(task.get("predicate") or "").strip()
+    receipt_target = str(task.get("receipt_target") or "").strip()
+    cli_src = Path(__file__).resolve().parents[1] / "cli" / "src"
+    if str(cli_src) not in sys.path:
+        sys.path.insert(0, str(cli_src))
+    try:
+        from limen.intake import is_durable_receipt_target, is_executable_predicate
+
+        contract_ok = is_executable_predicate(predicate) and is_durable_receipt_target(receipt_target)
+    except (ImportError, ModuleNotFoundError):
         try:
-            session_count = int(sessions) if sessions is not None else None
-        except (TypeError, ValueError):
-            session_count = None
-        if in_window and prior_sessions is not None and session_count is not None and session_count != prior_sessions:
-            seams.add(canonical_hash({"kind": "session-count", "from": prior_sessions, "to": session_count}))
-        if session_count is not None:
-            prior_sessions = session_count
+            argv = shlex.split(predicate)
+        except ValueError:
+            argv = []
+        predicate_ok = bool(
+            argv
+            and (
+                argv[0] in {"bash", "git", "gh", "python", "python3", "sh"}
+                or "/" in argv[0]
+                or argv[0].endswith((".py", ".sh"))
+            )
+        )
+        github_target = bool(
+            re.fullmatch(r"https://github\.com/[^/]+/[^/]+/(?:issues|pull|actions|commit)/.+", receipt_target)
+        )
+        git_target = re.fullmatch(r"git:[^/:]+/[^:]+:(?P<path>[^\s]+)", receipt_target)
+        git_target_ok = bool(
+            git_target
+            and not git_target.group("path").startswith("/")
+            and all(part not in {"", ".", "..", ".git"} for part in git_target.group("path").split("/"))
+        )
+        contract_ok = predicate_ok and (github_target or git_target_ok)
+    return bool(contract_ok and str(log.get("output") or "").strip())
 
-        lanes = str(heartbeat.get("latest_dispatch_lanes") or "")
-        if in_window and prior_lanes and lanes and lanes != prior_lanes:
-            seams.add(canonical_hash({"kind": "vendor-lanes", "from": prior_lanes, "to": lanes}))
-        if lanes:
-            prior_lanes = lanes
-    return len(seams)
+
+def _load_task_event_ledger(path: Path | None = None) -> dict[str, Any]:
+    source = path or TASKS_PATH
+    streams: dict[str, list[tuple[dt.datetime, str]]] = {
+        "value_done": [],
+        "owner_blocked": [],
+        "session_seams": [],
+    }
+    errors = 0
+    try:
+        board = yaml.safe_load(source.read_text(encoding="utf-8"))
+    except Exception:
+        board = {}
+        errors += 1
+    tasks = board.get("tasks") if isinstance(board, dict) else None
+    if not isinstance(tasks, list):
+        tasks = []
+        errors += 1
+
+    session_events: dict[str, tuple[dt.datetime, str]] = {}
+    for task in tasks:
+        if not isinstance(task, dict):
+            errors += 1
+            continue
+        logs = task.get("dispatch_log") or []
+        if not isinstance(logs, list):
+            errors += 1
+            continue
+        for log_index, log in enumerate(logs):
+            if not isinstance(log, dict):
+                errors += 1
+                continue
+            status = str(log.get("status") or "")
+            if status not in {"done", "failed_blocked", "needs_human", "in_progress"}:
+                continue
+            timestamp = parse_iso(str(log.get("timestamp") or ""))
+            if timestamp is None:
+                errors += 1
+                continue
+            payload = _task_event_payload(task, log, log_index=log_index, status=status)
+            if status == "done" and _typed_terminal_event(task, log):
+                streams["value_done"].append((timestamp, canonical_hash(payload)))
+            elif status in {"failed_blocked", "needs_human"} and _typed_terminal_event(task, log):
+                streams["owner_blocked"].append((timestamp, canonical_hash(payload)))
+            elif status == "in_progress":
+                agent = str(log.get("agent") or "").strip()
+                session_id = str(log.get("session_id") or "").strip()
+                if (
+                    not agent
+                    or not session_id
+                    or session_id.lower()
+                    in {
+                        "heal",
+                        "none",
+                        "null",
+                        "receipt_refresh",
+                        "unknown",
+                    }
+                ):
+                    continue
+                session_key = canonical_hash({"agent": agent, "session_id": session_id})
+                event = (timestamp, canonical_hash(payload))
+                if session_key not in session_events or event < session_events[session_key]:
+                    session_events[session_key] = event
+    streams["session_seams"].extend(session_events.values())
+    for events in streams.values():
+        events.sort(key=lambda item: (item[0], item[1]))
+    return {"ok": errors == 0, "error_count": errors, "streams": streams}
+
+
+def task_event_snapshot(
+    captured_at: dt.datetime,
+    *,
+    ledger: dict[str, Any] | None = None,
+    path: Path | None = None,
+) -> dict[str, Any]:
+    captured_at = captured_at.astimezone(dt.timezone.utc).replace(microsecond=0)
+    source = ledger or _load_task_event_ledger(path)
+    snapshots: dict[str, dict[str, Any]] = {}
+    all_ids: list[str] = []
+    for name in ("value_done", "owner_blocked", "session_seams"):
+        event_ids = [
+            event_id for timestamp, event_id in (source.get("streams") or {}).get(name, []) if timestamp <= captured_at
+        ]
+        all_ids.extend(event_ids)
+        snapshots[name] = {"count": len(event_ids), "digest": _event_digest(event_ids)}
+    return {
+        "schema_version": TRIAL_TASK_EVENT_SCHEMA_VERSION,
+        "captured_at": captured_at.isoformat(timespec="seconds"),
+        "ok": source.get("ok") is True,
+        "error_count": _bounded_int(source.get("error_count")),
+        "source_digest": _event_digest(all_ids),
+        **snapshots,
+    }
+
+
+def _cursor_digest(cursor: dict[str, Any]) -> str:
+    cli_src = Path(__file__).resolve().parents[1] / "cli" / "src"
+    if str(cli_src) not in sys.path:
+        sys.path.insert(0, str(cli_src))
+    try:
+        from limen.prompt_corpus import cursor_digest
+
+        return str(cursor_digest(cursor))
+    except Exception:
+        return ""
+
+
+def _prompt_scope_exact(snapshot: dict[str, Any], cursor: dict[str, Any]) -> bool:
+    scope = snapshot.get("source_scope") if isinstance(snapshot.get("source_scope"), dict) else {}
+    cursor_scope = cursor if isinstance(cursor, dict) else {}
+    families = scope.get("source_families") if isinstance(scope.get("source_families"), dict) else {}
+    families_exact = bool(families) and all(
+        isinstance(item, dict)
+        and _bounded_int(item.get("pending")) == 0
+        and _bounded_int(item.get("errors")) == 0
+        and _bounded_int(item.get("unsupported")) == 0
+        and _bounded_int(item.get("converged")) == _bounded_int(item.get("discovered"))
+        for item in families.values()
+    )
+    cursor_families = (
+        cursor_scope.get("source_families") if isinstance(cursor_scope.get("source_families"), dict) else {}
+    )
+    cursor_families_exact = bool(cursor_families) and all(
+        isinstance(item, dict)
+        and _bounded_int(item.get("pending")) == 0
+        and _bounded_int(item.get("errors")) == 0
+        and _bounded_int(item.get("unsupported")) == 0
+        and _bounded_int(item.get("converged")) == _bounded_int(item.get("discovered"))
+        for item in cursor_families.values()
+    )
+    source_error_count = _bounded_int(scope.get("source_error_count")) + len(scope.get("source_errors") or [])
+    return bool(
+        scope.get("scope") == "all"
+        and scope.get("target_scope") == "all"
+        and scope.get("all_baseline_complete") is True
+        and _bounded_int(scope.get("pending_files")) == 0
+        and source_error_count == 0
+        and _bounded_int(scope.get("unsupported_source_count")) == 0
+        and _bounded_int(scope.get("unresolved_unit_count")) == 0
+        and not (scope.get("adapter_gaps") or [])
+        and families_exact
+        and cursor_scope.get("scope") == "all"
+        and cursor_scope.get("target_scope") == "all"
+        and cursor_scope.get("all_baseline_complete") is True
+        and _bounded_int(cursor_scope.get("pending_files")) == 0
+        and not (cursor_scope.get("source_errors") or [])
+        and not (cursor_scope.get("adapter_gaps") or [])
+        and cursor_families_exact
+    )
+
+
+def prompt_authority_snapshot(
+    captured_at: dt.datetime,
+    *,
+    path: Path | None = None,
+) -> dict[str, Any]:
+    captured_at = captured_at.astimezone(dt.timezone.utc).replace(microsecond=0)
+    source = path or PROMPT_ATOM_SNAPSHOT
+    cursor_path = source.parent / "source-cursor.json"
+    snapshot = load_json(source)
+    cursor = load_json(cursor_path)
+    errors = 0
+    if not snapshot:
+        errors += 1
+    if not cursor:
+        errors += 1
+    coverage = snapshot.get("coverage") if isinstance(snapshot.get("coverage"), dict) else {}
+    operator_value = coverage.get("operator_occurrences")
+    operator_valid = isinstance(operator_value, int) and not isinstance(operator_value, bool) and operator_value >= 0
+    if not operator_valid:
+        errors += 1
+    validation_ok = bool((snapshot.get("validation") or {}).get("ok"))
+    exact = validation_ok and _prompt_scope_exact(snapshot, cursor)
+    expected_cursor_digest = str(snapshot.get("source_cursor_digest") or "")
+    actual_cursor_digest = _cursor_digest(cursor) if cursor else ""
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_cursor_digest) or expected_cursor_digest != actual_cursor_digest:
+        errors += 1
+        exact = False
+    cursor_signature = (snapshot.get("journal_signatures") or {}).get("cursor") or {}
+    try:
+        stat = cursor_path.stat()
+        signature_ok = (
+            _bounded_int(cursor_signature.get("size")) == stat.st_size
+            and _bounded_int(cursor_signature.get("mtime_ns")) == stat.st_mtime_ns
+        )
+    except OSError:
+        signature_ok = False
+    if not signature_ok:
+        errors += 1
+        exact = False
+    last_scan_at = parse_iso(str(cursor.get("last_scan_at") or ""))
+    age_sec: int | None = None
+    fresh = False
+    if last_scan_at:
+        age_sec = int((captured_at - last_scan_at).total_seconds())
+        fresh = -TRIAL_EDGE_TOLERANCE_SEC <= age_sec <= TRIAL_PROMPT_MAX_AGE_SEC
+    else:
+        errors += 1
+    return {
+        "schema_version": TRIAL_PROMPT_AUTHORITY_SCHEMA_VERSION,
+        "captured_at": captured_at.isoformat(timespec="seconds"),
+        "present": bool(snapshot and cursor),
+        "validation_ok": validation_ok,
+        "exact_all": exact,
+        "fresh": fresh,
+        "last_scan_at": last_scan_at.isoformat(timespec="seconds") if last_scan_at else None,
+        "age_sec": age_sec,
+        "operator_occurrences": int(operator_value) if operator_valid else 0,
+        "snapshot_digest": canonical_hash(snapshot) if snapshot else "",
+        "cursor_digest": actual_cursor_digest,
+        "error_count": errors,
+    }
+
+
+def _task_snapshot_errors(value: Any, captured_at: dt.datetime | None = None) -> list[str]:
+    if not isinstance(value, dict):
+        return ["task event snapshot is missing"]
+    errors: list[str] = []
+    if value.get("schema_version") != TRIAL_TASK_EVENT_SCHEMA_VERSION:
+        errors.append("task event schema mismatch")
+    if value.get("ok") is not True or _bounded_int(value.get("error_count")) != 0:
+        errors.append("task event source is not valid")
+    actual_time = parse_iso(str(value.get("captured_at") or ""))
+    if captured_at and actual_time != captured_at:
+        errors.append("task event capture time mismatch")
+    for key in ("source_digest",):
+        if not re.fullmatch(r"[0-9a-f]{64}", str(value.get(key) or "")):
+            errors.append(f"{key} is not sha256")
+    for name in ("value_done", "owner_blocked", "session_seams"):
+        stream = value.get(name) if isinstance(value.get(name), dict) else {}
+        if not isinstance(stream.get("count"), int) or _bounded_int(stream.get("count")) != stream.get("count"):
+            errors.append(f"{name} count is invalid")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(stream.get("digest") or "")):
+            errors.append(f"{name} digest is not sha256")
+    return errors
+
+
+def _prompt_snapshot_errors(value: Any, captured_at: dt.datetime | None = None) -> list[str]:
+    if not isinstance(value, dict):
+        return ["prompt authority snapshot is missing"]
+    errors: list[str] = []
+    if value.get("schema_version") != TRIAL_PROMPT_AUTHORITY_SCHEMA_VERSION:
+        errors.append("prompt authority schema mismatch")
+    actual_time = parse_iso(str(value.get("captured_at") or ""))
+    if captured_at and actual_time != captured_at:
+        errors.append("prompt authority capture time mismatch")
+    if not all(value.get(key) is True for key in ("present", "validation_ok", "exact_all", "fresh")):
+        errors.append("prompt authority is not fresh exact all/all")
+    if _bounded_int(value.get("error_count")) != 0:
+        errors.append("prompt authority has source errors")
+    if not isinstance(value.get("operator_occurrences"), int) or value.get("operator_occurrences", -1) < 0:
+        errors.append("operator occurrence count is invalid")
+    for key in ("snapshot_digest", "cursor_digest"):
+        if not re.fullmatch(r"[0-9a-f]{64}", str(value.get(key) or "")):
+            errors.append(f"prompt {key} is not sha256")
+    return errors
+
+
+def _active_marker_errors(marker: Any) -> list[str]:
+    if not isinstance(marker, dict):
+        return ["active trial marker is missing"]
+    errors: list[str] = []
+    if marker.get("schema_version") != TRIAL_MARKER_SCHEMA_VERSION:
+        errors.append("trial marker schema mismatch")
+    if marker.get("active") is not True:
+        errors.append("trial marker is not active")
+    if not _content_hash_valid(marker):
+        errors.append("trial marker content hash mismatch")
+    start = parse_iso(str(marker.get("window_start") or ""))
+    end = parse_iso(str(marker.get("window_end") or ""))
+    started_at = parse_iso(str(marker.get("started_at") or ""))
+    if not start or not end or started_at != start:
+        errors.append("trial marker timestamps are invalid")
+    elif int((end - start).total_seconds()) != TRIAL_DURATION_SEC:
+        errors.append("trial marker is not exactly eight hours")
+    if marker.get("evaluator_hash") != evaluator_hash():
+        errors.append("trial marker evaluator changed during the window")
+    baseline = marker.get("baseline") if isinstance(marker.get("baseline"), dict) else {}
+    errors.extend(_task_snapshot_errors(baseline.get("task_events"), start))
+    errors.extend(_prompt_snapshot_errors(baseline.get("prompt_authority"), start))
+    return errors
+
+
+def _terminal_marker_errors(marker: Any, receipt: dict[str, Any]) -> list[str]:
+    if not isinstance(marker, dict):
+        return ["terminal trial marker is missing"]
+    errors: list[str] = []
+    if marker.get("schema_version") != TRIAL_MARKER_SCHEMA_VERSION or marker.get("active") is not False:
+        errors.append("terminal trial marker schema/state mismatch")
+    if not _content_hash_valid(marker):
+        errors.append("terminal trial marker content hash mismatch")
+    active_marker = marker.get("active_marker") if isinstance(marker.get("active_marker"), dict) else {}
+    errors.extend(_active_marker_errors(active_marker))
+    if marker.get("trial_id") != active_marker.get("content_hash"):
+        errors.append("terminal marker trial id mismatch")
+    if marker.get("receipt_content_hash") != receipt.get("content_hash"):
+        errors.append("terminal marker receipt content hash mismatch")
+    if marker.get("receipt_input_hash") != receipt.get("input_hash"):
+        errors.append("terminal marker receipt input hash mismatch")
+    if marker.get("receipt_pass") is not receipt.get("pass"):
+        errors.append("terminal marker receipt verdict mismatch")
+    return errors
+
+
+def start_trial(
+    now: dt.datetime | None = None,
+    path: Path | None = None,
+) -> tuple[dict[str, Any], bool]:
+    marker_path = path or TRIAL_WINDOW_PATH
+    reference = (now or utc_now()).astimezone(dt.timezone.utc).replace(microsecond=0)
+    lock_path = marker_path.with_suffix(marker_path.suffix + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        existing = load_json(marker_path)
+        if existing.get("active") is True:
+            raise TrialContractError("an unattended trial is already active")
+        task_events = task_event_snapshot(reference)
+        prompt_authority = prompt_authority_snapshot(reference)
+        baseline_errors = [
+            *_task_snapshot_errors(task_events, reference),
+            *_prompt_snapshot_errors(prompt_authority, reference),
+        ]
+        if baseline_errors:
+            raise TrialContractError("trial baseline is not authoritative: " + "; ".join(sorted(set(baseline_errors))))
+        marker: dict[str, Any] = {
+            "schema_version": TRIAL_MARKER_SCHEMA_VERSION,
+            "active": True,
+            "started_at": reference.isoformat(timespec="seconds"),
+            "window_start": reference.isoformat(timespec="seconds"),
+            "window_end": (reference + dt.timedelta(seconds=TRIAL_DURATION_SEC)).isoformat(timespec="seconds"),
+            "evaluator_hash": evaluator_hash(),
+            "baseline": {"task_events": task_events, "prompt_authority": prompt_authority},
+        }
+        marker["content_hash"] = canonical_hash(marker)
+        _write_json_atomic(marker_path, marker)
+        return marker, True
+
+
+def _strict_jsonl(path: Path) -> tuple[list[dict[str, Any]], int]:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="strict").splitlines()
+    except (OSError, UnicodeError):
+        return [], 1
+    records: list[dict[str, Any]] = []
+    errors = 0
+    for line in lines:
+        try:
+            value = json.loads(line)
+        except ValueError:
+            errors += 1
+            continue
+        if not isinstance(value, dict):
+            errors += 1
+            continue
+        records.append(value)
+    return records, errors
+
+
+def _sample_errors(record: dict[str, Any], timestamp: dt.datetime, expected_task: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    status = record.get("status")
+    if status not in {"ok", "blocked"}:
+        errors.append("sample status is not non-alert terminal state")
+    alerts = record.get("alerts")
+    if not isinstance(alerts, list):
+        errors.append("sample alert instrumentation is missing")
+    handoff = record.get("handoff_relay") if isinstance(record.get("handoff_relay"), dict) else {}
+    if not isinstance(handoff.get("ok"), bool) or not isinstance(handoff.get("check_returncode"), int):
+        errors.append("sample handoff instrumentation is incomplete")
+    errors.extend(_task_snapshot_errors(record.get("task_events"), timestamp))
+    if record.get("task_events") != expected_task:
+        errors.append("task event snapshot does not match append-only dispatch log")
+    errors.extend(_prompt_snapshot_errors(record.get("prompt_authority"), timestamp))
+    return errors
+
+
+def _stream_count(snapshot: dict[str, Any], name: str) -> int:
+    stream = snapshot.get(name) if isinstance(snapshot.get(name), dict) else {}
+    return _bounded_int(stream.get("count"))
+
+
+def _normalized_sample(timestamp: dt.datetime, record: dict[str, Any]) -> dict[str, Any]:
+    alerts = record.get("alerts") if isinstance(record.get("alerts"), list) else []
+    return {
+        "timestamp": timestamp.isoformat(timespec="seconds"),
+        "status": record.get("status"),
+        "alert_count": len(alerts),
+        "handoff_ok": bool((record.get("handoff_relay") or {}).get("ok")),
+        "handoff_check_returncode": (record.get("handoff_relay") or {}).get("check_returncode"),
+        "task_events": record.get("task_events"),
+        "prompt_authority": record.get("prompt_authority"),
+    }
 
 
 def build_trial_receipt(
-    start: dt.datetime,
-    end: dt.datetime,
+    active_marker: dict[str, Any],
     *,
-    watch_path: Path = RECEIPT_JSONL,
-    ticks_path: Path = TICKS_PATH,
+    watch_path: Path | None = None,
+    tasks_path: Path | None = None,
 ) -> dict[str, Any]:
-    start = start.astimezone(dt.timezone.utc)
-    end = end.astimezone(dt.timezone.utc)
-    pad = dt.timedelta(seconds=TRIAL_EDGE_TOLERANCE_SEC)
+    marker_errors = _active_marker_errors(active_marker)
+    start = parse_iso(str(active_marker.get("window_start") or ""))
+    end = parse_iso(str(active_marker.get("window_end") or ""))
+    if not start or not end:
+        raise TrialContractError("trial marker timestamps are invalid")
+    watch_source = watch_path or RECEIPT_JSONL
+    raw_records, parse_errors = _strict_jsonl(watch_source)
+    task_ledger = _load_task_event_ledger(tasks_path)
 
-    watch_records: list[tuple[dt.datetime, dict[str, Any]]] = []
-    for record in load_jsonl(watch_path):
+    bounded: list[tuple[dt.datetime, dict[str, Any]]] = []
+    for record in raw_records:
         timestamp = _record_time(record)
-        if timestamp and start - pad <= timestamp <= end:
-            watch_records.append((timestamp, record))
-    watch_records.sort(key=lambda item: item[0])
-    in_window = [(timestamp, record) for timestamp, record in watch_records if start <= timestamp <= end]
+        if timestamp and start <= timestamp <= end + dt.timedelta(seconds=TRIAL_EDGE_TOLERANCE_SEC):
+            bounded.append((timestamp, record))
+    bounded.sort(key=lambda item: item[0])
 
-    tick_records: list[tuple[dt.datetime, dict[str, Any]]] = []
-    for record in load_jsonl(ticks_path):
-        timestamp = _record_time(record, "ts")
-        if timestamp and start - pad <= timestamp <= end:
-            tick_records.append((timestamp, record))
-    tick_records.sort(key=lambda item: item[0])
+    sample_error_count = 0
+    normalized_samples: list[dict[str, Any]] = []
+    for timestamp, record in bounded:
+        expected_task = task_event_snapshot(timestamp, ledger=task_ledger)
+        sample_error_count += len(_sample_errors(record, timestamp, expected_task))
+        normalized_samples.append(_normalized_sample(timestamp, record))
+
+    sample_times = [timestamp for timestamp, _ in bounded]
+    gap_points = sorted([start, *sample_times, end])
+    max_gap_seconds = (
+        max(max(0, int((later - earlier).total_seconds())) for earlier, later in zip(gap_points, gap_points[1:]))
+        if len(gap_points) >= 2
+        else TRIAL_DURATION_SEC
+    )
+    boundary_sample_ok = bool(
+        sample_times and end <= sample_times[-1] <= end + dt.timedelta(seconds=TRIAL_MAX_SAMPLE_GAP_SEC)
+    )
+    coverage_ok = bool(
+        sample_times
+        and sample_times[0] <= start + dt.timedelta(seconds=TRIAL_MAX_SAMPLE_GAP_SEC)
+        and boundary_sample_ok
+        and max_gap_seconds <= TRIAL_MAX_SAMPLE_GAP_SEC
+    )
+    alert_count = sum(
+        len(record.get("alerts")) if isinstance(record.get("alerts"), list) else 1 for _, record in bounded
+    )
+    alert_status_without_entries = sum(
+        1
+        for _, record in bounded
+        if record.get("status") == "alert"
+        and (not isinstance(record.get("alerts"), list) or len(record.get("alerts") or []) == 0)
+    )
+    sample_schema_complete = sample_error_count == 0
+
+    baseline = active_marker.get("baseline") if isinstance(active_marker.get("baseline"), dict) else {}
+    baseline_tasks = baseline.get("task_events") if isinstance(baseline.get("task_events"), dict) else {}
+    expected_baseline_tasks = task_event_snapshot(start, ledger=task_ledger)
+    if baseline_tasks != expected_baseline_tasks:
+        marker_errors.append("task baseline no longer matches append-only dispatch log")
 
     windows: list[dict[str, Any]] = []
-    total_value_receipts = 0
-    total_owner_blockers = 0
     for index, (window_start, window_end) in enumerate(_trial_windows(start, end), start=1):
-        baseline_watch = _latest_at_or_before(watch_records, window_start)
-        final_watch = _latest_at_or_before(watch_records, window_end)
-        baseline_tick = _latest_at_or_before(tick_records, window_start)
-        final_tick = _latest_at_or_before(tick_records, window_end)
-
-        value_receipts = 0
-        if baseline_watch is not None and final_watch is not None:
-            before = _value_vector(baseline_watch)
-            after = _value_vector(final_watch)
-            value_receipts += sum(max(0, after[key] - before[key]) for key in before)
-        if baseline_tick is not None and final_tick is not None:
-            before_completed = _bounded_int(baseline_tick.get("done")) + _bounded_int(baseline_tick.get("archived"))
-            after_completed = _bounded_int(final_tick.get("done")) + _bounded_int(final_tick.get("archived"))
-            value_receipts += max(0, after_completed - before_completed)
-
-        window_records = [record for timestamp, record in in_window if window_start < timestamp <= window_end]
-        owner_blockers = len({signature for record in window_records if (signature := _owner_route_signature(record))})
-        sample_count = len(window_records)
-        passed = sample_count > 0 and (value_receipts > 0 or owner_blockers > 0)
+        before = task_event_snapshot(window_start, ledger=task_ledger)
+        after = task_event_snapshot(window_end, ledger=task_ledger)
+        value_done_events = _stream_count(after, "value_done") - _stream_count(before, "value_done")
+        owner_blocked_events = _stream_count(after, "owner_blocked") - _stream_count(before, "owner_blocked")
         windows.append(
             {
                 "index": index,
                 "start": window_start.isoformat(timespec="seconds"),
                 "end": window_end.isoformat(timespec="seconds"),
-                "sample_count": sample_count,
-                "value_receipts": value_receipts,
-                "owner_blockers": owner_blockers,
-                "pass": passed,
+                "value_done_events": max(0, value_done_events),
+                "owner_blocked_events": max(0, owner_blocked_events),
+                "pass": value_done_events > 0 or owner_blocked_events > 0,
             }
         )
-        total_value_receipts += value_receipts
-        total_owner_blockers += owner_blockers
 
-    sample_records = [record for _, record in in_window]
-    first_sample = in_window[0][0] if in_window else None
-    last_sample = in_window[-1][0] if in_window else None
-    coverage_ok = bool(first_sample and last_sample and first_sample <= start + pad and last_sample >= end - pad)
-    prompt_samples_complete = bool(sample_records) and all(
-        isinstance(record.get("operator_prompts"), dict)
-        and record["operator_prompts"].get("source") == "noninteractive-one-shot"
-        for record in sample_records
+    end_tasks = task_event_snapshot(end, ledger=task_ledger)
+    value_done_events = _stream_count(end_tasks, "value_done") - _stream_count(baseline_tasks, "value_done")
+    owner_blocked_events = _stream_count(end_tasks, "owner_blocked") - _stream_count(baseline_tasks, "owner_blocked")
+    seam_count = _stream_count(end_tasks, "session_seams") - _stream_count(baseline_tasks, "session_seams")
+    task_monotonic = all(value >= 0 for value in (value_done_events, owner_blocked_events, seam_count))
+
+    prompt_snapshots = [baseline.get("prompt_authority"), *(record.get("prompt_authority") for _, record in bounded)]
+    prompt_counts = [
+        _bounded_int(item.get("operator_occurrences")) for item in prompt_snapshots if isinstance(item, dict)
+    ]
+    prompt_monotonic = len(prompt_counts) == len(prompt_snapshots) and all(
+        later >= earlier for earlier, later in zip(prompt_counts, prompt_counts[1:])
     )
-    operator_prompts = sum(
-        _bounded_int((record.get("operator_prompts") or {}).get("count"))
-        for record in sample_records
-        if isinstance(record.get("operator_prompts"), dict)
+    operator_interventions = prompt_counts[-1] - prompt_counts[0] if prompt_counts and prompt_monotonic else 0
+    prompt_authority_ok = bool(
+        prompt_snapshots and all(not _prompt_snapshot_errors(item) for item in prompt_snapshots) and prompt_monotonic
     )
-    watch_alerts = sum(len(record.get("alerts") or []) for record in sample_records)
-    handoff_fresh = bool(sample_records and (sample_records[-1].get("handoff_relay") or {}).get("ok"))
-    seam_count = _trial_seam_count(watch_records, start, end)
-    duration_seconds = max(0, int((end - start).total_seconds()))
-    duration_ok = duration_seconds >= TRIAL_DURATION_SEC
+
+    terminal_record = bounded[-1][1] if bounded else {}
+    terminal_handoff = (
+        terminal_record.get("handoff_relay") if isinstance(terminal_record.get("handoff_relay"), dict) else {}
+    )
+    handoff_fresh = bool(terminal_handoff.get("ok") and terminal_handoff.get("check_returncode") == 0)
+    duration_seconds = int((end - start).total_seconds())
+    duration_ok = duration_seconds == TRIAL_DURATION_SEC
     windows_ok = bool(windows) and all(window["pass"] for window in windows)
 
     normalized_input = {
-        "start": start.isoformat(timespec="seconds"),
-        "end": end.isoformat(timespec="seconds"),
-        "watch": [
-            {
-                "timestamp": timestamp.isoformat(timespec="seconds"),
-                "status": record.get("status"),
-                "alerts": sorted(str(alert.get("id") or "") for alert in (record.get("alerts") or [])),
-                "handoff_fresh": bool((record.get("handoff_relay") or {}).get("ok")),
-                "operator_prompts": (record.get("operator_prompts") or {}).get("count"),
-                "operator_source": (record.get("operator_prompts") or {}).get("source"),
-                "value": _value_vector(record),
-                "owner_route_hash": _owner_route_signature(record),
-                "async_hash": canonical_hash((record.get("heartbeat") or {}).get("latest_async") or {}),
-                "session_count": (record.get("token_report") or {}).get("session_count"),
-                "lanes_hash": canonical_hash((record.get("heartbeat") or {}).get("latest_dispatch_lanes") or ""),
-            }
-            for timestamp, record in watch_records
-        ],
-        "ticks": [
-            {
-                "timestamp": timestamp.isoformat(timespec="seconds"),
-                "done": _bounded_int(record.get("done")),
-                "archived": _bounded_int(record.get("archived")),
-            }
-            for timestamp, record in tick_records
-        ],
+        "trial_id": active_marker.get("content_hash"),
+        "baseline": baseline,
+        "watch_source": normalized_samples,
+        "watch_source_parse_errors": parse_errors,
+        "task_window_end": end_tasks,
+        "task_windows": windows,
     }
     receipt: dict[str, Any] = {
         "schema_version": TRIAL_SCHEMA_VERSION,
+        "trial_id": active_marker.get("content_hash"),
         "window_start": start.isoformat(timespec="seconds"),
         "window_end": end.isoformat(timespec="seconds"),
         "duration_seconds": duration_seconds,
-        "hours": round(duration_seconds / 3600, 3),
+        "hours": 8,
         "value_window_seconds": TRIAL_VALUE_WINDOW_SEC,
         "window_count": len(windows),
         "windows": windows,
-        "sample_count": len(sample_records),
-        "value_receipts": total_value_receipts,
-        "owner_blockers": total_owner_blockers,
-        "seam_count": seam_count,
-        "vendor_seams": seam_count,
+        "sample_count": len(bounded),
+        "max_sample_gap_seconds": max_gap_seconds,
+        "sample_schema_complete": sample_schema_complete,
+        "source_parse_errors": parse_errors,
+        "value_done_events": max(0, value_done_events),
+        "owner_blocked_events": max(0, owner_blocked_events),
+        "seam_count": max(0, seam_count),
         "handoff_fresh": handoff_fresh,
-        "operator_prompts": operator_prompts,
-        "operator_prompt_samples_complete": prompt_samples_complete,
-        "watch_alerts": watch_alerts,
+        "operator_interventions": max(0, operator_interventions),
+        "prompt_authority_exact": prompt_authority_ok,
+        "watch_alerts": alert_count + alert_status_without_entries,
         "coverage_ok": coverage_ok,
         "duration_ok": duration_ok,
         "windows_ok": windows_ok,
+        "task_events_monotonic": task_monotonic,
         "evaluator_hash": evaluator_hash(),
         "input_hash": canonical_hash(normalized_input),
     }
     receipt["pass"] = bool(
-        duration_ok
+        not marker_errors
+        and parse_errors == 0
+        and duration_ok
         and coverage_ok
+        and sample_schema_complete
         and windows_ok
+        and task_monotonic
+        and seam_count > 0
+        and prompt_authority_ok
+        and operator_interventions == 0
         and handoff_fresh
-        and seam_count >= 1
-        and prompt_samples_complete
-        and operator_prompts == 0
-        and watch_alerts == 0
+        and receipt["watch_alerts"] == 0
     )
     return receipt
 
 
-def write_trial_receipt(receipt: dict[str, Any], path: Path = TRIAL_PATH) -> tuple[dict[str, Any], bool]:
-    deterministic = dict(receipt)
-    deterministic.pop("generated_at", None)
-    deterministic.pop("content_hash", None)
+def write_trial_receipt(receipt: dict[str, Any], path: Path | None = None) -> tuple[dict[str, Any], bool]:
+    output = path or TRIAL_PATH
+    deterministic = {key: value for key, value in receipt.items() if key not in {"generated_at", "content_hash"}}
     content_hash = canonical_hash(deterministic)
-    existing = load_json(path)
-    if existing.get("content_hash") == content_hash:
+    existing = load_json(output)
+    existing_deterministic = {
+        key: value for key, value in existing.items() if key not in {"generated_at", "content_hash"}
+    }
+    if (
+        existing.get("content_hash") == content_hash
+        and existing_deterministic == deterministic
+        and parse_iso(str(existing.get("generated_at") or "")) is not None
+    ):
         return existing, False
     payload = {**deterministic, "generated_at": iso_now(), "content_hash": content_hash}
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _write_json_atomic(output, payload)
     return payload, True
 
 
-def start_trial(start: dt.datetime | None = None, path: Path = TRIAL_WINDOW_PATH) -> tuple[dict[str, Any], bool]:
-    start = (start or utc_now()).astimezone(dt.timezone.utc).replace(microsecond=0)
-    end = start + dt.timedelta(seconds=TRIAL_DURATION_SEC)
-    marker = {
-        "schema_version": TRIAL_SCHEMA_VERSION,
-        "active": True,
-        "window_start": start.isoformat(timespec="seconds"),
-        "window_end": end.isoformat(timespec="seconds"),
-        "evaluator_hash": evaluator_hash(),
-    }
-    marker["content_hash"] = canonical_hash(marker)
-    existing = load_json(path)
-    if existing.get("content_hash") == marker["content_hash"]:
-        return existing, False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(marker, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return marker, True
-
-
 def finalize_trial(
-    start: dt.datetime,
-    end: dt.datetime,
+    active_marker: dict[str, Any],
     *,
-    output: Path = TRIAL_PATH,
-    watch_path: Path = RECEIPT_JSONL,
-    ticks_path: Path = TICKS_PATH,
+    output: Path | None = None,
+    watch_path: Path | None = None,
+    tasks_path: Path | None = None,
 ) -> tuple[dict[str, Any], bool]:
-    receipt = build_trial_receipt(start, end, watch_path=watch_path, ticks_path=ticks_path)
+    errors = _active_marker_errors(active_marker)
+    if errors:
+        raise TrialContractError("invalid active marker: " + "; ".join(sorted(set(errors))))
+    receipt = build_trial_receipt(active_marker, watch_path=watch_path, tasks_path=tasks_path)
     return write_trial_receipt(receipt, output)
 
 
 def maybe_finalize_trial(now: dt.datetime | None = None) -> dict[str, Any] | None:
-    marker = load_json(TRIAL_WINDOW_PATH)
-    if not marker.get("active"):
-        return None
-    start = parse_iso(str(marker.get("window_start") or ""))
-    end = parse_iso(str(marker.get("window_end") or ""))
-    if not start or not end or (now or utc_now()).astimezone(dt.timezone.utc) < end:
-        return None
-    receipt, changed = finalize_trial(start, end)
-    completed = {
-        **marker,
-        "active": False,
-        "finalized_at": receipt.get("generated_at"),
-        "receipt_content_hash": receipt.get("content_hash"),
-        "receipt_pass": receipt.get("pass"),
-    }
-    completed["content_hash"] = canonical_hash(
-        {key: value for key, value in completed.items() if key != "content_hash"}
-    )
-    TRIAL_WINDOW_PATH.write_text(json.dumps(completed, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return {"receipt": receipt, "changed": changed}
+    marker_path = TRIAL_WINDOW_PATH
+    lock_path = marker_path.with_suffix(marker_path.suffix + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        marker = load_json(marker_path)
+        if not marker.get("active"):
+            return None
+        errors = _active_marker_errors(marker)
+        if errors:
+            return {"error": "; ".join(sorted(set(errors)))}
+        end = parse_iso(str(marker.get("window_end") or ""))
+        reference = (now or utc_now()).astimezone(dt.timezone.utc)
+        if not end or reference < end:
+            return {"pending": True, "window_end": marker.get("window_end")}
+        receipt, changed = finalize_trial(marker)
+        completed: dict[str, Any] = {
+            "schema_version": TRIAL_MARKER_SCHEMA_VERSION,
+            "active": False,
+            "trial_id": marker.get("content_hash"),
+            "active_marker": marker,
+            "finalized_at": receipt.get("generated_at"),
+            "receipt_content_hash": receipt.get("content_hash"),
+            "receipt_input_hash": receipt.get("input_hash"),
+            "receipt_pass": receipt.get("pass"),
+        }
+        completed["content_hash"] = canonical_hash(completed)
+        _write_json_atomic(marker_path, completed)
+        return {"receipt": receipt, "changed": changed}
 
 
 def check_trial_receipt(
-    path: Path = TRIAL_PATH,
-    marker_path: Path = TRIAL_WINDOW_PATH,
+    path: Path | None = None,
+    marker_path: Path | None = None,
 ) -> tuple[bool, list[str]]:
-    receipt = load_json(path)
-    errors: list[str] = []
-    marker = load_json(marker_path)
-    if marker.get("active"):
-        errors.append("trial window is still active")
+    output = path or TRIAL_PATH
+    terminal_path = marker_path or TRIAL_WINDOW_PATH
+    receipt = load_json(output)
+    marker = load_json(terminal_path)
+    errors = _terminal_marker_errors(marker, receipt)
+    active_marker = marker.get("active_marker") if isinstance(marker.get("active_marker"), dict) else {}
     if receipt.get("schema_version") != TRIAL_SCHEMA_VERSION:
-        errors.append("schema_version mismatch")
-    if not receipt.get("pass"):
+        errors.append("trial receipt schema mismatch")
+    if receipt.get("pass") is not True:
         errors.append("trial receipt is not passing")
-    if _bounded_int(receipt.get("duration_seconds")) < TRIAL_DURATION_SEC:
-        errors.append("duration is under eight hours")
-    if _bounded_int(receipt.get("value_window_seconds")) != TRIAL_VALUE_WINDOW_SEC:
-        errors.append("value-window contract mismatch")
-    windows = receipt.get("windows") if isinstance(receipt.get("windows"), list) else []
-    if not windows or _bounded_int(receipt.get("window_count")) != len(windows):
-        errors.append("window count is missing or inconsistent")
-    elif not all(isinstance(window, dict) and window.get("pass") for window in windows):
-        errors.append("one or more value windows failed")
-    if not receipt.get("coverage_ok") or not receipt.get("duration_ok") or not receipt.get("windows_ok"):
-        errors.append("coverage/duration/value-window gate failed")
-    if not receipt.get("handoff_fresh"):
-        errors.append("warm handoff is missing")
-    if _bounded_int(receipt.get("seam_count")) < 1:
-        errors.append("no vendor/session seam observed")
-    if not receipt.get("operator_prompt_samples_complete") or _bounded_int(receipt.get("operator_prompts")) != 0:
-        errors.append("operator-prompt proof is incomplete or nonzero")
-    if _bounded_int(receipt.get("watch_alerts")) != 0:
-        errors.append("watch alerts were observed")
-    for key in ("evaluator_hash", "input_hash", "content_hash"):
-        if not re.fullmatch(r"[0-9a-f]{64}", str(receipt.get(key) or "")):
-            errors.append(f"{key} is not sha256")
+    generated_at = parse_iso(str(receipt.get("generated_at") or ""))
+    if generated_at is None:
+        errors.append("trial receipt generation time is invalid")
+    deterministic = {key: value for key, value in receipt.items() if key not in {"generated_at", "content_hash"}}
+    if receipt.get("content_hash") != canonical_hash(deterministic):
+        errors.append("trial receipt content hash mismatch")
+    try:
+        expected = build_trial_receipt(active_marker)
+    except TrialContractError as exc:
+        errors.append(str(exc))
+        expected = {}
+    if deterministic != expected:
+        errors.append("trial receipt does not match exact bounded source reconstruction")
     if receipt.get("evaluator_hash") != evaluator_hash():
-        errors.append("evaluator hash does not match current overnight-watch.py")
-    deterministic = dict(receipt)
-    deterministic.pop("generated_at", None)
-    claimed_content_hash = deterministic.pop("content_hash", None)
-    if claimed_content_hash != canonical_hash(deterministic):
-        errors.append("content hash mismatch")
-    return not errors, errors
+        errors.append("trial receipt evaluator hash mismatch")
+    return not errors, sorted(set(errors))
 
 
 def print_summary(snapshot: dict[str, Any]) -> None:
@@ -1411,13 +1775,18 @@ def run_once(*, dry_run: bool, json_output: bool) -> int:
             snapshot["heal"] = heal_actions
         write_receipts(snapshot)
         trial_finalization = maybe_finalize_trial()
-        if trial_finalization:
+        if trial_finalization and not trial_finalization.get("pending"):
             snapshot["trial_finalization"] = trial_finalization
     if json_output:
         print(json.dumps(snapshot, indent=2, sort_keys=True))
     else:
         print_summary(snapshot)
     if snapshot.get("status") == "alert":
+        return 1
+    finalization = snapshot.get("trial_finalization") or {}
+    if finalization.get("error") or (
+        isinstance(finalization.get("receipt"), dict) and finalization["receipt"].get("pass") is not True
+    ):
         return 1
     if snapshot.get("status") == "blocked":
         return int((snapshot.get("dispatch_control") or {}).get("exit_code") or 10)
@@ -1444,9 +1813,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="validate the content-addressed final trial receipt and inactive marker",
     )
-    parser.add_argument("--trial-start", help="ISO-8601 trial start (testing/backfill; default: now/active marker)")
-    parser.add_argument("--trial-end", help="ISO-8601 trial end (testing/backfill; default: active marker)")
-    parser.add_argument("--trial-output", default=str(TRIAL_PATH), help="final counts-only trial receipt path")
+    parser.add_argument(
+        "--trial-output",
+        default=str(TRIAL_PATH),
+        help="counts-only receipt path for --check-trial (finalization always uses the active marker owner)",
+    )
     parser.add_argument(
         "--watch", action="store_true", help="run an attached loop; launchd should prefer one-shot mode"
     )
@@ -1457,10 +1828,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.start_trial:
-        requested_start = parse_iso(args.trial_start) if args.trial_start else None
-        if args.trial_start and requested_start is None:
-            parser.error("--trial-start must be valid ISO-8601")
-        marker, changed = start_trial(requested_start)
+        try:
+            marker, changed = start_trial()
+        except TrialContractError as exc:
+            print(f"overnight-watch: trial start FAIL - {exc}", file=sys.stderr)
+            return 1
         if args.json:
             print(json.dumps({**marker, "changed": changed}, indent=2, sort_keys=True))
         else:
@@ -1472,30 +1844,27 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.finalize_trial:
-        marker = load_json(TRIAL_WINDOW_PATH)
-        requested_start = parse_iso(args.trial_start) if args.trial_start else parse_iso(marker.get("window_start"))
-        requested_end = parse_iso(args.trial_end) if args.trial_end else parse_iso(marker.get("window_end"))
-        if not requested_start or not requested_end:
-            parser.error("finalization requires an active marker or valid --trial-start and --trial-end")
-        if not args.trial_end and utc_now() < requested_end:
-            print(f"overnight-watch: trial pending until {requested_end.isoformat(timespec='seconds')}")
+        result = maybe_finalize_trial()
+        if result is None:
+            print("overnight-watch: trial finalization FAIL - no active trial", file=sys.stderr)
+            return 1
+        if result.get("pending"):
+            print(f"overnight-watch: trial pending until {result.get('window_end')}")
             return 10
-        receipt, changed = finalize_trial(
-            requested_start,
-            requested_end,
-            output=Path(args.trial_output).expanduser(),
-        )
-        if marker.get("active") and not args.trial_start and not args.trial_end:
-            maybe_finalize_trial(now=requested_end)
+        if result.get("error"):
+            print(f"overnight-watch: trial finalization FAIL - {result['error']}", file=sys.stderr)
+            return 1
+        receipt = result["receipt"]
+        changed = bool(result.get("changed"))
         if args.json:
             print(json.dumps({**receipt, "changed": changed}, indent=2, sort_keys=True))
         else:
             print(
                 "overnight-watch: trial "
                 f"pass={str(receipt.get('pass', False)).lower()} hours={receipt.get('hours')} "
-                f"windows={receipt.get('window_count')} value={receipt.get('value_receipts')} "
-                f"blockers={receipt.get('owner_blockers')} seams={receipt.get('seam_count')} "
-                f"prompts={receipt.get('operator_prompts')} alerts={receipt.get('watch_alerts')} "
+                f"windows={receipt.get('window_count')} value={receipt.get('value_done_events')} "
+                f"blockers={receipt.get('owner_blocked_events')} seams={receipt.get('seam_count')} "
+                f"prompts={receipt.get('operator_interventions')} alerts={receipt.get('watch_alerts')} "
                 f"changed={str(changed).lower()}"
             )
         return 0 if receipt.get("pass") else 1
@@ -1507,7 +1876,7 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 "overnight-watch: trial receipt OK "
                 f"hours={receipt.get('hours')} windows={receipt.get('window_count')} "
-                f"value={receipt.get('value_receipts')} blockers={receipt.get('owner_blockers')} "
+                f"value={receipt.get('value_done_events')} blockers={receipt.get('owner_blocked_events')} "
                 f"seams={receipt.get('seam_count')}"
             )
             return 0
