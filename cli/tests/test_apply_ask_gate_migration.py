@@ -183,14 +183,19 @@ def test_task_keyed_pr_predicates_require_exact_body_and_preserve_extra_gates() 
         payload["tasks"]["RETRO-0708-HEAL-GATE"],
     )
     assert "--json body" in simple
-    assert 'contains("RETRO-0708-HEAL-GATE")' in simple
+    assert "test(" in simple
+    assert "RETRO-0708-HEAL-GATE" in simple
     assert "--json number --jq length" not in simple
+    token_pattern = compiler.task_pr_body_pattern("RETRO-0708-HEAL-GATE")
+    assert compiler.re.search(token_pattern, "Closes `RETRO-0708-HEAL-GATE`.")
+    assert not compiler.re.search(token_pattern, "Closes RETRO-0708-HEAL-GATE-FOLLOWUP.")
+    assert not compiler.re.search(token_pattern, "Closes PREFIX-RETRO-0708-HEAL-GATE.")
 
     main_green = compiler.effective_parent_predicate(
         "GEN-organvm-manumissio-ci-green-0709",
         payload["tasks"]["GEN-organvm-manumissio-ci-green-0709"],
     )
-    assert 'contains("GEN-organvm-manumissio-ci-green-0709")' in main_green
+    assert "GEN-organvm-manumissio-ci-green-0709" in main_green
     assert "repos/organvm/manumissio/commits/main" in main_green
     assert "--workflow ci.yml" in main_green
 
@@ -199,7 +204,7 @@ def test_task_keyed_pr_predicates_require_exact_body_and_preserve_extra_gates() 
         payload["tasks"]["REV-organvm-limen-revenue-ship-0708"],
     )
     assert "scripts/ship-gate.py --check --task REV-organvm-limen-revenue-ship-0708" in ship
-    assert 'contains("REV-organvm-limen-revenue-ship-0708")' in ship
+    assert "REV-organvm-limen-revenue-ship-0708" in ship
 
 
 def test_keeper_archive_proves_children_and_rejection_fails_closed(tmp_path: Path) -> None:

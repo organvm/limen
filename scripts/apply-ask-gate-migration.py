@@ -140,6 +140,10 @@ _TASK_PR_RECEIPT_RE = re.compile(
 )
 
 
+def task_pr_body_pattern(task_id: str) -> str:
+    return rf"(^|[^A-Za-z0-9_.-]){re.escape(task_id)}([^A-Za-z0-9_.-]|$)"
+
+
 def effective_parent_predicate(task_id: str, row: dict[str, Any]) -> str:
     """Compile exact task-keyed PR custody without changing the frozen manifest digest."""
 
@@ -151,7 +155,7 @@ def effective_parent_predicate(task_id: str, row: dict[str, Any]) -> str:
     if match.group("task") != task_id:
         raise MigrationError(f"parent {task_id!r} task-keyed PR receipt names a different task")
     repo = match.group("repo")
-    jq_filter = f'([.[] | select((.body // "") | contains("{task_id}"))] | length)'
+    jq_filter = f'([.[] | select((.body // "") | test({json.dumps(task_pr_body_pattern(task_id))}))] | length)'
     exact_search = shlex.join(
         [
             "gh",
