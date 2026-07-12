@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import subprocess
+from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
 
 import limen.jules_remote as jr
+import limen.dispatch as dispatch_module
 from limen.dispatch import release_stale_tasks
 from limen.io import load_limen_file, save_limen_file
 from limen.jules_remote import JulesRemoteSession, JulesRemoteSnapshot, parse_jules_remote_sessions
@@ -126,10 +128,12 @@ def test_remote_list_parser_classifies_shared_status_vocabulary() -> None:
     sessions = parse_jules_remote_sessions(
         "\n".join(
             [
-                f"{SID} task repo now Completed",
-                "222222222222 task repo now Awaiting User Feedback",
-                "333333333333 task repo now Failed",
-                "444444444444 task repo now",
+                f"{SID}  ordinary task  organvm/limen  1h2m ago  Completed",
+                "222222222222  ordinary task  organvm/limen  1h ago  Awaiting User F",
+                "333333333333  ordinary task  organvm/limen  2h ago  Failed",
+                "444444444444  Fix failed CI  organvm/limen  3h ago",
+                "555555555555  Completed migration audit  organvm/limen  4h ago",
+                "666666666666  Fix failed CI  organvm/limen  5h ago  Completed",
             ]
         )
     )
@@ -138,6 +142,35 @@ def test_remote_list_parser_classifies_shared_status_vocabulary() -> None:
     assert sessions["222222222222"].status == "awaiting_user_feedback"
     assert sessions["333333333333"].status == "failed"
     assert sessions["444444444444"].status == "unknown"
+    assert sessions["555555555555"].status == "unknown"
+    assert sessions["666666666666"].status == "completed"
+
+
+def test_remote_probe_completes_before_single_writer_lock(tmp_path: Path, monkeypatch) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    _write_stale_board(tasks_path)
+    inside_lock = False
+
+    def probe():
+        assert inside_lock is False
+        return _snapshot("unknown")
+
+    @contextmanager
+    def queue_lock(_path):
+        nonlocal inside_lock
+        inside_lock = True
+        try:
+            yield True
+        finally:
+            inside_lock = False
+
+    monkeypatch.setattr(dispatch_module, "probe_jules_remote_sessions", probe)
+    monkeypatch.setattr(dispatch_module, "_queue_lock", queue_lock)
+
+    report = release_stale_tasks(load_limen_file(tasks_path), tasks_path, hours=24, dry_run=False)
+
+    assert report["held"] == ["STALE"]
+    assert inside_lock is False
 
 
 def test_remote_probe_distinguishes_unavailable_from_confirmed_empty(monkeypatch) -> None:

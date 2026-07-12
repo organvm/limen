@@ -464,7 +464,7 @@ def main() -> int:
         return 2
 
     # Self-throttle only applies to a real --apply beat (a --check gate always runs).
-    if args.apply and not args.force and not args.check and MARKER.exists():
+    if args.apply and not args.branch and not args.force and not args.check and MARKER.exists():
         if (time.time() - MARKER.stat().st_mtime) / 60.0 < every_min:
             print(f"[reap-branches] ran < {every_min:g}min ago — skip (--force to override)")
             return 0
@@ -548,13 +548,15 @@ def main() -> int:
 
     if args.apply:
         try:
-            MARKER.parent.mkdir(parents=True, exist_ok=True)
-            MARKER.write_text(str(time.time()))
+            targeted = bool(args.branch)
+            LOG.parent.mkdir(parents=True, exist_ok=True)
             with LOG.open("a") as fh:
                 fh.write(
                     json.dumps(
                         {
                             "ts": time.time(),
+                            "scope": "targeted" if targeted else "full",
+                            "targets": sorted(set(args.branch)),
                             "default": dref,
                             "online": online,
                             "reaped": reaped_names,
@@ -566,21 +568,24 @@ def main() -> int:
                     )
                     + "\n"
                 )
-            STATE.write_text(
-                json.dumps(
-                    {
-                        "ts": time.time(),
-                        "default": dref,
-                        "online": online,
-                        "reaped_this_run": reaped_names,
-                        "inflight": sorted(inflight),
-                        "advanced": sorted(advanced),
-                        "livework": sorted(livework),
-                    },
-                    indent=2,
+            if not targeted:
+                MARKER.parent.mkdir(parents=True, exist_ok=True)
+                MARKER.write_text(str(time.time()))
+                STATE.write_text(
+                    json.dumps(
+                        {
+                            "ts": time.time(),
+                            "default": dref,
+                            "online": online,
+                            "reaped_this_run": reaped_names,
+                            "inflight": sorted(inflight),
+                            "advanced": sorted(advanced),
+                            "livework": sorted(livework),
+                        },
+                        indent=2,
+                    )
                 )
-            )
-            write_ledger(livework, advanced, len(inflight))
+                write_ledger(livework, advanced, len(inflight))
         except Exception as e:  # observability must never break the beat
             print(f"[reap-branches] note: stamp/ledger write skipped ({str(e)[:80]})")
 

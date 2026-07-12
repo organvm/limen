@@ -3586,7 +3586,10 @@ def release_stale_tasks(
     harvest_ready: list[str] = []
     recover_ready: list[str] = []
     candidate_rows: list[ReleaseStaleCandidate] = []
-    snapshot: JulesRemoteSnapshot | None = None
+    # Remote I/O must never occupy the single-writer board lock. Probe from the caller's read-only
+    # candidate snapshot first; the successful catalog remains valid for any freshly re-read Jules
+    # candidate, while a candidate that appeared after this read fails closed if no probe was needed.
+    snapshot = _release_stale_snapshot(candidates, jules_snapshot)
     if not dry_run:
         # APPLY re-selects and mutates on a FRESH board under the queue lock — persisting the
         # caller's snapshot would erase every write made since it was loaded (the dispatch
@@ -3611,7 +3614,6 @@ def release_stale_tasks(
                 }
             fresh = load_limen_file(tasks_path) if tasks_path.exists() else limen
             candidates = stale_tasks(fresh, hours=hours, agent=agent)
-            snapshot = _release_stale_snapshot(candidates, jules_snapshot)
             for task in candidates:
                 original_status = task.status
                 if _restore_done_status(
@@ -3679,7 +3681,6 @@ def release_stale_tasks(
             if released or restored_done:
                 save_limen_file(tasks_path, fresh)
     else:
-        snapshot = _release_stale_snapshot(candidates, jules_snapshot)
         for task in candidates:
             if _has_done_transition(task):
                 action, remote_status = "restore_done", "prior_done"

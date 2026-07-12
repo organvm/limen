@@ -44,10 +44,11 @@ mkjson() { # state isDraft mss files rollup
 }
 
 pass=0; fail=0
-check() { # name expected_exit  (fixture already written)
+check() { # name expected_exit [extra policy args...]  (fixture already written)
   local name="$1" want="$2" got
+  shift 2
   set +e
-  PATH="$stubdir:$PATH" bash "$policy" 1 --repo o/r >/dev/null 2>&1
+  PATH="$stubdir:$PATH" bash "$policy" 1 --repo o/r "$@" >/dev/null 2>&1
   got=$?
   set -e
   if [ "$got" = "$want" ]; then
@@ -88,6 +89,8 @@ unset GH_RECHECK_HEAD
 mkjson OPEN false CLEAN "$DOC_FILES" "$GREEN"
 jq '.headRefOid = ""' "$fixture" > "$fixture.tmp" && mv "$fixture.tmp" "$fixture"
 check "head identity unavailable" 2
+mkjson OPEN false CLEAN "$DOC_FILES" "$GREEN"
+check "expected head mismatch" 2 --expected-head bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 
 # Resolver unavailable ⇒ website-sensitive (fail toward caution). With a broken python3 the
 # deploy regex cannot derive from the GATES registry, so a docs-only PR with zero checks —

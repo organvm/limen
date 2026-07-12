@@ -18,15 +18,17 @@
 #                     checks), then re-run. Distinct from HOLD: HOLD means GitHub would allow
 #                     the merge but the website-safety policy says wait; BLOCKED means it can't.
 #
-# Usage:  scripts/merge-policy.sh [PR_NUMBER] [--repo OWNER/NAME]
+# Usage:  scripts/merge-policy.sh [PR_NUMBER] [--repo OWNER/NAME] [--expected-head SHA]
 #         (no PR number → resolves the PR open for the current branch)
 set -euo pipefail
 
-PR=""; REPO=""
+PR=""; REPO=""; EXPECTED_HEAD=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="${2:-}"; shift 2 ;;
     --repo=*) REPO="${1#*=}"; shift ;;
+    --expected-head) EXPECTED_HEAD="${2:-}"; shift 2 ;;
+    --expected-head=*) EXPECTED_HEAD="${1#*=}"; shift ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) PR="$1"; shift ;;
   esac
@@ -86,6 +88,10 @@ fi
 # the next invocation inspect the new head. Missing head identity is equally non-authoritative.
 if [ -z "$head" ]; then
   echo "VERDICT: HOLD — PR head identity is unavailable; cannot associate checks with exact code."
+  exit 2
+fi
+if [ -n "$EXPECTED_HEAD" ] && [ "$head" != "$EXPECTED_HEAD" ]; then
+  echo "VERDICT: HOLD — expected PR head $EXPECTED_HEAD but GitHub reports $head; re-run on the new head."
   exit 2
 fi
 head_now=$(gh pr view "$PR" "${repo_args[@]+"${repo_args[@]}"}" --json headRefOid -q .headRefOid 2>/dev/null || true)
@@ -158,10 +164,12 @@ if [ "$sensitive" = 1 ]; then
     exit 2
   fi
   echo "VERDICT: CLEARED — website-sensitive, but CI is fully green. Safe to self-merge; the live deploy is verified."
+  echo "MERGE-HEAD: $head (use gh pr merge --match-head-commit $head)"
   exit 0
 fi
 if [ "$pending" -gt 0 ]; then
   echo "VERDICT: HOLD — ${pending} non-deploy check(s) still running. Merge once green."; exit 2
 fi
 echo "VERDICT: CLEARED — non-deploy PR, mergeable, no failing checks. Self-merge per the standing grant."
+echo "MERGE-HEAD: $head (use gh pr merge --match-head-commit $head)"
 exit 0

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from typing import Mapping
@@ -13,6 +14,7 @@ JULES_RECOVERY_STATES = frozenset(
         "awaiting_plan_approval",
     }
 )
+_LAST_ACTIVE_RE = re.compile(r"^(?:(?:\d+[dhms])+\s+ago|just now)$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -40,8 +42,9 @@ class JulesRemoteSnapshot:
         return session.status if session is not None else None
 
 
-def classify_jules_remote_line(line: str) -> str:
-    low = line.lower()
+def classify_jules_remote_status(status: str) -> str:
+    """Normalize only the CLI's terminal Status column, never task-description text."""
+    low = status.lower()
     if "failed" in low:
         return "failed"
     if "awaiting plan" in low:
@@ -60,13 +63,16 @@ def classify_jules_remote_line(line: str) -> str:
 def parse_jules_remote_sessions(output: str) -> dict[str, JulesRemoteSession]:
     sessions: dict[str, JulesRemoteSession] = {}
     for raw in output.splitlines():
-        parts = raw.split()
-        if not parts or not parts[0].isdigit():
+        columns = re.split(r"\s{2,}", raw.strip())
+        if not columns or not columns[0].isdigit():
             continue
-        session_id = parts[0]
+        session_id = columns[0]
+        status_text = ""
+        if len(columns) >= 2 and not _LAST_ACTIVE_RE.fullmatch(columns[-1]):
+            status_text = columns[-1]
         sessions[session_id] = JulesRemoteSession(
             session_id=session_id,
-            status=classify_jules_remote_line(raw),
+            status=classify_jules_remote_status(status_text),
             raw=raw,
         )
     return sessions
