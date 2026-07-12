@@ -528,6 +528,10 @@ def test_safe_predicate_classification_never_executes(tmp_path, monkeypatch, pre
         "gh api repos/organvm/limen --method=POST",
         "gh api repos/organvm/limen --met POST",
         "gh api repos/organvm/limen --r body=changed",
+        "gh api repos/organvm/limen -iXPOST",
+        "gh api repos/organvm/limen --cache 1h",
+        "gh api repos/organvm/limen --cache=1h",
+        "gh pr view 980 -Rorganvm/limen --json state",
         "gh pr view 980 --web",
         "gh pr view 980 --we",
         "gh pr view 980 --help",
@@ -660,6 +664,27 @@ def test_receipt_and_jules_proofs_do_not_execute_inherited_path_tools(tmp_path, 
     )
     assert fake_gh_marker.exists() is False
     assert fake_jules_marker.exists() is False
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "https://github.com/organvm/limen/blob/main/does-not-exist.txt",
+        "https://github.com/organvm/limen/tree/main/does-not-exist",
+        "https://github.com/organvm/limen/blob/feature/slash-ref/does-not-exist.txt",
+        "https://github.com/organvm/limen/tree/feature/slash-ref/does-not-exist",
+    ],
+)
+def test_blob_and_tree_urls_cannot_prove_only_ref_existence(tmp_path, monkeypatch, target):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    monkeypatch.setattr(
+        module,
+        "_github_api_proof",
+        lambda _endpoint: pytest.fail("ambiguous blob/tree URL must not degrade to a commit proof"),
+    )
+
+    assert module._receipt_target_proof(target) is None
 
 
 @pytest.mark.parametrize(
@@ -1101,6 +1126,115 @@ def test_byte_identical_source_symlink_redirect_fails_closed(tmp_path, monkeypat
     assert any("symlink" in error for error in errors)
 
 
+@pytest.mark.parametrize("redirect", ["ledger", "lock", "ancestor"])
+def test_watch_writer_rejects_symlink_redirect_before_trial_append(tmp_path, monkeypatch, redirect):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    module.write_jsonl({"baseline": True})
+    _start(module, start)
+    watch_path = module.RECEIPT_JSONL
+    lock_path = watch_path.with_suffix(watch_path.suffix + ".lock")
+    outside = tmp_path / f"outside-{redirect}"
+    outside.write_bytes(b"outside-must-not-change\n")
+    observation_before = module._file_custody(module.TRIAL_OBSERVATION_PATH)
+
+    if redirect == "ledger":
+        watch_path.unlink()
+        watch_path.symlink_to(outside)
+        preserved_watch = outside
+    elif redirect == "lock":
+        lock_path.unlink()
+        lock_path.symlink_to(outside)
+        preserved_watch = outside
+    else:
+        logs = watch_path.parent
+        preserved_logs = logs.with_name(f"{logs.name}-preserved")
+        logs.rename(preserved_logs)
+        logs.symlink_to(preserved_logs, target_is_directory=True)
+        preserved_watch = preserved_logs / watch_path.name
+    preserved_bytes = preserved_watch.read_bytes()
+
+    with pytest.raises(module.TrialContractError, match="symlink"):
+        module.write_jsonl({"forged": True})
+
+    assert preserved_watch.read_bytes() == preserved_bytes
+    assert module._file_custody(module.TRIAL_OBSERVATION_PATH) == observation_before
+
+
+@pytest.mark.parametrize("redirect", ["ledger", "lock", "ancestor"])
+def test_trial_start_rejects_watch_redirect_before_any_trial_write(tmp_path, monkeypatch, redirect):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    _write_prompt_authority(module, start)
+    watch_path = module.RECEIPT_JSONL
+    lock_path = watch_path.with_suffix(watch_path.suffix + ".lock")
+    outside = tmp_path / f"outside-start-{redirect}"
+    outside.write_bytes(b"outside-must-not-change\n")
+    if redirect == "ledger":
+        watch_path.symlink_to(outside)
+    elif redirect == "lock":
+        lock_path.symlink_to(outside)
+    else:
+        logs = watch_path.parent
+        preserved_logs = logs.with_name(f"{logs.name}-preserved")
+        logs.rename(preserved_logs)
+        logs.symlink_to(preserved_logs, target_is_directory=True)
+    outside_bytes = outside.read_bytes()
+
+    with pytest.raises(module.TrialContractError, match="symlink"):
+        module.start_trial()
+
+    assert outside.read_bytes() == outside_bytes
+    if redirect == "ancestor":
+        preserved_logs = watch_path.parent.with_name(f"{watch_path.parent.name}-preserved")
+        assert not (preserved_logs / module.TRIAL_WINDOW_PATH.name).exists()
+        assert not (preserved_logs / module.TRIAL_OBSERVATION_PATH.name).exists()
+        assert not (preserved_logs / "overnight-trial-anchors").exists()
+    else:
+        assert not module.TRIAL_WINDOW_PATH.exists()
+        assert not module.TRIAL_OBSERVATION_PATH.exists()
+        assert not module._trial_anchor_path({"content_hash": "0" * 64}).parent.exists()
+
+
+def test_evaluator_hash_binds_every_local_semantic_dependency(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+    dependency_root = tmp_path / "evaluator-dependencies"
+    copies = {}
+    for name, source in module._evaluator_dependency_paths().items():
+        destination = dependency_root / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+        copies[name] = destination
+    assert {
+        "cli/src/limen/intake.py",
+        "cli/src/limen/jules_remote.py",
+        "cli/src/limen/prompt_corpus.py",
+        "scripts/overnight-watch.py",
+    }.issubset(copies)
+    monkeypatch.setattr(module, "_evaluator_dependency_paths", lambda: copies)
+    _, result = _run_trial(module, clock, start)
+    terminal_marker = json.loads(module.TRIAL_WINDOW_PATH.read_text())
+    active_marker = terminal_marker["active_marker"]
+    expected_hash = result["receipt"]["evaluator_hash"]
+    assert module.evaluator_hash() == expected_hash
+
+    for name, dependency in copies.items():
+        original = dependency.read_bytes()
+        dependency.write_bytes(original + f"\n# mutated {name}\n".encode())
+
+        assert module.evaluator_hash() != expected_hash
+        assert "trial marker evaluator changed during the window" in module._active_marker_errors(active_marker)
+        ok, errors = module.check_trial_receipt()
+        assert ok is False
+        assert any("evaluator" in error for error in errors)
+
+        dependency.write_bytes(original)
+        assert module.evaluator_hash() == expected_hash
+        assert module.check_trial_receipt() == (True, [])
+
+
 def test_live_terminal_projections_may_advance_after_immutable_custody(tmp_path, monkeypatch, capsys):
     start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
     module, clock = _fresh_module(tmp_path, monkeypatch, start)
@@ -1149,6 +1283,63 @@ def test_terminal_custody_sidecar_removal_or_rewrite_fails(tmp_path, monkeypatch
     assert any("custody sidecar" in error for error in errors)
     repeated = module.maybe_finalize_trial()
     assert repeated and "error" in repeated
+
+
+def test_terminal_custody_fifo_fails_without_blocking_checker(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+    _run_trial(module, clock, start)
+    receipt = json.loads(module.TRIAL_PATH.read_text())
+    descriptor = receipt["terminal_custody"]["sources"]["handoff"]
+    sidecar = module._terminal_custody_path(receipt["trial_id"], "handoff", descriptor["digest"])
+    sidecar.unlink()
+    module.os.mkfifo(sidecar, 0o400)
+
+    result = subprocess.run(
+        [module.sys.executable, str(SCRIPT), "--check-trial"],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        env=module.os.environ.copy(),
+    )
+
+    assert result.returncode == 1
+    assert "custody sidecar is not a regular file" in result.stderr
+
+
+def test_terminal_custody_final_symlink_fails_before_read(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+    _run_trial(module, clock, start)
+    receipt = json.loads(module.TRIAL_PATH.read_text())
+    descriptor = receipt["terminal_custody"]["sources"]["handoff"]
+    sidecar = module._terminal_custody_path(receipt["trial_id"], "handoff", descriptor["digest"])
+    preserved = sidecar.with_name(f"{sidecar.name}.preserved")
+    sidecar.rename(preserved)
+    sidecar.symlink_to(preserved)
+
+    ok, errors = module.check_trial_receipt()
+
+    assert ok is False
+    assert "terminal handoff custody sidecar is a symlink" in errors
+
+
+def test_terminal_custody_device_is_rejected_before_read(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    monkeypatch.setattr(module, "ROOT", Path("/dev"))
+
+    payload, mode, errors = module._read_trusted_regular_file(
+        Path("/dev/null"),
+        label="terminal device custody sidecar",
+    )
+
+    assert payload is None
+    assert mode is None
+    assert errors == ["terminal device custody sidecar is not a regular file"]
 
 
 def test_terminal_custody_descriptor_cannot_be_substituted(tmp_path, monkeypatch):

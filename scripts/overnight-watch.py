@@ -295,12 +295,28 @@ def canonical_hash(value: Any) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _evaluator_dependency_paths() -> dict[str, Path]:
+    repository = Path(__file__).resolve().parents[1]
+    return {
+        "cli/src/limen/intake.py": repository / "cli" / "src" / "limen" / "intake.py",
+        "cli/src/limen/jules_remote.py": repository / "cli" / "src" / "limen" / "jules_remote.py",
+        "cli/src/limen/prompt_corpus.py": repository / "cli" / "src" / "limen" / "prompt_corpus.py",
+        "scripts/overnight-watch.py": Path(__file__).resolve(),
+    }
+
+
 def evaluator_hash() -> str:
-    try:
-        payload = Path(__file__).read_bytes()
-    except OSError:
-        return "unavailable"
-    return hashlib.sha256(payload).hexdigest()
+    dependencies: dict[str, dict[str, Any]] = {}
+    for name, path in sorted(_evaluator_dependency_paths().items()):
+        try:
+            payload = path.read_bytes()
+        except OSError:
+            return "unavailable"
+        dependencies[name] = {
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "size": len(payload),
+        }
+    return canonical_hash({"schema_version": "overnight-evaluator.v1", "dependencies": dependencies})
 
 
 def token_snapshot() -> dict[str, Any]:
@@ -890,15 +906,40 @@ def update_state(snapshot: dict[str, Any]) -> None:
 
 
 def write_jsonl(snapshot: dict[str, Any]) -> None:
-    RECEIPT_JSONL.parent.mkdir(parents=True, exist_ok=True)
     lock_path = RECEIPT_JSONL.with_suffix(RECEIPT_JSONL.suffix + ".lock")
-    with lock_path.open("a+", encoding="utf-8") as lock:
-        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-        fd = os.open(RECEIPT_JSONL, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-        with os.fdopen(fd, "a", encoding="utf-8") as handle:
-            handle.write(json.dumps(snapshot, sort_keys=True) + "\n")
-            handle.flush()
-            os.fsync(handle.fileno())
+    parent_errors = _trusted_custody_path_errors(
+        RECEIPT_JSONL.parent,
+        label="watch ledger parent",
+        final_directory=True,
+    )
+    ledger_errors = _trusted_canonical_file_errors(
+        RECEIPT_JSONL,
+        label="watch ledger",
+        allow_missing=True,
+    )
+    lock_errors = _trusted_canonical_file_errors(
+        lock_path,
+        label="watch ledger lock",
+        allow_missing=True,
+    )
+    if parent_errors or ledger_errors or lock_errors:
+        raise TrialContractError("; ".join([*parent_errors, *ledger_errors, *lock_errors]))
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    directory_fd = os.open(RECEIPT_JSONL.parent, directory_flags)
+    try:
+        lock_flags = os.O_RDWR | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+        lock_fd = os.open(lock_path.name, lock_flags, 0o600, dir_fd=directory_fd)
+        with os.fdopen(lock_fd, "a+", encoding="utf-8") as lock:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            ledger_flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+            fd = os.open(RECEIPT_JSONL.name, ledger_flags, 0o600, dir_fd=directory_fd)
+            with os.fdopen(fd, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(snapshot, sort_keys=True) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 def write_markdown(snapshot: dict[str, Any]) -> None:
@@ -1649,38 +1690,131 @@ def _run_predicate_argv(argv: list[str]) -> tuple[int, str, str] | None:
 def _gh_read_only(argv: list[str]) -> bool:
     if len(argv) < 2 or argv[0] != "gh":
         return False
-    generic_forbidden = {"-h", "-w", "--help", "--version", "--watch", "--web"}
-    generic_forbidden_prefixes = ("--h", "--v", "--w")
-    for value in argv[2:]:
-        if (
-            value in generic_forbidden
-            or value.startswith(generic_forbidden_prefixes)
-            or (len(value) > 2 and value.startswith(("-h", "-w")))
-        ):
-            return False
-    if argv[1] == "api":
-        if len(argv) < 3:
-            return False
-        api_forbidden_exact = {"-F", "-X", "-f", "--field", "--input", "--method", "--raw-field"}
-        api_forbidden_long_prefixes = ("--f", "--i", "--m", "--r")
-        for value in argv[2:]:
-            if (
-                value in api_forbidden_exact
-                or value.startswith(api_forbidden_long_prefixes)
-                or (len(value) > 2 and value.startswith(("-F", "-X", "-f")))
-            ):
+
+    def exact_options(
+        values: list[str],
+        *,
+        value_options: set[str],
+        flag_options: set[str],
+        minimum_positionals: int,
+        maximum_positionals: int,
+    ) -> bool:
+        positionals: list[str] = []
+        index = 0
+        while index < len(values):
+            value = values[index]
+            if value.startswith("--"):
+                name, separator, attached = value.partition("=")
+                if name in flag_options:
+                    if separator:
+                        return False
+                    index += 1
+                    continue
+                if name not in value_options:
+                    return False
+                if separator:
+                    if not attached:
+                        return False
+                    index += 1
+                    continue
+                index += 1
+                if index >= len(values):
+                    return False
+                index += 1
+                continue
+            if value.startswith("-"):
+                # No short option is needed for proof. Rejecting all of them also
+                # rejects bundles such as ``-iXPOST`` instead of guessing how gh
+                # will split the token.
                 return False
-        return True
-    return len(argv) >= 3 and (argv[1], argv[2]) in {
-        ("issue", "list"),
-        ("issue", "view"),
-        ("pr", "checks"),
-        ("pr", "list"),
-        ("pr", "view"),
-        ("repo", "view"),
-        ("run", "list"),
-        ("run", "view"),
+            positionals.append(value)
+            index += 1
+        return minimum_positionals <= len(positionals) <= maximum_positionals
+
+    if argv[1] == "api":
+        return exact_options(
+            argv[2:],
+            value_options={"--jq"},
+            flag_options={"--paginate", "--slurp"},
+            minimum_positionals=1,
+            maximum_positionals=1,
+        )
+    if len(argv) < 3:
+        return False
+    command = (argv[1], argv[2])
+    specifications = {
+        ("issue", "list"): (
+            {
+                "--app",
+                "--assignee",
+                "--author",
+                "--json",
+                "--jq",
+                "--label",
+                "--limit",
+                "--mention",
+                "--milestone",
+                "--repo",
+                "--search",
+                "--state",
+            },
+            set(),
+            0,
+            0,
+        ),
+        ("issue", "view"): ({"--json", "--jq", "--repo", "--template"}, {"--comments"}, 0, 1),
+        ("pr", "checks"): ({"--json", "--jq", "--repo"}, {"--required"}, 0, 1),
+        ("pr", "list"): (
+            {
+                "--app",
+                "--author",
+                "--base",
+                "--head",
+                "--json",
+                "--jq",
+                "--label",
+                "--limit",
+                "--repo",
+                "--search",
+                "--state",
+            },
+            {"--draft"},
+            0,
+            0,
+        ),
+        ("pr", "view"): ({"--json", "--jq", "--repo", "--template"}, {"--comments"}, 0, 1),
+        ("repo", "view"): ({"--json", "--jq", "--template"}, set(), 0, 1),
+        ("run", "list"): (
+            {
+                "--branch",
+                "--commit",
+                "--created",
+                "--event",
+                "--json",
+                "--jq",
+                "--limit",
+                "--repo",
+                "--status",
+                "--user",
+                "--workflow",
+            },
+            set(),
+            0,
+            0,
+        ),
+        ("run", "view"): ({"--job", "--json", "--jq", "--repo", "--template"}, set(), 0, 1),
     }
+    specification = specifications.get(command)
+    if specification is None:
+        return False
+    value_options, flag_options, minimum_positionals, maximum_positionals = specification
+    return exact_options(
+        argv[3:],
+        value_options=value_options,
+        flag_options=flag_options,
+        minimum_positionals=minimum_positionals,
+        maximum_positionals=maximum_positionals,
+    )
 
 
 def _git_read_only(argv: list[str]) -> bool:
@@ -1984,8 +2118,12 @@ def _receipt_target_proof(target: str) -> dict[str, Any] | None:
         endpoint = f"repos/{repo}/actions/runs/{parts[4]}"
     elif kind == "actions" and len(parts) >= 5 and parts[3] == "workflows":
         endpoint = f"repos/{repo}/actions/workflows/{parts[4]}"
-    elif kind in {"blob", "tree"} and len(parts) >= 5:
-        endpoint = f"repos/{repo}/commits/{parts[3]}"
+    elif kind in {"blob", "tree"}:
+        # A browser URL does not delimit a slash-bearing ref from its path.
+        # Proving only the commit/ref would let a nonexistent path count as a
+        # durable receipt. Require the unambiguous ``git:owner/repo:path`` form,
+        # which resolves the exact contents object above.
+        return None
     if not endpoint:
         return None
     proof = _github_api_proof(endpoint)
@@ -2433,6 +2571,7 @@ def start_trial() -> tuple[dict[str, Any], bool]:
     configured_paths = {
         "trial task source": (TASKS_PATH, False),
         "trial watch ledger": (RECEIPT_JSONL, True),
+        "trial watch ledger lock": (RECEIPT_JSONL.with_suffix(RECEIPT_JSONL.suffix + ".lock"), True),
         "trial observation ledger": (TRIAL_OBSERVATION_PATH, True),
         "trial receipt": (TRIAL_PATH, True),
         "trial marker": (marker_path, True),
@@ -2744,6 +2883,33 @@ def _trusted_canonical_file_errors(
     return []
 
 
+def _read_trusted_regular_file(path: Path, *, label: str) -> tuple[bytes | None, int | None, list[str]]:
+    path_errors = _trusted_canonical_file_errors(path, label=label)
+    if path_errors:
+        return None, None, path_errors
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    directory_fd: int | None = None
+    file_fd: int | None = None
+    try:
+        directory_fd = os.open(path.parent, directory_flags)
+        file_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        file_fd = os.open(path.name, file_flags, dir_fd=directory_fd)
+        metadata = os.fstat(file_fd)
+        if not stat.S_ISREG(metadata.st_mode):
+            return None, None, [f"{label} is not a regular file"]
+        with os.fdopen(file_fd, "rb") as handle:
+            file_fd = None
+            payload = handle.read()
+        return payload, metadata.st_mode & 0o777, []
+    except OSError as exc:
+        return None, None, [f"{label} no-follow read failed: {exc}"]
+    finally:
+        if file_fd is not None:
+            os.close(file_fd)
+        if directory_fd is not None:
+            os.close(directory_fd)
+
+
 def _terminal_custody_path(trial_id: str, name: str, digest: str) -> Path:
     if name not in {"handoff", "prompt_cursor", "prompt_snapshot"} or not re.fullmatch(r"[0-9a-f]{64}", digest):
         raise TrialContractError("terminal custody path components are invalid")
@@ -2846,14 +3012,16 @@ def _terminal_custody_errors(
         if not verify_paths:
             continue
         path = _terminal_custody_path(trial_id, name, digest)
-        try:
-            payload = path.read_bytes()
-            mode = path.stat().st_mode & 0o777
-        except OSError:
-            errors.append(f"terminal {name} custody sidecar is missing")
+        payload, mode, file_errors = _read_trusted_regular_file(
+            path,
+            label=f"terminal {name} custody sidecar",
+        )
+        if file_errors:
+            errors.extend(file_errors)
             continue
-        if path.is_symlink():
-            errors.append(f"terminal {name} custody sidecar is a symlink")
+        if payload is None or mode is None:
+            errors.append(f"terminal {name} custody sidecar no-follow read was incomplete")
+            continue
         if len(payload) != source.get("size") or _sha256_bytes(payload) != digest:
             errors.append(f"terminal {name} custody sidecar content mismatch")
         if mode & 0o222:
