@@ -927,6 +927,18 @@ parameters:
     self_update: "updated by scripts/overnight-watch.py"
     owner: continuity
     note: "Deduped active alert path for overnight monitor failures; replaces long interactive-agent polling loops with WATCH_ALERT receipts."
+  LIMEN_OVERNIGHT_TRIAL_RECEIPT:
+    default: "$LIMEN_ROOT/logs/overnight-trial.json"
+    env: LIMEN_OVERNIGHT_TRIAL_RECEIPT
+    self_update: "content-addressed finalization by scripts/overnight-watch.py"
+    owner: continuity
+    note: "Counts-only eight-hour unattended-trial receipt; evaluator, normalized input, and content hashes bind the proof without publishing prompt bodies."
+  LIMEN_OVERNIGHT_TRIAL_WINDOW:
+    default: "$LIMEN_ROOT/logs/overnight-trial-window.json"
+    env: LIMEN_OVERNIGHT_TRIAL_WINDOW
+    self_update: "started and finalized by scripts/overnight-watch.py"
+    owner: continuity
+    note: "Lifecycle marker for the fixed eight-hour unattended trial; active markers keep Omega red until automatic finalization records terminal custody."
   LIMEN_OVERNIGHT_WATCH_MAX_LOG_AGE_SEC:
     default: 1200
     env: LIMEN_OVERNIGHT_WATCH_MAX_LOG_AGE_SEC
