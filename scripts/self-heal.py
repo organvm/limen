@@ -202,7 +202,8 @@ def live_chronic_groups(path=HEAL_CONVERGENCE, *, now=None):
         return set()
     if generated.tzinfo is None:
         generated = generated.replace(tzinfo=datetime.timezone.utc)
-    if (now - generated.astimezone(datetime.timezone.utc)).total_seconds() > CHRONIC_MAX_AGE_SECONDS:
+    age_seconds = (now - generated.astimezone(datetime.timezone.utc)).total_seconds()
+    if age_seconds < 0 or age_seconds > CHRONIC_MAX_AGE_SECONDS:
         return set()
     return {
         (str(group.get("repo") or ""), str(group.get("check") or ""))

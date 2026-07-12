@@ -186,6 +186,21 @@ def test_stale_chronic_receipt_cannot_freeze_current_work(tmp_path, monkeypatch)
     assert "HEAL-cifix-organvm-exporter-54" in ids
 
 
+def test_future_dated_chronic_receipt_cannot_freeze_current_work(tmp_path, monkeypatch):
+    m = _load(tmp_path, monkeypatch)
+    p = tmp_path / "tasks.yaml"
+    _board(p)
+    future = m.datetime.datetime.now(m.datetime.timezone.utc) + m.datetime.timedelta(days=1)
+    m.HEAL_CONVERGENCE.write_text(
+        json.dumps({"timestamp": future.isoformat(), "chronic": [{"repo": "organvm/exporter", "check": "e2e"}]}),
+        encoding="utf-8",
+    )
+
+    assert _run(m, monkeypatch, p) == 0
+    ids = {task["id"] for task in yaml.safe_load(p.read_text())["tasks"]}
+    assert "HEAL-cifix-organvm-exporter-54" in ids
+
+
 def test_chronic_check_cannot_hide_a_distinct_new_failure(tmp_path, monkeypatch):
     m = _load(tmp_path, monkeypatch)
     p = tmp_path / "tasks.yaml"
