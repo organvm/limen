@@ -17,6 +17,7 @@ from pathlib import Path
 import subprocess
 
 import limen.tabularius as tabularius
+import pytest
 from limen.io import load_limen_file, queue_lock, save_limen_file
 from limen.models import LimenFile, Task
 from limen.tabularius import (
@@ -234,7 +235,41 @@ def test_exact_task_precondition_rejects_archive_after_concurrent_claim(tmp_path
     current = {task.id: task for task in load_limen_file(board).tasks}["T-1"]
     assert current.status == "dispatched"
     reason = (_rejected(board) / f"{archive.ticket_id}.json.reason.txt").read_text()
-    assert "exact state changed" in reason
+    assert "invalidated regardless of timestamp order" in reason
+
+
+@pytest.mark.parametrize("claim_status", ["dispatched", "in_progress"])
+def test_batch_admission_rejects_archive_before_later_active_claim(tmp_path, claim_status):
+    board = _seed_board(tmp_path)
+    original = {task.id: task for task in load_limen_file(board).tasks}["T-1"]
+    original_state = original.model_dump(mode="json", exclude_none=True)
+    archive = _ticket(
+        INTENT_UPSERT,
+        task_id="T-1",
+        ts=datetime(2026, 7, 2, 12, 0, tzinfo=timezone.utc),
+        patch={"status": "archived"},
+        log={"status": "archived", "output": "migration archive"},
+        precondition={"status": "open", "task_sha256": task_state_sha256(original_state)},
+    )
+    later_claim = _ticket(
+        INTENT_STATUS,
+        task_id="T-1",
+        ts=datetime(2026, 7, 2, 12, 1, tzinfo=timezone.utc),
+        log={"status": claim_status, "output": "later concurrent claim"},
+    )
+    submit_ticket(board, archive)
+    submit_ticket(board, later_claim)
+
+    preview = drain_once(board, dry_run=True)
+    assert (preview.applied, preview.rejected, preview.pending) == (1, 1, 2)
+    result = drain_once(board)
+
+    assert (result.applied, result.rejected) == (1, 1)
+    current = {task.id: task for task in load_limen_file(board).tasks}["T-1"]
+    assert current.status == claim_status
+    assert [entry.status for entry in current.dispatch_log] == [claim_status]
+    reason = (_rejected(board) / f"{archive.ticket_id}.json.reason.txt").read_text()
+    assert "invalidated regardless of timestamp order" in reason
 
 
 # --- one bad ticket never breaks the batch or the board -----------------------------------------

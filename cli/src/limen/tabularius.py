@@ -393,6 +393,46 @@ def _parse_pending(inbox: Path) -> tuple[list[tuple[Path, Ticket]], list[tuple[P
     return good, bad
 
 
+def _admit_exact_preconditions(
+    pending: list[tuple[Path, Ticket]],
+) -> tuple[list[tuple[Path, Ticket]], list[tuple[Path, str]]]:
+    """Reject exact-state tickets that conflict anywhere in the captured batch.
+
+    Sequential optimistic checks are insufficient: an archive ticket at T can
+    satisfy its precondition and then a same-task claim at T+1 can reopen it in
+    the same keeper drain.  Admission therefore inspects the entire
+    lock-captured batch before folding any task.  Any other pending state event
+    for the same task invalidates a ``task_sha256`` precondition regardless of
+    timestamp order.  Only the guarded ticket is rejected; unrelated tickets
+    and the conflicting owner event retain their normal append-only custody.
+    """
+
+    task_mutations = {INTENT_UPSERT, INTENT_STATUS, INTENT_REMOVE}
+    by_task: dict[str, list[tuple[Path, Ticket]]] = {}
+    for path, ticket in pending:
+        if ticket.task_id and ticket.intent in task_mutations:
+            by_task.setdefault(ticket.task_id, []).append((path, ticket))
+
+    rejected: list[tuple[Path, str]] = []
+    rejected_paths: set[Path] = set()
+    for path, ticket in pending:
+        if not ticket.task_id or "task_sha256" not in (ticket.precondition or {}):
+            continue
+        peers = [(peer_path, peer) for peer_path, peer in by_task.get(ticket.task_id, []) if peer_path != path]
+        if not peers:
+            continue
+        peer_ids = sorted(peer.ticket_id for _, peer in peers)
+        rejected_paths.add(path)
+        rejected.append(
+            (
+                path,
+                f"batch precondition failed: {ticket.task_id} has {len(peers)} other pending state event(s) "
+                f"{peer_ids}; exact task state is invalidated regardless of timestamp order",
+            )
+        )
+    return [(path, ticket) for path, ticket in pending if path not in rejected_paths], rejected
+
+
 def _apply(ticket: Ticket, tasks: OrderedDict[str, dict[str, Any]], meta: dict[str, Any]) -> None:
     """Fold one ticket onto the in-memory board state (mutates `tasks`/`meta` in place).
 
@@ -521,12 +561,16 @@ def drain_once(board_path: Path, *, dry_run: bool = False, lock_timeout: int = 2
 
     if dry_run:
         good, bad = _parse_pending(inbox)
+        admitted, precondition_rejections = _admit_exact_preconditions(good)
         pending = len(good) + len(bad)
         return DrainResult(
             pending=pending,
-            applied=len(good),
-            rejected=len(bad),
-            note=f"dry-run: {len(good)} applicable, {len(bad)} unparseable",
+            applied=len(admitted),
+            rejected=len(bad) + len(precondition_rejections),
+            note=(
+                f"dry-run: {len(admitted)} applicable, "
+                f"{len(bad)} unparseable, {len(precondition_rejections)} precondition conflict(s)"
+            ),
         )
 
     with queue_lock(board_path, timeout=lock_timeout) as locked:
@@ -547,8 +591,9 @@ def drain_once(board_path: Path, *, dry_run: bool = False, lock_timeout: int = 2
         meta: dict[str, Any] = {"version": board_json.get("version", "1.0"), "portal": board_json.get("portal")}
 
         applied: list[tuple[Path, Ticket]] = []
-        rejected: list[tuple[Path, str]] = list(bad)
-        for p, ticket in good:
+        admitted, precondition_rejections = _admit_exact_preconditions(good)
+        rejected: list[tuple[Path, str]] = [*bad, *precondition_rejections]
+        for p, ticket in admitted:
             try:
                 _apply(ticket, tasks, meta)
                 applied.append((p, ticket))

@@ -321,7 +321,53 @@ def test_concurrent_claim_invalidates_parent_exact_state_and_verification(tmp_pa
     assert drained.rejected == 1
     current = {task.id: task for task in load_limen_file(board).tasks}[task_id]
     assert current.status == "dispatched"
-    with pytest.raises(compiler.MigrationError, match="status 'dispatched'.*expected 'archived'"):
+    with pytest.raises(compiler.MigrationError, match="rejected keeper ticket"):
+        compiler.verify_parents_applied(payload, board)
+
+
+@pytest.mark.parametrize("claim_status", ["dispatched", "in_progress"])
+def test_later_same_batch_claim_rejects_parent_archive_and_verification(tmp_path: Path, claim_status: str) -> None:
+    compiler = _module()
+    payload = _payload()
+    source = load_limen_file(BOARD)
+    frozen = set(payload["frozen_ids"])
+    board = tmp_path / "tasks.yaml"
+    save_limen_file(board, LimenFile(tasks=[task for task in source.tasks if task.id in frozen]))
+    timestamp = compiler.parse_timestamp("2026-07-12T18:00:00Z")
+    kwargs = {"timestamp": timestamp, "agent": "codex", "session_id": f"later-{claim_status}"}
+    children = compiler.compile_child_tickets(payload, **kwargs)
+    compiler.submit_compiled_tickets(board, children)
+    assert drain_once(board).applied == 29
+    parents = compiler.compile_parent_tickets(payload, board, **kwargs)
+    compiler.submit_compiled_tickets(board, parents)
+
+    task_id = "DISCOVER-organvm-arca"
+    row = payload["tasks"][task_id]
+    later_claim = compiler.Ticket(
+        ticket_id=f"later-{claim_status}-claim",
+        timestamp=timestamp + timedelta(seconds=1),
+        agent="jules",
+        session_id=f"later-{claim_status}",
+        intent="task.upsert",
+        task_id=task_id,
+        patch={
+            "predicate": row["predicate"],
+            "receipt_target": row["receipt_target"],
+            "status": claim_status,
+        },
+        log={"status": claim_status, "output": "later same-batch claim"},
+    )
+    compiler.submit_ticket(board, later_claim)
+    drained = drain_once(board)
+
+    assert (drained.applied, drained.rejected) == (52, 1)
+    current = {task.id: task for task in load_limen_file(board).tasks}[task_id]
+    assert current.status == claim_status
+    assert "archived" not in [entry.status for entry in current.dispatch_log]
+    parent = next(ticket for ticket in parents if ticket.task_id == task_id)
+    reason = (tickets_root(board) / "rejected" / f"{parent.ticket_id}.json.reason.txt").read_text()
+    assert "invalidated regardless of timestamp order" in reason
+    with pytest.raises(compiler.MigrationError, match="rejected keeper ticket"):
         compiler.verify_parents_applied(payload, board)
 
 

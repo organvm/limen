@@ -1476,6 +1476,7 @@
       }
     ],
     "rejection_policy": "fail_closed",
+    "batch_admission": "reject_exact_precondition_ticket_on_any_same_task_pending_state_event_regardless_of_timestamp_order",
     "publication_failure": "shared_queue_lock_then_remove_only_this_invocation_exact_unconsumed_inbox_tickets",
     "retry_identity": "semantic_ticket_id_independent_of_timestamp_agent_session; preserve_first_archived_event_identity",
     "direct_board_write": "forbidden",

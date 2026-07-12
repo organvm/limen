@@ -575,11 +575,6 @@ def verify_parents_applied(payload: dict[str, Any], board_path: Path) -> dict[st
         parent = board.get(task_id)
         if not isinstance(row, dict) or parent is None:
             raise MigrationError(f"parent {task_id!r} is missing after application")
-        expected_status = str((row.get("status_patch") or {}).get("status") or parent.status)
-        if parent.status != expected_status:
-            raise MigrationError(f"parent {task_id!r} has status {parent.status!r}, expected {expected_status!r}")
-        if parent.predicate != row.get("predicate") or parent.receipt_target != row.get("receipt_target"):
-            raise MigrationError(f"parent {task_id!r} lacks the frozen typed contract")
         ticket_id = deterministic_ticket_id(payload, PHASE_PARENTS, task_id)
         filename = f"{ticket_id}.json"
         root = tickets_root(board_path)
@@ -594,6 +589,11 @@ def verify_parents_applied(payload: dict[str, Any], board_path: Path) -> dict[st
         if not archived.exists():
             raise MigrationError(f"parent {task_id!r} lacks a keeper archive receipt")
         archived_ticket = _read_ticket(archived)
+        expected_status = str((row.get("status_patch") or {}).get("status") or parent.status)
+        if parent.status != expected_status:
+            raise MigrationError(f"parent {task_id!r} has status {parent.status!r}, expected {expected_status!r}")
+        if parent.predicate != row.get("predicate") or parent.receipt_target != row.get("receipt_target"):
+            raise MigrationError(f"parent {task_id!r} lacks the frozen typed contract")
         expected_patch = {
             "predicate": row.get("predicate"),
             "receipt_target": row.get("receipt_target"),

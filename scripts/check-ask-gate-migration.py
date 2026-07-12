@@ -434,6 +434,11 @@ def verify_receipt(payload: dict[str, Any]) -> list[str]:
     if application.get("rejection_policy") != "fail_closed":
         errors.append("application_contract.rejection_policy must be fail_closed")
     if (
+        application.get("batch_admission")
+        != "reject_exact_precondition_ticket_on_any_same_task_pending_state_event_regardless_of_timestamp_order"
+    ):
+        errors.append("application_contract must reject same-task batch races regardless of timestamp order")
+    if (
         application.get("publication_failure")
         != "shared_queue_lock_then_remove_only_this_invocation_exact_unconsumed_inbox_tickets"
     ):
