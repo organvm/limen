@@ -51,25 +51,38 @@ finalize it automatically after eight hours:
 python3 scripts/overnight-watch.py --start-trial
 ```
 
-The active window is recorded in `logs/overnight-trial-window.json`. Finalization
-writes `logs/overnight-trial.json`, a counts-only, content-addressed receipt. A
-passing receipt requires:
+The active window is recorded in `logs/overnight-trial-window.json`. It seals the
+existing byte prefixes of the ordinary watch log and the dedicated
+`logs/overnight-trial-observations.jsonl` chain, plus every task-event ID already
+present. An exclusive content-addressed anchor records the marker's actual file
+creation time, and monotonic-clock custody must also span the full eight hours;
+changing the wall clock cannot backfill the run. Finalization writes
+`logs/overnight-trial.json`, a counts-only,
+content-addressed receipt. A passing receipt requires:
 
 - a prospective, single active marker whose evaluator remains unchanged for exactly eight hours;
-- complete sample coverage with no gap over ten minutes;
-- a newly appended typed `done` event or typed owner-blocked event in every 90-minute window;
+- complete prospective sample coverage with no gap over ten minutes, with each sample bound to
+  exactly one newly appended ordinary watch row and the previous observation hash;
+- a newly first-observed typed `done` or owner-blocked event, whose predicate passes and whose
+  durable receipt target resolves, with no rolling activity gap over 90 minutes including both
+  trial boundaries;
 - a fresh warm handoff at the end;
-- at least one newly appended structured `in_progress` session event;
+- at least one newly observed `in_progress` event whose provider-native session is independently
+  present in a supported source (currently Jules remote sessions or a GitHub Actions run);
 - a fresh, validated, exact `all/all` prompt-atom snapshot on every sample, with zero increase in
-  `coverage.operator_occurrences`; and
+  operator occurrence IDs from the preserved append-only prompt journal; and
 - zero watch alerts.
 
 The receipt contains only window/count summaries plus SHA-256 hashes of the
 evaluator and normalized inputs. Re-finalizing the same window is byte-idempotent.
-The checker reconstructs the receipt from the exact bounded watch log and current
-append-only task dispatch history; a self-consistent but fabricated hash is rejected.
+The checker reconstructs the receipt from the prospective observation hash chain,
+verifies every preserved watch and prompt-journal prefix, rejects task-event
+removal or rewriting, and confirms that credited proof IDs first appeared after
+the sealed baseline. Pre-seeded future timestamps, self-consistent sample lies,
+source truncation, and rewritten source prefixes do not count.
 
-Trial start intentionally has no backfill arguments and refuses to replace an active
+Trial start and finalization intentionally have no backfill arguments; finalization
+also refuses to run before the marker's real end time. Trial start refuses to replace an active
 marker. Prompt authority is fail-closed: while issue
 [`#957`](https://github.com/organvm/limen/issues/957) remains `partial:all`, or while its
 source cursor cannot prove a fresh exact scan, `--start-trial` fails instead of

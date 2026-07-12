@@ -152,56 +152,106 @@ spec = importlib.util.spec_from_file_location("omega_watch_fixture", script)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
-tasks = []
-for index, minute in enumerate((60, 150, 240, 330, 420), start=1):
-    tasks.append({
-        "id": f"VALUE-{index}", "status": "done", "target_agent": "codex",
-        "predicate": f"python3 check-{index}.py", "receipt_target": f"git:organvm/limen:docs/r-{index}.json",
-        "dispatch_log": [{"timestamp": (start + dt.timedelta(minutes=minute)).isoformat(),
-                          "agent": "codex", "session_id": f"s-{index}", "status": "done",
+clock = [start]
+module.utc_now = lambda: clock[0]
+module.time.monotonic_ns = lambda: 10_000_000_000_000 + int((clock[0] - start).total_seconds() * 1_000_000_000)
+module._anchor_created_ns = lambda _path: int(start.timestamp() * 1_000_000_000)
+module._cursor_digest = lambda cursor: module.canonical_hash(cursor)
+module._cursor_semantic = lambda cursor: cursor
+module.handoff_relay_snapshot = lambda **_kwargs: {"ok": True, "check_returncode": 0}
+module._prove_terminal_event = lambda entry: {
+    "event_id": entry["event_id"], "proof_hash": module.canonical_hash(entry)
+}
+module._prove_session_event = lambda entry: {
+    "event_id": entry["event_id"], "provider": "jules", "proof_hash": module.canonical_hash(entry)
+}
+module.TASKS_PATH.write_text(json.dumps({"version": 1, "tasks": []}))
+(module.LOGS / "async-runs").mkdir(parents=True, exist_ok=True)
+(module.LOGS / "handoff.json").write_text('{"fresh":true}\n')
+
+def signature(path):
+    stat = path.stat()
+    return {"size": stat.st_size, "mtime_ns": stat.st_mtime_ns, "mode": stat.st_mode & 0o777}
+
+def write_prompt(at):
+    source = module.PROMPT_ATOM_SNAPSHOT
+    source.parent.mkdir(parents=True, exist_ok=True)
+    events = source.parent / "prompt-events.jsonl"
+    outcomes = source.parent / "prompt-atom-outcomes.jsonl"
+    events.touch(exist_ok=True)
+    outcomes.touch(exist_ok=True)
+    cursor = {
+        "scope": "all", "target_scope": "all", "all_baseline_complete": True,
+        "pending_files": 0, "source_errors": [], "unsupported_source_count": 0,
+        "unresolved_unit_count": 0, "adapter_gaps": [],
+        "source_families": {"fixture": {"discovered": 1, "converged": 1, "pending": 0,
+                                                   "errors": 0, "unsupported": 0}},
+        "last_scan_at": at.isoformat(timespec="seconds"),
+    }
+    cursor_path = source.parent / "source-cursor.json"
+    cursor_path.write_text(json.dumps(cursor, sort_keys=True))
+    snapshot = {
+        "source_cursor_digest": module._cursor_digest(cursor), "source_scope": cursor,
+        "coverage": {"operator_occurrences": 0}, "validation": {"ok": True},
+        "journal_signatures": {"events": signature(events), "outcomes": signature(outcomes),
+                               "cursor": signature(cursor_path)},
+    }
+    source.write_text(json.dumps(snapshot, sort_keys=True))
+
+def append_task(at, index, status, agent="codex", session_id=None):
+    board = json.loads(module.TASKS_PATH.read_text())
+    board["tasks"].append({
+        "id": f"TRIAL-{index}", "status": status, "target_agent": agent,
+        "predicate": "python3 -c 'raise SystemExit(0)'",
+        "receipt_target": f"git:organvm/limen:docs/r-{index}.json",
+        "dispatch_log": [{"timestamp": at.isoformat(timespec="seconds"), "agent": agent,
+                          "session_id": session_id or f"s-{index}", "status": status,
                           "output": "verified durable receipt"}],
     })
-tasks.append({
-    "id": "SEAM-1", "status": "in_progress", "target_agent": "codex",
-    "predicate": "python3 seam.py", "receipt_target": "git:organvm/limen:docs/seam.json",
-    "dispatch_log": [{"timestamp": (start + dt.timedelta(minutes=30)).isoformat(),
-                      "agent": "codex", "session_id": "session-seam", "status": "in_progress",
-                      "output": "execution started"}],
-})
-module.TASKS_PATH.write_text(json.dumps({"version": 1, "tasks": tasks}))
+    module.TASKS_PATH.write_text(json.dumps(board, sort_keys=True))
 
-def prompt(at):
-    return {
-        "schema_version": module.TRIAL_PROMPT_AUTHORITY_SCHEMA_VERSION,
-        "captured_at": at.isoformat(timespec="seconds"), "present": True,
-        "validation_ok": True, "exact_all": True, "fresh": True,
-        "last_scan_at": at.isoformat(timespec="seconds"), "age_sec": 0,
-        "operator_occurrences": 7, "snapshot_digest": "1" * 64,
-        "cursor_digest": "2" * 64, "error_count": 0,
+def sample(at):
+    clock[0] = at
+    write_prompt(at)
+    snapshot = {
+        "timestamp": at.isoformat(timespec="seconds"),
+        "launchd": {"ok": True, "state": "running", "env": {}}, "log_age_sec": 0,
+        "heartbeat": {"latest_tick": {"timestamp": at.isoformat(timespec="seconds")}},
+        "worker_count": 0, "heartbeat_child_count": 0, "stale_tick_count": 0,
+        "handoff_relay": {"ok": True, "check_returncode": 0},
+        "value_gate": {"returncode": 0}, "dispatch_control": {"allow_dispatch": True},
+        "plist_drift": [], "throughput": {"below_floor": False},
     }
+    module.write_jsonl(snapshot)
+    module.append_trial_observation(snapshot)
 
-baseline = {"task_events": module.task_event_snapshot(start), "prompt_authority": prompt(start)}
-active = {
-    "schema_version": module.TRIAL_MARKER_SCHEMA_VERSION, "active": True,
-    "started_at": start.isoformat(timespec="seconds"),
-    "window_start": start.isoformat(timespec="seconds"),
-    "window_end": (start + dt.timedelta(hours=8)).isoformat(timespec="seconds"),
-    "evaluator_hash": module.evaluator_hash(), "baseline": baseline,
-}
-active["content_hash"] = module.canonical_hash(active)
-module.TRIAL_WINDOW_PATH.write_text(json.dumps(active))
-rows = []
-for minute in range(0, 481, 5):
+write_prompt(start)
+active, _ = module.start_trial()
+for minute in range(5, 481, 5):
     at = start + dt.timedelta(minutes=minute)
-    rows.append({"timestamp": at.isoformat(timespec="seconds"), "status": "ok", "alerts": [],
-                 "handoff_relay": {"ok": True, "check_returncode": 0},
-                 "task_events": module.task_event_snapshot(at), "prompt_authority": prompt(at)})
-module.RECEIPT_JSONL.write_text("".join(json.dumps(row, sort_keys=True) + "\n" for row in rows))
-result = module.maybe_finalize_trial(now=start + dt.timedelta(hours=8))
+    if minute in (60, 150, 240, 330, 420):
+        append_task(at, minute, "done")
+    if minute == 30:
+        append_task(at, 999, "in_progress", "jules", "12345678901234567890")
+    sample(at)
+clock[0] = start + dt.timedelta(hours=8)
+result = module.maybe_finalize_trial()
 assert result["receipt"]["pass"] is True, result
 PY
 set +e
-LIMEN_ROOT="$work" python3 "$work/scripts/overnight-watch.py" --check-trial >/dev/null 2>&1; rc=$?
+LIMEN_ROOT="$work" python3 - "$work/scripts/overnight-watch.py" >/dev/null 2>&1 <<'PY'
+import datetime as dt, importlib.util, json, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("omega_watch_check", Path(sys.argv[1]))
+module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+terminal = json.loads(module.TRIAL_WINDOW_PATH.read_text()); active = terminal["active_marker"]
+start = module.parse_iso(active["window_start"]); end = module.parse_iso(active["window_end"])
+module.utc_now = lambda: end
+module.time.monotonic_ns = lambda: active["monotonic_start_ns"] + module.TRIAL_DURATION_SEC * 1_000_000_000
+module._anchor_created_ns = lambda _path: int(start.timestamp() * 1_000_000_000)
+raise SystemExit(0 if module.check_trial_receipt()[0] else 1)
+PY
+rc=$?
 set -e
 check "$rc" "0" "case3 content-addressed trial"
 python3 - "$work/logs/overnight-trial.json" <<'PY'
@@ -212,7 +262,19 @@ d["input_hash"] = "f" * 64
 json.dump(d, open(p, "w"), indent=2, sort_keys=True)
 PY
 set +e
-LIMEN_ROOT="$work" python3 "$work/scripts/overnight-watch.py" --check-trial >/dev/null 2>&1; rc=$?
+LIMEN_ROOT="$work" python3 - "$work/scripts/overnight-watch.py" >/dev/null 2>&1 <<'PY'
+import importlib.util, json, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("omega_watch_tamper", Path(sys.argv[1]))
+module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+terminal = json.loads(module.TRIAL_WINDOW_PATH.read_text()); active = terminal["active_marker"]
+start = module.parse_iso(active["window_start"]); end = module.parse_iso(active["window_end"])
+module.utc_now = lambda: end
+module.time.monotonic_ns = lambda: active["monotonic_start_ns"] + module.TRIAL_DURATION_SEC * 1_000_000_000
+module._anchor_created_ns = lambda _path: int(start.timestamp() * 1_000_000_000)
+raise SystemExit(0 if module.check_trial_receipt()[0] else 1)
+PY
+rc=$?
 set -e
 check "$rc" "1" "case3 tamper rejected"
 
