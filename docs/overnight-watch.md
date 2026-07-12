@@ -41,3 +41,31 @@ python3 scripts/overnight-watch.py
 `--watch` exists for a local terminal, but it is not the interactive-agent
 pattern. Agents should inspect the receipt or respond to `WATCH_ALERT`; they
 should not spend a large conversation context on routine five-minute polling.
+
+## Eight-hour unattended trial
+
+Start the fixed contract once; the normal five-minute one-shot producer will
+finalize it automatically after eight hours:
+
+```bash
+python3 scripts/overnight-watch.py --start-trial
+```
+
+The active window is recorded in `logs/overnight-trial-window.json`. Finalization
+writes `logs/overnight-trial.json`, a counts-only, content-addressed receipt. A
+passing receipt requires:
+
+- full eight-hour sample coverage;
+- durable value or an owner-routed blocker in every 90-minute window;
+- a fresh warm handoff at the end;
+- at least one vendor/session seam;
+- complete zero-operator-prompt instrumentation; and
+- zero watch alerts.
+
+The receipt contains only window/count summaries plus SHA-256 hashes of the
+evaluator and normalized inputs. Re-finalizing the same window is byte-idempotent.
+Verify it with:
+
+```bash
+python3 scripts/overnight-watch.py --check-trial
+```

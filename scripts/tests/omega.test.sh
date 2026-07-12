@@ -12,7 +12,9 @@ set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 real_omega="$here/../omega.sh"
+real_watch="$here/../overnight-watch.py"
 [ -f "$real_omega" ] || { echo "FAIL: cannot find omega.sh at $real_omega" >&2; exit 1; }
+[ -f "$real_watch" ] || { echo "FAIL: cannot find overnight-watch.py at $real_watch" >&2; exit 1; }
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -136,15 +138,49 @@ assert d["verdict"] == "BROKEN" and d["fail"] >= 1, d
 print("  case2 stamp OK")
 PY
 
-# ── Case 3: overnight-trial marker flips its rung from SKIP to a live check ───────
-# (Not exercised in --offline since the rung is live; assert the marker path parses without error.)
-echo '{"pass": true, "hours": 9, "vendor_seams": 2, "merged_prs": 7, "operator_prompts": 0}' > "$work/logs/overnight-trial.json"
+# ── Case 3: overnight-trial receipt is content-addressed, not a bare pass boolean ────────────────
+cp "$real_watch" "$work/scripts/overnight-watch.py"
+python3 - "$work/scripts/overnight-watch.py" "$work/logs/overnight-trial.json" <<'PY'
+import datetime as dt
+import hashlib, json, sys
+script, output = sys.argv[1:]
+start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+window_starts = [0, 90, 180, 270, 360, 390]
+windows = [
+    {"index": i, "start": (start + dt.timedelta(minutes=offset)).isoformat(),
+     "end": (start + dt.timedelta(minutes=offset + 90)).isoformat(),
+     "sample_count": 18, "value_receipts": 1, "owner_blockers": 0, "pass": True}
+    for i, offset in enumerate(window_starts, start=1)
+]
+d = {
+    "schema_version": "overnight-trial.v1", "window_start": "2026-07-01T00:00:00+00:00",
+    "window_end": "2026-07-01T08:00:00+00:00", "duration_seconds": 28800, "hours": 8,
+    "value_window_seconds": 5400, "window_count": 6, "windows": windows, "sample_count": 97,
+    "value_receipts": 6, "owner_blockers": 0, "seam_count": 1, "vendor_seams": 1,
+    "handoff_fresh": True, "operator_prompts": 0, "operator_prompt_samples_complete": True,
+    "watch_alerts": 0, "coverage_ok": True, "duration_ok": True, "windows_ok": True,
+    "evaluator_hash": hashlib.sha256(open(script, "rb").read()).hexdigest(), "input_hash": "0" * 64,
+    "pass": True,
+}
+d["content_hash"] = hashlib.sha256(json.dumps(d, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+d["generated_at"] = "2026-07-01T08:00:00+00:00"
+json.dump(d, open(output, "w"), indent=2, sort_keys=True)
+PY
+set +e
+LIMEN_ROOT="$work" python3 "$work/scripts/overnight-watch.py" --check-trial >/dev/null 2>&1; rc=$?
+set -e
+check "$rc" "0" "case3 content-addressed trial"
 python3 - "$work/logs/overnight-trial.json" <<'PY'
 import json, sys
-d = json.load(open(sys.argv[1]))
-assert d.get("pass") is True, d
-print("  case3 marker OK")
+p = sys.argv[1]
+d = json.load(open(p))
+d["input_hash"] = "f" * 64
+json.dump(d, open(p, "w"), indent=2, sort_keys=True)
 PY
+set +e
+LIMEN_ROOT="$work" python3 "$work/scripts/overnight-watch.py" --check-trial >/dev/null 2>&1; rc=$?
+set -e
+check "$rc" "1" "case3 tamper rejected"
 
 echo
 if [ "$fail" -eq 0 ]; then

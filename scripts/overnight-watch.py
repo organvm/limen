@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -32,6 +33,8 @@ STATE_PATH = Path(os.environ.get("LIMEN_OVERNIGHT_WATCH_STATE", LOGS / "overnigh
 RECEIPT_JSONL = Path(os.environ.get("LIMEN_OVERNIGHT_WATCH_RECEIPT", LOGS / "overnight-watch.jsonl"))
 RECEIPT_MD = LOGS / "overnight-watch.md"
 ALERT_PATH = Path(os.environ.get("LIMEN_OVERNIGHT_WATCH_ALERT", LOGS / "overnight-watch-alert.json"))
+TRIAL_PATH = Path(os.environ.get("LIMEN_OVERNIGHT_TRIAL_RECEIPT", LOGS / "overnight-trial.json"))
+TRIAL_WINDOW_PATH = Path(os.environ.get("LIMEN_OVERNIGHT_TRIAL_WINDOW", LOGS / "overnight-trial-window.json"))
 TOKEN_REPORT = Path(os.environ.get("LIMEN_CODEX_TOKEN_REPORT", LOGS / "codex-token-report.json"))
 HANDOFF_SCRIPT = ROOT / "scripts" / "handoff-relay.py"
 SESSION_VALUE_SCRIPT = ROOT / "scripts" / "session-value-review.py"
@@ -58,6 +61,10 @@ ESCALATE_REPO = os.environ.get("LIMEN_CENSOR_ISSUES_REPO", "organvm/limen")
 PLIST_DRIFT_KEYS = ("LIMEN_ASYNC_MAX", "LIMEN_DISPATCH_ASYNC", "LIMEN_DISPATCH_LANES", "LIMEN_ROOT")
 VITALS_SKIP_MARKER = "vitals-pressure: dispatch skipped"
 TAIL_BYTES = 192 * 1024
+TRIAL_SCHEMA_VERSION = "overnight-trial.v1"
+TRIAL_DURATION_SEC = 8 * 60 * 60
+TRIAL_VALUE_WINDOW_SEC = 90 * 60
+TRIAL_EDGE_TOLERANCE_SEC = 10 * 60
 
 EXPECT_DISPATCH_ASYNC = os.environ.get("LIMEN_OVERNIGHT_WATCH_EXPECT_DISPATCH_ASYNC", "")
 EXPECT_DISPATCH_LANES = os.environ.get("LIMEN_OVERNIGHT_WATCH_EXPECT_DISPATCH_LANES", "")
@@ -256,6 +263,30 @@ def load_json(path: Path) -> dict[str, Any]:
     except Exception:
         return {}
     return raw if isinstance(raw, dict) else {}
+
+
+def canonical_hash(value: Any) -> str:
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def evaluator_hash() -> str:
+    try:
+        payload = Path(__file__).read_bytes()
+    except OSError:
+        return "unavailable"
+    return hashlib.sha256(payload).hexdigest()
+
+
+def operator_prompt_snapshot() -> dict[str, Any]:
+    """Count operator prompts emitted by this unattended one-shot producer.
+
+    The watch process has no interactive input path: it either writes a receipt or exits with a
+    machine-readable alert. Recording the invariant on every sample makes old/uninstrumented
+    samples fail closed instead of being interpreted as zero prompts.
+    """
+
+    return {"count": 0, "source": "noninteractive-one-shot"}
 
 
 def token_snapshot() -> dict[str, Any]:
@@ -518,6 +549,7 @@ def build_snapshot(*, refresh_handoff: bool = True, record_gate: bool = True) ->
             "max_stale_ticks": MAX_STALE_TICKS,
         },
         "token_report": token_snapshot(),
+        "operator_prompts": operator_prompt_snapshot(),
     }
     snapshot["handoff_relay"] = handoff_relay_snapshot(refresh=refresh_handoff)
     snapshot["value_gate"] = session_value_gate_snapshot(record_gate=record_gate)
@@ -952,6 +984,400 @@ def write_receipts(snapshot: dict[str, Any]) -> None:
     update_alert(snapshot)
 
 
+def load_jsonl(path: Path) -> list[dict[str, Any]]:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    records: list[dict[str, Any]] = []
+    for line in lines:
+        try:
+            value = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(value, dict):
+            records.append(value)
+    return records
+
+
+def _record_time(record: dict[str, Any], key: str = "timestamp") -> dt.datetime | None:
+    return parse_iso(str(record.get(key) or ""))
+
+
+def _bounded_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _value_vector(record: dict[str, Any]) -> dict[str, int]:
+    value_gate = record.get("value_gate") if isinstance(record.get("value_gate"), dict) else {}
+    gate = value_gate.get("gate") if isinstance(value_gate.get("gate"), dict) else {}
+    evidence = gate.get("evidence") if isinstance(gate.get("evidence"), dict) else {}
+    pressures = gate.get("pressures") if isinstance(gate.get("pressures"), dict) else {}
+    return {
+        "batch_receipts": _bounded_int(evidence.get("batch_receipts")),
+        "prompt_events_recorded": _bounded_int(evidence.get("prompt_events_recorded")),
+        "done_or_routed_roots": _bounded_int(pressures.get("done_or_routed_roots")),
+        "value_commits": _bounded_int(pressures.get("value_commits")),
+    }
+
+
+def _owner_route_signature(record: dict[str, Any]) -> str:
+    dispatch = record.get("dispatch_control") if isinstance(record.get("dispatch_control"), dict) else {}
+    if dispatch.get("allow_dispatch", True):
+        return ""
+    value_gate = record.get("value_gate") if isinstance(record.get("value_gate"), dict) else {}
+    gate = value_gate.get("gate") if isinstance(value_gate.get("gate"), dict) else {}
+    evidence = gate.get("evidence") if isinstance(gate.get("evidence"), dict) else {}
+    next_action = gate.get("next_action") if isinstance(gate.get("next_action"), dict) else {}
+    command = str(next_action.get("command") or dispatch.get("next_command") or "").strip()
+    owner = str(
+        next_action.get("owner")
+        or next_action.get("repo")
+        or evidence.get("next_product_owner")
+        or evidence.get("owner")
+        or ""
+    ).strip()
+    source = str(next_action.get("source") or "").strip()
+    if not command or not (owner or source):
+        return ""
+    return canonical_hash(
+        {
+            "action": gate.get("action") or value_gate.get("action") or "blocked",
+            "command": command,
+            "owner": owner,
+            "source": source,
+        }
+    )
+
+
+def _latest_at_or_before(
+    records: list[tuple[dt.datetime, dict[str, Any]]],
+    moment: dt.datetime,
+) -> dict[str, Any] | None:
+    latest = None
+    for timestamp, record in records:
+        if timestamp > moment:
+            break
+        latest = record
+    return latest
+
+
+def _trial_windows(start: dt.datetime, end: dt.datetime) -> list[tuple[dt.datetime, dt.datetime]]:
+    width = dt.timedelta(seconds=TRIAL_VALUE_WINDOW_SEC)
+    windows: list[tuple[dt.datetime, dt.datetime]] = []
+    cursor = start
+    while cursor + width <= end:
+        windows.append((cursor, cursor + width))
+        cursor += width
+    final_start = end - width
+    if final_start >= start and (not windows or final_start > windows[-1][0]):
+        windows.append((final_start, end))
+    return windows
+
+
+def _trial_seam_count(
+    records: list[tuple[dt.datetime, dict[str, Any]]],
+    start: dt.datetime,
+    end: dt.datetime,
+) -> int:
+    seams: set[str] = set()
+    prior_sessions: int | None = None
+    prior_lanes = ""
+    prior_async = ""
+    for timestamp, record in records:
+        in_window = start < timestamp <= end
+        heartbeat = record.get("heartbeat") if isinstance(record.get("heartbeat"), dict) else {}
+        async_line = heartbeat.get("latest_async") if isinstance(heartbeat.get("latest_async"), dict) else {}
+        async_raw = str(async_line.get("raw") or "")
+        if in_window and _bounded_int(async_line.get("launched")) > 0 and async_raw and async_raw != prior_async:
+            seams.add(canonical_hash({"kind": "launch", "raw_hash": canonical_hash(async_raw)}))
+        if async_raw:
+            prior_async = async_raw
+
+        token = record.get("token_report") if isinstance(record.get("token_report"), dict) else {}
+        sessions = token.get("session_count")
+        try:
+            session_count = int(sessions) if sessions is not None else None
+        except (TypeError, ValueError):
+            session_count = None
+        if in_window and prior_sessions is not None and session_count is not None and session_count != prior_sessions:
+            seams.add(canonical_hash({"kind": "session-count", "from": prior_sessions, "to": session_count}))
+        if session_count is not None:
+            prior_sessions = session_count
+
+        lanes = str(heartbeat.get("latest_dispatch_lanes") or "")
+        if in_window and prior_lanes and lanes and lanes != prior_lanes:
+            seams.add(canonical_hash({"kind": "vendor-lanes", "from": prior_lanes, "to": lanes}))
+        if lanes:
+            prior_lanes = lanes
+    return len(seams)
+
+
+def build_trial_receipt(
+    start: dt.datetime,
+    end: dt.datetime,
+    *,
+    watch_path: Path = RECEIPT_JSONL,
+    ticks_path: Path = TICKS_PATH,
+) -> dict[str, Any]:
+    start = start.astimezone(dt.timezone.utc)
+    end = end.astimezone(dt.timezone.utc)
+    pad = dt.timedelta(seconds=TRIAL_EDGE_TOLERANCE_SEC)
+
+    watch_records: list[tuple[dt.datetime, dict[str, Any]]] = []
+    for record in load_jsonl(watch_path):
+        timestamp = _record_time(record)
+        if timestamp and start - pad <= timestamp <= end:
+            watch_records.append((timestamp, record))
+    watch_records.sort(key=lambda item: item[0])
+    in_window = [(timestamp, record) for timestamp, record in watch_records if start <= timestamp <= end]
+
+    tick_records: list[tuple[dt.datetime, dict[str, Any]]] = []
+    for record in load_jsonl(ticks_path):
+        timestamp = _record_time(record, "ts")
+        if timestamp and start - pad <= timestamp <= end:
+            tick_records.append((timestamp, record))
+    tick_records.sort(key=lambda item: item[0])
+
+    windows: list[dict[str, Any]] = []
+    total_value_receipts = 0
+    total_owner_blockers = 0
+    for index, (window_start, window_end) in enumerate(_trial_windows(start, end), start=1):
+        baseline_watch = _latest_at_or_before(watch_records, window_start)
+        final_watch = _latest_at_or_before(watch_records, window_end)
+        baseline_tick = _latest_at_or_before(tick_records, window_start)
+        final_tick = _latest_at_or_before(tick_records, window_end)
+
+        value_receipts = 0
+        if baseline_watch is not None and final_watch is not None:
+            before = _value_vector(baseline_watch)
+            after = _value_vector(final_watch)
+            value_receipts += sum(max(0, after[key] - before[key]) for key in before)
+        if baseline_tick is not None and final_tick is not None:
+            before_completed = _bounded_int(baseline_tick.get("done")) + _bounded_int(baseline_tick.get("archived"))
+            after_completed = _bounded_int(final_tick.get("done")) + _bounded_int(final_tick.get("archived"))
+            value_receipts += max(0, after_completed - before_completed)
+
+        window_records = [record for timestamp, record in in_window if window_start < timestamp <= window_end]
+        owner_blockers = len({signature for record in window_records if (signature := _owner_route_signature(record))})
+        sample_count = len(window_records)
+        passed = sample_count > 0 and (value_receipts > 0 or owner_blockers > 0)
+        windows.append(
+            {
+                "index": index,
+                "start": window_start.isoformat(timespec="seconds"),
+                "end": window_end.isoformat(timespec="seconds"),
+                "sample_count": sample_count,
+                "value_receipts": value_receipts,
+                "owner_blockers": owner_blockers,
+                "pass": passed,
+            }
+        )
+        total_value_receipts += value_receipts
+        total_owner_blockers += owner_blockers
+
+    sample_records = [record for _, record in in_window]
+    first_sample = in_window[0][0] if in_window else None
+    last_sample = in_window[-1][0] if in_window else None
+    coverage_ok = bool(first_sample and last_sample and first_sample <= start + pad and last_sample >= end - pad)
+    prompt_samples_complete = bool(sample_records) and all(
+        isinstance(record.get("operator_prompts"), dict)
+        and record["operator_prompts"].get("source") == "noninteractive-one-shot"
+        for record in sample_records
+    )
+    operator_prompts = sum(
+        _bounded_int((record.get("operator_prompts") or {}).get("count"))
+        for record in sample_records
+        if isinstance(record.get("operator_prompts"), dict)
+    )
+    watch_alerts = sum(len(record.get("alerts") or []) for record in sample_records)
+    handoff_fresh = bool(sample_records and (sample_records[-1].get("handoff_relay") or {}).get("ok"))
+    seam_count = _trial_seam_count(watch_records, start, end)
+    duration_seconds = max(0, int((end - start).total_seconds()))
+    duration_ok = duration_seconds >= TRIAL_DURATION_SEC
+    windows_ok = bool(windows) and all(window["pass"] for window in windows)
+
+    normalized_input = {
+        "start": start.isoformat(timespec="seconds"),
+        "end": end.isoformat(timespec="seconds"),
+        "watch": [
+            {
+                "timestamp": timestamp.isoformat(timespec="seconds"),
+                "status": record.get("status"),
+                "alerts": sorted(str(alert.get("id") or "") for alert in (record.get("alerts") or [])),
+                "handoff_fresh": bool((record.get("handoff_relay") or {}).get("ok")),
+                "operator_prompts": (record.get("operator_prompts") or {}).get("count"),
+                "operator_source": (record.get("operator_prompts") or {}).get("source"),
+                "value": _value_vector(record),
+                "owner_route_hash": _owner_route_signature(record),
+                "async_hash": canonical_hash((record.get("heartbeat") or {}).get("latest_async") or {}),
+                "session_count": (record.get("token_report") or {}).get("session_count"),
+                "lanes_hash": canonical_hash((record.get("heartbeat") or {}).get("latest_dispatch_lanes") or ""),
+            }
+            for timestamp, record in watch_records
+        ],
+        "ticks": [
+            {
+                "timestamp": timestamp.isoformat(timespec="seconds"),
+                "done": _bounded_int(record.get("done")),
+                "archived": _bounded_int(record.get("archived")),
+            }
+            for timestamp, record in tick_records
+        ],
+    }
+    receipt: dict[str, Any] = {
+        "schema_version": TRIAL_SCHEMA_VERSION,
+        "window_start": start.isoformat(timespec="seconds"),
+        "window_end": end.isoformat(timespec="seconds"),
+        "duration_seconds": duration_seconds,
+        "hours": round(duration_seconds / 3600, 3),
+        "value_window_seconds": TRIAL_VALUE_WINDOW_SEC,
+        "window_count": len(windows),
+        "windows": windows,
+        "sample_count": len(sample_records),
+        "value_receipts": total_value_receipts,
+        "owner_blockers": total_owner_blockers,
+        "seam_count": seam_count,
+        "vendor_seams": seam_count,
+        "handoff_fresh": handoff_fresh,
+        "operator_prompts": operator_prompts,
+        "operator_prompt_samples_complete": prompt_samples_complete,
+        "watch_alerts": watch_alerts,
+        "coverage_ok": coverage_ok,
+        "duration_ok": duration_ok,
+        "windows_ok": windows_ok,
+        "evaluator_hash": evaluator_hash(),
+        "input_hash": canonical_hash(normalized_input),
+    }
+    receipt["pass"] = bool(
+        duration_ok
+        and coverage_ok
+        and windows_ok
+        and handoff_fresh
+        and seam_count >= 1
+        and prompt_samples_complete
+        and operator_prompts == 0
+        and watch_alerts == 0
+    )
+    return receipt
+
+
+def write_trial_receipt(receipt: dict[str, Any], path: Path = TRIAL_PATH) -> tuple[dict[str, Any], bool]:
+    deterministic = dict(receipt)
+    deterministic.pop("generated_at", None)
+    deterministic.pop("content_hash", None)
+    content_hash = canonical_hash(deterministic)
+    existing = load_json(path)
+    if existing.get("content_hash") == content_hash:
+        return existing, False
+    payload = {**deterministic, "generated_at": iso_now(), "content_hash": content_hash}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return payload, True
+
+
+def start_trial(start: dt.datetime | None = None, path: Path = TRIAL_WINDOW_PATH) -> tuple[dict[str, Any], bool]:
+    start = (start or utc_now()).astimezone(dt.timezone.utc).replace(microsecond=0)
+    end = start + dt.timedelta(seconds=TRIAL_DURATION_SEC)
+    marker = {
+        "schema_version": TRIAL_SCHEMA_VERSION,
+        "active": True,
+        "window_start": start.isoformat(timespec="seconds"),
+        "window_end": end.isoformat(timespec="seconds"),
+        "evaluator_hash": evaluator_hash(),
+    }
+    marker["content_hash"] = canonical_hash(marker)
+    existing = load_json(path)
+    if existing.get("content_hash") == marker["content_hash"]:
+        return existing, False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(marker, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return marker, True
+
+
+def finalize_trial(
+    start: dt.datetime,
+    end: dt.datetime,
+    *,
+    output: Path = TRIAL_PATH,
+    watch_path: Path = RECEIPT_JSONL,
+    ticks_path: Path = TICKS_PATH,
+) -> tuple[dict[str, Any], bool]:
+    receipt = build_trial_receipt(start, end, watch_path=watch_path, ticks_path=ticks_path)
+    return write_trial_receipt(receipt, output)
+
+
+def maybe_finalize_trial(now: dt.datetime | None = None) -> dict[str, Any] | None:
+    marker = load_json(TRIAL_WINDOW_PATH)
+    if not marker.get("active"):
+        return None
+    start = parse_iso(str(marker.get("window_start") or ""))
+    end = parse_iso(str(marker.get("window_end") or ""))
+    if not start or not end or (now or utc_now()).astimezone(dt.timezone.utc) < end:
+        return None
+    receipt, changed = finalize_trial(start, end)
+    completed = {
+        **marker,
+        "active": False,
+        "finalized_at": receipt.get("generated_at"),
+        "receipt_content_hash": receipt.get("content_hash"),
+        "receipt_pass": receipt.get("pass"),
+    }
+    completed["content_hash"] = canonical_hash(
+        {key: value for key, value in completed.items() if key != "content_hash"}
+    )
+    TRIAL_WINDOW_PATH.write_text(json.dumps(completed, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"receipt": receipt, "changed": changed}
+
+
+def check_trial_receipt(
+    path: Path = TRIAL_PATH,
+    marker_path: Path = TRIAL_WINDOW_PATH,
+) -> tuple[bool, list[str]]:
+    receipt = load_json(path)
+    errors: list[str] = []
+    marker = load_json(marker_path)
+    if marker.get("active"):
+        errors.append("trial window is still active")
+    if receipt.get("schema_version") != TRIAL_SCHEMA_VERSION:
+        errors.append("schema_version mismatch")
+    if not receipt.get("pass"):
+        errors.append("trial receipt is not passing")
+    if _bounded_int(receipt.get("duration_seconds")) < TRIAL_DURATION_SEC:
+        errors.append("duration is under eight hours")
+    if _bounded_int(receipt.get("value_window_seconds")) != TRIAL_VALUE_WINDOW_SEC:
+        errors.append("value-window contract mismatch")
+    windows = receipt.get("windows") if isinstance(receipt.get("windows"), list) else []
+    if not windows or _bounded_int(receipt.get("window_count")) != len(windows):
+        errors.append("window count is missing or inconsistent")
+    elif not all(isinstance(window, dict) and window.get("pass") for window in windows):
+        errors.append("one or more value windows failed")
+    if not receipt.get("coverage_ok") or not receipt.get("duration_ok") or not receipt.get("windows_ok"):
+        errors.append("coverage/duration/value-window gate failed")
+    if not receipt.get("handoff_fresh"):
+        errors.append("warm handoff is missing")
+    if _bounded_int(receipt.get("seam_count")) < 1:
+        errors.append("no vendor/session seam observed")
+    if not receipt.get("operator_prompt_samples_complete") or _bounded_int(receipt.get("operator_prompts")) != 0:
+        errors.append("operator-prompt proof is incomplete or nonzero")
+    if _bounded_int(receipt.get("watch_alerts")) != 0:
+        errors.append("watch alerts were observed")
+    for key in ("evaluator_hash", "input_hash", "content_hash"):
+        if not re.fullmatch(r"[0-9a-f]{64}", str(receipt.get(key) or "")):
+            errors.append(f"{key} is not sha256")
+    if receipt.get("evaluator_hash") != evaluator_hash():
+        errors.append("evaluator hash does not match current overnight-watch.py")
+    deterministic = dict(receipt)
+    deterministic.pop("generated_at", None)
+    claimed_content_hash = deterministic.pop("content_hash", None)
+    if claimed_content_hash != canonical_hash(deterministic):
+        errors.append("content hash mismatch")
+    return not errors, errors
+
+
 def print_summary(snapshot: dict[str, Any]) -> None:
     heartbeat = snapshot.get("heartbeat") or {}
     async_line = (heartbeat.get("latest_async") or {}).get("raw")
@@ -984,6 +1410,9 @@ def run_once(*, dry_run: bool, json_output: bool) -> int:
         if heal_actions:
             snapshot["heal"] = heal_actions
         write_receipts(snapshot)
+        trial_finalization = maybe_finalize_trial()
+        if trial_finalization:
+            snapshot["trial_finalization"] = trial_finalization
     if json_output:
         print(json.dumps(snapshot, indent=2, sort_keys=True))
     else:
@@ -999,6 +1428,25 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="inspect without writing receipts")
     parser.add_argument("--json", action="store_true", help="print the full snapshot")
+    trial_mode = parser.add_mutually_exclusive_group()
+    trial_mode.add_argument(
+        "--start-trial",
+        action="store_true",
+        help="start a fixed eight-hour unattended trial consumed by later one-shot invocations",
+    )
+    trial_mode.add_argument(
+        "--finalize-trial",
+        action="store_true",
+        help="finalize the due active trial, or the explicit --trial-start/--trial-end window",
+    )
+    trial_mode.add_argument(
+        "--check-trial",
+        action="store_true",
+        help="validate the content-addressed final trial receipt and inactive marker",
+    )
+    parser.add_argument("--trial-start", help="ISO-8601 trial start (testing/backfill; default: now/active marker)")
+    parser.add_argument("--trial-end", help="ISO-8601 trial end (testing/backfill; default: active marker)")
+    parser.add_argument("--trial-output", default=str(TRIAL_PATH), help="final counts-only trial receipt path")
     parser.add_argument(
         "--watch", action="store_true", help="run an attached loop; launchd should prefer one-shot mode"
     )
@@ -1007,6 +1455,65 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--max-samples", type=int, default=0, help="watch-loop sample cap; 0 means forever")
     args = parser.parse_args(argv)
+
+    if args.start_trial:
+        requested_start = parse_iso(args.trial_start) if args.trial_start else None
+        if args.trial_start and requested_start is None:
+            parser.error("--trial-start must be valid ISO-8601")
+        marker, changed = start_trial(requested_start)
+        if args.json:
+            print(json.dumps({**marker, "changed": changed}, indent=2, sort_keys=True))
+        else:
+            print(
+                "overnight-watch: trial "
+                f"{'started' if changed else 'already-active'} "
+                f"{marker.get('window_start')} -> {marker.get('window_end')}"
+            )
+        return 0
+
+    if args.finalize_trial:
+        marker = load_json(TRIAL_WINDOW_PATH)
+        requested_start = parse_iso(args.trial_start) if args.trial_start else parse_iso(marker.get("window_start"))
+        requested_end = parse_iso(args.trial_end) if args.trial_end else parse_iso(marker.get("window_end"))
+        if not requested_start or not requested_end:
+            parser.error("finalization requires an active marker or valid --trial-start and --trial-end")
+        if not args.trial_end and utc_now() < requested_end:
+            print(f"overnight-watch: trial pending until {requested_end.isoformat(timespec='seconds')}")
+            return 10
+        receipt, changed = finalize_trial(
+            requested_start,
+            requested_end,
+            output=Path(args.trial_output).expanduser(),
+        )
+        if marker.get("active") and not args.trial_start and not args.trial_end:
+            maybe_finalize_trial(now=requested_end)
+        if args.json:
+            print(json.dumps({**receipt, "changed": changed}, indent=2, sort_keys=True))
+        else:
+            print(
+                "overnight-watch: trial "
+                f"pass={str(receipt.get('pass', False)).lower()} hours={receipt.get('hours')} "
+                f"windows={receipt.get('window_count')} value={receipt.get('value_receipts')} "
+                f"blockers={receipt.get('owner_blockers')} seams={receipt.get('seam_count')} "
+                f"prompts={receipt.get('operator_prompts')} alerts={receipt.get('watch_alerts')} "
+                f"changed={str(changed).lower()}"
+            )
+        return 0 if receipt.get("pass") else 1
+
+    if args.check_trial:
+        ok, errors = check_trial_receipt(Path(args.trial_output).expanduser())
+        if ok:
+            receipt = load_json(Path(args.trial_output).expanduser())
+            print(
+                "overnight-watch: trial receipt OK "
+                f"hours={receipt.get('hours')} windows={receipt.get('window_count')} "
+                f"value={receipt.get('value_receipts')} blockers={receipt.get('owner_blockers')} "
+                f"seams={receipt.get('seam_count')}"
+            )
+            return 0
+        for error in errors:
+            print(f"overnight-watch: trial receipt FAIL - {error}", file=sys.stderr)
+        return 1
 
     if not args.watch:
         return run_once(dry_run=args.dry_run, json_output=args.json)
