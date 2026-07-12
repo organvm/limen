@@ -87,6 +87,16 @@ entities:
         type: checking
         balance_known: false
         notes: "card-0186 fraud hold blocks autopay (see his-hand-levers.json L-CARD-FRAUD-HOLD)"
+      - id: santander-card-0186
+        institution: "Santander"
+        type: credit
+        balance_known: false
+        notes: "Known fraud-hold/card interruption; register as liability so runway and autopay risk are visible even before balance entry"
+      - id: student-loan-nelnet
+        institution: "Nelnet / U.S. Department of Education"
+        type: loan
+        balance_known: false
+        notes: "Default/IDR recertification risk; principal must confirm servicer balance and payment requirement"
       - id: icloud-email
         institution: "Apple (iCloud)"
         type: receivable
@@ -192,6 +202,20 @@ obligation_sources:
         frequency: "monthly"
         priority: 88
         next_step: "Log in at nelnet.studentaid.gov: check default status, recertify IDR plan"
+      - id: card-0186-fraud-hold
+        entity: anthony-personal
+        title: "Santander card-0186 — fraud hold blocks autopay"
+        amount_unknown: true
+        frequency: "one-time"
+        priority: 90
+        next_step: "Verify the fraud hold through Santander's official portal/phone path; then update dependent autopay methods"
+      - id: billing-cascade-card-hold
+        entity: anthony-personal
+        title: "Billing cascade — subscriptions and infra tied to card-0186"
+        amount_unknown: true
+        frequency: "monthly"
+        priority: 82
+        next_step: "After card hold clears, update the payment method for high-value services first"
       - id: stripe-kyc
         entity: sovereign-systems-llc
         title: "KYC / identity verification — Stripe"

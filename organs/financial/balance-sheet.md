@@ -1,6 +1,6 @@
 # Financial Office — Consolidated Balance Sheet
 
-> Generated: 2026-07-03T11:43:04Z
+> Generated: 2026-07-03T23:58:44Z
 > *Advisory estimate. Balances marked `-` need principal entry.
 
 ## Net Worth
@@ -28,9 +28,11 @@
 
 | Account | Type | Balance | Status |
 |---|---|---|---|
+| anthony-personal:santander-card-0186 | credit | - | (needs entry) |
+| anthony-personal:student-loan-nelnet | loan | - | (needs entry) |
 | **Total Liabilities** | | **$0.00** | 0 known |
 
 ### Balance History (snapshots)
-- **Snapshots recorded:** 1
+- **Snapshots recorded:** 2
 - **Latest:** 2026-07-03
-- **First snapshot recorded** — trend data will appear after the next beat
+- **Trend tracking active** — run consolidate.py each beat to record changes

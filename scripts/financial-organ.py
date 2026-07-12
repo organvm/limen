@@ -117,6 +117,64 @@ def _has_entity_balances() -> bool:
     return False
 
 
+def _parse_amount(value) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.replace("$", "").replace(",", "").strip()
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+    return None
+
+
+def _obligation_amount_known(obligation: dict) -> bool:
+    if obligation.get("amount_unknown") is True:
+        return False
+    for field in (
+        "amount_usd",
+        "amount",
+        "monthly_amount",
+        "estimated_monthly_amount",
+        "estimated_amount",
+    ):
+        if _parse_amount(obligation.get(field)) is not None:
+            return True
+    return _parse_amount(obligation.get("amount_cents")) is not None
+
+
+def _financial_obligations_for_maturity() -> list[dict]:
+    root_ledger = ROOT / "obligations-ledger.json"
+    try:
+        if root_ledger.exists():
+            data = json.loads(root_ledger.read_text())
+            root_obs = [o for o in data.get("obligations", []) if o.get("rung") == "protocol"]
+            if root_obs:
+                return root_obs
+    except (json.JSONDecodeError, OSError):
+        pass
+
+    try:
+        import yaml
+
+        with open(FIN_HOME / "entities.yaml") as f:
+            data = yaml.safe_load(f) or {}
+        embedded = []
+        for source in data.get("obligation_sources", []) or []:
+            embedded.extend(source.get("financial_obligations", []) or [])
+        return embedded
+    except Exception:
+        return []
+
+
+def _has_quantified_obligations() -> bool:
+    obligations = _financial_obligations_for_maturity()
+    return bool(obligations) and all(_obligation_amount_known(o) for o in obligations)
+
+
 def _has_content(rel: str) -> bool:
     """Check if a markdown file exists and has more than just headers."""
     p = ROOT / rel
@@ -161,11 +219,12 @@ def _ladder_maturity() -> int:
     return 0
 
 
-def _assess_maturity() -> dict:
+def _assess_maturity(consolidation: dict | None = None, current_beat: bool = False) -> dict:
     """Evaluate objective criteria and return {criteria, maturity_pct, passed_keys, failed_keys}."""
     passed = []
     failed = []
     total_weight = sum(w for _, _, w in _MATURITY_CRITERIA)
+    current_consolidator_passed = bool(consolidation and consolidation.get("status") == "pass")
 
     for key, label, weight in _MATURITY_CRITERIA:
         ok = False
@@ -192,11 +251,13 @@ def _assess_maturity() -> dict:
         elif key == "organ_beat_exists":
             ok = _exists("scripts/financial-organ.py")
         elif key == "voice_fresh":
-            ok = _file_modified_within("logs/.voice/financial", _CADENCE_SEC * 2 + 60)
+            ok = _file_modified_within("logs/.voice/financial", _CADENCE_SEC * 2 + 60) or (
+                current_beat and current_consolidator_passed
+            )
         elif key == "entity_balances":
             ok = _has_entity_balances()
         elif key == "consolidator_passes_beat":
-            ok = _exists("logs/financial-organ-state.json")
+            ok = current_consolidator_passed or _exists("logs/financial-organ-state.json")
         elif key == "ladder_auto_advancing":
             ok = _ladder_maturity() >= 40
         elif key == "real_revenue_flowing":
@@ -210,15 +271,7 @@ def _assess_maturity() -> dict:
             except OSError:
                 ok = False
         elif key == "obligations_quantified":
-            try:
-                import yaml
-
-                with open(FIN_HOME / "entities.yaml") as f:
-                    data = yaml.safe_load(f) or {}
-                obs = data.get("obligation_sources", [])
-                ok = len(obs) > 0
-            except Exception:
-                ok = False
+            ok = _has_quantified_obligations()
 
         if ok:
             passed.append(key)
@@ -388,6 +441,36 @@ def _financial_standing() -> dict:
     return {}
 
 
+def _write_web_face(report: dict, assessment: dict, standing: dict) -> None:
+    """Preserve consolidate.py's rich dashboard JSON and add beat metadata."""
+    face = ROOT / "web" / "app" / "public" / "financial-standing.json"
+    try:
+        face.parent.mkdir(parents=True, exist_ok=True)
+        existing = {}
+        if face.exists():
+            try:
+                parsed = json.loads(face.read_text())
+                if isinstance(parsed, dict):
+                    existing = parsed
+            except (json.JSONDecodeError, OSError):
+                existing = {}
+
+        existing.setdefault("ts", report["ts"])
+        existing.setdefault("maturity", assessment["maturity_pct"])
+        existing.setdefault("stage", standing.get("stage", "?"))
+        existing["beat"] = {
+            "ts": report["ts"],
+            "maturity": assessment["maturity_pct"],
+            "stage": standing.get("stage", "?"),
+            "consolidator": report["consolidation"]["status"],
+            "passed_checks": assessment["passed"],
+            "next_slices": assessment["failed"],
+        }
+        face.write_text(json.dumps(existing, indent=2))
+    except OSError:
+        pass
+
+
 def main() -> int:
     LOGS.mkdir(parents=True, exist_ok=True)
     VOICED.mkdir(parents=True, exist_ok=True)
@@ -396,7 +479,7 @@ def main() -> int:
     consolidation = _run_consolidator()
 
     # 2. Assess maturity
-    assessment = _assess_maturity()
+    assessment = _assess_maturity(consolidation, current_beat=True)
 
     # 3. Advance ladder if maturity grew
     advancement = _advance_maturity(assessment)
@@ -442,25 +525,8 @@ def main() -> int:
     # 7. Stamp voice for proprioception
     (VOICED / "financial").write_text(report["ts"])
 
-    # 8. Write a human-readable face for the financial dashboard
-    face = ROOT / "web" / "app" / "public" / "financial-standing.json"
-    try:
-        face.parent.mkdir(parents=True, exist_ok=True)
-        face.write_text(
-            json.dumps(
-                {
-                    "ts": report["ts"],
-                    "maturity": assessment["maturity_pct"],
-                    "stage": standing.get("stage", "?"),
-                    "consolidator": consolidation["status"],
-                    "passed_checks": assessment["passed"],
-                    "next_slices": assessment["failed"],
-                },
-                indent=2,
-            )
-        )
-    except OSError:
-        pass
+    # 8. Preserve consolidate.py's dashboard and attach beat metadata
+    _write_web_face(report, assessment, standing)
 
     return 0
 

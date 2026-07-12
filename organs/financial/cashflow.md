@@ -23,8 +23,8 @@
 
 | Week | Starting | Known Inflows | Known Outflows | Net | Cumulative | Note |
 |---|---|---|---|---|---|---|
-| W1 | 2026-07-10 | — | — | $+0.00 | $+0.00 |  |
-| W2 | 2026-07-17 | — | — | $+0.00 | $+0.00 |  |
+| W1 | 2026-07-10 | — | — | $+0.00 | $+0.00 | |
+| W2 | 2026-07-17 | — | — | $+0.00 | $+0.00 | |
 | W3 | 2026-07-24 | — | — | $+0.00 | $+0.00 | post-deploy |
 | W4 | 2026-07-31 | — | — | $+0.00 | $+0.00 | post-deploy |
 | W5 | 2026-08-07 | — | — | $+0.00 | $+0.00 | post-deploy |
@@ -40,6 +40,7 @@
 
 - **Current net position:** Unknown — set balances in `entities.yaml` to enable runway calculation.
 - **Threshold:** < 4 weeks of obligations = alert principal.
+- **Unquantified obligations:** 4 — runway is not reliable until amounts are entered.
 
 ## Obligations (financial-material)
 
