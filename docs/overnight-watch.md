@@ -84,8 +84,12 @@ source truncation, and rewritten source prefixes do not count.
 
 Predicate proof never invokes a shell. It executes only classified read-only
 GitHub/Git/test commands or tracked repository check scripts as direct argument
-vectors; shell pipes, backgrounding, control operators, redirection, and mutating
-GitHub operations are rejected before execution.
+vectors; shell pipes, backgrounding, control operators, redirection, mutating
+GitHub operations, and Git output/pager/config/external-diff or executable-hook
+flags are rejected before execution. Git remote transports and help viewers are
+not classified as observation-only. Allowed local Git reads run with inherited
+transport/config execution variables removed and pager, hook, fsmonitor,
+text-conversion, external-diff execution, and optional index writes disabled.
 
 Trial start and finalization intentionally have no backfill arguments; finalization
 also refuses to run before the marker's real end time. Trial start refuses to replace an active
@@ -96,10 +100,15 @@ manufacturing a zero-operator receipt.
 
 The prompt scan may be at most the narrow clock-skew tolerance ahead of the
 sample; the ten-minute sample-gap allowance is not a prompt-freshness allowance.
-At finalization and every later receipt check, the terminal handoff, prompt cursor,
-and private prompt snapshot must still byte-match their recorded live custody.
-Repeating `--finalize-trial` against that unchanged terminal state returns the same
-receipt with `changed:false`, exits successfully, and writes no bytes.
+At finalization, the exact terminal handoff, prompt cursor, and private prompt
+snapshot bytes are copied once into read-only, content-addressed custody sidecars.
+The receipt binds their sizes and SHA-256 digests to the hash-chained terminal
+observation, and every later check re-derives that binding before verifying the
+immutable sidecars. Normal heartbeat, watch, and prompt projections may therefore
+advance without invalidating the completed trial. Repeating
+`--finalize-trial` returns the same receipt with `changed:false`, exits
+successfully, and writes no terminal bytes; substituted, missing, writable,
+symlinked, ancestor-symlinked, or rewritten custody sidecars fail closed.
 
 Verify it with:
 

@@ -78,6 +78,7 @@ TAIL_BYTES = 192 * 1024
 TRIAL_SCHEMA_VERSION = "overnight-trial.v2"
 TRIAL_MARKER_SCHEMA_VERSION = "overnight-trial-window.v2"
 TRIAL_OBSERVATION_SCHEMA_VERSION = "overnight-trial-observation.v1"
+TRIAL_TERMINAL_CUSTODY_SCHEMA_VERSION = "overnight-terminal-custody.v1"
 TRIAL_TASK_EVENT_SCHEMA_VERSION = "overnight-task-events.v2"
 TRIAL_PROMPT_AUTHORITY_SCHEMA_VERSION = "overnight-prompt-authority.v2"
 TRIAL_DURATION_SEC = 8 * 60 * 60
@@ -1368,14 +1369,64 @@ def _task_event_within_observation(
 
 
 def _run_predicate_argv(argv: list[str]) -> tuple[int, str, str] | None:
+    execution_argv = list(argv)
+    environment = os.environ.copy()
+    if argv and argv[0] == "git":
+        inherited_git_exec_env = {
+            "GIT_ASKPASS",
+            "GIT_CONFIG_COUNT",
+            "GIT_CONFIG_PARAMETERS",
+            "GIT_EXTERNAL_DIFF",
+            "GIT_MAN_VIEWER",
+            "GIT_PAGER",
+            "GIT_PROXY_COMMAND",
+            "GIT_SSH",
+            "GIT_SSH_COMMAND",
+            "SSH_ASKPASS",
+        }
+        for name in tuple(environment):
+            if (
+                name in inherited_git_exec_env
+                or name.startswith("GIT_TRACE")
+                or re.fullmatch(r"GIT_CONFIG_(?:KEY|VALUE)_\d+", name)
+            ):
+                environment.pop(name, None)
+        environment.update(
+            {
+                "GIT_ATTR_NOSYSTEM": "1",
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_PAGER": "cat",
+                "GIT_OPTIONAL_LOCKS": "0",
+                "GIT_TERMINAL_PROMPT": "0",
+                "PAGER": "cat",
+            }
+        )
+        git_prefix = [
+            "git",
+            "--no-pager",
+            "-c",
+            "core.pager=cat",
+            "-c",
+            "diff.external=",
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "core.hooksPath=/dev/null",
+        ]
+        if len(argv) >= 2 and argv[1] in {"diff", "log", "show"}:
+            execution_argv = [*git_prefix, argv[1], "--no-ext-diff", "--no-textconv", *argv[2:]]
+        else:
+            execution_argv = [*git_prefix, *argv[1:]]
     try:
         proc = subprocess.Popen(
-            argv,
+            execution_argv,
             cwd=ROOT,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             start_new_session=True,
+            env=environment,
         )
         stdout, stderr = proc.communicate(timeout=TRIAL_PREDICATE_TIMEOUT_SEC)
     except subprocess.TimeoutExpired:
@@ -1429,6 +1480,69 @@ def _tracked_check_script(argv: list[str]) -> bool:
         return False
     tracked = run(["git", "-C", str(ROOT), "ls-files", "--error-unmatch", str(relative)], timeout=5)
     return tracked.returncode == 0
+
+
+def _git_read_only(argv: list[str]) -> bool:
+    if len(argv) < 2 or argv[0] != "git":
+        return False
+    subcommand = argv[1]
+    if subcommand not in {"diff", "log", "ls-files", "merge-base", "rev-parse", "show", "status"}:
+        return False
+    forbidden_exact = {
+        "-c",
+        "-h",
+        "-o",
+        "-p",
+        "-u",
+        "--config-env",
+        "--exec",
+        "--exec-path",
+        "--ext-diff",
+        "--external-diff",
+        "--help",
+        "--output",
+        "--pager",
+        "--paginate",
+        "--show-signature",
+        "--textconv",
+        "--upload-pack",
+    }
+    forbidden_prefixes = (
+        "--config-env=",
+        "--exec-path=",
+        "--exec=",
+        "--ext-diff=",
+        "--external-diff=",
+        "--help=",
+        "--output=",
+        "--pager=",
+        "--show-signature=",
+        "--textconv=",
+        "--upload-pack=",
+    )
+    forbidden_abbreviations = (
+        "--conf",
+        "--exec",
+        "--ext",
+        "--help",
+        "--out",
+        "--pag",
+        "--show-s",
+        "--textc",
+        "--upl",
+    )
+    forbidden_attached_short = ("-c", "-h", "-o", "-p", "-u")
+    for value in argv[2:]:
+        if (
+            value in forbidden_exact
+            or value.startswith(forbidden_prefixes)
+            or value.startswith(forbidden_abbreviations)
+            or (len(value) > 2 and value.startswith(forbidden_attached_short))
+        ):
+            return False
+        if "%G" in value:
+            return False
+    return True
 
 
 def _extract_single_substitution(command: str) -> tuple[str, str | None] | None:
@@ -1496,8 +1610,8 @@ def _direct_observation_command(argv: list[str]) -> bool:
         return len(argv) >= 2 and argv[-1] == "]"
     if _gh_read_only(argv):
         return True
-    if argv[0] == "git" and len(argv) >= 2:
-        return argv[1] in {"diff", "log", "ls-files", "ls-remote", "merge-base", "rev-parse", "show", "status"}
+    if argv[0] == "git":
+        return _git_read_only(argv)
     return _tracked_check_script(argv)
 
 
@@ -2183,11 +2297,7 @@ def _observation_errors(value: Any, *, marker: dict[str, Any]) -> list[str]:
     return errors
 
 
-def _read_observation_chain(
-    marker: dict[str, Any],
-    *,
-    require_terminal_live_custody: bool = False,
-) -> tuple[list[dict[str, Any]], list[str]]:
+def _read_observation_chain(marker: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
     baseline = marker.get("baseline") if isinstance(marker.get("baseline"), dict) else {}
     prefix = baseline.get("observation_ledger") if isinstance(baseline.get("observation_ledger"), dict) else {}
     errors = [f"observation ledger {error}" for error in _custody_errors(prefix)]
@@ -2280,17 +2390,184 @@ def _read_observation_chain(
         last_ids = set((rows[-1].get("task_source") or {}).get("event_ids") or [])
         if not last_ids.issubset(current_task_ids):
             errors.append("task source was rewritten or truncated after the last observation")
-        if require_terminal_live_custody:
-            terminal_prompt = rows[-1].get("prompt_authority") or {}
-            terminal_prompt_custody = terminal_prompt.get("source_custody") or {}
-            prompt_paths = _prompt_paths(PROMPT_ATOM_SNAPSHOT)
-            for name in ("cursor", "snapshot"):
-                if _file_custody(prompt_paths[name]) != terminal_prompt_custody.get(name):
-                    errors.append(f"terminal prompt {name} custody no longer matches the live authoritative file")
-            terminal_handoff = rows[-1].get("handoff") or {}
-            if _file_custody(LOGS / "handoff.json") != terminal_handoff.get("source_custody"):
-                errors.append("terminal handoff custody no longer matches the live authoritative file")
     return rows, errors
+
+
+def _terminal_source_paths() -> dict[str, Path]:
+    prompt_paths = _prompt_paths(PROMPT_ATOM_SNAPSHOT)
+    return {
+        "handoff": LOGS / "handoff.json",
+        "prompt_cursor": prompt_paths["cursor"],
+        "prompt_snapshot": prompt_paths["snapshot"],
+    }
+
+
+def _terminal_custody_directory(trial_id: str) -> Path:
+    if not re.fullmatch(r"[0-9a-f]{64}", trial_id):
+        raise TrialContractError("terminal custody trial id is invalid")
+    return TRIAL_WINDOW_PATH.parent / "overnight-trial-custody" / trial_id
+
+
+def _terminal_custody_path(trial_id: str, name: str, digest: str) -> Path:
+    if name not in {"handoff", "prompt_cursor", "prompt_snapshot"} or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise TrialContractError("terminal custody path components are invalid")
+    return _terminal_custody_directory(trial_id) / f"{name}-{digest}.bin"
+
+
+def _terminal_observation_custody(observations: list[dict[str, Any]]) -> tuple[dict[str, Any], list[str]]:
+    if not observations:
+        return {}, ["terminal observation is missing"]
+    terminal = observations[-1]
+    terminal_prompt = terminal.get("prompt_authority") if isinstance(terminal.get("prompt_authority"), dict) else {}
+    prompt_custody = (
+        terminal_prompt.get("source_custody") if isinstance(terminal_prompt.get("source_custody"), dict) else {}
+    )
+    handoff = terminal.get("handoff") if isinstance(terminal.get("handoff"), dict) else {}
+    recorded = {
+        "handoff": handoff.get("source_custody"),
+        "prompt_cursor": prompt_custody.get("cursor"),
+        "prompt_snapshot": prompt_custody.get("snapshot"),
+    }
+    sources: dict[str, dict[str, Any]] = {}
+    errors: list[str] = []
+    for name in _terminal_source_paths():
+        expected = recorded.get(name)
+        expected_errors = _custody_errors(expected)
+        if expected_errors or not isinstance(expected, dict) or expected.get("present") is not True:
+            errors.append(f"terminal observation {name} custody is invalid")
+            continue
+        sources[name] = {"size": expected["size"], "digest": expected["digest"]}
+    return {"schema_version": TRIAL_TERMINAL_CUSTODY_SCHEMA_VERSION, "sources": sources}, errors
+
+
+def _terminal_live_custody_errors(value: dict[str, Any]) -> list[str]:
+    sources = value.get("sources") if isinstance(value.get("sources"), dict) else {}
+    errors: list[str] = []
+    for name, path in _terminal_source_paths().items():
+        expected = sources.get(name)
+        live = _file_custody(path)
+        if (
+            not isinstance(expected, dict)
+            or live.get("present") is not True
+            or live.get("size") != expected.get("size")
+            or live.get("digest") != expected.get("digest")
+        ):
+            errors.append(f"terminal {name} custody does not match the live authoritative file")
+    return errors
+
+
+def _terminal_custody_directory_errors(trial_id: str) -> list[str]:
+    directory = _terminal_custody_directory(trial_id)
+    errors: list[str] = []
+    for label, path in (("root", directory.parent), ("trial", directory)):
+        if path.is_symlink():
+            errors.append(f"terminal custody {label} directory is a symlink")
+        elif not path.is_dir():
+            errors.append(f"terminal custody {label} directory is missing or invalid")
+    return errors
+
+
+def _terminal_custody_errors(
+    value: Any,
+    *,
+    trial_id: str,
+    verify_sidecars: bool,
+) -> list[str]:
+    if not isinstance(value, dict):
+        return ["terminal custody descriptor is missing"]
+    errors: list[str] = []
+    trial_id_valid = bool(re.fullmatch(r"[0-9a-f]{64}", trial_id))
+    if not trial_id_valid:
+        errors.append("terminal custody trial id is invalid")
+    if value.get("schema_version") != TRIAL_TERMINAL_CUSTODY_SCHEMA_VERSION:
+        errors.append("terminal custody schema mismatch")
+    sources = value.get("sources") if isinstance(value.get("sources"), dict) else {}
+    if set(sources) != set(_terminal_source_paths()):
+        errors.append("terminal custody source set mismatch")
+    verify_paths = verify_sidecars and trial_id_valid
+    if verify_paths:
+        directory_errors = _terminal_custody_directory_errors(trial_id)
+        errors.extend(directory_errors)
+        verify_paths = not directory_errors
+    for name in _terminal_source_paths():
+        source = sources.get(name) if isinstance(sources.get(name), dict) else {}
+        if not _strict_nonnegative_int(source.get("size")):
+            errors.append(f"terminal {name} custody size is invalid")
+        digest = str(source.get("digest") or "")
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            errors.append(f"terminal {name} custody digest is invalid")
+            continue
+        if not verify_paths:
+            continue
+        path = _terminal_custody_path(trial_id, name, digest)
+        try:
+            payload = path.read_bytes()
+            mode = path.stat().st_mode & 0o777
+        except OSError:
+            errors.append(f"terminal {name} custody sidecar is missing")
+            continue
+        if path.is_symlink():
+            errors.append(f"terminal {name} custody sidecar is a symlink")
+        if len(payload) != source.get("size") or _sha256_bytes(payload) != digest:
+            errors.append(f"terminal {name} custody sidecar content mismatch")
+        if mode & 0o222:
+            errors.append(f"terminal {name} custody sidecar is writable")
+    return errors
+
+
+def _preserve_terminal_custody(trial_id: str, value: dict[str, Any]) -> None:
+    errors = _terminal_custody_errors(value, trial_id=trial_id, verify_sidecars=False)
+    if errors:
+        raise TrialContractError("invalid terminal custody: " + "; ".join(sorted(set(errors))))
+    directory = _terminal_custody_directory(trial_id)
+    if directory.parent.is_symlink():
+        raise TrialContractError("terminal custody root directory is a symlink or invalid")
+    try:
+        directory.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise TrialContractError(f"terminal custody root directory is unavailable: {exc}") from exc
+    if directory.parent.is_symlink() or not directory.parent.is_dir():
+        raise TrialContractError("terminal custody root directory is a symlink or invalid")
+    if directory.is_symlink():
+        raise TrialContractError("terminal custody trial directory is a symlink or invalid")
+    try:
+        directory.mkdir(mode=0o700, exist_ok=True)
+    except OSError as exc:
+        raise TrialContractError(f"terminal custody trial directory is unavailable: {exc}") from exc
+    if directory.is_symlink() or not directory.is_dir():
+        raise TrialContractError("terminal custody trial directory is a symlink or invalid")
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        directory_fd = os.open(directory, directory_flags)
+    except OSError as exc:
+        raise TrialContractError(f"terminal custody trial directory is unavailable: {exc}") from exc
+    try:
+        os.fchmod(directory_fd, 0o700)
+        for name, source_path in _terminal_source_paths().items():
+            descriptor = value["sources"][name]
+            try:
+                payload = source_path.read_bytes()
+            except OSError as exc:
+                raise TrialContractError(f"terminal {name} source is unavailable: {exc}") from exc
+            digest = str(descriptor["digest"])
+            if len(payload) != descriptor["size"] or _sha256_bytes(payload) != digest:
+                raise TrialContractError(f"terminal {name} source changed before custody preservation")
+            destination = _terminal_custody_path(trial_id, name, digest)
+            file_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+            try:
+                fd = os.open(destination.name, file_flags, 0o400, dir_fd=directory_fd)
+            except FileExistsError:
+                continue
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+    sidecar_errors = _terminal_custody_errors(value, trial_id=trial_id, verify_sidecars=True)
+    if sidecar_errors:
+        raise TrialContractError("terminal custody preservation failed: " + "; ".join(sorted(set(sidecar_errors))))
 
 
 def append_trial_observation(snapshot: dict[str, Any]) -> dict[str, Any] | None:
@@ -2410,7 +2687,11 @@ def append_trial_observation(snapshot: dict[str, Any]) -> dict[str, Any] | None:
         return record
 
 
-def build_trial_receipt(active_marker: dict[str, Any]) -> dict[str, Any]:
+def build_trial_receipt(
+    active_marker: dict[str, Any],
+    *,
+    terminal_custody: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     marker_errors = _active_marker_errors(active_marker)
     start = parse_iso(str(active_marker.get("window_start") or ""))
     end = parse_iso(str(active_marker.get("window_end") or ""))
@@ -2421,16 +2702,27 @@ def build_trial_receipt(active_marker: dict[str, Any]) -> dict[str, Any]:
     monotonic_elapsed_ns = time.monotonic_ns() - int(active_marker.get("monotonic_start_ns") or 0)
     if monotonic_elapsed_ns < (TRIAL_DURATION_SEC - TRIAL_CLOCK_TOLERANCE_SEC) * 1_000_000_000:
         raise TrialContractError("trial cannot be finalized before eight hours of monotonic custody")
-    observations, source_errors = _read_observation_chain(
-        active_marker,
-        require_terminal_live_custody=True,
-    )
+    observations, source_errors = _read_observation_chain(active_marker)
     bounded = [
         (observed_at, record)
         for record in observations
         if (observed_at := parse_iso(str(record.get("observed_at") or "")))
         and start <= observed_at <= end + dt.timedelta(seconds=TRIAL_EDGE_TOLERANCE_SEC)
     ]
+    recorded_custody, recorded_custody_errors = _terminal_observation_custody([record for _, record in bounded])
+    source_errors.extend(recorded_custody_errors)
+    if terminal_custody is None:
+        terminal_custody = recorded_custody
+        custody_errors = _terminal_live_custody_errors(terminal_custody)
+    else:
+        if terminal_custody != recorded_custody:
+            raise TrialContractError("terminal custody descriptor does not match the terminal observation")
+        custody_errors = _terminal_custody_errors(
+            terminal_custody,
+            trial_id=str(active_marker.get("content_hash") or ""),
+            verify_sidecars=True,
+        )
+    source_errors.extend(custody_errors)
     evidence_records = [(timestamp, record) for timestamp, record in bounded if timestamp <= end]
     sample_times = [timestamp for timestamp, _ in bounded]
     gap_points = sorted([start, *sample_times, end])
@@ -2547,6 +2839,7 @@ def build_trial_receipt(active_marker: dict[str, Any]) -> dict[str, Any]:
         "baseline": baseline,
         "observation_hashes": [record.get("content_hash") for _, record in bounded],
         "source_errors": sorted(set(source_errors)),
+        "terminal_custody": terminal_custody,
         "task_window_end": terminal_source,
         "task_windows": windows,
     }
@@ -2578,6 +2871,7 @@ def build_trial_receipt(active_marker: dict[str, Any]) -> dict[str, Any]:
         "windows_ok": windows_ok,
         "rolling_value_ok": rolling_value_ok,
         "task_events_monotonic": task_monotonic,
+        "terminal_custody": terminal_custody,
         "evaluator_hash": evaluator_hash(),
         "input_hash": canonical_hash(normalized_input),
     }
@@ -2625,6 +2919,7 @@ def finalize_trial(
     if errors:
         raise TrialContractError("invalid active marker: " + "; ".join(sorted(set(errors))))
     receipt = build_trial_receipt(active_marker)
+    _preserve_terminal_custody(str(active_marker.get("content_hash") or ""), receipt["terminal_custody"])
     return write_trial_receipt(receipt)
 
 
@@ -2685,8 +2980,18 @@ def check_trial_receipt(
     deterministic = {key: value for key, value in receipt.items() if key not in {"generated_at", "content_hash"}}
     if receipt.get("content_hash") != canonical_hash(deterministic):
         errors.append("trial receipt content hash mismatch")
+    errors.extend(
+        _terminal_custody_errors(
+            receipt.get("terminal_custody"),
+            trial_id=str(receipt.get("trial_id") or ""),
+            verify_sidecars=True,
+        )
+    )
     try:
-        expected = build_trial_receipt(active_marker)
+        expected = build_trial_receipt(
+            active_marker,
+            terminal_custody=receipt.get("terminal_custody"),
+        )
     except TrialContractError as exc:
         errors.append(str(exc))
         expected = {}

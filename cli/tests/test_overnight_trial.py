@@ -54,6 +54,14 @@ def _path_signature(path: Path) -> dict[str, int]:
     return {"size": stat.st_size, "mtime_ns": stat.st_mtime_ns, "mode": stat.st_mode & 0o777}
 
 
+def _terminal_sidecar_state(module, receipt: dict) -> dict[str, tuple[bytes, int]]:
+    state = {}
+    for name, descriptor in receipt["terminal_custody"]["sources"].items():
+        path = module._terminal_custody_path(receipt["trial_id"], name, descriptor["digest"])
+        state[name] = (path.read_bytes(), path.stat().st_mode & 0o777)
+    return state
+
+
 def _write_prompt_authority(
     module,
     at: dt.datetime,
@@ -491,6 +499,109 @@ def test_safe_predicate_classification_never_executes(tmp_path, monkeypatch, pre
     assert module._predicate_is_observation_only(predicate) is True
 
 
+@pytest.mark.parametrize(
+    "predicate",
+    [
+        "git diff --output=/tmp/x",
+        "git diff --output /tmp/x",
+        "git diff -o /tmp/x",
+        "git diff -o/tmp/x",
+        "git diff --out=/tmp/x",
+        "git show --output=/tmp/x HEAD",
+        "git diff --ext-diff",
+        "git diff --ext",
+        "git show --textconv HEAD:file",
+        "git show --textc HEAD:file",
+        "git show --show-signature HEAD",
+        "git show --show-sig HEAD",
+        "git log --format=%G? -1",
+        "git --paginate log -1",
+        "git -c core.pager=/tmp/x log -1",
+        "git --config-env=core.pager:PAGER log -1",
+        "git diff --pager=/tmp/x",
+        "git diff --external-diff=/tmp/x",
+        "git ls-remote --upload-pack=/tmp/x origin",
+        "git ls-remote origin",
+        "git ls-remote ext::/tmp/executable-helper",
+        "git ls-remote ssh://example.invalid/repo.git",
+        "git log --exec=/tmp/x",
+        "git --exec-path=/tmp/x status",
+        "git status --porcelain --help",
+        "git diff --stat -h",
+        "git log -1 --help",
+    ],
+)
+def test_git_write_or_exec_flags_are_rejected_without_execution(tmp_path, monkeypatch, predicate):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    calls = []
+    monkeypatch.setattr(module, "_run_predicate_argv", lambda argv: calls.append(argv))
+
+    assert module._predicate_is_observation_only(predicate) is False
+    assert module._predicate_proof(predicate) is None
+    assert calls == []
+
+
+def test_safe_git_classifier_is_nonexecuting(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    monkeypatch.setattr(
+        module,
+        "_run_predicate_argv",
+        lambda _argv: pytest.fail("classification must not execute git"),
+    )
+
+    assert module._predicate_is_observation_only("git diff --no-ext-diff --no-textconv --exit-code") is True
+
+
+def test_safe_git_executor_scrubs_ambient_exec_hooks(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    for name in (
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
+        "GIT_CONFIG_PARAMETERS",
+        "GIT_EXTERNAL_DIFF",
+        "GIT_MAN_VIEWER",
+        "GIT_SSH_COMMAND",
+        "GIT_TRACE2",
+    ):
+        monkeypatch.setenv(name, "/tmp/untrusted-executable")
+    captured = {}
+
+    class Process:
+        returncode = 0
+
+        def communicate(self, timeout=None):
+            assert timeout == module.TRIAL_PREDICATE_TIMEOUT_SEC
+            return "", ""
+
+    def fake_popen(argv, **kwargs):
+        captured["argv"] = argv
+        captured["env"] = kwargs["env"]
+        return Process()
+
+    monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
+
+    assert module._run_predicate_argv(["git", "diff", "--check"]) == (0, "", "")
+    assert not any(
+        name in captured["env"]
+        for name in (
+            "GIT_CONFIG_COUNT",
+            "GIT_CONFIG_KEY_0",
+            "GIT_CONFIG_VALUE_0",
+            "GIT_CONFIG_PARAMETERS",
+            "GIT_EXTERNAL_DIFF",
+            "GIT_MAN_VIEWER",
+            "GIT_SSH_COMMAND",
+            "GIT_TRACE2",
+        )
+    )
+    assert captured["env"]["GIT_OPTIONAL_LOCKS"] == "0"
+    assert captured["argv"][-3:] == ["--no-ext-diff", "--no-textconv", "--check"]
+
+
 def test_rolling_value_gap_over_ninety_minutes_fails(tmp_path, monkeypatch):
     start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
     module, clock = _fresh_module(tmp_path, monkeypatch, start)
@@ -526,7 +637,7 @@ def test_operator_journal_delta_fails_trial(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize(
     "source",
-    ["watch", "observation", "tasks", "prompt", "cursor", "snapshot", "handoff"],
+    ["watch", "observation", "tasks", "prompt"],
 )
 def test_source_rewrite_or_truncation_breaks_checker(tmp_path, monkeypatch, source):
     start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
@@ -554,20 +665,142 @@ def test_source_rewrite_or_truncation_breaks_checker(tmp_path, monkeypatch, sour
         board = _load_board(module)
         board["tasks"] = board["tasks"][1:]
         module.TASKS_PATH.write_text(json.dumps(board), encoding="utf-8")
-    elif source == "prompt":
+    else:
         events = module.PROMPT_ATOM_SNAPSHOT.parent / "prompt-events.jsonl"
         events.write_text("", encoding="utf-8")
-    elif source == "cursor":
-        (module.PROMPT_ATOM_SNAPSHOT.parent / "source-cursor.json").write_text("{}\n", encoding="utf-8")
-    elif source == "snapshot":
-        module.PROMPT_ATOM_SNAPSHOT.write_text("{}\n", encoding="utf-8")
-    else:
-        (module.LOGS / "handoff.json").write_text('{"rewritten":true}\n', encoding="utf-8")
 
     ok, errors = module.check_trial_receipt()
 
     assert ok is False
     assert errors
+
+
+def test_live_terminal_projections_may_advance_after_immutable_custody(tmp_path, monkeypatch, capsys):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+    _, result = _run_trial(module, clock, start)
+    receipt_bytes = module.TRIAL_PATH.read_bytes()
+    terminal_bytes = module.TRIAL_WINDOW_PATH.read_bytes()
+    terminal_sidecars = _terminal_sidecar_state(module, result["receipt"])
+    later = start + dt.timedelta(hours=8, minutes=5)
+    clock.value = later
+
+    _write_prompt_authority(module, later)
+    (module.LOGS / "handoff.json").write_text('{"advanced":true}\n', encoding="utf-8")
+    module.write_jsonl(_watch_snapshot(later))
+    _append_task_event(module, later, 1001, "done")
+
+    repeated = module.maybe_finalize_trial()
+    assert repeated and repeated["changed"] is False and repeated["receipt"] == result["receipt"]
+    assert module.check_trial_receipt() == (True, [])
+    assert module.main(["--finalize-trial", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["changed"] is False
+    assert module.TRIAL_PATH.read_bytes() == receipt_bytes
+    assert module.TRIAL_WINDOW_PATH.read_bytes() == terminal_bytes
+    assert _terminal_sidecar_state(module, result["receipt"]) == terminal_sidecars
+
+
+@pytest.mark.parametrize("name", ["handoff", "prompt_cursor", "prompt_snapshot"])
+@pytest.mark.parametrize("mutation", ["remove", "rewrite"])
+def test_terminal_custody_sidecar_removal_or_rewrite_fails(tmp_path, monkeypatch, name, mutation):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+    _run_trial(module, clock, start)
+    receipt = json.loads(module.TRIAL_PATH.read_text())
+    descriptor = receipt["terminal_custody"]["sources"][name]
+    sidecar = module._terminal_custody_path(receipt["trial_id"], name, descriptor["digest"])
+
+    if mutation == "remove":
+        sidecar.unlink()
+    else:
+        sidecar.chmod(0o600)
+        sidecar.write_bytes(b"rewritten\n")
+
+    ok, errors = module.check_trial_receipt()
+    assert ok is False
+    assert any("custody sidecar" in error for error in errors)
+    repeated = module.maybe_finalize_trial()
+    assert repeated and "error" in repeated
+
+
+def test_terminal_custody_descriptor_cannot_be_substituted(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+    _run_trial(module, clock, start)
+    receipt = json.loads(module.TRIAL_PATH.read_text())
+    marker = json.loads(module.TRIAL_WINDOW_PATH.read_text())
+    active_marker = marker["active_marker"]
+    forged = {
+        "schema_version": module.TRIAL_TERMINAL_CUSTODY_SCHEMA_VERSION,
+        "sources": {},
+    }
+    for name in receipt["terminal_custody"]["sources"]:
+        payload = f"substituted-{name}\n".encode()
+        digest = module._sha256_bytes(payload)
+        sidecar = module._terminal_custody_path(receipt["trial_id"], name, digest)
+        sidecar.write_bytes(payload)
+        sidecar.chmod(0o400)
+        forged["sources"][name] = {"size": len(payload), "digest": digest}
+
+    with pytest.raises(module.TrialContractError, match="does not match the terminal observation"):
+        module.build_trial_receipt(active_marker, terminal_custody=forged)
+
+    observations, errors = module._read_observation_chain(active_marker)
+    assert errors == []
+    end = module.parse_iso(active_marker["window_end"])
+    assert end is not None
+    bounded = [
+        record
+        for record in observations
+        if (observed_at := module.parse_iso(record["observed_at"]))
+        and observed_at <= end + dt.timedelta(seconds=module.TRIAL_EDGE_TOLERANCE_SEC)
+    ]
+    normalized_input = {
+        "trial_id": active_marker["content_hash"],
+        "baseline": active_marker["baseline"],
+        "observation_hashes": [record["content_hash"] for record in bounded],
+        "source_errors": [],
+        "terminal_custody": forged,
+        "task_window_end": bounded[-1]["task_source"],
+        "task_windows": receipt["windows"],
+    }
+    receipt["terminal_custody"] = forged
+    receipt["input_hash"] = module.canonical_hash(normalized_input)
+    deterministic = {key: value for key, value in receipt.items() if key not in {"generated_at", "content_hash"}}
+    receipt["content_hash"] = module.canonical_hash(deterministic)
+    module._write_json_atomic(module.TRIAL_PATH, receipt)
+    marker["receipt_content_hash"] = receipt["content_hash"]
+    marker["receipt_input_hash"] = receipt["input_hash"]
+    marker_payload = {key: value for key, value in marker.items() if key != "content_hash"}
+    marker["content_hash"] = module.canonical_hash(marker_payload)
+    module._write_json_atomic(module.TRIAL_WINDOW_PATH, marker)
+
+    ok, check_errors = module.check_trial_receipt()
+    assert ok is False
+    assert "terminal custody descriptor does not match the terminal observation" in check_errors
+
+
+def test_terminal_custody_ancestor_symlink_fails_closed(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+    _run_trial(module, clock, start)
+    receipt = json.loads(module.TRIAL_PATH.read_text())
+    directory = module._terminal_custody_directory(receipt["trial_id"])
+    preserved = directory.with_name(f"{directory.name}-preserved")
+    directory.rename(preserved)
+    directory.symlink_to(preserved, target_is_directory=True)
+    preserved_mode = preserved.stat().st_mode & 0o777
+
+    ok, errors = module.check_trial_receipt()
+    assert ok is False
+    assert "terminal custody trial directory is a symlink" in errors
+    with pytest.raises(module.TrialContractError, match="trial directory is a symlink"):
+        module._preserve_terminal_custody(receipt["trial_id"], receipt["terminal_custody"])
+    assert preserved.stat().st_mode & 0o777 == preserved_mode
 
 
 def test_active_trial_cannot_be_replaced_or_backfilled(tmp_path, monkeypatch):
