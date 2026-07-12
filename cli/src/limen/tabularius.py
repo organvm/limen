@@ -37,6 +37,8 @@ Design invariants (each carried over from a shipped safety precedent):
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import subprocess
 import tempfile
@@ -83,6 +85,18 @@ class Ticket(BaseModel):
     patch: dict[str, Any] | None = None
     # optional dispatch_log payload appended to the task's log — {"status": .., "output"?: ..}.
     log: dict[str, Any] | None = None
+    # Optional optimistic concurrency guard, evaluated by the keeper against
+    # the exact current task immediately before this ticket is folded.  A
+    # migration can therefore never archive a task that another ticket claimed
+    # after compilation.
+    precondition: dict[str, Any] | None = None
+
+
+def task_state_sha256(fields: dict[str, Any]) -> str:
+    """Content hash for one JSON-mode task state, including its append-only log."""
+
+    encoded = json.dumps(fields, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def new_ticket_id(session_id: str = "unknown", now: datetime | None = None) -> str:
@@ -396,6 +410,26 @@ def _apply(ticket: Ticket, tasks: OrderedDict[str, dict[str, Any]], meta: dict[s
             raise ValueError(f"{ticket.intent} requires task_id")
         is_new = ticket.task_id not in tasks
         base = dict(tasks.get(ticket.task_id, {}))
+        precondition = ticket.precondition or {}
+        unknown_preconditions = set(precondition) - {"absent", "status", "task_sha256"}
+        if unknown_preconditions:
+            raise ValueError(f"unknown task preconditions: {sorted(unknown_preconditions)}")
+        if precondition.get("absent") is True and not is_new:
+            raise ValueError(f"task precondition failed: {ticket.task_id} is no longer absent")
+        if "task_sha256" in precondition:
+            if is_new:
+                raise ValueError(f"task precondition failed: {ticket.task_id} is absent")
+            actual_hash = task_state_sha256(base)
+            if actual_hash != precondition["task_sha256"]:
+                raise ValueError(
+                    f"task precondition failed: {ticket.task_id} exact state changed "
+                    f"({actual_hash[:12]} != {str(precondition['task_sha256'])[:12]})"
+                )
+        if "status" in precondition and base.get("status") != precondition["status"]:
+            raise ValueError(
+                f"task precondition failed: {ticket.task_id} status is {base.get('status')!r}, "
+                f"expected {precondition['status']!r}"
+            )
         merged = {**base, **(ticket.patch or {})}
         merged["id"] = ticket.task_id
         merged["updated"] = ticket.timestamp.isoformat()
@@ -481,12 +515,13 @@ def drain_once(board_path: Path, *, dry_run: bool = False, lock_timeout: int = 2
     if not inbox.is_dir():
         return DrainResult(note="inbox empty")
 
-    good, bad = _parse_pending(inbox)
-    pending = len(good) + len(bad)
-    if pending == 0:
+    pending_hint = len(list(inbox.glob("*.json")))
+    if pending_hint == 0:
         return DrainResult(note="inbox empty")
 
     if dry_run:
+        good, bad = _parse_pending(inbox)
+        pending = len(good) + len(bad)
         return DrainResult(
             pending=pending,
             applied=len(good),
@@ -496,7 +531,15 @@ def drain_once(board_path: Path, *, dry_run: bool = False, lock_timeout: int = 2
 
     with queue_lock(board_path, timeout=lock_timeout) as locked:
         if not locked:
-            return DrainResult(pending=pending, deferred=True, note="queue lock held; deferred to next beat")
+            return DrainResult(pending=pending_hint, deferred=True, note="queue lock held; deferred to next beat")
+
+        # Parse only after taking the same lock used by phase publishers.  A
+        # keeper can therefore observe either the complete published phase or
+        # none of it, never an in-flight prefix captured before the lock.
+        good, bad = _parse_pending(inbox)
+        pending = len(good) + len(bad)
+        if pending == 0:
+            return DrainResult(note="inbox empty")
 
         board = load_limen_file(board_path)
         board_json = board.model_dump(mode="json", exclude_none=True)

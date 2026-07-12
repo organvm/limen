@@ -23,12 +23,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
 import sys
 from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -37,12 +39,19 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "cli" / "src"))
 
 from limen.intake import validate_intake_contract  # noqa: E402
-from limen.io import load_limen_file  # noqa: E402
+from limen.io import load_limen_file, queue_lock  # noqa: E402
 from limen.models import Task  # noqa: E402
-from limen.tabularius import INTENT_UPSERT, Ticket, submit_ticket, tickets_root  # noqa: E402
+from limen.tabularius import (  # noqa: E402
+    INTENT_UPSERT,
+    Ticket,
+    submit_ticket,
+    task_state_sha256,
+    tickets_root,
+)
 
 
 DEFAULT_RECEIPT = ROOT / "docs" / "ask-gate-migration-2026-07-12.json"
+CANONICAL_CHECKER = ROOT / "scripts" / "check-ask-gate-migration.py"
 DEFAULT_BOARD = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
 MIGRATION_ID = "ask-gate-migration-2026-07-12"
 PHASE_CHILDREN = "children"
@@ -62,6 +71,36 @@ def _canonical_payload(payload: dict[str, Any]) -> bytes:
 
 def manifest_digest(payload: dict[str, Any]) -> str:
     return hashlib.sha256(_canonical_payload(payload)).hexdigest()
+
+
+@lru_cache(maxsize=1)
+def _canonical_verifier() -> Any:
+    spec = importlib.util.spec_from_file_location("check_ask_gate_migration_canonical", CANONICAL_CHECKER)
+    if spec is None or spec.loader is None:
+        raise MigrationError(f"cannot load canonical migration verifier: {CANONICAL_CHECKER}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def verify_canonical_payload(payload: dict[str, Any]) -> str:
+    """Bind compilation to the tracked receipt and its owner verifier.
+
+    A caller cannot mutate a predicate, phase, or manifest-derived namespace in
+    memory and still compile tickets: the bytes must equal the canonical receipt
+    and that receipt must pass ``check-ask-gate-migration.py`` first.
+    """
+
+    try:
+        canonical = json.loads(DEFAULT_RECEIPT.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise MigrationError(f"cannot read canonical migration receipt: {exc}") from exc
+    if _canonical_payload(payload) != _canonical_payload(canonical):
+        raise MigrationError("payload differs from the canonical verified migration receipt")
+    errors = _canonical_verifier().verify_receipt(canonical)
+    if errors:
+        raise MigrationError(f"canonical migration receipt failed verification: {errors[0]}")
+    return manifest_digest(canonical)
 
 
 def parse_timestamp(value: str) -> datetime:
@@ -98,6 +137,7 @@ def check_live_prerequisites(
 ) -> list[str]:
     """Execute every declared prerequisite and fail on the first non-merged gate."""
 
+    verify_canonical_payload(payload)
     checked: list[str] = []
     prerequisites = payload.get("prerequisites")
     if not isinstance(prerequisites, dict) or not prerequisites:
@@ -134,6 +174,7 @@ def _ticket(
     timestamp: datetime,
     agent: str,
     session_id: str,
+    precondition: dict[str, Any],
 ) -> Ticket:
     return Ticket(
         ticket_id=deterministic_ticket_id(payload, phase, task_id),
@@ -147,6 +188,7 @@ def _ticket(
             "status": status,
             "output": f"{MIGRATION_ID}: {phase}:{action}; receipt={patch['receipt_target']}",
         },
+        precondition=precondition,
     )
 
 
@@ -157,6 +199,7 @@ def compile_child_tickets(
     agent: str,
     session_id: str,
 ) -> list[Ticket]:
+    verify_canonical_payload(payload)
     tickets: list[Ticket] = []
     children = payload.get("children")
     if not isinstance(children, list):
@@ -184,6 +227,7 @@ def compile_child_tickets(
                 timestamp=timestamp,
                 agent=agent,
                 session_id=session_id,
+                precondition={"absent": True},
             )
         )
     expected = int((payload.get("counts") or {}).get("children") or 0)
@@ -211,6 +255,7 @@ def compile_parent_tickets(
     agent: str,
     session_id: str,
 ) -> list[Ticket]:
+    verify_canonical_payload(payload)
     board = _board_tasks(board_path)
     tasks = payload.get("tasks")
     frozen_ids = payload.get("frozen_ids")
@@ -248,6 +293,10 @@ def compile_parent_tickets(
                 timestamp=timestamp,
                 agent=agent,
                 session_id=session_id,
+                precondition={
+                    "status": parent.status,
+                    "task_sha256": task_state_sha256(parent.model_dump(mode="json", exclude_none=True)),
+                },
             )
         )
     expected = int((payload.get("counts") or {}).get("frozen_ids") or 0)
@@ -267,8 +316,36 @@ def _read_ticket(path: Path) -> Ticket:
         raise MigrationError(f"cannot validate migration ticket receipt {path}: {exc}") from exc
 
 
-def _assert_same_ticket(expected: Ticket, actual: Ticket, path: Path) -> None:
-    if actual.model_dump(mode="json") != expected.model_dump(mode="json"):
+def _ticket_semantics(ticket: Ticket, *, include_precondition: bool) -> dict[str, Any]:
+    semantic = {
+        "intent": ticket.intent,
+        "task_id": ticket.task_id,
+        "patch": ticket.patch,
+        "log": ticket.log,
+    }
+    if include_precondition:
+        semantic["precondition"] = ticket.precondition
+    return semantic
+
+
+def _assert_same_ticket(
+    expected: Ticket,
+    actual: Ticket,
+    path: Path,
+    *,
+    include_precondition: bool,
+) -> None:
+    """Compare semantic work, not retry-specific event identity.
+
+    A pending ticket must retain the same optimistic precondition.  Once the
+    keeper archives it, that precondition has been consumed, so retries compare
+    only the immutable patch/log intent and preserve the archive's original
+    timestamp, agent, and session as the honest append-only event identity.
+    """
+
+    if _ticket_semantics(actual, include_precondition=include_precondition) != _ticket_semantics(
+        expected, include_precondition=include_precondition
+    ):
         raise MigrationError(f"deterministic ticket collision or drift at {path}")
 
 
@@ -276,6 +353,15 @@ def submit_compiled_tickets(board_path: Path, tickets: Iterable[Ticket]) -> dict
     """Append tickets idempotently; any rejection or ID/content drift is fatal."""
 
     tickets = list(tickets)
+    with queue_lock(board_path, timeout=20) as locked:
+        if not locked:
+            raise MigrationError("queue lock held; phase publication made no inbox changes")
+        return _submit_compiled_tickets_locked(board_path, tickets)
+
+
+def _submit_compiled_tickets_locked(board_path: Path, tickets: list[Ticket]) -> dict[str, int]:
+    """Publish one precompiled phase while holding the keeper's queue lock."""
+
     counts = {"submitted": 0, "pending": 0, "archived": 0}
     missing: list[Ticket] = []
     for ticket in tickets:
@@ -285,12 +371,12 @@ def submit_compiled_tickets(board_path: Path, tickets: Iterable[Ticket]) -> dict
             raise MigrationError(f"migration ticket was rejected: {rejected}")
         archived = _ticket_path(board_path, "archive", ticket)
         if archived.exists():
-            _assert_same_ticket(ticket, _read_ticket(archived), archived)
+            _assert_same_ticket(ticket, _read_ticket(archived), archived, include_precondition=False)
             counts["archived"] += 1
             continue
         pending = _ticket_path(board_path, "inbox", ticket)
         if pending.exists():
-            _assert_same_ticket(ticket, _read_ticket(pending), pending)
+            _assert_same_ticket(ticket, _read_ticket(pending), pending, include_precondition=True)
             counts["pending"] += 1
             continue
         missing.append(ticket)
@@ -298,19 +384,50 @@ def submit_compiled_tickets(board_path: Path, tickets: Iterable[Ticket]) -> dict
     # No inbox write occurs until every ticket in the phase has passed the
     # rejection/collision preflight.  A bad ticket therefore cannot leave an
     # arbitrary prefix of the phase pending.
-    for ticket in missing:
-        try:
-            submit_ticket(board_path, ticket)
-        except FileExistsError:
-            # A concurrent identical submit is harmless; a same-ID/different
-            # event is a deterministic collision and remains fatal.
+    created: list[tuple[Path, Ticket]] = []
+    try:
+        for ticket in missing:
+            try:
+                submit_ticket(board_path, ticket)
+            except FileExistsError:
+                # A concurrent identical submit is harmless; a same-ID/different
+                # event is a deterministic collision and triggers rollback.
+                pending = _ticket_path(board_path, "inbox", ticket)
+                if not pending.exists():
+                    raise
+                _assert_same_ticket(ticket, _read_ticket(pending), pending, include_precondition=True)
+                counts["pending"] += 1
+                continue
             pending = _ticket_path(board_path, "inbox", ticket)
-            if not pending.exists():
-                raise
-            _assert_same_ticket(ticket, _read_ticket(pending), pending)
-            counts["pending"] += 1
-        else:
+            created.append((pending, ticket))
             counts["submitted"] += 1
+    except Exception as exc:
+        rollback_errors: list[str] = []
+        removed = 0
+        consumed = 0
+        for pending, created_ticket in reversed(created):
+            if not pending.exists():
+                consumed += 1
+                continue  # the keeper already consumed it; never rewrite custody
+            try:
+                _assert_same_ticket(
+                    created_ticket,
+                    _read_ticket(pending),
+                    pending,
+                    include_precondition=True,
+                )
+                pending.unlink()
+                removed += 1
+            except Exception as rollback_exc:  # noqa: BLE001 - preserve every unsafe path
+                rollback_errors.append(f"{pending}: {rollback_exc}")
+        if rollback_errors:
+            raise MigrationError(
+                "phase publication failed and exact-prefix cleanup was incomplete: " + "; ".join(rollback_errors)
+            ) from exc
+        raise MigrationError(
+            f"phase publication failed; removed {removed} exact unconsumed ticket(s) from this invocation; "
+            f"{consumed} already consumed and left in keeper custody: {exc}"
+        ) from exc
     return counts
 
 
@@ -355,6 +472,7 @@ def check_parent_dispositions(
     frozen action is stale and must be re-routed rather than blindly applied.
     """
 
+    verify_canonical_payload(payload)
     tasks = payload.get("tasks") or {}
     counts = {"terminal": 0, "nonterminal": 0}
     for task_id in payload.get("frozen_ids") or []:
@@ -389,6 +507,7 @@ def check_parent_dispositions(
 def verify_children_admitted(payload: dict[str, Any], board_path: Path) -> dict[str, int]:
     """Prove all children crossed the keeper seam before parents may be submitted."""
 
+    verify_canonical_payload(payload)
     board = _board_tasks(board_path)
     timestamp = parse_timestamp(str(payload.get("generated_at")))
     probe_tickets = compile_child_tickets(
@@ -429,12 +548,25 @@ def verify_children_admitted(payload: dict[str, Any], board_path: Path) -> dict[
             raise MigrationError(f"child {task_id!r} archive receipt has the wrong owner/intent")
         if archived_ticket.patch != ticket.patch:
             raise MigrationError(f"child {task_id!r} archive receipt does not carry the frozen packet")
+        if archived_ticket.precondition != {"absent": True}:
+            raise MigrationError(f"child {task_id!r} archive receipt lacks the absent-state precondition")
         if not archived_ticket.log or archived_ticket.log.get("status") != child.status:
             raise MigrationError(f"child {task_id!r} archive receipt lacks its append-only creation log")
+        matching_log = any(
+            entry.timestamp == archived_ticket.timestamp
+            and entry.agent == archived_ticket.agent
+            and entry.session_id == archived_ticket.session_id
+            and entry.status == archived_ticket.log.get("status")
+            and entry.output == archived_ticket.log.get("output")
+            for entry in child.dispatch_log
+        )
+        if not matching_log:
+            raise MigrationError(f"child {task_id!r} board log does not match its honest archive identity")
     return {"admitted": len(probe_tickets), "rejected": 0, "pending": 0}
 
 
 def verify_parents_applied(payload: dict[str, Any], board_path: Path) -> dict[str, int]:
+    verify_canonical_payload(payload)
     board = _board_tasks(board_path)
     tasks = payload.get("tasks") or {}
     verified = 0
@@ -448,14 +580,6 @@ def verify_parents_applied(payload: dict[str, Any], board_path: Path) -> dict[st
             raise MigrationError(f"parent {task_id!r} has status {parent.status!r}, expected {expected_status!r}")
         if parent.predicate != row.get("predicate") or parent.receipt_target != row.get("receipt_target"):
             raise MigrationError(f"parent {task_id!r} lacks the frozen typed contract")
-        migration_logs = [
-            entry
-            for entry in parent.dispatch_log
-            if MIGRATION_ID in str(entry.output or "") and entry.status == expected_status
-        ]
-        if not migration_logs:
-            raise MigrationError(f"parent {task_id!r} lacks an append-only migration log")
-
         ticket_id = deterministic_ticket_id(payload, PHASE_PARENTS, task_id)
         filename = f"{ticket_id}.json"
         root = tickets_root(board_path)
@@ -483,6 +607,22 @@ def verify_parents_applied(payload: dict[str, Any], board_path: Path) -> dict[st
             or archived_ticket.log.get("status") != expected_status
         ):
             raise MigrationError(f"parent {task_id!r} archive receipt has wrong patch/log/intent")
+        precondition = archived_ticket.precondition or {}
+        allowed_precondition_statuses = {str(row.get("source_status") or ""), expected_status}
+        if precondition.get("status") not in allowed_precondition_statuses or not isinstance(
+            precondition.get("task_sha256"), str
+        ):
+            raise MigrationError(f"parent {task_id!r} archive receipt lacks its exact source-state precondition")
+        matching_log = any(
+            entry.timestamp == archived_ticket.timestamp
+            and entry.agent == archived_ticket.agent
+            and entry.session_id == archived_ticket.session_id
+            and entry.status == archived_ticket.log.get("status")
+            and entry.output == archived_ticket.log.get("output")
+            for entry in parent.dispatch_log
+        )
+        if not matching_log:
+            raise MigrationError(f"parent {task_id!r} board log does not match its honest archive identity")
         verified += 1
     return {"verified": verified}
 
@@ -507,7 +647,7 @@ def _summary(
         "compiled": len(tickets),
         "ticket_ids": [ticket.ticket_id for ticket in tickets],
         "submission": submission or {"submitted": 0, "pending": 0, "archived": 0},
-        "event_identity": (
+        "requested_event_identity": (
             {
                 "timestamp": tickets[0].timestamp.isoformat(),
                 "agent": tickets[0].agent,

@@ -1442,6 +1442,7 @@
   "application_contract": {
     "schema_version": "limen.ask_gate_migration.application.v1",
     "helper": "scripts/apply-ask-gate-migration.py",
+    "canonical_verifier": "scripts/check-ask-gate-migration.py",
     "default_mode": "dry-run",
     "apply_identity": {
       "timestamp": "required",
@@ -1459,6 +1460,7 @@
         "intent": "task.upsert",
         "patch": "full_task",
         "append_log": true,
+        "precondition": "task_absent",
         "completion_gate": "all deterministic child tickets archived by TABVLARIVS; all 29 exact typed child packets present; zero pending or rejected child tickets"
       },
       {
@@ -1467,20 +1469,23 @@
         "intent": "task.upsert",
         "patch": "predicate + receipt_target + status_patch",
         "append_log": true,
+        "precondition": "exact_current_task_sha256_and_status",
         "requires": "children completion_gate",
         "owner_state_gate": "re-execute all 52 predicates; done, superseded, and split must pass while normalize and needs_human must remain nonterminal",
         "completion_gate": "all parent typed contracts and terminal status patches present with append-only migration logs"
       }
     ],
     "rejection_policy": "fail_closed",
+    "publication_failure": "shared_queue_lock_then_remove_only_this_invocation_exact_unconsumed_inbox_tickets",
+    "retry_identity": "semantic_ticket_id_independent_of_timestamp_agent_session; preserve_first_archived_event_identity",
     "direct_board_write": "forbidden",
     "deterministic_ticket_ids": true
   },
   "application_order": [
-    "Execute the live MERGED predicates for prerequisite PR #978 and PR #982; any nonzero predicate blocks both phases.",
+    "Require byte equality with the canonical receipt and execute its canonical verifier before compiling any ticket; then execute the live MERGED predicates for prerequisite PR #978 and PR #982.",
     "Compile and submit all 29 full child task.upsert tickets through TABVLARIVS, with explicit timestamp, agent, and session identity.",
     "Drain the keeper, then require every deterministic child ticket in the archive, every exact typed child packet on the board, and zero pending or rejected child tickets.",
-    "Only after the child completion gate, re-execute all 52 owner predicates and abort stale dispositions; then compile and submit all 52 partial parent task.upsert tickets with append-only dispatch logs.",
+    "Only after the child completion gate, re-execute all 52 owner predicates and abort stale dispositions; then compile all 52 parent tickets with exact task-state preconditions and publish them with exact-prefix cleanup on failure.",
     "Drain the keeper again, verify all parent contracts/statuses/logs, validate board schema and frozen-set coverage, and require an empty ticket inbox."
   ],
   "safety": {

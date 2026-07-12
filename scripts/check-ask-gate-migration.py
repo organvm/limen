@@ -37,6 +37,7 @@ EXPECTED_CHILDREN = 29
 EXPECTED_PREREQUISITES = {978, 982}
 APPLICATION_SCHEMA = "limen.ask_gate_migration.application.v1"
 APPLICATION_HELPER = "scripts/apply-ask-gate-migration.py"
+APPLICATION_VERIFIER = "scripts/check-ask-gate-migration.py"
 EXPECTED_APPLICATION_PHASES = [
     {
         "name": "children",
@@ -44,6 +45,7 @@ EXPECTED_APPLICATION_PHASES = [
         "intent": "task.upsert",
         "patch": "full_task",
         "append_log": True,
+        "precondition": "task_absent",
     },
     {
         "name": "parents",
@@ -51,6 +53,7 @@ EXPECTED_APPLICATION_PHASES = [
         "intent": "task.upsert",
         "patch": "predicate + receipt_target + status_patch",
         "append_log": True,
+        "precondition": "exact_current_task_sha256_and_status",
     },
 ]
 VALID_STATUSES = {
@@ -396,6 +399,8 @@ def verify_receipt(payload: dict[str, Any]) -> list[str]:
         errors.append(f"application_contract.schema_version must be {APPLICATION_SCHEMA}")
     if application.get("helper") != APPLICATION_HELPER or not (ROOT / APPLICATION_HELPER).is_file():
         errors.append(f"application_contract.helper must name tracked {APPLICATION_HELPER}")
+    if application.get("canonical_verifier") != APPLICATION_VERIFIER:
+        errors.append(f"application_contract.canonical_verifier must name {APPLICATION_VERIFIER}")
     if application.get("default_mode") != "dry-run":
         errors.append("application_contract.default_mode must be dry-run")
     if application.get("live_prerequisites") != ["typed_intake", "terminal_discovery_dispositions"]:
@@ -428,6 +433,15 @@ def verify_receipt(payload: dict[str, Any]) -> list[str]:
                 errors.append(f"child completion gate must prove {needle}")
     if application.get("rejection_policy") != "fail_closed":
         errors.append("application_contract.rejection_policy must be fail_closed")
+    if (
+        application.get("publication_failure")
+        != "shared_queue_lock_then_remove_only_this_invocation_exact_unconsumed_inbox_tickets"
+    ):
+        errors.append("application_contract must require exact unconsumed-prefix cleanup on publication failure")
+    retry_identity = str(application.get("retry_identity") or "")
+    for needle in ("independent_of_timestamp_agent_session", "preserve_first_archived_event_identity"):
+        if needle not in retry_identity:
+            errors.append(f"application_contract retry identity must prove {needle}")
     if application.get("direct_board_write") != "forbidden":
         errors.append("application_contract must forbid direct board writes")
     if application.get("deterministic_ticket_ids") is not True:

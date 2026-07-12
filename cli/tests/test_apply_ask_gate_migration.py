@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import copy
 import importlib.util
 import json
 import subprocess
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -50,6 +52,20 @@ def test_non_merged_live_prerequisite_fails_closed() -> None:
     assert any("982" in command for command in seen)
 
 
+def test_compiler_rejects_payload_that_differs_from_canonical_receipt() -> None:
+    compiler = _module()
+    broken = copy.deepcopy(_payload())
+    broken["tasks"]["GH-organvm-limen-793"]["predicate"] = "true"
+
+    with pytest.raises(compiler.MigrationError, match="differs from the canonical verified"):
+        compiler.compile_child_tickets(
+            broken,
+            timestamp=compiler.parse_timestamp("2026-07-12T18:00:00Z"),
+            agent="codex",
+            session_id="mutated-manifest",
+        )
+
+
 def test_compilers_are_deterministic_typed_and_append_only() -> None:
     compiler = _module()
     payload = _payload()
@@ -64,6 +80,7 @@ def test_compilers_are_deterministic_typed_and_append_only() -> None:
     assert len(children_a) == 29
     assert len({ticket.ticket_id for ticket in children_a}) == 29
     assert all(ticket.intent == "task.upsert" and ticket.log for ticket in children_a)
+    assert all(ticket.precondition == {"absent": True} for ticket in children_a)
     assert all(
         ticket.patch and ticket.patch.get("predicate") and ticket.patch.get("receipt_target") for ticket in children_a
     )
@@ -76,6 +93,7 @@ def test_compilers_are_deterministic_typed_and_append_only() -> None:
     assert len(parents_a) == 52
     assert len({ticket.ticket_id for ticket in parents_a}) == 52
     assert all(ticket.intent == "task.upsert" and ticket.log for ticket in parents_a)
+    assert all(ticket.precondition and ticket.precondition.get("task_sha256") for ticket in parents_a)
     assert all(
         set(ticket.patch or {}) <= {"predicate", "receipt_target", "status"}
         and {"predicate", "receipt_target"} <= set(ticket.patch or {})
@@ -167,6 +185,33 @@ def test_phase_rejection_preflight_submits_no_prefix(tmp_path: Path) -> None:
     assert not list((tickets_root(board) / "inbox").glob("*.json"))
 
 
+def test_mid_publication_failure_rolls_back_only_this_exact_prefix(tmp_path: Path, monkeypatch) -> None:
+    compiler = _module()
+    payload = _payload()
+    board = tmp_path / "tasks.yaml"
+    save_limen_file(board, LimenFile())
+    tickets = compiler.compile_child_tickets(
+        payload,
+        timestamp=compiler.parse_timestamp("2026-07-12T18:00:00Z"),
+        agent="codex",
+        session_id="rollback-prefix",
+    )
+    real_submit = compiler.submit_ticket
+    calls = 0
+
+    def flaky_submit(board_path, ticket):
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise OSError("synthetic disk fault")
+        return real_submit(board_path, ticket)
+
+    monkeypatch.setattr(compiler, "submit_ticket", flaky_submit)
+    with pytest.raises(compiler.MigrationError, match="removed 2 exact unconsumed ticket"):
+        compiler.submit_compiled_tickets(board, tickets)
+    assert not list((tickets_root(board) / "inbox").glob("*.json"))
+
+
 def test_two_phase_keeper_round_trip_supports_raw_parent_tickets(tmp_path: Path) -> None:
     compiler = _module()
     payload = _payload()
@@ -189,10 +234,94 @@ def test_two_phase_keeper_round_trip_supports_raw_parent_tickets(tmp_path: Path)
     assert (parent_drain.applied, parent_drain.rejected) == (52, 0)
     assert compiler.verify_parents_applied(payload, board) == {"verified": 52}
 
+    retry_kwargs = {
+        "timestamp": timestamp + timedelta(minutes=30),
+        "agent": "agy",
+        "session_id": "round-trip-retry",
+    }
+    parent_retry = compiler.compile_parent_tickets(payload, board, **retry_kwargs)
+    assert [ticket.ticket_id for ticket in parent_retry] == [ticket.ticket_id for ticket in parents]
+    assert compiler.submit_compiled_tickets(board, parent_retry) == {
+        "submitted": 0,
+        "pending": 0,
+        "archived": 52,
+    }
+    assert compiler.verify_parents_applied(payload, board) == {"verified": 52}
+
     rejected = tickets_root(board) / "rejected" / f"{parents[0].ticket_id}.json.reason.txt"
     rejected.parent.mkdir(parents=True, exist_ok=True)
     rejected.write_text("synthetic parent rejection evidence", encoding="utf-8")
     with pytest.raises(compiler.MigrationError, match="rejected keeper ticket"):
+        compiler.verify_parents_applied(payload, board)
+
+
+def test_retry_identity_uses_first_honest_child_event_without_collision(tmp_path: Path) -> None:
+    compiler = _module()
+    payload = _payload()
+    board = tmp_path / "tasks.yaml"
+    save_limen_file(board, LimenFile())
+    first = compiler.compile_child_tickets(
+        payload,
+        timestamp=compiler.parse_timestamp("2026-07-12T18:00:00Z"),
+        agent="codex",
+        session_id="first-invocation",
+    )
+    retry = compiler.compile_child_tickets(
+        payload,
+        timestamp=compiler.parse_timestamp("2026-07-12T19:00:00Z"),
+        agent="agy",
+        session_id="retry-invocation",
+    )
+    assert [ticket.ticket_id for ticket in first] == [ticket.ticket_id for ticket in retry]
+    assert compiler.submit_compiled_tickets(board, first)["submitted"] == 29
+    assert compiler.submit_compiled_tickets(board, retry) == {"submitted": 0, "pending": 29, "archived": 0}
+    assert drain_once(board).applied == 29
+    compiler.preflight_child_submission(payload, board, retry)
+    assert compiler.submit_compiled_tickets(board, retry) == {"submitted": 0, "pending": 0, "archived": 29}
+
+    child = {task.id: task for task in load_limen_file(board).tasks}[str(first[0].task_id)]
+    assert len(child.dispatch_log) == 1
+    assert child.dispatch_log[0].agent == "codex"
+    assert child.dispatch_log[0].session_id == "first-invocation"
+
+
+def test_concurrent_claim_invalidates_parent_exact_state_and_verification(tmp_path: Path) -> None:
+    compiler = _module()
+    payload = _payload()
+    source = load_limen_file(BOARD)
+    frozen = set(payload["frozen_ids"])
+    board = tmp_path / "tasks.yaml"
+    save_limen_file(board, LimenFile(tasks=[task for task in source.tasks if task.id in frozen]))
+    timestamp = compiler.parse_timestamp("2026-07-12T18:00:00Z")
+    kwargs = {"timestamp": timestamp, "agent": "codex", "session_id": "concurrent-parent"}
+    children = compiler.compile_child_tickets(payload, **kwargs)
+    compiler.submit_compiled_tickets(board, children)
+    assert drain_once(board).applied == 29
+    parents = compiler.compile_parent_tickets(payload, board, **kwargs)
+
+    task_id = "DISCOVER-organvm-arca"
+    row = payload["tasks"][task_id]
+    claim = compiler.Ticket(
+        ticket_id="concurrent-claim-before-parent",
+        timestamp=timestamp - timedelta(seconds=1),
+        agent="jules",
+        session_id="concurrent-claim",
+        intent="task.upsert",
+        task_id=task_id,
+        patch={
+            "predicate": row["predicate"],
+            "receipt_target": row["receipt_target"],
+            "status": "dispatched",
+        },
+        log={"status": "dispatched", "output": "concurrent claim"},
+    )
+    compiler.submit_ticket(board, claim)
+    compiler.submit_compiled_tickets(board, parents)
+    drained = drain_once(board)
+    assert drained.rejected == 1
+    current = {task.id: task for task in load_limen_file(board).tasks}[task_id]
+    assert current.status == "dispatched"
+    with pytest.raises(compiler.MigrationError, match="status 'dispatched'.*expected 'archived'"):
         compiler.verify_parents_applied(payload, board)
 
 
