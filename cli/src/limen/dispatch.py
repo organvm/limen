@@ -932,6 +932,26 @@ def _superseded_by_rebase_task(task: Task, tasks_by_id: dict[str, Task]) -> bool
     return False
 
 
+def _superseded_by_trunk_repair(task: Task, tasks_by_id: dict[str, Task]) -> bool:
+    """A live HEAL-mainred task supersedes any individual HEAL-cifix task for the same repo.
+
+    When main's trunk is red (HEAL-mainred-<repo> is active), individual PR CI-fix tasks
+    are redundant — fixing the root cause heals all PRs at once. Without this gate, two
+    agents can race: one fixing the trunk, another fixing one PR for the same root cause.
+    """
+    task_id = str(task.id or "")
+    prefix = "HEAL-cifix-"
+    if not task_id.startswith(prefix):
+        return False
+    suffix = task_id[len(prefix):]
+    repo_slug = suffix.rsplit("-", 1)[0] if "-" in suffix else suffix
+    mainred_id = f"HEAL-mainred-{repo_slug}"
+    mainred = tasks_by_id.get(mainred_id)
+    if mainred is not None and str(mainred.status or "") in _ACTIVE_SUPERSEDER_STATUSES:
+        return True
+    return False
+
+
 def _routine_generated_buildout(task: Task) -> bool:
     labels = set(task.labels or [])
     return "generated" in labels and "build-out" in labels
@@ -2952,6 +2972,7 @@ def dispatch_tasks(
         and t.budget_cost <= remaining
         and (task_id is not None or _deps_met(t, id2))
         and (task_id is not None or not _superseded_by_rebase_task(t, id2))
+        and (task_id is not None or not _superseded_by_trunk_repair(t, id2))
         and (task_id is not None or chronic_dispatch_reason(t) is None)
         and not (debt_blocked and _routine_generated_buildout(t))
         and _routine_generated_buildout_allowed(t)
@@ -3335,6 +3356,7 @@ def _select_parallel_reservations(
             and t.budget_cost <= rem
             and _deps_met(t, id2)
             and not _superseded_by_rebase_task(t, id2)
+            and not _superseded_by_trunk_repair(t, id2)
             and chronic_dispatch_reason(t) is None
             and not (debt_blocked and _routine_generated_buildout(t))
             and _routine_generated_buildout_allowed(t)
