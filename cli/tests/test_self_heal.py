@@ -44,7 +44,7 @@ _VIEW = {
         "state": "OPEN",
         "isDraft": False,
         "mergeable": "MERGEABLE",
-        "statusCheckRollup": [{"conclusion": "FAILURE"}],
+        "statusCheckRollup": [{"name": "e2e", "conclusion": "FAILURE"}],
     },  # CI-RED
     6: {
         "state": "OPEN",
@@ -148,6 +148,42 @@ def test_respects_limit_cap(tmp_path, monkeypatch):
     _board(p)
     _run(m, monkeypatch, p, "--limit", "1")
     assert len(yaml.safe_load(p.read_text())["tasks"]) == 1, "must emit at most --limit tasks"
+
+
+def test_fresh_live_chronic_repo_check_freezes_repeat_heal(tmp_path, monkeypatch, capsys):
+    m = _load(tmp_path, monkeypatch)
+    p = tmp_path / "tasks.yaml"
+    _board(p)
+    m.HEAL_CONVERGENCE.write_text(
+        json.dumps(
+            {
+                "timestamp": m.datetime.datetime.now(m.datetime.timezone.utc).isoformat(),
+                "chronic": [{"repo": "organvm/exporter", "check": "e2e", "prs": ["u/1", "u/2", "u/3"]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert _run(m, monkeypatch, p) == 0
+    ids = {task["id"] for task in yaml.safe_load(p.read_text())["tasks"]}
+    assert "HEAL-cifix-organvm-exporter-54" not in ids
+    assert "HEAL-rebase-organvm-scale-6" in ids
+    assert "chronic-frozen=1" in capsys.readouterr().out
+
+
+def test_stale_chronic_receipt_cannot_freeze_current_work(tmp_path, monkeypatch):
+    m = _load(tmp_path, monkeypatch)
+    p = tmp_path / "tasks.yaml"
+    _board(p)
+    stale = m.datetime.datetime.now(m.datetime.timezone.utc) - m.datetime.timedelta(days=1)
+    m.HEAL_CONVERGENCE.write_text(
+        json.dumps({"timestamp": stale.isoformat(), "chronic": [{"repo": "organvm/exporter", "check": "e2e"}]}),
+        encoding="utf-8",
+    )
+
+    assert _run(m, monkeypatch, p) == 0
+    ids = {task["id"] for task in yaml.safe_load(p.read_text())["tasks"]}
+    assert "HEAL-cifix-organvm-exporter-54" in ids
 
 
 def test_explicit_pr_bypasses_rotating_search_window(tmp_path, monkeypatch):
