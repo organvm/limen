@@ -1,25 +1,37 @@
 #!/usr/bin/env python3
-"""Hermetic regression for local probe server ownership and cleanup."""
+"""Hermetic regressions for local probe process ownership and bounded cleanup."""
 
 from __future__ import annotations
 
+import contextlib
 import errno
 import os
 import shutil
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+@dataclass(frozen=True)
+class ProbeCase:
+    name: str
+    script_name: str
+    port_variable: str
+
+
 CASES = (
-    ("runtime", "probe-local-runtime.sh", "LIMEN_PROBE_PORT"),
-    ("worker", "probe-local-worker.sh", "LIMEN_WORKER_PROBE_PORT"),
+    ProbeCase("runtime", "probe-local-runtime.sh", "LIMEN_PROBE_PORT"),
+    ProbeCase("worker", "probe-local-worker.sh", "LIMEN_WORKER_PROBE_PORT"),
 )
 
 
@@ -67,20 +79,29 @@ def process_group_exists(pgid: int) -> bool:
 
 
 def terminate_process_group(pgid: int) -> None:
-    """Best-effort cleanup that cannot target the test runner's process group."""
+    """Best-effort test cleanup that never targets the test runner's group."""
     if pgid == os.getpgrp() or not process_group_exists(pgid):
         return
-    try:
+    with contextlib.suppress(ProcessLookupError, PermissionError):
         os.killpg(pgid, signal.SIGTERM)
-    except ProcessLookupError:
+    if wait_for(lambda: not process_group_exists(pgid), timeout=1.0):
         return
-    if wait_for(lambda: not process_group_exists(pgid), timeout=2.0):
-        return
-    try:
+    with contextlib.suppress(ProcessLookupError, PermissionError):
         os.killpg(pgid, signal.SIGKILL)
-    except ProcessLookupError:
-        return
-    wait_for(lambda: not process_group_exists(pgid), timeout=2.0)
+    wait_for(lambda: not process_group_exists(pgid), timeout=1.0)
+
+
+def collect(process: subprocess.Popen[str], *, timeout: float = 10.0) -> str:
+    """Collect output and always reap the wrapper, even when an assertion path times out."""
+    try:
+        output, _ = process.communicate(timeout=timeout)
+        return output
+    except subprocess.TimeoutExpired:
+        terminate_process_group(process.pid)
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            process.kill()
+        output, _ = process.communicate(timeout=2)
+        raise AssertionError(f"probe wrapper {process.pid} did not exit\n{output}")
 
 
 def write_executable(path: Path, body: str) -> None:
@@ -90,14 +111,16 @@ def write_executable(path: Path, body: str) -> None:
 
 def prepare_fixture(fixture: Path) -> None:
     scripts = fixture / "scripts"
-    worker_bin = fixture / "web/worker/node_modules/.bin"
+    worker_root = fixture / "web/worker"
+    wrangler_cli = worker_root / "node_modules/wrangler/wrangler-dist/cli.js"
     scripts.mkdir(parents=True)
     (fixture / "web/api").mkdir(parents=True)
-    worker_bin.mkdir(parents=True)
-    (fixture / "web/worker/node_modules/yaml").mkdir(parents=True)
+    (worker_root / "node_modules/yaml").mkdir(parents=True)
+    wrangler_cli.parent.mkdir(parents=True)
+    wrangler_cli.write_text("// fixture: the fake node executable handles this path\n")
 
-    for _, script_name, _ in CASES:
-        shutil.copy2(ROOT / "scripts" / script_name, scripts / script_name)
+    for case in CASES:
+        shutil.copy2(ROOT / "scripts" / case.script_name, scripts / case.script_name)
 
     fake_server = fixture / "fake-server.py"
     write_executable(
@@ -118,6 +141,8 @@ sock.settimeout(0.2)
 Path(os.environ["PROBE_TEST_PID_FILE"]).write_text(f"{os.getpid()} {os.getppid()}\\n")
 
 def stop(_signum, _frame):
+    if os.environ.get("PROBE_TEST_SERVER_MODE") == "ignore-term":
+        return
     sock.close()
     raise SystemExit(0)
 
@@ -141,7 +166,10 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-if not Path(os.environ["PROBE_TEST_RELEASE_FILE"]).exists():
+mode = os.environ.get("PROBE_TEST_ADAPTER_MODE", "release")
+if mode == "always-fail":
+    raise SystemExit(1)
+if mode == "release" and not Path(os.environ["PROBE_TEST_RELEASE_FILE"]).exists():
     raise SystemExit(1)
 url = sys.argv[sys.argv.index("--api-url") + 1]
 parsed = urlparse(url)
@@ -151,14 +179,6 @@ try:
 except OSError:
     raise SystemExit(1)
 print("hermetic adapter probe passed")
-""",
-    )
-
-    write_executable(
-        worker_bin / "wrangler",
-        """#!/usr/bin/env bash
-set -euo pipefail
-exec "$REAL_PYTHON" "$FAKE_SERVER" "$@"
 """,
     )
 
@@ -175,55 +195,149 @@ fi
 exec "$REAL_PYTHON" "$@"
 """,
     )
+    write_executable(
+        fake_bin / "node",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--no-warnings" ]]; then
+  shift
+fi
+printf '%s\\n' "${1:-}" > "$PROBE_TEST_WRANGLER_CLI_FILE"
+shift
+exec "$REAL_PYTHON" "$FAKE_SERVER" "$@"
+""",
+    )
 
 
-def run_case(fixture: Path, name: str, script_name: str, port_variable: str, port: int) -> None:
-    pid_file = fixture / f"{name}.pid"
-    release_file = fixture / f"{name}.release"
-    temp_dir = fixture / f"{name}-tmp"
-    temp_dir.mkdir()
+@dataclass
+class RunningProbe:
+    process: subprocess.Popen[str]
+    server_pid: int
+    temp_parent: Path
+    release_file: Path
+    cli_file: Path
+    port: int
+
+
+def start_case(
+    fixture: Path,
+    case: ProbeCase,
+    port: int,
+    *,
+    adapter_mode: str = "release",
+    server_mode: str = "cooperative",
+    attempts: int = 200,
+) -> RunningProbe:
+    stem = f"{case.name}-{adapter_mode}-{server_mode}-{port}"
+    pid_file = fixture / f"{stem}.pid"
+    release_file = fixture / f"{stem}.release"
+    cli_file = fixture / f"{stem}.cli"
+    temp_parent = fixture / f"{stem}-tmp"
+    temp_parent.mkdir()
     env = os.environ.copy()
     env.update(
         {
             "FAKE_SERVER": str(fixture / "fake-server.py"),
             "PATH": f"{fixture / 'bin'}:{env['PATH']}",
+            "PROBE_TEST_ADAPTER_MODE": adapter_mode,
             "PROBE_TEST_PID_FILE": str(pid_file),
             "PROBE_TEST_RELEASE_FILE": str(release_file),
+            "PROBE_TEST_SERVER_MODE": server_mode,
+            "PROBE_TEST_WRANGLER_CLI_FILE": str(cli_file),
             "REAL_PYTHON": sys.executable,
-            "TMPDIR": str(temp_dir),
-            port_variable: str(port),
+            "TMPDIR": str(temp_parent),
+            "LIMEN_PROBE_ATTEMPTS": str(attempts),
+            "LIMEN_PROBE_RETRY_DELAY": "0.02",
+            "LIMEN_PROBE_TERM_GRACE": "0.15",
+            case.port_variable: str(port),
         }
     )
     process = subprocess.Popen(
-        ["bash", str(fixture / "scripts" / script_name)],
+        ["bash", str(fixture / "scripts" / case.script_name)],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         start_new_session=True,
         text=True,
     )
-    output = ""
+
+    if not wait_for(lambda: pid_file.exists() and port_listening(port)):
+        output = collect(process, timeout=1)
+        raise AssertionError(f"{case.name}: fake server did not become ready\n{output}")
+
+    server_pid, server_parent = (int(value) for value in pid_file.read_text().split())
+    assert server_parent == process.pid, (
+        f"{case.name}: server pid {server_pid} is owned by {server_parent}, not probe pid {process.pid}"
+    )
+    assert process_group_exists(server_pid), f"{case.name}: server group {server_pid} was not isolated"
+
+    run_dirs = list(temp_parent.iterdir())
+    assert len(run_dirs) == 1 and run_dirs[0].is_dir(), f"{case.name}: expected one private run dir: {run_dirs}"
+    assert stat.S_IMODE(run_dirs[0].stat().st_mode) == 0o700, (
+        f"{case.name}: run dir mode is {stat.S_IMODE(run_dirs[0].stat().st_mode):o}, not 700"
+    )
+
+    if case.name == "worker":
+        assert cli_file.exists(), "worker: fake node did not record its CLI argument"
+        assert cli_file.read_text().strip() == str(
+            fixture / "web/worker/node_modules/wrangler/wrangler-dist/cli.js"
+        ), "worker: probe did not invoke Wrangler's real CLI entrypoint"
+
+    return RunningProbe(process, server_pid, temp_parent, release_file, cli_file, port)
+
+
+def assert_reaped(run: RunningProbe, case: ProbeCase) -> None:
+    assert wait_for(lambda: not process_exists(run.server_pid)), (
+        f"{case.name}: server pid {run.server_pid} survived cleanup"
+    )
+    assert wait_for(lambda: not process_group_exists(run.server_pid)), (
+        f"{case.name}: server group {run.server_pid} survived cleanup"
+    )
+    assert wait_for(lambda: not port_listening(run.port)), f"{case.name}: port {run.port} still accepts connections"
+    assert not list(run.temp_parent.iterdir()), f"{case.name}: per-run temp state survived cleanup"
+
+
+def finish_case(run: RunningProbe, case: ProbeCase, *, expected_returncode: int) -> str:
     try:
-        if not wait_for(lambda: pid_file.exists() and port_listening(port)):
-            output = process.communicate(timeout=1)[0]
-            raise AssertionError(f"{name}: fake server did not become ready\n{output}")
-
-        server_pid, server_parent = (int(value) for value in pid_file.read_text().split())
-        assert server_parent == process.pid, (
-            f"{name}: listener pid {server_pid} is owned by wrapper pid {server_parent}, not probe pid {process.pid}"
+        output = collect(run.process)
+        assert run.process.returncode == expected_returncode, (
+            f"{case.name}: expected rc {expected_returncode}, got {run.process.returncode}\n{output}"
         )
-
-        release_file.touch()
-        output = process.communicate(timeout=10)[0]
-        assert process.returncode == 0, f"{name}: probe failed with {process.returncode}\n{output}"
-        assert wait_for(lambda: not process_exists(server_pid)), f"{name}: server pid {server_pid} survived success"
-        assert wait_for(lambda: not port_listening(port)), f"{name}: port {port} still accepts connections"
-        assert not process_group_exists(process.pid), f"{name}: probe process group {process.pid} survived success"
+        assert_reaped(run, case)
+        return output
     finally:
-        terminate_process_group(process.pid)
-        if process.poll() is None:
-            process.kill()
-            process.wait(timeout=2)
+        terminate_process_group(run.process.pid)
+        if run.process.poll() is None:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                run.process.kill()
+            run.process.wait(timeout=2)
+
+
+def exercise_success(fixture: Path, case: ProbeCase, port: int) -> None:
+    run = start_case(fixture, case, port)
+    run.release_file.touch()
+    output = finish_case(run, case, expected_returncode=0)
+    assert "sending KILL" not in output, f"{case.name}: cooperative success escalated to KILL"
+
+
+def exercise_failure(fixture: Path, case: ProbeCase, port: int) -> None:
+    run = start_case(fixture, case, port, adapter_mode="always-fail", attempts=20)
+    output = finish_case(run, case, expected_returncode=1)
+    assert "sending KILL" not in output, f"{case.name}: cooperative failure escalated to KILL"
+
+
+def exercise_signal(fixture: Path, case: ProbeCase, port: int) -> None:
+    run = start_case(fixture, case, port, adapter_mode="always-fail")
+    run.process.send_signal(signal.SIGTERM)
+    output = finish_case(run, case, expected_returncode=143)
+    assert "sending KILL" not in output, f"{case.name}: cooperative signal escalated to KILL"
+
+
+def exercise_noncooperative(fixture: Path, case: ProbeCase, port: int) -> None:
+    run = start_case(fixture, case, port, server_mode="ignore-term")
+    run.release_file.touch()
+    output = finish_case(run, case, expected_returncode=0)
+    assert "did not exit after TERM; sending KILL" in output, f"{case.name}: KILL escalation was not exercised"
 
 
 def main() -> int:
@@ -231,10 +345,17 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="limen-probe-ownership-") as raw_fixture:
         fixture = Path(raw_fixture)
         prepare_fixture(fixture)
-        for name, script_name, port_variable in CASES:
-            port = unused_port(used_ports)
-            run_case(fixture, name, script_name, port_variable, port)
-            print(f"PASS {name}: successful probe reaped listener on {port}")
+        exercises = (
+            ("success", exercise_success),
+            ("failure", exercise_failure),
+            ("signal", exercise_signal),
+            ("noncooperative", exercise_noncooperative),
+        )
+        for case in CASES:
+            for label, exercise in exercises:
+                port = unused_port(used_ports)
+                exercise(fixture, case, port)
+                print(f"PASS {case.name}: {label} cleanup reaped listener on {port}")
     return 0
 
 
