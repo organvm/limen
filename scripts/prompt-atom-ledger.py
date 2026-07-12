@@ -955,9 +955,7 @@ def source_exclusion_candidate_id(
         return None
     if source == "claude-plans":
         return "claude-generated-plan-v1"
-    if source == "codex-attachments":
-        return "codex-attachment-v1"
-    if source == "claude-tasks" and len(parts) >= 1:
+    if source == "claude-tasks" and len(parts) >= 2:
         if path.name == ".lock" and int(signature.get("size") or 0) == 0:
             return "claude-task-lock-v1"
         if path.name == ".highwatermark":
