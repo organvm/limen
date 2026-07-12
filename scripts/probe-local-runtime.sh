@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="${TMPDIR:-/tmp}/limen-runtime-probe"
 TASKS_PATH="$TMP_DIR/tasks.yaml"
+SERVER_LOG="$TMP_DIR/uvicorn.log"
+PROBE_LOG="$TMP_DIR/probe.log"
 PORT="${LIMEN_PROBE_PORT:-8765}"
 OWNER_TOKEN="${LIMEN_PROBE_OWNER_TOKEN:-owner-probe-token}"
 CLIENT_TOKEN="${LIMEN_PROBE_CLIENT_TOKEN:-client-probe-token}"
@@ -72,20 +74,23 @@ tasks:
 YAML
 
 cleanup() {
-  if [[ -n "${SERVER_PID:-}" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
-    kill "$SERVER_PID" 2>/dev/null || true
-    wait "$SERVER_PID" 2>/dev/null || true
+  local pid="${SERVER_PID:-}"
+  [[ -n "$pid" ]] || return 0
+  if kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null || true
   fi
+  wait "$pid" 2>/dev/null || true
 }
 trap cleanup EXIT
 
 (
   cd "$ROOT/web/api"
-  LIMEN_TASKS="$TASKS_PATH" \
+  exec env \
+    LIMEN_TASKS="$TASKS_PATH" \
     LIMEN_API_TOKEN="$OWNER_TOKEN" \
     LIMEN_CLIENT_TOKEN="$CLIENT_TOKEN" \
     PYTHONPATH="${PYTHONPATH:-}" \
-    python3 -m uvicorn main:app --host 127.0.0.1 --port "$PORT" >/tmp/limen-runtime-probe-uvicorn.log 2>&1
+    python3 -m uvicorn main:app --host 127.0.0.1 --port "$PORT" >"$SERVER_LOG" 2>&1
 ) &
 SERVER_PID="$!"
 
@@ -97,13 +102,13 @@ for _ in {1..40}; do
     --task-id PROBE-001 \
     --verify-task-id PROBE-VERIFY \
     --assign-task-id PROBE-ASSIGN \
-    --archive-task-id PROBE-ARCHIVE >/tmp/limen-runtime-probe.log 2>&1; then
-    cat /tmp/limen-runtime-probe.log
+    --archive-task-id PROBE-ARCHIVE >"$PROBE_LOG" 2>&1; then
+    cat "$PROBE_LOG"
     exit 0
   fi
   sleep 0.25
 done
 
-cat /tmp/limen-runtime-probe-uvicorn.log >&2 || true
-cat /tmp/limen-runtime-probe.log >&2 || true
+cat "$SERVER_LOG" >&2 || true
+cat "$PROBE_LOG" >&2 || true
 exit 1

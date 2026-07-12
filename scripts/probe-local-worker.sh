@@ -14,8 +14,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="${TMPDIR:-/tmp}/limen-worker-probe"
 ENV_FILE="$TMP_DIR/.dev.vars"
 BOARD_FILE="$TMP_DIR/tasks.yaml"
+SERVER_LOG="$TMP_DIR/wrangler.log"
+PROBE_LOG="$TMP_DIR/probe.log"
 OWNER_TOKEN="${LIMEN_PROBE_OWNER_TOKEN:-owner-probe-token}"
 CLIENT_TOKEN="${LIMEN_PROBE_CLIENT_TOKEN:-client-probe-token}"
+WRANGLER_BIN="$ROOT/web/worker/node_modules/.bin/wrangler"
 
 port_available() {
   python3 - "$1" <<'PY'
@@ -122,14 +125,16 @@ LIMEN_CORS_ORIGINS=http://127.0.0.1:$PORT
 EOF
 
 cleanup() {
-  if [[ -n "${SERVER_PID:-}" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
-    kill "$SERVER_PID" 2>/dev/null || true
-    wait "$SERVER_PID" 2>/dev/null || true
+  local pid="${SERVER_PID:-}"
+  [[ -n "$pid" ]] || return 0
+  if kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null || true
   fi
+  wait "$pid" 2>/dev/null || true
 }
 trap cleanup EXIT
 
-if [[ ! -d "$ROOT/web/worker/node_modules/yaml" ]]; then
+if [[ ! -d "$ROOT/web/worker/node_modules/yaml" || ! -x "$WRANGLER_BIN" ]]; then
   (
     cd "$ROOT/web/worker"
     npm install --silent
@@ -138,13 +143,14 @@ fi
 
 (
   cd "$ROOT/web/worker"
-  npx wrangler dev --local --ip 127.0.0.1 --port "$PORT" --env-file "$ENV_FILE" --log-level error >/tmp/limen-worker-probe-wrangler.log 2>&1
+  exec "$WRANGLER_BIN" dev --local --ip 127.0.0.1 --port "$PORT" \
+    --env-file "$ENV_FILE" --log-level error >"$SERVER_LOG" 2>&1
 ) &
 SERVER_PID="$!"
 
 for _ in {1..80}; do
   if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-    cat /tmp/limen-worker-probe-wrangler.log >&2 || true
+    cat "$SERVER_LOG" >&2 || true
     printf 'wrangler dev exited before the worker probe became ready\n' >&2
     exit 1
   fi
@@ -155,13 +161,13 @@ for _ in {1..80}; do
     --task-id PROBE-001 \
     --verify-task-id PROBE-VERIFY \
     --assign-task-id PROBE-ASSIGN \
-    --archive-task-id PROBE-ARCHIVE >/tmp/limen-worker-probe.log 2>&1; then
-    cat /tmp/limen-worker-probe.log
+    --archive-task-id PROBE-ARCHIVE >"$PROBE_LOG" 2>&1; then
+    cat "$PROBE_LOG"
     exit 0
   fi
   sleep 0.25
 done
 
-cat /tmp/limen-worker-probe-wrangler.log >&2 || true
-cat /tmp/limen-worker-probe.log >&2 || true
+cat "$SERVER_LOG" >&2 || true
+cat "$PROBE_LOG" >&2 || true
 exit 1
