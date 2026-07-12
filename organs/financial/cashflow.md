@@ -1,6 +1,6 @@
 # Financial Office — Rolling Cash-Flow Projection
 
-> Generated: 2026-07-10T01:15:31Z
+> Generated: 2026-07-12T06:02:50Z
 > *Forward-looking estimate based on known revenue stages and obligations.
 > Confidence increases as more balances and obligation amounts are confirmed.*
 
@@ -23,18 +23,18 @@
 
 | Week | Starting | Known Inflows | Known Outflows | Net | Cumulative | Note |
 |---|---|---|---|---|---|---|
-| W1 | 2026-07-10 | — | — | $+0.00 | $+0.00 |  |
-| W2 | 2026-07-17 | — | — | $+0.00 | $+0.00 |  |
-| W3 | 2026-07-24 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W4 | 2026-07-31 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W5 | 2026-08-07 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W6 | 2026-08-14 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W7 | 2026-08-21 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W8 | 2026-08-28 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W9 | 2026-09-04 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W10 | 2026-09-11 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W11 | 2026-09-18 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W12 | 2026-09-25 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W1 | 2026-07-12 | — | — | $+0.00 | $+0.00 |  |
+| W2 | 2026-07-19 | — | — | $+0.00 | $+0.00 |  |
+| W3 | 2026-07-26 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W4 | 2026-08-02 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W5 | 2026-08-09 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W6 | 2026-08-16 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W7 | 2026-08-23 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W8 | 2026-08-30 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W9 | 2026-09-06 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W10 | 2026-09-13 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W11 | 2026-09-20 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W12 | 2026-09-27 | — | — | $+0.00 | $+0.00 | post-deploy |
 
 ### Runway
 
@@ -43,14 +43,11 @@
 
 ## Obligations (financial-material)
 
-Sourced from `obligations-ledger.json` — 7 protocol-class obligations:
+Sourced from `obligations-ledger.json` — 4 protocol-class obligations:
 
 | Priority | Title | Owner | Next Step |
 |---|---|---|---|
-| 90 | Fraud alert — verify first — Stripe | yours | VERIFY the sender is genuine (fraud notices are heavily spoofed — do NOT click links). If real, call the number on the back of the card. |
-| 90 | Fraud alert — verify first — Santander Bank | yours | VERIFY the sender is genuine (fraud notices are heavily spoofed — do NOT click links). If real, call the number on the back of the card. |
-| 88 | Student loan — default risk — Nelnet | yours | Log in at nelnet.studentaid.gov: check default status, recertify the income-driven repayment plan, and set the lowest viable payment. |
+| 90 | Fraud alert — verify first — GrowHealthy FL | yours | VERIFY the sender is genuine (fraud notices are heavily spoofed — do NOT click links). If real, call the number on the back of the card. |
 | 88 | Student loan — default risk — U.S. Department of Education | yours | Log in at nelnet.studentaid.gov: check default status, recertify the income-driven repayment plan, and set the lowest viable payment. |
 | 82 | Billing — payment failed — Google Cloud Platform | yours | Root cause is the card-0186 hold — resolve THAT first, then update the payment method here. (Cascades to Anthropic / Google Cloud / GitHub.) |
-| 82 | Billing — payment failed — Anthropic | yours | Root cause is the card-0186 hold — resolve THAT first, then update the payment method here. (Cascades to Anthropic / Google Cloud / GitHub.) |
 | 78 | KYC / identity verification — Stripe | yours | Provide the exact info requested. Note: Stripe KYC is blocked on the dead LLC — prefer the individual monetization rail (Ko-fi/Lemon Squeezy). |
