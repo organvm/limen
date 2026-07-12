@@ -333,7 +333,7 @@ def main():
     sick = []
     for repo, num, url, verdict, failing_checks in rows:
         chronic_hits = sorted(check for check in failing_checks if (repo, check) in chronic)
-        if verdict == "CI-RED" and chronic_hits:
+        if verdict == "CI-RED" and failing_checks and len(chronic_hits) == len(failing_checks):
             frozen.append((repo, num, chronic_hits))
             continue
         if verdict in KINDS:

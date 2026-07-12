@@ -186,6 +186,38 @@ def test_stale_chronic_receipt_cannot_freeze_current_work(tmp_path, monkeypatch)
     assert "HEAL-cifix-organvm-exporter-54" in ids
 
 
+def test_chronic_check_cannot_hide_a_distinct_new_failure(tmp_path, monkeypatch):
+    m = _load(tmp_path, monkeypatch)
+    p = tmp_path / "tasks.yaml"
+    _board(p)
+    monkeypatch.setitem(
+        _VIEW,
+        54,
+        {
+            "state": "OPEN",
+            "isDraft": False,
+            "mergeable": "MERGEABLE",
+            "statusCheckRollup": [
+                {"name": "e2e", "conclusion": "FAILURE"},
+                {"name": "lint", "conclusion": "FAILURE"},
+            ],
+        },
+    )
+    m.HEAL_CONVERGENCE.write_text(
+        json.dumps(
+            {
+                "timestamp": m.datetime.datetime.now(m.datetime.timezone.utc).isoformat(),
+                "chronic": [{"repo": "organvm/exporter", "check": "e2e"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert _run(m, monkeypatch, p) == 0
+    ids = {task["id"] for task in yaml.safe_load(p.read_text())["tasks"]}
+    assert "HEAL-cifix-organvm-exporter-54" in ids
+
+
 def test_explicit_pr_bypasses_rotating_search_window(tmp_path, monkeypatch):
     m = _load(tmp_path, monkeypatch)
     p = tmp_path / "tasks.yaml"
