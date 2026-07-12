@@ -35,7 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
-from limen.intake import contract_fields, github_pr_contract  # noqa: E402
+from limen.intake import contract_fields, github_pr_contract, is_durable_receipt_target  # noqa: E402
 from limen.models import Task  # noqa: E402
 from limen.tabularius import submit_task_upsert  # noqa: E402
 
@@ -142,7 +142,14 @@ def _dispositioned_repos(ranked: set[str]) -> set[str]:
     rows = payload.get("dispositions")
     if not isinstance(rows, list):
         return set()
-    seen: Counter[str] = Counter()
+    # Uniqueness is a ledger property, not a property of the rows that happen to
+    # validate.  Count every named row first so a malformed/conflicting duplicate
+    # cannot hide behind the one valid row and suppress discovery.
+    seen = Counter(
+        str(row.get("repo") or "").strip()
+        for row in rows
+        if isinstance(row, dict) and str(row.get("repo") or "").strip()
+    )
     valid: set[str] = set()
     for row in rows:
         if not isinstance(row, dict):
@@ -152,15 +159,12 @@ def _dispositioned_repos(ranked: set[str]) -> set[str]:
         receipt = str(row.get("receipt") or "").strip()
         if not repo or disposition not in {"ranked", "archival"}:
             continue
-        if not (
-            receipt.startswith("https://github.com/") or receipt.startswith("github:") or receipt.startswith("git:")
-        ):
+        if seen[repo] != 1 or not is_durable_receipt_target(receipt):
             continue
         if (disposition == "ranked") != (repo in ranked):
             continue
-        seen[repo] += 1
         valid.add(repo)
-    return {repo for repo in valid if seen[repo] == 1}
+    return valid
 
 
 def _avg_headroom_pct() -> float | None:

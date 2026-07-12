@@ -133,11 +133,13 @@ def test_skips_durable_ranked_and_archival_dispositions(tmp_path: Path):
 def test_malformed_or_duplicate_dispositions_fail_open(tmp_path: Path):
     p = tmp_path / "tasks.yaml"
     _board(p, busy_repos=[])
-    org = ["o/valid-archive", "o/duplicate", "o/no-receipt"]
+    org = ["o/valid-archive", "o/duplicate", "o/mixed-duplicate", "o/no-receipt"]
     dispositions = [
         {"repo": "o/valid-archive", "disposition": "archival", "receipt": "github:o/r:pull-request:1"},
         {"repo": "o/duplicate", "disposition": "archival", "receipt": "github:o/r:pull-request:2"},
         {"repo": "o/duplicate", "disposition": "archival", "receipt": "github:o/r:pull-request:3"},
+        {"repo": "o/mixed-duplicate", "disposition": "archival", "receipt": "github:o/r:pull-request:4"},
+        {"repo": "o/mixed-duplicate", "disposition": "maybe", "receipt": "github:o/r:pull-request:5"},
         {"repo": "o/no-receipt", "disposition": "archival", "receipt": ""},
     ]
 
@@ -152,7 +154,32 @@ def test_malformed_or_duplicate_dispositions_fail_open(tmp_path: Path):
         dispositions=dispositions,
     )
 
-    assert {task["repo"] for task in _generated(p)} == {"o/duplicate", "o/no-receipt"}
+    assert {task["repo"] for task in _generated(p)} == {"o/duplicate", "o/mixed-duplicate", "o/no-receipt"}
+
+
+def test_partial_receipt_prefixes_fail_open(tmp_path: Path):
+    p = tmp_path / "tasks.yaml"
+    _board(p, busy_repos=[])
+    receipts = {
+        "o/bare-github": "https://github.com/",
+        "o/partial-github": "https://github.com/not-a-receipt",
+        "o/bare-git": "git:",
+        "o/partial-git": "git:not-a-durable-target",
+    }
+    dispositions = [{"repo": repo, "disposition": "archival", "receipt": receipt} for repo, receipt in receipts.items()]
+
+    _run(
+        p,
+        "--apply",
+        "--floor",
+        "8",
+        "--max-new",
+        "8",
+        org_repos=",".join(receipts),
+        dispositions=dispositions,
+    )
+
+    assert {task["repo"] for task in _generated(p)} == set(receipts)
 
 
 def test_noop_when_discovery_floor_met(tmp_path: Path):
