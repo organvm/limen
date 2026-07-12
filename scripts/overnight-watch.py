@@ -11,6 +11,7 @@ every few minutes without replaying any agent conversation.
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime as dt
 import fcntl
 import hashlib
@@ -79,7 +80,8 @@ VITALS_SKIP_MARKER = "vitals-pressure: dispatch skipped"
 TAIL_BYTES = 192 * 1024
 TRIAL_SCHEMA_VERSION = "overnight-trial.v2"
 TRIAL_MARKER_SCHEMA_VERSION = "overnight-trial-window.v2"
-TRIAL_OBSERVATION_SCHEMA_VERSION = "overnight-trial-observation.v1"
+TRIAL_OBSERVATION_SCHEMA_VERSION = "overnight-trial-observation.v2"
+TRIAL_OBSERVATION_CUSTODY_SCHEMA_VERSION = "overnight-observation-custody.v1"
 TRIAL_TERMINAL_CUSTODY_SCHEMA_VERSION = "overnight-terminal-custody.v1"
 TRIAL_TASK_EVENT_SCHEMA_VERSION = "overnight-task-events.v2"
 TRIAL_PROMPT_AUTHORITY_SCHEMA_VERSION = "overnight-prompt-authority.v2"
@@ -301,7 +303,10 @@ def _evaluator_dependency_paths() -> dict[str, Path]:
         "cli/src/limen/intake.py": repository / "cli" / "src" / "limen" / "intake.py",
         "cli/src/limen/jules_remote.py": repository / "cli" / "src" / "limen" / "jules_remote.py",
         "cli/src/limen/prompt_corpus.py": repository / "cli" / "src" / "limen" / "prompt_corpus.py",
+        "scripts/autonomy-governor.py": repository / "scripts" / "autonomy-governor.py",
+        "scripts/handoff-relay.py": repository / "scripts" / "handoff-relay.py",
         "scripts/overnight-watch.py": Path(__file__).resolve(),
+        "scripts/session-value-review.py": repository / "scripts" / "session-value-review.py",
     }
 
 
@@ -1063,14 +1068,12 @@ def _sha256_bytes(payload: bytes) -> str:
 
 
 def _file_custody(path: Path) -> dict[str, Any]:
-    try:
-        payload = path.read_bytes()
-        stat = path.stat()
-    except OSError:
+    payload, _, file_errors = _read_trusted_regular_file(path, label="custody source")
+    present = not file_errors and payload is not None
+    if payload is None:
         payload = b""
-        stat = None
     return {
-        "present": stat is not None,
+        "present": present,
         "size": len(payload),
         "digest": _sha256_bytes(payload),
     }
@@ -1094,11 +1097,14 @@ def _prefix_matches(path: Path, custody: dict[str, Any]) -> bool:
         return False
     size = int(custody["size"])
     try:
-        with path.open("rb") as handle:
-            prefix = handle.read(size)
-            current_size = path.stat().st_size
+        path.lstat()
     except OSError:
         return size == 0 and custody.get("present") is False and custody.get("digest") == _sha256_bytes(b"")
+    payload, _, file_errors = _read_trusted_regular_file(path, label="prefix source")
+    if file_errors or payload is None:
+        return False
+    prefix = payload[:size]
+    current_size = len(payload)
     return current_size >= size and len(prefix) == size and _sha256_bytes(prefix) == custody.get("digest")
 
 
@@ -1285,8 +1291,11 @@ def _trial_anchor_errors(marker: dict[str, Any]) -> list[str]:
         "evaluator_hash": marker.get("evaluator_hash"),
         "monotonic_start_ns": marker.get("monotonic_start_ns"),
     }
+    payload, _, read_errors = _read_trusted_regular_file(path, label="prospective trial anchor")
+    if read_errors:
+        return read_errors
     try:
-        actual = json.loads(path.read_text(encoding="utf-8"))
+        actual = json.loads(payload or b"{}")
         created_ns = _anchor_created_ns(path)
     except (OSError, ValueError):
         return ["prospective trial anchor is missing or malformed"]
@@ -1297,6 +1306,123 @@ def _trial_anchor_errors(marker: dict[str, Any]) -> list[str]:
     if started_at is None or abs(created_ns / 1_000_000_000 - started_at.timestamp()) > TRIAL_CLOCK_TOLERANCE_SEC:
         errors.append("prospective trial anchor creation time does not match trial start")
     return errors
+
+
+def _observation_custody_directory(marker: dict[str, Any]) -> Path:
+    trial_id = str(marker.get("content_hash") or "")
+    if not re.fullmatch(r"[0-9a-f]{64}", trial_id):
+        raise TrialContractError("observation custody trial id is invalid")
+    return TRIAL_WINDOW_PATH.parent / "overnight-trial-observation-custody" / trial_id
+
+
+def _observation_custody_path(marker: dict[str, Any], observation: dict[str, Any]) -> Path:
+    sequence = observation.get("sequence")
+    content_hash = str(observation.get("content_hash") or "")
+    if not isinstance(sequence, int) or sequence < 1 or not re.fullmatch(r"[0-9a-f]{64}", content_hash):
+        raise TrialContractError("observation custody identity is invalid")
+    return _observation_custody_directory(marker) / f"{sequence:06d}-{content_hash}.json"
+
+
+def _observation_custody_payload(marker: dict[str, Any], observation: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": TRIAL_OBSERVATION_CUSTODY_SCHEMA_VERSION,
+        "trial_id": marker.get("content_hash"),
+        "sequence": observation.get("sequence"),
+        "observed_at": observation.get("observed_at"),
+        "observation_hash": observation.get("content_hash"),
+        "observation_digest": canonical_hash(observation),
+        "proof_digest": canonical_hash(
+            {name: observation.get(name) or [] for name in ("value_proofs", "blocker_proofs", "session_proofs")}
+        ),
+    }
+
+
+def _prepare_observation_custody(marker: dict[str, Any]) -> None:
+    directory = _observation_custody_directory(marker)
+    configured_root = directory.parent
+    configured_errors = _trusted_custody_path_errors(
+        configured_root.parent,
+        label="observation custody configured root",
+        final_directory=True,
+    )
+    if configured_errors:
+        raise TrialContractError("; ".join(configured_errors))
+    if configured_root.is_symlink():
+        raise TrialContractError("observation custody root is a symlink")
+    configured_root.mkdir(mode=0o700, exist_ok=True)
+    root_errors = _trusted_custody_path_errors(
+        configured_root,
+        label="observation custody root",
+        final_directory=True,
+    )
+    if root_errors:
+        raise TrialContractError("; ".join(root_errors))
+    if directory.is_symlink():
+        raise TrialContractError("observation custody trial directory is a symlink")
+    directory.mkdir(mode=0o700, exist_ok=True)
+    directory_errors = _trusted_custody_path_errors(
+        directory,
+        label="observation custody trial directory",
+        final_directory=True,
+    )
+    if directory_errors:
+        raise TrialContractError("; ".join(directory_errors))
+
+
+def _observation_custody_created_ns(path: Path) -> int:
+    metadata = path.lstat()
+    birth = getattr(metadata, "st_birthtime", None)
+    return int((birth if birth is not None else metadata.st_ctime) * 1_000_000_000)
+
+
+def _observation_custody_errors(marker: dict[str, Any], observation: dict[str, Any]) -> list[str]:
+    try:
+        path = _observation_custody_path(marker, observation)
+    except TrialContractError as exc:
+        return [str(exc)]
+    payload, mode, read_errors = _read_trusted_regular_file(path, label="prospective observation custody")
+    if read_errors or payload is None or mode is None:
+        return read_errors or ["prospective observation custody is missing"]
+    try:
+        actual = json.loads(payload)
+    except (UnicodeError, ValueError):
+        return ["prospective observation custody is malformed"]
+    errors: list[str] = []
+    if actual != _observation_custody_payload(marker, observation):
+        errors.append("prospective observation custody does not match the observation")
+    if mode & 0o222:
+        errors.append("prospective observation custody is writable")
+    observed_at = parse_iso(str(observation.get("observed_at") or ""))
+    try:
+        created_ns = _observation_custody_created_ns(path)
+    except OSError:
+        created_ns = 0
+    if observed_at is None or abs(created_ns / 1_000_000_000 - observed_at.timestamp()) > TRIAL_CLOCK_TOLERANCE_SEC:
+        errors.append("prospective observation custody creation time does not match observation time")
+    return errors
+
+
+def _write_observation_custody(marker: dict[str, Any], observation: dict[str, Any]) -> None:
+    _prepare_observation_custody(marker)
+    path = _observation_custody_path(marker, observation)
+    if path.exists():
+        existing_errors = _observation_custody_errors(marker, observation)
+        if existing_errors:
+            raise TrialContractError("; ".join(existing_errors))
+        return
+    material = (json.dumps(_observation_custody_payload(marker, observation), sort_keys=True) + "\n").encode("utf-8")
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    directory_fd = os.open(path.parent, directory_flags)
+    try:
+        file_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(path.name, file_flags, 0o400, dir_fd=directory_fd)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(material)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 def _event_digest(event_ids: list[str]) -> str:
@@ -1367,10 +1493,11 @@ def _load_task_event_ledger(path: Path | None = None) -> dict[str, Any]:
         "session_seams": [],
     }
     all_events: dict[str, dict[str, Any]] = {}
-    errors = 0
+    payload, _, file_errors = _read_trusted_regular_file(source, label="task source")
+    errors = len(file_errors)
     try:
-        board = yaml.safe_load(source.read_text(encoding="utf-8"))
-    except Exception:
+        board = yaml.safe_load(payload.decode("utf-8", "strict")) if payload is not None else {}
+    except (UnicodeError, yaml.YAMLError):
         board = {}
         errors += 1
     tasks = board.get("tasks") if isinstance(board, dict) else None
@@ -2017,7 +2144,7 @@ def _predicate_proof(command: str) -> dict[str, Any] | None:
     return {"predicate_hash": canonical_hash(command), "result_hash": canonical_hash(results)}
 
 
-def _github_api_proof(endpoint: str) -> dict[str, Any] | None:
+def _github_api_object(endpoint: str) -> dict[str, Any] | list[Any] | None:
     result = _run_trusted_tool_argv("gh", ["api", endpoint], timeout=30)
     if result is None or result[0] != 0:
         return None
@@ -2025,7 +2152,48 @@ def _github_api_proof(endpoint: str) -> dict[str, Any] | None:
         payload = json.loads(result[1] or "{}")
     except ValueError:
         return None
+    return payload if isinstance(payload, (dict, list)) else None
+
+
+def _github_api_proof(endpoint: str) -> dict[str, Any] | None:
+    payload = _github_api_object(endpoint)
+    if payload is None:
+        return None
     return {"endpoint_hash": canonical_hash(endpoint), "object_hash": canonical_hash(payload)}
+
+
+def _exact_key_in_text(value: Any, key: str) -> bool:
+    if not isinstance(value, str) or not key:
+        return False
+    boundary = r"A-Za-z0-9._/-"
+    return re.search(rf"(?<![{boundary}]){re.escape(key)}(?![{boundary}])", value) is not None
+
+
+def _json_contains_exact_value(value: Any, expected: str) -> bool:
+    if isinstance(value, dict):
+        return expected in value or any(_json_contains_exact_value(item, expected) for item in value.values())
+    if isinstance(value, list):
+        return any(_json_contains_exact_value(item, expected) for item in value)
+    return isinstance(value, str) and value == expected
+
+
+def _content_has_exact_anchor(payload: dict[str, Any], anchor: str) -> bool:
+    if not anchor or payload.get("encoding") != "base64" or not isinstance(payload.get("content"), str):
+        return False
+    try:
+        encoded = re.sub(rb"\s+", b"", payload["content"].encode("ascii", "strict"))
+        decoded = base64.b64decode(encoded, validate=True)
+    except (UnicodeError, ValueError):
+        return False
+    try:
+        value = json.loads(decoded)
+    except (UnicodeError, ValueError):
+        try:
+            text = decoded.decode("utf-8", "strict")
+        except UnicodeError:
+            return False
+        return any(line.strip() == anchor for line in text.splitlines())
+    return _json_contains_exact_value(value, anchor)
 
 
 def _receipt_target_proof(target: str) -> dict[str, Any] | None:
@@ -2033,19 +2201,21 @@ def _receipt_target_proof(target: str) -> dict[str, Any] | None:
     if git_match:
         repo = git_match.group("repo")
         path = git_match.group("path")
-        remote = _run_trusted_tool_argv("gh", ["api", f"repos/{repo}/contents/{path}"], timeout=30)
-        if remote is None or remote[0] != 0:
+        endpoint = f"repos/{repo}/contents/{path}"
+        payload = _github_api_object(endpoint)
+        if not isinstance(payload, dict):
             return None
-        try:
-            payload = json.loads(remote[1] or "{}")
-        except ValueError:
-            return None
-        object_id = str(payload.get("sha") or "") if isinstance(payload, dict) else ""
+        object_id = str(payload.get("sha") or "")
         if not object_id:
+            return None
+        anchor = str(git_match.group("anchor") or "")
+        if anchor and not _content_has_exact_anchor(payload, anchor):
             return None
         return {
             "target_hash": canonical_hash(target),
-            "object_hash": canonical_hash({"repo": repo, "path": path, "object_id": object_id}),
+            "object_hash": canonical_hash(
+                {"repo": repo, "path": path, "object_id": object_id, "anchor": anchor or None}
+            ),
         }
 
     declared = re.fullmatch(
@@ -2069,7 +2239,7 @@ def _receipt_target_proof(target: str) -> dict[str, Any] | None:
                     "--search",
                     f"{key} in:body",
                     "--json",
-                    "number,url,mergedAt,mergeCommit",
+                    "number,url,title,body,state,mergedAt,mergeCommit",
                 ],
                 timeout=30,
             )
@@ -2086,7 +2256,7 @@ def _receipt_target_proof(target: str) -> dict[str, Any] | None:
                     "--search",
                     f"{key} in:title",
                     "--json",
-                    "number,url,closedAt,stateReason",
+                    "number,url,title,body,state,closedAt,stateReason",
                 ],
                 timeout=30,
             )
@@ -2094,12 +2264,34 @@ def _receipt_target_proof(target: str) -> dict[str, Any] | None:
             objects = json.loads(result[1] or "[]") if result is not None and result[0] == 0 else []
         except ValueError:
             objects = []
-        if not isinstance(objects, list) or not objects:
+        if not isinstance(objects, list):
             return None
-        return {"target_hash": canonical_hash(target), "object_hash": canonical_hash(objects)}
+        if kind == "pull-request":
+            exact = [
+                item
+                for item in objects
+                if isinstance(item, dict)
+                and _exact_key_in_text(item.get("body"), key)
+                and str(item.get("state") or "").upper() == "MERGED"
+                and bool(item.get("mergedAt"))
+                and isinstance(item.get("mergeCommit"), dict)
+                and bool(item["mergeCommit"].get("oid"))
+            ]
+        else:
+            exact = [
+                item
+                for item in objects
+                if isinstance(item, dict)
+                and _exact_key_in_text(item.get("title"), key)
+                and str(item.get("state") or "").upper() == "CLOSED"
+                and bool(item.get("closedAt"))
+            ]
+        if not exact:
+            return None
+        return {"target_hash": canonical_hash(target), "object_hash": canonical_hash(exact)}
 
     parsed = urlparse(target)
-    if parsed.scheme != "https" or parsed.netloc.lower() != "github.com":
+    if parsed.scheme != "https" or parsed.netloc.lower() != "github.com" or parsed.query or parsed.fragment:
         return None
     parts = [part for part in parsed.path.split("/") if part]
     if len(parts) < 4:
@@ -2108,16 +2300,23 @@ def _receipt_target_proof(target: str) -> dict[str, Any] | None:
     kind = parts[2]
     key = parts[3]
     endpoint = ""
-    if kind == "issues" and key.isdigit():
+    validator = ""
+    if kind == "issues" and key.isdigit() and len(parts) == 4:
         endpoint = f"repos/{repo}/issues/{key}"
-    elif kind == "pull" and key.isdigit():
+        validator = "closed_issue"
+    elif kind == "pull" and key.isdigit() and len(parts) == 4:
         endpoint = f"repos/{repo}/pulls/{key}"
-    elif kind == "commit":
+        validator = "merged_pull"
+    elif kind == "commit" and len(parts) == 4:
         endpoint = f"repos/{repo}/commits/{key}"
+        validator = "commit"
     elif kind == "actions" and len(parts) >= 5 and parts[3] == "runs" and parts[4].isdigit():
+        if len(parts) != 5:
+            return None
         endpoint = f"repos/{repo}/actions/runs/{parts[4]}"
+        validator = "successful_run"
     elif kind == "actions" and len(parts) >= 5 and parts[3] == "workflows":
-        endpoint = f"repos/{repo}/actions/workflows/{parts[4]}"
+        return None
     elif kind in {"blob", "tree"}:
         # A browser URL does not delimit a slash-bearing ref from its path.
         # Proving only the commit/ref would let a nonexistent path count as a
@@ -2126,10 +2325,28 @@ def _receipt_target_proof(target: str) -> dict[str, Any] | None:
         return None
     if not endpoint:
         return None
-    proof = _github_api_proof(endpoint)
-    if proof is None:
+    payload = _github_api_object(endpoint)
+    if not isinstance(payload, dict):
         return None
-    return {"target_hash": canonical_hash(target), **proof}
+    if validator == "closed_issue" and not (
+        str(payload.get("state") or "").lower() == "closed" and bool(payload.get("closed_at"))
+    ):
+        return None
+    if validator == "merged_pull" and not (bool(payload.get("merged_at")) and bool(payload.get("merge_commit_sha"))):
+        return None
+    if validator == "commit" and not str(payload.get("sha") or "").startswith(key):
+        return None
+    if validator == "successful_run" and not (
+        str(payload.get("status") or "").lower() == "completed"
+        and str(payload.get("conclusion") or "").lower() == "success"
+        and str(payload.get("id") or "") == parts[4]
+    ):
+        return None
+    return {
+        "target_hash": canonical_hash(target),
+        "endpoint_hash": canonical_hash(endpoint),
+        "object_hash": canonical_hash(payload),
+    }
 
 
 def _prove_terminal_event(entry: dict[str, Any]) -> dict[str, Any] | None:
@@ -2147,15 +2364,39 @@ def _prove_terminal_event(entry: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _prove_session_event(entry: dict[str, Any]) -> dict[str, Any] | None:
+def _jules_last_active_at(raw: str, observed_at: dt.datetime) -> dt.datetime | None:
+    match = re.search(r"(?P<age>(?:(?:\d+)[dhms])+\s+ago|just now)\s*$", raw, re.IGNORECASE)
+    if not match:
+        return None
+    age = match.group("age").lower()
+    if age == "just now":
+        return observed_at
+    seconds = 0
+    for amount, unit in re.findall(r"(\d+)([dhms])", age):
+        seconds += int(amount) * {"d": 86400, "h": 3600, "m": 60, "s": 1}[unit]
+    return observed_at - dt.timedelta(seconds=seconds)
+
+
+def _prove_session_event(
+    entry: dict[str, Any],
+    *,
+    window_start: dt.datetime | None = None,
+    observed_at: dt.datetime | None = None,
+    require_active: bool = True,
+) -> dict[str, Any] | None:
     provider = str(entry.get("agent") or "").strip()
     session_id = str(entry.get("session_id") or "").strip()
+    event_time = parse_iso(str(entry.get("timestamp") or ""))
+    if window_start is None or observed_at is None or event_time is None:
+        return None
+    if not window_start <= event_time <= observed_at:
+        return None
     if provider == "jules" and session_id.isdigit() and len(session_id) >= 12:
         cli_src = Path(__file__).resolve().parents[1] / "cli" / "src"
         if str(cli_src) not in sys.path:
             sys.path.insert(0, str(cli_src))
         try:
-            from limen.jules_remote import parse_jules_remote_sessions
+            from limen.jules_remote import classify_jules_remote_status, parse_jules_remote_sessions
         except (ImportError, ModuleNotFoundError):
             return None
         remote = _run_trusted_tool_argv("jules", ["remote", "list", "--session"], timeout=90)
@@ -2164,21 +2405,85 @@ def _prove_session_event(entry: dict[str, Any]) -> dict[str, Any] | None:
         session = parse_jules_remote_sessions(remote[1]).get(session_id)
         if session is None:
             return None
+        status = session.status
+        if status == "unknown":
+            without_activity = re.sub(
+                r"(?:(?:(?:\d+)[dhms])+\s+ago|just now)\s*$",
+                "",
+                session.raw,
+                flags=re.IGNORECASE,
+            ).rstrip()
+            columns = re.split(r"\s{2,}", without_activity)
+            status = classify_jules_remote_status(columns[-1] if columns else "")
+        last_active_at = _jules_last_active_at(session.raw, observed_at)
+        if require_active and (
+            status not in {"planning", "in_progress"}
+            or last_active_at is None
+            or not window_start <= last_active_at <= observed_at
+        ):
+            return None
         return {
             "event_id": entry["event_id"],
             "provider": provider,
             "proof_hash": canonical_hash(
-                {"provider": provider, "session_id": session_id, "status": session.status, "raw": session.raw}
+                {
+                    "provider": provider,
+                    "session_id": session_id,
+                    "event_time": event_time.isoformat(timespec="seconds"),
+                    "observed_at": observed_at.isoformat(timespec="seconds"),
+                }
             ),
         }
     if provider == "github_actions" and "/actions/runs/" in session_id:
-        proof = _receipt_target_proof(session_id)
-        if proof is not None:
-            return {
-                "event_id": entry["event_id"],
-                "provider": provider,
-                "proof_hash": canonical_hash(proof),
-            }
+        parsed = urlparse(session_id)
+        parts = [part for part in parsed.path.split("/") if part]
+        if (
+            parsed.scheme != "https"
+            or parsed.netloc.lower() != "github.com"
+            or len(parts) != 5
+            or parts[2:4] != ["actions", "runs"]
+            or not parts[4].isdigit()
+        ):
+            return None
+        endpoint = f"repos/{parts[0]}/{parts[1]}/actions/runs/{parts[4]}"
+        payload = _github_api_object(endpoint)
+        if not isinstance(payload, dict):
+            return None
+        status = str(payload.get("status") or "").lower()
+        started_at = parse_iso(str(payload.get("run_started_at") or payload.get("created_at") or ""))
+        activity_at = parse_iso(str(payload.get("updated_at") or ""))
+        active_statuses = {"in_progress", "pending", "queued", "requested", "waiting"}
+        if (
+            str(payload.get("id") or "") != parts[4]
+            or started_at is None
+            or not window_start <= started_at <= observed_at + dt.timedelta(seconds=TRIAL_CLOCK_TOLERANCE_SEC)
+            or (
+                require_active
+                and (
+                    status not in active_statuses
+                    or activity_at is None
+                    or not window_start <= activity_at <= observed_at + dt.timedelta(seconds=TRIAL_CLOCK_TOLERANCE_SEC)
+                )
+            )
+        ):
+            return None
+        return {
+            "event_id": entry["event_id"],
+            "provider": provider,
+            "proof_hash": canonical_hash(
+                {
+                    "endpoint": endpoint,
+                    "run_id": str(payload.get("id")),
+                    "html_url": str(payload.get("html_url") or ""),
+                    "head_sha": str(payload.get("head_sha") or ""),
+                    "head_branch": str(payload.get("head_branch") or ""),
+                    "created_at": str(payload.get("created_at") or ""),
+                    "run_started_at": str(payload.get("run_started_at") or ""),
+                    "event_time": event_time.isoformat(timespec="seconds"),
+                    "observed_at": observed_at.isoformat(timespec="seconds"),
+                }
+            ),
+        }
     return None
 
 
@@ -2273,12 +2578,10 @@ def _operator_count_from_event_bytes(payload: bytes) -> tuple[int, int]:
 def _operator_count_at_custody(path: Path, custody: dict[str, Any]) -> tuple[int, int]:
     if not _prefix_matches(path, custody):
         return 0, 1
-    try:
-        with path.open("rb") as handle:
-            payload = handle.read(int(custody["size"]))
-    except OSError:
-        payload = b""
-    return _operator_count_from_event_bytes(payload)
+    payload, _, file_errors = _read_trusted_regular_file(path, label="prompt operator journal")
+    if file_errors or payload is None:
+        return 0, 1
+    return _operator_count_from_event_bytes(payload[: int(custody["size"])])
 
 
 def _prompt_scope_exact(snapshot: dict[str, Any], cursor: dict[str, Any]) -> bool:
@@ -2363,7 +2666,6 @@ def prompt_authority_snapshot(
     captured_at = captured_at.astimezone(dt.timezone.utc).replace(microsecond=0)
     source = path or PROMPT_ATOM_SNAPSHOT
     paths = _prompt_paths(source)
-    cursor_path = paths["cursor"]
     path_errors = [
         error
         for name, path_value in paths.items()
@@ -2372,8 +2674,21 @@ def prompt_authority_snapshot(
             label=f"prompt {name} source",
         )
     ]
-    snapshot = load_json(source)
-    cursor = load_json(cursor_path)
+    payloads: dict[str, bytes] = {}
+    for name, path_value in paths.items():
+        payload, _, file_errors = _read_trusted_regular_file(path_value, label=f"prompt {name} source")
+        if not file_errors and payload is not None:
+            payloads[name] = payload
+    try:
+        snapshot_value = json.loads(payloads.get("snapshot", b"{}"))
+    except (UnicodeError, ValueError):
+        snapshot_value = {}
+    try:
+        cursor_value = json.loads(payloads.get("cursor", b"{}"))
+    except (UnicodeError, ValueError):
+        cursor_value = {}
+    snapshot = snapshot_value if isinstance(snapshot_value, dict) else {}
+    cursor = cursor_value if isinstance(cursor_value, dict) else {}
     errors = len(path_errors)
     if not snapshot:
         errors += 1
@@ -2395,12 +2710,12 @@ def prompt_authority_snapshot(
     for name in ("events", "outcomes", "cursor"):
         signature = signatures.get(name) if isinstance(signatures.get(name), dict) else {}
         try:
-            stat = paths[name].stat()
+            metadata = paths[name].lstat()
             signature_ok = (
                 _strict_nonnegative_int(signature.get("size"))
-                and signature.get("size") == stat.st_size
+                and signature.get("size") == metadata.st_size
                 and _strict_nonnegative_int(signature.get("mtime_ns"))
-                and signature.get("mtime_ns") == stat.st_mtime_ns
+                and signature.get("mtime_ns") == metadata.st_mtime_ns
             )
         except OSError:
             signature_ok = False
@@ -2408,10 +2723,7 @@ def prompt_authority_snapshot(
             errors += 1
             exact = False
     source_custody = {name: _file_custody(path_value) for name, path_value in paths.items()}
-    try:
-        event_bytes = paths["events"].read_bytes()
-    except OSError:
-        event_bytes = b""
+    event_bytes = payloads.get("events", b"")
     journal_operator_count, journal_errors = _operator_count_from_event_bytes(event_bytes)
     if journal_errors or not operator_valid or journal_operator_count != operator_value:
         errors += max(1, journal_errors)
@@ -2519,7 +2831,9 @@ def _active_marker_errors(marker: Any) -> list[str]:
         errors.append("trial marker timestamps are invalid")
     elif int((end - start).total_seconds()) != TRIAL_DURATION_SEC:
         errors.append("trial marker is not exactly eight hours")
-    if marker.get("evaluator_hash") != evaluator_hash():
+    if not re.fullmatch(r"[0-9a-f]{64}", str(marker.get("evaluator_hash") or "")):
+        errors.append("trial marker evaluator hash is unavailable")
+    elif marker.get("evaluator_hash") != evaluator_hash():
         errors.append("trial marker evaluator changed during the window")
     if not _strict_nonnegative_int(marker.get("monotonic_start_ns")):
         errors.append("trial marker monotonic start is invalid")
@@ -2530,14 +2844,13 @@ def _active_marker_errors(marker: Any) -> list[str]:
         custody = baseline.get(name)
         errors.extend(f"{name} {error}" for error in _custody_errors(custody))
         allow_missing = isinstance(custody, dict) and custody.get("present") is False
-        errors.extend(
-            _trusted_canonical_file_errors(
-                path,
-                label=name,
-                allow_missing=allow_missing,
-            )
+        path_errors = _trusted_canonical_file_errors(
+            path,
+            label=name,
+            allow_missing=allow_missing,
         )
-        if isinstance(custody, dict) and not _prefix_matches(path, custody):
+        errors.extend(path_errors)
+        if not path_errors and isinstance(custody, dict) and not _prefix_matches(path, custody):
             errors.append(f"{name} prefix was rewritten or truncated")
     return errors
 
@@ -2593,7 +2906,13 @@ def start_trial() -> tuple[dict[str, Any], bool]:
     lock_fd = os.open(lock_path, lock_flags, 0o600)
     with os.fdopen(lock_fd, "a+", encoding="utf-8") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-        existing = load_json(marker_path)
+        existing, existing_errors = _load_trusted_json(
+            marker_path,
+            label="trial marker",
+            allow_missing=True,
+        )
+        if existing_errors:
+            raise TrialContractError("; ".join(existing_errors))
         if existing.get("active") is True:
             raise TrialContractError("an unattended trial is already active")
         task_ledger = _load_task_event_ledger()
@@ -2605,6 +2924,9 @@ def start_trial() -> tuple[dict[str, Any], bool]:
         ]
         if baseline_errors:
             raise TrialContractError("trial baseline is not authoritative: " + "; ".join(sorted(set(baseline_errors))))
+        current_evaluator_hash = evaluator_hash()
+        if not re.fullmatch(r"[0-9a-f]{64}", current_evaluator_hash):
+            raise TrialContractError("trial evaluator dependency set is unavailable")
         marker: dict[str, Any] = {
             "schema_version": TRIAL_MARKER_SCHEMA_VERSION,
             "active": True,
@@ -2612,7 +2934,7 @@ def start_trial() -> tuple[dict[str, Any], bool]:
             "window_start": reference.isoformat(timespec="seconds"),
             "window_end": (reference + dt.timedelta(seconds=TRIAL_DURATION_SEC)).isoformat(timespec="seconds"),
             "monotonic_start_ns": time.monotonic_ns(),
-            "evaluator_hash": evaluator_hash(),
+            "evaluator_hash": current_evaluator_hash,
             "baseline": {
                 "task_source": task_source,
                 "prompt_authority": prompt_authority,
@@ -2621,6 +2943,7 @@ def start_trial() -> tuple[dict[str, Any], bool]:
             },
         }
         marker["content_hash"] = canonical_hash(marker)
+        _prepare_observation_custody(marker)
         _write_trial_anchor(marker)
         _write_json_atomic(marker_path, marker)
         return marker, True
@@ -2648,6 +2971,26 @@ def _proof_list_errors(value: Any, label: str) -> list[str]:
     return errors
 
 
+def _watch_row_binding(value: dict[str, Any]) -> dict[str, Any]:
+    status, alerts = evaluate(value)
+    return {
+        "record_hash": canonical_hash(value),
+        "timestamp": str(value.get("timestamp") or ""),
+        "status": status,
+        "alert_count": len(alerts),
+        "alert_digest": canonical_hash(alerts),
+    }
+
+
+def _watch_span_status(value: list[dict[str, Any]]) -> str:
+    statuses = {str(item.get("status") or "") for item in value}
+    if "alert" in statuses:
+        return "alert"
+    if "blocked" in statuses:
+        return "blocked"
+    return "ok"
+
+
 def _observation_errors(value: Any, *, marker: dict[str, Any]) -> list[str]:
     if not isinstance(value, dict):
         return ["trial observation is missing"]
@@ -2667,9 +3010,27 @@ def _observation_errors(value: Any, *, marker: dict[str, Any]) -> list[str]:
         errors.append("trial observation monotonic clock is invalid")
     errors.extend(_task_source_errors(value.get("task_source")))
     errors.extend(_prompt_snapshot_errors(value.get("prompt_authority"), observed_at))
-    if value.get("status") not in {"ok", "blocked", "alert"}:
+    watch_span = value.get("watch_span") if isinstance(value.get("watch_span"), list) else []
+    if not watch_span:
+        errors.append("trial observation watch span is missing")
+    for binding in watch_span:
+        if not isinstance(binding, dict):
+            errors.append("trial observation watch binding is invalid")
+            continue
+        if not re.fullmatch(r"[0-9a-f]{64}", str(binding.get("record_hash") or "")):
+            errors.append("trial observation watch record hash is invalid")
+        if parse_iso(str(binding.get("timestamp") or "")) is None:
+            errors.append("trial observation watch timestamp is invalid")
+        if binding.get("status") not in {"ok", "blocked", "alert"}:
+            errors.append("trial observation watch status is invalid")
+        if not _strict_nonnegative_int(binding.get("alert_count")):
+            errors.append("trial observation watch alert count is invalid")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(binding.get("alert_digest") or "")):
+            errors.append("trial observation watch alert digest is invalid")
+    expected_alert_count = sum(_bounded_int(item.get("alert_count")) for item in watch_span if isinstance(item, dict))
+    if value.get("status") != _watch_span_status([item for item in watch_span if isinstance(item, dict)]):
         errors.append("trial observation status is invalid")
-    if not _strict_nonnegative_int(value.get("alert_count")):
+    if not _strict_nonnegative_int(value.get("alert_count")) or value.get("alert_count") != expected_alert_count:
         errors.append("trial observation alert count is invalid")
     handoff = value.get("handoff") if isinstance(value.get("handoff"), dict) else {}
     if not isinstance(handoff.get("ok"), bool) or not isinstance(handoff.get("check_returncode"), int):
@@ -2684,7 +3045,11 @@ def _observation_errors(value: Any, *, marker: dict[str, Any]) -> list[str]:
     return errors
 
 
-def _read_observation_chain(marker: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
+def _read_observation_chain(
+    marker: dict[str, Any],
+    *,
+    allow_unbound_watch_tail: bool = False,
+) -> tuple[list[dict[str, Any]], list[str]]:
     baseline = marker.get("baseline") if isinstance(marker.get("baseline"), dict) else {}
     prefix = baseline.get("observation_ledger") if isinstance(baseline.get("observation_ledger"), dict) else {}
     errors = [f"observation ledger {error}" for error in _custody_errors(prefix)]
@@ -2707,10 +3072,18 @@ def _read_observation_chain(marker: dict[str, Any]) -> tuple[list[dict[str, Any]
     errors.extend(path_errors)
     if path_errors:
         return [], errors
-    try:
-        payload = TRIAL_OBSERVATION_PATH.read_bytes()
-    except OSError:
-        payload = b""
+    observation_payload, _, observation_errors = _read_trusted_regular_file(
+        TRIAL_OBSERVATION_PATH,
+        label="observation ledger",
+    )
+    if observation_errors:
+        if prefix.get("present") is False and not TRIAL_OBSERVATION_PATH.exists():
+            payload = b""
+        else:
+            errors.extend(observation_errors)
+            return [], errors
+    else:
+        payload = observation_payload or b""
     size = int(prefix.get("size") or 0)
     if len(payload) < size or _sha256_bytes(payload[:size]) != prefix.get("digest"):
         errors.append("observation ledger baseline prefix was rewritten or truncated")
@@ -2723,11 +3096,20 @@ def _read_observation_chain(marker: dict[str, Any]) -> tuple[list[dict[str, Any]
     previous_monotonic = int(marker.get("monotonic_start_ns") or 0)
     previous_task = baseline.get("task_source") if isinstance(baseline.get("task_source"), dict) else {}
     previous_watch = watch_prefix
-    current_watch_bytes = RECEIPT_JSONL.read_bytes() if RECEIPT_JSONL.exists() else b""
+    watch_payload, _, watch_read_errors = _read_trusted_regular_file(RECEIPT_JSONL, label="watch ledger")
+    if watch_read_errors:
+        if watch_prefix.get("present") is False and not RECEIPT_JSONL.exists():
+            current_watch_bytes = b""
+        else:
+            errors.extend(watch_read_errors)
+            return [], errors
+    else:
+        current_watch_bytes = watch_payload or b""
     current_task_ledger = _load_task_event_ledger()
     current_task_ids = set((current_task_ledger.get("all_events") or {}).keys())
     for expected_sequence, row in enumerate(rows, start=1):
         errors.extend(_observation_errors(row, marker=marker))
+        errors.extend(_observation_custody_errors(marker, row))
         if row.get("sequence") != expected_sequence:
             errors.append("observation sequence is not contiguous")
         if row.get("previous_hash") != previous_hash:
@@ -2766,14 +3148,22 @@ def _read_observation_chain(marker: dict[str, Any]) -> tuple[list[dict[str, Any]
             errors.append("watch ledger was rewritten or truncated")
         else:
             watch_rows, watch_errors = _jsonl_bytes(current_watch_bytes[previous_size:current_size])
-            matching = [
-                item
-                for item in watch_rows
-                if canonical_hash(item) == row.get("watch_record_hash")
-                and str(item.get("timestamp") or "") == str(row.get("observed_at") or "")
-            ]
-            if watch_errors or len(matching) != 1:
-                errors.append("observation is not bound to one authoritative watch append")
+            actual_span = [_watch_row_binding(item) for item in watch_rows]
+            recorded_span = row.get("watch_span") if isinstance(row.get("watch_span"), list) else []
+            if watch_errors or not watch_rows or actual_span != recorded_span:
+                errors.append("observation does not bind every authoritative watch append")
+            elif actual_span[-1].get("record_hash") != row.get("watch_record_hash") or actual_span[-1].get(
+                "timestamp"
+            ) != row.get("observed_at"):
+                errors.append("observation is not bound to its terminal authoritative watch append")
+            for binding in actual_span:
+                watch_time = parse_iso(str(binding.get("timestamp") or ""))
+                if (
+                    watch_time is None
+                    or (previous_time and watch_time <= previous_time)
+                    or (observed_at and watch_time > observed_at)
+                ):
+                    errors.append("watch append timestamp is outside its observation span")
 
         prompt = row.get("prompt_authority") if isinstance(row.get("prompt_authority"), dict) else {}
         custody = prompt.get("source_custody") if isinstance(prompt.get("source_custody"), dict) else {}
@@ -2796,6 +3186,19 @@ def _read_observation_chain(marker: dict[str, Any]) -> tuple[list[dict[str, Any]
         last_ids = set((rows[-1].get("task_source") or {}).get("event_ids") or [])
         if not last_ids.issubset(current_task_ids):
             errors.append("task source was rewritten or truncated after the last observation")
+    terminal_watch_size = int(previous_watch.get("size") or 0)
+    if terminal_watch_size <= len(current_watch_bytes):
+        tail_rows, tail_errors = _jsonl_bytes(current_watch_bytes[terminal_watch_size:])
+        if tail_errors:
+            errors.append("watch ledger has malformed rows after the last observation")
+        if not allow_unbound_watch_tail:
+            window_end = parse_iso(str(marker.get("window_end") or ""))
+            for item in tail_rows:
+                timestamp = parse_iso(str(item.get("timestamp") or ""))
+                if timestamp is None:
+                    errors.append("unbound watch append timestamp is invalid")
+                elif window_end and timestamp <= window_end:
+                    errors.append("in-window watch append is not bound to an observation")
     return rows, errors
 
 
@@ -2908,6 +3311,32 @@ def _read_trusted_regular_file(path: Path, *, label: str) -> tuple[bytes | None,
             os.close(file_fd)
         if directory_fd is not None:
             os.close(directory_fd)
+
+
+def _load_trusted_json(
+    path: Path,
+    *,
+    label: str,
+    allow_missing: bool = False,
+) -> tuple[dict[str, Any], list[str]]:
+    path_errors = _trusted_canonical_file_errors(path, label=label, allow_missing=allow_missing)
+    if path_errors:
+        return {}, path_errors
+    if allow_missing:
+        try:
+            path.lstat()
+        except OSError:
+            return {}, []
+    payload, _, read_errors = _read_trusted_regular_file(path, label=label)
+    if read_errors or payload is None:
+        return {}, read_errors
+    try:
+        value = json.loads(payload)
+    except (UnicodeError, ValueError):
+        return {}, [f"{label} is malformed JSON"]
+    if not isinstance(value, dict):
+        return {}, [f"{label} is not a JSON object"]
+    return value, []
 
 
 def _terminal_custody_path(trial_id: str, name: str, digest: str) -> Path:
@@ -3080,10 +3509,12 @@ def _preserve_terminal_custody(trial_id: str, value: dict[str, Any]) -> None:
         os.fchmod(directory_fd, 0o700)
         for name, source_path in _terminal_source_paths().items():
             descriptor = value["sources"][name]
-            try:
-                payload = source_path.read_bytes()
-            except OSError as exc:
-                raise TrialContractError(f"terminal {name} source is unavailable: {exc}") from exc
+            payload, _, source_errors = _read_trusted_regular_file(
+                source_path,
+                label=f"terminal {name} source",
+            )
+            if source_errors or payload is None:
+                raise TrialContractError(f"terminal {name} source is unavailable: {'; '.join(source_errors)}")
             digest = str(descriptor["digest"])
             if len(payload) != descriptor["size"] or _sha256_bytes(payload) != digest:
                 raise TrialContractError(f"terminal {name} source changed before custody preservation")
@@ -3113,7 +3544,13 @@ def append_trial_observation(snapshot: dict[str, Any]) -> dict[str, Any] | None:
     )
     if marker_path_errors:
         raise TrialContractError("; ".join(marker_path_errors))
-    marker = load_json(TRIAL_WINDOW_PATH)
+    marker, marker_read_errors = _load_trusted_json(
+        TRIAL_WINDOW_PATH,
+        label="active trial marker",
+        allow_missing=True,
+    )
+    if marker_read_errors:
+        raise TrialContractError("; ".join(marker_read_errors))
     if marker.get("active") is not True:
         return None
     marker_errors = _active_marker_errors(marker)
@@ -3147,7 +3584,7 @@ def append_trial_observation(snapshot: dict[str, Any]) -> dict[str, Any] | None:
     lock_fd = os.open(lock_path, lock_flags, 0o600)
     with os.fdopen(lock_fd, "a+", encoding="utf-8") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-        rows, chain_errors = _read_observation_chain(marker)
+        rows, chain_errors = _read_observation_chain(marker, allow_unbound_watch_tail=True)
         if chain_errors:
             raise TrialContractError("trial observation chain is invalid: " + "; ".join(sorted(set(chain_errors))))
         baseline = marker.get("baseline") if isinstance(marker.get("baseline"), dict) else {}
@@ -3180,13 +3617,16 @@ def append_trial_observation(snapshot: dict[str, Any]) -> dict[str, Any] | None:
                 if proof:
                     blocker_proofs.append(proof)
             elif entry.get("status") == "in_progress":
-                proof = _prove_session_event(entry)
+                proof = _prove_session_event(
+                    entry,
+                    window_start=start,
+                    observed_at=observed_at,
+                )
                 if proof:
                     session_proofs.append(proof)
 
         prompt = prompt_authority_snapshot(observed_at)
         handoff_live = handoff_relay_snapshot(refresh=False)
-        status, alerts = evaluate(snapshot)
         watch_custody = _file_custody(RECEIPT_JSONL)
         previous_watch = (
             rows[-1].get("watch_custody")
@@ -3194,10 +3634,9 @@ def append_trial_observation(snapshot: dict[str, Any]) -> dict[str, Any] | None:
             else baseline.get("watch_ledger")
         )
         previous_watch_size = int((previous_watch or {}).get("size") or 0)
-        try:
-            watch_bytes = RECEIPT_JSONL.read_bytes()
-        except OSError:
-            watch_bytes = b""
+        watch_bytes, _, watch_read_errors = _read_trusted_regular_file(RECEIPT_JSONL, label="watch ledger")
+        if watch_read_errors or watch_bytes is None:
+            raise TrialContractError("watch source is not a canonical regular file")
         current_watch_size = int(watch_custody.get("size") or 0)
         appended_rows, appended_errors = _jsonl_bytes(watch_bytes[previous_watch_size:current_watch_size])
         matches = [item for item in appended_rows if canonical_hash(item) == canonical_hash(snapshot)]
@@ -3206,8 +3645,13 @@ def append_trial_observation(snapshot: dict[str, Any]) -> dict[str, Any] | None:
             or not _prefix_matches(RECEIPT_JSONL, previous_watch or {})
             or current_watch_size <= previous_watch_size
             or len(matches) != 1
+            or not appended_rows
+            or canonical_hash(appended_rows[-1]) != canonical_hash(snapshot)
         ):
             raise TrialContractError("watch source did not append the authoritative sample")
+        watch_span = [_watch_row_binding(item) for item in appended_rows]
+        span_status = _watch_span_status(watch_span)
+        span_alert_count = sum(int(item["alert_count"]) for item in watch_span)
 
         handoff_path = LOGS / "handoff.json"
         record: dict[str, Any] = {
@@ -3217,10 +3661,11 @@ def append_trial_observation(snapshot: dict[str, Any]) -> dict[str, Any] | None:
             "previous_hash": rows[-1].get("content_hash") if rows else marker.get("content_hash"),
             "observed_at": observed_at.isoformat(timespec="seconds"),
             "monotonic_ns": time.monotonic_ns(),
-            "status": status,
-            "alert_count": len(alerts),
+            "status": span_status,
+            "alert_count": span_alert_count,
             "watch_custody": watch_custody,
             "watch_record_hash": canonical_hash(snapshot),
+            "watch_span": watch_span,
             "task_source": task_source,
             "prompt_authority": prompt,
             "handoff": {
@@ -3233,6 +3678,7 @@ def append_trial_observation(snapshot: dict[str, Any]) -> dict[str, Any] | None:
             "session_proofs": session_proofs,
         }
         record["content_hash"] = canonical_hash(record)
+        _write_observation_custody(marker, record)
         _append_jsonl(TRIAL_OBSERVATION_PATH, record)
         return record
 
@@ -3242,6 +3688,7 @@ def build_trial_receipt(
     *,
     terminal_custody: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    verifying_preserved_custody = terminal_custody is not None
     marker_errors = _active_marker_errors(active_marker)
     start = parse_iso(str(active_marker.get("window_start") or ""))
     end = parse_iso(str(active_marker.get("window_end") or ""))
@@ -3291,7 +3738,6 @@ def build_trial_receipt(
         and max_gap_seconds <= TRIAL_MAX_SAMPLE_GAP_SEC
     )
     alert_count = sum(_bounded_int(record.get("alert_count")) for _, record in bounded)
-    alert_status_without_entries = sum(1 for _, record in bounded if record.get("status") == "alert")
     sample_schema_complete = not source_errors
 
     baseline = active_marker.get("baseline") if isinstance(active_marker.get("baseline"), dict) else {}
@@ -3306,18 +3752,24 @@ def build_trial_receipt(
     blocker_proofs = [proof for _, record in evidence_records for proof in (record.get("blocker_proofs") or [])]
     session_proofs = [proof for _, record in evidence_records for proof in (record.get("session_proofs") or [])]
     for proof in value_proofs:
-        if (current_entries.get(proof.get("event_id")) or {}).get("status") != "done":
+        entry = current_entries.get(proof.get("event_id")) or {}
+        if entry.get("status") != "done":
             source_errors.append("value proof no longer maps to a done event")
+        elif _prove_terminal_event(entry) != proof:
+            source_errors.append("value proof no longer re-executes exactly")
     for proof in blocker_proofs:
-        if (current_entries.get(proof.get("event_id")) or {}).get("status") not in {
+        entry = current_entries.get(proof.get("event_id")) or {}
+        if entry.get("status") not in {
             "failed_blocked",
             "needs_human",
         }:
             source_errors.append("blocker proof no longer maps to an owner-blocked event")
+        elif _prove_terminal_event(entry) != proof:
+            source_errors.append("blocker proof no longer re-executes exactly")
     for proof in session_proofs:
-        if (current_entries.get(proof.get("event_id")) or {}).get("status") != "in_progress":
+        entry = current_entries.get(proof.get("event_id")) or {}
+        if entry.get("status") != "in_progress":
             source_errors.append("session proof no longer maps to an in-progress event")
-
     activity_times = [
         timestamp
         for timestamp, record in evidence_records
@@ -3384,6 +3836,9 @@ def build_trial_receipt(
     monotonic_duration_ok = monotonic_elapsed_ns >= (TRIAL_DURATION_SEC - TRIAL_CLOCK_TOLERANCE_SEC) * 1_000_000_000
     windows_ok = rolling_value_ok
 
+    if verifying_preserved_custody and source_errors:
+        raise TrialContractError("trial reconstruction source errors: " + "; ".join(sorted(set(source_errors))))
+
     normalized_input = {
         "trial_id": active_marker.get("content_hash"),
         "baseline": baseline,
@@ -3414,7 +3869,7 @@ def build_trial_receipt(
         "handoff_fresh": handoff_fresh,
         "operator_interventions": max(0, operator_interventions),
         "prompt_authority_exact": prompt_authority_ok,
-        "watch_alerts": alert_count + alert_status_without_entries,
+        "watch_alerts": alert_count,
         "coverage_ok": coverage_ok,
         "duration_ok": duration_ok,
         "monotonic_duration_ok": monotonic_duration_ok,
@@ -3447,7 +3902,13 @@ def write_trial_receipt(receipt: dict[str, Any], path: Path | None = None) -> tu
     output = path or TRIAL_PATH
     deterministic = {key: value for key, value in receipt.items() if key not in {"generated_at", "content_hash"}}
     content_hash = canonical_hash(deterministic)
-    existing = load_json(output)
+    existing, existing_errors = _load_trusted_json(
+        output,
+        label="trial receipt",
+        allow_missing=True,
+    )
+    if existing_errors:
+        raise TrialContractError("; ".join(existing_errors))
     existing_deterministic = {
         key: value for key, value in existing.items() if key not in {"generated_at", "content_hash"}
     }
@@ -3493,10 +3954,18 @@ def maybe_finalize_trial() -> dict[str, Any] | None:
     lock_fd = os.open(lock_path, lock_flags, 0o600)
     with os.fdopen(lock_fd, "a+", encoding="utf-8") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-        marker = load_json(marker_path)
+        marker, marker_read_errors = _load_trusted_json(
+            marker_path,
+            label="trial marker",
+            allow_missing=True,
+        )
+        if marker_read_errors:
+            return {"error": "; ".join(marker_read_errors)}
         if not marker.get("active"):
             if marker.get("active") is False:
-                receipt = load_json(TRIAL_PATH)
+                receipt, receipt_read_errors = _load_trusted_json(TRIAL_PATH, label="terminal trial receipt")
+                if receipt_read_errors:
+                    return {"error": "; ".join(receipt_read_errors)}
                 ok, receipt_errors = check_trial_receipt(TRIAL_PATH)
                 if ok:
                     return {"receipt": receipt, "changed": False, "already_finalized": True}
@@ -3545,8 +4014,15 @@ def check_trial_receipt(
         for label, source_path in authoritative_paths.items()
         for error in _trusted_canonical_file_errors(source_path, label=label)
     )
-    receipt = {} if receipt_path_errors else load_json(output)
-    marker = {} if marker_path_errors else load_json(terminal_path)
+    receipt, receipt_read_errors = (
+        ({}, receipt_path_errors) if receipt_path_errors else _load_trusted_json(output, label="terminal trial receipt")
+    )
+    marker, marker_read_errors = (
+        ({}, marker_path_errors)
+        if marker_path_errors
+        else _load_trusted_json(terminal_path, label="terminal trial marker")
+    )
+    errors.extend([*receipt_read_errors, *marker_read_errors])
     errors.extend(_terminal_marker_errors(marker, receipt))
     active_marker = marker.get("active_marker") if isinstance(marker.get("active_marker"), dict) else {}
     if receipt.get("schema_version") != TRIAL_SCHEMA_VERSION:

@@ -62,28 +62,35 @@ content-addressed receipt. A passing receipt requires:
 
 - a prospective, single active marker whose evaluator remains unchanged for exactly eight hours;
 - complete prospective sample coverage with no gap over ten minutes, with each sample bound to
-  exactly one newly appended ordinary watch row and the previous observation hash;
+  every newly appended ordinary watch row and the previous observation hash; every row in each
+  offset span is independently re-evaluated, so an alert row cannot be skipped behind a later
+  healthy row;
 - a newly first-observed typed `done` or owner-blocked event, whose predicate passes and whose
   durable receipt target resolves, whose dispatch timestamp is inside the already-observed trial
   interval (never pre-window or future-dated), with no rolling activity gap over 90 minutes
   including both trial boundaries;
 - a fresh warm handoff at the end;
 - at least one newly observed `in_progress` event whose provider-native session is independently
-  present in a supported source (currently Jules remote sessions or a GitHub Actions run);
+  active, recently associated with the in-window task event, and independently present in a
+  supported source (currently Jules remote sessions or a currently active GitHub Actions run);
 - a fresh, validated, exact `all/all` prompt-atom snapshot on every sample, with zero increase in
   operator occurrence IDs from the preserved append-only prompt journal; and
 - zero watch alerts.
 
 The receipt contains only window/count summaries plus SHA-256 hashes of the
 evaluator and normalized inputs. The evaluator hash covers the watcher plus
-every local module it imports for evidence semantics (`intake.py`,
-`prompt_corpus.py`, and `jules_remote.py`), so changing any one during or after
-the window invalidates the marker and receipt. Re-finalizing the same window is byte-idempotent.
+every local module or script it invokes for evidence semantics (`intake.py`,
+`prompt_corpus.py`, `jules_remote.py`, `handoff-relay.py`,
+`session-value-review.py`, and `autonomy-governor.py`), so changing any one
+during or after the window invalidates the marker and receipt. Re-finalizing the same window is byte-idempotent.
 The checker reconstructs the receipt from the prospective observation hash chain,
 verifies every preserved watch and prompt-journal prefix, rejects task-event
 removal or rewriting, and confirms that credited proof IDs first appeared after
-the sealed baseline. Pre-seeded future timestamps, self-consistent sample lies,
-source truncation, and rewritten source prefixes do not count.
+the sealed baseline. Every observation and its proof set is also written once to
+read-only prospective custody whose creation time must match the live sample;
+terminal proof predicates and receipts are re-executed during checking. Pre-seeded
+future timestamps, post-window self-consistent chain rebuilds, source truncation,
+and rewritten source prefixes do not count.
 
 Predicate proof never invokes a shell. It executes only classified read-only
 GitHub, Git, and fixed-system `test`/`[` commands as direct argument vectors;
@@ -93,7 +100,10 @@ GitHub mutations, API field/input/method/cache options, browser/help viewers,
 all short-option bundles, and every option outside the command-specific exact
 read allowlist are rejected before execution. Ambiguous GitHub `blob`/`tree`
 URLs are not receipts; use the exact `git:owner/repo:path` form so the path
-object itself must resolve. Git output, pager,
+object itself must resolve, and any declared anchor must occur exactly in the
+remote object. Declared GitHub task keys must match exactly, and issue, PR, run,
+and commit URLs must prove the terminal state they claim rather than mere object
+existence. Git output, pager,
 config, signature, external-diff, help, and version options receive the same
 fail-closed treatment. Allowed local Git reads use the trusted system executable
 and fixed system path; discard inherited repository, object-alternate, config,
@@ -135,6 +145,9 @@ cursor, and snapshot sources; a byte-identical symlink redirect is not custody.
 The ordinary watch JSONL writer and its lock use the same canonical-parent,
 directory-descriptor, and `O_NOFOLLOW` boundary, so a redirected watch file,
 lock, or ancestor fails before a trial observation can be appended.
+All authoritative marker, watch, observation, task, prompt, handoff, and custody
+reads validate canonical regular-file state first and then use nonblocking,
+no-follow descriptors; special files fail without blocking strict Omega.
 
 Verify it with:
 

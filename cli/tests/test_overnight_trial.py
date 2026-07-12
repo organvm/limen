@@ -46,6 +46,13 @@ def _fresh_module(tmp_path, monkeypatch, start: dt.datetime):
     monkeypatch.setattr(module, "_anchor_created_ns", lambda _path: int(start.timestamp() * 1_000_000_000))
     monkeypatch.setattr(
         module,
+        "_observation_custody_created_ns",
+        lambda path: int(
+            module.parse_iso(json.loads(path.read_text(encoding="utf-8"))["observed_at"]).timestamp() * 1_000_000_000
+        ),
+    )
+    monkeypatch.setattr(
+        module,
         "handoff_relay_snapshot",
         lambda **_kwargs: {"ok": True, "check_returncode": 0},
     )
@@ -203,7 +210,7 @@ def _install_proof_stubs(module, monkeypatch) -> None:
     monkeypatch.setattr(
         module,
         "_prove_session_event",
-        lambda entry: (
+        lambda entry, **_kwargs: (
             {
                 "event_id": entry["event_id"],
                 "provider": "jules",
@@ -241,6 +248,7 @@ def _run_trial(
     omit_samples: set[int] | None = None,
     operator_at: int | None = None,
     event_timestamp_offsets: dict[int, int] | None = None,
+    extra_alert_at: int | None = None,
 ):
     marker = _start(module, start)
     operator_count = 0
@@ -262,6 +270,10 @@ def _run_trial(
             _append_operator_occurrence(module, 1)
             operator_count = 1
         if minute not in (omit_samples or set()):
+            if extra_alert_at == minute:
+                alert = _watch_snapshot(at - dt.timedelta(seconds=1))
+                alert["launchd"] = {"ok": False, "state": "stopped", "env": {}}
+                module.write_jsonl(alert)
             _observe(module, clock, at, operator_count=operator_count)
     clock.value = start + dt.timedelta(hours=8)
     return marker, module.maybe_finalize_trial()
@@ -299,6 +311,35 @@ def test_trial_passes_rebuilds_and_is_byte_idempotent(tmp_path, monkeypatch, cap
     assert "session-" not in serialized
     assert "predicate" not in serialized
     assert "receipt_target" not in serialized
+
+
+def test_extra_mid_window_alert_watch_row_cannot_be_skipped(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+
+    _, result = _run_trial(module, clock, start, extra_alert_at=240)
+
+    assert result["receipt"]["watch_alerts"] >= 1
+    assert result["receipt"]["pass"] is False
+    ok, errors = module.check_trial_receipt()
+    assert ok is False
+    assert "trial receipt is not passing" in errors
+
+
+def test_unbound_terminal_window_alert_row_invalidates_receipt(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+    _run_trial(module, clock, start)
+    alert = _watch_snapshot(start + dt.timedelta(hours=8))
+    alert["launchd"] = {"ok": False, "state": "stopped", "env": {}}
+    module.write_jsonl(alert)
+
+    ok, errors = module.check_trial_receipt()
+
+    assert ok is False
+    assert any("in-window watch append is not bound" in error for error in errors)
 
 
 def test_preseeded_future_events_and_samples_cannot_count(tmp_path, monkeypatch):
@@ -439,7 +480,7 @@ def test_failed_predicate_or_missing_receipt_does_not_count(tmp_path, monkeypatc
     monkeypatch.setattr(
         module,
         "_prove_session_event",
-        lambda entry: {
+        lambda entry, **_kwargs: {
             "event_id": entry["event_id"],
             "provider": "jules",
             "proof_hash": module.canonical_hash(entry),
@@ -685,6 +726,177 @@ def test_blob_and_tree_urls_cannot_prove_only_ref_existence(tmp_path, monkeypatc
     )
 
     assert module._receipt_target_proof(target) is None
+
+
+def test_declared_github_receipt_requires_exact_terminal_task_key(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    objects = [
+        {
+            "number": 1,
+            "body": "closes TASK-100 only",
+            "title": "unrelated",
+            "state": "MERGED",
+            "mergedAt": "2026-07-01T00:00:00Z",
+            "mergeCommit": {"oid": "a" * 40},
+        }
+    ]
+    monkeypatch.setattr(
+        module,
+        "_run_trusted_tool_argv",
+        lambda *_args, **_kwargs: (0, json.dumps(objects), ""),
+    )
+
+    target = "github:organvm/limen:pull-request:TASK-10"
+    assert module._receipt_target_proof(target) is None
+    objects[0]["body"] = "closes TASK-10 with exact owner receipt"
+    assert module._receipt_target_proof(target) is not None
+
+    objects[:] = [
+        {
+            "number": 2,
+            "title": "owner packet for TASK-100",
+            "state": "CLOSED",
+            "closedAt": "2026-07-01T00:00:00Z",
+        }
+    ]
+    issue_target = "github:organvm/limen:issue:TASK-10"
+    assert module._receipt_target_proof(issue_target) is None
+    objects[0]["title"] = "owner packet for TASK-10"
+    assert module._receipt_target_proof(issue_target) is not None
+
+
+def test_git_receipt_anchor_must_exist_exactly(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+
+    def content(task_id):
+        encoded = module.base64.b64encode(json.dumps({"task_id": task_id}).encode()).decode()
+        return {"type": "file", "sha": "a" * 40, "encoding": "base64", "content": encoded}
+
+    payload = content("TASK-100")
+    monkeypatch.setattr(module, "_github_api_object", lambda _endpoint: payload)
+    target = "git:organvm/limen:docs/receipt.json#TASK-10"
+
+    assert module._receipt_target_proof(target) is None
+    payload = content("TASK-10")
+    assert module._receipt_target_proof(target) is not None
+
+
+def test_terminal_url_receipt_requires_claimed_terminal_state(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    payload = {"number": 957, "state": "open", "closed_at": None}
+    monkeypatch.setattr(module, "_github_api_object", lambda _endpoint: payload)
+
+    target = "https://github.com/organvm/limen/issues/957"
+    assert module._receipt_target_proof(target) is None
+    payload.update({"state": "closed", "closed_at": "2026-07-01T00:00:00Z"})
+    assert module._receipt_target_proof(target) is not None
+
+    payload = {"number": 980, "state": "closed", "merged_at": None, "merge_commit_sha": None}
+    monkeypatch.setattr(module, "_github_api_object", lambda _endpoint: payload)
+    pull_target = "https://github.com/organvm/limen/pull/980"
+    assert module._receipt_target_proof(pull_target) is None
+    payload.update({"merged_at": "2026-07-01T00:00:00Z", "merge_commit_sha": "a" * 40})
+    assert module._receipt_target_proof(pull_target) is not None
+
+    payload = {"id": 123, "status": "completed", "conclusion": "failure"}
+    monkeypatch.setattr(module, "_github_api_object", lambda _endpoint: payload)
+    run_target = "https://github.com/organvm/limen/actions/runs/123"
+    assert module._receipt_target_proof(run_target) is None
+    payload["conclusion"] = "success"
+    assert module._receipt_target_proof(run_target) is not None
+
+
+def test_github_actions_seam_requires_current_in_window_run(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    observed_at = start + dt.timedelta(minutes=30)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    run_id = "123456789012"
+    entry = {
+        "event_id": "a" * 64,
+        "agent": "github_actions",
+        "session_id": f"https://github.com/organvm/limen/actions/runs/{run_id}",
+        "timestamp": (start + dt.timedelta(minutes=10)).isoformat(timespec="seconds"),
+    }
+    payload = {
+        "id": int(run_id),
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": (start - dt.timedelta(days=1)).isoformat(timespec="seconds"),
+        "run_started_at": (start - dt.timedelta(days=1)).isoformat(timespec="seconds"),
+        "updated_at": (start - dt.timedelta(days=1)).isoformat(timespec="seconds"),
+    }
+    monkeypatch.setattr(module, "_github_api_object", lambda _endpoint: payload)
+
+    assert module._prove_session_event(entry, window_start=start, observed_at=observed_at) is None
+    payload.update(
+        {
+            "status": "in_progress",
+            "conclusion": None,
+            "created_at": (start + dt.timedelta(minutes=5)).isoformat(timespec="seconds"),
+            "run_started_at": (start + dt.timedelta(minutes=6)).isoformat(timespec="seconds"),
+            "updated_at": (start + dt.timedelta(minutes=20)).isoformat(timespec="seconds"),
+            "html_url": entry["session_id"],
+            "head_sha": "b" * 40,
+            "head_branch": "main",
+        }
+    )
+    active_proof = module._prove_session_event(entry, window_start=start, observed_at=observed_at)
+    assert active_proof is not None
+    payload.update({"status": "completed", "conclusion": "success"})
+    assert (
+        module._prove_session_event(
+            entry,
+            window_start=start,
+            observed_at=observed_at,
+            require_active=False,
+        )
+        == active_proof
+    )
+
+
+def test_jules_seam_requires_active_recent_exact_session(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    observed_at = start + dt.timedelta(minutes=30)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    session_id = "123456789012"
+    entry = {
+        "event_id": "a" * 64,
+        "agent": "jules",
+        "session_id": session_id,
+        "timestamp": (start + dt.timedelta(minutes=10)).isoformat(timespec="seconds"),
+    }
+
+    monkeypatch.setattr(
+        module,
+        "_run_trusted_tool_argv",
+        lambda *_args, **_kwargs: (0, f"{session_id}  in progress  5m ago\n", ""),
+    )
+    active_proof = module._prove_session_event(entry, window_start=start, observed_at=observed_at)
+    assert active_proof is not None
+    monkeypatch.setattr(
+        module,
+        "_run_trusted_tool_argv",
+        lambda *_args, **_kwargs: (0, f"{session_id}  in progress  2h ago\n", ""),
+    )
+    assert module._prove_session_event(entry, window_start=start, observed_at=observed_at) is None
+    monkeypatch.setattr(
+        module,
+        "_run_trusted_tool_argv",
+        lambda *_args, **_kwargs: (0, f"{session_id}  completed  just now\n", ""),
+    )
+    assert module._prove_session_event(entry, window_start=start, observed_at=observed_at) is None
+    assert (
+        module._prove_session_event(
+            entry,
+            window_start=start,
+            observed_at=observed_at,
+            require_active=False,
+        )
+        == active_proof
+    )
 
 
 @pytest.mark.parametrize(
@@ -1080,6 +1292,55 @@ def test_source_rewrite_or_truncation_breaks_checker(tmp_path, monkeypatch, sour
     assert errors
 
 
+def test_post_window_self_consistent_chain_rebuild_lacks_prospective_custody(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+    _run_trial(module, clock, start)
+    terminal_marker = json.loads(module.TRIAL_WINDOW_PATH.read_text())
+    active_marker = terminal_marker["active_marker"]
+    original_rows, parse_errors = module._jsonl_bytes(module.TRIAL_OBSERVATION_PATH.read_bytes())
+    assert parse_errors == 0 and original_rows
+    rebuilt = []
+    previous_hash = active_marker["content_hash"]
+    for original in original_rows:
+        row = {key: value for key, value in original.items() if key != "content_hash"}
+        row["previous_hash"] = previous_hash
+        row["post_window_rebuild"] = True
+        row["content_hash"] = module.canonical_hash(row)
+        rebuilt.append(row)
+        previous_hash = row["content_hash"]
+    module.TRIAL_OBSERVATION_PATH.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in rebuilt),
+        encoding="utf-8",
+    )
+    for row in rebuilt:
+        module._write_observation_custody(active_marker, row)
+    monkeypatch.setattr(
+        module,
+        "_observation_custody_created_ns",
+        lambda _path: int(clock.value.timestamp() * 1_000_000_000),
+    )
+
+    ok, errors = module.check_trial_receipt()
+
+    assert ok is False
+    assert any("observation custody creation time" in error for error in errors)
+
+
+def test_terminal_proofs_are_reexecuted_during_receipt_check(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+    _run_trial(module, clock, start)
+    monkeypatch.setattr(module, "_prove_terminal_event", lambda _entry: None)
+
+    ok, errors = module.check_trial_receipt()
+
+    assert ok is False
+    assert any("proof no longer re-executes exactly" in error for error in errors)
+
+
 @pytest.mark.parametrize(
     "source",
     [
@@ -1211,7 +1472,10 @@ def test_evaluator_hash_binds_every_local_semantic_dependency(tmp_path, monkeypa
         "cli/src/limen/intake.py",
         "cli/src/limen/jules_remote.py",
         "cli/src/limen/prompt_corpus.py",
+        "scripts/autonomy-governor.py",
+        "scripts/handoff-relay.py",
         "scripts/overnight-watch.py",
+        "scripts/session-value-review.py",
     }.issubset(copies)
     monkeypatch.setattr(module, "_evaluator_dependency_paths", lambda: copies)
     _, result = _run_trial(module, clock, start)
@@ -1233,6 +1497,16 @@ def test_evaluator_hash_binds_every_local_semantic_dependency(tmp_path, monkeypa
         dependency.write_bytes(original)
         assert module.evaluator_hash() == expected_hash
         assert module.check_trial_receipt() == (True, [])
+
+
+def test_trial_start_rejects_unavailable_evaluator_dependency_set(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    _write_prompt_authority(module, start)
+    monkeypatch.setattr(module, "evaluator_hash", lambda: "unavailable")
+
+    with pytest.raises(module.TrialContractError, match="dependency set is unavailable"):
+        module.start_trial()
 
 
 def test_live_terminal_projections_may_advance_after_immutable_custody(tmp_path, monkeypatch, capsys):
@@ -1307,6 +1581,34 @@ def test_terminal_custody_fifo_fails_without_blocking_checker(tmp_path, monkeypa
 
     assert result.returncode == 1
     assert "custody sidecar is not a regular file" in result.stderr
+
+
+@pytest.mark.parametrize("source", ["marker", "watch", "prompt_events"])
+def test_authoritative_fifo_source_fails_without_blocking_checker(tmp_path, monkeypatch, source):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+    _run_trial(module, clock, start)
+    prompt_paths = module._prompt_paths(module.PROMPT_ATOM_SNAPSHOT)
+    path = {
+        "marker": module.TRIAL_WINDOW_PATH,
+        "watch": module.RECEIPT_JSONL,
+        "prompt_events": prompt_paths["events"],
+    }[source]
+    path.unlink()
+    module.os.mkfifo(path, 0o400)
+
+    result = subprocess.run(
+        [module.sys.executable, str(SCRIPT), "--check-trial"],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        env=module.os.environ.copy(),
+    )
+
+    assert result.returncode == 1
+    assert "not a regular file" in result.stderr
 
 
 def test_terminal_custody_final_symlink_fails_before_read(tmp_path, monkeypatch):

@@ -156,13 +156,17 @@ clock = [start]
 module.utc_now = lambda: clock[0]
 module.time.monotonic_ns = lambda: 10_000_000_000_000 + int((clock[0] - start).total_seconds() * 1_000_000_000)
 module._anchor_created_ns = lambda _path: int(start.timestamp() * 1_000_000_000)
+module._observation_custody_created_ns = lambda path: int(
+    module.parse_iso(json.loads(path.read_text())["observed_at"]).timestamp() * 1_000_000_000
+)
+module.evaluator_hash = lambda: "e" * 64
 module._cursor_digest = lambda cursor: module.canonical_hash(cursor)
 module._cursor_semantic = lambda cursor: cursor
 module.handoff_relay_snapshot = lambda **_kwargs: {"ok": True, "check_returncode": 0}
 module._prove_terminal_event = lambda entry: {
     "event_id": entry["event_id"], "proof_hash": module.canonical_hash(entry)
 }
-module._prove_session_event = lambda entry: {
+module._prove_session_event = lambda entry, **_kwargs: {
     "event_id": entry["event_id"], "provider": "jules", "proof_hash": module.canonical_hash(entry)
 }
 module.TASKS_PATH.write_text(json.dumps({"version": 1, "tasks": []}))
@@ -249,6 +253,13 @@ start = module.parse_iso(active["window_start"]); end = module.parse_iso(active[
 module.utc_now = lambda: end
 module.time.monotonic_ns = lambda: active["monotonic_start_ns"] + module.TRIAL_DURATION_SEC * 1_000_000_000
 module._anchor_created_ns = lambda _path: int(start.timestamp() * 1_000_000_000)
+module._observation_custody_created_ns = lambda path: int(
+    module.parse_iso(json.loads(path.read_text())["observed_at"]).timestamp() * 1_000_000_000
+)
+module.evaluator_hash = lambda: "e" * 64
+module._prove_terminal_event = lambda entry: {
+    "event_id": entry["event_id"], "proof_hash": module.canonical_hash(entry)
+}
 raise SystemExit(0 if module.check_trial_receipt()[0] else 1)
 PY
 rc=$?
@@ -272,6 +283,13 @@ start = module.parse_iso(active["window_start"]); end = module.parse_iso(active[
 module.utc_now = lambda: end
 module.time.monotonic_ns = lambda: active["monotonic_start_ns"] + module.TRIAL_DURATION_SEC * 1_000_000_000
 module._anchor_created_ns = lambda _path: int(start.timestamp() * 1_000_000_000)
+module._observation_custody_created_ns = lambda path: int(
+    module.parse_iso(json.loads(path.read_text())["observed_at"]).timestamp() * 1_000_000_000
+)
+module.evaluator_hash = lambda: "e" * 64
+module._prove_terminal_event = lambda entry: {
+    "event_id": entry["event_id"], "proof_hash": module.canonical_hash(entry)
+}
 raise SystemExit(0 if module.check_trial_receipt()[0] else 1)
 PY
 rc=$?
