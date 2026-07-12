@@ -16,12 +16,45 @@ chmod 700 "$TMP_DIR"
 TASKS_PATH="$TMP_DIR/tasks.yaml"
 SERVER_LOG="$TMP_DIR/uvicorn.log"
 PROBE_LOG="$TMP_DIR/probe.log"
-PORT="${LIMEN_PROBE_PORT:-8765}"
 OWNER_TOKEN="${LIMEN_PROBE_OWNER_TOKEN:-owner-probe-token}"
 CLIENT_TOKEN="${LIMEN_PROBE_CLIENT_TOKEN:-client-probe-token}"
 ATTEMPTS="${LIMEN_PROBE_ATTEMPTS:-40}"
 RETRY_DELAY="${LIMEN_PROBE_RETRY_DELAY:-0.25}"
 TERM_GRACE="${LIMEN_PROBE_TERM_GRACE:-2}"
+
+port_available() {
+  python3 - "$1" <<'PY'
+import socket
+import sys
+
+port = int(sys.argv[1])
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    try:
+        sock.bind(("127.0.0.1", port))
+    except OSError:
+        raise SystemExit(1)
+PY
+}
+
+choose_port() {
+  python3 - <<'PY'
+import socket
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.bind(("127.0.0.1", 0))
+    print(sock.getsockname()[1])
+PY
+}
+
+if [[ -n "${LIMEN_PROBE_PORT:-}" ]]; then
+  PORT="$LIMEN_PROBE_PORT"
+  if ! port_available "$PORT"; then
+    printf 'LIMEN_PROBE_PORT=%s is already in use; refusing to probe an unrelated process\n' "$PORT" >&2
+    exit 1
+  fi
+else
+  PORT="$(choose_port)"
+fi
 
 cat > "$TASKS_PATH" <<'YAML'
 version: '1.0'

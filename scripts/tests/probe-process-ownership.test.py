@@ -167,6 +167,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 mode = os.environ.get("PROBE_TEST_ADAPTER_MODE", "release")
+if call_file := os.environ.get("PROBE_TEST_ADAPTER_CALL_FILE"):
+    Path(call_file).write_text("called\\n")
 if mode == "always-fail":
     raise SystemExit(1)
 if mode == "release" and not Path(os.environ["PROBE_TEST_RELEASE_FILE"]).exists():
@@ -340,6 +342,64 @@ def exercise_noncooperative(fixture: Path, case: ProbeCase, port: int) -> None:
     assert "did not exit after TERM; sending KILL" in output, f"{case.name}: KILL escalation was not exercised"
 
 
+def exercise_occupied_port(fixture: Path, case: ProbeCase, port: int) -> None:
+    stem = f"{case.name}-occupied-{port}"
+    pid_file = fixture / f"{stem}.pid"
+    release_file = fixture / f"{stem}.release"
+    release_file.touch()
+    call_file = fixture / f"{stem}.adapter-called"
+    cli_file = fixture / f"{stem}.cli"
+    temp_parent = fixture / f"{stem}-tmp"
+    temp_parent.mkdir()
+    env = os.environ.copy()
+    env.update(
+        {
+            "FAKE_SERVER": str(fixture / "fake-server.py"),
+            "PATH": f"{fixture / 'bin'}:{env['PATH']}",
+            "PROBE_TEST_ADAPTER_CALL_FILE": str(call_file),
+            "PROBE_TEST_ADAPTER_MODE": "release",
+            "PROBE_TEST_PID_FILE": str(pid_file),
+            "PROBE_TEST_RELEASE_FILE": str(release_file),
+            "PROBE_TEST_SERVER_MODE": "cooperative",
+            "PROBE_TEST_WRANGLER_CLI_FILE": str(cli_file),
+            "REAL_PYTHON": sys.executable,
+            "TMPDIR": str(temp_parent),
+            case.port_variable: str(port),
+        }
+    )
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as unrelated:
+        unrelated.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        unrelated.bind(("127.0.0.1", port))
+        unrelated.listen()
+        process = subprocess.Popen(
+            ["bash", str(fixture / "scripts" / case.script_name)],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            text=True,
+        )
+        try:
+            output = collect(process, timeout=5)
+            assert process.returncode == 1, (
+                f"{case.name}: occupied port should fail, got {process.returncode}\\n{output}"
+            )
+            assert "already in use; refusing to probe an unrelated process" in output, (
+                f"{case.name}: occupied-port refusal was not explicit\\n{output}"
+            )
+            assert not call_file.exists(), f"{case.name}: adapter ran against an unrelated listener"
+            assert not pid_file.exists(), f"{case.name}: owned server started despite occupied port"
+            assert port_listening(port), f"{case.name}: unrelated listener was disturbed"
+            assert not list(temp_parent.iterdir()), f"{case.name}: occupied-port failure left temp residue"
+        finally:
+            terminate_process_group(process.pid)
+            if process.poll() is None:
+                with contextlib.suppress(ProcessLookupError, PermissionError):
+                    process.kill()
+                process.wait(timeout=2)
+
+
 def main() -> int:
     used_ports: set[int] = set()
     with tempfile.TemporaryDirectory(prefix="limen-probe-ownership-") as raw_fixture:
@@ -356,6 +416,9 @@ def main() -> int:
                 port = unused_port(used_ports)
                 exercise(fixture, case, port)
                 print(f"PASS {case.name}: {label} cleanup reaped listener on {port}")
+            occupied_port = unused_port(used_ports)
+            exercise_occupied_port(fixture, case, occupied_port)
+            print(f"PASS {case.name}: occupied port {occupied_port} was rejected without probing")
     return 0
 
 
