@@ -55,7 +55,7 @@ ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 LOCKD = ROOT / "logs" / ".queue.lock.d"
 LOG = ROOT / "logs" / "self-heal.log"
 HEAL_CONVERGENCE = ROOT / "logs" / "heal-convergence.json"
-CHRONIC_MAX_AGE_SECONDS = int(os.environ.get("LIMEN_HEAL_CHRONIC_MAX_AGE_SECONDS", "7200") or "7200")
+CHRONIC_MAX_AGE_SECONDS = 2 * 60 * 60
 
 # the heal kinds this organ emits, keyed by the classifier verdict it reacts to.
 KINDS = {
