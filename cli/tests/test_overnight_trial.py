@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import importlib.util
 import json
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -484,6 +485,7 @@ def test_mutating_predicates_are_never_executed(tmp_path, monkeypatch, predicate
 @pytest.mark.parametrize(
     "predicate",
     [
+        "gh api repos/organvm/limen --jq .full_name",
         "gh run view 123 --repo organvm/limen --json conclusion --jq .conclusion",
         'test "$(gh pr view 980 --repo organvm/limen --json state --jq .state)" = MERGED',
         "gh run list --repo organvm/limen --json conclusion --jq '[.[] | select(.conclusion == \"success\")] | length'",
@@ -504,6 +506,45 @@ def test_safe_predicate_classification_never_executes(tmp_path, monkeypatch, pre
 @pytest.mark.parametrize(
     "predicate",
     [
+        "gh api repos/organvm/limen -XPOST -fbody=changed",
+        "gh api repos/organvm/limen -X POST",
+        "gh api repos/organvm/limen -fbody=changed",
+        "gh api repos/organvm/limen -Fbody=changed",
+        "gh api repos/organvm/limen --field=body=changed",
+        "gh api repos/organvm/limen --fie body=changed",
+        "gh api repos/organvm/limen --raw-field=body=changed",
+        "gh api repos/organvm/limen --raw-f body=changed",
+        "gh api repos/organvm/limen --input=payload.json",
+        "gh api repos/organvm/limen --inp payload.json",
+        "gh api repos/organvm/limen --i payload.json",
+        "gh api repos/organvm/limen --method=POST",
+        "gh api repos/organvm/limen --met POST",
+        "gh api repos/organvm/limen --r body=changed",
+        "gh pr view 980 --web",
+        "gh pr view 980 --we",
+        "gh pr view 980 --help",
+        "gh pr view 980 --he",
+        "gh pr view 980 --h",
+        "gh pr view 980 --v",
+        "gh pr view 980 --w",
+        "gh repo view -w",
+        "gh pr checks 980 --watch",
+    ],
+)
+def test_gh_mutation_or_external_view_flags_are_rejected_without_execution(tmp_path, monkeypatch, predicate):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    calls = []
+    monkeypatch.setattr(module, "_run_predicate_argv", lambda argv: calls.append(argv))
+
+    assert module._predicate_is_observation_only(predicate) is False
+    assert module._predicate_proof(predicate) is None
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "predicate",
+    [
         "git diff --output=/tmp/x",
         "git diff --output /tmp/x",
         "git diff -o /tmp/x",
@@ -517,6 +558,10 @@ def test_safe_predicate_classification_never_executes(tmp_path, monkeypatch, pre
         "git show --show-signature HEAD",
         "git show --show-sig HEAD",
         "git log --format=%G? -1",
+        "git log --format=pretty -1",
+        "git log --for=pretty -1",
+        "git log --pretty=unsafe -1",
+        "git log --pre=unsafe -1",
         "git --paginate log -1",
         "git -c core.pager=/tmp/x log -1",
         "git --config-env=core.pager:PAGER log -1",
@@ -624,11 +669,14 @@ def test_safe_git_executor_scrubs_ambient_exec_hooks(tmp_path, monkeypatch):
     }
     assert {name: captured["env"].get(name) for name in controlled} == controlled
     assert {name for name in captured["env"] if name.startswith("GIT_")} == set(controlled)
+    assert set(captured["env"]) == {*controlled, "LANG", "LC_ALL", "PAGER", "PATH"}
     assert not any(name in captured["env"] for name in poisoned if name not in controlled)
     assert "HTTPS_PROXY" not in captured["env"]
     assert "SSH_AUTH_SOCK" not in captured["env"]
     assert captured["env"]["PAGER"] == ""
+    assert captured["env"]["PATH"] == module.os.defpath
     assert captured["env"]["GIT_OPTIONAL_LOCKS"] == "0"
+    assert captured["argv"][0] == module._trusted_git_executable()
     assert captured["argv"][-3:] == ["--no-ext-diff", "--no-textconv", "--check"]
     assert "--no-optional-locks" in captured["argv"]
     assert "--no-replace-objects" in captured["argv"]
@@ -641,6 +689,7 @@ def test_safe_git_executor_scrubs_ambient_exec_hooks(tmp_path, monkeypatch):
         "core.sshCommand=",
         "credential.helper=",
         "diff.external=",
+        "format.pretty=medium",
         "log.showSignature=false",
         "protocol.allow=never",
         "protocol.ext.allow=never",
@@ -651,6 +700,90 @@ def test_safe_git_executor_scrubs_ambient_exec_hooks(tmp_path, monkeypatch):
         "protocol.ssh.allow=never",
     ):
         assert setting in captured["argv"]
+
+
+def test_safe_git_executor_does_not_resolve_git_from_inherited_path(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    trusted_git = module._trusted_git_executable()
+    assert trusted_git is not None
+    subprocess.run([trusted_git, "-C", str(tmp_path), "init", "--quiet"], check=True)
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    marker = tmp_path / "fake-git-invoked"
+    fake_git = fake_bin / "git"
+    fake_git.write_text(f'#!/bin/sh\n: > "{marker}"\nexit 99\n', encoding="utf-8")
+    fake_git.chmod(0o700)
+    monkeypatch.setenv("PATH", f"{fake_bin}{module.os.pathsep}{module.os.defpath}")
+
+    result = module._run_predicate_argv(["git", "status", "--short"])
+
+    assert result is not None and result[0] == 0
+    assert marker.exists() is False
+
+
+def test_safe_git_executor_neutralizes_repo_signature_helpers(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+    trusted_git = module._trusted_git_executable()
+    ssh_keygen = shutil.which("ssh-keygen", path=module.os.defpath)
+    if trusted_git is None or ssh_keygen is None:
+        pytest.skip("trusted git and ssh-keygen are required for the signed-commit fixture")
+
+    def git(*args, check=True):
+        return subprocess.run(
+            [trusted_git, "-C", str(tmp_path), *args],
+            check=check,
+            capture_output=True,
+            text=True,
+        )
+
+    git("init", "--quiet")
+    git("config", "user.email", "signed-fixture@example.invalid")
+    git("config", "user.name", "Signed Fixture")
+    signing_key = tmp_path / "signing-key"
+    subprocess.run(
+        [ssh_keygen, "-q", "-t", "ed25519", "-N", "", "-f", str(signing_key)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    git("config", "gpg.format", "ssh")
+    git("config", "user.signingkey", str(signing_key))
+    (tmp_path / "signed.txt").write_text("signed fixture\n", encoding="utf-8")
+    git("add", "signed.txt")
+    git("commit", "--quiet", "-S", "-m", "signed fixture")
+
+    helper_marker = tmp_path / "signature-helper-invoked"
+    helper = tmp_path / "signature-helper.sh"
+    helper.write_text(
+        f"#!/bin/sh\n: > {shlex.quote(str(helper_marker))}\nexit 1\n",
+        encoding="utf-8",
+    )
+    helper.chmod(0o700)
+    public_key = signing_key.with_suffix(".pub").read_text(encoding="utf-8").split()
+    allowed_signers = tmp_path / "allowed-signers"
+    allowed_signers.write_text(
+        f"signed-fixture@example.invalid {public_key[0]} {public_key[1]}\n",
+        encoding="utf-8",
+    )
+    git("config", "format.pretty", "%G?")
+    git("config", "log.showSignature", "true")
+    git("config", "gpg.ssh.allowedSignersFile", str(allowed_signers))
+    git("config", "gpg.ssh.program", str(helper))
+    uncontrolled = git("log", "-1", check=False)
+    assert uncontrolled.stdout.strip() == "B"
+    assert helper_marker.is_file()
+    helper_marker.unlink()
+
+    result = module._run_predicate_argv(["git", "log", "-1"])
+
+    assert result is not None and result[0] == 0
+    assert helper_marker.exists() is False
+    git("config", "pretty.oneline", "%G?")
+    oneline_result = module._run_predicate_argv(["git", "log", "--oneline", "-1"])
+    assert oneline_result is not None and oneline_result[0] == 0
+    assert helper_marker.exists() is False
 
 
 def test_safe_git_executor_denies_alternate_and_promisor_transport(tmp_path, monkeypatch):
@@ -924,10 +1057,28 @@ def test_terminal_custody_ancestor_symlink_fails_closed(tmp_path, monkeypatch):
 
     ok, errors = module.check_trial_receipt()
     assert ok is False
-    assert "terminal custody trial directory is a symlink" in errors
+    assert any("terminal custody directory component" in error and "symlink" in error for error in errors)
     with pytest.raises(module.TrialContractError, match="trial directory is a symlink"):
         module._preserve_terminal_custody(receipt["trial_id"], receipt["terminal_custody"])
     assert preserved.stat().st_mode & 0o777 == preserved_mode
+
+
+def test_configured_terminal_root_replacement_symlink_fails_closed(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, clock = _fresh_module(tmp_path, monkeypatch, start)
+    _install_proof_stubs(module, monkeypatch)
+    _run_trial(module, clock, start)
+    configured_root = module.TRIAL_WINDOW_PATH.parent
+    preserved = configured_root.with_name(f"{configured_root.name}-preserved")
+    configured_root.rename(preserved)
+    configured_root.symlink_to(preserved, target_is_directory=True)
+
+    ok, errors = module.check_trial_receipt()
+
+    assert ok is False
+    assert any("terminal custody directory component" in error and "symlink" in error for error in errors)
+    repeated = module.maybe_finalize_trial()
+    assert repeated and "error" in repeated
 
 
 def test_active_trial_cannot_be_replaced_or_backfilled(tmp_path, monkeypatch):

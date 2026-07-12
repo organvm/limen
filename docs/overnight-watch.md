@@ -85,13 +85,15 @@ source truncation, and rewritten source prefixes do not count.
 Predicate proof never invokes a shell. It executes only classified read-only
 GitHub/Git/test commands or tracked repository check scripts as direct argument
 vectors; shell pipes, backgrounding, control operators, redirection, mutating
-GitHub operations, and Git output/pager/config/external-diff or executable-hook
-flags and their abbreviated spellings are rejected before execution. Git remote
-transports, help viewers, and version paths are not classified as observation-only.
-Allowed local Git reads discard inherited repository, object-alternate, config,
+GitHub mutations, API field/input/method options, browser/help viewers, and unsafe
+attached or abbreviated flags are rejected before execution. Git output, pager,
+config, signature, external-diff, help, and version options receive the same
+fail-closed treatment. Allowed local Git reads use the trusted system executable
+and fixed system path; discard inherited repository, object-alternate, config,
 transport, helper, pager, and tracing variables; deny every transport protocol and
-promisor lazy fetch; and disable replacement refs, hooks, fsmonitor, text conversion,
-external diffs, credential helpers, pagers, and optional index writes.
+promisor lazy fetch; force a signature-free built-in display format; and disable
+replacement refs, hooks, fsmonitor, text conversion, external diffs, credential
+helpers, pagers, and optional index writes.
 
 Trial start and finalization intentionally have no backfill arguments; finalization
 also refuses to run before the marker's real end time. Trial start refuses to replace an active
@@ -110,7 +112,10 @@ immutable sidecars. Normal heartbeat, watch, and prompt projections may therefor
 advance without invalidating the completed trial. Repeating
 `--finalize-trial` returns the same receipt with `changed:false`, exits
 successfully, and writes no terminal bytes; substituted, missing, writable,
-symlinked, ancestor-symlinked, or rewritten custody sidecars fail closed.
+symlinked, ancestor-symlinked, or rewritten custody sidecars fail closed. Every
+custody path component from the trusted Limen root is checked with no-follow
+metadata and realpath containment, so moving the configured receipt root and
+replacing it with a symlink also invalidates the receipt.
 
 Verify it with:
 

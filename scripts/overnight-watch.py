@@ -20,6 +20,7 @@ import re
 import shlex
 import shutil
 import signal
+import stat
 import statistics
 import subprocess
 import sys
@@ -1368,29 +1369,24 @@ def _task_event_within_observation(
     return window_start <= event_time <= observed_at
 
 
+def _trusted_git_executable() -> str | None:
+    candidate = shutil.which("git", path=os.defpath)
+    if not candidate:
+        return None
+    resolved = Path(candidate).resolve()
+    if not resolved.is_file() or not os.access(resolved, os.X_OK):
+        return None
+    return str(resolved)
+
+
 def _run_predicate_argv(argv: list[str]) -> tuple[int, str, str] | None:
     execution_argv = list(argv)
     environment = os.environ.copy()
     if argv and argv[0] == "git":
-        inherited_transport_env = {
-            "ALL_PROXY",
-            "HTTPS_PROXY",
-            "HTTP_PROXY",
-            "MANPAGER",
-            "NO_PROXY",
-            "PAGER",
-            "SSH_ASKPASS",
-            "SSH_ASKPASS_REQUIRE",
-            "SSH_AGENT_PID",
-            "SSH_AUTH_SOCK",
-            "all_proxy",
-            "https_proxy",
-            "http_proxy",
-            "no_proxy",
-        }
-        for name in tuple(environment):
-            if name.startswith("GIT_") or name in inherited_transport_env:
-                environment.pop(name, None)
+        trusted_git = _trusted_git_executable()
+        if not trusted_git:
+            return None
+        environment = {"LANG": "C", "LC_ALL": "C", "PATH": os.defpath}
         environment.update(
             {
                 "GIT_ALLOW_PROTOCOL": "",
@@ -1407,7 +1403,7 @@ def _run_predicate_argv(argv: list[str]) -> tuple[int, str, str] | None:
             }
         )
         git_prefix = [
-            "git",
+            trusted_git,
             "--no-pager",
             "--no-optional-locks",
             "--no-replace-objects",
@@ -1428,6 +1424,8 @@ def _run_predicate_argv(argv: list[str]) -> tuple[int, str, str] | None:
             "-c",
             "diff.external=",
             "-c",
+            "format.pretty=medium",
+            "-c",
             "http.proxy=",
             "-c",
             "log.showSignature=false",
@@ -1446,7 +1444,17 @@ def _run_predicate_argv(argv: list[str]) -> tuple[int, str, str] | None:
             "-c",
             "protocol.ssh.allow=never",
         ]
-        if len(argv) >= 2 and argv[1] in {"diff", "log", "show"}:
+        if len(argv) >= 2 and argv[1] in {"log", "show"}:
+            execution_argv = [
+                *git_prefix,
+                argv[1],
+                "--format=medium",
+                "--no-show-signature",
+                "--no-ext-diff",
+                "--no-textconv",
+                *argv[2:],
+            ]
+        elif len(argv) >= 2 and argv[1] == "diff":
             execution_argv = [*git_prefix, argv[1], "--no-ext-diff", "--no-textconv", *argv[2:]]
         else:
             execution_argv = [*git_prefix, *argv[1:]]
@@ -1473,14 +1481,28 @@ def _run_predicate_argv(argv: list[str]) -> tuple[int, str, str] | None:
 def _gh_read_only(argv: list[str]) -> bool:
     if len(argv) < 2 or argv[0] != "gh":
         return False
+    generic_forbidden = {"-h", "-w", "--help", "--version", "--watch", "--web"}
+    generic_forbidden_prefixes = ("--h", "--v", "--w")
+    for value in argv[2:]:
+        if (
+            value in generic_forbidden
+            or value.startswith(generic_forbidden_prefixes)
+            or (len(value) > 2 and value.startswith(("-h", "-w")))
+        ):
+            return False
     if argv[1] == "api":
-        method = "GET"
-        for index, value in enumerate(argv):
-            if value in {"-X", "--method"} and index + 1 < len(argv):
-                method = argv[index + 1].upper()
-            elif value.startswith("--method="):
-                method = value.split("=", 1)[1].upper()
-        return method == "GET" and not any(value in {"-f", "--field", "-F", "--raw-field"} for value in argv)
+        if len(argv) < 3:
+            return False
+        api_forbidden_exact = {"-F", "-X", "-f", "--field", "--input", "--method", "--raw-field"}
+        api_forbidden_long_prefixes = ("--f", "--i", "--m", "--r")
+        for value in argv[2:]:
+            if (
+                value in api_forbidden_exact
+                or value.startswith(api_forbidden_long_prefixes)
+                or (len(value) > 2 and value.startswith(("-F", "-X", "-f")))
+            ):
+                return False
+        return True
     return len(argv) >= 3 and (argv[1], argv[2]) in {
         ("issue", "list"),
         ("issue", "view"),
@@ -1532,10 +1554,12 @@ def _git_read_only(argv: list[str]) -> bool:
         "--exec-path",
         "--ext-diff",
         "--external-diff",
+        "--format",
         "--help",
         "--output",
         "--pager",
         "--paginate",
+        "--pretty",
         "--show-signature",
         "--textconv",
         "--upload-pack",
@@ -1546,9 +1570,11 @@ def _git_read_only(argv: list[str]) -> bool:
         "--exec=",
         "--ext-diff=",
         "--external-diff=",
+        "--format=",
         "--help=",
         "--output=",
         "--pager=",
+        "--pretty=",
         "--show-signature=",
         "--textconv=",
         "--upload-pack=",
@@ -1557,9 +1583,11 @@ def _git_read_only(argv: list[str]) -> bool:
         "--conf",
         "--exec",
         "--ext",
+        "--for",
         "--h",
         "--out",
         "--pag",
+        "--pre",
         "--show-s",
         "--textc",
         "--upl",
@@ -2442,6 +2470,44 @@ def _terminal_custody_directory(trial_id: str) -> Path:
     return TRIAL_WINDOW_PATH.parent / "overnight-trial-custody" / trial_id
 
 
+def _trusted_custody_path_errors(path: Path, *, label: str, final_directory: bool) -> list[str]:
+    anchor = Path(os.path.abspath(ROOT))
+    candidate = Path(os.path.abspath(path))
+    try:
+        relative = candidate.relative_to(anchor)
+    except ValueError:
+        return [f"{label} escapes the trusted Limen root"]
+    errors: list[str] = []
+    components = [anchor]
+    current = anchor
+    for part in relative.parts:
+        current /= part
+        components.append(current)
+    for index, component in enumerate(components):
+        try:
+            metadata = component.lstat()
+        except OSError:
+            errors.append(f"{label} component {index} is missing")
+            break
+        if stat.S_ISLNK(metadata.st_mode):
+            errors.append(f"{label} component {index} is a symlink")
+            break
+        if index < len(components) - 1 or final_directory:
+            if not stat.S_ISDIR(metadata.st_mode):
+                errors.append(f"{label} component {index} is not a directory")
+                break
+    if not errors:
+        try:
+            anchor_real = anchor.resolve(strict=True)
+            candidate_real = candidate.resolve(strict=True)
+        except OSError:
+            errors.append(f"{label} realpath custody is unavailable")
+        else:
+            if candidate_real != anchor_real.joinpath(relative):
+                errors.append(f"{label} realpath escaped its trusted component chain")
+    return errors
+
+
 def _terminal_custody_path(trial_id: str, name: str, digest: str) -> Path:
     if name not in {"handoff", "prompt_cursor", "prompt_snapshot"} or not re.fullmatch(r"[0-9a-f]{64}", digest):
         raise TrialContractError("terminal custody path components are invalid")
@@ -2492,7 +2558,13 @@ def _terminal_live_custody_errors(value: dict[str, Any]) -> list[str]:
 
 def _terminal_custody_directory_errors(trial_id: str) -> list[str]:
     directory = _terminal_custody_directory(trial_id)
-    errors: list[str] = []
+    errors = _trusted_custody_path_errors(
+        directory,
+        label="terminal custody directory",
+        final_directory=True,
+    )
+    if errors:
+        return errors
     for label, path in (("root", directory.parent), ("trial", directory)):
         if path.is_symlink():
             errors.append(f"terminal custody {label} directory is a symlink")
@@ -2554,6 +2626,13 @@ def _preserve_terminal_custody(trial_id: str, value: dict[str, Any]) -> None:
     if errors:
         raise TrialContractError("invalid terminal custody: " + "; ".join(sorted(set(errors))))
     directory = _terminal_custody_directory(trial_id)
+    configured_root_errors = _trusted_custody_path_errors(
+        directory.parent.parent,
+        label="terminal custody configured root",
+        final_directory=True,
+    )
+    if configured_root_errors:
+        raise TrialContractError("; ".join(sorted(set(configured_root_errors))))
     if directory.parent.is_symlink():
         raise TrialContractError("terminal custody root directory is a symlink or invalid")
     try:
@@ -2562,6 +2641,13 @@ def _preserve_terminal_custody(trial_id: str, value: dict[str, Any]) -> None:
         raise TrialContractError(f"terminal custody root directory is unavailable: {exc}") from exc
     if directory.parent.is_symlink() or not directory.parent.is_dir():
         raise TrialContractError("terminal custody root directory is a symlink or invalid")
+    custody_root_errors = _trusted_custody_path_errors(
+        directory.parent,
+        label="terminal custody root directory",
+        final_directory=True,
+    )
+    if custody_root_errors:
+        raise TrialContractError("; ".join(sorted(set(custody_root_errors))))
     if directory.is_symlink():
         raise TrialContractError("terminal custody trial directory is a symlink or invalid")
     try:
@@ -2570,6 +2656,13 @@ def _preserve_terminal_custody(trial_id: str, value: dict[str, Any]) -> None:
         raise TrialContractError(f"terminal custody trial directory is unavailable: {exc}") from exc
     if directory.is_symlink() or not directory.is_dir():
         raise TrialContractError("terminal custody trial directory is a symlink or invalid")
+    trial_directory_errors = _trusted_custody_path_errors(
+        directory,
+        label="terminal custody trial directory",
+        final_directory=True,
+    )
+    if trial_directory_errors:
+        raise TrialContractError("; ".join(sorted(set(trial_directory_errors))))
     directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
         directory_fd = os.open(directory, directory_flags)
