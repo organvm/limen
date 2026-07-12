@@ -1372,47 +1372,79 @@ def _run_predicate_argv(argv: list[str]) -> tuple[int, str, str] | None:
     execution_argv = list(argv)
     environment = os.environ.copy()
     if argv and argv[0] == "git":
-        inherited_git_exec_env = {
-            "GIT_ASKPASS",
-            "GIT_CONFIG_COUNT",
-            "GIT_CONFIG_PARAMETERS",
-            "GIT_EXTERNAL_DIFF",
-            "GIT_MAN_VIEWER",
-            "GIT_PAGER",
-            "GIT_PROXY_COMMAND",
-            "GIT_SSH",
-            "GIT_SSH_COMMAND",
+        inherited_transport_env = {
+            "ALL_PROXY",
+            "HTTPS_PROXY",
+            "HTTP_PROXY",
+            "MANPAGER",
+            "NO_PROXY",
+            "PAGER",
             "SSH_ASKPASS",
+            "SSH_ASKPASS_REQUIRE",
+            "SSH_AGENT_PID",
+            "SSH_AUTH_SOCK",
+            "all_proxy",
+            "https_proxy",
+            "http_proxy",
+            "no_proxy",
         }
         for name in tuple(environment):
-            if (
-                name in inherited_git_exec_env
-                or name.startswith("GIT_TRACE")
-                or re.fullmatch(r"GIT_CONFIG_(?:KEY|VALUE)_\d+", name)
-            ):
+            if name.startswith("GIT_") or name in inherited_transport_env:
                 environment.pop(name, None)
         environment.update(
             {
+                "GIT_ALLOW_PROTOCOL": "",
                 "GIT_ATTR_NOSYSTEM": "1",
                 "GIT_CONFIG_GLOBAL": "/dev/null",
                 "GIT_CONFIG_NOSYSTEM": "1",
-                "GIT_PAGER": "cat",
+                "GIT_CONFIG_SYSTEM": "/dev/null",
+                "GIT_NO_LAZY_FETCH": "1",
                 "GIT_OPTIONAL_LOCKS": "0",
+                "GIT_PAGER": "",
+                "GIT_PROTOCOL_FROM_USER": "0",
                 "GIT_TERMINAL_PROMPT": "0",
-                "PAGER": "cat",
+                "PAGER": "",
             }
         )
         git_prefix = [
             "git",
             "--no-pager",
+            "--no-optional-locks",
+            "--no-replace-objects",
             "-c",
-            "core.pager=cat",
+            "core.alternateRefsCommand=",
             "-c",
-            "diff.external=",
+            "core.askPass=",
             "-c",
             "core.fsmonitor=false",
             "-c",
             "core.hooksPath=/dev/null",
+            "-c",
+            "core.pager=",
+            "-c",
+            "core.sshCommand=",
+            "-c",
+            "credential.helper=",
+            "-c",
+            "diff.external=",
+            "-c",
+            "http.proxy=",
+            "-c",
+            "log.showSignature=false",
+            "-c",
+            "protocol.allow=never",
+            "-c",
+            "protocol.ext.allow=never",
+            "-c",
+            "protocol.file.allow=never",
+            "-c",
+            "protocol.git.allow=never",
+            "-c",
+            "protocol.http.allow=never",
+            "-c",
+            "protocol.https.allow=never",
+            "-c",
+            "protocol.ssh.allow=never",
         ]
         if len(argv) >= 2 and argv[1] in {"diff", "log", "show"}:
             execution_argv = [*git_prefix, argv[1], "--no-ext-diff", "--no-textconv", *argv[2:]]
@@ -1494,6 +1526,7 @@ def _git_read_only(argv: list[str]) -> bool:
         "-o",
         "-p",
         "-u",
+        "-v",
         "--config-env",
         "--exec",
         "--exec-path",
@@ -1524,14 +1557,15 @@ def _git_read_only(argv: list[str]) -> bool:
         "--conf",
         "--exec",
         "--ext",
-        "--help",
+        "--h",
         "--out",
         "--pag",
         "--show-s",
         "--textc",
         "--upl",
+        "--v",
     )
-    forbidden_attached_short = ("-c", "-h", "-o", "-p", "-u")
+    forbidden_attached_short = ("-c", "-h", "-o", "-p", "-u", "-v")
     for value in argv[2:]:
         if (
             value in forbidden_exact

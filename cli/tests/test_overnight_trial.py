@@ -5,6 +5,8 @@ from __future__ import annotations
 import datetime as dt
 import importlib.util
 import json
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -527,8 +529,13 @@ def test_safe_predicate_classification_never_executes(tmp_path, monkeypatch, pre
         "git log --exec=/tmp/x",
         "git --exec-path=/tmp/x status",
         "git status --porcelain --help",
+        "git status --porcelain --hel",
+        "git status --porcelain --he",
         "git diff --stat -h",
         "git log -1 --help",
+        "git status --version",
+        "git status --ver",
+        "git status -v",
     ],
 )
 def test_git_write_or_exec_flags_are_rejected_without_execution(tmp_path, monkeypatch, predicate):
@@ -557,17 +564,35 @@ def test_safe_git_classifier_is_nonexecuting(tmp_path, monkeypatch):
 def test_safe_git_executor_scrubs_ambient_exec_hooks(tmp_path, monkeypatch):
     start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
     module, _ = _fresh_module(tmp_path, monkeypatch, start)
-    for name in (
-        "GIT_CONFIG_COUNT",
-        "GIT_CONFIG_KEY_0",
-        "GIT_CONFIG_VALUE_0",
-        "GIT_CONFIG_PARAMETERS",
-        "GIT_EXTERNAL_DIFF",
-        "GIT_MAN_VIEWER",
-        "GIT_SSH_COMMAND",
-        "GIT_TRACE2",
-    ):
-        monkeypatch.setenv(name, "/tmp/untrusted-executable")
+    poisoned = {
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES": "/tmp/untrusted-objects",
+        "GIT_ALLOW_PROTOCOL": "ext:ssh:https:file",
+        "GIT_COMMON_DIR": "/tmp/untrusted-common",
+        "GIT_CONFIG": "/tmp/untrusted-config",
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_GLOBAL": "/tmp/untrusted-global-config",
+        "GIT_CONFIG_KEY_0": "protocol.ext.allow",
+        "GIT_CONFIG_PARAMETERS": "'protocol.ext.allow=always'",
+        "GIT_CONFIG_SYSTEM": "/tmp/untrusted-system-config",
+        "GIT_CONFIG_VALUE_0": "always",
+        "GIT_DIFF_OPTS": "--ext-diff",
+        "GIT_DIR": "/tmp/untrusted-git-dir",
+        "GIT_EXEC_PATH": "/tmp/untrusted-exec-path",
+        "GIT_EXTERNAL_DIFF": "/tmp/untrusted-diff",
+        "GIT_NO_LAZY_FETCH": "0",
+        "GIT_OBJECT_DIRECTORY": "/tmp/untrusted-object-dir",
+        "GIT_PAGER": "/tmp/untrusted-pager",
+        "GIT_PROTOCOL_FROM_USER": "1",
+        "GIT_SSH": "/tmp/untrusted-ssh",
+        "GIT_SSH_COMMAND": "/tmp/untrusted-ssh-command",
+        "GIT_TRACE": "/tmp/untrusted-trace",
+        "GIT_TRACE2": "/tmp/untrusted-trace2",
+        "GIT_WORK_TREE": "/tmp/untrusted-work-tree",
+        "HTTPS_PROXY": "http://untrusted.invalid",
+        "SSH_AUTH_SOCK": "/tmp/untrusted-agent",
+    }
+    for name, value in poisoned.items():
+        monkeypatch.setenv(name, value)
     captured = {}
 
     class Process:
@@ -585,21 +610,123 @@ def test_safe_git_executor_scrubs_ambient_exec_hooks(tmp_path, monkeypatch):
     monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
 
     assert module._run_predicate_argv(["git", "diff", "--check"]) == (0, "", "")
-    assert not any(
-        name in captured["env"]
-        for name in (
-            "GIT_CONFIG_COUNT",
-            "GIT_CONFIG_KEY_0",
-            "GIT_CONFIG_VALUE_0",
-            "GIT_CONFIG_PARAMETERS",
-            "GIT_EXTERNAL_DIFF",
-            "GIT_MAN_VIEWER",
-            "GIT_SSH_COMMAND",
-            "GIT_TRACE2",
-        )
-    )
+    controlled = {
+        "GIT_ALLOW_PROTOCOL": "",
+        "GIT_ATTR_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_SYSTEM": "/dev/null",
+        "GIT_NO_LAZY_FETCH": "1",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "GIT_PAGER": "",
+        "GIT_PROTOCOL_FROM_USER": "0",
+        "GIT_TERMINAL_PROMPT": "0",
+    }
+    assert {name: captured["env"].get(name) for name in controlled} == controlled
+    assert {name for name in captured["env"] if name.startswith("GIT_")} == set(controlled)
+    assert not any(name in captured["env"] for name in poisoned if name not in controlled)
+    assert "HTTPS_PROXY" not in captured["env"]
+    assert "SSH_AUTH_SOCK" not in captured["env"]
+    assert captured["env"]["PAGER"] == ""
     assert captured["env"]["GIT_OPTIONAL_LOCKS"] == "0"
     assert captured["argv"][-3:] == ["--no-ext-diff", "--no-textconv", "--check"]
+    assert "--no-optional-locks" in captured["argv"]
+    assert "--no-replace-objects" in captured["argv"]
+    for setting in (
+        "core.alternateRefsCommand=",
+        "core.askPass=",
+        "core.fsmonitor=false",
+        "core.hooksPath=/dev/null",
+        "core.pager=",
+        "core.sshCommand=",
+        "credential.helper=",
+        "diff.external=",
+        "log.showSignature=false",
+        "protocol.allow=never",
+        "protocol.ext.allow=never",
+        "protocol.file.allow=never",
+        "protocol.git.allow=never",
+        "protocol.http.allow=never",
+        "protocol.https.allow=never",
+        "protocol.ssh.allow=never",
+    ):
+        assert setting in captured["argv"]
+
+
+def test_safe_git_executor_denies_alternate_and_promisor_transport(tmp_path, monkeypatch):
+    start = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    module, _ = _fresh_module(tmp_path, monkeypatch, start)
+
+    def git(*args, env=None):
+        return subprocess.run(
+            ["git", "-C", str(tmp_path), *args],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+    git("init", "--quiet")
+    git("config", "user.email", "trial-fixture@example.invalid")
+    git("config", "user.name", "Trial Fixture")
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("alternate-only-payload\n", encoding="utf-8")
+    git("add", "tracked.txt")
+    git("commit", "--quiet", "-m", "fixture")
+    safe_read = module._run_predicate_argv(["git", "show", "HEAD:tracked.txt"])
+    assert safe_read is not None and safe_read[:2] == (0, "alternate-only-payload\n")
+    blob_oid = git("rev-parse", "HEAD:tracked.txt").stdout.strip()
+    object_path = tmp_path / ".git" / "objects" / blob_oid[:2] / blob_oid[2:]
+    assert object_path.is_file()
+    alternate_objects = tmp_path.parent / f"{tmp_path.name}-alternate-objects"
+    shutil.copytree(tmp_path / ".git" / "objects", alternate_objects)
+    object_path.unlink()
+
+    alternate_env = dict(module.os.environ)
+    alternate_env["GIT_ALTERNATE_OBJECT_DIRECTORIES"] = str(alternate_objects)
+    alternate_env["GIT_NO_LAZY_FETCH"] = "1"
+    assert git("show", "HEAD:tracked.txt", env=alternate_env).stdout == "alternate-only-payload\n"
+
+    helper_marker = tmp_path / "transport-helper-invoked"
+    helper = tmp_path / "transport-helper.sh"
+    helper.write_text('#!/bin/sh\n: > "$1"\nexit 1\n', encoding="utf-8")
+    helper.chmod(0o700)
+    git("config", "remote.origin.url", f"ext::{helper} {helper_marker}")
+    git("config", "remote.origin.promisor", "true")
+    git("config", "remote.origin.partialclonefilter", "blob:none")
+    git("config", "protocol.ext.allow", "always")
+    git("config", "core.repositoryformatversion", "1")
+    git("config", "extensions.partialClone", "origin")
+    uncontrolled_env = {name: value for name, value in module.os.environ.items() if not name.startswith("GIT_")}
+    uncontrolled_env.update(
+        {
+            "GIT_ALLOW_PROTOCOL": "ext",
+            "GIT_PROTOCOL_FROM_USER": "1",
+            "GIT_TERMINAL_PROMPT": "0",
+        }
+    )
+    uncontrolled = subprocess.run(
+        ["git", "-C", str(tmp_path), "show", "HEAD:tracked.txt"],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=uncontrolled_env,
+    )
+    assert uncontrolled.returncode != 0
+    assert helper_marker.is_file()
+    helper_marker.unlink()
+    monkeypatch.setenv("GIT_ALTERNATE_OBJECT_DIRECTORIES", str(alternate_objects))
+    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "ext:file:ssh:https")
+    monkeypatch.setenv("GIT_PROTOCOL_FROM_USER", "1")
+    monkeypatch.setenv("GIT_NO_LAZY_FETCH", "0")
+
+    result = module._run_predicate_argv(["git", "show", "HEAD:tracked.txt"])
+
+    assert result is not None
+    assert result[0] != 0
+    assert "alternate-only-payload" not in result[1]
+    assert helper_marker.exists() is False
 
 
 def test_rolling_value_gap_over_ninety_minutes_fails(tmp_path, monkeypatch):

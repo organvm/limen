@@ -86,10 +86,12 @@ Predicate proof never invokes a shell. It executes only classified read-only
 GitHub/Git/test commands or tracked repository check scripts as direct argument
 vectors; shell pipes, backgrounding, control operators, redirection, mutating
 GitHub operations, and Git output/pager/config/external-diff or executable-hook
-flags are rejected before execution. Git remote transports and help viewers are
-not classified as observation-only. Allowed local Git reads run with inherited
-transport/config execution variables removed and pager, hook, fsmonitor,
-text-conversion, external-diff execution, and optional index writes disabled.
+flags and their abbreviated spellings are rejected before execution. Git remote
+transports, help viewers, and version paths are not classified as observation-only.
+Allowed local Git reads discard inherited repository, object-alternate, config,
+transport, helper, pager, and tracing variables; deny every transport protocol and
+promisor lazy fetch; and disable replacement refs, hooks, fsmonitor, text conversion,
+external diffs, credential helpers, pagers, and optional index writes.
 
 Trial start and finalization intentionally have no backfill arguments; finalization
 also refuses to run before the marker's real end time. Trial start refuses to replace an active
