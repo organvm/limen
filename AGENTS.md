@@ -139,7 +139,9 @@ made-up estimate of effort.
 Treat execution capacity as a work loan. Before dispatch, the task should underwrite the requested
 capacity with an explicit value case, cost, origin, horizon, owner surface, predicate, and receipt
 target. Urgency, cost of delay, confidence, reversibility, dependencies, and resource pressure inform
-ranking when available. After execution, reconcile forecast to actual durable credit and actual spend;
+ranking when available. Record requested capacity as a debit, expected value as forecast credit, and
+predicate plus receipt target as collateral. After execution, reconcile forecast to actual durable
+credit and actual spend. A terminal board state is only a credit claim until the owning receipt passes;
 do not let a high-cost attempt inherit the value it merely intended to create.
 
 ## Dynamic Provider Selection

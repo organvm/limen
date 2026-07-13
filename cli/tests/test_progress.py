@@ -91,6 +91,14 @@ def test_snapshot_keeps_origins_horizons_and_unknown_coverage_distinct(
     assert snapshot["summary"]["contract_ready_active"] == 1
     assert snapshot["summary"]["underwritten_active"] == 1
     assert snapshot["summary"]["underwriting_coverage_pct"] == 33.3
+    assert snapshot["summary"]["requested_active_debit_runs"] == 3
+    assert snapshot["summary"]["underwritten_active_debit_runs"] == 1
+    assert snapshot["summary"]["ununderwritten_active_debit_runs"] == 2
+    assert snapshot["summary"]["debit_underwriting_coverage_pct"] == 33.3
+    assert snapshot["summary"]["forecast_credit_active"] == 1
+    assert snapshot["summary"]["forecast_credit_coverage_pct"] == 33.3
+    assert snapshot["summary"]["board_credit_claims"] == 1
+    assert snapshot["summary"]["unsubstantiated_terminal_claims"] == 0
     assert snapshot["summary"]["origin_coverage_pct"] == 100.0
     assert snapshot["summary"]["horizon_coverage_pct"] == 100.0
     assert snapshot["summary"]["due_metadata_coverage_pct"] == 33.3
@@ -121,11 +129,11 @@ def test_render_supports_macro_and_micro_zoom() -> None:
         Path("."),
         now=datetime(2026, 7, 13, 12, tzinfo=UTC),
     )
-    rendered = render_progress(
-        snapshot, view="origin", scope="human_prompt", ascii_only=True, limit=None
-    )
+    rendered = render_progress(snapshot, view="origin", scope="human_prompt", ascii_only=True, limit=None)
     assert "BOARD CLOSURE" in rendered
     assert "WORK LOANS" in rendered
+    assert "CAPITAL DEBITS" in rendered
+    assert "CREDIT FORECAST" in rendered
     assert "ORIGIN ZOOM" in rendered
     assert "human_prompt" in rendered
     assert "ASK-1" in rendered
@@ -134,9 +142,7 @@ def test_render_supports_macro_and_micro_zoom() -> None:
     assert progress_bar(50, width=10, ascii_only=True) == "[#####.....]"
 
 
-def test_progress_cli_prints_complete_json_universe(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_progress_cli_prints_complete_json_universe(tmp_path: Path, monkeypatch) -> None:
     board = _board().model_dump(mode="json")
     (tmp_path / "tasks.yaml").write_text(json.dumps(board), encoding="utf-8")
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
@@ -163,4 +169,5 @@ def test_progress_cli_can_write_a_complete_receipt(tmp_path: Path, monkeypatch) 
     assert result.exit_code == 0, result.output
     payload = json.loads(receipt.read_text(encoding="utf-8"))
     assert payload["summary"]["active_debt"] == 3
+    assert payload["summary"]["requested_active_debit_runs"] == 3
     assert len(payload["tasks"]) == 4
