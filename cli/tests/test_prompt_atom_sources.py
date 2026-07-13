@@ -34,6 +34,61 @@ def _regular_lifecycle(module, rows):
     return lifecycle
 
 
+VALID_CODEX_PNG_DATA_URL = (
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
+
+
+def _codex_session_v2_fixture(module, tmp_path: Path, rows: list[dict]):
+    sessions = tmp_path / ".codex" / "sessions"
+    session_id = "019f-codex-session-v2"
+    path = sessions / "2026" / "07" / "13" / f"rollout-{session_id}.jsonl"
+    path.parent.mkdir(parents=True)
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    lifecycle = module.load_lifecycle_module()
+    lifecycle.LOCAL_SOURCES = [("codex-sessions", sessions, ("*",))]
+    lifecycle.OPENCODE_DB = tmp_path / "missing-opencode.db"
+    lifecycle.AGY_CLI_CONVERSATIONS = tmp_path / "missing-agy"
+    lifecycle.HOME = tmp_path
+    return lifecycle, path, session_id
+
+
+def _codex_media_rows(session_id: str, *, image_url: str = VALID_CODEX_PNG_DATA_URL):
+    message = "[Image #1] Assess this evidence."
+    placeholder = "[Image #1]"
+    return [
+        {"type": "session_meta", "payload": {"id": session_id}},
+        {
+            "timestamp": "2026-07-13T12:00:00.001Z",
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": message},
+                    {"type": "input_image", "detail": "high", "image_url": image_url},
+                ],
+            },
+        },
+        {
+            "timestamp": "2026-07-13T12:00:00.002Z",
+            "type": "event_msg",
+            "payload": {
+                "type": "user_message",
+                "message": message,
+                "images": [],
+                "local_images": ["/private/tmp/codex-input-image.png"],
+                "text_elements": [
+                    {
+                        "placeholder": placeholder,
+                        "byte_range": {"start": 0, "end": len(placeholder.encode("utf-8"))},
+                    }
+                ],
+            },
+        },
+    ]
+
+
 def _claude_memory_alias_fixture(module, tmp_path: Path, *, absolute: bool = False):
     projects = tmp_path / ".claude" / "projects"
     target = projects / "project" / "memory" / "fixture.md"
@@ -218,6 +273,308 @@ def test_codex_user_media_is_an_explicit_gap_instead_of_silently_losing_the_atta
     assert result["unsupported"] == [key]
     assert result["unsupported_units"][key] == sources.file_signature(path)
     assert key not in result["files"]
+
+
+def test_codex_inline_png_media_binds_to_transport_and_stays_out_of_textual_atoms(tmp_path: Path):
+    sources = _load()
+    session_id = "019f-codex-session-v2"
+    lifecycle, path, _session_id = _codex_session_v2_fixture(
+        sources,
+        tmp_path,
+        _codex_media_rows(session_id),
+    )
+    key = sources.cursor_unit_key("codex-sessions", path)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert result["errors"] == []
+    assert result["unsupported"] == []
+    assert result["source_adapter_counts"] == {"codex-session-jsonl-v2": 1}
+    receipt = result["adapted_unit_receipts"][key]
+    assert receipt["contract_id"] == "codex-session-jsonl-v2"
+    assert sources.source_contract_receipt_applies(
+        receipt["contract_id"],
+        "codex-sessions",
+        str(path),
+        signature=sources.file_signature(path),
+    )
+    media = [event for event in events if event["body_kind"] == "nontext_input"]
+    assert len(media) == 1
+    assert media[0]["provenance"] == "operator_typed"
+    assert media[0]["authority"] == "operator"
+    assert media[0]["text"].startswith("codex-input-image-v1:sha256=")
+    assert VALID_CODEX_PNG_DATA_URL not in media[0]["text"]
+
+    snapshot = sources.update_ledger(
+        sources.LedgerPaths.for_root(tmp_path / "ledger"),
+        events=events,
+        cursor={
+            "version": 1,
+            "scope": "fixture",
+            "source_manifest_digest": sources.digest({"fixture": 1}),
+            "source_families": {},
+            "files": {},
+        },
+    )
+    assert snapshot["coverage"]["atoms"] == 1
+    media_occurrence = next(
+        occurrence for occurrence in snapshot["occurrences"] if occurrence["body_kind"] == "nontext_input"
+    )
+    assert media_occurrence["excluded_reason"] == "nontext_prompt_input"
+    assert media_occurrence["atom_ids"] == []
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "unbound",
+        "ambiguous",
+        "bad-base64",
+        "bad-detail",
+        "bad-placeholder-range",
+        "noncanonical-local-path",
+    ],
+)
+def test_codex_media_adapter_fails_closed_on_unbound_or_malformed_inputs(tmp_path: Path, mutation: str):
+    sources = _load()
+    session_id = "019f-codex-session-v2"
+    rows = _codex_media_rows(session_id)
+    if mutation == "unbound":
+        rows.pop()
+    elif mutation == "ambiguous":
+        rows.append(dict(rows[-1]))
+    elif mutation == "bad-base64":
+        rows[1]["payload"]["content"][1]["image_url"] = "data:image/png;base64,not-valid!"
+    elif mutation == "bad-detail":
+        rows[1]["payload"]["content"][1]["detail"] = "auto"
+    elif mutation == "bad-placeholder-range":
+        rows[2]["payload"]["text_elements"][0]["byte_range"]["end"] += 1
+    elif mutation == "noncanonical-local-path":
+        rows[2]["payload"]["local_images"] = ["../image.png"]
+    lifecycle, path, _session_id = _codex_session_v2_fixture(sources, tmp_path, rows)
+    key = sources.cursor_unit_key("codex-sessions", path)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert key not in result["files"]
+    assert key not in result["adapted_unit_receipts"]
+    assert result["errors"] or result["unsupported"] == [key]
+
+
+def test_codex_compacted_history_is_preserved_as_derived_context(tmp_path: Path):
+    sources = _load()
+    session_id = "019f-codex-session-v2"
+    rows = [
+        {"type": "session_meta", "payload": {"id": session_id}},
+        {
+            "timestamp": "2026-07-13T12:00:00Z",
+            "type": "compacted",
+            "payload": {
+                "first_window_id": "11111111-1111-1111-1111-111111111111",
+                "message": "",
+                "previous_window_id": "22222222-2222-2222-2222-222222222222",
+                "replacement_history": [
+                    {
+                        "type": "message",
+                        "role": "developer",
+                        "content": [{"type": "input_text", "text": "provider context"}],
+                    },
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": "preserved historical operator turn"},
+                            {
+                                "type": "input_image",
+                                "detail": "high",
+                                "image_url": VALID_CODEX_PNG_DATA_URL,
+                            },
+                        ],
+                    },
+                    {"type": "compaction", "id": "cmp-1", "encrypted_content": "opaque"},
+                ],
+                "window_id": "33333333-3333-3333-3333-333333333333",
+                "window_number": 1,
+            },
+        },
+    ]
+    lifecycle, path, _session_id = _codex_session_v2_fixture(sources, tmp_path, rows)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert result["errors"] == []
+    assert result["unsupported"] == []
+    assert [event["body_kind"] for event in events] == ["session_context", "nontext_context"]
+    assert {event["provenance"] for event in events} == {"continuation_summary"}
+    assert {event["authority"] for event in events} == {"derived"}
+    assert not [event for event in events if event["text"] == "provider context"]
+    snapshot = sources.update_ledger(
+        sources.LedgerPaths.for_root(tmp_path / "ledger-compacted"),
+        events=events,
+        cursor={
+            "version": 1,
+            "scope": "fixture",
+            "source_manifest_digest": sources.digest({"fixture": 1}),
+            "source_families": {},
+            "files": {},
+        },
+    )
+    assert snapshot["coverage"]["atoms"] == 0
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["nonempty-message", "unknown-role", "missing-compaction", "unknown-item", "too-many-items"],
+)
+def test_codex_compacted_history_unknown_shapes_remain_explicit_gaps(tmp_path: Path, mutation: str):
+    sources = _load()
+    session_id = "019f-codex-session-v2"
+    history = [
+        {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "turn"}]},
+        {"type": "compaction", "encrypted_content": "opaque"},
+    ]
+    payload = {"message": "", "replacement_history": history}
+    if mutation == "nonempty-message":
+        payload["message"] = "unexpected summary"
+    elif mutation == "unknown-role":
+        history[0]["role"] = "assistant"
+    elif mutation == "missing-compaction":
+        history.pop()
+    elif mutation == "unknown-item":
+        history.append({"type": "future_compaction", "prompt": "must not disappear"})
+    elif mutation == "too-many-items":
+        limit = sources.SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]["max_compacted_history_items"]
+        payload["replacement_history"] = [history[0]] * (limit + 1)
+    rows = [
+        {"type": "session_meta", "payload": {"id": session_id}},
+        {"timestamp": "2026-07-13T12:00:00Z", "type": "compacted", "payload": payload},
+    ]
+    lifecycle, path, _session_id = _codex_session_v2_fixture(sources, tmp_path, rows)
+    key = sources.cursor_unit_key("codex-sessions", path)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["errors"] or result["unsupported"] == [key]
+    assert key not in result["files"]
+    assert key not in result["adapted_unit_receipts"]
+
+
+def test_codex_session_resume_metadata_uses_the_one_filename_bound_identity(tmp_path: Path):
+    sources = _load()
+    session_id = "019f-codex-session-v2"
+    rows = [
+        {"type": "session_meta", "payload": {"id": "019f-prior-session"}},
+        {"type": "session_meta", "payload": {"id": session_id}},
+        {
+            "timestamp": "2026-07-13T12:00:00Z",
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "resume safely"}],
+            },
+        },
+    ]
+    lifecycle, path, _session_id = _codex_session_v2_fixture(sources, tmp_path, rows)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert result["errors"] == []
+    assert result["unsupported"] == []
+    assert {event["session_ref"] for event in events} == {f"codex:{session_id}"}
+    assert sources.cursor_unit_key("codex-sessions", path) in result["adapted_unit_receipts"]
+
+
+def test_codex_session_ambiguous_identity_without_filename_binding_fails_closed(tmp_path: Path):
+    sources = _load()
+    rows = [
+        {"type": "session_meta", "payload": {"id": "019f-prior-session"}},
+        {"type": "session_meta", "payload": {"id": "019f-other-session"}},
+    ]
+    lifecycle, path, _session_id = _codex_session_v2_fixture(sources, tmp_path, rows)
+    key = sources.cursor_unit_key("codex-sessions", path)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert "identity is ambiguous" in " ".join(result["errors"])
+    assert key not in result["files"]
+    assert key not in result["adapted_unit_receipts"]
+
+
+@pytest.mark.parametrize("ceiling", ["records", "record_bytes", "file_bytes"])
+def test_codex_session_streaming_adapter_enforces_independent_hard_bounds(
+    tmp_path: Path,
+    monkeypatch,
+    ceiling: str,
+):
+    sources = _load()
+    session_id = "019f-codex-session-v2"
+    rows = [
+        {"type": "session_meta", "payload": {"id": session_id}},
+        {
+            "timestamp": "2026-07-13T12:00:00Z",
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "bounded turn"}],
+            },
+        },
+    ]
+    lifecycle, path, _session_id = _codex_session_v2_fixture(sources, tmp_path, rows)
+    rule = sources.SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]
+    if ceiling == "records":
+        monkeypatch.setitem(rule, "max_records", 1)
+    elif ceiling == "record_bytes":
+        monkeypatch.setitem(rule, "max_record_bytes", 16)
+    else:
+        monkeypatch.setitem(rule, "max_probe_bytes", max(1, path.stat().st_size - 1))
+    key = sources.cursor_unit_key("codex-sessions", path)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert "bounded" in " ".join(result["errors"])
+    assert key not in result["files"]
+    assert key not in result["adapted_unit_receipts"]
 
 
 @pytest.mark.parametrize(
@@ -5218,7 +5575,10 @@ def test_codex_pasted_text_attachment_binds_to_one_parent_and_inherits_authority
         related_signatures=receipt["related_signatures"],
         related_evidence=receipt["related_evidence"],
     )
-    assert result["source_adapter_counts"] == {"codex-pasted-text-attachment-v1": 1}
+    assert result["source_adapter_counts"] == {
+        "codex-pasted-text-attachment-v1": 1,
+        "codex-session-jsonl-v2": 1,
+    }
     assert result["coverage"]["codex-attachments"]["adapted"] == 1
 
 
@@ -5356,6 +5716,7 @@ def test_codex_attachment_symlink_never_receives_adapter_custody(tmp_path: Path,
 def test_codex_attachment_enforces_byte_and_encoding_bounds(tmp_path: Path):
     sources = _load()
     lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    key = sources.cursor_unit_key("codex-attachments", attachment)
     limit = sources.SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]["max_probe_bytes"]
     attachment.write_bytes(b"x" * (limit + 1))
 
@@ -5372,7 +5733,10 @@ def test_codex_attachment_enforces_byte_and_encoding_bounds(tmp_path: Path):
 
     assert not [event for event in events if event["source"] == "codex-attachments"]
     assert "bounded byte ceiling" in " ".join(oversized["errors"])
-    assert oversized["adapted_unit_receipts"] == {}
+    assert key not in oversized["adapted_unit_receipts"]
+    assert {receipt["contract_id"] for receipt in oversized["adapted_unit_receipts"].values()} == {
+        "codex-session-jsonl-v2"
+    }
 
     attachment.write_bytes(b"\xff\xfe\xfa")
     events, malformed = sources.scan_regular_sources(
@@ -5388,7 +5752,10 @@ def test_codex_attachment_enforces_byte_and_encoding_bounds(tmp_path: Path):
 
     assert not [event for event in events if event["source"] == "codex-attachments"]
     assert "strict UTF-8" in " ".join(malformed["errors"])
-    assert malformed["adapted_unit_receipts"] == {}
+    assert key not in malformed["adapted_unit_receipts"]
+    assert {receipt["contract_id"] for receipt in malformed["adapted_unit_receipts"].values()} == {
+        "codex-session-jsonl-v2"
+    }
 
 
 def test_codex_attachment_streams_parent_larger_than_the_regular_source_limit(tmp_path: Path):
@@ -5413,8 +5780,8 @@ def test_codex_attachment_streams_parent_larger_than_the_regular_source_limit(tm
     assert len(attachment_events) == 1
     assert attachment_events[0]["provenance"] == "operator_typed"
     assert result["adapted_unit_receipts"][key]["contract_id"] == "codex-pasted-text-attachment-v1"
-    assert result["coverage"]["codex-sessions"]["errors"] == 1
-    assert "bounded ceiling" in " ".join(result["errors"])
+    assert result["coverage"]["codex-sessions"]["errors"] == 0
+    assert result["errors"] == []
 
 
 def test_codex_attachment_reordered_oversized_echo_fails_closed_in_regular_and_streaming_modes(
@@ -5661,7 +6028,7 @@ def test_codex_attachment_malformed_transport_echo_fails_parent_completeness_clo
     assert result["parent_completeness_unknown"] == [session_key]
     assert result["unsupported"] == [attachment_key]
     assert attachment_key not in result["adapted_unit_receipts"]
-    assert "completeness is unknown" in " ".join(result["errors"])
+    assert "unknown Codex user record envelope" in " ".join(result["errors"])
 
 
 def _append_oversized_incomplete_codex_parent_row(
@@ -5803,7 +6170,7 @@ def test_codex_attachment_unknown_parent_completeness_keeps_receipt_unresolved_a
     assert cursor["unsupported_units"][attachment_key] == sources.file_signature(attachment)
     assert attachment_key not in cursor["adapted_unit_receipts"]
     assert {"codex-attachments", "codex-sessions"}.issubset(cursor["adapter_gaps"])
-    assert "completeness is unknown" in " ".join(cursor["source_errors"])
+    assert "bounded byte ceiling" in " ".join(cursor["source_errors"])
     assert sources.validate_source_adapter_cursor(cursor) == []
 
 

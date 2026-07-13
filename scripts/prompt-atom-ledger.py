@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import contextlib
 import datetime as dt
 import hashlib
@@ -14,10 +16,12 @@ import re
 import shlex
 import signal
 import sqlite3
+import struct
 import subprocess
 import sys
 import threading
 import time
+import zlib
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -59,6 +63,9 @@ from limen.prompt_sources import (  # noqa: E402
     CLAUDE_DERIVED_TOOL_RESULT_TEXT_FIELDS,
     CLAUDE_EXIT_PLAN_ALLOWED_PROMPT_INPUT_KEYS,
     CLAUDE_EXIT_PLAN_ALLOWED_PROMPT_KEYS,
+    CODEX_COMPACTED_MESSAGE_KEYSETS,
+    CODEX_COMPACTED_PAYLOAD_KEYSETS,
+    CODEX_COMPACTION_ITEM_KEYSETS,
     CODEX_HISTORY_KEYSETS,
     CODEX_BYTE_RANGE_KEYS,
     CODEX_EVENT_USER_PAYLOAD_KEYSETS,
@@ -1213,6 +1220,17 @@ def native_source_adapter_candidate_id(
         if len(relative.parts) == 2 and re.fullmatch(r"pasted-text-[1-9][0-9]*\.txt", path.name):
             return "codex-pasted-text-attachment-v1"
         return None
+    if source == "codex-sessions":
+        parts = relative.parts
+        if (
+            len(parts) == 4
+            and re.fullmatch(r"20[0-9]{2}", parts[0])
+            and re.fullmatch(r"(?:0[1-9]|1[0-2])", parts[1])
+            and re.fullmatch(r"(?:0[1-9]|[12][0-9]|3[01])", parts[2])
+            and re.fullmatch(r"rollout-.+\.jsonl", parts[3])
+        ):
+            return "codex-session-jsonl-v2"
+        return None
     if source != "claude-projects" or path.suffix.lower() != ".json":
         return None
     if len(relative.parts) == 4 and relative.parts[2] == "remote-agents":
@@ -1289,7 +1307,44 @@ def canonical_file_session_id(source: str, path: Path, records: list[dict[str, A
                     candidates.append(value)
     if not candidates:
         return None
-    return next((value for value in candidates if value in path.name), candidates[0])
+    path_matches = [value for value in candidates if value in path.name]
+    if len(path_matches) == 1:
+        return path_matches[0]
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
+def codex_session_identity_error(path: Path, records: list[dict[str, Any]]) -> str | None:
+    """Require one canonical file identity while permitting exact resume metadata."""
+
+    candidates: list[str] = []
+    for obj in records:
+        if obj.get("type") != "session_meta":
+            continue
+        payload = obj.get("payload")
+        if not isinstance(payload, dict):
+            return "Codex session metadata is malformed"
+        identity_count = 0
+        for key in ("id", "session_id"):
+            if key not in payload:
+                continue
+            value = payload.get(key)
+            if not isinstance(value, str) or not value:
+                return "Codex session identity is malformed"
+            identity_count += 1
+            if value not in candidates:
+                candidates.append(value)
+        if identity_count == 0:
+            return "Codex session identity is malformed"
+    if not candidates:
+        return "Codex session has no canonical identity"
+    if len(candidates) == 1:
+        return None
+    path_matches = [value for value in candidates if value in path.name]
+    if len(path_matches) != 1:
+        return "Codex session identity is ambiguous"
+    return None
 
 
 def codex_file_is_forked(source: str, records: list[dict[str, Any]]) -> bool:
@@ -1700,6 +1755,73 @@ def strict_json_records(
     return [], f"{path}: JSON source is not an object or object array", True
 
 
+def strict_codex_session_records(
+    lifecycle: Any,
+    path: Path,
+    signature: dict[str, Any],
+) -> tuple[list[dict[str, Any]], str | None, bool]:
+    """Stream one canonical Codex rollout under its provider-specific ceilings.
+
+    Non-prompt rows become empty positional sentinels after validation. This
+    preserves exact event indexes without retaining large assistant/tool bodies
+    in memory, while every user-bearing row is schema-checked before custody can
+    advance.
+    """
+
+    rule = SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]
+    max_probe_bytes = int(rule["max_probe_bytes"])
+    max_record_bytes = int(rule["max_record_bytes"])
+    max_records = int(rule["max_records"])
+    expected_size = int(signature.get("size") or 0)
+    if expected_size > max_probe_bytes:
+        return [], f"{path}: Codex session exceeds bounded byte ceiling {max_probe_bytes}", True
+
+    records: list[dict[str, Any]] = []
+    bytes_read = 0
+    try:
+        with path.open("rb") as handle:
+            while True:
+                raw = handle.readline(max_record_bytes + 1)
+                if not raw:
+                    break
+                bytes_read += len(raw)
+                if len(raw) > max_record_bytes:
+                    return [], f"{path}: Codex record exceeds bounded byte ceiling {max_record_bytes}", True
+                if not raw.strip():
+                    continue
+                if len(records) >= max_records:
+                    return [], f"{path}: Codex record count exceeds bounded ceiling {max_records}", True
+                record_number = len(records) + 1
+                try:
+                    obj = json.loads(raw.decode("utf-8", errors="strict"))
+                except (UnicodeError, ValueError, RecursionError) as exc:
+                    return [], f"{path}:{record_number}: malformed JSON: {exc}", True
+                if not isinstance(obj, dict):
+                    return [], f"{path}:{record_number}: JSONL row is not an object", True
+                schema_error = native_record_schema_error(
+                    lifecycle,
+                    "codex-sessions",
+                    path,
+                    [obj],
+                    adapter_id="codex-session-jsonl-v2",
+                    file_complete=False,
+                )
+                if schema_error:
+                    detail = schema_error.split(":1: ", 1)[-1]
+                    return [], f"{path}:{record_number}: {detail}", True
+                keep = bool(obj.get("type") in {"compacted", "session_meta"} or contains_codex_user_marker(obj))
+                records.append(obj if keep else {})
+    except OSError as exc:
+        return [], f"{path}: unreadable Codex session: {exc}", True
+
+    if bytes_read != expected_size or file_signature(path) != signature:
+        return [], f"{path}: Codex session changed during bounded read", True
+    identity_error = codex_session_identity_error(path, records)
+    if identity_error:
+        return [], f"{path}: {identity_error}", True
+    return records, None, True
+
+
 def strict_native_records(
     lifecycle: Any,
     source: str,
@@ -1718,6 +1840,8 @@ def strict_native_records(
 
     active_limits = limits or runtime_limits({})
     adapter_id = native_source_adapter_candidate_id(lifecycle, source, path)
+    if adapter_id == "codex-session-jsonl-v2":
+        return strict_codex_session_records(lifecycle, path, signature)
     if adapter_id == "claude-remote-task-command-v1":
         adapter_limit = int(SOURCE_ADAPTER_RULES[adapter_id]["max_probe_bytes"])
         try:
@@ -1808,6 +1932,219 @@ def unhandled_prompt_field(
     return None
 
 
+def _codex_turn_metadata_valid(value: Any) -> bool:
+    return bool(
+        isinstance(value, dict)
+        and set(value) == {"turn_id"}
+        and isinstance(value.get("turn_id"), str)
+        and value.get("turn_id")
+    )
+
+
+def codex_image_block_schema_error(block: dict[str, Any]) -> str | None:
+    if tuple(sorted(block)) != CODEX_USER_CONTENT_BLOCK_KEYSETS["input_image"]:
+        return "unknown Codex input-image schema"
+    if block.get("detail") != "high":
+        return "unknown Codex input-image detail schema"
+    image_url = block.get("image_url")
+    prefix = "data:image/png;base64,"
+    if not isinstance(image_url, str) or not image_url.startswith(prefix) or len(image_url) == len(prefix):
+        return "unknown Codex input-image data schema"
+    max_media_bytes = int(SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]["max_media_bytes"])
+    max_encoded_bytes = ((max_media_bytes + 2) // 3) * 4
+    if len(image_url) - len(prefix) > max_encoded_bytes:
+        return f"Codex input image exceeds bounded byte ceiling {max_media_bytes}"
+    return None
+
+
+def codex_event_text_elements_error(payload: dict[str, Any]) -> str | None:
+    message = payload.get("message")
+    elements = payload.get("text_elements")
+    if not isinstance(message, str) or not isinstance(elements, list):
+        return "unknown Codex event text-element schema"
+    message_bytes = message.encode("utf-8")
+    previous_end = 0
+    for element in elements:
+        byte_range = element.get("byte_range") if isinstance(element, dict) else None
+        if (
+            not isinstance(element, dict)
+            or tuple(sorted(element)) != CODEX_TEXT_ELEMENT_KEYS
+            or not isinstance(element.get("placeholder"), str)
+            or not isinstance(byte_range, dict)
+            or tuple(sorted(byte_range)) != CODEX_BYTE_RANGE_KEYS
+            or any(
+                isinstance(byte_range.get(field), bool) or not isinstance(byte_range.get(field), int)
+                for field in CODEX_BYTE_RANGE_KEYS
+            )
+        ):
+            return "unknown Codex event text-element schema"
+        start = int(byte_range["start"])
+        end = int(byte_range["end"])
+        if start < previous_end or end < start or end > len(message_bytes):
+            return "invalid Codex event text-element range"
+        try:
+            exact_placeholder = message_bytes[start:end].decode("utf-8", errors="strict")
+        except UnicodeError:
+            return "invalid Codex event text-element range"
+        if exact_placeholder != element["placeholder"]:
+            return "Codex event text-element does not match message bytes"
+        previous_end = end
+    return None
+
+
+def codex_compacted_schema_error(record: dict[str, Any]) -> str | None:
+    payload = record.get("payload")
+    if not isinstance(payload, dict) or tuple(sorted(payload)) not in CODEX_COMPACTED_PAYLOAD_KEYSETS:
+        return "unknown Codex compacted payload schema"
+    if payload.get("message") != "":
+        return "Codex compacted message must be the exact empty transport field"
+
+    payload_keys = tuple(sorted(payload))
+    if len(payload_keys) == 6:
+        uuid_pattern = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+        if any(
+            not isinstance(payload.get(field), str) or re.fullmatch(uuid_pattern, str(payload[field])) is None
+            for field in ("first_window_id", "previous_window_id", "window_id")
+        ):
+            return "unknown Codex compacted window identity schema"
+        window_number = payload.get("window_number")
+        if isinstance(window_number, bool) or not isinstance(window_number, int) or window_number < 0:
+            return "unknown Codex compacted window number schema"
+    elif "window_id" in payload:
+        window_id = payload.get("window_id")
+        if isinstance(window_id, bool) or not isinstance(window_id, int) or window_id < 0:
+            return "unknown Codex compacted legacy window schema"
+
+    history = payload.get("replacement_history")
+    maximum = int(SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]["max_compacted_history_items"])
+    if not isinstance(history, list) or not history or len(history) > maximum:
+        return f"Codex compacted history exceeds bounded item ceiling {maximum}"
+    compaction_items = 0
+    allowed_messages = set(CODEX_COMPACTED_MESSAGE_KEYSETS)
+    allowed_compactions = set(CODEX_COMPACTION_ITEM_KEYSETS)
+    for item in history:
+        if not isinstance(item, dict):
+            return "unknown Codex compacted history item schema"
+        item_type = item.get("type")
+        if item_type == "message":
+            if tuple(sorted(item)) not in allowed_messages or item.get("role") not in {"user", "developer"}:
+                return "unknown Codex compacted message schema"
+            metadata = item.get("internal_chat_message_metadata_passthrough")
+            if metadata is not None and not _codex_turn_metadata_valid(metadata):
+                return "unknown Codex compacted message metadata schema"
+            content = item.get("content")
+            if not isinstance(content, list):
+                return "unknown Codex compacted message content schema"
+            for block in content:
+                if not isinstance(block, dict):
+                    return "unknown Codex compacted content block schema"
+                block_type = block.get("type")
+                expected_keys = CODEX_USER_CONTENT_BLOCK_KEYSETS.get(str(block_type))
+                if expected_keys is None or tuple(sorted(block)) != expected_keys:
+                    return "Codex compacted content requires an explicit adapter"
+                if block_type == "input_text":
+                    if not isinstance(block.get("text"), str):
+                        return "unknown Codex compacted input-text schema"
+                    continue
+                if item.get("role") != "user":
+                    return "Codex compacted developer media requires an explicit adapter"
+                image_error = codex_image_block_schema_error(block)
+                if image_error:
+                    return image_error
+            continue
+        if item_type == "compaction":
+            compaction_items += 1
+            if tuple(sorted(item)) not in allowed_compactions:
+                return "unknown Codex compaction item schema"
+            if not isinstance(item.get("encrypted_content"), str) or not item.get("encrypted_content"):
+                return "unknown Codex encrypted compaction schema"
+            if "id" in item and (not isinstance(item.get("id"), str) or not item.get("id")):
+                return "unknown Codex compaction identity schema"
+            for field in ("metadata", "internal_chat_message_metadata_passthrough"):
+                if field in item and not _codex_turn_metadata_valid(item.get(field)):
+                    return "unknown Codex compaction metadata schema"
+            continue
+        return "unknown Codex compacted history item type"
+    if compaction_items != 1:
+        return "Codex compacted history must contain exactly one compaction item"
+    return None
+
+
+def codex_media_pairing_error(records: list[dict[str, Any]]) -> str | None:
+    """Bind local-image transport references to one nearby canonical data image turn."""
+
+    primaries: list[tuple[int, tuple[str, ...], int]] = []
+    for index, record in enumerate(records):
+        payload = record.get("payload")
+        if not (
+            record.get("type") == "response_item"
+            and isinstance(payload, dict)
+            and payload.get("type") == "message"
+            and payload.get("role") == "user"
+        ):
+            continue
+        content = payload.get("content")
+        if not isinstance(content, list):
+            continue
+        texts = tuple(
+            str(block["text"])
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "input_text" and isinstance(block.get("text"), str)
+        )
+        media_count = sum(1 for block in content if isinstance(block, dict) and block.get("type") == "input_image")
+        if media_count:
+            primaries.append((index, texts, media_count))
+
+    paired: Counter[int] = Counter()
+    for index, record in enumerate(records):
+        payload = record.get("payload")
+        if not (
+            record.get("type") == "event_msg" and isinstance(payload, dict) and payload.get("type") == "user_message"
+        ):
+            continue
+        local_images = payload.get("local_images")
+        if not isinstance(local_images, list) or not local_images:
+            continue
+        for locator in local_images:
+            if not isinstance(locator, str) or not locator or "\x00" in locator:
+                return "Codex user-media transport locator is malformed"
+            candidate = Path(locator)
+            if (
+                not candidate.is_absolute()
+                or ".." in candidate.parts
+                or str(candidate.expanduser().absolute()) != locator
+            ):
+                return "Codex user-media transport locator is not canonical"
+        elements = payload.get("text_elements")
+        if not isinstance(elements, list):
+            return "Codex user-media transport has malformed text elements"
+        image_placeholders = [
+            element
+            for element in elements
+            if isinstance(element, dict)
+            and re.fullmatch(r"\[Image #[1-9][0-9]*\]", str(element.get("placeholder") or ""))
+        ]
+        if len(image_placeholders) != len(local_images):
+            return "Codex user-media transport cardinality does not match image placeholders"
+        message = payload.get("message")
+        candidates = [
+            primary
+            for primary in primaries
+            if primary[0] < index
+            and index - primary[0] <= 2
+            and isinstance(message, str)
+            and message in primary[1]
+            and primary[2] == len(local_images)
+        ]
+        if not candidates:
+            return "Codex user media has no exact canonical primary binding"
+        primary = max(candidates, key=lambda item: item[0])
+        paired[primary[0]] += 1
+    if any(paired[index] != 1 for index, _texts, _count in primaries):
+        return "Codex primary user media does not have exactly one transport binding"
+    return None
+
+
 def native_record_schema_error(
     lifecycle: Any,
     source: str,
@@ -1815,6 +2152,7 @@ def native_record_schema_error(
     records: list[dict[str, Any]],
     *,
     adapter_id: str | None,
+    file_complete: bool = True,
 ) -> str | None:
     """Reject structurally unknown Claude containers before advancing a cursor."""
 
@@ -1835,8 +2173,16 @@ def native_record_schema_error(
                 and isinstance(payload, dict)
                 and payload.get("type") == "user_message"
             )
-            if contains_codex_user_marker(record) and not (is_response_user or is_event_user):
+            is_compacted = record.get("type") == "compacted"
+            if contains_codex_user_marker(record) and not (is_response_user or is_event_user or is_compacted):
                 return f"{path}:{index + 1}: unknown Codex user-bearing record schema"
+            if is_compacted:
+                if tuple(sorted(record)) != CODEX_USER_RECORD_KEYS or not isinstance(record.get("timestamp"), str):
+                    return f"{path}:{index + 1}: unknown Codex compacted record envelope"
+                compacted_error = codex_compacted_schema_error(record)
+                if compacted_error:
+                    return f"{path}:{index + 1}: {compacted_error}"
+                continue
             if not isinstance(payload, dict):
                 continue
             has_user_role = payload.get("role") == "user"
@@ -1871,8 +2217,11 @@ def native_record_schema_error(
                     expected_keys = CODEX_USER_CONTENT_BLOCK_KEYSETS.get(str(block_type))
                     if expected_keys is None or tuple(sorted(block)) != expected_keys:
                         return f"{path}:{index + 1}: Codex user content requires an explicit content adapter"
-                    if block_type != "input_text":
-                        return f"{path}:{index + 1}: Codex user media requires an explicit content adapter"
+                    if block_type == "input_image":
+                        image_error = codex_image_block_schema_error(block)
+                        if image_error:
+                            return f"{path}:{index + 1}: {image_error}"
+                        continue
                     if not isinstance(block.get("text"), str):
                         return f"{path}:{index + 1}: unknown Codex input-text schema"
                 continue
@@ -1885,26 +2234,19 @@ def native_record_schema_error(
                     media = payload.get(media_field, [])
                     if media is not None and not isinstance(media, list):
                         return f"{path}:{index + 1}: unknown Codex event user-media schema"
-                    if media:
+                    if media_field == "images" and media:
                         return f"{path}:{index + 1}: Codex user media requires an explicit content adapter"
-                elements = payload.get("text_elements")
-                if not isinstance(elements, list):
-                    return f"{path}:{index + 1}: unknown Codex event text-element schema"
-                for element in elements:
-                    byte_range = element.get("byte_range") if isinstance(element, dict) else None
                     if (
-                        not isinstance(element, dict)
-                        or tuple(sorted(element)) != CODEX_TEXT_ELEMENT_KEYS
-                        or not isinstance(element.get("placeholder"), str)
-                        or not isinstance(byte_range, dict)
-                        or tuple(sorted(byte_range)) != CODEX_BYTE_RANGE_KEYS
-                        or any(
-                            isinstance(byte_range.get(field), bool) or not isinstance(byte_range.get(field), int)
-                            for field in CODEX_BYTE_RANGE_KEYS
-                        )
+                        media_field == "local_images"
+                        and media
+                        and not all(isinstance(value, str) and value for value in media)
                     ):
-                        return f"{path}:{index + 1}: unknown Codex event text-element schema"
-        return None
+                        return f"{path}:{index + 1}: unknown Codex event local-image schema"
+                elements_error = codex_event_text_elements_error(payload)
+                if elements_error:
+                    return f"{path}:{index + 1}: {elements_error}"
+        pairing_error = codex_media_pairing_error(records) if file_complete else None
+        return f"{path}: {pairing_error}" if pairing_error else None
     if source == "codex-history":
         allowed = set(CODEX_HISTORY_KEYSETS)
         for index, record in enumerate(records):
@@ -2442,9 +2784,12 @@ def normalize_codex_file_events(
         digest(str(event.get("text") or "")) for event in events if event.get("provenance") == "transport_echo"
     }
     for event in events:
+        media_primary = bool(event.pop("_codex_media_primary", False))
         if event.get("provenance") != "operator_typed":
             continue
-        unmatched_effective_input = bool(echo_hashes) and digest(str(event.get("text") or "")) not in echo_hashes
+        unmatched_effective_input = bool(
+            not media_primary and echo_hashes and digest(str(event.get("text") or "")) not in echo_hashes
+        )
         if forked:
             event["body_kind"] = "session_context"
             event["task_body"] = ""
@@ -2501,6 +2846,149 @@ def codex_attachment_reference_paths(lifecycle: Any, text: str) -> list[str]:
     return targets
 
 
+def codex_png_descriptor(block: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Validate one bounded inline PNG and return a private digest-only occurrence."""
+
+    schema_error = codex_image_block_schema_error(block)
+    if schema_error:
+        return None, schema_error
+    prefix = "data:image/png;base64,"
+    encoded = str(block["image_url"])[len(prefix) :]
+    try:
+        payload = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        return None, "Codex input image is not strict base64"
+    maximum = int(SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]["max_media_bytes"])
+    if not payload or len(payload) > maximum:
+        return None, f"Codex input image exceeds bounded byte ceiling {maximum}"
+    if not payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None, "Codex input image is not a canonical PNG"
+
+    offset = 8
+    width: int | None = None
+    height: int | None = None
+    saw_iend = False
+    chunk_index = 0
+    while offset < len(payload):
+        if offset + 12 > len(payload):
+            return None, "Codex input PNG is truncated"
+        length = struct.unpack(">I", payload[offset : offset + 4])[0]
+        chunk_type = payload[offset + 4 : offset + 8]
+        chunk_end = offset + 12 + length
+        if chunk_end > len(payload) or re.fullmatch(rb"[A-Za-z]{4}", chunk_type) is None:
+            return None, "Codex input PNG has a malformed chunk"
+        chunk_data = payload[offset + 8 : offset + 8 + length]
+        expected_crc = struct.unpack(">I", payload[offset + 8 + length : chunk_end])[0]
+        actual_crc = zlib.crc32(chunk_data, zlib.crc32(chunk_type)) & 0xFFFFFFFF
+        if actual_crc != expected_crc:
+            return None, "Codex input PNG has a corrupt chunk"
+        if chunk_index == 0:
+            if chunk_type != b"IHDR" or length != 13:
+                return None, "Codex input PNG has no canonical IHDR"
+            width, height = struct.unpack(">II", chunk_data[:8])
+            if width <= 0 or height <= 0:
+                return None, "Codex input PNG dimensions are malformed"
+        elif chunk_type == b"IHDR":
+            return None, "Codex input PNG repeats IHDR"
+        if chunk_type == b"IEND":
+            if length != 0 or chunk_end != len(payload):
+                return None, "Codex input PNG has a malformed IEND"
+            saw_iend = True
+            offset = chunk_end
+            break
+        offset = chunk_end
+        chunk_index += 1
+    if not saw_iend or width is None or height is None or offset != len(payload):
+        return None, "Codex input PNG is incomplete"
+    media_hash = hashlib.sha256(payload).hexdigest()
+    return (
+        f"codex-input-image-v1:sha256={media_hash};bytes={len(payload)};width={width};height={height};detail=high",
+        None,
+    )
+
+
+def codex_prompt_items_for(
+    lifecycle: Any,
+    obj: dict[str, Any],
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Extract exact text and digest-only media occurrences from one Codex row."""
+
+    payload = obj.get("payload")
+    if (
+        obj.get("type") == "response_item"
+        and isinstance(payload, dict)
+        and payload.get("type") == "message"
+        and payload.get("role") == "user"
+    ):
+        items: list[dict[str, Any]] = []
+        for block_index, block in enumerate(payload.get("content") or []):
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "input_text":
+                text = block.get("text")
+                if isinstance(text, str) and text.strip():
+                    items.append({"text_index": block_index, "text": text})
+                continue
+            if block.get("type") == "input_image":
+                descriptor, error = codex_png_descriptor(block)
+                if error:
+                    return [], error
+                items.append(
+                    {
+                        "text_index": block_index,
+                        "text": descriptor,
+                        "body_kind": "nontext_input",
+                        "media_primary": True,
+                    }
+                )
+        return items, None
+    if obj.get("type") == "event_msg" and isinstance(payload, dict) and payload.get("type") == "user_message":
+        message = payload.get("message")
+        return ([{"text_index": 0, "text": message}] if isinstance(message, str) and message.strip() else []), None
+    if obj.get("type") == "compacted" and isinstance(payload, dict):
+        items = []
+        item_index = 0
+        for history_item in payload.get("replacement_history") or []:
+            if not isinstance(history_item, dict) or history_item.get("type") != "message":
+                continue
+            if history_item.get("role") != "user":
+                continue
+            for block in history_item.get("content") or []:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "input_text":
+                    text = block.get("text")
+                    if isinstance(text, str) and text.strip():
+                        items.append(
+                            {
+                                "text_index": item_index,
+                                "text": text,
+                                "body_kind": "session_context",
+                                "provenance": "continuation_summary",
+                                "authority": "derived",
+                            }
+                        )
+                elif block.get("type") == "input_image":
+                    descriptor, error = codex_png_descriptor(block)
+                    if error:
+                        return [], error
+                    items.append(
+                        {
+                            "text_index": item_index,
+                            "text": descriptor,
+                            "body_kind": "nontext_context",
+                            "provenance": "continuation_summary",
+                            "authority": "derived",
+                        }
+                    )
+                item_index += 1
+        return items, None
+    return [
+        {"text_index": index, "text": text}
+        for index, text in enumerate(prompt_texts_for(lifecycle, "codex-sessions", obj))
+    ], None
+
+
 def regular_file_events(
     lifecycle: Any,
     source: str,
@@ -2517,14 +3005,30 @@ def regular_file_events(
     path_authority = claude_project_path_authority(lifecycle, source, path)
     file_events: list[dict[str, Any]] = []
     for event_index, obj in enumerate(records):
-        texts = prompt_texts_for(lifecycle, source, obj)
-        for text_index, text in enumerate(texts):
-            if adapter_id == "claude-remote-task-command-v1":
+        if source == "codex-sessions":
+            prompt_items, prompt_error = codex_prompt_items_for(lifecycle, obj)
+            if prompt_error:
+                return [], f"{path}:{event_index + 1}: {prompt_error}"
+        else:
+            prompt_items = [
+                {"text_index": text_index, "text": text}
+                for text_index, text in enumerate(prompt_texts_for(lifecycle, source, obj))
+            ]
+        for item in prompt_items:
+            text_index = int(item["text_index"])
+            text = str(item["text"])
+            if "body_kind" in item:
+                task_body, body_kind = "", str(item["body_kind"])
+            elif adapter_id == "claude-remote-task-command-v1":
                 task_body, body_kind = "", "direct"
             else:
                 task_body, body_kind = lifecycle.normalize_task_body(text)
-            provenance, authority = provenance_for(source, obj, body_kind)
-            if path_authority == "derived" or adapter_id:
+            provenance, authority = (
+                (str(item["provenance"]), str(item["authority"]))
+                if "provenance" in item and "authority" in item
+                else provenance_for(source, obj, body_kind)
+            )
+            if path_authority == "derived" or (adapter_id and adapter_id != "codex-session-jsonl-v2"):
                 provenance, authority = "delegated_task_frame", "derived"
             elif path_authority == "unknown" and provenance == "operator_typed":
                 provenance, authority = "unknown_user_input", "unknown"
@@ -2560,6 +3064,7 @@ def regular_file_events(
                         if source == "codex-sessions" and _codex_canonical_parent_record(obj)
                         else {}
                     ),
+                    **({"_codex_media_primary": True} if item.get("media_primary") else {}),
                 }
             )
             if len(file_events) > limits.max_events_per_unit:
@@ -2696,8 +3201,6 @@ def bounded_codex_attachment_parent_events_from_path(
                         parent_completeness_unknown = True
                     if len(session_ids) > max_session_ids:
                         session_identity_error = "attachment parent has too many session identities"
-                    elif len(session_ids) > 1:
-                        session_identity_error = "attachment parent session identity is ambiguous"
                     forked = bool(
                         forked
                         or payload.get("forked_from_id")
@@ -2711,6 +3214,7 @@ def bounded_codex_attachment_parent_events_from_path(
                     path,
                     [obj],
                     adapter_id=None,
+                    file_complete=False,
                 )
                 if schema_error:
                     parent_completeness_unknown = True
@@ -2757,8 +3261,6 @@ def bounded_codex_attachment_parent_events_from_path(
 
     if bytes_read != int(signature.get("size") or 0) or file_signature(path) != signature:
         return [], "attachment parent changed during bounded read", True
-    if session_identity_error:
-        return [], session_identity_error, parent_completeness_unknown
     if parent_completeness_unknown and candidates:
         return (
             [],
@@ -2767,9 +3269,17 @@ def bounded_codex_attachment_parent_events_from_path(
         )
     if not candidates:
         return [], None, parent_completeness_unknown
-    if not session_ids:
+    if session_identity_error:
+        return [], session_identity_error, parent_completeness_unknown
+    path_matches = [value for value in session_ids if value in path.name]
+    if len(session_ids) == 1:
+        file_session_id = session_ids[0]
+    elif len(path_matches) == 1:
+        file_session_id = path_matches[0]
+    elif not session_ids:
         return [], "attachment parent has no canonical session identity", False
-    file_session_id = session_ids[0]
+    else:
+        return [], "attachment parent session identity is ambiguous", False
     parent_events: list[dict[str, Any]] = []
     for candidate in candidates:
         text = str(candidate["text"])
@@ -3038,6 +3548,14 @@ def scan_regular_sources(
     )
     source_alias_blocker_counts: Counter[str] = Counter(getattr(active_rows, "source_alias_blocker_counts", {}))
     has_codex_attachment_rows = any(str(row["source"]) == "codex-attachments" for row in active_rows)
+    codex_session_proves_parent_completeness = bool(
+        int(SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]["max_probe_bytes"])
+        <= int(SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]["max_parent_probe_bytes"])
+        and int(SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]["max_record_bytes"])
+        <= int(SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]["max_parent_record_bytes"])
+        and int(SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]["max_records"])
+        <= int(SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]["max_parent_records"])
+    )
     for source, error in getattr(active_rows, "discovery_errors", []):
         coverage_row(coverage, source)["errors"] += 1
         errors.append(error)
@@ -3270,6 +3788,32 @@ def scan_regular_sources(
                 counts["errors"] += 1
                 errors.append(f"{source}:{path}: source changed during cached adapter validation")
                 continue
+            if adapter_id == "codex-session-jsonl-v2" and has_codex_attachment_rows:
+                (
+                    targeted_parent_events,
+                    targeted_error,
+                    targeted_completeness_unknown,
+                ) = bounded_codex_attachment_parent_events_from_path(
+                    lifecycle,
+                    path,
+                    signature,
+                    limits=active_limits,
+                )
+                if targeted_completeness_unknown:
+                    parent_completeness_unknown.add(key)
+                if targeted_error:
+                    files.pop(key, None)
+                    adapted_unit_receipts.pop(key, None)
+                    counts["errors"] += 1
+                    errors.append(f"{source}:{targeted_error}")
+                    continue
+                collect_codex_attachment_parents(
+                    lifecycle,
+                    parent_path=path,
+                    parent_signature=signature,
+                    file_events=targeted_parent_events,
+                    parents=codex_attachment_parents,
+                )
             adapter_counts[adapter_id] += 1
             counts["adapted"] += 1
             counts["converged"] += 1
@@ -3357,8 +3901,17 @@ def scan_regular_sources(
                 signature,
                 limits=active_limits,
             )
-            if source == "codex-sessions":
-                if error or not supported:
+            if source == "codex-sessions" and has_codex_attachment_rows:
+                if (
+                    adapter_id == "codex-session-jsonl-v2"
+                    and codex_session_proves_parent_completeness
+                    and not error
+                    and supported
+                ):
+                    targeted_parent_events = []
+                    targeted_error = None
+                    targeted_completeness_unknown = False
+                elif error or not supported:
                     (
                         targeted_parent_events,
                         targeted_error,
@@ -3382,7 +3935,7 @@ def scan_regular_sources(
                     )
                 if targeted_completeness_unknown:
                     parent_completeness_unknown.add(key)
-                if targeted_error:
+                if targeted_error and not error:
                     error = targeted_error
                 if targeted_parent_events and source_unit_signature(lifecycle, source, path) == signature:
                     collect_codex_attachment_parents(
@@ -3418,6 +3971,20 @@ def scan_regular_sources(
                         adapter_id=adapter_id,
                         limits=active_limits,
                     )
+                    if (
+                        source == "codex-sessions"
+                        and adapter_id == "codex-session-jsonl-v2"
+                        and codex_session_proves_parent_completeness
+                        and has_codex_attachment_rows
+                        and not error
+                    ):
+                        collect_codex_attachment_parents(
+                            lifecycle,
+                            parent_path=path,
+                            parent_signature=signature,
+                            file_events=file_events,
+                            parents=codex_attachment_parents,
+                        )
                     supported = True
         if not supported:
             counts["unsupported"] += 1

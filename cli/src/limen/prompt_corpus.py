@@ -602,6 +602,9 @@ def atoms_from_event(
     task_body = str(event.get("task_body") or "")
     body_kind = str(occurrence.get("body_kind") or "direct")
     atom_text = task_body if task_body.strip() else str(occurrence.get("raw_text") or "")
+    if body_kind in {"nontext_context", "nontext_input"}:
+        occurrence["excluded_reason"] = "nontext_prompt_input"
+        return []
     if body_kind in {"flame_scaffold", "session_context"} and not task_body.strip():
         occurrence["excluded_reason"] = "derived_context_without_actionable_body"
         return []

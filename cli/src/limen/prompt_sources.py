@@ -12,7 +12,7 @@ from typing import Any
 
 
 SOURCE_ADAPTER_CONTRACT_VERSION = 1
-PROMPT_SOURCE_SCANNER_VERSION = 3
+PROMPT_SOURCE_SCANNER_VERSION = 4
 SOURCE_FILE_SIGNATURE_FIELDS = ("ctime_ns", "device", "inode", "mtime_ns", "size")
 AGY_CONVERSATION_ROOT_SEGMENTS = (".gemini", "antigravity-cli", "conversations")
 AGY_SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
@@ -358,7 +358,7 @@ SOURCE_ADAPTER_RULES: dict[str, dict[str, Any]] = {
         "parent_byte_accounting": "cumulative-actual-read",
         "max_probe_bytes": 1048576,
         "max_parent_probe_bytes": 536870912,
-        "max_parent_record_bytes": 1048576,
+        "max_parent_record_bytes": 16777216,
         "max_parent_candidate_bytes": 16777216,
         "max_parent_records": 100000,
         "max_parent_session_ids": 16,
@@ -441,6 +441,29 @@ SOURCE_ADAPTER_RULES: dict[str, dict[str, Any]] = {
         "body_kind": "delegated_task_frame",
         "provenance": "delegated_task_frame",
         "authority": "derived",
+    },
+    "codex-session-jsonl-v2": {
+        "source": "codex-sessions",
+        "path": {
+            "relative_depth": 4,
+            "calendar_segments": ["YYYY", "MM", "DD"],
+            "basename_regex": r"rollout-.+\.jsonl",
+        },
+        "schema": "codex-session-jsonl-v2",
+        "canonical_identity": "one-id-or-one-filename-bound-id",
+        "compacted_history_authority": "derived-continuation-context",
+        "media": {
+            "primary": "response_item:message:user:input_image",
+            "transport": "event_msg:user_message:local_images",
+            "binding": "nearest-preceding-exact-text-and-cardinality",
+            "encoding": "data:image/png;base64",
+            "occurrence": "digest-only-nontext-input",
+        },
+        "max_probe_bytes": 536870912,
+        "max_record_bytes": 16777216,
+        "max_records": 100000,
+        "max_compacted_history_items": 256,
+        "max_media_bytes": 16777216,
     },
     "claude-remote-task-command-v1": {
         "source": "claude-projects",
@@ -650,6 +673,18 @@ CODEX_USER_CONTENT_BLOCK_KEYSETS = {
     "input_text": ("text", "type"),
     "input_image": ("detail", "image_url", "type"),
 }
+CODEX_COMPACTED_PAYLOAD_KEYSETS = (
+    ("first_window_id", "message", "previous_window_id", "replacement_history", "window_id", "window_number"),
+    ("message", "replacement_history", "window_id"),
+    ("message", "replacement_history"),
+)
+CODEX_COMPACTED_MESSAGE_KEYSETS = CODEX_RESPONSE_USER_PAYLOAD_KEYSETS
+CODEX_COMPACTION_ITEM_KEYSETS = (
+    ("encrypted_content", "id", "internal_chat_message_metadata_passthrough", "type"),
+    ("encrypted_content", "id", "type"),
+    ("encrypted_content", "metadata", "type"),
+    ("encrypted_content", "type"),
+)
 CODEX_EVENT_USER_PAYLOAD_KEYSETS = (
     ("images", "local_images", "message", "text_elements", "type"),
     ("local_images", "message", "text_elements", "type"),
@@ -1022,6 +1057,36 @@ SOURCE_RECORD_SCHEMAS = {
             "media_fields_require_adapter_when_nonempty": ["images", "local_images"],
         },
     },
+    "codex-session-jsonl-v2": {
+        "source": "codex-sessions",
+        "record_keys": CODEX_USER_RECORD_KEYS,
+        "canonical_identity": "one-id-or-one-filename-bound-id",
+        "response_item": {
+            "payload_keysets": CODEX_RESPONSE_USER_PAYLOAD_KEYSETS,
+            "content_block_keysets": CODEX_USER_CONTENT_BLOCK_KEYSETS,
+            "text_block": "input_text",
+            "media_block": {
+                "type": "input_image",
+                "detail": "high",
+                "encoding": "data:image/png;base64",
+                "atomization": "nontext-occurrence-only",
+            },
+        },
+        "event_msg": {
+            "payload_keysets": CODEX_EVENT_USER_PAYLOAD_KEYSETS,
+            "local_image_role": "transport-reference",
+            "image_placeholder_regex": r"\[Image #[1-9][0-9]*\]",
+            "binding": "nearest-preceding-exact-text-and-cardinality",
+        },
+        "compacted": {
+            "payload_keysets": CODEX_COMPACTED_PAYLOAD_KEYSETS,
+            "message": "exact-empty-string",
+            "replacement_message_keysets": CODEX_COMPACTED_MESSAGE_KEYSETS,
+            "compaction_item_keysets": CODEX_COMPACTION_ITEM_KEYSETS,
+            "user_authority": "derived-continuation-context",
+            "developer_role": "non-operator-context",
+        },
+    },
     "claude-project-jsonl-v1": {
         "source": "claude-projects",
         "suffix": ".jsonl",
@@ -1232,6 +1297,7 @@ def _relative_role_parts(source: str, locator: str) -> tuple[str, ...] | None:
     roots = {
         "agy-cli-conversations": (".gemini", "antigravity-cli", "conversations"),
         "codex-attachments": (".codex", "attachments"),
+        "codex-sessions": (".codex", "sessions"),
         "claude-file-history": (".claude", "file-history"),
         "claude-plans": (".claude", "plans"),
         "claude-projects": (".claude", "projects"),
@@ -1460,6 +1526,13 @@ def source_contract_receipt_applies(
             len(relative) == 1
             and re.fullmatch(r"opencode\.db#session:[0-9a-f]{24}", relative[0]) is not None
             and set(related) == set()
+        ),
+        "codex-session-jsonl-v2": lambda: (
+            len(relative) == 4
+            and re.fullmatch(r"20[0-9]{2}", relative[0]) is not None
+            and re.fullmatch(r"(?:0[1-9]|1[0-2])", relative[1]) is not None
+            and re.fullmatch(r"(?:0[1-9]|[12][0-9]|3[01])", relative[2]) is not None
+            and re.fullmatch(r"rollout-.+\.jsonl", relative[3]) is not None
         ),
         "claude-file-history-snapshot-v1": lambda: (
             len(relative) >= 1 and re.fullmatch(r"[0-9a-fA-F]+@v[0-9]+", path.name) is not None
