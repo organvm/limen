@@ -886,7 +886,9 @@ def test_discovery_does_not_advertise_unreachable_auth_or_workflow(auth_rc: int,
             return CommandResult(args, auth_rc)
         if result := control_ref_result(args):
             return result
-        return CommandResult(args, workflow_rc, json.dumps({"id": WORKFLOW_ID, "path": WORKFLOW_PATH, "state": "active"}))
+        return CommandResult(
+            args, workflow_rc, json.dumps({"id": WORKFLOW_ID, "path": WORKFLOW_PATH, "state": "active"})
+        )
 
     adapters, capabilities = discover_adapters(
         vendors=(vendor(),),
@@ -1022,11 +1024,7 @@ def test_workflow_submission_correlates_exact_request_across_paginated_catalog()
                         }
                     ]
                 },
-                {
-                    "workflow_runs": [
-                        exact_actions_row(req, run_id=22)
-                    ]
-                },
+                {"workflow_runs": [exact_actions_row(req, run_id=22)]},
             ]
             return CommandResult(args, 0, json.dumps(payload))
         raise AssertionError(args)
@@ -1524,6 +1522,6 @@ def test_workflow_has_no_raw_shell_predicate_or_patch_upload() -> None:
     assert "github.ref_type" in workflow
     assert "inputs.workflow_path" in workflow
     assert "verification_context_digest" in workflow
-    assert "docker pull \"$LIMEN_SANDBOX_IMAGE\"" in workflow
+    assert 'docker pull "$LIMEN_SANDBOX_IMAGE"' in workflow
     assert SANDBOX_IMAGE in workflow
     assert "instruction_digest" in workflow

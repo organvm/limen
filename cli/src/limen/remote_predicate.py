@@ -528,7 +528,7 @@ def _attest_sandbox_runtime(runner: SandboxRunner, *, docker_binary: str) -> Non
 
 def _sandbox_probe_source() -> str:
     expected = repr(dict(sorted(SANDBOX_ENV.items())))
-    return f'''from pathlib import Path
+    return f"""from pathlib import Path
 import os
 import socket
 
@@ -571,7 +571,7 @@ finally:
 if connected:
     raise SystemExit("outbound network unexpectedly reachable")
 print("limen-sandbox-boundary-v1")
-'''
+"""
 
 
 def _attest_sandbox(runner: SandboxRunner, *, docker_binary: str, timeout: int) -> str:

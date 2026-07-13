@@ -87,7 +87,9 @@ def verification_context_for_task(task: object, tasks_by_id: Mapping[str, object
     labels = [str(label) for label in (getattr(task, "labels", None) or [])]
     dependencies = [str(dep) for dep in (getattr(task, "depends_on", None) or [])]
     if task_type != "verification":
-        raise RemoteExecutionError("GitHub Actions lane is verification-only; implementation/build/code tasks are rejected")
+        raise RemoteExecutionError(
+            "GitHub Actions lane is verification-only; implementation/build/code tasks are rejected"
+        )
     if not REPO_RE.fullmatch(task_repo):
         raise RemoteExecutionError("verification child requires an exact GitHub owner/repo")
     if VERIFICATION_ONLY_LABEL not in labels:
@@ -115,7 +117,9 @@ def verification_context_for_task(task: object, tasks_by_id: Mapping[str, object
         if parent_repo != target.repo or not REPO_RE.fullmatch(parent_repo):
             raise RemoteExecutionError(f"verification parent repository does not match its receipt: {parent_id}")
         if parent_repo != task_repo:
-            raise RemoteExecutionError(f"verification parent does not have custody in the child target repo: {parent_id}")
+            raise RemoteExecutionError(
+                f"verification parent does not have custody in the child target repo: {parent_id}"
+            )
 
         expected_url = (
             f"https://github.com/{target.repo}/pull/{target.identifier}"
@@ -126,8 +130,7 @@ def verification_context_for_task(task: object, tasks_by_id: Mapping[str, object
         for entry in reversed(list(getattr(parent, "dispatch_log", None) or [])):
             status = str(getattr(entry, "status", "") or "").lower()
             text = " ".join(
-                str(getattr(entry, name, "") or "")
-                for name in ("session_id", "output", "provider_url")
+                str(getattr(entry, name, "") or "") for name in ("session_id", "output", "provider_url")
             ).lower()
             if status not in {"done", "archived"}:
                 continue
@@ -1103,7 +1106,9 @@ class RemoteLifecycle:
             or run.verification_context_digest != request.verification_context_digest
             or run.request_id != request.request_id
         ):
-            raise RemoteExecutionError("adapter changed provider, request, target SHA, control SHA, or workflow identity")
+            raise RemoteExecutionError(
+                "adapter changed provider, request, target SHA, control SHA, or workflow identity"
+            )
 
     @classmethod
     def _check_transition(cls, request: RemoteRequest, before: RemoteRun, after: RemoteRun) -> None:
