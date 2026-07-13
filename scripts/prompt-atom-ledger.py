@@ -52,6 +52,13 @@ from limen.prompt_sources import (  # noqa: E402
     AGY_CONVERSATION_UNIT_SIGNATURE_FIELDS,
     AGY_HISTORY_KEYSETS,
     CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+    CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+    CLAUDE_DERIVED_TOOL_RESULT_INTEGER_FIELDS,
+    CLAUDE_DERIVED_TOOL_RESULT_JOB_KEYS,
+    CLAUDE_DERIVED_TOOL_RESULT_PROMPT_KEYSETS,
+    CLAUDE_DERIVED_TOOL_RESULT_TEXT_FIELDS,
+    CLAUDE_EXIT_PLAN_ALLOWED_PROMPT_INPUT_KEYS,
+    CLAUDE_EXIT_PLAN_ALLOWED_PROMPT_KEYS,
     CODEX_HISTORY_KEYSETS,
     CODEX_BYTE_RANGE_KEYS,
     CODEX_EVENT_USER_PAYLOAD_KEYSETS,
@@ -968,7 +975,10 @@ def source_unit_signature(
     )
     if custody.error is not None:
         return None
-    if custody.alias_contract_id == CLAUDE_PROJECT_MEMORY_ALIAS_ID:
+    if custody.alias_contract_id in {
+        CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+        CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+    }:
         return custody.unit_signature
     return file_signature(path)
 
@@ -1008,7 +1018,9 @@ def source_exclusion_candidate_id(
     if custody.error is not None or relative is None:
         return None
     if custody.alias_contract_id == CLAUDE_PROJECT_MEMORY_ALIAS_ID:
-        return CLAUDE_PROJECT_MEMORY_ALIAS_ID
+        return custody.alias_contract_id
+    if custody.alias_contract_id == CLAUDE_SUBAGENT_SESSION_ALIAS_ID:
+        return custody.alias_contract_id if path.is_file() else None
     parts = relative.parts
     suffix = path.suffix.lower()
 
@@ -1070,7 +1082,10 @@ def confirm_source_exclusion(
         return None
     related: dict[str, dict[str, Any]] = {}
     related_evidence: dict[str, dict[str, str]] = {}
-    if candidate_id == CLAUDE_PROJECT_MEMORY_ALIAS_ID:
+    if candidate_id in {
+        CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+        CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+    }:
         custody = source_path_custody(lifecycle, source, path)
         if (
             custody.error is not None
@@ -1113,7 +1128,10 @@ def current_exclusion_related_signatures(
     path: Path,
     candidate_id: str,
 ) -> dict[str, dict[str, Any]] | None:
-    if candidate_id == CLAUDE_PROJECT_MEMORY_ALIAS_ID:
+    if candidate_id in {
+        CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+        CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+    }:
         custody = source_path_custody(lifecycle, source, path)
         if custody.error is not None or custody.alias_contract_id != candidate_id:
             return None
@@ -1130,7 +1148,10 @@ def current_exclusion_related_evidence(
     path: Path,
     candidate_id: str,
 ) -> dict[str, dict[str, Any]] | None:
-    if candidate_id == CLAUDE_PROJECT_MEMORY_ALIAS_ID:
+    if candidate_id in {
+        CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+        CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+    }:
         custody = source_path_custody(lifecycle, source, path)
         if custody.error is not None or custody.alias_contract_id != candidate_id:
             return None
@@ -1353,6 +1374,127 @@ def claude_assistant_prompt_fields(name: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys((*CLAUDE_ASSISTANT_PROMPT_FIELDS["*"], *CLAUDE_ASSISTANT_PROMPT_FIELDS.get(name, ()))))
 
 
+def claude_exit_plan_allowed_prompts(tool_input: Any) -> list[str] | None:
+    """Return only the exact, provider-emitted ExitPlanMode permission prompts."""
+
+    if not isinstance(tool_input, dict) or tuple(sorted(tool_input)) != tuple(
+        sorted(CLAUDE_EXIT_PLAN_ALLOWED_PROMPT_INPUT_KEYS)
+    ):
+        return None
+    if not isinstance(tool_input.get("plan"), str) or not isinstance(tool_input.get("planFilePath"), str):
+        return None
+    allowed = tool_input.get("allowedPrompts")
+    if not isinstance(allowed, list):
+        return None
+    prompts: list[str] = []
+    for item in allowed:
+        if (
+            not isinstance(item, dict)
+            or tuple(sorted(item)) != tuple(sorted(CLAUDE_EXIT_PLAN_ALLOWED_PROMPT_KEYS))
+            or not isinstance(item.get("prompt"), str)
+            or not item["prompt"].strip()
+            or not isinstance(item.get("tool"), str)
+            or not item["tool"].strip()
+        ):
+            return None
+        prompts.append(str(item["prompt"]))
+    return prompts
+
+
+def claude_derived_tool_result_prompt(obj: dict[str, Any]) -> str | None:
+    """Extract the exact delegated prompt echoed by a Claude subagent result."""
+
+    marker = obj.get("sourceToolAssistantUUID")
+    result = obj.get("toolUseResult")
+    allowed_keysets = {tuple(sorted(keyset)) for keyset in CLAUDE_DERIVED_TOOL_RESULT_PROMPT_KEYSETS}
+    if (
+        not isinstance(marker, str)
+        or not marker
+        or not isinstance(result, dict)
+        or tuple(sorted(result)) not in allowed_keysets
+    ):
+        return None
+    for field in CLAUDE_DERIVED_TOOL_RESULT_TEXT_FIELDS:
+        if field in result and not isinstance(result.get(field), str):
+            return None
+    for field in CLAUDE_DERIVED_TOOL_RESULT_INTEGER_FIELDS:
+        if field in result and (isinstance(result.get(field), bool) or not isinstance(result.get(field), int)):
+            return None
+    for field in ("canReadOutputFile", "isAsync"):
+        if field in result and not isinstance(result.get(field), bool):
+            return None
+    if "content" in result and not isinstance(result.get("content"), list):
+        return None
+    for field in ("toolStats", "usage"):
+        if field in result and not isinstance(result.get(field), dict):
+            return None
+    prompt = result.get("prompt")
+    return prompt if isinstance(prompt, str) and prompt.strip() else None
+
+
+def claude_derived_tool_result_job_prompts(obj: dict[str, Any]) -> list[str] | None:
+    """Extract prompts from the exact provider-emitted durable-job result envelope."""
+
+    marker = obj.get("sourceToolAssistantUUID")
+    result = obj.get("toolUseResult")
+    if (
+        not isinstance(marker, str)
+        or not marker
+        or not isinstance(result, dict)
+        or set(result) != {"jobs"}
+        or not isinstance(result.get("jobs"), list)
+    ):
+        return None
+    prompts: list[str] = []
+    for job in result["jobs"]:
+        if (
+            not isinstance(job, dict)
+            or tuple(sorted(job)) != tuple(sorted(CLAUDE_DERIVED_TOOL_RESULT_JOB_KEYS))
+            or any(not isinstance(job.get(field), str) for field in ("cron", "humanSchedule", "id", "prompt"))
+            or any(not isinstance(job.get(field), bool) for field in ("durable", "recurring"))
+            or not job["id"].strip()
+            or not job["prompt"].strip()
+        ):
+            return None
+        prompts.append(str(job["prompt"]))
+    return prompts
+
+
+def claude_attachment_prompt_texts(attachment: dict[str, Any]) -> list[str] | None:
+    """Parse exact textual attachment envelopes; media remains an explicit gap."""
+
+    attachment_type = attachment.get("type")
+    if attachment_type == "goal_status":
+        condition = attachment.get("condition")
+        return [condition] if isinstance(condition, str) and condition.strip() else None
+    if attachment_type not in {"hook_additional_context", "queued_command"}:
+        return []
+    field = "content" if attachment_type == "hook_additional_context" else "prompt"
+    value = attachment.get(field)
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if not isinstance(value, list):
+        return None
+    if attachment_type == "hook_additional_context":
+        return (
+            [item for item in value if isinstance(item, str) and item.strip()]
+            if all(isinstance(item, str) for item in value)
+            else None
+        )
+    texts: list[str] = []
+    for block in value:
+        if (
+            not isinstance(block, dict)
+            or set(block) != {"text", "type"}
+            or block.get("type") != "text"
+            or not isinstance(block.get("text"), str)
+        ):
+            return None
+        if block["text"].strip():
+            texts.append(str(block["text"]))
+    return texts
+
+
 def claude_assistant_prompt_texts(obj: dict[str, Any]) -> list[str]:
     message = obj.get("message")
     content = message.get("content") if isinstance(message, dict) else None
@@ -1371,6 +1513,10 @@ def claude_assistant_prompt_texts(obj: dict[str, Any]) -> list[str]:
             value = tool_input.get(field)
             if isinstance(value, str) and value.strip():
                 texts.append(value)
+        if name == "ExitPlanMode":
+            nested = claude_exit_plan_allowed_prompts(tool_input)
+            if nested is not None:
+                texts.extend(nested)
     return texts
 
 
@@ -1417,12 +1563,8 @@ def prompt_texts_for(lifecycle: Any, source: str, obj: dict[str, Any]) -> list[s
     if source == "claude-projects" and obj.get("type") == "attachment":
         attachment = obj.get("attachment")
         if isinstance(attachment, dict):
-            if attachment.get("type") == "queued_command":
-                return lifecycle.text_from_content(attachment.get("prompt"))
-            if attachment.get("type") == "goal_status":
-                return lifecycle.text_from_content(attachment.get("condition"))
-            if attachment.get("type") == "hook_additional_context":
-                return lifecycle.text_from_content(attachment.get("content"))
+            texts = claude_attachment_prompt_texts(attachment)
+            return texts or []
         return []
     if source == "claude-projects" and obj.get("type") == "assistant":
         return claude_assistant_prompt_texts(obj)
@@ -1465,16 +1607,22 @@ def prompt_texts_for(lifecycle: Any, source: str, obj: dict[str, Any]) -> list[s
             if not isinstance(message, dict) or message.get("role") not in (None, "user"):
                 return []
             content = message.get("content")
+            texts: list[str] = []
             if isinstance(content, str):
-                return [content] if content.strip() else []
-            if isinstance(content, list):
-                texts: list[str] = []
+                if content.strip():
+                    texts.append(content)
+            elif isinstance(content, list):
                 for block in content:
                     if not isinstance(block, dict) or block.get("type") != "text":
                         continue
                     texts.extend(lifecycle.text_from_content(block.get("text")))
-                return texts
-            return []
+            derived_prompt = claude_derived_tool_result_prompt(obj)
+            if derived_prompt is not None:
+                texts.append(derived_prompt)
+            derived_job_prompts = claude_derived_tool_result_job_prompts(obj)
+            if derived_job_prompts is not None:
+                texts.extend(derived_job_prompts)
+            return texts
     parser_source = "gemini-tmp-agy" if source == "gemini-tmp" else source
     return lifecycle.prompt_texts(parser_source, obj)
 
@@ -1483,6 +1631,8 @@ def strict_json_records(
     path: Path,
     *,
     limits: ResourceLimits | None = None,
+    max_source_bytes: int | None = None,
+    max_records: int | None = None,
 ) -> tuple[list[dict[str, Any]], str | None, bool]:
     """Read one supported JSON source atomically or return a closed error.
 
@@ -1492,15 +1642,17 @@ def strict_json_records(
     """
 
     active_limits = limits or runtime_limits({})
+    byte_ceiling = max_source_bytes or active_limits.max_source_bytes_per_unit
+    record_ceiling = max_records or active_limits.max_events_per_unit
     is_jsonl = path.suffix == ".jsonl" or path.name == "history.jsonl"
     if not is_jsonl and path.suffix != ".json":
         return [], None, False
     try:
         size = path.stat().st_size
-        if size > active_limits.max_source_bytes_per_unit:
+        if size > byte_ceiling:
             return (
                 [],
-                f"{path}: source is {size} bytes; bounded ceiling is {active_limits.max_source_bytes_per_unit}",
+                f"{path}: source is {size} bytes; bounded ceiling is {byte_ceiling}",
                 True,
             )
         if is_jsonl:
@@ -1509,10 +1661,10 @@ def strict_json_records(
                 for line_number, line in enumerate(handle, start=1):
                     if not line.strip():
                         continue
-                    if len(rows) >= active_limits.max_events_per_unit:
+                    if len(rows) >= record_ceiling:
                         return (
                             [],
-                            f"{path}: record count exceeds bounded ceiling {active_limits.max_events_per_unit}",
+                            f"{path}: record count exceeds bounded ceiling {record_ceiling}",
                             True,
                         )
                     try:
@@ -1529,10 +1681,10 @@ def strict_json_records(
     if isinstance(value, dict):
         return [value], None, True
     if isinstance(value, list) and all(isinstance(row, dict) for row in value):
-        if len(value) > active_limits.max_events_per_unit:
+        if len(value) > record_ceiling:
             return (
                 [],
-                f"{path}: record count exceeds bounded ceiling {active_limits.max_events_per_unit}",
+                f"{path}: record count exceeds bounded ceiling {record_ceiling}",
                 True,
             )
         return list(value), None, True
@@ -1565,7 +1717,14 @@ def strict_native_records(
             return [], f"{path}: unreadable JSON source: {exc}", True
         if size > adapter_limit:
             return [], f"{path}: remote task metadata exceeds adapter ceiling {adapter_limit}", True
-    records, error, supported = strict_json_records(path, limits=active_limits)
+    source_schema = SOURCE_RECORD_SCHEMAS.get("claude-project-jsonl-v1", {})
+    source_specific_limits = bool(source == "claude-projects" and path.suffix.lower() == ".jsonl")
+    records, error, supported = strict_json_records(
+        path,
+        limits=active_limits,
+        max_source_bytes=(int(source_schema["max_probe_bytes"]) if source_specific_limits else None),
+        max_records=(int(source_schema["max_records"]) if source_specific_limits else None),
+    )
     if error or not supported:
         return records, error, supported
     if adapter_id != "claude-remote-task-command-v1":
@@ -1831,6 +1990,12 @@ def native_record_schema_error(
                     return f"{path}:{index + 1}: unknown Claude project JSONL record schema"
                 if record_type == "user":
                     message = record.get("message")
+                    message_content = message.get("content") if isinstance(message, dict) else None
+                    if isinstance(message_content, list) and any(
+                        isinstance(block, dict) and block.get("type") in {"document", "image"}
+                        for block in message_content
+                    ):
+                        return f"{path}:{index + 1}: Claude user media requires an explicit content adapter"
                     if (
                         not isinstance(message, dict)
                         or set(message) != {"content", "role"}
@@ -1843,6 +2008,19 @@ def native_record_schema_error(
                         for block in content:
                             if isinstance(block, dict) and block.get("type") == "tool_result":
                                 opaque_prompt_subtrees.add(id(block.get("content")))
+                    tool_result = record.get("toolUseResult")
+                    if isinstance(tool_result, dict) and "prompt" in tool_result:
+                        if claude_derived_tool_result_prompt(record) is None:
+                            return f"{path}:{index + 1}: unknown Claude derived tool-result prompt schema"
+                        handled_prompt_fields.add((id(tool_result), "prompt"))
+                        for field in ("content", "toolStats", "usage"):
+                            if field in tool_result:
+                                opaque_prompt_subtrees.add(id(tool_result.get(field)))
+                    if isinstance(tool_result, dict) and "jobs" in tool_result:
+                        if claude_derived_tool_result_job_prompts(record) is None:
+                            return f"{path}:{index + 1}: unknown Claude derived tool-result jobs schema"
+                        for job in tool_result["jobs"]:
+                            handled_prompt_fields.add((id(job), "prompt"))
                 if record_type == "assistant":
                     message = record.get("message")
                     content = message.get("content") if isinstance(message, dict) else None
@@ -1865,6 +2043,12 @@ def native_record_schema_error(
                         if any(field in tool_input and not isinstance(tool_input.get(field), str) for field in fields):
                             return f"{path}:{index + 1}: unknown Claude assistant prompt-field schema"
                         handled_prompt_fields.update((id(tool_input), field) for field in fields if field in tool_input)
+                        if "allowedPrompts" in tool_input:
+                            allowed_prompts = claude_exit_plan_allowed_prompts(tool_input)
+                            if name != "ExitPlanMode" or allowed_prompts is None:
+                                return f"{path}:{index + 1}: unknown Claude allowed-prompts schema"
+                            for item in tool_input["allowedPrompts"]:
+                                handled_prompt_fields.add((id(item), "prompt"))
                 if record_type == "attachment":
                     attachment = record.get("attachment")
                     if not isinstance(attachment, dict) or attachment.get("type") not in CLAUDE_ATTACHMENT_TYPES:
@@ -1878,12 +2062,12 @@ def native_record_schema_error(
                         field in attachment and field not in prompt_fields for field in CLAUDE_UNEXPECTED_PROMPT_FIELDS
                     ):
                         return f"{path}:{index + 1}: unknown Claude attachment prompt-carrier schema"
-                    if any(
-                        field in attachment and not isinstance(attachment.get(field), str) for field in prompt_fields
-                    ):
+                    if prompt_fields and claude_attachment_prompt_texts(attachment) is None:
+                        if attachment_type == "queued_command" and isinstance(attachment.get("prompt"), list):
+                            return (
+                                f"{path}:{index + 1}: Claude queued-command media requires an explicit content adapter"
+                            )
                         return f"{path}:{index + 1}: unknown Claude attachment prompt-field schema"
-                    if attachment.get("type") == "queued_command" and not content_valid(attachment.get("prompt")):
-                        return f"{path}:{index + 1}: unknown Claude queued-command schema"
                     if attachment.get("type") == "goal_status" and (
                         set(attachment) - set(CLAUDE_GOAL_STATUS_KEYS)
                         or not isinstance(attachment.get("condition"), str)
@@ -2009,6 +2193,8 @@ def _discover_candidate(
             rows.source_alias_blocker_counts[str(custody.blocker_reason)] += 1
         return True
     try:
+        if custody.alias_contract_id == CLAUDE_SUBAGENT_SESSION_ALIAS_ID and path.is_dir():
+            return True
         if custody.alias_contract_id is None and not path.is_file():
             return True
         source_mtime = (
@@ -2930,7 +3116,10 @@ def scan_regular_sources(
                     excluded_unit_receipts.pop(key, None)
                     counts["errors"] += 1
                     errors.append(f"{source}:{path}: source changed during cached exclusion validation")
-                    if exclusion_id == CLAUDE_PROJECT_MEMORY_ALIAS_ID:
+                    if exclusion_id in {
+                        CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+                        CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+                    }:
                         source_alias_blocker_counts["alias_changed"] += 1
                     continue
                 exclusion_counts[exclusion_id] += 1
@@ -2969,7 +3158,10 @@ def scan_regular_sources(
             if confirmed is None:
                 excluded_unit_receipts.pop(key, None)
                 adapted_unit_receipts.pop(key, None)
-                if exclusion_id == CLAUDE_PROJECT_MEMORY_ALIAS_ID:
+                if exclusion_id in {
+                    CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+                    CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+                }:
                     counts["errors"] += 1
                     errors.append(f"{source}:{path}: approved alias changed during exclusion classification")
                     source_alias_blocker_counts["alias_changed"] += 1
@@ -2980,7 +3172,11 @@ def scan_regular_sources(
                 continue
             confirmed_id, related_signatures, related_evidence = confirmed
             related_changed = bool(
-                exclusion_id == CLAUDE_PROJECT_MEMORY_ALIAS_ID
+                exclusion_id
+                in {
+                    CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+                    CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+                }
                 and (
                     current_exclusion_related_signatures(lifecycle, source, path, exclusion_id) != related_signatures
                     or current_exclusion_related_evidence(lifecycle, source, path, exclusion_id) != related_evidence
@@ -2989,7 +3185,10 @@ def scan_regular_sources(
             if source_unit_signature(lifecycle, source, path) != signature or related_changed:
                 counts["errors"] += 1
                 errors.append(f"{source}:{path}: source changed during exclusion classification")
-                if exclusion_id == CLAUDE_PROJECT_MEMORY_ALIAS_ID:
+                if exclusion_id in {
+                    CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+                    CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+                }:
                     source_alias_blocker_counts["alias_changed"] += 1
                 continue
             excluded_unit_receipts[key] = {

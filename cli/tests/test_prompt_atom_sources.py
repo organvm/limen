@@ -49,6 +49,51 @@ def _claude_memory_alias_fixture(module, tmp_path: Path, *, absolute: bool = Fal
     return lifecycle, projects, alias, target
 
 
+def _claude_subagent_alias_fixture(module, tmp_path: Path):
+    projects = tmp_path / ".claude" / "projects"
+    target = projects / "project" / "target-session" / "subagents" / "agent.jsonl"
+    alias = projects / "project" / "alias-session" / "subagents" / target.name
+    target.parent.mkdir(parents=True)
+    alias.parent.mkdir(parents=True)
+    target.write_text(
+        json.dumps(
+            {
+                "type": "user",
+                "message": {"role": "user", "content": "delegated alias target"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    alias.symlink_to(target)
+    lifecycle = module.load_lifecycle_module()
+    lifecycle.LOCAL_SOURCES = [("claude-projects", projects, ("*",))]
+    lifecycle.OPENCODE_DB = tmp_path / "missing-opencode.db"
+    lifecycle.AGY_CLI_CONVERSATIONS = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    lifecycle.HOME = tmp_path
+    return lifecycle, projects, alias, target
+
+
+def _scan_claude_rows(module, tmp_path: Path, rows: list[dict]):
+    projects = tmp_path / ".claude" / "projects"
+    transcript = projects / "project" / "session.jsonl"
+    transcript.parent.mkdir(parents=True)
+    transcript.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    lifecycle = module.load_lifecycle_module()
+    lifecycle.LOCAL_SOURCES = [("claude-projects", projects, ("*",))]
+    lifecycle.OPENCODE_DB = tmp_path / "missing-opencode.db"
+    lifecycle.AGY_CLI_CONVERSATIONS = tmp_path / "missing-agy"
+    lifecycle.HOME = tmp_path / "missing-home"
+    events, result = module.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=module.ScanBudget(limit=1),
+        rows=[{"source": "claude-projects", "path": transcript}],
+    )
+    return events, result, transcript
+
+
 def test_claude_tool_and_transport_surfaces_never_become_operator_input():
     sources = _load()
     lifecycle = sources.load_lifecycle_module()
@@ -3150,6 +3195,110 @@ def test_memory_alias_second_pass_is_zero_growth_byte_identical_and_public_safe(
     assert alias.name not in encoded
 
 
+def test_claude_subagent_cross_session_alias_is_excluded_with_independent_target_custody(
+    tmp_path: Path,
+    monkeypatch,
+):
+    sources = _load()
+    lifecycle, _projects, alias, target = _claude_subagent_alias_fixture(sources, tmp_path)
+    rows = sources.regular_source_rows(lifecycle, None)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=None),
+        rows=rows,
+    )
+
+    alias_key = sources.cursor_unit_key("claude-projects", alias)
+    target_key = sources.cursor_unit_key("claude-projects", target)
+    receipt = result["excluded_unit_receipts"][alias_key]
+    assert [event["text"] for event in events] == ["delegated alias target"]
+    assert {event["authority"] for event in events} == {"derived"}
+    assert result["errors"] == []
+    assert result["unsupported"] == []
+    assert result["source_alias_blocker_counts"] == {}
+    assert receipt["contract_id"] == sources.CLAUDE_SUBAGENT_SESSION_ALIAS_ID
+    assert receipt["related_signatures"]["subagent_target"] == sources.file_signature(target)
+    assert receipt["related_evidence"]["subagent_target"]["target_locator"] == str(target)
+    assert result["files"][target_key] == sources.file_signature(target)
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    _events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=tmp_path / "missing-cursor.json"),
+        days=None,
+        max_files=10,
+    )
+    assert cursor["scope"] == "all"
+    assert sources.validate_source_adapter_cursor(cursor) == []
+    from limen.prompt_corpus import DEFAULT_POLICY, build_snapshot, public_projection
+
+    public = public_projection(build_snapshot([], [], [], DEFAULT_POLICY, cursor))
+    encoded = json.dumps(public, sort_keys=True)
+    assert str(alias) not in encoded
+    assert str(target) not in encoded
+
+    missing_target = json.loads(json.dumps(cursor))
+    missing_target["source_units"].remove(target_key)
+    missing_target["source_unit_count"] -= 1
+    missing_target["source_units_digest"] = sources.digest(missing_target["source_units"])
+    missing_target["files"].pop(target_key)
+    assert any(
+        "subagent-session alias target lacks independent custody" in error
+        for error in sources.validate_source_adapter_cursor(missing_target)
+    )
+
+
+@pytest.mark.parametrize("near_miss", ["relative", "other-project", "same-session", "link-chain"])
+def test_claude_subagent_alias_near_misses_remain_fail_closed(tmp_path: Path, near_miss: str):
+    sources = _load()
+    lifecycle, projects, alias, target = _claude_subagent_alias_fixture(sources, tmp_path)
+    alias.unlink()
+    if near_miss == "relative":
+        alias.symlink_to(Path("..") / ".." / "target-session" / "subagents" / target.name)
+    elif near_miss == "other-project":
+        other = projects / "other-project" / "target-session" / "subagents" / target.name
+        other.parent.mkdir(parents=True)
+        other.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
+        alias.symlink_to(other)
+    elif near_miss == "same-session":
+        other = alias.with_name("other.jsonl")
+        other.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
+        alias.symlink_to(other)
+    else:
+        chained = target.with_name("chained.jsonl")
+        chained.symlink_to(target)
+        alias.symlink_to(chained)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        rows=[{"source": "claude-projects", "path": alias}],
+    )
+
+    assert events == []
+    assert len(result["errors"]) == 1
+    assert sum(result["source_alias_blocker_counts"].values()) == 1
+    assert result["excluded_unit_receipts"] == {}
+
+
+def test_claude_subagent_directory_alias_is_metadata_only_and_not_a_source_unit(tmp_path: Path):
+    sources = _load()
+    lifecycle, projects, _alias, _target = _claude_subagent_alias_fixture(sources, tmp_path)
+    target_dir = projects / "project" / "target-session" / "subagents" / "agent" / "nested"
+    alias_dir = projects / "project" / "alias-session" / "subagents" / "agent" / "nested"
+    target_dir.mkdir(parents=True)
+    alias_dir.parent.mkdir(parents=True, exist_ok=True)
+    alias_dir.symlink_to(target_dir, target_is_directory=True)
+
+    rows = sources.regular_source_rows(lifecycle, None)
+
+    assert not rows.discovery_errors
+    assert all(Path(row["path"]) != alias_dir for row in rows)
+
+
 def test_structural_exclusion_near_misses_remain_adapter_gaps(tmp_path: Path):
     sources = _load()
     lifecycle = sources.load_lifecycle_module()
@@ -3351,6 +3500,66 @@ def test_claude_remote_task_command_enforces_its_hashed_adapter_byte_ceiling(tmp
     assert supported is True
     assert records == []
     assert f"adapter ceiling {limit}" in str(error)
+
+
+def test_claude_jsonl_uses_its_hashed_source_ceiling_without_unbounding_other_families(
+    tmp_path: Path,
+    monkeypatch,
+):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    projects = tmp_path / ".claude" / "projects"
+    transcript = projects / "project" / "session.jsonl"
+    transcript.parent.mkdir(parents=True)
+    schema = sources.SOURCE_RECORD_SCHEMAS["claude-project-jsonl-v1"]
+    monkeypatch.setitem(schema, "max_probe_bytes", 4096)
+    monkeypatch.setitem(schema, "max_records", 3)
+    limits = sources.ResourceLimits(
+        max_source_bytes_per_unit=1,
+        max_events_per_unit=1,
+        max_discovery_units=10,
+        max_classifier_input_bytes=1024,
+        max_classifier_output_bytes=1024,
+        max_classifier_stderr_bytes=1024,
+        max_classifier_occurrences=10,
+    )
+    rows = [{"type": "system"}, {"type": "system"}, {"type": "system"}]
+    transcript.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    records, error, supported = sources.strict_native_records(
+        lifecycle,
+        "claude-projects",
+        transcript,
+        sources.file_signature(transcript),
+        limits=limits,
+    )
+    assert supported is True
+    assert error is None
+    assert len(records) == 3
+
+    transcript.write_text("".join(json.dumps(row) + "\n" for row in [*rows, {"type": "system"}]), encoding="utf-8")
+    records, error, supported = sources.strict_native_records(
+        lifecycle,
+        "claude-projects",
+        transcript,
+        sources.file_signature(transcript),
+        limits=limits,
+    )
+    assert supported is True
+    assert records == []
+    assert "record count exceeds bounded ceiling 3" in str(error)
+
+    transcript.write_text("x" * 4097, encoding="utf-8")
+    records, error, supported = sources.strict_native_records(
+        lifecycle,
+        "claude-projects",
+        transcript,
+        sources.file_signature(transcript),
+        limits=limits,
+    )
+    assert supported is True
+    assert records == []
+    assert "bounded ceiling is 4096" in str(error)
 
 
 def test_claude_subagent_and_workflow_paths_force_derived_authority_without_sidechain_flag(
@@ -3827,6 +4036,333 @@ def test_claude_meta_compact_and_tool_originated_user_rows_never_gain_operator_a
         "continuation_summary",
         "delegated_task_frame",
     ]
+
+
+@pytest.mark.parametrize("keyset_index", range(5))
+def test_claude_derived_tool_result_prompt_shapes_are_preserved_exactly(
+    tmp_path: Path,
+    keyset_index: int,
+):
+    sources = _load()
+    keyset = sources.CLAUDE_DERIVED_TOOL_RESULT_PROMPT_KEYSETS[keyset_index]
+    result = {}
+    for field in keyset:
+        if field in {"canReadOutputFile", "isAsync"}:
+            result[field] = True
+        elif field in sources.CLAUDE_DERIVED_TOOL_RESULT_INTEGER_FIELDS:
+            result[field] = 1
+        elif field == "content":
+            result[field] = []
+        elif field in {"toolStats", "usage"}:
+            result[field] = {}
+        else:
+            result[field] = "derived prompt" if field == "prompt" else f"fixture-{field}"
+    row = {
+        "type": "user",
+        "sourceToolAssistantUUID": "assistant-source",
+        "message": {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "tool-one",
+                    "content": "ordinary result body",
+                }
+            ],
+        },
+        "toolUseResult": result,
+    }
+
+    events, scan, _transcript = _scan_claude_rows(sources, tmp_path, [row])
+
+    assert scan["errors"] == []
+    assert scan["unsupported"] == []
+    assert [event["text"] for event in events] == ["derived prompt"]
+    assert {event["provenance"] for event in events} == {"delegated_task_frame"}
+    assert {event["authority"] for event in events} == {"derived"}
+
+
+@pytest.mark.parametrize("near_miss", ["extra-key", "nontext-prompt", "missing-marker", "boolean-total"])
+def test_claude_derived_tool_result_prompt_near_misses_stay_unsupported(
+    tmp_path: Path,
+    near_miss: str,
+):
+    sources = _load()
+    result = {
+        "agentId": "agent",
+        "canReadOutputFile": True,
+        "description": "fixture",
+        "isAsync": True,
+        "outputFile": "fixture",
+        "prompt": "derived prompt",
+        "resolvedModel": "fixture",
+        "status": "done",
+    }
+    row = {
+        "type": "user",
+        "sourceToolAssistantUUID": "assistant-source",
+        "message": {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "tool-one", "content": "result"}],
+        },
+        "toolUseResult": result,
+    }
+    if near_miss == "extra-key":
+        result["futureCarrier"] = "unknown"
+    elif near_miss == "nontext-prompt":
+        result["prompt"] = ["not exact text"]
+    elif near_miss == "missing-marker":
+        row.pop("sourceToolAssistantUUID")
+    else:
+        result.clear()
+        result.update(
+            {
+                "agentId": "agent",
+                "agentType": "fixture",
+                "content": [],
+                "prompt": "derived prompt",
+                "resolvedModel": "fixture",
+                "status": "done",
+                "totalDurationMs": True,
+                "totalTokens": 1,
+                "totalToolUseCount": 1,
+                "usage": {},
+            }
+        )
+
+    events, scan, transcript = _scan_claude_rows(sources, tmp_path, [row])
+
+    key = sources.cursor_unit_key("claude-projects", transcript)
+    assert events == []
+    assert scan["unsupported"] == [key]
+    assert key not in scan["files"]
+
+
+def test_claude_derived_tool_result_jobs_are_preserved_as_exact_derived_segments(tmp_path: Path):
+    sources = _load()
+    row = {
+        "type": "user",
+        "sourceToolAssistantUUID": "assistant-source",
+        "message": {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "tool-one", "content": "result"}],
+        },
+        "toolUseResult": {
+            "jobs": [
+                {
+                    "cron": "0 9 * * *",
+                    "durable": True,
+                    "humanSchedule": "daily at nine",
+                    "id": "job-one",
+                    "prompt": "first derived job prompt",
+                    "recurring": True,
+                },
+                {
+                    "cron": "",
+                    "durable": False,
+                    "humanSchedule": "once",
+                    "id": "job-two",
+                    "prompt": "second derived job prompt",
+                    "recurring": False,
+                },
+            ]
+        },
+    }
+
+    events, scan, _transcript = _scan_claude_rows(sources, tmp_path, [row])
+
+    assert scan["errors"] == []
+    assert scan["unsupported"] == []
+    assert [event["text"] for event in events] == [
+        "first derived job prompt",
+        "second derived job prompt",
+    ]
+    assert {event["provenance"] for event in events} == {"delegated_task_frame"}
+    assert {event["authority"] for event in events} == {"derived"}
+
+
+@pytest.mark.parametrize(
+    "near_miss",
+    ["extra-job-key", "nontext-prompt", "missing-marker", "nonboolean-durable", "extra-result-key"],
+)
+def test_claude_derived_tool_result_jobs_near_misses_stay_unsupported(
+    tmp_path: Path,
+    near_miss: str,
+):
+    sources = _load()
+    job = {
+        "cron": "0 9 * * *",
+        "durable": True,
+        "humanSchedule": "daily at nine",
+        "id": "job-one",
+        "prompt": "derived job prompt",
+        "recurring": True,
+    }
+    row = {
+        "type": "user",
+        "sourceToolAssistantUUID": "assistant-source",
+        "message": {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "tool-one", "content": "result"}],
+        },
+        "toolUseResult": {"jobs": [job]},
+    }
+    if near_miss == "extra-job-key":
+        job["futureCarrier"] = "unknown"
+    elif near_miss == "nontext-prompt":
+        job["prompt"] = ["not exact text"]
+    elif near_miss == "missing-marker":
+        row.pop("sourceToolAssistantUUID")
+    elif near_miss == "nonboolean-durable":
+        job["durable"] = 1
+    else:
+        row["toolUseResult"]["status"] = "unknown"
+
+    events, scan, transcript = _scan_claude_rows(sources, tmp_path, [row])
+
+    key = sources.cursor_unit_key("claude-projects", transcript)
+    assert events == []
+    assert scan["unsupported"] == [key]
+    assert key not in scan["files"]
+
+
+def test_claude_exit_plan_allowed_prompts_are_exact_derived_segments(tmp_path: Path):
+    sources = _load()
+    row = {
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "name": "ExitPlanMode",
+                    "input": {
+                        "allowedPrompts": [
+                            {"prompt": "Run the exact focused predicate.", "tool": "Bash"},
+                            {"prompt": "Inspect the bounded receipt.", "tool": "Read"},
+                        ],
+                        "plan": "generated plan body",
+                        "planFilePath": "private plan path",
+                    },
+                }
+            ],
+        },
+    }
+
+    events, scan, _transcript = _scan_claude_rows(sources, tmp_path, [row])
+
+    assert scan["unsupported"] == []
+    assert [event["text"] for event in events] == [
+        "Run the exact focused predicate.",
+        "Inspect the bounded receipt.",
+    ]
+    assert {event["authority"] for event in events} == {"derived"}
+
+
+@pytest.mark.parametrize("near_miss", ["wrong-tool", "extra-item-key", "nontext-prompt"])
+def test_claude_allowed_prompt_near_misses_stay_unsupported(tmp_path: Path, near_miss: str):
+    sources = _load()
+    item = {"prompt": "Run the exact focused predicate.", "tool": "Bash"}
+    tool_use = {
+        "type": "tool_use",
+        "name": "ExitPlanMode",
+        "input": {
+            "allowedPrompts": [item],
+            "plan": "generated plan body",
+            "planFilePath": "private plan path",
+        },
+    }
+    if near_miss == "wrong-tool":
+        tool_use["name"] = "FuturePlanMode"
+    elif near_miss == "extra-item-key":
+        item["future"] = "unknown"
+    else:
+        item["prompt"] = ["not exact text"]
+    row = {
+        "type": "assistant",
+        "message": {"role": "assistant", "content": [tool_use]},
+    }
+
+    events, scan, transcript = _scan_claude_rows(sources, tmp_path, [row])
+
+    assert events == []
+    assert scan["unsupported"] == [sources.cursor_unit_key("claude-projects", transcript)]
+
+
+def test_claude_list_valued_text_attachments_converge_but_media_stays_explicit(tmp_path: Path):
+    sources = _load()
+    textual_rows = [
+        {
+            "type": "attachment",
+            "attachment": {
+                "type": "hook_additional_context",
+                "content": ["first derived context", "second derived context"],
+            },
+        },
+        {
+            "type": "attachment",
+            "attachment": {
+                "type": "queued_command",
+                "prompt": [{"type": "text", "text": "queued exact text"}],
+            },
+        },
+    ]
+    events, scan, _transcript = _scan_claude_rows(sources, tmp_path / "textual", textual_rows)
+
+    assert scan["unsupported"] == []
+    assert [event["text"] for event in events] == [
+        "first derived context",
+        "second derived context",
+        "queued exact text",
+    ]
+    assert [event["provenance"] for event in events] == [
+        "delegated_task_frame",
+        "delegated_task_frame",
+        "unknown_user_input",
+    ]
+
+    media_row = {
+        "type": "attachment",
+        "attachment": {
+            "type": "queued_command",
+            "prompt": [
+                {"type": "text", "text": "must not be partially extracted"},
+                {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": "image/png", "data": "cGl4ZWw="},
+                },
+            ],
+        },
+    }
+    media_events, media_scan, media_path = _scan_claude_rows(sources, tmp_path / "media", [media_row])
+    assert media_events == []
+    assert media_scan["unsupported"] == [sources.cursor_unit_key("claude-projects", media_path)]
+
+
+def test_claude_mixed_user_text_and_media_never_partially_converges(tmp_path: Path):
+    sources = _load()
+    row = {
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "must remain bound to media"},
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": "cGRm",
+                    },
+                },
+            ],
+        },
+    }
+
+    events, scan, transcript = _scan_claude_rows(sources, tmp_path, [row])
+
+    assert events == []
+    assert scan["unsupported"] == [sources.cursor_unit_key("claude-projects", transcript)]
 
 
 def test_claude_tool_result_with_extra_prompt_carrier_is_an_explicit_gap(tmp_path: Path):
