@@ -245,7 +245,13 @@ def status(agent, status):
     is_flag=True,
     help="Print the complete machine-readable universe.",
 )
-def progress(view, scope, level, limit, show_all, ascii_only, json_output):
+@click.option(
+    "--report-file",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Write the complete machine-readable universe to a JSON receipt.",
+)
+def progress(view, scope, level, limit, show_all, ascii_only, json_output, report_file):
     """Zoom from portfolio progress bars into every active debt leaf.
 
     Sources are coverage-aware: a dark or stale estate sensor remains visible as
@@ -261,6 +267,10 @@ def progress(view, scope, level, limit, show_all, ascii_only, json_output):
         raise click.ClickException("cannot build progress universe")
     limen = load_limen_file(tasks_path)
     snapshot = build_progress_snapshot(limen, root)
+    if report_file:
+        output = Path(report_file).expanduser()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(snapshot, indent=2) + "\n", encoding="utf-8")
     if json_output:
         click.echo(json.dumps(snapshot, indent=2))
         return
