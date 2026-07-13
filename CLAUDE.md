@@ -181,8 +181,11 @@ Concretely, from precedent:
 - **`settings.json` / hook-arming blocked** (self-modification boundary) → stage the exact
   validated file, hand the human the one required copy-paste, and do the surrounding branch,
   commit, rebase, push, PR, and merge work yourself.
-- **A permission prompt recurs** → broaden the allow rule to the whole class of command
-  (root-to-leaf), never re-approve the same literal string one prompt at a time. (Insights
+- **A permission prompt recurs** → run `scripts/claude-permission-preflight.py` against the exact
+  unattended command packet and fix the contradiction at its owning settings scope before relaunch.
+  `ask` wins over Auto, bypass, narrower allow rules, and hook allow decisions. For build cleanup,
+  declare the generated path and use Auto with its default safety policy retained; do not trade a
+  recurring prompt for a broad `rm` bypass. Never re-approve one literal string at a time. (Insights
   lineage: a too-narrow allowlist caused 10+ repeat prompts in one session.)
 - **A bridge / connectivity / auth check reports blocked** → attempt the documented bootstrap or
   reconnection path once before reporting; a passive re-report of a known-blocked status is a

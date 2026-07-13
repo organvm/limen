@@ -197,6 +197,11 @@ gates:
     scoped: false
     owner: lifecycle
     note: "Path-aware trusted-Bash decision matrix (hermetic fixture) — the permission-hang killer; destructive verbs auto-approved only on disposable/in-repo paths, force-push/shred never."
+  claude-permission-preflight-test:
+    command: "python3 -m pytest cli/tests/test_claude_permission_preflight.py -q"
+    paths: ["scripts/claude-permission-preflight.py", "cli/tests/test_claude_permission_preflight.py", "scripts/dialogs-silenced.sh", "scripts/hooks/allow-trusted-cd-git.sh", "docs/never-hang-permission-spec.md", "AGENTS.md", "CLAUDE.md"]
+    owner: lifecycle
+    note: "Exact unattended Bash packets fail before launch when effective ask/deny rules override Auto/bypass/hook allow; cleanup is confined to caller-declared generated paths and Auto safety defaults stay armed."
   dispatch-admission:
     command: "python3 scripts/check-dispatch-admission.py"
     paths: ["scripts/dispatch-admission.py", "scripts/check-dispatch-admission.py"]

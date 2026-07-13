@@ -34,22 +34,19 @@ except Exception:
 print((d.get("permissions") or {}).get("defaultMode", ""))
 PY
 )"
-if [ "$mode" = "bypassPermissions" ]; then
-  green "Claude prompts: permissions.defaultMode = bypassPermissions (no in-app prompts)"
+if [ "$mode" = "auto" ]; then
+  green "Claude prompts: permissions.defaultMode = auto (prompt-free with safety classifier)"
 else
-  red "Claude prompts: defaultMode is '${mode:-unset}' — Claude still asks for off-allowlist tools"
-  cure "Simplest total cure — edit $SETTINGS, inside \"permissions\": { … } add:  \"defaultMode\": \"bypassPermissions\","
-  note "An AI cannot set this for you: disabling one's own approval gate is guard-railed by design."
-  note "acceptEdits is NOT enough — it still prompts for Bash. bypassPermissions = truly zero prompts."
-  note "Surgical alternative, already homed as L-AGENT-BASH-PROMPT (#183): generalize the trust hook instead of full bypass."
+  red "Claude prompts: defaultMode is '${mode:-unset}' — safe unattended cleanup requires auto"
+  cure "Set permissions.defaultMode to \"auto\" in $SETTINGS; keep the Auto \$defaults safety policy."
+  note "acceptEdits/default still prompt for Bash; bypass cannot combine prompt-free rm with a path-sensitive personal-data gate."
 fi
 
 # ── 1b. Live-hook drift — deployed hooks must match the repo canonical sources. ──
-# The PreToolUse trust hook is THE mechanism that silences fleet/auto-mode prompts
-# (`--permission-mode auto` overrides bypassPermissions; no settings allow rule can
-# suppress the compound-cd guard, and only a hook `allow` preempts the destructive
-# ask rules for path-gated reap work — docs/never-hang-permission-spec.md). A stale
-# live copy silently reintroduces the prompt flood, so parity is a checked class.
+# The PreToolUse trust hook is the fast path for compound-cd and path-gated reap work.
+# It does NOT override a matching permission ask rule; class 1c checks that separate
+# precedence seam before launch. A stale live copy still reintroduces the prompt flood,
+# so parity remains a checked class.
 ROOT="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)"
 for hf in allow-trusted-cd-git.sh insights-capture.sh; do
   canon="$ROOT/scripts/hooks/$hf"; live="$HOME/.claude/hooks/$hf"
@@ -66,28 +63,22 @@ for hf in allow-trusted-cd-git.sh insights-capture.sh; do
   fi
 done
 
-# ── 1c. Ask-list policy — the five destructive ask rules are the fail-safe backstop. ──
-# If the trust hook ever breaks, behavior must degrade to PROMPTING on rm/force-push,
-# never to silent approval (Bash(*) is in allow, so removing an ask rule = silent allow).
-askdelta="$(python3 - "$SETTINGS" <<'PY' 2>/dev/null
-import json, sys
-want = sorted(["Bash(git push* --force*)", "Bash(git push* -f*)", "Bash(rm:*)", "Bash(rmdir:*)", "Bash(shred:*)"])
-try:
-    d = json.load(open(sys.argv[1]))
-except Exception:
-    print("settings unreadable"); raise SystemExit
-got = sorted((d.get("permissions") or {}).get("ask") or [])
-if got != want:
-    missing = [r for r in want if r not in got]
-    extra = [r for r in got if r not in want]
-    print(f"missing={missing} extra={extra}")
-PY
-)"
-if [ -z "$askdelta" ]; then
-  green "Ask-list policy: the five destructive ask rules are exactly in place (fail-safe backstop)"
+# ── 1c. Effective packet preflight — ask beats Auto/bypass/hook allow. ──
+# The synthetic packet is NEVER executed. It represents the recurring class that stalled
+# HOSPES: enter a project, delete one declared generated-output directory, run tests.
+# The checker reads the locally visible settings stack and proves that no ask/deny rule
+# intercepts the packet while Auto's default safety backstop remains intact.
+PREFLIGHT="$ROOT/scripts/claude-permission-preflight.py"
+probe_cmd="cd \"$ROOT\" && rm -rf .limen-permission-preflight-output && python3 -m pytest -q"
+if [ -f "$PREFLIGHT" ] && preflight_out="$(python3 "$PREFLIGHT" \
+    --project-root "$ROOT" \
+    --generated-path .limen-permission-preflight-output \
+    --command "$probe_cmd" 2>&1)"; then
+  green "Unattended packet preflight: safe generated cleanup + test command cannot prompt"
 else
-  red "Ask-list policy drift: $askdelta"
-  cure "Restore permissions.ask in $SETTINGS to exactly the five rules: Bash(git push* --force*), Bash(git push* -f*), Bash(rm:*), Bash(rmdir:*), Bash(shred:*)."
+  red "Unattended packet preflight: effective settings would block or prompt"
+  [ -n "${preflight_out:-}" ] && note "$preflight_out"
+  cure "Run python3 $PREFLIGHT --project-root <repo> --mode auto --generated-path <generated-dir> --command '<exact packet>'; fix only the named contradiction, retain real human gates, and rerun."
 fi
 
 # ── 1d. Hook wiring — settings must actually run the trust hook on Bash PreToolUse. ──
@@ -108,7 +99,7 @@ if [ "$wired" = "yes" ]; then
   green "Hook wired: hooks.PreToolUse runs ~/.claude/hooks/allow-trusted-cd-git.sh"
 else
   red "Trust hook NOT wired in $SETTINGS hooks.PreToolUse — the compound-cd guard floods every fleet job"
-  cure "Add hooks.PreToolUse matcher \"Bash\" -> command \$HOME/.claude/hooks/allow-trusted-cd-git.sh to $SETTINGS (one paste; agent self-edit of permission files is classifier-blocked)."
+  cure "Add hooks.PreToolUse matcher \"Bash\" -> command \$HOME/.claude/hooks/allow-trusted-cd-git.sh to $SETTINGS; then rerun class 1c because hook allow does not override ask."
 fi
 echo
 

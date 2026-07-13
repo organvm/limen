@@ -68,6 +68,7 @@ task-board' tasks.yaml
 
 expect charter-change 'syntax-changed
 diff-hygiene
+claude-permission-preflight-test
 agent-docs
 check-gates' CLAUDE.md
 

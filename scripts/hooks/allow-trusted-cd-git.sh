@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PreToolUse hook: auto-approve safe Bash commands inside user-owned trees.
+# PreToolUse hook: propose prompt-free approval for safe Bash commands inside user-owned trees.
 #
 # WHY: Claude Code v2.1.x prompts on EVERY compound `cd <dir> && <cmd>` (the
 # "bare-repo / untrusted git hooks" guard, upstream #32985). No settings
@@ -32,9 +32,11 @@
 # command (no leading cd) gets the same analysis, plus a small read-only
 # diagnostics allowlist (ps, route -n get, diskutil list/info, tmutil
 # read-verbs, gh repo view/list/clone) measured from real prompt fossils.
-# The user-level settings `ask` rules stay in place as the fail-safe backstop:
-# if this hook stays silent, behavior degrades to a prompt, never to a silent
-# approval.
+# Permission precedence still applies after the hook: a matching user/project
+# `ask` rule forces a prompt even when this hook emits `allow`. The unattended
+# launch contract therefore runs scripts/claude-permission-preflight.py against
+# the exact packet first. Hook silence leaves Claude's normal Auto safety policy
+# in charge; hard-danger forms remain unapproved here.
 #
 # History:
 #  - originally only handled the `git` case (cd\ *git*).
