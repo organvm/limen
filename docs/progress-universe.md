@@ -27,6 +27,7 @@ limen progress --view workstream --scope financial
 # Print every matching debt leaf or return the complete lossless dataset
 limen progress --all
 limen progress --json-output
+limen progress --report-file logs/progress-universe.json
 ```
 
 Macro bars show only `done` or `archived` tasks divided by the explicit group denominator. Micro bars

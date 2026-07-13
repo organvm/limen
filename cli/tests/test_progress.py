@@ -147,3 +147,20 @@ def test_progress_cli_prints_complete_json_universe(
     payload = json.loads(result.output)
     assert payload["schema"] == "limen.progress-universe.v1"
     assert len(payload["tasks"]) == 4
+
+
+def test_progress_cli_can_write_a_complete_receipt(tmp_path: Path, monkeypatch) -> None:
+    board = _board().model_dump(mode="json")
+    (tmp_path / "tasks.yaml").write_text(json.dumps(board), encoding="utf-8")
+    receipt = tmp_path / "logs" / "progress-universe.json"
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+
+    result = CliRunner().invoke(
+        main,
+        ["progress", "--level", "macro", "--ascii", "--report-file", str(receipt)],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(receipt.read_text(encoding="utf-8"))
+    assert payload["summary"]["active_debt"] == 3
+    assert len(payload["tasks"]) == 4
