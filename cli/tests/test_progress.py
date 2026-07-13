@@ -138,7 +138,10 @@ def test_render_supports_macro_and_micro_zoom() -> None:
     assert "CREDIT CLAIMS" in rendered
     assert "ORIGIN ZOOM" in rendered
     assert "human_prompt" in rendered
+    assert "debit=" in rendered
     assert "ASK-1" in rendered
+    assert "DEBIT:1" in rendered
+    assert "CREDIT:DARK" in rendered
     assert "DUE-1" not in rendered
     assert "never estimated effort" in rendered
     assert progress_bar(50, width=10, ascii_only=True) == "[#####.....]"

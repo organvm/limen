@@ -463,7 +463,9 @@ def render_progress(
                 continue
             lines.append(
                 f"  {_short(name, 22):<22} {progress_bar(group['closure_pct'], width=14, ascii_only=ascii_only)}"
-                f" {group['closure_pct']:>5.1f}%  debt={group['active_debt']:<4} blocked={group['blocked']:<4}"
+                f" {group['closure_pct']:>5.1f}%  debt={group['active_debt']:<4}"
+                f" debit={group['requested_active_debit_runs']:<4}"
+                f" funded={group['underwritten_active_debit_runs']:<4} blocked={group['blocked']:<4}"
             )
         lines.extend(["", "SOURCE COVERAGE"])
         for source in snapshot["source_coverage"]:
@@ -499,6 +501,8 @@ def render_progress(
                 flags.append("NO-CONTRACT")
             if not row["underwriting_ready"]:
                 flags.append("NO-UNDERWRITE")
+            flags.append(f"DEBIT:{row['debit_requested_runs']}")
+            flags.append("CREDIT:FORECAST" if row["credit_forecast"] else "CREDIT:DARK")
             if row["due"]:
                 flags.append(f"DUE:{row['due']}")
             suffix = " " + ",".join(flags) if flags else ""

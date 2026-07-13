@@ -71,6 +71,8 @@ The receipt exposes a double-entry view without pretending that unlike units are
   predicate and receipt target. The owner receipt still has to verify the actual credit.
 - `CAPITAL DEBITS` is cost-weighted underwriting coverage, so one expensive dark loan cannot hide
   behind many cheap well-formed tasks.
+- Macro zoom rows retain both leaf debt and requested/funded run-debits; micro rows show each leaf's
+  debit plus whether its expected credit is explicit or dark.
 
 Debit and credit are reconciled at the leaf, while portfolio totals retain their units. Limen does
 not subtract a token from a merged PR or invent a universal exchange rate; ranking can use explicit
