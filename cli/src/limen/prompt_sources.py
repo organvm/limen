@@ -318,6 +318,85 @@ SOURCE_ADAPTER_RULES: dict[str, dict[str, Any]] = {
         "max_parent_records": 100000,
         "max_parent_session_ids": 16,
     },
+    "opencode-assistant-task-v1": {
+        "source": "opencode-db",
+        "storage": {
+            "parent_table": "message",
+            "child_table": "part",
+            "relationship": [
+                "message.id=part.message_id",
+                "message.session_id=part.session_id",
+            ],
+        },
+        "parent": {
+            "role": "assistant",
+            "message_keysets": [
+                [
+                    "agent",
+                    "cost",
+                    "mode",
+                    "modelID",
+                    "parentID",
+                    "path",
+                    "providerID",
+                    "role",
+                    "time",
+                    "tokens",
+                ],
+                [
+                    "agent",
+                    "cost",
+                    "finish",
+                    "mode",
+                    "modelID",
+                    "parentID",
+                    "path",
+                    "providerID",
+                    "role",
+                    "time",
+                    "tokens",
+                ],
+            ],
+        },
+        "part": {
+            "type": "tool",
+            "tool": "task",
+            "keys": ["callID", "state", "tool", "type"],
+            "identity_field": "callID",
+        },
+        "state": {
+            "running_keys": ["input", "metadata", "status", "time", "title"],
+            "completed_keys": ["input", "metadata", "output", "status", "time", "title"],
+            "metadata_keysets": [
+                ["model", "parentSessionId", "sessionId"],
+                ["model", "parentSessionId", "sessionId", "truncated"],
+                ["model", "outputPath", "parentSessionId", "sessionId", "truncated"],
+            ],
+            "time_keysets": {
+                "running": ["start"],
+                "completed": ["end", "start"],
+            },
+        },
+        "input": {
+            "keysets": [
+                ["description", "prompt", "subagent_type"],
+                ["command", "description", "prompt", "subagent_type"],
+            ],
+            "text_field": "prompt",
+        },
+        "child_session": {
+            "id": "state.metadata.sessionId",
+            "parent_id": "part.session_id",
+            "agent": "state.input.subagent_type",
+            "model": {
+                "id": "state.metadata.model.modelID",
+                "providerID": "state.metadata.model.providerID",
+            },
+        },
+        "body_kind": "delegated_task_frame",
+        "provenance": "delegated_task_frame",
+        "authority": "derived",
+    },
     "claude-remote-task-command-v1": {
         "source": "claude-projects",
         "path": {"relative_depth": 4, "segment_2": "remote-agents", "suffix": ".json"},
@@ -699,6 +778,43 @@ OPENCODE_USER_MESSAGE_KEYS = (
     "summary",
     "time",
 )
+OPENCODE_ASSISTANT_MESSAGE_KEYSETS = (
+    ("agent", "cost", "mode", "modelID", "parentID", "path", "providerID", "role", "time", "tokens"),
+    (
+        "agent",
+        "cost",
+        "finish",
+        "mode",
+        "modelID",
+        "parentID",
+        "path",
+        "providerID",
+        "role",
+        "time",
+        "tokens",
+    ),
+)
+OPENCODE_TASK_TOOL_PART_KEYS = ("callID", "state", "tool", "type")
+OPENCODE_TASK_TOOL_STATE_KEYSETS = {
+    "running": ("input", "metadata", "status", "time", "title"),
+    "completed": ("input", "metadata", "output", "status", "time", "title"),
+}
+OPENCODE_TASK_TOOL_INPUT_KEYSETS = (
+    ("description", "prompt", "subagent_type"),
+    ("command", "description", "prompt", "subagent_type"),
+)
+OPENCODE_TASK_TOOL_METADATA_KEYSETS = (
+    ("model", "parentSessionId", "sessionId"),
+    ("model", "parentSessionId", "sessionId", "truncated"),
+    ("model", "outputPath", "parentSessionId", "sessionId", "truncated"),
+)
+OPENCODE_TASK_TOOL_TIME_KEYSETS = {
+    "running": ("start",),
+    "completed": ("end", "start"),
+}
+OPENCODE_USER_SUMMARY_KEYS = ("diffs",)
+OPENCODE_USER_SUMMARY_DIFF_KEYS = ("additions", "deletions", "file", "patch", "status")
+OPENCODE_USER_SUMMARY_MAX_BYTES = 512 * 1024 * 1024
 OPENCODE_UNIT_SIGNATURE_FIELDS = (
     "content_sha256",
     "db_ctime_ns",
@@ -831,8 +947,22 @@ SOURCE_RECORD_SCHEMAS = {
         "source": "opencode-db",
         "message_keys": OPENCODE_USER_MESSAGE_KEYS,
         "part_keysets": OPENCODE_USER_PART_KEYSETS,
+        "excluded_summary": {
+            "keys": OPENCODE_USER_SUMMARY_KEYS,
+            "diff_keys": OPENCODE_USER_SUMMARY_DIFF_KEYS,
+            "max_bytes": OPENCODE_USER_SUMMARY_MAX_BYTES,
+            "diff_field_types": {
+                "additions": "integer",
+                "deletions": "integer",
+                "file": "text",
+                "patch": "text",
+                "status": "text",
+            },
+            "disposition": "provider-generated-patch-context",
+        },
         "unit_signature_fields": OPENCODE_UNIT_SIGNATURE_FIELDS,
     },
+    "opencode-assistant-task-v1": SOURCE_ADAPTER_RULES["opencode-assistant-task-v1"],
     "agy-conversation-v1": {
         "source": "agy-cli-conversations",
         "table": "steps",
@@ -915,6 +1045,7 @@ def _relative_role_parts(source: str, locator: str) -> tuple[str, ...] | None:
         "claude-plans": (".claude", "plans"),
         "claude-projects": (".claude", "projects"),
         "claude-tasks": (".claude", "tasks"),
+        "opencode-db": (".local", "share", "opencode"),
     }
     root = roots.get(source)
     if root is None:
@@ -1083,6 +1214,11 @@ def source_contract_receipt_applies(
             len(relative) == 2
             and re.fullmatch(r"pasted-text-[1-9][0-9]*\.txt", path.name) is not None
             and set(related) == {"parent_session"}
+        ),
+        "opencode-assistant-task-v1": lambda: (
+            len(relative) == 1
+            and re.fullmatch(r"opencode\.db#session:[0-9a-f]{24}", relative[0]) is not None
+            and set(related) == set()
         ),
         "claude-file-history-snapshot-v1": lambda: (
             len(relative) >= 1 and re.fullmatch(r"[0-9a-fA-F]+@v[0-9]+", path.name) is not None
