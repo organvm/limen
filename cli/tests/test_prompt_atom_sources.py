@@ -488,6 +488,114 @@ def _opencode_fixture(path: Path) -> None:
     connection.close()
 
 
+def _opencode_task_fixture(path: Path, variants: tuple[str, ...]) -> list[str]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(path)
+    connection.executescript(
+        """
+        CREATE TABLE session (
+            id TEXT PRIMARY KEY,
+            parent_id TEXT,
+            agent TEXT,
+            model TEXT,
+            time_created INTEGER,
+            time_updated INTEGER
+        );
+        CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+        CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+        """
+    )
+    prompts: list[str] = []
+    for index, variant in enumerate(variants):
+        parent_id = f"parent-{index}"
+        child_id = f"child-{index}"
+        model_id = f"model-{index}"
+        provider_id = f"provider-{index}"
+        agent = f"agent-{index}"
+        prompt = f"synthetic delegated prompt {index}"
+        prompts.append(prompt)
+        connection.execute(
+            "INSERT INTO session VALUES (?, NULL, ?, ?, ?, ?)",
+            (
+                parent_id,
+                "build",
+                json.dumps({"id": "parent-model", "providerID": "parent-provider", "variant": "default"}),
+                index * 10 + 1,
+                index * 10 + 1,
+            ),
+        )
+        connection.execute(
+            "INSERT INTO session VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                child_id,
+                parent_id,
+                agent,
+                json.dumps({"id": model_id, "providerID": provider_id, "variant": "default"}),
+                index * 10 + 2,
+                index * 10 + 2,
+            ),
+        )
+        message_data = {
+            "agent": "build",
+            "cost": 0,
+            "mode": "build",
+            "modelID": "parent-model",
+            "parentID": f"previous-{index}",
+            "path": {"cwd": "/tmp", "root": "/tmp"},
+            "providerID": "parent-provider",
+            "role": "assistant",
+            "time": {"created": index * 10 + 3},
+            "tokens": {"input": 0, "output": 0, "reasoning": 0},
+        }
+        metadata = {
+            "model": {"modelID": model_id, "providerID": provider_id},
+            "parentSessionId": parent_id,
+            "sessionId": child_id,
+        }
+        input_data = {"description": f"task {index}", "prompt": prompt, "subagent_type": agent}
+        state: dict[str, object]
+        if variant == "completed":
+            message_data["finish"] = "tool-calls"
+            metadata["truncated"] = False
+            state = {
+                "input": input_data,
+                "metadata": metadata,
+                "output": f"synthetic output {index}",
+                "status": "completed",
+                "time": {"start": index * 10 + 4, "end": index * 10 + 5},
+                "title": f"task {index}",
+            }
+        else:
+            if variant == "command":
+                input_data["command"] = "synthetic-command"
+                metadata.update({"outputPath": f"/tmp/output-{index}", "truncated": True})
+            state = {
+                "input": input_data,
+                "metadata": metadata,
+                "status": "running",
+                "time": {"start": index * 10 + 4},
+                "title": f"task {index}",
+            }
+        message_id = f"message-{index}"
+        connection.execute(
+            "INSERT INTO message VALUES (?, ?, ?, ?)",
+            (message_id, parent_id, index * 10 + 3, json.dumps(message_data)),
+        )
+        connection.execute(
+            "INSERT INTO part VALUES (?, ?, ?, ?, ?)",
+            (
+                f"part-{index}",
+                message_id,
+                parent_id,
+                index * 10 + 4,
+                json.dumps({"callID": f"call-{index}", "state": state, "tool": "task", "type": "tool"}),
+            ),
+        )
+    connection.commit()
+    connection.close()
+    return prompts
+
+
 def test_opencode_requires_primary_proof_and_caps_work_by_session(tmp_path: Path):
     sources = _load()
     lifecycle = sources.load_lifecycle_module()
@@ -515,6 +623,333 @@ def test_opencode_requires_primary_proof_and_caps_work_by_session(tmp_path: Path
     assert len(second_events) == 1
     assert second_events[0]["authority"] == "operator"
     assert second["pending_files"] == 0
+
+
+def test_opencode_task_tool_adapter_covers_exact_live_variants_and_is_idempotent(tmp_path: Path):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    database = tmp_path / "home" / ".local" / "share" / "opencode" / "opencode.db"
+    prompts = _opencode_task_fixture(database, ("running", "completed", "command"))
+    lifecycle.OPENCODE_DB = database
+
+    first_events, first = sources.scan_opencode(
+        lifecycle,
+        {"files": {}, "adapted_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=6),
+    )
+
+    assert [event["text"] for event in first_events] == prompts
+    assert all(event["body_kind"] == "delegated_task_frame" for event in first_events)
+    assert all(event["provenance"] == "delegated_task_frame" for event in first_events)
+    assert all(event["authority"] == "derived" for event in first_events)
+    assert all(event["source_segment"] == "state.input.prompt" for event in first_events)
+    assert len(first["adapted_unit_receipts"]) == 3
+    assert first["coverage"]["opencode-db"]["adapted"] == 3
+    assert all(
+        receipt["contract_id"] == "opencode-assistant-task-v1" for receipt in first["adapted_unit_receipts"].values()
+    )
+    assert sources.source_contract_receipt_applies(
+        "opencode-assistant-task-v1",
+        "opencode-db",
+        f"{database}#session:{'a' * 24}",
+        signature=next(iter(first["adapted_unit_receipts"].values()))["signature"],
+    )
+
+    second_events, second = sources.scan_opencode(
+        lifecycle,
+        {
+            "files": first["processed"],
+            "adapted_unit_receipts": first["adapted_unit_receipts"],
+        },
+        days=None,
+        budget=sources.ScanBudget(limit=6),
+    )
+
+    assert second_events == []
+    assert second["adapted_unit_receipts"] == first["adapted_unit_receipts"]
+    assert second["attempted_files"] == 0
+    assert second["errors"] == []
+
+
+def test_opencode_task_tool_receipt_projects_into_native_cursor(tmp_path: Path, monkeypatch):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    database = tmp_path / "home" / ".local" / "share" / "opencode" / "opencode.db"
+    prompts = _opencode_task_fixture(database, ("running",))
+    lifecycle.LOCAL_SOURCES = []
+    lifecycle.HOME = tmp_path / "home"
+    lifecycle.OPENCODE_DB = database
+    lifecycle.AGY_CLI_CONVERSATIONS = lifecycle.HOME / ".gemini" / "antigravity-cli" / "conversations"
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+
+    events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=tmp_path / "missing-cursor.json"),
+        days=None,
+        max_files=2,
+    )
+
+    assert [event["text"] for event in events] == prompts
+    assert cursor["scope"] == "all"
+    assert cursor["source_adapter_counts"]["opencode-assistant-task-v1"] == 1
+    assert cursor["source_coverage"]["opencode-db"]["adapted"] == 1
+    assert len(cursor["adapted_unit_receipts"]) == 1
+    assert cursor["adapter_gaps"] == []
+    assert sources.validate_source_adapter_cursor(cursor) == []
+
+
+@pytest.mark.parametrize("failure", ["extra-state-field", "wrong-child-parent"])
+def test_opencode_task_tool_adapter_fails_closed_on_structural_drift(tmp_path: Path, failure: str):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    database = tmp_path / "home" / ".local" / "share" / "opencode" / "opencode.db"
+    _opencode_task_fixture(database, ("running",))
+    connection = sqlite3.connect(database)
+    if failure == "extra-state-field":
+        raw = connection.execute("SELECT data FROM part WHERE id='part-0'").fetchone()[0]
+        part_data = json.loads(raw)
+        part_data["state"]["future"] = True
+        connection.execute("UPDATE part SET data=? WHERE id='part-0'", (json.dumps(part_data),))
+    else:
+        connection.execute("UPDATE session SET parent_id='wrong-parent' WHERE id='child-0'")
+    connection.commit()
+    connection.close()
+    lifecycle.OPENCODE_DB = database
+
+    events, result = sources.scan_opencode(
+        lifecycle,
+        {"files": {}, "adapted_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+    )
+
+    assert events == []
+    assert result["adapted_unit_receipts"] == {}
+    assert len(result["processed"]) == 1
+    assert len(result["errors"]) == 1
+    assert "OpenCode task-tool" in result["errors"][0]
+
+
+def test_opencode_exact_user_summary_is_excluded_from_prompt_byte_cap_and_digest(tmp_path: Path):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    database = tmp_path / "opencode.db"
+    connection = sqlite3.connect(database)
+    connection.executescript(
+        """
+        CREATE TABLE session (id TEXT PRIMARY KEY, time_created INTEGER, time_updated INTEGER);
+        CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+        CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+        INSERT INTO session VALUES ('summary', 1, 1);
+        """
+    )
+    summary = {
+        "diffs": [
+            {
+                "additions": 1,
+                "deletions": 0,
+                "file": "synthetic.txt",
+                "patch": "x" * 10_000,
+                "status": "added",
+            }
+        ]
+    }
+    connection.execute(
+        "INSERT INTO message VALUES ('message-summary', 'summary', 1, ?)",
+        (json.dumps({"role": "user", "summary": summary}),),
+    )
+    connection.execute(
+        "INSERT INTO part VALUES ('part-summary', 'message-summary', 'summary', 1, ?)",
+        (json.dumps({"type": "text", "text": "bounded user prompt"}),),
+    )
+    connection.commit()
+    connection.close()
+    lifecycle.OPENCODE_DB = database
+    limits = sources.ResourceLimits(
+        max_source_bytes_per_unit=512,
+        max_events_per_unit=10,
+        max_discovery_units=10,
+        max_classifier_input_bytes=1024,
+        max_classifier_output_bytes=1024,
+        max_classifier_stderr_bytes=1024,
+        max_classifier_occurrences=10,
+    )
+
+    first_events, first = sources.scan_opencode(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        limits=limits,
+    )
+    first_signature = next(iter(first["processed"].values()))
+    assert [event["text"] for event in first_events] == ["bounded user prompt"]
+    assert first["errors"] == []
+    assert database.stat().st_size > limits.max_source_bytes_per_unit
+
+    connection = sqlite3.connect(database)
+    summary["diffs"][0]["patch"] = "y" * 10_000
+    connection.execute(
+        "UPDATE message SET data=? WHERE id='message-summary'",
+        (json.dumps({"role": "user", "summary": summary}),),
+    )
+    connection.commit()
+    connection.close()
+
+    second_events, second = sources.scan_opencode(
+        lifecycle,
+        {"files": first["processed"]},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        limits=limits,
+    )
+    second_signature = next(iter(second["processed"].values()))
+    assert second_events == []
+    assert second["attempted_files"] == 0
+    assert second_signature["content_sha256"] == first_signature["content_sha256"]
+
+
+def test_opencode_nonuser_summary_marker_remains_in_content_digest(tmp_path: Path):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    database = tmp_path / "opencode.db"
+    connection = sqlite3.connect(database)
+    connection.executescript(
+        """
+        CREATE TABLE session (id TEXT PRIMARY KEY, time_created INTEGER, time_updated INTEGER);
+        CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+        CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+        INSERT INTO session VALUES ('summary-marker', 1, 1);
+        """
+    )
+    connection.execute(
+        "INSERT INTO message VALUES ('message-summary', 'summary-marker', 1, ?)",
+        (json.dumps({"role": "assistant", "summary": True}),),
+    )
+    connection.commit()
+    connection.close()
+    lifecycle.OPENCODE_DB = database
+
+    _first_events, first = sources.scan_opencode(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+    first_signature = next(iter(first["processed"].values()))
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "UPDATE message SET data=? WHERE id='message-summary'",
+        (json.dumps({"role": "assistant", "summary": False}),),
+    )
+    connection.commit()
+    connection.close()
+
+    second_events, second = sources.scan_opencode(
+        lifecycle,
+        {"files": first["processed"]},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+    second_signature = next(iter(second["processed"].values()))
+
+    assert second_events == []
+    assert second["errors"] == []
+    assert second["attempted_files"] == 1
+    assert second_signature["content_sha256"] != first_signature["content_sha256"]
+
+
+@pytest.mark.parametrize("failure", ["summary-extra-field", "diff-wrong-type"])
+def test_opencode_user_summary_exclusion_fails_closed_on_schema_drift(tmp_path: Path, failure: str):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    database = tmp_path / "opencode.db"
+    connection = sqlite3.connect(database)
+    connection.executescript(
+        """
+        CREATE TABLE session (id TEXT PRIMARY KEY, time_created INTEGER, time_updated INTEGER);
+        CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+        CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+        INSERT INTO session VALUES ('summary', 1, 1);
+        """
+    )
+    diff = {"additions": 1, "deletions": 0, "file": "x", "patch": "y", "status": "added"}
+    summary: dict[str, object] = {"diffs": [diff]}
+    if failure == "summary-extra-field":
+        summary["future"] = True
+    else:
+        diff["additions"] = "1"
+    connection.execute(
+        "INSERT INTO message VALUES ('message-summary', 'summary', 1, ?)",
+        (json.dumps({"role": "user", "summary": summary}),),
+    )
+    connection.commit()
+    connection.close()
+    lifecycle.OPENCODE_DB = database
+
+    events, result = sources.scan_opencode(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["processed"] == {}
+    assert len(result["errors"]) == 1
+    assert "OpenCode summary" in result["errors"][0]
+
+
+def test_source_contract_reset_drops_stale_unresolved_obligations(tmp_path: Path, monkeypatch):
+    sources = _load()
+    lifecycle = _regular_lifecycle(sources, [])
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    stale_contract = {**sources.source_adapter_contract(), "digest": "0" * 64}
+    stale_key = "scan-v2:opencode-db:stale-unit"
+    cursor_path = tmp_path / "cursor.json"
+    cursor_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "scanner_version": 2,
+                "scope": "partial:all",
+                "target_scope": "all",
+                "all_baseline_complete": False,
+                "source_adapter_contract": stale_contract,
+                "files": {},
+                "unsupported_units": {},
+                "unresolved_units": [stale_key],
+                "excluded_unit_receipts": {},
+                "adapted_unit_receipts": {},
+                "source_families": {
+                    "opencode-db": {
+                        "discovered": 1,
+                        "converged": 0,
+                        "adapted": 0,
+                        "excluded": 0,
+                        "pending": 0,
+                        "errors": 1,
+                        "unsupported": 0,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=cursor_path),
+        days=None,
+        max_files=1,
+    )
+
+    assert events == []
+    assert cursor["replace_files"] is True
+    assert cursor["unresolved_units"] == []
+    assert cursor["source_errors"] == []
+    assert "opencode-db" not in cursor["adapter_gaps"]
+    assert cursor["scope"] == "all"
+    assert sources.validate_source_adapter_cursor(cursor) == []
 
 
 def test_opencode_malformed_session_is_not_cursor_advanced(tmp_path: Path):

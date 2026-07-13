@@ -78,8 +78,17 @@ from limen.prompt_sources import (  # noqa: E402
     GEMINI_NONUSER_RECORD_KEYSETS,
     GEMINI_SET_KEYSETS,
     GEMINI_USER_RECORD_KEYSETS,
+    OPENCODE_ASSISTANT_MESSAGE_KEYSETS,
+    OPENCODE_TASK_TOOL_INPUT_KEYSETS,
+    OPENCODE_TASK_TOOL_METADATA_KEYSETS,
+    OPENCODE_TASK_TOOL_PART_KEYS,
+    OPENCODE_TASK_TOOL_STATE_KEYSETS,
+    OPENCODE_TASK_TOOL_TIME_KEYSETS,
     OPENCODE_USER_MESSAGE_KEYS,
     OPENCODE_USER_PART_KEYSETS,
+    OPENCODE_USER_SUMMARY_DIFF_KEYS,
+    OPENCODE_USER_SUMMARY_KEYS,
+    OPENCODE_USER_SUMMARY_MAX_BYTES,
     OPENCODE_UNIT_SIGNATURE_FIELDS,
     PROMPT_SOURCE_SCANNER_VERSION,
     SOURCE_ADAPTER_CONTRACT_VERSION,
@@ -3394,6 +3403,236 @@ def opencode_integrity_error(connection: sqlite3.Connection, *, step_ceiling: in
     return None
 
 
+def opencode_user_summary_schema_error(
+    connection: sqlite3.Connection,
+    *,
+    session_id: str,
+    step_ceiling: int,
+) -> str | None:
+    """Validate the exact provider-generated patch-summary envelope in SQLite.
+
+    The summary can be much larger than the user prompt.  Keep it outside the
+    prompt projection only after proving its canonical shape without returning
+    patch bodies to Python.
+    """
+
+    progress = {"steps": 0}
+
+    def bounded_progress() -> int:
+        progress["steps"] += 1_000
+        return int(progress["steps"] > step_ceiling)
+
+    connection.set_progress_handler(bounded_progress, 1_000)
+    try:
+        summary_rows = connection.execute(
+            "SELECT id, json_extract(data, '$.role') AS role, "
+            "json_type(data, '$.summary') AS summary_type, "
+            "length(CAST(json_extract(data, '$.summary') AS BLOB)) AS summary_bytes "
+            "FROM message WHERE session_id=? AND json_valid(data) "
+            "AND json_extract(data, '$.role')='user' "
+            "AND json_type(data, '$.summary') IS NOT NULL",
+            (session_id,),
+        ).fetchall()
+        expected_diff_types = {
+            "additions": "integer",
+            "deletions": "integer",
+            "file": "text",
+            "patch": "text",
+            "status": "text",
+        }
+        if set(expected_diff_types) != set(OPENCODE_USER_SUMMARY_DIFF_KEYS):
+            raise RuntimeError("OpenCode summary field-type contract drift")
+        allowed_placeholders = ", ".join("?" for _ in OPENCODE_USER_SUMMARY_DIFF_KEYS)
+        exact_key_checks = " OR ".join(
+            "(SELECT COUNT(*) FROM json_each(d.value) AS field WHERE field.key=?) != 1"
+            for _ in OPENCODE_USER_SUMMARY_DIFF_KEYS
+        )
+        type_checks = " OR ".join(
+            f"COALESCE(json_type(d.value, '$.{field}'), 'missing') != ?" for field in OPENCODE_USER_SUMMARY_DIFF_KEYS
+        )
+        invalid_diff_query = (
+            "SELECT 1 FROM message AS m, json_each(m.data, '$.summary.diffs') AS d "
+            "WHERE m.id=? AND (d.type != 'object' "
+            "OR (SELECT COUNT(*) FROM json_each(d.value)) != ? "
+            f"OR EXISTS (SELECT 1 FROM json_each(d.value) AS field WHERE field.key NOT IN ({allowed_placeholders})) "
+            f"OR {exact_key_checks} OR {type_checks}) LIMIT 1"
+        )
+        for row in summary_rows:
+            if row["role"] != "user" or row["summary_type"] != "object":
+                return "OpenCode summary is not canonical user patch context"
+            if int(row["summary_bytes"] or 0) > OPENCODE_USER_SUMMARY_MAX_BYTES:
+                return f"OpenCode summary exceeds hard byte ceiling {OPENCODE_USER_SUMMARY_MAX_BYTES}"
+            summary_keys = connection.execute(
+                "SELECT COUNT(*) AS total, "
+                "SUM(CASE WHEN key=? THEN 1 ELSE 0 END) AS expected, "
+                "SUM(CASE WHEN key!=? THEN 1 ELSE 0 END) AS unexpected "
+                "FROM message AS m, json_each(m.data, '$.summary') WHERE m.id=?",
+                (OPENCODE_USER_SUMMARY_KEYS[0], OPENCODE_USER_SUMMARY_KEYS[0], row["id"]),
+            ).fetchone()
+            if (
+                int(summary_keys["total"] or 0) != len(OPENCODE_USER_SUMMARY_KEYS)
+                or int(summary_keys["expected"] or 0) != 1
+                or int(summary_keys["unexpected"] or 0) != 0
+            ):
+                return "OpenCode summary has an unknown provider patch-context schema"
+            summary_data = connection.execute(
+                "SELECT json_type(data, '$.summary.diffs') AS diffs_type FROM message WHERE id=?",
+                (row["id"],),
+            ).fetchone()
+            if summary_data is None or summary_data["diffs_type"] != "array":
+                return "OpenCode summary diffs is not a canonical array"
+            invalid_diff = connection.execute(
+                invalid_diff_query,
+                (
+                    row["id"],
+                    len(OPENCODE_USER_SUMMARY_DIFF_KEYS),
+                    *OPENCODE_USER_SUMMARY_DIFF_KEYS,
+                    *OPENCODE_USER_SUMMARY_DIFF_KEYS,
+                    *(expected_diff_types[field] for field in OPENCODE_USER_SUMMARY_DIFF_KEYS),
+                ),
+            ).fetchone()
+            if invalid_diff is not None:
+                return "OpenCode summary contains an unknown provider diff schema"
+    except sqlite3.OperationalError as exc:
+        if "interrupted" in str(exc).lower():
+            return "OpenCode summary validation exceeds bounded step ceiling"
+        raise
+    finally:
+        connection.set_progress_handler(None, 0)
+    return None
+
+
+def opencode_assistant_task_event(
+    lifecycle: Any,
+    connection: sqlite3.Connection,
+    *,
+    path: Path,
+    session_id: str,
+    message: sqlite3.Row,
+    message_data: dict[str, Any],
+    part: sqlite3.Row,
+    part_data: dict[str, Any],
+    event_index: int,
+    text_index: int,
+    seen_call_ids: set[str],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Adapt one exact OpenCode task-tool call into a derived prompt event."""
+
+    if set(message_data) not in [set(keyset) for keyset in OPENCODE_ASSISTANT_MESSAGE_KEYSETS]:
+        return None, "OpenCode task-tool parent requires an explicit assistant-message adapter"
+    if message_data.get("role") != "assistant":
+        return None, "OpenCode task-tool parent is not a canonical assistant message"
+    if set(part_data) != set(OPENCODE_TASK_TOOL_PART_KEYS):
+        return None, "OpenCode task-tool part has an unknown envelope"
+    call_id = part_data.get("callID")
+    if not isinstance(call_id, str) or not call_id.strip():
+        return None, "OpenCode task-tool callID must be a non-empty string"
+    if call_id in seen_call_ids:
+        return None, "OpenCode task-tool callID is duplicated within its session"
+    seen_call_ids.add(call_id)
+    state = part_data.get("state")
+    if not isinstance(state, dict):
+        return None, "OpenCode task-tool state is not an object"
+    status = state.get("status")
+    expected_state_keys = OPENCODE_TASK_TOOL_STATE_KEYSETS.get(status)
+    if expected_state_keys is None or set(state) != set(expected_state_keys):
+        return None, "OpenCode task-tool state requires an explicit status adapter"
+    input_data = state.get("input")
+    if not isinstance(input_data, dict) or set(input_data) not in [
+        set(keyset) for keyset in OPENCODE_TASK_TOOL_INPUT_KEYSETS
+    ]:
+        return None, "OpenCode task-tool input has an unknown schema"
+    for field in ("description", "prompt", "subagent_type"):
+        if not isinstance(input_data.get(field), str) or not str(input_data[field]).strip():
+            return None, f"OpenCode task-tool {field} must be a non-empty string"
+    if "command" in input_data and (
+        not isinstance(input_data.get("command"), str) or not str(input_data["command"]).strip()
+    ):
+        return None, "OpenCode task-tool command must be a non-empty string"
+    metadata = state.get("metadata")
+    if not isinstance(metadata, dict) or set(metadata) not in [
+        set(keyset) for keyset in OPENCODE_TASK_TOOL_METADATA_KEYSETS
+    ]:
+        return None, "OpenCode task-tool metadata has an unknown schema"
+    for field in ("parentSessionId", "sessionId"):
+        if not isinstance(metadata.get(field), str) or not str(metadata[field]).strip():
+            return None, f"OpenCode task-tool metadata {field} must be a non-empty string"
+    if metadata["parentSessionId"] != session_id:
+        return None, "OpenCode task-tool metadata does not name its canonical parent session"
+    if "truncated" in metadata and not isinstance(metadata.get("truncated"), bool):
+        return None, "OpenCode task-tool truncated metadata must be boolean"
+    if "outputPath" in metadata and (
+        not isinstance(metadata.get("outputPath"), str) or not str(metadata["outputPath"]).strip()
+    ):
+        return None, "OpenCode task-tool outputPath metadata must be a non-empty string"
+    metadata_model = metadata.get("model")
+    if not isinstance(metadata_model, dict) or set(metadata_model) != {"modelID", "providerID"}:
+        return None, "OpenCode task-tool metadata model has an unknown schema"
+    if any(
+        not isinstance(metadata_model.get(field), str) or not str(metadata_model[field]).strip()
+        for field in ("modelID", "providerID")
+    ):
+        return None, "OpenCode task-tool metadata model fields must be non-empty strings"
+    time_data = state.get("time")
+    expected_time_keys = OPENCODE_TASK_TOOL_TIME_KEYSETS[status]
+    if not isinstance(time_data, dict) or set(time_data) != set(expected_time_keys):
+        return None, "OpenCode task-tool time has an unknown schema"
+    for field in expected_time_keys:
+        if isinstance(time_data.get(field), bool) or not isinstance(time_data.get(field), int):
+            return None, "OpenCode task-tool time fields must be exact integers"
+    if status == "completed" and time_data["end"] < time_data["start"]:
+        return None, "OpenCode task-tool completion precedes its start"
+    if not isinstance(state.get("title"), str):
+        return None, "OpenCode task-tool title must be a string"
+    if status == "completed" and not isinstance(state.get("output"), str):
+        return None, "OpenCode completed task-tool output must be a string"
+    required_session_columns = {"id", "parent_id", "agent", "model"}
+    session_columns = {str(row["name"]) for row in connection.execute("PRAGMA main.table_xinfo('session')").fetchall()}
+    if not required_session_columns.issubset(session_columns):
+        return None, "OpenCode task-tool child relationship fields are unavailable"
+    child = connection.execute(
+        "SELECT id, parent_id, agent, model FROM session WHERE id=?",
+        (metadata["sessionId"],),
+    ).fetchone()
+    if child is None or child["parent_id"] != session_id:
+        return None, "OpenCode task-tool child session is not canonically parented"
+    if child["agent"] != input_data["subagent_type"]:
+        return None, "OpenCode task-tool child session agent does not match its input"
+    try:
+        child_model = json.loads(child["model"]) if child["model"] else None
+    except (TypeError, ValueError):
+        child_model = None
+    if not isinstance(child_model, dict) or set(child_model) != {"id", "providerID", "variant"}:
+        return None, "OpenCode task-tool child session model has an unknown schema"
+    if any(
+        not isinstance(child_model.get(field), str) or not str(child_model[field]).strip()
+        for field in ("id", "providerID", "variant")
+    ):
+        return None, "OpenCode task-tool child session model fields must be non-empty strings"
+    if child_model["id"] != metadata_model["modelID"] or child_model["providerID"] != metadata_model["providerID"]:
+        return None, "OpenCode task-tool child session model does not match its metadata"
+    text = str(input_data["prompt"]).strip()
+    task_body, normalized_kind = lifecycle.normalize_task_body(text)
+    return (
+        {
+            "source": "opencode-db",
+            "session_ref": f"opencode-db:{child['id']}:{path}",
+            "event_ref": str(part["id"]),
+            "event_index": event_index,
+            "text_index": text_index,
+            "source_locator": f"{path}#{part['id']}",
+            "source_segment": "state.input.prompt",
+            "timestamp": lifecycle.iso_from_epoch_ms(part["time_created"]),
+            "text": text,
+            "task_body": task_body if normalized_kind == "flame_with_task_body" else "",
+            "body_kind": "delegated_task_frame",
+            "provenance": "delegated_task_frame",
+            "authority": "derived",
+        },
+        None,
+    )
+
+
 def scan_opencode(
     lifecycle: Any,
     cursor: dict[str, Any],
@@ -3406,10 +3645,14 @@ def scan_opencode(
     path = Path(lifecycle.OPENCODE_DB)
     coverage = {"opencode-db": empty_coverage()}
     counts = coverage["opencode-db"]
+    adapter_contract = source_adapter_contract()
+    adapter_contract_digest = str(adapter_contract["digest"])
+    prior_adapted_receipts = cursor.get("adapted_unit_receipts") or {}
     if not path.exists():
         return [], {
             "discovered": {},
             "processed": {},
+            "adapted_unit_receipts": {},
             "errors": [],
             "unsupported": [],
             "pending_files": 0,
@@ -3423,6 +3666,7 @@ def scan_opencode(
         return [], {
             "discovered": {},
             "processed": {},
+            "adapted_unit_receipts": {},
             "errors": [f"opencode-db:{path}: {escape}"],
             "unsupported": [],
             "pending_files": 0,
@@ -3436,6 +3680,7 @@ def scan_opencode(
         return [], {
             "discovered": {},
             "processed": {},
+            "adapted_unit_receipts": {},
             "errors": [f"opencode-db:{path}: source cannot be stat'ed"],
             "unsupported": [],
             "pending_files": 0,
@@ -3453,6 +3698,7 @@ def scan_opencode(
         return [], {
             "discovered": {},
             "processed": {},
+            "adapted_unit_receipts": {},
             "errors": [f"opencode-db:{path}: {exc}"],
             "unsupported": [],
             "pending_files": 0,
@@ -3463,6 +3709,7 @@ def scan_opencode(
     events: list[dict[str, Any]] = []
     discovered: dict[str, Any] = {}
     processed: dict[str, Any] = {}
+    adapted_unit_receipts: dict[str, Any] = {}
     errors: list[str] = []
     pending = 0
     attempted = 0
@@ -3489,9 +3736,10 @@ def scan_opencode(
             errors.append(f"opencode-db: session discovery exceeds bounded ceiling {active_limits.max_discovery_units}")
         for session in sessions:
             session_id = str(session["id"])
+            unit_locator = f"{path}#session:{digest(session_id)[:24]}"
             unit_key = cursor_unit_key(
                 "opencode-db",
-                f"{path}#session:{digest(session_id)[:24]}",
+                unit_locator,
             )
             base_unit_signature = {
                 **database_signature,
@@ -3510,12 +3758,30 @@ def scan_opencode(
             counts["discovered"] += 1
             if cache_generation_matches:
                 processed[unit_key] = unit_signature
+                cached_receipt = prior_adapted_receipts.get(unit_key)
+                if source_unit_receipt_matches(
+                    cached_receipt,
+                    disposition="adapted",
+                    contract_id="opencode-assistant-task-v1",
+                    contract_digest=adapter_contract_digest,
+                    source="opencode-db",
+                    locator=unit_locator,
+                    signature=unit_signature,
+                ):
+                    adapted_unit_receipts[unit_key] = cached_receipt
+                    counts["adapted"] += 1
                 counts["converged"] += 1
                 continue
             max_rows = active_limits.max_events_per_unit * 10
+            projected_message_data = (
+                "CASE WHEN json_valid(data) AND json_extract(data, '$.role')='user' "
+                "AND json_type(data, '$.summary') IS NOT NULL "
+                "THEN json_remove(data, '$.summary') ELSE data END"
+            )
             message_count, message_bytes, message_limit = bounded_sqlite_lengths(
                 connection,
-                "SELECT COALESCE(length(CAST(data AS BLOB)), 0) FROM message WHERE session_id=? LIMIT ?",
+                "SELECT COALESCE(length(CAST((" + projected_message_data + ") AS BLOB)), 0) "
+                "FROM message WHERE session_id=? LIMIT ?",
                 (session_id,),
                 max_rows=max_rows,
                 max_bytes=active_limits.max_source_bytes_per_unit,
@@ -3549,8 +3815,18 @@ def scan_opencode(
                     f"{active_limits.max_source_bytes_per_unit}"
                 )
                 continue
+            summary_schema_error = opencode_user_summary_schema_error(
+                connection,
+                session_id=session_id,
+                step_ceiling=max(100_000, active_limits.max_events_per_unit * 10_000),
+            )
+            if summary_schema_error:
+                counts["errors"] += 1
+                errors.append(f"{unit_key}: {summary_schema_error}")
+                continue
             messages = connection.execute(
-                "SELECT id, time_created, data FROM message WHERE session_id=? ORDER BY time_created, id",
+                "SELECT id, time_created, " + projected_message_data + " AS data "
+                "FROM message WHERE session_id=? ORDER BY time_created, id",
                 (session_id,),
             ).fetchall()
             part_rows = connection.execute(
@@ -3585,6 +3861,21 @@ def scan_opencode(
                 # per-session content comparison; unrelated sessions retain
                 # custody without consuming bounded parse work units.
                 processed[unit_key] = unit_signature
+                cached_receipt = prior_adapted_receipts.get(unit_key)
+                if source_unit_receipt_matches(
+                    cached_receipt,
+                    disposition="adapted",
+                    contract_id="opencode-assistant-task-v1",
+                    contract_digest=adapter_contract_digest,
+                    source="opencode-db",
+                    locator=unit_locator,
+                    signature=cached_signature,
+                ):
+                    adapted_unit_receipts[unit_key] = {
+                        **cached_receipt,
+                        "signature": unit_signature,
+                    }
+                    counts["adapted"] += 1
                 counts["converged"] += 1
                 continue
             if not budget.claim():
@@ -3594,6 +3885,8 @@ def scan_opencode(
             attempted += 1
             session_events: list[dict[str, Any]] = []
             session_error: str | None = None
+            session_adapted = False
+            seen_call_ids: set[str] = set()
             for event_index, message in enumerate(messages):
                 try:
                     data = json.loads(message["data"]) if message["data"] else {}
@@ -3620,10 +3913,41 @@ def scan_opencode(
                 if session_error:
                     break
                 if data.get("role") != "user":
-                    if opencode_message_is_unknown_user_carrier(data) or any(
-                        structured_user_prompt_marker(part) for part in part_objects
-                    ):
+                    for text_index, (part, part_data) in enumerate(zip(parts, part_objects, strict=True)):
+                        if part_data.get("type") == "tool" and part_data.get("tool") == "task":
+                            task_event, task_error = opencode_assistant_task_event(
+                                lifecycle,
+                                connection,
+                                path=path,
+                                session_id=session_id,
+                                message=message,
+                                message_data=data,
+                                part=part,
+                                part_data=part_data,
+                                event_index=event_index,
+                                text_index=text_index,
+                                seen_call_ids=seen_call_ids,
+                            )
+                            if task_error:
+                                session_error = f"{unit_key}: {task_error}"
+                                break
+                            if task_event is not None:
+                                session_events.append(task_event)
+                                session_adapted = True
+                            continue
+                        if structured_user_prompt_marker(part_data):
+                            session_error = f"{unit_key}: unknown OpenCode user-bearing message or part schema"
+                            break
+                    if session_error:
+                        break
+                    if opencode_message_is_unknown_user_carrier(data):
                         session_error = f"{unit_key}: unknown OpenCode user-bearing message or part schema"
+                        break
+                    if len(session_events) > active_limits.max_events_per_unit:
+                        session_error = (
+                            f"{unit_key}: prompt occurrence count exceeds bounded ceiling "
+                            f"{active_limits.max_events_per_unit}"
+                        )
                         break
                     continue
                 schema_error = opencode_user_schema_error(data, part_objects)
@@ -3664,6 +3988,17 @@ def scan_opencode(
                 continue
             events.extend(session_events)
             processed[unit_key] = unit_signature
+            if session_adapted:
+                adapted_unit_receipts[unit_key] = {
+                    "version": SOURCE_ADAPTER_CONTRACT_VERSION,
+                    "disposition": "adapted",
+                    "contract_id": "opencode-assistant-task-v1",
+                    "contract_digest": adapter_contract_digest,
+                    "signature": unit_signature,
+                    "related_signatures": {},
+                    "related_evidence": {},
+                }
+                counts["adapted"] += 1
             counts["converged"] += 1
             counts["scanned"] += 1
     except (sqlite3.Error, ValueError) as exc:
@@ -3675,13 +4010,16 @@ def scan_opencode(
     if final_database_signature != database_signature:
         events = []
         processed = {}
+        adapted_unit_receipts = {}
         counts["converged"] = 0
         counts["scanned"] = 0
+        counts["adapted"] = 0
         counts["errors"] += 1
         errors.append("opencode-db: database or WAL changed during scan; cursor not advanced")
     return events, {
         "discovered": discovered,
         "processed": processed,
+        "adapted_unit_receipts": adapted_unit_receipts,
         "container_signature": database_signature if final_database_signature == database_signature else None,
         "errors": errors,
         "unsupported": [],
@@ -4458,7 +4796,7 @@ def scan_native_sources(
         opencode_scan["coverage"],
         agy_scan["coverage"],
     )
-    raw_prior_unresolved_units = loaded_cursor.get("unresolved_units")
+    raw_prior_unresolved_units = [] if source_cache_reset else loaded_cursor.get("unresolved_units")
     prior_unresolved_set = set(raw_prior_unresolved_units) if isinstance(raw_prior_unresolved_units, list) else set()
     missing_prior_unresolved: set[str] = set()
     if effective_days is None:
@@ -4468,7 +4806,7 @@ def scan_native_sources(
             parts = key.split(":", 2) if isinstance(key, str) else []
             source = parts[1] if len(parts) == 3 and parts[0].startswith("scan-v") else "unknown"
             missing_obligation_sources.add(source)
-        prior_families = loaded_cursor.get("source_families")
+        prior_families = {} if source_cache_reset else loaded_cursor.get("source_families")
         prior_families = prior_families if isinstance(prior_families, dict) else {}
         for source, prior_counts in prior_families.items():
             if not isinstance(source, str) or not isinstance(prior_counts, dict):
@@ -4527,6 +4865,9 @@ def scan_native_sources(
     )
     excluded_source_count = len(excluded_unit_receipts)
     adapted_unit_receipts = dict(regular["adapted_unit_receipts"])
+    for key in opencode_scan["discovered"]:
+        adapted_unit_receipts.pop(key, None)
+    adapted_unit_receipts.update(opencode_scan.get("adapted_unit_receipts") or {})
     for key in agy_scan["discovered"]:
         adapted_unit_receipts.pop(key, None)
     adapted_unit_receipts.update(agy_scan.get("adapted_unit_receipts") or {})
