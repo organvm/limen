@@ -22,12 +22,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.io import load_limen_file  # noqa: E402
-from limen.dispatch import call_agent_dispatch  # noqa: E402
+from limen.dispatch import _REMOTE_SUBMISSION_RECEIPTS, call_agent_dispatch  # noqa: E402
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 TASKS = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
 RUNS = ROOT / "logs" / "async-runs"
 _SAFE_STEM_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+_ASYNC_RESERVATION_RE = re.compile(r"^async-reserve:[0-9a-f]{32}$")
 
 
 def _run_stem(task_id: str) -> str:
@@ -38,12 +39,16 @@ def _run_stem(task_id: str) -> str:
     return f"{slug[:80]}--{digest}"
 
 
-def _result_path(task_id: str) -> Path:
-    return RUNS / f"{_run_stem(task_id)}.result.json"
+def _reservation_suffix(reservation_id: str) -> str:
+    return hashlib.sha256(reservation_id.encode("utf-8")).hexdigest()[:16]
 
 
-def _running_marker_path(task_id: str, agent: str) -> Path:
-    return RUNS / f"{_run_stem(task_id)}__{agent}.running"
+def _result_path(task_id: str, reservation_id: str) -> Path:
+    return RUNS / f"{_run_stem(task_id)}--{_reservation_suffix(reservation_id)}.result.json"
+
+
+def _running_marker_path(task_id: str, agent: str, reservation_id: str) -> Path:
+    return RUNS / f"{_run_stem(task_id)}__{agent}--{_reservation_suffix(reservation_id)}.running"
 
 
 def heal_outcome(task, result):
@@ -90,6 +95,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--agent", required=True)
     ap.add_argument("--task-id", required=True)
+    ap.add_argument("--reservation-id", required=True)
     a = ap.parse_args()
     RUNS.mkdir(parents=True, exist_ok=True)
     err = None
@@ -97,26 +103,42 @@ def main() -> int:
     try:
         lf = load_limen_file(TASKS)
         task = next((t for t in lf.tasks if t.id == a.task_id), None)
-        result = call_agent_dispatch(a.agent, task, dry_run=False) if task is not None else "__notask__"
+        reservation = task.dispatch_log[-1] if task is not None and task.dispatch_log else None
+        if (
+            task is None
+            or task.status != "dispatched"
+            or reservation is None
+            or reservation.status != "dispatched"
+            or reservation.agent != a.agent
+            or reservation.session_id != a.reservation_id
+            or not _ASYNC_RESERVATION_RE.fullmatch(a.reservation_id)
+        ):
+            result = "__notask__"
+            err = "async reservation was superseded before worker execution"
+        else:
+            result = call_agent_dispatch(a.agent, task, dry_run=False)
     except Exception as e:  # never crash without leaving a result the harvester can apply
         result = False
         err = str(e)[:300]
     out = {
         "task_id": a.task_id,
         "agent": a.agent,
+        "reservation_id": a.reservation_id,
         "result": result,  # bool | str (PR url / __noop__ / __ratelimit__ / __timeout__)
         "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "err": err,
+        "remote_submission": dict(_REMOTE_SUBMISSION_RECEIPTS.get(a.task_id, {})),
     }
     if task is not None and a.task_id.startswith("HEAL-"):
         derived = heal_outcome(task, result)
         if derived:
             out.update(derived)
-    tmp = _result_path(a.task_id).with_suffix(".tmp")
+    result_path = _result_path(a.task_id, a.reservation_id)
+    tmp = result_path.with_suffix(f".{os.getpid()}.tmp")
     tmp.write_text(json.dumps(out))
-    tmp.replace(_result_path(a.task_id))  # atomic publish
+    tmp.replace(result_path)  # atomic publish
     try:
-        _running_marker_path(a.task_id, a.agent).unlink()
+        _running_marker_path(a.task_id, a.agent, a.reservation_id).unlink()
     except OSError:
         pass
     return 0

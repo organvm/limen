@@ -10,7 +10,7 @@ for harvest.
 import importlib.util
 import json
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "cli" / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
-from limen.models import LimenFile, Task  # noqa: E402
+from limen.models import DispatchLogEntry, LimenFile, Task  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("dispatch_async", str(ROOT / "scripts" / "dispatch-async.py"))
 dispatch_async = importlib.util.module_from_spec(_spec)
@@ -38,7 +38,23 @@ def board(tmp_path, monkeypatch):
     save_limen_file(
         tasks_path,
         LimenFile(
-            tasks=[Task(id="T1", title="t", target_agent="jules", status="dispatched", created=date(2026, 7, 1))]
+            tasks=[
+                Task(
+                    id="T1",
+                    title="t",
+                    target_agent="jules",
+                    status="dispatched",
+                    created=date(2026, 7, 1),
+                    dispatch_log=[
+                        DispatchLogEntry(
+                            timestamp=datetime.now(timezone.utc),
+                            agent="jules",
+                            session_id="async-reserve",
+                            status="dispatched",
+                        )
+                    ],
+                )
+            ]
         ),
     )
     monkeypatch.setattr(dispatch_async, "TASKS", tasks_path)
@@ -51,6 +67,22 @@ def _old_marker(runs: Path, tid: str, agent: str) -> Path:
     marker = runs / f"{tid}__{agent}.running"
     marker.write_text((dispatch_async._now().replace(year=2020)).isoformat())  # ancient → always stale
     return marker
+
+
+def _set_legacy_reservation(tasks_path: Path, agent: str) -> None:
+    board = load_limen_file(tasks_path)
+    task = board.tasks[0]
+    task.target_agent = agent
+    task.status = "dispatched"
+    task.dispatch_log.append(
+        DispatchLogEntry(
+            timestamp=datetime.now(timezone.utc),
+            agent=agent,
+            session_id="async-reserve",
+            status="dispatched",
+        )
+    )
+    save_limen_file(tasks_path, board)
 
 
 def test_reap_stale_reopens_and_removes_marker(board):
@@ -80,6 +112,7 @@ def test_reap_stale_leaves_marker_when_result_present(board):
 
 def test_reap_dead_pid_marker_without_waiting_for_age(board, monkeypatch):
     tasks_path, runs = board
+    _set_legacy_reservation(tasks_path, "agy")
     marker = runs / "T1__agy.running"
     marker.write_text(
         json.dumps(
@@ -106,6 +139,7 @@ def test_reap_dead_pid_marker_without_waiting_for_age(board, monkeypatch):
 
 def test_reap_zombie_child_marker_after_grace(board, monkeypatch):
     tasks_path, runs = board
+    _set_legacy_reservation(tasks_path, "agy")
     marker = runs / "T1__agy.running"
     started = dispatch_async._now() - dispatch_async.datetime.timedelta(seconds=300)
     marker.write_text(
