@@ -1425,6 +1425,12 @@ parameters:
     env: LIMEN_ROOT
     self_update: none
     owner: limen-daemon
+  LIMEN_SKIP_LOCAL_HTTP_PROBES:
+    default: "0"
+    env: LIMEN_SKIP_LOCAL_HTTP_PROBES
+    self_update: none
+    owner: limen-daemon
+    note: "Opt-in verifier escape hatch for managed sandboxes that cannot bind localhost. Default 0 keeps local runtime and Worker adapter probes mandatory in normal environments."
   LIMEN_LIVE_ROOT:
     default: "~/Workspace/limen"
     env: LIMEN_LIVE_ROOT

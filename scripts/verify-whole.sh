@@ -189,11 +189,16 @@ else
   printf 'Skipping MONETA tests — npm not found on PATH.\n'
 fi
 
-step "Probe local runtime adapter over HTTP"
-PYTHONPATH="$PYTHONPATH_VALUE" scripts/probe-local-runtime.sh
+if [[ "${LIMEN_SKIP_LOCAL_HTTP_PROBES:-0}" == "1" ]]; then
+  step "Skip local HTTP probes"
+  printf 'Skipping local runtime and Worker probes because LIMEN_SKIP_LOCAL_HTTP_PROBES=1\n'
+else
+  step "Probe local runtime adapter over HTTP"
+  PYTHONPATH="$PYTHONPATH_VALUE" scripts/probe-local-runtime.sh
 
-step "Probe local Cloudflare Worker adapter over HTTP"
-scripts/probe-local-worker.sh
+  step "Probe local Cloudflare Worker adapter over HTTP"
+  scripts/probe-local-worker.sh
+fi
 
 step "Build static dashboard and validate exported surfaces"
 (
