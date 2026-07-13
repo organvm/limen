@@ -2685,9 +2685,7 @@ def test_missing_checkout_is_measured_reserved_hydrated_then_isolated(tmp_path: 
         vitals_action="ok",
     )
     with D._machine_admission_lock():
-        blocked, reason = D._worktree_admission_for_task(
-            task, "codex", snapshot, reserve=True, machine_lease=True
-        )
+        blocked, reason = D._worktree_admission_for_task(task, "codex", snapshot, reserve=True, machine_lease=True)
     assert not blocked, reason
     assert D._admission_lease_path(task.id).exists()
 

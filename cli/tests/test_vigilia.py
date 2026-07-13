@@ -82,9 +82,7 @@ def test_vitals_beat_gate_sheds_only_at_critical(monkeypatch):
 
 
 def test_heartbeat_vitals_preserves_remote_dispatch_and_throttles_both_local_modes():
-    heartbeat = (Path(__file__).resolve().parents[2] / "scripts" / "heartbeat-loop.sh").read_text(
-        encoding="utf-8"
-    )
+    heartbeat = (Path(__file__).resolve().parents[2] / "scripts" / "heartbeat-loop.sh").read_text(encoding="utf-8")
 
     assert "vitals-pressure: dispatch skipped" not in heartbeat
     assert "local admission shed; remote dispatch remains live" in heartbeat
@@ -94,9 +92,7 @@ def test_heartbeat_vitals_preserves_remote_dispatch_and_throttles_both_local_mod
 
 
 def test_launchd_local_ceiling_has_no_literal_fleet_cap():
-    generator = (Path(__file__).resolve().parents[2] / "scripts" / "gen-launchd-plist.sh").read_text(
-        encoding="utf-8"
-    )
+    generator = (Path(__file__).resolve().parents[2] / "scripts" / "gen-launchd-plist.sh").read_text(encoding="utf-8")
 
     assert 'ASYNC_MAX_DERIVED="$NCPU"' in generator
     assert "NCPU > 12" not in generator

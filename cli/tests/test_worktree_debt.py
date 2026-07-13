@@ -977,9 +977,7 @@ def test_snapshot_unknown_target_inventory_fails_closed(tmp_path: Path, monkeypa
     assert "target inventory unknown" in snap["reason"]
 
 
-def test_snapshot_unreadable_configured_root_fails_closed_via_strict_inventory(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_snapshot_unreadable_configured_root_fails_closed_via_strict_inventory(tmp_path: Path, monkeypatch) -> None:
     worktrees = _isolate(tmp_path, monkeypatch)
     monkeypatch.setattr(wd, "_worktree_disk_free_gib", lambda _p: 500.0)
     original_iterdir = Path.iterdir

@@ -1422,9 +1422,7 @@ def _worktree_admission_for_task(
     """
     impact = _classify_worktree_impact(task, agent)
     checkout_gib = (
-        _local_admission_requirement_gib(task)
-        if impact == IMPACT_DEBT_CREATING and snapshot.get("active")
-        else None
+        _local_admission_requirement_gib(task) if impact == IMPACT_DEBT_CREATING and snapshot.get("active") else None
     )
     blocked, reason = admission_blocks(impact, snapshot, checkout_gib, reserve=reserve)
     if not blocked and reserve and machine_lease and impact == IMPACT_DEBT_CREATING:
@@ -3067,11 +3065,7 @@ def _remote_hydration_requirement_gib(task: Task) -> float | None:
         return None
     cache = _clone_cache_root()
     block = _filesystem_block_size(effective_worktree_root())
-    if (
-        cache is None
-        or block is None
-        or _filesystem_device(cache) != _filesystem_device(effective_worktree_root())
-    ):
+    if cache is None or block is None or _filesystem_device(cache) != _filesystem_device(effective_worktree_root()):
         return None
     slug = task.repo.strip().removesuffix(".git")
     try:
@@ -4160,9 +4154,7 @@ def dispatch_tasks(
                 live_snapshot, used_slots = _snapshot_with_machine_reservations()
                 local = _classify_worktree_impact(task, agent_filter) == IMPACT_DEBT_CREATING
                 if local and used_slots >= _local_dispatch_ceiling():
-                    blocked, msg = True, (
-                        f"machine local slots full ({used_slots}/{_local_dispatch_ceiling()})"
-                    )
+                    blocked, msg = True, (f"machine local slots full ({used_slots}/{_local_dispatch_ceiling()})")
                 else:
                     blocked, msg = _worktree_admission_for_task(
                         task,

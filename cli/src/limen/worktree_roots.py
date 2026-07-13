@@ -178,11 +178,7 @@ def _children(root: Path, min_age_h: float, source: str, *, strict: bool = False
 
 def _discover_repo_local_roots(limen_root: Path, *, strict: bool = False) -> list[Path]:
     explicit = _path_list("LIMEN_RECLAIM_REPO_LOCAL_ROOTS", [])
-    roots = [
-        path
-        for path in explicit
-        if _inventory_is_dir(path, strict=strict, source="explicit repo-local root")
-    ]
+    roots = [path for path in explicit if _inventory_is_dir(path, strict=strict, source="explicit repo-local root")]
     workspace_roots = _path_list("LIMEN_RECLAIM_WORKSPACE_ROOTS", [Path.home() / "Workspace"])
     max_depth = _int_env("LIMEN_RECLAIM_WORKSPACE_MAX_DEPTH", 5)
 

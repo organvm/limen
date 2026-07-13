@@ -89,9 +89,7 @@ def test_cvstos_requires_exact_zero_worktree_debt():
         "antigravity_scratch": {"measured": True, "unsafe_unpreserved_dispositions": {}},
     }
 
-    assert mod.failures(assessment) == [
-        "worktree lifecycle debt not at zero (worktree-debt.py --fail-on-debt)"
-    ]
+    assert mod.failures(assessment) == ["worktree lifecycle debt not at zero (worktree-debt.py --fail-on-debt)"]
 
 
 def test_vvltvs_malformed_env_knobs_fail_open(monkeypatch, tmp_path):

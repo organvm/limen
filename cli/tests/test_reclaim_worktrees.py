@@ -159,9 +159,7 @@ def test_reclaim_help_does_not_discover_targets(monkeypatch, capsys) -> None:
     assert "usage: reclaim-worktrees.py" in capsys.readouterr().out
 
 
-def test_persist_apply_receipt_records_finite_completion_in_log_and_marker(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_persist_apply_receipt_records_finite_completion_in_log_and_marker(tmp_path: Path, monkeypatch) -> None:
     reclaim = load_reclaim_worktrees()
     marker = tmp_path / "logs" / ".reclaim-last"
     log = tmp_path / "logs" / "reclaim-worktrees.jsonl"
