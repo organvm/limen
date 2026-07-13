@@ -12,7 +12,15 @@ def _load_server():
     # --ignore-missing-imports but never installs its runtime), so skip rather than fail the whole
     # suite when the runtime is absent — this test only means something where mcp is installed.
     pytest.importorskip("mcp.server.fastmcp")
-    path = Path(__file__).resolve().parents[2] / "mcp" / "src" / "limen_mcp" / "server.py"
+    # server.py imports its own package absolutely (`from limen_mcp.intake import …`), so the repo's
+    # mcp/src must be importable even when limen_mcp isn't pip-installed — otherwise this test FAILS
+    # (not skips) on any host that has the `mcp` runtime but not the limen_mcp package: the skip
+    # guard above passes, then exec_module hits ModuleNotFoundError. Resolving the package from the
+    # repo also means the code under test is always THIS checkout, never a stale installed copy.
+    src_root = Path(__file__).resolve().parents[2] / "mcp" / "src"
+    if str(src_root) not in sys.path:
+        sys.path.insert(0, str(src_root))
+    path = src_root / "limen_mcp" / "server.py"
     spec = importlib.util.spec_from_file_location("limen_mcp_server_under_test", path)
     assert spec is not None
     assert spec.loader is not None
