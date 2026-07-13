@@ -501,7 +501,7 @@ while true; do
   # sensor needs no shell edit. Default-ON: the fallback matches the parameter-panel default and
   # metabolize.sh (the :-0/:-1/"1" three-way drift kept this lane dark — github-estate-reconcile and
   # the 0g4 liveness rung never executed live). Released by the 2026-07-13 canary receipts (dry +
-  # one live-parity pass; see the PR body of fix/live-wire-launch-agent-liveness). Loop-body edit:
+  # one live-parity pass; PR #1013 body). Loop-body edit:
   # takes effect only after `launchctl kickstart -k gui/$(id -u)/com.limen.heartbeat`.
   if [ "${LIMEN_BEAT_DERIVE:-1}" = "1" ]; then
     python3 "$LIMEN_ROOT/scripts/beat-sensors.py" --run --source heartbeat --scheduled-only \

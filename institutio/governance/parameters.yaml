@@ -2296,7 +2296,7 @@ parameters:
     env: LIMEN_BEAT_DERIVE
     self_update: none
     owner: governance
-    note: "The continuous metabolize sensor loop is registry-derived and default-on after #935; the deleted hand-wired blocks are not a fallback, so 0 skips that pass as an escape hatch. The same generic runner now owns scheduled heartbeat cadence, timeout, conditional argv, voice stamps, Omega eligibility, and armed-valve metadata from sensors.yaml. The heartbeat's scheduled lane is live-wired too (heartbeat-loop.sh fallback 1, held equal to this default by test_derive_fallback_matches_panel_default): the post-#921 integration drain was released by the 2026-07-13 dry + live-parity canary receipts (PR body of fix/live-wire-launch-agent-liveness)."
+    note: "The continuous metabolize sensor loop is registry-derived and default-on after #935; the deleted hand-wired blocks are not a fallback, so 0 skips that pass as an escape hatch. The same generic runner now owns scheduled heartbeat cadence, timeout, conditional argv, voice stamps, Omega eligibility, and armed-valve metadata from sensors.yaml. The heartbeat's scheduled lane is live-wired too (heartbeat-loop.sh fallback 1, held equal to this default by test_derive_fallback_matches_panel_default): the post-#921 integration drain was released by the 2026-07-13 dry + live-parity canary receipts (PR #1013 body)."
 
   LIMEN_PROMPT_ATOM_CONTROL:
     default: "0"
