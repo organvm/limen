@@ -877,19 +877,27 @@ def validate_remote_submission_harvest(
         raise RemoteExecutionError("remote receipt request/run metadata is malformed")
     if _REMOTE_REQUEST_FIELDS - request.keys() or _REMOTE_RUN_FIELDS - run.keys():
         raise RemoteExecutionError("remote receipt request/run metadata is incomplete")
-    current_contract_fields = {
+    required_current_contract_fields = {
         "predicate_digest",
         "instruction_digest",
         "receipt_target",
         "custody_mode",
         "inputs",
+        "execution_profile",
         "execution_profile_digest",
         "verification_context_digest",
     }
-    if current_contract_fields - expected_request_contract.keys() or any(
+    current_contract_fields = required_current_contract_fields - {"execution_profile"}
+    if required_current_contract_fields - expected_request_contract.keys() or any(
         request[field] != expected_request_contract[field] for field in current_contract_fields
     ):
         raise RemoteExecutionError("remote receipt request no longer matches the current task contract")
+    try:
+        current_execution_profile = validate_execution_profile(expected_request_contract["execution_profile"])
+    except PredicateContractError as exc:
+        raise RemoteExecutionError("current remote execution profile is invalid") from exc
+    if request["execution_profile_digest"] != digest_bytes(canonical_json(current_execution_profile)):
+        raise RemoteExecutionError("remote receipt execution profile digest does not match the current task contract")
     if (
         not isinstance(request.get("inputs"), list)
         or isinstance(request.get("workflow_id"), bool)
@@ -941,6 +949,31 @@ def validate_remote_submission_harvest(
     if payload.get("state") != run.get("state") or metadata["remote_state"] != payload.get("state"):
         raise RemoteExecutionError("remote submission and receipt states disagree")
     packet = str(request["packet_digest"])
+    try:
+        expected_packet = packet_digest(
+            provider=str(request["provider"]),
+            task_id=str(request["task_id"]),
+            repo=str(request["repo"]),
+            base_sha=str(request["base_sha"]),
+            control_repo=str(request["control_repo"]),
+            control_ref=str(request["control_ref"]),
+            control_ref_kind=str(request["control_ref_kind"]),
+            control_sha=str(request["control_sha"]),
+            workflow_id=request["workflow_id"],
+            workflow_path=str(request["workflow_path"]),
+            workflow_event=str(request["workflow_event"]),
+            verification_context_digest=str(request["verification_context_digest"]),
+            predicate_digest=str(request["predicate_digest"]),
+            instruction_digest=str(request["instruction_digest"]),
+            receipt_target=str(request["receipt_target"]),
+            custody_mode=str(request["custody_mode"]),
+            inputs=validate_content_references(request["inputs"]),
+            execution_profile=current_execution_profile,
+        )
+    except (PredicateContractError, TypeError, ValueError) as exc:
+        raise RemoteExecutionError("remote receipt packet manifest is invalid") from exc
+    if packet != expected_packet:
+        raise RemoteExecutionError("remote receipt packet digest does not bind its request manifest")
     if not DIGEST_RE.fullmatch(packet) or metadata["remote_request_id"] != packet.removeprefix("sha256:")[:32]:
         raise RemoteExecutionError("remote request ID is not derived from the attested packet digest")
     return metadata

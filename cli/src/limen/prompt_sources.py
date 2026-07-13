@@ -4,15 +4,251 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
-from pathlib import PurePath
+import stat
+from pathlib import Path, PurePath
 from typing import Any
 
 
 SOURCE_ADAPTER_CONTRACT_VERSION = 1
-PROMPT_SOURCE_SCANNER_VERSION = 2
+PROMPT_SOURCE_SCANNER_VERSION = 3
 SOURCE_FILE_SIGNATURE_FIELDS = ("ctime_ns", "device", "inode", "mtime_ns", "size")
+CLAUDE_PROJECT_MEMORY_ALIAS_ID = "claude-project-memory-alias-v1"
+SOURCE_ALIAS_BLOCKER_REASONS = (
+    "alias_ancestor_symlink",
+    "alias_changed",
+    "alias_dangling_target",
+    "alias_isolated_home_escape",
+    "alias_link_chain",
+    "alias_outside_root",
+    "alias_target_mismatch",
+    "alias_target_not_regular",
+    "alias_wrong_role",
+)
+
+
+class SourcePathCustody:
+    """Metadata-only custody for one path below a declared prompt-source root."""
+
+    __slots__ = (
+        "alias_contract_id",
+        "alias_target",
+        "blocker_reason",
+        "error",
+        "related_evidence",
+        "related_signatures",
+        "relative",
+        "unit_signature",
+    )
+
+    def __init__(
+        self,
+        *,
+        relative: Path | None,
+        unit_signature: dict[str, int] | None,
+        alias_contract_id: str | None = None,
+        alias_target: Path | None = None,
+        related_signatures: dict[str, dict[str, int]] | None = None,
+        related_evidence: dict[str, dict[str, str]] | None = None,
+        blocker_reason: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        self.relative = relative
+        self.unit_signature = unit_signature
+        self.alias_contract_id = alias_contract_id
+        self.alias_target = alias_target
+        self.related_signatures = related_signatures
+        self.related_evidence = related_evidence
+        self.blocker_reason = blocker_reason
+        self.error = error
+
+
+def _signature_from_stat(value: os.stat_result) -> dict[str, int]:
+    values = {
+        "size": value.st_size,
+        "mtime_ns": value.st_mtime_ns,
+        "ctime_ns": value.st_ctime_ns,
+        "inode": value.st_ino,
+        "device": value.st_dev,
+    }
+    return {field: int(values[field]) for field in SOURCE_FILE_SIGNATURE_FIELDS}
+
+
+def _absolute_lexical(path: Path) -> Path:
+    return Path(os.path.abspath(os.fspath(path.expanduser())))
+
+
+def _within(candidate: Path, root: Path) -> bool:
+    try:
+        candidate.relative_to(root) if candidate != root else None
+    except ValueError:
+        return False
+    return True
+
+
+def _blocked_source_path(reason: str, message: str) -> SourcePathCustody:
+    return SourcePathCustody(
+        relative=None,
+        unit_signature=None,
+        blocker_reason=reason,
+        error=message,
+    )
+
+
+def inspect_source_path_custody(
+    source: str,
+    path: Path,
+    containment_root: Path,
+    *,
+    isolated_home: Path | None = None,
+) -> SourcePathCustody:
+    """Resolve direct files and one exact Claude memory alias without arbitrary link traversal.
+
+    The declared root itself remains trusted and may be a configured symlink, matching
+    the pre-existing scanner contract. Below that root, only a leaf
+    ``claude-projects/<project>/<name>.md`` alias whose link text names the exact
+    ``memory/<name>.md`` sibling is admissible. The target and every target ancestor
+    below the root must be non-symlinks.
+    """
+
+    lexical_root = _absolute_lexical(containment_root)
+    lexical_path = _absolute_lexical(path)
+    try:
+        relative = lexical_path.relative_to(lexical_root)
+    except ValueError:
+        return _blocked_source_path("alias_outside_root", "source path escapes its declared source root")
+
+    try:
+        resolved_root = lexical_root.resolve(strict=True)
+        resolved_home = isolated_home.resolve(strict=True) if isolated_home is not None else None
+    except OSError as exc:
+        return _blocked_source_path("alias_outside_root", f"source path cannot be resolved: {exc}")
+    if resolved_home is not None and not _within(resolved_root, resolved_home):
+        return _blocked_source_path("alias_isolated_home_escape", "source path escapes isolated source home")
+
+    path_is_declared_root = lexical_path == lexical_root
+    current = lexical_root if path_is_declared_root else lexical_path.parent
+    try:
+        while current != lexical_root:
+            current_stat = os.lstat(current)
+            if stat.S_ISLNK(current_stat.st_mode):
+                return _blocked_source_path(
+                    "alias_ancestor_symlink",
+                    "source path contains a symlink hop below its declared source root",
+                )
+            parent = current.parent
+            if parent == current:
+                return _blocked_source_path("alias_outside_root", "source path is outside its containment root")
+            current = parent
+        leaf_stat = os.lstat(lexical_path)
+    except OSError as exc:
+        return _blocked_source_path("alias_dangling_target", f"source path cannot be resolved: {exc}")
+
+    if not stat.S_ISLNK(leaf_stat.st_mode) or path_is_declared_root:
+        try:
+            resolved_path = lexical_path.resolve(strict=True)
+        except OSError as exc:
+            return _blocked_source_path("alias_dangling_target", f"source path cannot be resolved: {exc}")
+        if not _within(resolved_path, resolved_root):
+            return _blocked_source_path("alias_outside_root", "source path escapes its declared source root")
+        if resolved_home is not None and not _within(resolved_path, resolved_home):
+            return _blocked_source_path("alias_isolated_home_escape", "source path escapes isolated source home")
+        direct_stat = os.stat(lexical_path) if path_is_declared_root else leaf_stat
+        return SourcePathCustody(relative=relative, unit_signature=_signature_from_stat(direct_stat))
+
+    alias_error = "source path contains a symlink hop outside the approved Claude project-memory alias contract"
+    if source != "claude-projects" or len(relative.parts) != 2 or lexical_path.suffix.lower() != ".md":
+        return _blocked_source_path("alias_wrong_role", alias_error)
+
+    expected_target = lexical_path.parent / "memory" / lexical_path.name
+    try:
+        link_text = os.readlink(lexical_path)
+    except OSError as exc:
+        return _blocked_source_path("alias_changed", f"source path contains a changed symlink hop: {exc}")
+    link_path = Path(link_text)
+    if not link_path.is_absolute() and ".." in link_path.parts:
+        return _blocked_source_path("alias_target_mismatch", alias_error)
+    claimed_target = _absolute_lexical(link_path if link_path.is_absolute() else lexical_path.parent / link_path)
+    if claimed_target != expected_target:
+        return _blocked_source_path("alias_target_mismatch", alias_error)
+
+    try:
+        current = expected_target
+        target_stat: os.stat_result | None = None
+        while current != lexical_root:
+            current_stat = os.lstat(current)
+            if stat.S_ISLNK(current_stat.st_mode):
+                return _blocked_source_path(
+                    "alias_link_chain",
+                    "source path contains a symlink hop whose target is another symlink",
+                )
+            if current == expected_target:
+                target_stat = current_stat
+            current = current.parent
+        if target_stat is None or not stat.S_ISREG(target_stat.st_mode):
+            return _blocked_source_path(
+                "alias_target_not_regular",
+                "source path contains a symlink hop whose target is not a regular file",
+            )
+        resolved_target = expected_target.resolve(strict=True)
+    except OSError as exc:
+        return _blocked_source_path(
+            "alias_dangling_target",
+            f"source path contains a dangling symlink hop: {exc}",
+        )
+    if not _within(resolved_target, resolved_root):
+        return _blocked_source_path("alias_outside_root", alias_error)
+    if resolved_home is not None and not _within(resolved_target, resolved_home):
+        return _blocked_source_path("alias_isolated_home_escape", "source path escapes isolated source home")
+
+    target_signature = _signature_from_stat(target_stat)
+    target_locator_sha256 = hashlib.sha256(str(expected_target).encode("utf-8", errors="replace")).hexdigest()
+    link_target_sha256 = hashlib.sha256(os.fsencode(link_text)).hexdigest()
+    return SourcePathCustody(
+        relative=relative,
+        unit_signature=_signature_from_stat(leaf_stat),
+        alias_contract_id=CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+        alias_target=expected_target,
+        related_signatures={"memory_target": target_signature},
+        related_evidence={
+            "memory_target": {
+                "locator_sha256": target_locator_sha256,
+                "link_target_sha256": link_target_sha256,
+            }
+        },
+    )
+
+
 SOURCE_ADAPTER_RULES: dict[str, dict[str, Any]] = {
+    "codex-pasted-text-attachment-v1": {
+        "source": "codex-attachments",
+        "path": {
+            "relative_depth": 2,
+            "basename_regex": r"pasted-text-[1-9][0-9]*\.txt",
+        },
+        "parent": {
+            "source": "codex-sessions",
+            "record": "response_item:message:user",
+            "content_block_type": "input_text",
+            "reference_line": (
+                "pasted text file: <canonical-absolute-attachment-path>. Read this file before continuing."
+            ),
+            "cardinality": "exactly-one-canonical-parent-event",
+            "session_identity": "exactly-one-canonical-session-meta-identity",
+            "inherits": ["session_ref", "timestamp", "provenance", "authority"],
+        },
+        "body_encoding": "utf-8-strict",
+        "unparsed_parent_record_authority": "parent-completeness-unknown",
+        "unknown_parent_completeness_with_attachment_candidate": "fail-closed",
+        "parent_byte_accounting": "cumulative-actual-read",
+        "max_probe_bytes": 1048576,
+        "max_parent_probe_bytes": 536870912,
+        "max_parent_record_bytes": 1048576,
+        "max_parent_candidate_bytes": 16777216,
+        "max_parent_records": 100000,
+        "max_parent_session_ids": 16,
+    },
     "claude-remote-task-command-v1": {
         "source": "claude-projects",
         "path": {"relative_depth": 4, "segment_2": "remote-agents", "suffix": ".json"},
@@ -81,6 +317,18 @@ SOURCE_EXCLUSION_RULES: dict[str, dict[str, Any]] = {
         "source": "claude-projects",
         "path": {"relative_depth": 3, "segment_1": "memory", "suffix": ".md"},
     },
+    CLAUDE_PROJECT_MEMORY_ALIAS_ID: {
+        "source": "claude-projects",
+        "path": {"relative_depth": 2, "suffix": ".md"},
+        "alias": {
+            "kind": "leaf-symlink",
+            "target": "memory/<same-basename>",
+            "target_type": "regular-file",
+            "ancestor_symlinks": "reject",
+            "target_symlinks": "reject",
+            "containment": "same-declared-source-root",
+        },
+    },
     "claude-project-memory-mirror-v1": {
         "source": "claude-projects",
         "path": {"relative_depth": 2, "suffix": ".md"},
@@ -123,11 +371,29 @@ SOURCE_EXCLUSION_RULES: dict[str, dict[str, Any]] = {
 SOURCE_ADAPTER_IDS = tuple(sorted(SOURCE_ADAPTER_RULES))
 SOURCE_EXCLUSION_IDS = tuple(sorted(SOURCE_EXCLUSION_RULES))
 SOURCE_RECEIPT_EVIDENCE_RULES = {
+    "codex-pasted-text-attachment-v1": {
+        "related_label": "parent_session",
+        "cardinality": "exactly-one",
+        "parent_locator": "private-canonical-codex-session-path",
+        "identity": [
+            "parent_locator_sha256",
+            "parent_event_ref_sha256",
+            "parent_session_ref_sha256",
+            "reference_sha256",
+        ],
+        "inherited": ["provenance", "authority", "timestamp"],
+    },
     "claude-project-memory-mirror-v1": {
         "related_label": "memory_sibling",
         "related_locator": "<primary-parent>/memory/<primary-basename>",
         "content_predicate": "primary-and-related-sha256-equal",
-    }
+    },
+    CLAUDE_PROJECT_MEMORY_ALIAS_ID: {
+        "related_label": "memory_target",
+        "related_locator": "<primary-parent>/memory/<primary-basename>",
+        "identity": ["locator_sha256", "link_target_sha256"],
+        "target_type": "non-symlink-regular-file",
+    },
 }
 SOURCE_AUTHORITY_RULES = {
     "claude-project-main-session-v1": {
@@ -506,6 +772,7 @@ SOURCE_ADAPTER_CONTRACT_SPEC = {
     "version": SOURCE_ADAPTER_CONTRACT_VERSION,
     "scanner_version": PROMPT_SOURCE_SCANNER_VERSION,
     "file_signature_fields": SOURCE_FILE_SIGNATURE_FIELDS,
+    "alias_blocker_reasons": SOURCE_ALIAS_BLOCKER_REASONS,
     "adapters": SOURCE_ADAPTER_RULES,
     "exclusions": SOURCE_EXCLUSION_RULES,
     "receipt_evidence": SOURCE_RECEIPT_EVIDENCE_RULES,
@@ -526,6 +793,7 @@ def source_adapter_contract() -> dict[str, Any]:
         "version": SOURCE_ADAPTER_CONTRACT_VERSION,
         "scanner_version": PROMPT_SOURCE_SCANNER_VERSION,
         "digest": _digest(SOURCE_ADAPTER_CONTRACT_SPEC),
+        "alias_blocker_reasons": sorted(SOURCE_ALIAS_BLOCKER_REASONS),
         "adapter_ids": sorted(SOURCE_ADAPTER_IDS),
         "exclusion_ids": sorted(SOURCE_EXCLUSION_IDS),
         "adapter_sources": {
@@ -539,6 +807,7 @@ def source_adapter_contract() -> dict[str, Any]:
 
 def _relative_role_parts(source: str, locator: str) -> tuple[str, ...] | None:
     roots = {
+        "codex-attachments": (".codex", "attachments"),
         "claude-file-history": (".claude", "file-history"),
         "claude-plans": (".claude", "plans"),
         "claude-projects": (".claude", "projects"),
@@ -600,14 +869,124 @@ def source_contract_receipt_applies(
             and signature.get("size") == sibling_signature.get("size")
         )
 
+    def memory_alias_evidence_valid() -> bool:
+        target = path.parent / "memory" / path.name
+        detail = evidence.get("memory_target")
+        target_signature = related.get("memory_target")
+        expected_locator_sha = hashlib.sha256(str(target).encode("utf-8", errors="replace")).hexdigest()
+        return bool(
+            set(related) == {"memory_target"}
+            and set(evidence) == {"memory_target"}
+            and isinstance(target_signature, dict)
+            and isinstance(detail, dict)
+            and set(detail) == {"link_target_sha256", "locator_sha256"}
+            and detail.get("locator_sha256") == expected_locator_sha
+            and all(
+                isinstance(detail.get(field), str) and re.fullmatch(r"[0-9a-f]{64}", str(detail[field])) is not None
+                for field in ("link_target_sha256", "locator_sha256")
+            )
+        )
+
+    def codex_attachment_evidence_valid() -> bool:
+        detail = evidence.get("parent_event")
+        parent_signature = related.get("parent_session")
+        if not isinstance(detail, dict) or not isinstance(parent_signature, dict):
+            return False
+        expected_keys = {
+            "authority",
+            "parent_event_index",
+            "parent_event_ref_sha256",
+            "parent_locator",
+            "parent_locator_sha256",
+            "parent_session_ref_sha256",
+            "parent_text_index",
+            "provenance",
+            "reference_sha256",
+            "timestamp",
+        }
+        if set(evidence) != {"parent_event"} or set(detail) != expected_keys:
+            return False
+        parent_locator = detail.get("parent_locator")
+        if not isinstance(parent_locator, str) or not parent_locator:
+            return False
+        parent_parts = PurePath(parent_locator).parts
+        codex_sessions = (".codex", "sessions")
+        parent_root_indexes = [
+            index
+            for index in range(len(parent_parts) - len(codex_sessions) + 1)
+            if tuple(parent_parts[index : index + len(codex_sessions)]) == codex_sessions
+        ]
+        attachment_parts = path.parts
+        attachment_root_indexes = [
+            index
+            for index in range(len(attachment_parts) - 1)
+            if tuple(attachment_parts[index : index + 2]) == (".codex", "attachments")
+        ]
+        if (
+            len(parent_root_indexes) != 1
+            or len(attachment_root_indexes) != 1
+            or parent_parts[: parent_root_indexes[0]] != attachment_parts[: attachment_root_indexes[0]]
+            or PurePath(parent_locator).suffix.lower() != ".jsonl"
+        ):
+            return False
+        if (
+            detail.get("parent_locator_sha256")
+            != hashlib.sha256(parent_locator.encode("utf-8", errors="replace")).hexdigest()
+        ):
+            return False
+        reference = f"pasted text file: {locator}. Read this file before continuing."
+        if detail.get("reference_sha256") != hashlib.sha256(reference.encode("utf-8", errors="replace")).hexdigest():
+            return False
+        for field in ("parent_event_ref_sha256", "parent_session_ref_sha256"):
+            value = detail.get(field)
+            if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
+                return False
+        for field in ("parent_event_index", "parent_text_index"):
+            value = detail.get(field)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                return False
+        provenance = detail.get("provenance")
+        authority = detail.get("authority")
+        expected_authority = (
+            "operator"
+            if provenance == "operator_typed"
+            else ("unknown" if provenance == "unknown_user_input" else "derived")
+        )
+        return bool(
+            provenance
+            in {
+                "operator_typed",
+                "transport_echo",
+                "continuation_summary",
+                "delegated_task_frame",
+                "unknown_user_input",
+            }
+            and authority == expected_authority
+            and (
+                detail.get("timestamp") is None
+                or (
+                    not isinstance(detail.get("timestamp"), bool)
+                    and isinstance(detail.get("timestamp"), (str, int, float))
+                )
+            )
+        )
+
     prompt_suffixes = {".json", ".jsonl", ".md"}
 
     predicates = {
+        "codex-pasted-text-attachment-v1": lambda: (
+            len(relative) == 2
+            and re.fullmatch(r"pasted-text-[1-9][0-9]*\.txt", path.name) is not None
+            and set(related) == {"parent_session"}
+        ),
         "claude-file-history-snapshot-v1": lambda: (
             len(relative) >= 1 and re.fullmatch(r"[0-9a-fA-F]+@v[0-9]+", path.name) is not None
         ),
         "claude-generated-plan-v1": lambda: len(relative) >= 1,
         "claude-project-memory-v1": lambda: len(relative) == 3 and relative[1] == "memory" and suffix == ".md",
+        CLAUDE_PROJECT_MEMORY_ALIAS_ID: lambda: (
+            len(relative) == 2 and suffix == ".md" and set(related) == {"memory_target"}
+        ),
         "claude-project-memory-mirror-v1": lambda: (
             len(relative) == 2 and suffix == ".md" and set(related) == {"memory_sibling"}
         ),
@@ -632,4 +1011,8 @@ def source_contract_receipt_applies(
         return False
     if contract_id == "claude-project-memory-mirror-v1":
         return mirror_evidence_valid()
+    if contract_id == CLAUDE_PROJECT_MEMORY_ALIAS_ID:
+        return memory_alias_evidence_valid()
+    if contract_id == "codex-pasted-text-attachment-v1":
+        return codex_attachment_evidence_valid()
     return not evidence
