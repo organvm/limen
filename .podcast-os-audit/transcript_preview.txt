@@ -1,0 +1,107 @@
+conversation_id: 6a543ef4-5fec-83ea-92bc-c7acb87c1bf6
+title: Podcast AI System Design
+update_time: 1783912694.347828
+nodes: 86
+messages_with_text: 31
+LAST: role=assistant status=finished_successfully end_turn=True chars=225
+======================================================================
+
+----- [user] (status=finished_successfully end_turn=None) -----
+Okay, we wanna build, um, we're starting a podcast, and we want to do just the podcasting. We want to build an AI system to basically do everything that requires booking the guests, and emailing them, following up, thanking them, sending them a, you know, a Hershey kiss on their pillow, the whatever, the whole thing. We need all of that stuff, all the back-end stuff to be built out. So we need that whole system. What would that look like? Who is a part of it? What are those people? What, like, let's say we were the most successful podcast in the world. What, who should be working for us, quote-unquote? What would those AI roles look like? How could they interact? And how can we make it seem like it's not AI? Like, it should feel real and human.
+
+----- [assistant] (status=finished_successfully end_turn=False) -----
+```json {"search_query":[{"q":"site:platform.openai.com/docs Responses API tools background mode official OpenAI"},{"q":"site:developers.google.com/gmail/api send email drafts official Gmail API"},{"q":"site:developers.google.com/calendar/api freebusy events official Google Calendar API"},{"q":"site:developers.hubspot.com/docs CRM contacts associations workflows official"}],"response_length":"long"} ```
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+I’m mapping this as a complete guest-operations system: roles, handoffs, data, automation, escalation rules, and the genuinely human experience each guest feels.
+
+----- [assistant] (status=finished_successfully end_turn=False) -----
+```json {"find":[{"ref_id":"turn886790view0","pattern":"Function calling provides a powerful and flexible way"},{"ref_id":"turn886790view0","pattern":"How function calling works"},{"ref_id":"turn886790view1","pattern":"Structured Outputs ensures"},{"ref_id":"turn886790view2","pattern":"Evals are structured tests"},{"ref_id":"turn886790view3","pattern":"Create and send email messages"},{"ref_id":"turn886790view3","pattern":"drafts.send"}],"response_length":"medium"} ```
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+Externally, one accountable producer identity should represent the show; internally, specialized agents can share memory, operate within strict permissions, and escalate exceptions to humans.
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+# Build a **Guest Operations OS**, not a swarm of bots The system should function like the invisible production office behind a world-class podcast: - **One authoritative guest database** - **One deterministic guest lifecycle** - **Several specialized AI capabilities** - **A small number of real humans who own judgment and relationships** - **Hard approval boundaries before consequential actions** The AI roles should be internal. Externally, guests interact with a coherent **Guest Team**, not fifteen fabricated employees. The correct goal is not to make AI *pretend* to be human. It is to make the experience feel genuinely attentive: specific, continuous, restrained, reliable, and accountable. --- # 1. Who would work for the most successful podcast in the world? ## Human leadership layer Even with extensive automation, these functions should have real human ownership. | Human seat | Actual responsibility | |---|---| | **Showrunner / Executive Producer** | Defines the show, editorial standards, priorities, risk tolerance, and final guest decisions | | **Host or Hosts** | Conduct the conversation and maintain important relationships | | **Head of Talent / Booking** | Owns strategic guest relationships, difficult negotiations, warm introductions, and VIP handling | | **Editorial Producer** | Determines why a guest belongs on the show and what the episode should accomplish | | **Production Manager** | Owns recording logistics, studio operations, calendars, deadlines, and deliverab
+...[truncated 25531 chars]
+
+----- [user] (status=finished_successfully end_turn=None) -----
+Okay, so a little bit more about who we are. I am, I have no following. I have just sort of my background, you know. And he is, his name is Ari Mannis, M-A-N-N-I-S. He has 50,000 followers. He's opened for Theo Von, he's opened for Mark Normand. But he doesn't wanna like use his, like he doesn't wanna reach in, like be asking his friends for help. So we need to figure out how to like work his network without being pathetic, essentially, you know.
+
+----- [assistant] (status=in_progress end_turn=None) -----
+```json {"query":"The user is starting a podcast with Ari Mannis and wants a tailored strategy for leveraging Ari's existing network without seeming needy or asking friends for favors. Retrieve any prior context about the user's intended podcast format, positioning, creative identity, audience goals, and any earlier discussion of Ari Mannis or related collaborators that would materially affect the strategy."} ```
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+I’ll map Ari’s public footprint into a booking strategy that leverages credible adjacency without turning friendships into favors.
+
+----- [assistant] (status=finished_successfully end_turn=False) -----
+```json {"search_query":[{"q":"Ari Mannis official website comedian bio Theo Von Mark Normand"},{"q":"Ari Mannis Instagram official"},{"q":"Ari Mannis YouTube podcast official"},{"q":"Ari Mannis comedy bio official"}],"image_query":[{"q":"Ari Mannis comedian"}],"response_length":"long"} ```
+
+----- [assistant] (status=finished_successfully end_turn=False) -----
+```json {"search_query":[{"q":"site:melrosepodcasts.com Ari Mannis Melrose Podcasts"},{"q":"site:arimannis.com Ari Mannis podcast"},{"q":"site:instagram.com/arimannis Ari Mannis followers projects Melrose Podcasts Bonnie Hill Inn"},{"q":"site:podcasts.apple.com \"Unlicensed Therapy\" \"Ari Mannis\""}],"response_length":"long"} ```
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+From that, I’ll build a practical guest-acquisition ladder and outreach system.
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+iturn517926image0 ## This materially changes the starting position You are **not** starting from zero. Ari’s public footprint currently includes roughly 49,000 Instagram followers, about 12,000 YouTube subscribers, and an established *Unlicensed Therapy* archive of 179 episodes. Apple currently lists the show as active through 2026 with a 4.9 rating from 736 ratings. His official biography also lists touring or opening work with Mark Normand, Theo Von, Andrew Santino, Dan Soder, Pauly Shore, and others. citeturn517926search1turn618685search3turn607820view3turn607820view0 Public profiles also identify Ari as a co-founder of Melrose Podcasts. Melrose operates professional studios in Los Angeles, New York, and Austin and publicly lists productions including *This Past Weekend*, *Blocks with Neal Brennan*, *Giggly Squad*, and *Unlicensed Therapy* among shows recorded in its facilities. That does **not** imply that those people are available to you, but it gives Ari genuine production credibility and puts him inside a producer-and-studio ecosystem—not merely a comedian’s social circle. citeturn845392search0turn845392search2turn845392search16turn845392search20 The actual configuration is: | You | Ari | |---|---| | No substantial existing audience | Existing public audience | | Multimedia artist, writer, scholar, systems-builder | Touring comedian and experienced podcast host | | Editorial architecture and research | Performance instincts and comedy-industry fluency |
+...[truncated 18243 chars]
+
+----- [user] (status=finished_successfully end_turn=None) -----
+He also has a studio in LA, NYC, and Austin
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+That changes the strategy substantially. You are not merely launching a podcast around Ari’s audience and relationships. You already have the beginnings of a **three-city production network**: - **Los Angeles** - **New York City** - **Austin** Assuming those studios are available to the new show, this should become one of the central operating advantages. ## What the studio network gives you ### 1. A stronger guest proposition You can tell a representative: > We can record professionally in Los Angeles, New York, or Austin, depending on the guest’s schedule. That removes one of the main barriers to booking: travel and logistical inconvenience. The guest does not need to: - Fly somewhere specifically for the show - Build a home recording setup - Depend on a remote webcam interview - Fit into a single city’s production calendar This makes cold outreach materially stronger without relying on Ari’s friendships. ### 2. Access to people already moving through those cities The system should monitor: - Comedy tours - Book tours - Film and television press schedules - Album releases - Conferences - Festivals - Speaking engagements - Gallery openings - University appearances - Other podcast bookings - People temporarily in each city The pitch becomes: > You are already in New York on October 14. We have a professional studio available nearby and can handle the entire recording within a defined 90-minute window. That is much easier to accept than: > Would you travel somewhere for our ne
+...[truncated 9121 chars]
+
+----- [user] (status=finished_successfully end_turn=None) -----
+They’re his studios—we will use them most certainly lol
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+Right. Then my earlier “assuming they’re available” hedge was unnecessary. The studios are not a peripheral advantage or borrowed infrastructure. They are **owned operating infrastructure**, and the system should be designed around them from the beginning. ## Revised premise You are launching: > **A flagship podcast inside Ari’s existing three-city studio network: Los Angeles, New York, and Austin.** That is substantially stronger than “two people starting a podcast.” It means you already control: - Recording environments - Production scheduling - Technical standards - Guest hospitality - Geographic routing - Potential crew and equipment - The ability to record guests where they already are - The capacity to batch multiple episodes efficiently The podcast can be presented as a new format from an established production operation, even though the show itself has no audience yet. ## The studios become part of the product The guest proposition is now: > We record professionally in Los Angeles, New York, and Austin. We can route the appearance around your existing travel schedule, handle the entire production process, and require no promotional commitment. That is a legitimate offer. You are providing convenience, production quality, edited media, and a developed conversation—not merely requesting access to someone’s popularity. ## The AI system must treat studios as first-class objects Every guest opportunity should automatically include: ```text Preferred city Alternative cities
+...[truncated 2514 chars]
+
+----- [user] (status=finished_successfully end_turn=None) -----
+I’d like to not see the microphones—like Club Random
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+Yes — that’s the right instinct. If you don’t want visible microphones, then the show should be designed as a **conversation space**, not a “podcast set.” ## What you’re describing A look closer to: - lounge / salon - cinematic conversation - relaxed, premium, intimate - not “two people at mics” - not YouTube-broadcast energy So the visual language becomes: - chairs, couch, side table - drinks, books, objects, texture - practical lamps - softer lighting - no mic arms in frame - no giant branded desk unless that’s part of the concept ## Audio solution To make that work, you’d usually use some combination of: ### Primary - **hidden lav mics** on the hosts/guests ### Backup / reinforcement - **overhead shotgun mics** - or **boom mics just out of frame** - or **boundary / plant mics** hidden in furniture or on the table That gives you clean sound without the visual clutter of visible podcast microphones. ## What this changes creatively This pushes the show toward: - more timeless - more filmic - more premium - less “content creator” - more like a real hosted encounter That matters because it also helps with guests. People often look better and feel less self-conscious when they’re not speaking into a giant mic the whole time. ## Design rule Your studio design brief should now include: > **No visible microphones in the final frame.** > Capture should be hidden or out-of-frame. > The room must read as an intentional conversational environment, not a recording booth. ## Production i
+...[truncated 675 chars]
+
+----- [user] (status=finished_successfully end_turn=None) -----
+So im with Ari right now on vacation. We’re in the Hamptons—and so his issue is he is lazy and doesn’t want to work his network—hence why im building this. And it’s also something we can sell to our network bc they all podcast (not be hacky about it). We also, okay, so I like what you're saying, define the full visual set language. That will be something we could do in the, like, I wanna do that, I wanna design the whole thing. I want it to be visually, you know, minimal, interesting, and different. But I can't go into this guy's, like, studio and just change everything. We need to make a successful podcast first. So how do we make this podcast successful, right? Simultaneously, I want my own podcast, but I'm gonna go around with a suitcase of GoPros, and I wanna go into different people's spaces so it could always be different. Now, that's its own thing, but I'm gonna use the system for that as well, right? Also, we were talking about how we should have different segments, and we don't want to just be a podcast where people talk, right? Like, um, we don't want to just do the same thing that everyone else fucking does. So, that's important, right? We want to design segments. The advertising should be funny. It shouldn't be just ad reads where you're just boringly reading the ads, you know, that kind of sucks. Those are just some ideas for now, but I wanna, he's out right now, my friend, and I'm home because I'm not feeling, so I wanna, I kinda wanna get this thing designed an
+...[truncated 85 chars]
+
+----- [assistant] (status=in_progress end_turn=None) -----
+```json {"query":"The user is building a new podcast with Ari Mannis, who owns studios in Los Angeles, New York City, and Austin. Ari does not want to manually work his network, and the user also wants a separate mobile podcast recorded in other people's spaces with GoPros. Retrieve prior user-specific details about the desired podcast format, hosts' roles, visual style, segment ideas, audience strategy, and any relevant creative or business constraints so I can design a coherent operating blueprint."} ```
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+I’m treating this as one integrated build: the flagship, your mobile show, the reusable guest-operations product, and a concrete launch sequence.
+
+----- [assistant] (status=finished_successfully end_turn=False) -----
+```json {"image_query":[{"q":"Club Random Bill Maher set interior podcast lounge no visible microphones"},{"q":"cinematic interview set lounge hidden microphones minimal"}],"search_query":[{"q":"site:blog.youtube/news-and-events podcasts monthly viewers YouTube official 2025"},{"q":"site:newsroom.spotify.com video podcasts creator program official 2025"},{"q":"site:edisonresearch.com podcast consumption YouTube 2025"},{"q":"site:iab.com podcast advertising revenue study 2025 host-read ads"}],"response_length":"long"} ```
+
+----- [assistant] (status=finished_successfully end_turn=False) -----
+```json {"search_query":[{"q":"site:ftc.gov endorsement guides social media advertising disclosure podcast host read ads official"},{"q":"site:support.google.com/youtube podcast clips shorts official best practices"},{"q":"site:creators.spotify.com video podcast clips official creators 2025"},{"q":"site:blog.youtube podcast creators thumbnails titles chapters clips official"}],"response_length":"long"} ```
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+The blueprint will also define repeatable segments, visual rules, a growth loop, and automation robust enough to minimize Ari’s required effort.
+
+----- [tool] (status=finished_successfully end_turn=None) -----
+[Execution output: Created /mnt/data/podcast_os_v0_starter_pack.zip Files: - START_HERE.md - ad_lab.md - agent_roles.md - ari_approval_dashboard.html - field_show_profile.md - guest_pipeline_template.csv - outreach_templates.md - segment_deck.md - show_dna.yaml - visual_language_v0.md - workflow.json]
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+iturn604912image0 The crucial insight is that **Ari’s laziness is not merely an obstacle; it is the first product requirement**. He represents the ideal customer: > A host with relationships, production infrastructure, and on-camera ability who wants to record—but does not want to research guests, manage contacts, write outreach, negotiate calendars, supervise follow-ups, design episodes, or remember promises. Build the system around reducing Ari’s operational participation to roughly **ten minutes per week**. Once it works for him, it becomes a legitimate product for the other podcasters in his network who have the same problem. # What you are actually building There are three connected but distinct products: ```text 1. ARI + YOU FLAGSHIP SHOW Controlled studio conversation LA / NYC / Austin Consistent format and visual grammar 2. YOUR FIELD SHOW Portable suitcase production Recorded inside other people's spaces Variable environment, consistent artistic protocol 3. PODCAST OPERATING SYSTEM Guest intelligence Relationship routing Booking Scheduling Episode design Studio logistics Ad creative Post-production Relationship follow-through ``` The two shows share the same operating system but should **not look or feel like the same show**. The flagship proves the system under controlled conditions. Your mobile show proves that the system is portable and format-independent. The software/service is the layer other podcasters eventually buy. --- # 1. The flagship cannot merely be 
+...[truncated 22170 chars]
+
+----- [user] (status=finished_successfully end_turn=None) -----
+@GitHub I’ve built a content cannibalizer, a streaming app—I’ve built perhaps more that we are not even realizing fits in and can be compiled and distilled into this
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+I’ll audit your GitHub repositories for reusable media, streaming, scheduling, voice, and automation capabilities, then classify each component to retain, extract, merge, or retire.
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+The ecosystem already contains production-grade mail workflows, livestreaming, media archiving, and post-production automation. The main missing component is a purpose-built guest CRM and booking front office.
+
+----- [assistant] (status=finished_successfully end_turn=True) -----
+Hidden reuse changes the gap: Mirror Mirror supplies scheduling concierge functions, while application-pipeline can become the guest opportunity engine. The product should compose these through adapters, not merge everything.
