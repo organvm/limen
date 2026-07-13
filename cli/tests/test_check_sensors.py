@@ -212,7 +212,7 @@ def test_unreachable_heartbeat_sensor_without_cadence_fails_f(tmp_path):
     reg = _write(
         tmp_path,
         "sensors:\n  x:\n    section: '0x'\n    source: [heartbeat]\n    gate: LIMEN_GITVS\n"
-        "    default: \"1\"\n"
+        '    default: "1"\n'
         "    steps:\n      - command: 'python3 scripts/gitvs.py reconcile'\n        severity: silent\n"
         "        escalation: 'e'\n",
     )
@@ -223,7 +223,7 @@ def test_unreachable_heartbeat_sensor_without_cadence_fails_f(tmp_path):
     reg2 = tmp_path / "fixed.yaml"
     reg2.write_text(
         "sensors:\n  x:\n    section: '0x'\n    source: [heartbeat]\n    gate: LIMEN_GITVS\n"
-        "    default: \"1\"\n"
+        '    default: "1"\n'
         "    cadence: {env: LIMEN_BEAT_GITVS, default: 8}\n"
         "    steps:\n      - command: 'python3 scripts/gitvs.py reconcile'\n        severity: silent\n"
         "        escalation: 'e'\n",
