@@ -391,7 +391,7 @@ def _sandbox_profile() -> dict[str, object]:
         "cpus": "1.0",
         "memory": "512m",
         "pids": 64,
-        "container_logs": "local:max-size=1m,max-file=1",
+        "container_logs": "local:max-size=1m,max-file=1,compress=false",
         "environment": dict(sorted(SANDBOX_ENV.items())),
     }
 
@@ -419,6 +419,7 @@ def sandbox_command(cwd: Path, script: str, *, docker_binary: str = "docker") ->
         "--log-driver=local",
         "--log-opt=max-size=1m",
         "--log-opt=max-file=1",
+        "--log-opt=compress=false",
         "--pull=never",
         "--network=none",
         "--read-only",

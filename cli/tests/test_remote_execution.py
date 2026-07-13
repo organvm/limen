@@ -592,6 +592,7 @@ def test_sandbox_command_exposes_only_read_only_target_and_controlled_tmpfs(tmp_
     assert "--log-driver=local" in command
     assert "--log-opt=max-size=1m" in command
     assert "--log-opt=max-file=1" in command
+    assert "--log-opt=compress=false" in command
     assert "--read-only" in command
     assert "--cap-drop=ALL" in command
     assert "--security-opt=no-new-privileges:true" in command
