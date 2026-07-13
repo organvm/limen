@@ -428,19 +428,30 @@ def _worktree_disk_free_gib(path: Path) -> float | None:
     return None
 
 
+def _scalar_float(value: object) -> float | None:
+    """Coerce a simple configuration/receipt scalar to a float."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _finite_float(value: object) -> float | None:
+    """Coerce a simple configuration/receipt scalar to a finite float."""
+    number = _scalar_float(value)
+    return number if number is not None and math.isfinite(number) else None
+
+
 def _disk_floor_gib() -> float | None:
     """Registered LIMEN_DISK_FLOOR_GIB (env override > panel default). None if unresolvable.
 
     Uses the parameter-panel authority — never a hardcoded fallback number.
     """
     raw = _live_parameter("LIMEN_DISK_FLOOR_GIB")
-    if raw is None or isinstance(raw, bool):
-        return None
-    try:
-        floor = float(raw)
-    except (TypeError, ValueError):
-        return None
-    return floor if math.isfinite(floor) and floor > 0 else None
+    floor = _finite_float(raw)
+    return floor if floor is not None and floor > 0 else None
 
 
 def _vitals_action() -> str:
@@ -470,14 +481,8 @@ def _live_enabled(name: str) -> bool:
 
 
 def _positive_finite_parameter(name: str) -> float | None:
-    value = _live_parameter(name)
-    if value is None or isinstance(value, bool):
-        return None
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    return number if math.isfinite(number) and number > 0 else None
+    number = _finite_float(_live_parameter(name))
+    return number if number is not None and number > 0 else None
 
 
 def _reaper_freshness_minutes() -> float | None:
@@ -573,23 +578,18 @@ def _reaper_blocks_new_local(root: Path, targets_present: bool | None) -> tuple[
     if event.get("apply") is not True:
         return True, "worktree targets present: final reclaim receipt is not an apply run"
 
-    event_ts_raw = event.get("ts")
-    if isinstance(event_ts_raw, bool):
-        return True, "worktree targets present: reclaim event timestamp is invalid"
-    try:
-        event_ts = float(event_ts_raw)
-    except (TypeError, ValueError):
+    event_ts = _scalar_float(event.get("ts"))
+    if event_ts is None:
         return True, "worktree targets present: reclaim event timestamp is invalid"
     if not math.isfinite(event_ts) or event_ts <= 0:
         return True, "worktree targets present: reclaim event timestamp is not finite and positive"
 
     completed_ts_raw = event.get("completed_ts")
-    if isinstance(completed_ts_raw, bool):
-        return True, "worktree targets present: reclaim completion timestamp is invalid"
-    try:
-        completed_ts = float(completed_ts_raw)
-    except (TypeError, ValueError):
+    if completed_ts_raw is None:
         return True, "worktree targets present: strict receipt missing finite completed_ts; await next apply run"
+    completed_ts = _scalar_float(completed_ts_raw)
+    if completed_ts is None:
+        return True, "worktree targets present: reclaim completion timestamp is invalid"
     if not math.isfinite(completed_ts) or completed_ts <= 0:
         return True, "worktree targets present: reclaim completion timestamp is not finite and positive"
 
@@ -727,11 +727,10 @@ def admission_blocks(
 
     if isinstance(checkout_gib, bool) or checkout_gib is None:
         return True, "tracked HEAD checkout size is unknown — failing closed for new local worktree"
-    try:
-        estimate = float(checkout_gib)
-    except (TypeError, ValueError):
+    estimate = _finite_float(checkout_gib)
+    if estimate is None:
         return True, "tracked HEAD checkout size is unknown — failing closed for new local worktree"
-    if not math.isfinite(estimate) or estimate <= 0:
+    if estimate <= 0:
         return True, "tracked HEAD checkout size is invalid — failing closed for new local worktree"
 
     room_raw = snapshot.get("room_gib")
@@ -739,30 +738,29 @@ def admission_blocks(
         free = snapshot.get("free_gib")
         floor = snapshot.get("floor_gib")
         reserved = snapshot.get("reserved_gib", 0.0)
-        if any(isinstance(value, bool) or value is None for value in (free, floor, reserved)):
+        free_number = _finite_float(free)
+        floor_number = _finite_float(floor)
+        reserved_number = _finite_float(reserved)
+        if free_number is None or floor_number is None or reserved_number is None:
             return True, "local checkout room is unknown — failing closed for new local worktree"
-        try:
-            room = max(0.0, float(free) - float(floor) - float(reserved))
-        except (TypeError, ValueError):
-            return True, "local checkout room is unknown — failing closed for new local worktree"
+        room = max(0.0, free_number - floor_number - reserved_number)
     else:
-        try:
-            room = float(room_raw)
-        except (TypeError, ValueError):
+        room_number = _finite_float(room_raw)
+        if room_number is None:
             return True, "local checkout room is unknown — failing closed for new local worktree"
-    if not math.isfinite(room) or room < 0:
+        room = room_number
+    if room < 0:
         return True, "local checkout room is invalid — failing closed for new local worktree"
     if estimate > room:
         return True, f"tracked HEAD checkout needs {estimate:.3f} GiB but only {room:.3f} GiB remains above floor"
 
     if reserve:
         reserved_raw = snapshot.get("reserved_gib", 0.0)
-        try:
-            reserved = float(reserved_raw)
-        except (TypeError, ValueError):
+        current_reserved = _finite_float(reserved_raw)
+        if current_reserved is None:
             return True, "local checkout reservation state is invalid — failing closed"
-        if not math.isfinite(reserved) or reserved < 0:
+        if current_reserved < 0:
             return True, "local checkout reservation state is invalid — failing closed"
-        snapshot["reserved_gib"] = reserved + estimate
+        snapshot["reserved_gib"] = current_reserved + estimate
         snapshot["room_gib"] = room - estimate
     return False, ""

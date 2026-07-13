@@ -2600,7 +2600,9 @@ def _recognized_narrow_verifier(segment: list[str]) -> bool:
     pytest_index = _pytest_command_index(segment)
     if pytest_index is not None:
         targets = _pytest_positional_targets(segment[pytest_index + 1 :])
-        return bool(targets) and all(_pytest_target_is_narrow(target) for target in targets)
+        if not targets:
+            return False
+        return all(_pytest_target_is_narrow(target) for target in targets)
     verifier_index = 0
     if _python_command(basenames[0]):
         verifier_index = 1
