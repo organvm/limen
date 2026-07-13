@@ -34,7 +34,6 @@ def _load(tmp_path, n_open=6, agent="codex"):
     module-level ROOT/TASKS/RUNS pick up this env."""
     os.environ["LIMEN_ROOT"] = str(tmp_path)
     os.environ["LIMEN_TASKS"] = str(tmp_path / "tasks.yaml")
-    os.environ["LIMEN_REMOTE_RECEIPT_ROOT"] = str(tmp_path / "logs" / "remote-execution")
     os.environ["LIMEN_DISPATCH_ADMISSION"] = "0"
     os.environ["LIMEN_WORKTREE_DEBT_GATE"] = "0"
     today = datetime.date.today()
