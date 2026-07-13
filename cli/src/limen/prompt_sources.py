@@ -247,6 +247,7 @@ def inspect_source_path_custody(
     if resolved_home is not None and not _within(resolved_target, resolved_home):
         return _blocked_source_path("alias_isolated_home_escape", "source path escapes isolated source home")
 
+    assert target_stat is not None
     target_signature = _signature_from_stat(target_stat)
     target_locator_sha256 = hashlib.sha256(str(expected_target).encode("utf-8", errors="replace")).hexdigest()
     link_target_sha256 = hashlib.sha256(os.fsencode(link_text)).hexdigest()
