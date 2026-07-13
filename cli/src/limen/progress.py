@@ -75,9 +75,7 @@ def _slug(value: Any) -> str | None:
     return normalized or None
 
 
-def _field_or_label(
-    task: Task, fields: Iterable[str], label_prefixes: Iterable[str]
-) -> str | None:
+def _field_or_label(task: Task, fields: Iterable[str], label_prefixes: Iterable[str]) -> str | None:
     """Read explicit metadata without guessing from a title or task ID."""
 
     for field in fields:
@@ -104,9 +102,7 @@ def task_origin(task: Task) -> str:
 
 
 def task_horizon(task: Task) -> str:
-    raw = _field_or_label(
-        task, ("time_horizon", "horizon"), ("horizon", "time-horizon")
-    )
+    raw = _field_or_label(task, ("time_horizon", "horizon"), ("horizon", "time-horizon"))
     value = _slug(raw)
     return _HORIZON_ALIASES.get(value or "", value or "unknown")
 
@@ -149,6 +145,11 @@ def _task_row(task: Task, root: Path) -> dict[str, Any]:
         and task.predicate
         and task.receipt_target
     )
+    credit_booking = (
+        "board_claim_with_contract"
+        if complete and contract_ready
+        else ("unsubstantiated_terminal_claim" if complete else "not_booked")
+    )
     return {
         "id": task.id,
         "title": task.title,
@@ -158,6 +159,8 @@ def _task_row(task: Task, root: Path) -> dict[str, Any]:
         "horizon": horizon,
         "due": task_due(task),
         "value_case": value_case,
+        "credit_forecast": value_case,
+        "credit_booking": credit_booking,
         "agent": task.target_agent,
         "priority": task.priority,
         "status": task.status,
@@ -169,6 +172,7 @@ def _task_row(task: Task, root: Path) -> dict[str, Any]:
         "contract_ready": contract_ready,
         "underwriting_ready": underwriting_ready,
         "work_loan_cost_runs": task.budget_cost,
+        "debit_requested_runs": task.budget_cost,
         "updated": task.updated.isoformat() if task.updated else None,
         "url": task.urls[0] if task.urls else None,
     }
@@ -179,12 +183,15 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     complete = sum(bool(row["complete"]) for row in rows)
     debt = total - complete
     blocked = sum(bool(row["blocked"]) for row in rows)
-    contract_ready_active = sum(
-        bool(row["contract_ready"]) and not row["complete"] for row in rows
+    contract_ready_active = sum(bool(row["contract_ready"]) and not row["complete"] for row in rows)
+    underwritten_active = sum(bool(row["underwriting_ready"]) and not row["complete"] for row in rows)
+    requested_active_debit_runs = sum(int(row["debit_requested_runs"]) for row in rows if not row["complete"])
+    underwritten_active_debit_runs = sum(
+        int(row["debit_requested_runs"]) for row in rows if row["underwriting_ready"] and not row["complete"]
     )
-    underwritten_active = sum(
-        bool(row["underwriting_ready"]) and not row["complete"] for row in rows
-    )
+    forecast_credit_active = sum(bool(row["credit_forecast"]) and not row["complete"] for row in rows)
+    board_credit_claims = sum(row["credit_booking"] == "board_claim_with_contract" for row in rows)
+    unsubstantiated_terminal_claims = sum(row["credit_booking"] == "unsubstantiated_terminal_claim" for row in rows)
     return {
         "total": total,
         "complete": complete,
@@ -195,6 +202,14 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "contract_coverage_pct": _percent(contract_ready_active, debt),
         "underwritten_active": underwritten_active,
         "underwriting_coverage_pct": _percent(underwritten_active, debt),
+        "requested_active_debit_runs": requested_active_debit_runs,
+        "underwritten_active_debit_runs": underwritten_active_debit_runs,
+        "ununderwritten_active_debit_runs": (requested_active_debit_runs - underwritten_active_debit_runs),
+        "debit_underwriting_coverage_pct": _percent(underwritten_active_debit_runs, requested_active_debit_runs),
+        "forecast_credit_active": forecast_credit_active,
+        "forecast_credit_coverage_pct": _percent(forecast_credit_active, debt),
+        "board_credit_claims": board_credit_claims,
+        "unsubstantiated_terminal_claims": unsubstantiated_terminal_claims,
     }
 
 
@@ -205,9 +220,7 @@ def _groups(rows: list[dict[str, Any]], field: str) -> list[dict[str, Any]]:
         key = str(value) if value not in (None, "") else "unknown"
         buckets.setdefault(key, []).append(row)
     grouped = [{field: key, **_summarize(items)} for key, items in buckets.items()]
-    return sorted(
-        grouped, key=lambda item: (-int(item["active_debt"]), str(item[field]))
-    )
+    return sorted(grouped, key=lambda item: (-int(item["active_debt"]), str(item[field])))
 
 
 def _read_json(path: Path) -> Any | None:
@@ -291,9 +304,7 @@ def _source_coverage(root: Path, now: datetime) -> list[dict[str, Any]]:
         payload = _read_json(path)
         generated = _timestamp(payload)
         age = _age_hours(generated, now)
-        status = (
-            "dark" if payload is None else ("undated" if generated is None else "ready")
-        )
+        status = "dark" if payload is None else ("undated" if generated is None else "ready")
         if payload is not None and age is not None and age > max_age:
             status = "stale"
         if source_id == "mail" and isinstance(payload, dict):
@@ -314,9 +325,7 @@ def _source_coverage(root: Path, now: datetime) -> list[dict[str, Any]]:
     return rows
 
 
-def build_progress_snapshot(
-    limen: LimenFile, root: Path, *, now: datetime | None = None
-) -> dict[str, Any]:
+def build_progress_snapshot(limen: LimenFile, root: Path, *, now: datetime | None = None) -> dict[str, Any]:
     """Build the lossless board projection and its source-completeness manifest."""
 
     generated = (now or datetime.now(UTC)).astimezone(UTC)
@@ -348,12 +357,15 @@ def build_progress_snapshot(
                 "active task has explicit origin, horizon, value case, owner repo, predicate, receipt target, "
                 "and run cost"
             ),
+            "accounting": (
+                "requested run cost is a debit; value case is forecast credit; terminal board state with a "
+                "predicate and receipt target is only a board credit claim until the owning receipt is verified"
+            ),
         },
         "summary": summary,
         "status_counts": dict(sorted(Counter(row["status"] for row in rows).items())),
         "dimensions": {
-            field: _groups(rows, field)
-            for field in ("workstream", "origin", "horizon", "agent", "repo", "status")
+            field: _groups(rows, field) for field in ("workstream", "origin", "horizon", "agent", "repo", "status")
         },
         "source_coverage": source_rows,
         "tasks": rows,
@@ -406,6 +418,16 @@ def render_progress(
                 f"{summary['underwritten_active']}/{summary['active_debt']} fully underwritten",
             ),
             (
+                "CAPITAL DEBITS",
+                summary["debit_underwriting_coverage_pct"],
+                f"{summary['underwritten_active_debit_runs']}/{summary['requested_active_debit_runs']} run-debits underwritten",
+            ),
+            (
+                "CREDIT FORECAST",
+                summary["forecast_credit_coverage_pct"],
+                f"{summary['forecast_credit_active']}/{summary['active_debt']} active leaves name expected credit",
+            ),
+            (
                 "ORIGIN COVERAGE",
                 summary["origin_coverage_pct"],
                 "due vs prompt vs recommendation vs debt",
@@ -427,9 +449,7 @@ def render_progress(
             ),
         )
         for label, pct, note in metrics:
-            lines.append(
-                f"{label:<16} {progress_bar(pct, ascii_only=ascii_only)} {pct:>5.1f}%  {note}"
-            )
+            lines.append(f"{label:<16} {progress_bar(pct, ascii_only=ascii_only)} {pct:>5.1f}%  {note}")
         lines.extend(["", f"{view.upper()} ZOOM"])
         for group in snapshot["dimensions"][view]:
             name = str(group[view])
@@ -447,11 +467,7 @@ def render_progress(
                 "undated": "DATE?",
                 "dark": "DARK",
             }[source["status"]]
-            age = (
-                "unknown age"
-                if source["age_hours"] is None
-                else f"{source['age_hours']}h old"
-            )
+            age = "unknown age" if source["age_hours"] is None else f"{source['age_hours']}h old"
             lines.append(f"  {marker:<5} {_short(source['label'], 38):<38} {age}")
 
     if level in {"micro", "all"}:
@@ -486,7 +502,5 @@ def render_progress(
                 f" {_short(row['title'], 54)}{suffix}"
             )
         if limit is not None and len(tasks) > len(shown):
-            lines.append(
-                f"  … {len(tasks) - len(shown)} more; use --all to print every matching debt leaf"
-            )
+            lines.append(f"  … {len(tasks) - len(shown)} more; use --all to print every matching debt leaf")
     return "\n".join(lines) + "\n"

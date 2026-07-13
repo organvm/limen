@@ -61,3 +61,17 @@ origin, horizon, value case, owner repo, run cost, executable predicate, and dur
 Urgency, cost of delay, confidence, dependencies, reversibility, and resource pressure can then rank
 otherwise eligible loans dynamically. Completion reconciles intended value against actual durable
 credit and actual spend; requested value is never booked as achieved value.
+
+The receipt exposes a double-entry view without pretending that unlike units are interchangeable:
+
+- `debit_requested_runs` records the board capacity requested by each leaf. Token, money, elapsed
+  time, and host costs remain separate debit dimensions when their owning telemetry is available.
+- `credit_forecast` records the explicit value case. It is a forecast, not earned value.
+- `credit_booking=board_claim_with_contract` means the terminal board claim at least names its
+  predicate and receipt target. The owner receipt still has to verify the actual credit.
+- `CAPITAL DEBITS` is cost-weighted underwriting coverage, so one expensive dark loan cannot hide
+  behind many cheap well-formed tasks.
+
+Debit and credit are reconciled at the leaf, while portfolio totals retain their units. Limen does
+not subtract a token from a merged PR or invent a universal exchange rate; ranking can use explicit
+utility and cost-of-delay doctrine, but the ledger preserves the evidence needed to audit that choice.
