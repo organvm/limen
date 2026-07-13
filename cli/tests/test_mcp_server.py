@@ -62,6 +62,11 @@ def test_agent_claim_preserves_board_extensions_and_reserves_budget(tmp_path, mo
                         "created": "2026-07-02",
                         "claude_tier": "sonnet",
                         "depends_on": ["TASK-0"],
+                        # claim-time intake normalization fails CLOSED without owner data: a legacy
+                        # task needs at least an exact owner/repo so the merged-PR fallback contract
+                        # (github_pr_contract) is derivable. Without it agent_claim correctly raises
+                        # IntakeContractError instead of dispatching unverifiable work.
+                        "repo": "organvm/limen",
                         "custom_extension": {"keep": True},
                     }
                 ],
@@ -85,3 +90,6 @@ def test_agent_claim_preserves_board_extensions_and_reserves_budget(tmp_path, mo
     assert task["depends_on"] == ["TASK-0"]
     assert task["custom_extension"] == {"keep": True}
     assert task["dispatch_log"][-1]["status"] == "dispatched"
+    # normalize_selected_legacy_task derived the merged-PR fallback contract from the task's repo
+    assert "gh pr list --repo organvm/limen" in task["predicate"]
+    assert task["receipt_target"] == "github:organvm/limen:pull-request:TASK-1"
