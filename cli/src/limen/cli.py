@@ -48,9 +48,7 @@ def resolve_limen_repo_root() -> Path:
     for candidate in candidates:
         if (candidate / "scripts" / "start-worktree-session.sh").exists():
             return candidate
-    click.echo(
-        "Could not find scripts/start-worktree-session.sh; set LIMEN_ROOT", err=True
-    )
+    click.echo("Could not find scripts/start-worktree-session.sh; set LIMEN_ROOT", err=True)
     sys.exit(2)
 
 
@@ -90,18 +88,14 @@ tasks: []
     click.echo(f"Created {tasks_file} with daily budget of {budget}")
     ag = target / "AGENTS.md"
     if not ag.exists():
-        ag.write_text(
-            "# Limen Agent Protocol\n\nSee https://github.com/4444J99/limen\n"
-        )
+        ag.write_text("# Limen Agent Protocol\n\nSee https://github.com/4444J99/limen\n")
         click.echo(f"Created {ag}")
 
 
 @main.command()
 @click.option("--agent", default=None, help="Filter by target agent")
 @click.option("--budget", default=None, type=int, help="Max runs to spend")
-@click.option(
-    "--dry-run/--live", default=True, help="Default: dry-run (no actual dispatch)"
-)
+@click.option("--dry-run/--live", default=True, help="Default: dry-run (no actual dispatch)")
 @click.option("--task", default=None, help="Dispatch a single task ID")
 @click.option("--limit", default=None, type=int, help="Maximum tasks to dispatch")
 def dispatch(agent, budget, dry_run, task, limit):
@@ -121,27 +115,17 @@ def dispatch(agent, budget, dry_run, task, limit):
 
 
 @main.command("release-stale")
-@click.option(
-    "--hours", default=24, type=int, help="Age threshold for stale active claims"
-)
+@click.option("--hours", default=24, type=int, help="Age threshold for stale active claims")
 @click.option("--agent", default=None, help="Filter by target agent")
-@click.option(
-    "--dry-run/--apply", default=True, help="Default: dry-run (no task mutation)"
-)
-@click.option(
-    "--json-output", "json_output", is_flag=True, help="Print machine-readable JSON"
-)
-@click.option(
-    "--report-file", default=None, help="Write machine-readable JSON to this path"
-)
+@click.option("--dry-run/--apply", default=True, help="Default: dry-run (no task mutation)")
+@click.option("--json-output", "json_output", is_flag=True, help="Print machine-readable JSON")
+@click.option("--report-file", default=None, help="Write machine-readable JSON to this path")
 def release_stale(hours, agent, dry_run, json_output, report_file):
     """Route stale claims; Jules claims reopen only after confirmed remote absence."""
     root = resolve_root()
     tasks_path = resolve_tasks_path(root)
     limen = load_limen_file(tasks_path)
-    report = release_stale_tasks(
-        limen, tasks_path, hours=hours, dry_run=dry_run, agent=agent
-    )
+    report = release_stale_tasks(limen, tasks_path, hours=hours, dry_run=dry_run, agent=agent)
     if report_file:
         report_path = Path(report_file).expanduser()
         report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -152,12 +136,8 @@ def release_stale(hours, agent, dry_run, json_output, report_file):
 
 @main.command()
 @click.option("--agent", default="jules", help="Agent readiness to check")
-@click.option(
-    "--json-output", "json_output", is_flag=True, help="Print machine-readable JSON"
-)
-@click.option(
-    "--report-file", default=None, help="Write machine-readable JSON to this path"
-)
+@click.option("--json-output", "json_output", is_flag=True, help="Print machine-readable JSON")
+@click.option("--report-file", default=None, help="Write machine-readable JSON to this path")
 def doctor(agent, json_output, report_file):
     """Report local readiness for dispatch and stale-claim recovery."""
     root = resolve_root()
@@ -172,15 +152,9 @@ def doctor(agent, json_output, report_file):
 
 
 @main.command()
-@click.option(
-    "--agent", default="jules", help="Agent queue used for mechanism commands"
-)
-@click.option(
-    "--json-output", "json_output", is_flag=True, help="Print machine-readable JSON"
-)
-@click.option(
-    "--report-file", default=None, help="Write machine-readable JSON to this path"
-)
+@click.option("--agent", default="jules", help="Agent queue used for mechanism commands")
+@click.option("--json-output", "json_output", is_flag=True, help="Print machine-readable JSON")
+@click.option("--report-file", default=None, help="Write machine-readable JSON to this path")
 def qa(agent, json_output, report_file):
     """Report QA lifecycle gates and steering queues without mutating tasks."""
     root = resolve_root()
@@ -235,9 +209,7 @@ def status(agent, status):
     show_default=True,
     help="Micro rows to print.",
 )
-@click.option(
-    "--all", "show_all", is_flag=True, help="Print every matching active debt leaf."
-)
+@click.option("--all", "show_all", is_flag=True, help="Print every matching active debt leaf.")
 @click.option("--ascii", "ascii_only", is_flag=True, help="Use ASCII progress bars.")
 @click.option(
     "--json-output",
@@ -399,12 +371,8 @@ def channels(scope, emit, prs_mode, json_output):
         filtered = ws.filter_board(limen, scope, root)
         out = Path(emit).expanduser()
         out.parent.mkdir(parents=True, exist_ok=True)
-        save_limen_file(
-            out, filtered, allow_shrink=True
-        )  # a single channel is legitimately small
-        click.echo(
-            f"wrote {len(filtered.tasks)} tasks for channel '{ws.canonical_handle(scope, root)}' to {out}"
-        )
+        save_limen_file(out, filtered, allow_shrink=True)  # a single channel is legitimately small
+        click.echo(f"wrote {len(filtered.tasks)} tasks for channel '{ws.canonical_handle(scope, root)}' to {out}")
         return
 
     if json_output:
@@ -538,11 +506,7 @@ def materialize(verify, emit_events):
 
     if emit_events:
         out = Path(emit_events).expanduser()
-        out.write_text(
-            "".join(
-                json.dumps(e, ensure_ascii=False, sort_keys=True) + "\n" for e in events
-            )
-        )
+        out.write_text("".join(json.dumps(e, ensure_ascii=False, sort_keys=True) + "\n" for e in events))
         click.echo(f"wrote {len(events)} events to {out}")
 
     if verify or not emit_events:
@@ -571,9 +535,7 @@ def materialize(verify, emit_events):
 @main.command()
 @click.option("--once", is_flag=True, help="One frame then exit")
 @click.option("--compact", is_flag=True, help="One-line compact mode")
-@click.option(
-    "-n", "--interval", default=2.0, type=float, help="Refresh interval in seconds"
-)
+@click.option("-n", "--interval", default=2.0, type=float, help="Refresh interval in seconds")
 def watch(once, compact, interval):
     """Show the real-time fleet dashboard."""
     from limen.watch import run
