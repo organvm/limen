@@ -279,8 +279,19 @@ class FakeRuntime:
         token: str | None = None,
         method: str = "GET",
         body: dict[str, Any] | None = None,
+        *,
+        retry_transient: bool = True,
     ) -> Any:
-        self.calls.append({"base_url": base_url, "path": path, "token": token, "method": method, "body": body})
+        self.calls.append(
+            {
+                "base_url": base_url,
+                "path": path,
+                "token": token,
+                "method": method,
+                "body": body,
+                "retry_transient": retry_transient,
+            }
+        )
         route = path.split("?", 1)[0]
         if token not in (None, OWNER_TOKEN, CLIENT_TOKEN):
             return self.response(401, {"detail": "invalid token"})
@@ -429,6 +440,13 @@ def test_main_verifies_optional_owner_mutations(
     assert fake.tasks["TASK-ASSIGN"]["predicate"].startswith('test "$(gh pr list')
     assert fake.tasks["TASK-ASSIGN"]["receipt_target"] == "github:organvm/limen:pull-request:TASK-ASSIGN"
     assert fake.tasks["TASK-ARCHIVE"]["status"] == "archived"
+    mutating_calls = [
+        call
+        for call in fake.calls
+        if call["method"] == "POST" and any(action in call["path"] for action in ("/verify", "/assign", "/archive"))
+    ]
+    assert mutating_calls
+    assert all(call["retry_transient"] is False for call in mutating_calls if call["token"] == OWNER_TOKEN)
 
 
 def test_request_encodes_json_and_decodes_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -493,6 +511,216 @@ def test_request_returns_http_error_payload(monkeypatch: pytest.MonkeyPatch) -> 
     assert response.status == 418
     assert response.payload == {"detail": "short and stout"}
     assert "short and stout" in response.text
+
+
+def test_request_retries_transient_chain_then_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    probe = load_probe()
+    attempts = 0
+    delays: list[float] = []
+
+    class FakeHTTPResponse:
+        status = 200
+
+        def __enter__(self) -> "FakeHTTPResponse":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b'{"status": "ok"}'
+
+    def fake_urlopen(request: Any, timeout: float) -> FakeHTTPResponse:
+        nonlocal attempts
+        attempts += 1
+        assert timeout == 7
+        if attempts == 1:
+            raise probe.urllib.error.URLError(ConnectionResetError("connection reset by peer"))
+        if attempts == 2:
+            raise probe.urllib.error.HTTPError(
+                request.full_url,
+                500,
+                "worker storage failure",
+                hdrs={},
+                fp=io.BytesIO(b'{"detail":"GitHub storage request failed (502): error code: 502\\n"}'),
+            )
+        return FakeHTTPResponse()
+
+    monkeypatch.setattr(probe.urllib.request, "urlopen", fake_urlopen)
+
+    response = probe.request(
+        "https://runtime.test",
+        "/api/surface-manifest",
+        max_attempts=3,
+        timeout_seconds=7,
+        retry_backoff_seconds=0.25,
+        max_retry_backoff_seconds=0.5,
+        request_budget_seconds=30,
+        sleep_fn=delays.append,
+        monotonic_fn=lambda: 0.0,
+    )
+
+    assert response.status == 200
+    assert response.payload == {"status": "ok"}
+    assert attempts == 3
+    assert delays == [0.25, 0.5]
+    assert response.attempt_chain == (
+        "attempt 1/3: transport ConnectionResetError: connection reset by peer",
+        'attempt 2/3: HTTP 500: "{\\"detail\\":\\"GitHub storage request failed (502): error code: 502\\\\n\\"}"',
+    )
+
+
+def test_request_preserves_persistent_transient_failure_chain(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    probe = load_probe()
+    bodies = [b'{"detail":"upstream one"}', b'{"detail":"upstream two"}', b'{"detail":"upstream three"}']
+    attempts = 0
+    delays: list[float] = []
+
+    def fake_urlopen(request: Any, timeout: float) -> Any:
+        nonlocal attempts
+        body = bodies[attempts]
+        attempts += 1
+        raise probe.urllib.error.HTTPError(request.full_url, 503, "unavailable", hdrs={}, fp=io.BytesIO(body))
+
+    monkeypatch.setattr(probe.urllib.request, "urlopen", fake_urlopen)
+
+    response = probe.request(
+        "https://runtime.test",
+        "/api/client-status",
+        max_attempts=3,
+        retry_backoff_seconds=0.1,
+        max_retry_backoff_seconds=0.2,
+        sleep_fn=delays.append,
+        monotonic_fn=lambda: 0.0,
+    )
+
+    assert attempts == 3
+    assert delays == [0.1, 0.2]
+    with pytest.raises(SystemExit) as exc:
+        probe.assert_status(response, 200, "client status")
+
+    assert exc.value.code == 1
+    error = capsys.readouterr().err
+    for index, marker in enumerate(("upstream one", "upstream two", "upstream three"), start=1):
+        assert f"attempt {index}/3: HTTP 503" in error
+        assert marker in error
+
+
+@pytest.mark.parametrize("status", [401, 404, 422, 500])
+def test_request_does_not_retry_nonretryable_http_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    status: int,
+) -> None:
+    probe = load_probe()
+    attempts = 0
+
+    def fake_urlopen(request: Any, timeout: float) -> Any:
+        nonlocal attempts
+        attempts += 1
+        raise probe.urllib.error.HTTPError(
+            request.full_url,
+            status,
+            "client error",
+            hdrs={},
+            fp=io.BytesIO(b'{"detail":"do not retry"}'),
+        )
+
+    def unexpected_sleep(_delay: float) -> None:
+        raise AssertionError("nonretryable response must not back off")
+
+    monkeypatch.setattr(probe.urllib.request, "urlopen", fake_urlopen)
+
+    response = probe.request(
+        "https://runtime.test",
+        "/api/surface-manifest",
+        max_attempts=3,
+        sleep_fn=unexpected_sleep,
+    )
+
+    assert response.status == status
+    assert response.attempt_chain == ()
+    assert attempts == 1
+
+
+@pytest.mark.parametrize("body", [b"null", b"[]", b'"not an object"'])
+def test_request_treats_non_object_http_500_as_nonretryable(
+    monkeypatch: pytest.MonkeyPatch,
+    body: bytes,
+) -> None:
+    probe = load_probe()
+    attempts = 0
+
+    def fake_urlopen(request: Any, timeout: float) -> Any:
+        nonlocal attempts
+        attempts += 1
+        raise probe.urllib.error.HTTPError(request.full_url, 500, "server error", hdrs={}, fp=io.BytesIO(body))
+
+    monkeypatch.setattr(probe.urllib.request, "urlopen", fake_urlopen)
+
+    response = probe.request("https://runtime.test", "/api/surface-manifest", max_attempts=3, sleep_fn=lambda _: None)
+
+    assert response.status == 500
+    assert response.attempt_chain == ()
+    assert attempts == 1
+
+
+def test_disabled_retry_reports_single_transport_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    probe = load_probe()
+
+    def fake_urlopen(request: Any, timeout: float) -> Any:
+        raise probe.urllib.error.URLError(ConnectionResetError("mutation response lost"))
+
+    monkeypatch.setattr(probe.urllib.request, "urlopen", fake_urlopen)
+
+    with pytest.raises(SystemExit) as exc:
+        probe.request(
+            "https://runtime.test",
+            "/api/tasks/TASK-1/verify",
+            method="POST",
+            retry_transient=False,
+        )
+
+    assert exc.value.code == 1
+    error = capsys.readouterr().err
+    assert "attempt 1/1: transport ConnectionResetError: mutation response lost" in error
+    assert "attempt 1/3" not in error
+
+
+def test_schema_failure_remains_immediate_after_successful_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    probe = load_probe()
+    attempts = 0
+
+    class FakeHTTPResponse:
+        status = 200
+
+        def __enter__(self) -> "FakeHTTPResponse":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b'{"status":"ok","surface":"public","summary":{"total":"wrong"}}'
+
+    def fake_urlopen(request: Any, timeout: float) -> FakeHTTPResponse:
+        nonlocal attempts
+        attempts += 1
+        return FakeHTTPResponse()
+
+    monkeypatch.setattr(probe.urllib.request, "urlopen", fake_urlopen)
+    response = probe.request("https://runtime.test", "/api/public-status", max_attempts=3)
+
+    with pytest.raises(SystemExit) as exc:
+        probe.assert_schema(response.payload, "status-summary.schema.json", "public status")
+
+    assert exc.value.code == 1
+    assert attempts == 1
 
 
 def test_private_field_guard_rejects_redaction_regressions() -> None:
