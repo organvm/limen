@@ -99,6 +99,7 @@ def test_snapshot_keeps_origins_horizons_and_unknown_coverage_distinct(
     assert snapshot["summary"]["forecast_credit_coverage_pct"] == 33.3
     assert snapshot["summary"]["board_credit_claims"] == 1
     assert snapshot["summary"]["unsubstantiated_terminal_claims"] == 0
+    assert snapshot["summary"]["credit_claim_contract_pct"] == 100.0
     assert snapshot["summary"]["origin_coverage_pct"] == 100.0
     assert snapshot["summary"]["horizon_coverage_pct"] == 100.0
     assert snapshot["summary"]["due_metadata_coverage_pct"] == 33.3
@@ -134,6 +135,7 @@ def test_render_supports_macro_and_micro_zoom() -> None:
     assert "WORK LOANS" in rendered
     assert "CAPITAL DEBITS" in rendered
     assert "CREDIT FORECAST" in rendered
+    assert "CREDIT CLAIMS" in rendered
     assert "ORIGIN ZOOM" in rendered
     assert "human_prompt" in rendered
     assert "ASK-1" in rendered

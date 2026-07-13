@@ -210,6 +210,7 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "forecast_credit_coverage_pct": _percent(forecast_credit_active, debt),
         "board_credit_claims": board_credit_claims,
         "unsubstantiated_terminal_claims": unsubstantiated_terminal_claims,
+        "credit_claim_contract_pct": _percent(board_credit_claims, complete),
     }
 
 
@@ -426,6 +427,11 @@ def render_progress(
                 "CREDIT FORECAST",
                 summary["forecast_credit_coverage_pct"],
                 f"{summary['forecast_credit_active']}/{summary['active_debt']} active leaves name expected credit",
+            ),
+            (
+                "CREDIT CLAIMS",
+                summary["credit_claim_contract_pct"],
+                f"{summary['board_credit_claims']}/{summary['complete']} terminal claims carry contract collateral",
             ),
             (
                 "ORIGIN COVERAGE",
