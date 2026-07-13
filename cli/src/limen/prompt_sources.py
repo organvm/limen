@@ -300,6 +300,7 @@ SOURCE_ADAPTER_RULES: dict[str, dict[str, Any]] = {
             "source": "codex-sessions",
             "record": "response_item:message:user",
             "content_block_type": "input_text",
+            "coexisting_exact_nonparent_content_block_types": ["input_image"],
             "reference_line": (
                 "pasted text file: <canonical-absolute-attachment-path>. Read this file before continuing."
             ),
@@ -313,7 +314,7 @@ SOURCE_ADAPTER_RULES: dict[str, dict[str, Any]] = {
         "parent_byte_accounting": "cumulative-actual-read",
         "max_probe_bytes": 1048576,
         "max_parent_probe_bytes": 536870912,
-        "max_parent_record_bytes": 1048576,
+        "max_parent_record_bytes": 16777216,
         "max_parent_candidate_bytes": 16777216,
         "max_parent_records": 100000,
         "max_parent_session_ids": 16,
@@ -510,6 +511,23 @@ CODEX_EVENT_USER_PAYLOAD_KEYSETS = (
 )
 CODEX_TEXT_ELEMENT_KEYS = ("byte_range", "placeholder")
 CODEX_BYTE_RANGE_KEYS = ("end", "start")
+CODEX_COMPACTED_PAYLOAD_KEYSETS = (
+    ("message", "replacement_history", "window_id"),
+    (
+        "first_window_id",
+        "message",
+        "previous_window_id",
+        "replacement_history",
+        "window_id",
+        "window_number",
+    ),
+)
+CODEX_COMPACTED_MARKER_KEYSETS = (
+    ("encrypted_content", "metadata", "type"),
+    ("encrypted_content", "id", "type"),
+    ("encrypted_content", "id", "internal_chat_message_metadata_passthrough", "type"),
+    ("encrypted_content", "type"),
+)
 CLAUDE_PROJECT_JSONL_TYPES = (
     "agent-name",
     "agent-setting",
@@ -749,6 +767,15 @@ SOURCE_RECORD_SCHEMAS = {
             "text_element_keys": CODEX_TEXT_ELEMENT_KEYS,
             "byte_range_keys": CODEX_BYTE_RANGE_KEYS,
             "media_fields_require_adapter_when_nonempty": ["images", "local_images"],
+        },
+        "noncanonical_parent_replay": {
+            "record": "compacted:replacement_history",
+            "payload_keysets": CODEX_COMPACTED_PAYLOAD_KEYSETS,
+            "message_keysets": CODEX_RESPONSE_USER_PAYLOAD_KEYSETS,
+            "content_block_keysets": CODEX_USER_CONTENT_BLOCK_KEYSETS,
+            "marker_keysets": CODEX_COMPACTED_MARKER_KEYSETS,
+            "parent_eligible": False,
+            "schema_validation": "exact",
         },
     },
     "claude-project-jsonl-v1": {

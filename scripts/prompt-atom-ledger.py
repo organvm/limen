@@ -54,6 +54,8 @@ from limen.prompt_sources import (  # noqa: E402
     CLAUDE_PROJECT_MEMORY_ALIAS_ID,
     CODEX_HISTORY_KEYSETS,
     CODEX_BYTE_RANGE_KEYS,
+    CODEX_COMPACTED_MARKER_KEYSETS,
+    CODEX_COMPACTED_PAYLOAD_KEYSETS,
     CODEX_EVENT_USER_PAYLOAD_KEYSETS,
     CODEX_RESPONSE_USER_PAYLOAD_KEYSETS,
     CODEX_TEXT_ELEMENT_KEYS,
@@ -2274,6 +2276,151 @@ def _codex_canonical_parent_record(obj: dict[str, Any]) -> bool:
     )
 
 
+def _codex_compacted_parent_replay_record(obj: dict[str, Any]) -> bool:
+    """Recognize an exact Codex compaction replay, which is never a parent event."""
+
+    if tuple(sorted(obj)) != CODEX_USER_RECORD_KEYS or not isinstance(obj.get("timestamp"), str):
+        return False
+    payload = obj.get("payload")
+    if obj.get("type") != "compacted" or not isinstance(payload, dict):
+        return False
+    payload_keys = tuple(sorted(payload))
+    if payload_keys not in CODEX_COMPACTED_PAYLOAD_KEYSETS:
+        return False
+    if not isinstance(payload.get("message"), str) or not isinstance(payload.get("replacement_history"), list):
+        return False
+    if payload_keys == CODEX_COMPACTED_PAYLOAD_KEYSETS[0]:
+        window_id = payload.get("window_id")
+        if isinstance(window_id, bool) or not isinstance(window_id, int) or window_id < 0:
+            return False
+    else:
+        if any(
+            not isinstance(payload.get(field), str) for field in ("first_window_id", "previous_window_id", "window_id")
+        ):
+            return False
+        window_number = payload.get("window_number")
+        if isinstance(window_number, bool) or not isinstance(window_number, int) or window_number < 0:
+            return False
+
+    for replacement in payload["replacement_history"]:
+        if not isinstance(replacement, dict):
+            return False
+        replacement_type = replacement.get("type")
+        if replacement_type == "message":
+            if tuple(sorted(replacement)) not in CODEX_RESPONSE_USER_PAYLOAD_KEYSETS:
+                return False
+            if replacement.get("role") not in {"developer", "user"}:
+                return False
+            metadata = replacement.get("internal_chat_message_metadata_passthrough")
+            if metadata is not None and (
+                not isinstance(metadata, dict)
+                or set(metadata) != {"turn_id"}
+                or not isinstance(metadata.get("turn_id"), str)
+            ):
+                return False
+            content = replacement.get("content")
+            if not isinstance(content, list):
+                return False
+            for block in content:
+                if not isinstance(block, dict):
+                    return False
+                block_type = str(block.get("type") or "")
+                expected_keys = CODEX_USER_CONTENT_BLOCK_KEYSETS.get(block_type)
+                if expected_keys is None or tuple(sorted(block)) != expected_keys:
+                    return False
+                if block_type == "input_text" and not isinstance(block.get("text"), str):
+                    return False
+                if block_type == "input_image" and (
+                    not isinstance(block.get("detail"), str) or not isinstance(block.get("image_url"), str)
+                ):
+                    return False
+            continue
+        if replacement_type != "compaction" or tuple(sorted(replacement)) not in CODEX_COMPACTED_MARKER_KEYSETS:
+            return False
+        if not isinstance(replacement.get("encrypted_content"), str):
+            return False
+        if "id" in replacement and not isinstance(replacement.get("id"), str):
+            return False
+        for field in ("metadata", "internal_chat_message_metadata_passthrough"):
+            if field not in replacement:
+                continue
+            metadata = replacement.get(field)
+            if (
+                not isinstance(metadata, dict)
+                or set(metadata) != {"turn_id"}
+                or not isinstance(metadata.get("turn_id"), str)
+            ):
+                return False
+    return True
+
+
+def _codex_exact_parent_text_envelope(obj: dict[str, Any]) -> bool:
+    """Validate user text carriers while leaving exact coexisting media non-parental."""
+
+    payload = obj.get("payload")
+    if tuple(sorted(obj)) != CODEX_USER_RECORD_KEYS or not isinstance(obj.get("timestamp"), str):
+        return False
+    if not isinstance(payload, dict):
+        return False
+    is_response_user = bool(
+        obj.get("type") == "response_item" and payload.get("type") == "message" and payload.get("role") == "user"
+    )
+    is_event_user = bool(obj.get("type") == "event_msg" and payload.get("type") == "user_message")
+    if is_response_user:
+        if tuple(sorted(payload)) not in CODEX_RESPONSE_USER_PAYLOAD_KEYSETS:
+            return False
+        metadata = payload.get("internal_chat_message_metadata_passthrough")
+        if metadata is not None and (
+            not isinstance(metadata, dict)
+            or set(metadata) != {"turn_id"}
+            or not isinstance(metadata.get("turn_id"), str)
+        ):
+            return False
+        content = payload.get("content")
+        if not isinstance(content, list):
+            return False
+        for block in content:
+            if not isinstance(block, dict):
+                return False
+            block_type = str(block.get("type") or "")
+            expected_keys = CODEX_USER_CONTENT_BLOCK_KEYSETS.get(block_type)
+            if expected_keys is None or tuple(sorted(block)) != expected_keys:
+                return False
+            if block_type == "input_text" and not isinstance(block.get("text"), str):
+                return False
+            if block_type == "input_image" and (
+                not isinstance(block.get("detail"), str) or not isinstance(block.get("image_url"), str)
+            ):
+                return False
+        return True
+    if not is_event_user or tuple(sorted(payload)) not in CODEX_EVENT_USER_PAYLOAD_KEYSETS:
+        return False
+    if not isinstance(payload.get("message"), str):
+        return False
+    for media_field in ("images", "local_images"):
+        media = payload.get(media_field, [])
+        if media is not None and (not isinstance(media, list) or any(not isinstance(item, str) for item in media)):
+            return False
+    elements = payload.get("text_elements")
+    if not isinstance(elements, list):
+        return False
+    for element in elements:
+        byte_range = element.get("byte_range") if isinstance(element, dict) else None
+        if (
+            not isinstance(element, dict)
+            or tuple(sorted(element)) != CODEX_TEXT_ELEMENT_KEYS
+            or not isinstance(element.get("placeholder"), str)
+            or not isinstance(byte_range, dict)
+            or tuple(sorted(byte_range)) != CODEX_BYTE_RANGE_KEYS
+            or any(
+                isinstance(byte_range.get(field), bool) or not isinstance(byte_range.get(field), int)
+                for field in CODEX_BYTE_RANGE_KEYS
+            )
+        ):
+            return False
+    return True
+
+
 def codex_attachment_reference_line(path: Path) -> str:
     return f"pasted text file: {path.expanduser().absolute()}. Read this file before continuing."
 
@@ -2510,16 +2657,21 @@ def bounded_codex_attachment_parent_events_from_path(
                         or payload.get("thread_source") == "subagent"
                     )
                     continue
-                schema_error = native_record_schema_error(
-                    lifecycle,
-                    "codex-sessions",
-                    path,
-                    [obj],
-                    adapter_id=None,
-                )
-                if schema_error:
-                    parent_completeness_unknown = True
+                if obj.get("type") == "compacted":
+                    if not _codex_compacted_parent_replay_record(obj):
+                        parent_completeness_unknown = True
                     continue
+                if not _codex_exact_parent_text_envelope(obj):
+                    schema_error = native_record_schema_error(
+                        lifecycle,
+                        "codex-sessions",
+                        path,
+                        [obj],
+                        adapter_id=None,
+                    )
+                    if schema_error:
+                        parent_completeness_unknown = True
+                        continue
                 if (
                     obj.get("type") == "event_msg"
                     and isinstance(payload, dict)

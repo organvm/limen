@@ -4181,6 +4181,227 @@ def _codex_attachment_fixture(
     return lifecycle, session, attachment
 
 
+def _codex_compacted_replay_row(reference: str, *, envelope: str) -> dict[str, object]:
+    replacement_history: list[dict[str, object]] = [
+        {
+            "type": "message",
+            "role": "developer",
+            "content": [{"type": "input_text", "text": "Synthetic replay frame."}],
+        },
+        {
+            "type": "message",
+            "role": "user",
+            "content": [{"type": "input_text", "text": reference}],
+            "internal_chat_message_metadata_passthrough": {"turn_id": f"turn-{envelope}-renamed"},
+        },
+        {
+            "type": "compaction",
+            "encrypted_content": "opaque-synthetic-replay-marker",
+            "id": f"marker-{envelope}-renamed",
+        },
+    ]
+    if envelope == "legacy":
+        payload: dict[str, object] = {
+            "message": "Synthetic compacted context.",
+            "replacement_history": replacement_history,
+            "window_id": 41,
+        }
+    else:
+        payload = {
+            "first_window_id": f"window-{envelope}-first-renamed",
+            "message": "Synthetic compacted context.",
+            "previous_window_id": f"window-{envelope}-previous-renamed",
+            "replacement_history": replacement_history,
+            "window_id": f"window-{envelope}-current-renamed",
+            "window_number": 41,
+        }
+    return {
+        "type": "compacted",
+        "timestamp": "2026-07-13T01:00:00Z",
+        "payload": payload,
+    }
+
+
+@pytest.mark.parametrize("envelope", ["legacy", "current-renamed"])
+def test_codex_attachment_exact_compacted_replay_is_not_a_second_parent(
+    tmp_path: Path,
+    envelope: str,
+):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    rows.insert(1, _codex_compacted_replay_row(sources.codex_attachment_reference_line(attachment), envelope=envelope))
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    attachment_events = [event for event in events if event["source"] == "codex-attachments"]
+    assert len(attachment_events) == 1
+    assert attachment_events[0]["authority"] == "operator"
+    assert attachment_key in result["adapted_unit_receipts"]
+    assert attachment_key not in result["unsupported_units"]
+    assert result["parent_completeness_unknown"] == []
+
+
+@pytest.mark.parametrize("mutation", ["extra-payload-key", "unknown-replacement-role", "unknown-content-block"])
+def test_codex_attachment_malformed_compacted_replay_fails_parent_completeness_closed(
+    tmp_path: Path,
+    mutation: str,
+):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    replay = _codex_compacted_replay_row(
+        sources.codex_attachment_reference_line(attachment),
+        envelope="current-renamed",
+    )
+    payload = replay["payload"]
+    assert isinstance(payload, dict)
+    replacements = payload["replacement_history"]
+    assert isinstance(replacements, list)
+    user_replacement = replacements[1]
+    assert isinstance(user_replacement, dict)
+    if mutation == "extra-payload-key":
+        payload["renamed_unknown"] = True
+    elif mutation == "unknown-replacement-role":
+        user_replacement["role"] = "renamed-unknown"
+    else:
+        content = user_replacement["content"]
+        assert isinstance(content, list) and isinstance(content[0], dict)
+        content[0]["renamed_unknown"] = True
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    rows.insert(1, replay)
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+    session_key = sources.cursor_unit_key("codex-sessions", session)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert result["parent_completeness_unknown"] == [session_key]
+    assert attachment_key in result["unsupported_units"]
+    assert attachment_key not in result["adapted_unit_receipts"]
+
+
+def test_codex_attachment_compacted_replay_without_canonical_parent_stays_unbound(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path, parent_texts=[])
+    replay = _codex_compacted_replay_row(
+        sources.codex_attachment_reference_line(attachment),
+        envelope="current-renamed",
+    )
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    rows.insert(1, replay)
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert attachment_key in result["unsupported_units"]
+    assert attachment_key not in result["adapted_unit_receipts"]
+    assert result["parent_completeness_unknown"] == []
+
+
+def test_codex_attachment_exact_coexisting_media_does_not_hide_text_parent(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    content = rows[1]["payload"]["content"]
+    content.append(
+        {
+            "type": "input_image",
+            "detail": "renamed-synthetic-detail",
+            "image_url": "data:image/png;base64,c3ludGhldGlj",
+        }
+    )
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    attachment_events = [event for event in events if event["source"] == "codex-attachments"]
+    assert len(attachment_events) == 1
+    assert attachment_key in result["adapted_unit_receipts"]
+    assert attachment_key not in result["unsupported_units"]
+    assert result["parent_completeness_unknown"] == []
+
+
+@pytest.mark.parametrize("mutation", ["extra-key", "nontext-url"])
+def test_codex_attachment_malformed_coexisting_media_fails_parent_completeness_closed(
+    tmp_path: Path,
+    mutation: str,
+):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    image_block: dict[str, object] = {
+        "type": "input_image",
+        "detail": "renamed-synthetic-detail",
+        "image_url": "data:image/png;base64,c3ludGhldGlj",
+    }
+    if mutation == "extra-key":
+        image_block["renamed_unknown"] = True
+    else:
+        image_block["image_url"] = 41
+    rows[1]["payload"]["content"].append(image_block)
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+    session_key = sources.cursor_unit_key("codex-sessions", session)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert result["parent_completeness_unknown"] == [session_key]
+    assert attachment_key in result["unsupported_units"]
+    assert attachment_key not in result["adapted_unit_receipts"]
+
+
 @pytest.mark.parametrize(
     ("forked", "expected_provenance", "expected_authority"),
     [
@@ -4428,6 +4649,42 @@ def test_codex_attachment_streams_parent_larger_than_the_regular_source_limit(tm
     assert result["adapted_unit_receipts"][key]["contract_id"] == "codex-pasted-text-attachment-v1"
     assert result["coverage"]["codex-sessions"]["errors"] == 1
     assert "bounded ceiling" in " ".join(result["errors"])
+
+
+def test_codex_attachment_parses_bounded_large_nonparent_record_before_binding(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    rows.insert(
+        1,
+        {
+            "type": "response_item",
+            "timestamp": "2026-07-13T01:00:00Z",
+            "payload": {
+                "type": "function_call_output",
+                "output": "x" * (1024 * 1024 + 4096),
+            },
+        },
+    )
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    attachment_events = [event for event in events if event["source"] == "codex-attachments"]
+    assert len(attachment_events) == 1
+    assert attachment_key in result["adapted_unit_receipts"]
+    assert attachment_key not in result["unsupported_units"]
+    assert result["parent_completeness_unknown"] == []
 
 
 def test_codex_attachment_reordered_oversized_echo_fails_closed_in_regular_and_streaming_modes(
