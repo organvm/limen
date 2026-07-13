@@ -1654,6 +1654,16 @@ def validate_live_source_custody(cursor: dict[str, Any]) -> list[str]:
             custody = source_contract_module.inspect_source_path_custody(source, path, root)
             if custody.error is not None:
                 raise ValueError(custody.error)
+            if (
+                custody.alias_contract_id
+                == getattr(
+                    source_contract_module,
+                    "CLAUDE_SUBAGENT_SESSION_ALIAS_ID",
+                    "",
+                )
+                and path.is_dir()
+            ):
+                return True
             if custody.alias_contract_id is None and not path.is_file():
                 return True
             discovery_count += 1
