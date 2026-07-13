@@ -3666,8 +3666,14 @@ def test_claude_subagent_cross_session_alias_is_excluded_with_independent_target
     )
     assert cursor["scope"] == "all"
     assert sources.validate_source_adapter_cursor(cursor) == []
-    from limen.prompt_corpus import DEFAULT_POLICY, build_snapshot, public_projection
+    from limen.prompt_corpus import (
+        DEFAULT_POLICY,
+        build_snapshot,
+        public_projection,
+        validate_live_source_custody,
+    )
 
+    assert validate_live_source_custody(cursor) == []
     public = public_projection(build_snapshot([], [], [], DEFAULT_POLICY, cursor))
     encoded = json.dumps(public, sort_keys=True)
     assert str(alias) not in encoded
@@ -3719,7 +3725,7 @@ def test_claude_subagent_alias_near_misses_remain_fail_closed(tmp_path: Path, ne
     assert result["excluded_unit_receipts"] == {}
 
 
-def test_claude_subagent_directory_alias_is_metadata_only_and_not_a_source_unit(tmp_path: Path):
+def test_claude_subagent_directory_alias_is_metadata_only_and_not_a_source_unit(tmp_path: Path, monkeypatch):
     sources = _load()
     lifecycle, projects, _alias, _target = _claude_subagent_alias_fixture(sources, tmp_path)
     target_dir = projects / "project" / "target-session" / "subagents" / "agent" / "nested"
@@ -3732,6 +3738,16 @@ def test_claude_subagent_directory_alias_is_metadata_only_and_not_a_source_unit(
 
     assert not rows.discovery_errors
     assert all(Path(row["path"]) != alias_dir for row in rows)
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    _events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=tmp_path / "missing-cursor.json"),
+        days=None,
+        max_files=10,
+    )
+    from limen.prompt_corpus import validate_live_source_custody
+
+    assert cursor["scope"] == "all"
+    assert validate_live_source_custody(cursor) == []
 
 
 def test_structural_exclusion_near_misses_remain_adapter_gaps(tmp_path: Path):
