@@ -6,10 +6,10 @@
 - Branch: `work/next-autonomous-epoch-20260714`
 - Workstream: `governance`
 - Base ref: `origin/main`
-- HEAD at capsule write: `34827933`
+- HEAD at capsule write: `4e5d8526`
 - Upstream: `origin/work/next-autonomous-epoch-20260714`
 - Origin: `https://github.com/organvm/limen.git`
-- Status at capsule write: `## work/next-autonomous-epoch-20260714...origin/work/next-autonomous-epoch-20260714`
+- Status at capsule write: `## work/next-autonomous-epoch-20260714...origin/work/next-autonomous-epoch-20260714 [ahead 15]`
 - Autonomous: `yes`
 
 This is a historical snapshot. The runtime module requires fresh probes before action.
