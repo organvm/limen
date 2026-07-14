@@ -27,7 +27,8 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+SCRIPT_ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(os.environ.get("LIMEN_ROOT", SCRIPT_ROOT)).expanduser().resolve()
 PR_RE = re.compile(r"github\.com/([^/]+)/([^/]+)/pull/(\d+)")
 # A dispatch is RESERVED (status=dispatched, updated stamped, reserve log appended) before its
 # slow run. A freshly reserved local task still has no PR/session result, so only treat it as

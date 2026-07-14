@@ -24,11 +24,12 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
+SCRIPT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SCRIPT_ROOT / "cli" / "src"))
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.models import DispatchLogEntry  # noqa: E402
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", SCRIPT_ROOT)).expanduser().resolve()
 LOCKD = ROOT / "logs" / ".queue.lock.d"
 PR_RE = re.compile(r"github\.com/[^/]+/[^/]+/pull/\d+")
 CASCADE_TOP = "codex"
