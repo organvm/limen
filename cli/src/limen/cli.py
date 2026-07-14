@@ -305,16 +305,16 @@ def harvest(agent):
 @click.option(
     "--autonomous",
     is_flag=True,
-    help="Require a prompt, embed the live derive-not-force contract, and start Codex with the README.",
+    help="Require a prompt, render the modular live contract, and start Codex with the README index.",
 )
 @click.option("--codex", "launch_codex", is_flag=True, help="Open Codex in the worktree after creating the packet.")
 @click.option(
     "--shell", "launch_shell", is_flag=True, help="Open a login shell in the worktree after creating the packet."
 )
 @click.option("--from", "from_ref", default=None, help="Branch or ref to create the worktree branch from.")
-@click.option("--prompt", "prompt_text", default=None, help="Inline prompt packet for .limen-workstream/README.md.")
+@click.option("--prompt", "prompt_text", default=None, help="Inline prompt packet for .limen-workstream/intent.md.")
 @click.option(
-    "--prompt-file", default=None, type=click.Path(exists=True), help="Prompt packet file to embed in README.md."
+    "--prompt-file", default=None, type=click.Path(exists=True), help="Prompt packet file to copy into intent.md."
 )
 @click.option("--workstream", "workstream_handle", default=None, help="Pin the capsule to one purpose channel.")
 @click.option("--no-readme", is_flag=True, help="Create/reuse the worktree without writing the private kickoff packet.")
@@ -332,7 +332,7 @@ def workstream(
     repo,
     slug,
 ):
-    """Create/reuse a repo worktree plus a private kickoff README and kickstart command."""
+    """Create/reuse a repo worktree plus a modular kickoff capsule and command."""
     root = resolve_limen_repo_root()
     script = root / "scripts" / "start-worktree-session.sh"
     args = ["bash", str(script)]
