@@ -31,12 +31,14 @@ from limen.capacity import (
     ollama_model,
     select_lanes,
 )
+from limen.dispatch_ownership import ACTIVE_OWNER_STATUSES
 from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
 from limen.intake import IntakeContractError, normalize_selected_legacy_task, validate_intake_contract
 from limen.jules_remote import (
     JulesRemoteSnapshot,
     classify_jules_claim,
     probe_jules_remote_sessions,
+    probe_jules_remote_session_absences,
     task_jules_session_id,
 )
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
@@ -946,7 +948,7 @@ def chronic_dispatch_reason(task: Task) -> str | None:
     return None
 
 
-_ACTIVE_SUPERSEDER_STATUSES = {"open", "dispatched", "in_progress", "needs_human", "failed_blocked"}
+_ACTIVE_SUPERSEDER_STATUSES = ACTIVE_OWNER_STATUSES
 
 
 def _superseded_by_rebase_task(task: Task, tasks_by_id: dict[str, Task]) -> bool:
@@ -965,6 +967,26 @@ def _superseded_by_rebase_task(task: Task, tasks_by_id: dict[str, Task]) -> bool
         sibling = tasks_by_id.get(sibling_id)
         if sibling is not None and str(sibling.status or "") in _ACTIVE_SUPERSEDER_STATUSES:
             return True
+    return False
+
+
+def _superseded_by_trunk_repair(task: Task, tasks_by_id: dict[str, Task]) -> bool:
+    """A live HEAL-mainred task supersedes any individual HEAL-cifix task for the same repo.
+
+    When main's trunk is red (HEAL-mainred-<repo> is active), individual PR CI-fix tasks
+    are redundant — fixing the root cause heals all PRs at once. Without this gate, two
+    agents can race: one fixing the trunk, another fixing one PR for the same root cause.
+    """
+    task_id = str(task.id or "")
+    prefix = "HEAL-cifix-"
+    if not task_id.startswith(prefix):
+        return False
+    suffix = task_id[len(prefix) :]
+    repo_slug = suffix.rsplit("-", 1)[0] if "-" in suffix else suffix
+    mainred_id = f"HEAL-mainred-{repo_slug}"
+    mainred = tasks_by_id.get(mainred_id)
+    if mainred is not None and str(mainred.status or "") in _ACTIVE_SUPERSEDER_STATUSES:
+        return True
     return False
 
 
@@ -4383,6 +4405,8 @@ def dispatch_tasks(
             continue
         if task_id is None and _superseded_by_rebase_task(t, id2):
             continue
+        if task_id is None and _superseded_by_trunk_repair(t, id2):
+            continue
         if task_id is None and chronic_dispatch_reason(t) is not None:
             continue
         if not _routine_generated_buildout_allowed(t):
@@ -4814,6 +4838,8 @@ def _select_parallel_reservations(
                 continue
             if _superseded_by_rebase_task(t, id2):
                 continue
+            if _superseded_by_trunk_repair(t, id2):
+                continue
             if chronic_dispatch_reason(t) is not None:
                 continue
             if not _routine_generated_buildout_allowed(t):
@@ -5056,7 +5082,17 @@ def _release_stale_snapshot(
 ) -> JulesRemoteSnapshot | None:
     if not any(task.target_agent == "jules" and not _has_done_transition(task) for task in candidates):
         return None
-    return supplied if supplied is not None else probe_jules_remote_sessions()
+    if supplied is not None:
+        # A supplied snapshot is explicit caller evidence (and the hermetic test seam). Do not
+        # unexpectedly shell out after accepting it; callers may attach confirmed_absent evidence.
+        return supplied
+    snapshot = probe_jules_remote_sessions()
+    session_ids = [
+        task_jules_session_id(task)
+        for task in candidates
+        if task.target_agent == "jules" and not _has_done_transition(task)
+    ]
+    return probe_jules_remote_session_absences(snapshot, session_ids)
 
 
 def _release_stale_probe_report(snapshot: JulesRemoteSnapshot | None, candidates: list[Task]) -> dict[str, Any]:
@@ -5066,11 +5102,16 @@ def _release_stale_probe_report(snapshot: JulesRemoteSnapshot | None, candidates
         # The only no-snapshot Jules case is a prior-done transition, which does not require a
         # remote lookup to restore its terminal invariant.
         return {"status": "not_required", "session_count": 0}
+    outcome_counts: dict[str, int] = {}
+    for outcome in snapshot.absence_probe_outcomes.values():
+        outcome_counts[outcome] = outcome_counts.get(outcome, 0) + 1
     return {
         "status": "available" if snapshot.available else "unavailable",
         "session_count": len(snapshot.sessions),
         "catalog_exhaustive": snapshot.exhaustive,
         "confirmed_absent_count": len(snapshot.confirmed_absent),
+        "session_probe_count": len(snapshot.absence_probe_outcomes),
+        "session_probe_outcomes": outcome_counts,
     }
 
 
