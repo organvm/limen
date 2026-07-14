@@ -2930,7 +2930,17 @@ def test_source_missing_receipt_passes_validate_source_adapter_cursor():
         "source_errors": [],
         "pending_files": 0,
         "files": {},
-        "source_families": {"agy-cli-conversations": {"discovered": 1, "converged": 0, "adapted": 0, "excluded": 1, "pending": 0, "errors": 0, "unsupported": 0}},
+        "source_families": {
+            "agy-cli-conversations": {
+                "discovered": 1,
+                "converged": 0,
+                "adapted": 0,
+                "excluded": 1,
+                "pending": 0,
+                "errors": 0,
+                "unsupported": 0,
+            }
+        },
     }
 
     errors = corpus.validate_source_adapter_cursor(cursor)
