@@ -5,8 +5,8 @@ Two failure modes leak capacity:
   1. status==failed tasks just sit there. Re-open them at the TOP of the lane cascade
      (codex) so the dispatcher's per-task failover gives them a fresh run across lanes.
   2. status==dispatched jules tasks whose recorded session failed, stalled for
-     user feedback / plan approval, or is no longer in `jules remote list` (aged out / lost) are
-     orphaned — re-open so they re-dispatch fresh.
+     user feedback / plan approval, or is positively confirmed absent are orphaned — re-open so
+     they re-dispatch fresh. A miss in a non-exhaustive remote catalog is held, never reopened.
 
 Reversible (only flips status→open + target_agent + logs a heal entry); never deletes,
 never dispatches. Bounded by --limit. Run by the daemon's heal voice AND by supervision.
@@ -18,18 +18,21 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Iterable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.jules_remote import (  # noqa: E402
-    JULES_RECOVERY_STATES,
     JulesRemoteSnapshot,
+    classify_jules_claim,
     coerce_jules_snapshot,
+    probe_jules_remote_session_absences,
     probe_jules_remote_sessions,
     task_jules_session_id,
 )
 from limen.models import DispatchLogEntry  # noqa: E402
 from limen.dispatch import _has_done_transition, _restore_done_status  # noqa: E402
+from limen.chronic import CHRONIC_FLEET_DEBT_LABEL  # noqa: E402
 
 CASCADE_TOP = "codex"
 NOOP_RECOVERY_ESCALATION_THRESHOLD = 2
@@ -54,8 +57,9 @@ def _repeated_noop_failure_count(task) -> int:
     return 0
 
 
-def live_jules_sessions() -> JulesRemoteSnapshot:
-    return probe_jules_remote_sessions()
+def live_jules_sessions(session_ids: Iterable[str] = ()) -> JulesRemoteSnapshot:
+    snapshot = probe_jules_remote_sessions()
+    return probe_jules_remote_session_absences(snapshot, session_ids)
 
 
 def main() -> int:
@@ -69,9 +73,20 @@ def main() -> int:
     lf = load_limen_file(path)
     now = datetime.datetime.now(datetime.timezone.utc)
     selected_ids = set(args.task_ids or [])
+    jules_session_ids = [
+        task_jules_session_id(task)
+        for task in lf.tasks
+        if (not selected_ids or task.id in selected_ids)
+        and task.status == "dispatched"
+        and task.target_agent == "jules"
+        and not _has_done_transition(task)
+    ]
 
     live: JulesRemoteSnapshot | None = None  # lazily fetched only if we have orphan candidates
-    reopened_failed, reopened_orphan, reopened_remote_failed, escalated_noop = [], [], [], []
+    reopened_failed: list[str] = []
+    reopened_orphan: list[str] = []
+    reopened_remote_failed: list[str] = []
+    escalated_noop: list[str] = []
 
     for t in lf.tasks:
         if selected_ids and t.id not in selected_ids:
@@ -92,17 +107,25 @@ def main() -> int:
         if t.status == "failed":
             repeated_noop_count = _repeated_noop_failure_count(t)
             if repeated_noop_count:
-                t.status = "needs_human"
+                # Repeated no-ops are the FLEET's inability (it keeps producing nothing), not a human
+                # atom — park in failed_blocked (which nothing recycles: recover reopens `failed`, not
+                # `failed_blocked`), NOT needs_human, so the human surface stays truthful. Same
+                # fleet-debt class heal-dispatch parks chronic churn in (see limen.chronic); tagged so
+                # it reads as debt. Historical needs_human no-op dumps are re-homed by heal-dispatch's
+                # self-migration, whose predicate now also matches the "repeated no-op failures" string.
+                t.status = "failed_blocked"
                 t.updated = now
+                if CHRONIC_FLEET_DEBT_LABEL not in (t.labels or []):
+                    t.labels = list(t.labels or []) + [CHRONIC_FLEET_DEBT_LABEL]
                 t.dispatch_log.append(
                     DispatchLogEntry(
                         timestamp=now,
                         agent="limen",
                         session_id="heal",
-                        status="needs_human",
+                        status="failed_blocked",
                         output=(
                             f"recover: repeated no-op failures ({repeated_noop_count}) "
-                            "-> needs_human; stop fresh cascade"
+                            "-> failed_blocked (fleet-debt, off the human surface)"
                         ),
                     )
                 )
@@ -127,11 +150,9 @@ def main() -> int:
             if not sid:
                 continue
             if live is None:
-                live = coerce_jules_snapshot(live_jules_sessions())
-            if not live.available:
-                continue
-            remote_status = live.status(sid)
-            if remote_status in JULES_RECOVERY_STATES:
+                live = coerce_jules_snapshot(live_jules_sessions(jules_session_ids))
+            action, remote_status = classify_jules_claim(live, sid)
+            if action == "recover":
                 t.status = "open"
                 t.target_agent = CASCADE_TOP
                 t.updated = now
@@ -145,7 +166,7 @@ def main() -> int:
                     )
                 )
                 reopened_remote_failed.append(t.id)
-            elif remote_status is None:  # successful remote catalog proves session aged out / lost
+            elif action == "release":
                 t.status = "open"
                 t.updated = now
                 t.dispatch_log.append(

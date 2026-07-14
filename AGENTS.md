@@ -114,6 +114,43 @@ Tracked ledgers remain redacted; raw prompt bodies, private paths, full hashes, 
 material stay in `.limen-private/session-corpus`. Board mutations derived from corpus review still go
 through TABVLARIVS, and task statuses still use only the canonical state vocabulary below.
 
+## Board Progress and Source-Coverage Truth
+
+Lifecycle debt is first-class portfolio work. A preserved branch, merged PR, exact owner blocker,
+or safely reclaimed cache is real value when it closes ambiguity or preservation risk; do not dismiss
+that work as overhead. It still counts as progress only when the owning predicate and durable receipt
+exist. Scans, classifications, token spend, commits, and agent motion are supporting evidence, not
+terminal outcomes by themselves.
+
+Keep four sources of work distinct even when they point to the same leaf:
+
+- external obligations and work that is actually due;
+- human prompts, asks, corrections, and acceptance criteria;
+- agent or system recommendations about what should happen next;
+- detected lifecycle, quality, custody, and control-plane debt.
+
+Also preserve the purpose lane and time horizon (`past`, `present`, or `future`). Every normalized leaf
+should converge on source lineage, lane, horizon, owner, priority rationale, executable predicate,
+durable receipt target, and canonical state. Unknown classification or an unscanned source is visible
+coverage debt; never render it as zero work. Macro progress is terminal closure over an explicit
+denominator. Micro progress is predicate/receipt evidence or canonical lifecycle stage, never a
+made-up estimate of effort.
+
+Treat execution capacity as a work loan. Before dispatch, the task should underwrite the requested
+capacity with an explicit value case, cost, origin, horizon, owner surface, predicate, and receipt
+target. Urgency, cost of delay, confidence, reversibility, dependencies, and resource pressure inform
+ranking when available. Record requested capacity as a debit, expected value as forecast credit, and
+predicate plus receipt target as collateral. After execution, reconcile forecast to actual durable
+credit and actual spend. A terminal board state is only a credit claim until the owning receipt passes;
+do not let a high-cost attempt inherit the value it merely intended to create.
+
+`limen progress` is only the partial task-board projection and source-readiness lens for this
+doctrine. It does not ingest the source-owned leaves behind prompt, GitHub-estate, lifecycle, mail,
+financial, or contribution receipts. Its `scope: partial` output, source contract hashes, and
+separate board / coverage / verified-receipt debt counts must not be represented as whole-estate
+proof. Dynamic source enumeration, actual spend/value reconciliation, historical comparison, and an
+interactive TUI require their own owner receipts.
+
 ## Dynamic Provider Selection
 
 Provider catalogs are live external state, not repository constants. Do not encode model IDs,
@@ -214,6 +251,36 @@ lost context, looked stale, or was merely pushed to a remote branch. If a worktr
 code, emit the plan/owner task that captures the prompt's intent, then close the worktree only after
 the work is merged or proven patch-equivalent to the remote default branch.
 
+## Continuation Capsules
+
+Every closeout and every new autonomous initiative must leave or begin from one continuation capsule.
+For repository-backed work, use the existing worktree launcher (`limen workstream` /
+`scripts/start-worktree-session.sh`) instead of inventing a parallel session framework. If no Git
+repository is a logical owner, use an isolated owner-native workspace or remote receipt and explain
+that choice in the capsule; never manufacture a fake worktree merely to satisfy the form.
+
+A continuation capsule contains:
+
+- one isolated worktree and single-purpose branch when repository-backed, otherwise one isolated
+  owner-native workspace or durable remote surface;
+- a README with the objective, current evidence links, authorities, prohibitions, first probes,
+  executable predicates, ownership rules, and session-switch conditions;
+- one copy/paste command that enters the worktree and starts the next agent with that README as its
+  initial prompt;
+- a durable remote receipt for the capsule itself before the producing session closes.
+
+The capsule defines how reality decides what happens next; it never predeclares the ending. At launch,
+derive the exact remote head and CI state, board/task contracts, handoff age, provider headroom, mounted
+substrates, host pressure, active sessions, and lifecycle custody from live probes. Do not hard-code a
+future model, provider table, task count, completion percentage, or claim that Omega is reachable.
+Environment figures may select a lane, deny unsafe work, or trigger a session switch; they must never
+be edited to manufacture green.
+
+The next session finishes only when its live predicates pass and every discovered leaf has one of the
+closure receipts above. If context, value, resource, provider, or human gates require a boundary, emit
+the successor capsule and its launch command before ending. A closeout without that command is
+incomplete; a new autonomous session without a capsule must create one before broad execution.
+
 ## Task States
 
 The canonical state set lives in code — `VALID_STATUSES` in `mcp/src/limen_mcp/server.py` — and
@@ -227,7 +294,7 @@ Do not invent states.
 | `in_progress` | Actively being worked |
 | `done` | Completed successfully |
 | `failed` | Attempted, did not succeed — retryable |
-| `failed_blocked` | Stopped by an external blocker (billing / auth / infra) |
+| `failed_blocked` | Stopped by an external blocker (billing / auth / infra), or parked chronic fleet-debt (reopened ≥3×, never a PR — `scripts/heal-dispatch.py` parks these here, never in `needs_human`) |
 | `needs_human` | Cannot proceed without a human action |
 | `archived` | Closed and suppressed from active steering |
 
@@ -363,7 +430,8 @@ Choose the terminal state precisely:
 
 - `failed` — the attempt ran and did not succeed, but another attempt may fix it.
 - `failed_blocked` — an external system blocked progress (billing, auth, unavailable service,
-  broken dependency outside the repo).
+  broken dependency outside the repo), or the healer parked chronic fleet-debt there
+  (reopened ≥3×, never a PR — keep `needs_human` for genuinely human-gated atoms).
 - `needs_human` — the next required action is a real human decision or manual step.
 
 For `done`, include the evidence: predicate command, result, changed paths, PR/commit if any, and
@@ -427,6 +495,13 @@ checks.
 - You are Claude. Read this file as part of your startup instructions.
 - You have access to the full filesystem — `$LIMEN_ROOT/tasks.yaml` is a regular file.
 - Support `limen` as a subagent: when asked, run the limen CLI or read/write tasks.yaml directly.
+- **Fleet launches never wait on permissions.** Limen-owned non-interactive Claude dispatch uses
+  `--permission-mode dontAsk` with an explicit file-mutation allowlist. Bash/network policy remains
+  owned by effective user/project/managed rules; Limen does not inject a blanket shell grant. A tool
+  outside that surface, or one matched by an ask or deny rule, must fail closed and let the
+  dispatcher cascade or owner-route it; it must never become an approval modal. Do not replace this with
+  `acceptEdits` or `auto` (both can prompt), or `bypassPermissions` (unsafe on the host). This fleet
+  contract does not change the operator's settings or any interactive/user-started Claude session.
 - **Tier subagent fan-out by job.** Task/Workflow subagents inherit the session model; pick each agent's tier by its job (`.claude/agents/` types, or an explicit `model`/`effort`) so trivial workers never ride Opus. Authority: `cli/src/limen/model_selection.py`; details in CLAUDE.md → Parallel Exploration & Fan-Out.
 - **Fable plans, cheaper tiers build.** Fable's role is PLAN-ONLY: it does the deep analysis, emits a build packet into a worktree, and hands off to a cheaper tier (Opus/Sonnet/Haiku) that builds; building on Fable is prohibited. It is acceptance-gated (`scripts/fable-allotment.py accept ...`, `LIMEN_FABLE_ACCEPTANCE=<receipt>`) AND live runtime-capped against actual weekly tokens burned (40% deliberate / 50% hard, `scripts/fable-allotment.py balance` → `logs/fable-allotment.json`, enforced in `cli/src/limen/model_selection.py`). Full doctrine + caps: `docs/fable-allotment.md`.
 
@@ -498,6 +573,7 @@ checks.
 | Start execution | Edit `status: dispatched` → `status: in_progress` |
 | Report done | Edit `status: in_progress` → `status: done` + add output |
 | Show board | `limen status` (if CLI installed) |
+| Show macro/micro progress | `limen progress` (`--view`, `--scope`, `--all`, or `--json-output`) |
 | Dispatch | `limen dispatch --agent <name> --live` |
 | Harvest | `limen harvest --agent <name>` |
 | Init new | `limen init --root <path>` |
