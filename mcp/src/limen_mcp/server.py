@@ -4,11 +4,14 @@ import subprocess
 from datetime import date, datetime
 from pathlib import Path
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import yaml
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from limen_mcp import runtime_requirements
+from limen_mcp.intake import normalize_selected_legacy_task, validate_intake_contract
 
 VALID_STATUSES = {"open", "dispatched", "in_progress", "done", "failed", "failed_blocked", "needs_human", "archived"}
 VALID_PRIORITIES = {"critical", "high", "medium", "low", "backlog"}
@@ -78,6 +81,22 @@ class DispatchLogEntry(BaseModel):
         raise ValueError("dispatch event status must be canonical (legacy composite rows are read-only)")
 
 
+class ExecutionRequirement(BaseModel):
+    """A live control-host prerequisite that must clear before dispatch."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["mount"]
+    path: str = Field(min_length=1, max_length=4096)
+
+    @field_validator("path")
+    @classmethod
+    def validate_absolute_path(cls, value: str) -> str:
+        if "\x00" in value or not os.path.isabs(value):
+            raise ValueError("execution requirement path must be absolute")
+        return value
+
+
 class Task(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -93,6 +112,9 @@ class Task(BaseModel):
     labels: List[str] = Field(default_factory=list)
     urls: List[str] = Field(default_factory=list)
     context: Optional[str] = None
+    predicate: Optional[str] = None
+    receipt_target: Optional[str] = None
+    execution_requirements: Optional[List[ExecutionRequirement]] = None
     claude_tier: Optional[str] = None
     depends_on: List[str] = Field(default_factory=list)
     created: date
@@ -214,13 +236,36 @@ def _load_data() -> LimenFile:
     return LimenFile(**data)
 
 
+def _serialized_data(data: LimenFile) -> Dict[str, Any]:
+    """Serialize without materializing the new optional field on legacy task rows.
+
+    Other optional fields keep the MCP server's established explicit-null behavior.  An explicit
+    ``execution_requirements: null`` also remains explicit; only a field that was absent when the
+    model was loaded remains absent when saved.
+    """
+
+    payload = data.model_dump(mode="json")
+    raw_tasks = payload.get("tasks")
+    if not isinstance(raw_tasks, list):
+        return payload
+    for task, raw_task in zip(data.tasks, raw_tasks, strict=True):
+        if (
+            isinstance(raw_task, dict)
+            and task.execution_requirements is None
+            and "execution_requirements" not in task.model_fields_set
+        ):
+            raw_task.pop("execution_requirements", None)
+    return payload
+
+
 def _save_data(data: LimenFile, commit_msg: str = "chore: mcp task update"):
     path = _get_tasks_path()
     repo_dir = path.parent
+    payload = _serialized_data(data)
 
     # Write file locally first
     with open(path, "w") as f:
-        yaml.dump(data.model_dump(mode="json"), f, default_flow_style=False, sort_keys=False)
+        yaml.dump(payload, f, default_flow_style=False, sort_keys=False)
 
     # Layer 1: Concurrency Sync (Git Pull --Rebase wrapper)
     if (repo_dir / ".git").exists():
@@ -235,7 +280,7 @@ def _save_data(data: LimenFile, commit_msg: str = "chore: mcp task update"):
 
             # 3. RE-WRITE the file from memory to resolve any conflicts in tasks.yaml automatically
             with open(path, "w") as f:
-                yaml.dump(data.model_dump(mode="json"), f, default_flow_style=False, sort_keys=False)
+                yaml.dump(payload, f, default_flow_style=False, sort_keys=False)
 
             # 4. Drop the now-superseded stash (the memory re-write above is authoritative) so stash
             #    entries don't accumulate on every save.
@@ -305,7 +350,15 @@ def get_task(task_id: str) -> dict:
 
 
 @mcp.tool()
-def add_task(title: str, repo: str, agent: str = "jules", priority: str = "medium", budget_cost: int = 1) -> str:
+def add_task(
+    title: str,
+    repo: str,
+    predicate: str,
+    receipt_target: str,
+    agent: str = "jules",
+    priority: str = "medium",
+    budget_cost: int = 1,
+) -> str:
     """Add a new task to the pipeline."""
     title = _validate_text(title, "title", 512)
     repo = _validate_text(repo, "repo", 256)
@@ -335,15 +388,24 @@ def add_task(title: str, repo: str, agent: str = "jules", priority: str = "mediu
         priority=priority,
         budget_cost=budget_cost,
         status="open",
+        predicate=predicate,
+        receipt_target=receipt_target,
         created=date.today(),
     )
+    validate_intake_contract(new_task, is_new=True)
     data.tasks.append(new_task)
     _save_data(data, commit_msg=f"feat: add task {new_id}")
     return f"Created task {new_id}"
 
 
 @mcp.tool()
-def update_task_status(task_id: str, status: str, context: Optional[str] = None) -> str:
+def update_task_status(
+    task_id: str,
+    status: str,
+    context: Optional[str] = None,
+    predicate: Optional[str] = None,
+    receipt_target: Optional[str] = None,
+) -> str:
     """Update the status and context of a task. Allows 'failed_blocked' to evict dependencies."""
     task_id = _validate_task_id(task_id)
     status = _validate_optional_enum(status, VALID_STATUSES, "status") or status
@@ -361,7 +423,13 @@ def update_task_status(task_id: str, status: str, context: Optional[str] = None)
             t.status = status
             if context:
                 t.context = context
+            if predicate is not None:
+                t.predicate = predicate
+            if receipt_target is not None:
+                t.receipt_target = receipt_target
             t.updated = datetime.now()
+
+            validate_intake_contract(t)
 
             _save_data(data, commit_msg=f"chore: update {task_id} to {status}")
             return f"Updated {task_id} to {status}. New budget cost: {t.budget_cost}"
@@ -427,6 +495,13 @@ def agent_claim(task_id: str, agent_name: str = "opencode") -> str:
                 return f"Task {task_id} is not open (current status: {t.status}) - cannot claim"
             if t.target_agent not in (agent_name, "any"):
                 return f"Task {task_id} targets {t.target_agent}, not {agent_name} - cannot claim"
+
+            readiness = runtime_requirements.evaluate_execution_requirements(t)
+            if not readiness.ready:
+                reason = "; ".join(readiness.blockers)
+                return f"Task {task_id} runtime requirements unavailable: {reason} - cannot claim"
+
+            normalize_selected_legacy_task(t)
 
             now = datetime.now()
             t.status = "dispatched"

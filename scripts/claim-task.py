@@ -12,6 +12,10 @@ from typing import Any
 
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "cli" / "src"))
+from limen.intake import IntakeContractError, normalize_selected_legacy_task  # noqa: E402
+from limen import runtime_requirements  # noqa: E402
+
 VALID_CLAIM_AGENTS = {
     "agy",
     "claude",
@@ -78,6 +82,11 @@ def claim_task(data: dict[str, Any], task_id: str, agent: str, session_id: str) 
         if status != "open":
             raise SystemExit(f"task {task_id} is not open; current status is {status!r}")
 
+        readiness = runtime_requirements.evaluate_execution_requirements(task)
+        if not readiness.ready:
+            reason = "; ".join(readiness.blockers)
+            raise SystemExit(f"runtime requirements blocked {task_id}: {reason}")
+
         budget_cost = optional_nonnegative_int(task, "budget_cost", "budget_cost")
         portal = data.setdefault("portal", {})
         if not isinstance(portal, dict):
@@ -96,6 +105,11 @@ def claim_task(data: dict[str, Any], task_id: str, agent: str, session_id: str) 
             per_agent[agent] if agent in per_agent else 0,
             f"portal.budget.track.per_agent.{agent}",
         )
+
+        try:
+            normalize_selected_legacy_task(task)
+        except IntakeContractError as exc:
+            raise SystemExit(f"typed intake blocked {task_id}: {exc}") from None
 
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         task["target_agent"] = agent
@@ -139,9 +153,7 @@ def main() -> int:
 
     if not args.live:
         print(
-            "DRY-RUN claim: "
-            f"{task['id']} -> {task['target_agent']} "
-            f"status={task['status']} session={args.session_id}"
+            f"DRY-RUN claim: {task['id']} -> {task['target_agent']} status={task['status']} session={args.session_id}"
         )
         return 0
 

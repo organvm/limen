@@ -1,6 +1,7 @@
 import re
+import os
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -33,6 +34,22 @@ class DispatchLogEntry(BaseModel):
     selected_model: str | None = None
     selection_source: str | None = None
     catalog_hash: str | None = None
+    # Provider-neutral remote lifecycle.  Submission is only ``dispatched``; these fields make the
+    # exact off-box run recoverable without interpreting a provider-shaped session string.
+    provider_run_id: str | None = None
+    provider_url: str | None = None
+    base_sha: str | None = None
+    control_repo: str | None = None
+    control_ref: str | None = None
+    control_ref_kind: str | None = None
+    control_sha: str | None = None
+    workflow_id: int | None = None
+    workflow_path: str | None = None
+    workflow_event: str | None = None
+    verification_context_digest: str | None = None
+    remote_state: str | None = None
+    remote_request_id: str | None = None
+    remote_receipt: str | None = None
     output: str | None = None
 
     @field_validator("status")
@@ -41,6 +58,22 @@ class DispatchLogEntry(BaseModel):
         if value in VALID_STATUSES or value in {"noop", "pr_open"} or "->" in value:
             return value
         raise ValueError("dispatch event status must be canonical (legacy composite rows are read-only)")
+
+
+class ExecutionRequirement(BaseModel):
+    """A live control-host prerequisite that must clear before dispatch."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["mount"]
+    path: str = Field(min_length=1, max_length=4096)
+
+    @field_validator("path")
+    @classmethod
+    def validate_absolute_path(cls, value: str) -> str:
+        if "\x00" in value or not os.path.isabs(value):
+            raise ValueError("execution requirement path must be absolute")
+        return value
 
 
 class Task(BaseModel):
@@ -64,6 +97,14 @@ class Task(BaseModel):
     labels: list[str] = Field(default_factory=list)
     urls: list[str] = Field(default_factory=list)
     context: str | None = None
+    # Typed intake evidence. Optional here so historical boards remain loadable;
+    # every new/open submission is enforced by ``limen.intake`` at the writer
+    # and keeper seams, and selected legacy work is normalized before dispatch.
+    predicate: str | None = None
+    receipt_target: str | None = None
+    # Optional live prerequisites. Missing/empty keeps legacy tasks dispatchable; an explicit
+    # requirement is evaluated dynamically by handoff and every dispatch selector.
+    execution_requirements: list[ExecutionRequirement] | None = None
     # Optional per-task Claude tier pin ("haiku"|"sonnet"|"opus"|"fable") — an escape hatch that
     # overrides the earned-tier ladder's class-based derivation for THIS task (the env
     # LIMEN_CLAUDE_MODEL still wins above it). Fable still requires LIMEN_FABLE_ACCEPTANCE.

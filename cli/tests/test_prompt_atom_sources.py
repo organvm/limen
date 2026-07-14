@@ -34,6 +34,121 @@ def _regular_lifecycle(module, rows):
     return lifecycle
 
 
+VALID_CODEX_PNG_DATA_URL = (
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
+
+
+def _codex_session_v2_fixture(module, tmp_path: Path, rows: list[dict]):
+    sessions = tmp_path / ".codex" / "sessions"
+    session_id = "019f-codex-session-v2"
+    path = sessions / "2026" / "07" / "13" / f"rollout-{session_id}.jsonl"
+    path.parent.mkdir(parents=True)
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    lifecycle = module.load_lifecycle_module()
+    lifecycle.LOCAL_SOURCES = [("codex-sessions", sessions, ("*",))]
+    lifecycle.OPENCODE_DB = tmp_path / "missing-opencode.db"
+    lifecycle.AGY_CLI_CONVERSATIONS = tmp_path / "missing-agy"
+    lifecycle.HOME = tmp_path
+    return lifecycle, path, session_id
+
+
+def _codex_media_rows(session_id: str, *, image_url: str = VALID_CODEX_PNG_DATA_URL):
+    message = "[Image #1] Assess this evidence."
+    placeholder = "[Image #1]"
+    return [
+        {"type": "session_meta", "payload": {"id": session_id}},
+        {
+            "timestamp": "2026-07-13T12:00:00.001Z",
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": message},
+                    {"type": "input_image", "detail": "high", "image_url": image_url},
+                ],
+            },
+        },
+        {
+            "timestamp": "2026-07-13T12:00:00.002Z",
+            "type": "event_msg",
+            "payload": {
+                "type": "user_message",
+                "message": message,
+                "images": [],
+                "local_images": ["/private/tmp/codex-input-image.png"],
+                "text_elements": [
+                    {
+                        "placeholder": placeholder,
+                        "byte_range": {"start": 0, "end": len(placeholder.encode("utf-8"))},
+                    }
+                ],
+            },
+        },
+    ]
+
+
+def _claude_memory_alias_fixture(module, tmp_path: Path, *, absolute: bool = False):
+    projects = tmp_path / ".claude" / "projects"
+    target = projects / "project" / "memory" / "fixture.md"
+    alias = projects / "project" / target.name
+    target.parent.mkdir(parents=True)
+    target.write_text("synthetic memory fixture", encoding="utf-8")
+    alias.symlink_to(target if absolute else Path("memory") / target.name)
+    lifecycle = module.load_lifecycle_module()
+    lifecycle.LOCAL_SOURCES = [("claude-projects", projects, ("*",))]
+    lifecycle.OPENCODE_DB = tmp_path / "missing-opencode.db"
+    lifecycle.AGY_CLI_CONVERSATIONS = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    lifecycle.HOME = tmp_path
+    return lifecycle, projects, alias, target
+
+
+def _claude_subagent_alias_fixture(module, tmp_path: Path):
+    projects = tmp_path / ".claude" / "projects"
+    target = projects / "project" / "target-session" / "subagents" / "agent.jsonl"
+    alias = projects / "project" / "alias-session" / "subagents" / target.name
+    target.parent.mkdir(parents=True)
+    alias.parent.mkdir(parents=True)
+    target.write_text(
+        json.dumps(
+            {
+                "type": "user",
+                "message": {"role": "user", "content": "delegated alias target"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    alias.symlink_to(target)
+    lifecycle = module.load_lifecycle_module()
+    lifecycle.LOCAL_SOURCES = [("claude-projects", projects, ("*",))]
+    lifecycle.OPENCODE_DB = tmp_path / "missing-opencode.db"
+    lifecycle.AGY_CLI_CONVERSATIONS = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    lifecycle.HOME = tmp_path
+    return lifecycle, projects, alias, target
+
+
+def _scan_claude_rows(module, tmp_path: Path, rows: list[dict]):
+    projects = tmp_path / ".claude" / "projects"
+    transcript = projects / "project" / "session.jsonl"
+    transcript.parent.mkdir(parents=True)
+    transcript.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    lifecycle = module.load_lifecycle_module()
+    lifecycle.LOCAL_SOURCES = [("claude-projects", projects, ("*",))]
+    lifecycle.OPENCODE_DB = tmp_path / "missing-opencode.db"
+    lifecycle.AGY_CLI_CONVERSATIONS = tmp_path / "missing-agy"
+    lifecycle.HOME = tmp_path / "missing-home"
+    events, result = module.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=module.ScanBudget(limit=1),
+        rows=[{"source": "claude-projects", "path": transcript}],
+    )
+    return events, result, transcript
+
+
 def test_claude_tool_and_transport_surfaces_never_become_operator_input():
     sources = _load()
     lifecycle = sources.load_lifecycle_module()
@@ -158,6 +273,308 @@ def test_codex_user_media_is_an_explicit_gap_instead_of_silently_losing_the_atta
     assert result["unsupported"] == [key]
     assert result["unsupported_units"][key] == sources.file_signature(path)
     assert key not in result["files"]
+
+
+def test_codex_inline_png_media_binds_to_transport_and_stays_out_of_textual_atoms(tmp_path: Path):
+    sources = _load()
+    session_id = "019f-codex-session-v2"
+    lifecycle, path, _session_id = _codex_session_v2_fixture(
+        sources,
+        tmp_path,
+        _codex_media_rows(session_id),
+    )
+    key = sources.cursor_unit_key("codex-sessions", path)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert result["errors"] == []
+    assert result["unsupported"] == []
+    assert result["source_adapter_counts"] == {"codex-session-jsonl-v2": 1}
+    receipt = result["adapted_unit_receipts"][key]
+    assert receipt["contract_id"] == "codex-session-jsonl-v2"
+    assert sources.source_contract_receipt_applies(
+        receipt["contract_id"],
+        "codex-sessions",
+        str(path),
+        signature=sources.file_signature(path),
+    )
+    media = [event for event in events if event["body_kind"] == "nontext_input"]
+    assert len(media) == 1
+    assert media[0]["provenance"] == "operator_typed"
+    assert media[0]["authority"] == "operator"
+    assert media[0]["text"].startswith("codex-input-image-v1:sha256=")
+    assert VALID_CODEX_PNG_DATA_URL not in media[0]["text"]
+
+    snapshot = sources.update_ledger(
+        sources.LedgerPaths.for_root(tmp_path / "ledger"),
+        events=events,
+        cursor={
+            "version": 1,
+            "scope": "fixture",
+            "source_manifest_digest": sources.digest({"fixture": 1}),
+            "source_families": {},
+            "files": {},
+        },
+    )
+    assert snapshot["coverage"]["atoms"] == 1
+    media_occurrence = next(
+        occurrence for occurrence in snapshot["occurrences"] if occurrence["body_kind"] == "nontext_input"
+    )
+    assert media_occurrence["excluded_reason"] == "nontext_prompt_input"
+    assert media_occurrence["atom_ids"] == []
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "unbound",
+        "ambiguous",
+        "bad-base64",
+        "bad-detail",
+        "bad-placeholder-range",
+        "noncanonical-local-path",
+    ],
+)
+def test_codex_media_adapter_fails_closed_on_unbound_or_malformed_inputs(tmp_path: Path, mutation: str):
+    sources = _load()
+    session_id = "019f-codex-session-v2"
+    rows = _codex_media_rows(session_id)
+    if mutation == "unbound":
+        rows.pop()
+    elif mutation == "ambiguous":
+        rows.append(dict(rows[-1]))
+    elif mutation == "bad-base64":
+        rows[1]["payload"]["content"][1]["image_url"] = "data:image/png;base64,not-valid!"
+    elif mutation == "bad-detail":
+        rows[1]["payload"]["content"][1]["detail"] = "auto"
+    elif mutation == "bad-placeholder-range":
+        rows[2]["payload"]["text_elements"][0]["byte_range"]["end"] += 1
+    elif mutation == "noncanonical-local-path":
+        rows[2]["payload"]["local_images"] = ["../image.png"]
+    lifecycle, path, _session_id = _codex_session_v2_fixture(sources, tmp_path, rows)
+    key = sources.cursor_unit_key("codex-sessions", path)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert key not in result["files"]
+    assert key not in result["adapted_unit_receipts"]
+    assert result["errors"] or result["unsupported"] == [key]
+
+
+def test_codex_compacted_history_is_preserved_as_derived_context(tmp_path: Path):
+    sources = _load()
+    session_id = "019f-codex-session-v2"
+    rows = [
+        {"type": "session_meta", "payload": {"id": session_id}},
+        {
+            "timestamp": "2026-07-13T12:00:00Z",
+            "type": "compacted",
+            "payload": {
+                "first_window_id": "11111111-1111-1111-1111-111111111111",
+                "message": "",
+                "previous_window_id": "22222222-2222-2222-2222-222222222222",
+                "replacement_history": [
+                    {
+                        "type": "message",
+                        "role": "developer",
+                        "content": [{"type": "input_text", "text": "provider context"}],
+                    },
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": "preserved historical operator turn"},
+                            {
+                                "type": "input_image",
+                                "detail": "high",
+                                "image_url": VALID_CODEX_PNG_DATA_URL,
+                            },
+                        ],
+                    },
+                    {"type": "compaction", "id": "cmp-1", "encrypted_content": "opaque"},
+                ],
+                "window_id": "33333333-3333-3333-3333-333333333333",
+                "window_number": 1,
+            },
+        },
+    ]
+    lifecycle, path, _session_id = _codex_session_v2_fixture(sources, tmp_path, rows)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert result["errors"] == []
+    assert result["unsupported"] == []
+    assert [event["body_kind"] for event in events] == ["session_context", "nontext_context"]
+    assert {event["provenance"] for event in events} == {"continuation_summary"}
+    assert {event["authority"] for event in events} == {"derived"}
+    assert not [event for event in events if event["text"] == "provider context"]
+    snapshot = sources.update_ledger(
+        sources.LedgerPaths.for_root(tmp_path / "ledger-compacted"),
+        events=events,
+        cursor={
+            "version": 1,
+            "scope": "fixture",
+            "source_manifest_digest": sources.digest({"fixture": 1}),
+            "source_families": {},
+            "files": {},
+        },
+    )
+    assert snapshot["coverage"]["atoms"] == 0
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["nonempty-message", "unknown-role", "missing-compaction", "unknown-item", "too-many-items"],
+)
+def test_codex_compacted_history_unknown_shapes_remain_explicit_gaps(tmp_path: Path, mutation: str):
+    sources = _load()
+    session_id = "019f-codex-session-v2"
+    history = [
+        {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "turn"}]},
+        {"type": "compaction", "encrypted_content": "opaque"},
+    ]
+    payload = {"message": "", "replacement_history": history}
+    if mutation == "nonempty-message":
+        payload["message"] = "unexpected summary"
+    elif mutation == "unknown-role":
+        history[0]["role"] = "assistant"
+    elif mutation == "missing-compaction":
+        history.pop()
+    elif mutation == "unknown-item":
+        history.append({"type": "future_compaction", "prompt": "must not disappear"})
+    elif mutation == "too-many-items":
+        limit = sources.SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]["max_compacted_history_items"]
+        payload["replacement_history"] = [history[0]] * (limit + 1)
+    rows = [
+        {"type": "session_meta", "payload": {"id": session_id}},
+        {"timestamp": "2026-07-13T12:00:00Z", "type": "compacted", "payload": payload},
+    ]
+    lifecycle, path, _session_id = _codex_session_v2_fixture(sources, tmp_path, rows)
+    key = sources.cursor_unit_key("codex-sessions", path)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["errors"] or result["unsupported"] == [key]
+    assert key not in result["files"]
+    assert key not in result["adapted_unit_receipts"]
+
+
+def test_codex_session_resume_metadata_uses_the_one_filename_bound_identity(tmp_path: Path):
+    sources = _load()
+    session_id = "019f-codex-session-v2"
+    rows = [
+        {"type": "session_meta", "payload": {"id": "019f-prior-session"}},
+        {"type": "session_meta", "payload": {"id": session_id}},
+        {
+            "timestamp": "2026-07-13T12:00:00Z",
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "resume safely"}],
+            },
+        },
+    ]
+    lifecycle, path, _session_id = _codex_session_v2_fixture(sources, tmp_path, rows)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert result["errors"] == []
+    assert result["unsupported"] == []
+    assert {event["session_ref"] for event in events} == {f"codex:{session_id}"}
+    assert sources.cursor_unit_key("codex-sessions", path) in result["adapted_unit_receipts"]
+
+
+def test_codex_session_ambiguous_identity_without_filename_binding_fails_closed(tmp_path: Path):
+    sources = _load()
+    rows = [
+        {"type": "session_meta", "payload": {"id": "019f-prior-session"}},
+        {"type": "session_meta", "payload": {"id": "019f-other-session"}},
+    ]
+    lifecycle, path, _session_id = _codex_session_v2_fixture(sources, tmp_path, rows)
+    key = sources.cursor_unit_key("codex-sessions", path)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert "identity is ambiguous" in " ".join(result["errors"])
+    assert key not in result["files"]
+    assert key not in result["adapted_unit_receipts"]
+
+
+@pytest.mark.parametrize("ceiling", ["records", "record_bytes", "file_bytes"])
+def test_codex_session_streaming_adapter_enforces_independent_hard_bounds(
+    tmp_path: Path,
+    monkeypatch,
+    ceiling: str,
+):
+    sources = _load()
+    session_id = "019f-codex-session-v2"
+    rows = [
+        {"type": "session_meta", "payload": {"id": session_id}},
+        {
+            "timestamp": "2026-07-13T12:00:00Z",
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "bounded turn"}],
+            },
+        },
+    ]
+    lifecycle, path, _session_id = _codex_session_v2_fixture(sources, tmp_path, rows)
+    rule = sources.SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]
+    if ceiling == "records":
+        monkeypatch.setitem(rule, "max_records", 1)
+    elif ceiling == "record_bytes":
+        monkeypatch.setitem(rule, "max_record_bytes", 16)
+    else:
+        monkeypatch.setitem(rule, "max_probe_bytes", max(1, path.stat().st_size - 1))
+    key = sources.cursor_unit_key("codex-sessions", path)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert "bounded" in " ".join(result["errors"])
+    assert key not in result["files"]
+    assert key not in result["adapted_unit_receipts"]
 
 
 @pytest.mark.parametrize(
@@ -473,6 +890,114 @@ def _opencode_fixture(path: Path) -> None:
     connection.close()
 
 
+def _opencode_task_fixture(path: Path, variants: tuple[str, ...]) -> list[str]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(path)
+    connection.executescript(
+        """
+        CREATE TABLE session (
+            id TEXT PRIMARY KEY,
+            parent_id TEXT,
+            agent TEXT,
+            model TEXT,
+            time_created INTEGER,
+            time_updated INTEGER
+        );
+        CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+        CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+        """
+    )
+    prompts: list[str] = []
+    for index, variant in enumerate(variants):
+        parent_id = f"parent-{index}"
+        child_id = f"child-{index}"
+        model_id = f"model-{index}"
+        provider_id = f"provider-{index}"
+        agent = f"agent-{index}"
+        prompt = f"synthetic delegated prompt {index}"
+        prompts.append(prompt)
+        connection.execute(
+            "INSERT INTO session VALUES (?, NULL, ?, ?, ?, ?)",
+            (
+                parent_id,
+                "build",
+                json.dumps({"id": "parent-model", "providerID": "parent-provider", "variant": "default"}),
+                index * 10 + 1,
+                index * 10 + 1,
+            ),
+        )
+        connection.execute(
+            "INSERT INTO session VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                child_id,
+                parent_id,
+                agent,
+                json.dumps({"id": model_id, "providerID": provider_id, "variant": "default"}),
+                index * 10 + 2,
+                index * 10 + 2,
+            ),
+        )
+        message_data = {
+            "agent": "build",
+            "cost": 0,
+            "mode": "build",
+            "modelID": "parent-model",
+            "parentID": f"previous-{index}",
+            "path": {"cwd": "/tmp", "root": "/tmp"},
+            "providerID": "parent-provider",
+            "role": "assistant",
+            "time": {"created": index * 10 + 3},
+            "tokens": {"input": 0, "output": 0, "reasoning": 0},
+        }
+        metadata = {
+            "model": {"modelID": model_id, "providerID": provider_id},
+            "parentSessionId": parent_id,
+            "sessionId": child_id,
+        }
+        input_data = {"description": f"task {index}", "prompt": prompt, "subagent_type": agent}
+        state: dict[str, object]
+        if variant == "completed":
+            message_data["finish"] = "tool-calls"
+            metadata["truncated"] = False
+            state = {
+                "input": input_data,
+                "metadata": metadata,
+                "output": f"synthetic output {index}",
+                "status": "completed",
+                "time": {"start": index * 10 + 4, "end": index * 10 + 5},
+                "title": f"task {index}",
+            }
+        else:
+            if variant == "command":
+                input_data["command"] = "synthetic-command"
+                metadata.update({"outputPath": f"/tmp/output-{index}", "truncated": True})
+            state = {
+                "input": input_data,
+                "metadata": metadata,
+                "status": "running",
+                "time": {"start": index * 10 + 4},
+                "title": f"task {index}",
+            }
+        message_id = f"message-{index}"
+        connection.execute(
+            "INSERT INTO message VALUES (?, ?, ?, ?)",
+            (message_id, parent_id, index * 10 + 3, json.dumps(message_data)),
+        )
+        connection.execute(
+            "INSERT INTO part VALUES (?, ?, ?, ?, ?)",
+            (
+                f"part-{index}",
+                message_id,
+                parent_id,
+                index * 10 + 4,
+                json.dumps({"callID": f"call-{index}", "state": state, "tool": "task", "type": "tool"}),
+            ),
+        )
+    connection.commit()
+    connection.close()
+    return prompts
+
+
 def test_opencode_requires_primary_proof_and_caps_work_by_session(tmp_path: Path):
     sources = _load()
     lifecycle = sources.load_lifecycle_module()
@@ -500,6 +1025,333 @@ def test_opencode_requires_primary_proof_and_caps_work_by_session(tmp_path: Path
     assert len(second_events) == 1
     assert second_events[0]["authority"] == "operator"
     assert second["pending_files"] == 0
+
+
+def test_opencode_task_tool_adapter_covers_exact_live_variants_and_is_idempotent(tmp_path: Path):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    database = tmp_path / "home" / ".local" / "share" / "opencode" / "opencode.db"
+    prompts = _opencode_task_fixture(database, ("running", "completed", "command"))
+    lifecycle.OPENCODE_DB = database
+
+    first_events, first = sources.scan_opencode(
+        lifecycle,
+        {"files": {}, "adapted_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=6),
+    )
+
+    assert [event["text"] for event in first_events] == prompts
+    assert all(event["body_kind"] == "delegated_task_frame" for event in first_events)
+    assert all(event["provenance"] == "delegated_task_frame" for event in first_events)
+    assert all(event["authority"] == "derived" for event in first_events)
+    assert all(event["source_segment"] == "state.input.prompt" for event in first_events)
+    assert len(first["adapted_unit_receipts"]) == 3
+    assert first["coverage"]["opencode-db"]["adapted"] == 3
+    assert all(
+        receipt["contract_id"] == "opencode-assistant-task-v1" for receipt in first["adapted_unit_receipts"].values()
+    )
+    assert sources.source_contract_receipt_applies(
+        "opencode-assistant-task-v1",
+        "opencode-db",
+        f"{database}#session:{'a' * 24}",
+        signature=next(iter(first["adapted_unit_receipts"].values()))["signature"],
+    )
+
+    second_events, second = sources.scan_opencode(
+        lifecycle,
+        {
+            "files": first["processed"],
+            "adapted_unit_receipts": first["adapted_unit_receipts"],
+        },
+        days=None,
+        budget=sources.ScanBudget(limit=6),
+    )
+
+    assert second_events == []
+    assert second["adapted_unit_receipts"] == first["adapted_unit_receipts"]
+    assert second["attempted_files"] == 0
+    assert second["errors"] == []
+
+
+def test_opencode_task_tool_receipt_projects_into_native_cursor(tmp_path: Path, monkeypatch):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    database = tmp_path / "home" / ".local" / "share" / "opencode" / "opencode.db"
+    prompts = _opencode_task_fixture(database, ("running",))
+    lifecycle.LOCAL_SOURCES = []
+    lifecycle.HOME = tmp_path / "home"
+    lifecycle.OPENCODE_DB = database
+    lifecycle.AGY_CLI_CONVERSATIONS = lifecycle.HOME / ".gemini" / "antigravity-cli" / "conversations"
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+
+    events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=tmp_path / "missing-cursor.json"),
+        days=None,
+        max_files=2,
+    )
+
+    assert [event["text"] for event in events] == prompts
+    assert cursor["scope"] == "all"
+    assert cursor["source_adapter_counts"]["opencode-assistant-task-v1"] == 1
+    assert cursor["source_coverage"]["opencode-db"]["adapted"] == 1
+    assert len(cursor["adapted_unit_receipts"]) == 1
+    assert cursor["adapter_gaps"] == []
+    assert sources.validate_source_adapter_cursor(cursor) == []
+
+
+@pytest.mark.parametrize("failure", ["extra-state-field", "wrong-child-parent"])
+def test_opencode_task_tool_adapter_fails_closed_on_structural_drift(tmp_path: Path, failure: str):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    database = tmp_path / "home" / ".local" / "share" / "opencode" / "opencode.db"
+    _opencode_task_fixture(database, ("running",))
+    connection = sqlite3.connect(database)
+    if failure == "extra-state-field":
+        raw = connection.execute("SELECT data FROM part WHERE id='part-0'").fetchone()[0]
+        part_data = json.loads(raw)
+        part_data["state"]["future"] = True
+        connection.execute("UPDATE part SET data=? WHERE id='part-0'", (json.dumps(part_data),))
+    else:
+        connection.execute("UPDATE session SET parent_id='wrong-parent' WHERE id='child-0'")
+    connection.commit()
+    connection.close()
+    lifecycle.OPENCODE_DB = database
+
+    events, result = sources.scan_opencode(
+        lifecycle,
+        {"files": {}, "adapted_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+    )
+
+    assert events == []
+    assert result["adapted_unit_receipts"] == {}
+    assert len(result["processed"]) == 1
+    assert len(result["errors"]) == 1
+    assert "OpenCode task-tool" in result["errors"][0]
+
+
+def test_opencode_exact_user_summary_is_excluded_from_prompt_byte_cap_and_digest(tmp_path: Path):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    database = tmp_path / "opencode.db"
+    connection = sqlite3.connect(database)
+    connection.executescript(
+        """
+        CREATE TABLE session (id TEXT PRIMARY KEY, time_created INTEGER, time_updated INTEGER);
+        CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+        CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+        INSERT INTO session VALUES ('summary', 1, 1);
+        """
+    )
+    summary = {
+        "diffs": [
+            {
+                "additions": 1,
+                "deletions": 0,
+                "file": "synthetic.txt",
+                "patch": "x" * 10_000,
+                "status": "added",
+            }
+        ]
+    }
+    connection.execute(
+        "INSERT INTO message VALUES ('message-summary', 'summary', 1, ?)",
+        (json.dumps({"role": "user", "summary": summary}),),
+    )
+    connection.execute(
+        "INSERT INTO part VALUES ('part-summary', 'message-summary', 'summary', 1, ?)",
+        (json.dumps({"type": "text", "text": "bounded user prompt"}),),
+    )
+    connection.commit()
+    connection.close()
+    lifecycle.OPENCODE_DB = database
+    limits = sources.ResourceLimits(
+        max_source_bytes_per_unit=512,
+        max_events_per_unit=10,
+        max_discovery_units=10,
+        max_classifier_input_bytes=1024,
+        max_classifier_output_bytes=1024,
+        max_classifier_stderr_bytes=1024,
+        max_classifier_occurrences=10,
+    )
+
+    first_events, first = sources.scan_opencode(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        limits=limits,
+    )
+    first_signature = next(iter(first["processed"].values()))
+    assert [event["text"] for event in first_events] == ["bounded user prompt"]
+    assert first["errors"] == []
+    assert database.stat().st_size > limits.max_source_bytes_per_unit
+
+    connection = sqlite3.connect(database)
+    summary["diffs"][0]["patch"] = "y" * 10_000
+    connection.execute(
+        "UPDATE message SET data=? WHERE id='message-summary'",
+        (json.dumps({"role": "user", "summary": summary}),),
+    )
+    connection.commit()
+    connection.close()
+
+    second_events, second = sources.scan_opencode(
+        lifecycle,
+        {"files": first["processed"]},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        limits=limits,
+    )
+    second_signature = next(iter(second["processed"].values()))
+    assert second_events == []
+    assert second["attempted_files"] == 0
+    assert second_signature["content_sha256"] == first_signature["content_sha256"]
+
+
+def test_opencode_nonuser_summary_marker_remains_in_content_digest(tmp_path: Path):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    database = tmp_path / "opencode.db"
+    connection = sqlite3.connect(database)
+    connection.executescript(
+        """
+        CREATE TABLE session (id TEXT PRIMARY KEY, time_created INTEGER, time_updated INTEGER);
+        CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+        CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+        INSERT INTO session VALUES ('summary-marker', 1, 1);
+        """
+    )
+    connection.execute(
+        "INSERT INTO message VALUES ('message-summary', 'summary-marker', 1, ?)",
+        (json.dumps({"role": "assistant", "summary": True}),),
+    )
+    connection.commit()
+    connection.close()
+    lifecycle.OPENCODE_DB = database
+
+    _first_events, first = sources.scan_opencode(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+    first_signature = next(iter(first["processed"].values()))
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "UPDATE message SET data=? WHERE id='message-summary'",
+        (json.dumps({"role": "assistant", "summary": False}),),
+    )
+    connection.commit()
+    connection.close()
+
+    second_events, second = sources.scan_opencode(
+        lifecycle,
+        {"files": first["processed"]},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+    second_signature = next(iter(second["processed"].values()))
+
+    assert second_events == []
+    assert second["errors"] == []
+    assert second["attempted_files"] == 1
+    assert second_signature["content_sha256"] != first_signature["content_sha256"]
+
+
+@pytest.mark.parametrize("failure", ["summary-extra-field", "diff-wrong-type"])
+def test_opencode_user_summary_exclusion_fails_closed_on_schema_drift(tmp_path: Path, failure: str):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    database = tmp_path / "opencode.db"
+    connection = sqlite3.connect(database)
+    connection.executescript(
+        """
+        CREATE TABLE session (id TEXT PRIMARY KEY, time_created INTEGER, time_updated INTEGER);
+        CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+        CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+        INSERT INTO session VALUES ('summary', 1, 1);
+        """
+    )
+    diff = {"additions": 1, "deletions": 0, "file": "x", "patch": "y", "status": "added"}
+    summary: dict[str, object] = {"diffs": [diff]}
+    if failure == "summary-extra-field":
+        summary["future"] = True
+    else:
+        diff["additions"] = "1"
+    connection.execute(
+        "INSERT INTO message VALUES ('message-summary', 'summary', 1, ?)",
+        (json.dumps({"role": "user", "summary": summary}),),
+    )
+    connection.commit()
+    connection.close()
+    lifecycle.OPENCODE_DB = database
+
+    events, result = sources.scan_opencode(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["processed"] == {}
+    assert len(result["errors"]) == 1
+    assert "OpenCode summary" in result["errors"][0]
+
+
+def test_source_contract_reset_drops_stale_unresolved_obligations(tmp_path: Path, monkeypatch):
+    sources = _load()
+    lifecycle = _regular_lifecycle(sources, [])
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    stale_contract = {**sources.source_adapter_contract(), "digest": "0" * 64}
+    stale_key = "scan-v2:opencode-db:stale-unit"
+    cursor_path = tmp_path / "cursor.json"
+    cursor_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "scanner_version": 2,
+                "scope": "partial:all",
+                "target_scope": "all",
+                "all_baseline_complete": False,
+                "source_adapter_contract": stale_contract,
+                "files": {},
+                "unsupported_units": {},
+                "unresolved_units": [stale_key],
+                "excluded_unit_receipts": {},
+                "adapted_unit_receipts": {},
+                "source_families": {
+                    "opencode-db": {
+                        "discovered": 1,
+                        "converged": 0,
+                        "adapted": 0,
+                        "excluded": 0,
+                        "pending": 0,
+                        "errors": 1,
+                        "unsupported": 0,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=cursor_path),
+        days=None,
+        max_files=1,
+    )
+
+    assert events == []
+    assert cursor["replace_files"] is True
+    assert cursor["unresolved_units"] == []
+    assert cursor["source_errors"] == []
+    assert "opencode-db" not in cursor["adapter_gaps"]
+    assert cursor["scope"] == "all"
+    assert sources.validate_source_adapter_cursor(cursor) == []
 
 
 def test_opencode_malformed_session_is_not_cursor_advanced(tmp_path: Path):
@@ -1188,30 +2040,766 @@ def test_exact_all_rechecks_live_source_at_final_commit_boundary(tmp_path: Path,
 def _agy_database(path: Path, prompt: str) -> None:
     connection = sqlite3.connect(path)
     connection.execute(
-        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, step_payload TEXT, metadata TEXT, "
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
         "task_details TEXT, error_details TEXT, render_info TEXT)"
     )
     connection.execute(
-        "INSERT INTO steps VALUES (1, 14, ?, NULL, NULL, NULL, NULL)",
+        "INSERT INTO steps VALUES (1, 14, 3, ?, NULL, NULL, NULL, NULL)",
         (prompt,),
     )
     connection.commit()
     connection.close()
 
 
+def _agy_lifecycle(sources, root: Path):
+    lifecycle = sources.load_lifecycle_module()
+    lifecycle.AGY_CLI_CONVERSATIONS = root
+    segments = (".gemini", "antigravity-cli", "conversations")
+    if tuple(root.parts[-len(segments) :]) == segments:
+        lifecycle.HOME = root.parents[len(segments) - 1]
+    return lifecycle
+
+
+def _agy_limits(sources, *, source_bytes: int = 32 * 1024 * 1024, discovery: int = 100_000):
+    baseline = sources.runtime_limits({})
+    return sources.ResourceLimits(
+        max_source_bytes_per_unit=source_bytes,
+        max_events_per_unit=baseline.max_events_per_unit,
+        max_discovery_units=discovery,
+        max_classifier_input_bytes=baseline.max_classifier_input_bytes,
+        max_classifier_output_bytes=baseline.max_classifier_output_bytes,
+        max_classifier_stderr_bytes=baseline.max_classifier_stderr_bytes,
+        max_classifier_occurrences=baseline.max_classifier_occurrences,
+    )
+
+
+def test_agy_exact_short_prompt_is_provider_neutral_and_receipted(tmp_path: Path):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    database = root / "short.db"
+    _agy_database(database, "ship it")
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    key = sources.cursor_unit_key("agy-cli-conversations", database)
+    assert [(event["text"], event["provenance"], event["authority"]) for event in events] == [
+        ("ship it", "unknown_user_input", "unknown")
+    ]
+    assert events[0]["source_segment"] == "step_payload"
+    assert result["adapted_unit_receipts"][key]["contract_id"] == "agy-conversation-v1"
+    assert result["excluded_unit_receipts"] == {}
+
+
+def test_agy_short_binary_prompt_segment_is_not_lost_to_length_heuristics(tmp_path: Path):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    database = root / "binary-short.db"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload BLOB, metadata BLOB, "
+        "task_details BLOB, error_details BLOB, render_info BLOB)"
+    )
+    connection.execute(
+        "INSERT INTO steps VALUES (1, 14, 3, ?, NULL, NULL, NULL, NULL)",
+        (sqlite3.Binary(b"\x08\x01\x12\x02go"),),
+    )
+    connection.commit()
+    connection.close()
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert [event["text"] for event in events] == ["go"]
+    assert result["errors"] == []
+
+
+def test_agy_ambiguous_prompt_carriers_fail_closed_without_leaking_text(tmp_path: Path):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    database = root / "ambiguous.db"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
+        "task_details TEXT, error_details TEXT, render_info TEXT)"
+    )
+    secrets = ("synthetic first private prompt", "synthetic second private prompt")
+    connection.execute(
+        "INSERT INTO steps VALUES (1, 14, 3, ?, ?, NULL, NULL, NULL)",
+        secrets,
+    )
+    connection.commit()
+    connection.close()
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["processed"] == {}
+    assert result["adapted_unit_receipts"] == {}
+    assert "multiple grounded source segments" in result["errors"][0]
+    redacted_result = json.dumps(result, sort_keys=True)
+    assert all(secret not in redacted_result for secret in secrets)
+
+
+def test_agy_structural_nonprompt_database_has_typed_idempotent_exclusion(tmp_path: Path):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    database = root / "nonprompt.db"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
+        "task_details TEXT, error_details TEXT, render_info TEXT)"
+    )
+    connection.execute(
+        "INSERT INTO steps VALUES (1, 15, 3, ?, NULL, NULL, NULL, NULL)",
+        (json.dumps({"outcome": "synthetic tool result"}),),
+    )
+    connection.commit()
+    connection.close()
+    lifecycle = _agy_lifecycle(sources, root)
+
+    first_events, first = sources.scan_agy_conversations(
+        lifecycle,
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+    second_events, second = sources.scan_agy_conversations(
+        lifecycle,
+        {
+            "files": first["processed"],
+            "adapted_unit_receipts": first["adapted_unit_receipts"],
+            "excluded_unit_receipts": first["excluded_unit_receipts"],
+        },
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    key = sources.cursor_unit_key("agy-cli-conversations", database)
+    assert first_events == second_events == []
+    assert first["excluded_unit_receipts"][key]["contract_id"] == "agy-conversation-nonprompt-v1"
+    assert second["excluded_unit_receipts"] == first["excluded_unit_receipts"]
+    assert second["attempted_files"] == 0
+    assert second["coverage"]["agy-cli-conversations"]["excluded"] == 1
+
+
+def test_agy_typed_nonprompt_exclusion_validates_at_exact_all_scope(tmp_path: Path, monkeypatch):
+    sources = _load()
+    home = tmp_path / "home"
+    root = home / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    database = root / "nonprompt.db"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
+        "task_details TEXT, error_details TEXT, render_info TEXT)"
+    )
+    connection.execute("INSERT INTO steps VALUES (1, 15, 3, NULL, NULL, NULL, NULL, NULL)")
+    connection.commit()
+    connection.close()
+    lifecycle = _agy_lifecycle(sources, root)
+    lifecycle.HOME = home
+    lifecycle.LOCAL_SOURCES = []
+    lifecycle.OPENCODE_DB = home / ".local" / "share" / "opencode" / "missing.db"
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    paths = sources.LedgerPaths.for_root(tmp_path / "ledger")
+
+    events, proposal = sources.scan_native_sources(paths, days=None, max_files=1)
+    sources.update_ledger(paths, events=events, cursor=proposal)
+    cursor = sources.load_json_strict(paths.cursor)[0]
+
+    key = sources.cursor_unit_key("agy-cli-conversations", database)
+    assert events == []
+    assert cursor["scope"] == cursor["target_scope"] == "all"
+    assert cursor["files"] == {}
+    assert cursor["excluded_unit_receipts"][key]["contract_id"] == "agy-conversation-nonprompt-v1"
+    assert sources.check_ledger(paths, require_scope="all") == []
+
+
+def test_agy_exact_all_live_custody_rejects_root_symlink_swap(tmp_path: Path, monkeypatch):
+    sources = _load()
+    home = tmp_path / "home"
+    root = home / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    database = root / "nonprompt.db"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
+        "task_details TEXT, error_details TEXT, render_info TEXT)"
+    )
+    connection.execute("INSERT INTO steps VALUES (1, 15, 3, NULL, NULL, NULL, NULL, NULL)")
+    connection.commit()
+    connection.close()
+    lifecycle = _agy_lifecycle(sources, root)
+    lifecycle.HOME = home
+    lifecycle.LOCAL_SOURCES = []
+    lifecycle.OPENCODE_DB = home / ".local" / "share" / "opencode" / "missing.db"
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    paths = sources.LedgerPaths.for_root(tmp_path / "ledger")
+
+    events, proposal = sources.scan_native_sources(paths, days=None, max_files=1)
+    assert events == []
+    assert proposal["scope"] == "all"
+
+    custody = root.with_name("conversations-custody")
+    root.rename(custody)
+    root.symlink_to(custody, target_is_directory=True)
+
+    core = sys.modules["limen.prompt_corpus"]
+    errors = core.validate_live_source_custody(proposal)
+    assert "agy-cli-conversations: live conversation root changed to a symlink" in errors
+
+
+def test_agy_root_ancestor_symlink_fails_closed(tmp_path: Path):
+    sources = _load()
+    home = tmp_path / "home"
+    gemini = home / ".gemini"
+    gemini.mkdir(parents=True)
+    outside_cli = tmp_path / "outside-antigravity-cli"
+    outside_root = outside_cli / "conversations"
+    outside_root.mkdir(parents=True)
+    _agy_database(outside_root / "escaped.db", "synthetic escaped prompt")
+    (gemini / "antigravity-cli").symlink_to(outside_cli, target_is_directory=True)
+    root = gemini / "antigravity-cli" / "conversations"
+    lifecycle = sources.load_lifecycle_module()
+    lifecycle.HOME = home
+    lifecycle.AGY_CLI_CONVERSATIONS = root
+
+    events, result = sources.scan_agy_conversations(
+        lifecycle,
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["adapted_unit_receipts"] == {}
+    assert "conversation root contains a symlink hop" in result["errors"][0]
+
+
+@pytest.mark.parametrize("failure", ["noncanonical-absent", "broken-ancestor-symlink"])
+def test_agy_absent_root_only_closes_cleanly_for_canonical_direct_custody(tmp_path: Path, failure: str):
+    sources = _load()
+    home = tmp_path / "home"
+    home.mkdir()
+    if failure == "noncanonical-absent":
+        root = home / "missing-conversations"
+    else:
+        gemini = home / ".gemini"
+        gemini.mkdir()
+        (gemini / "antigravity-cli").symlink_to(tmp_path / "missing-target", target_is_directory=True)
+        root = gemini / "antigravity-cli" / "conversations"
+    lifecycle = sources.load_lifecycle_module()
+    lifecycle.HOME = home
+    lifecycle.AGY_CLI_CONVERSATIONS = root
+
+    events, result = sources.scan_agy_conversations(
+        lifecycle,
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["errors"]
+    expected = {
+        "noncanonical-absent": "does not match its canonical HOME-relative role",
+        "broken-ancestor-symlink": "contains a symlink hop",
+    }
+    assert expected[failure] in result["errors"][0]
+
+
+def test_agy_exact_all_live_custody_rejects_root_ancestor_symlink_swap(tmp_path: Path, monkeypatch):
+    sources = _load()
+    home = tmp_path / "home"
+    cli_root = home / ".gemini" / "antigravity-cli"
+    root = cli_root / "conversations"
+    root.mkdir(parents=True)
+    database = root / "nonprompt.db"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
+        "task_details TEXT, error_details TEXT, render_info TEXT)"
+    )
+    connection.execute("INSERT INTO steps VALUES (1, 15, 3, NULL, NULL, NULL, NULL, NULL)")
+    connection.commit()
+    connection.close()
+    lifecycle = _agy_lifecycle(sources, root)
+    lifecycle.LOCAL_SOURCES = []
+    lifecycle.OPENCODE_DB = home / ".local" / "share" / "opencode" / "missing.db"
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+
+    events, proposal = sources.scan_native_sources(
+        SimpleNamespace(cursor=tmp_path / "missing-cursor.json"),
+        days=None,
+        max_files=1,
+    )
+    assert events == []
+    assert proposal["scope"] == "all"
+
+    custody = tmp_path / "antigravity-cli-custody"
+    cli_root.rename(custody)
+    cli_root.symlink_to(custody, target_is_directory=True)
+
+    core = sys.modules["limen.prompt_corpus"]
+    errors = core.validate_live_source_custody(proposal)
+    assert "agy-cli-conversations: live conversation root containment changed after the sealed scan" in errors
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ["missing-status", "duplicate-index", "unknown-column", "view", "generated-column"],
+)
+def test_agy_malformed_step_envelopes_fail_closed(tmp_path: Path, failure: str):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    database = root / f"{failure}.db"
+    connection = sqlite3.connect(database)
+    if failure == "missing-status":
+        connection.execute(
+            "CREATE TABLE steps (idx INTEGER, step_type INTEGER, step_payload TEXT, metadata TEXT, "
+            "task_details TEXT, error_details TEXT, render_info TEXT)"
+        )
+        connection.execute("INSERT INTO steps VALUES (1, 14, 'prompt', NULL, NULL, NULL, NULL)")
+    elif failure == "duplicate-index":
+        connection.execute(
+            "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
+            "task_details TEXT, error_details TEXT, render_info TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO steps VALUES (1, 14, 3, ?, NULL, NULL, NULL, NULL)",
+            [("first",), ("second",)],
+        )
+    elif failure == "unknown-column":
+        connection.execute(
+            "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
+            "task_details TEXT, error_details TEXT, render_info TEXT, future_prompt_carrier TEXT)"
+        )
+        connection.execute("INSERT INTO steps VALUES (1, 15, 3, NULL, NULL, NULL, NULL, NULL, 'hidden prompt')")
+    elif failure == "view":
+        connection.execute(
+            "CREATE TABLE backing_steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, "
+            "metadata TEXT, task_details TEXT, error_details TEXT, render_info TEXT)"
+        )
+        connection.execute("INSERT INTO backing_steps VALUES (1, 14, 3, 'hidden prompt', NULL, NULL, NULL, NULL)")
+        connection.execute("CREATE VIEW steps AS SELECT * FROM backing_steps")
+    else:
+        connection.execute(
+            "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
+            "task_details TEXT, error_details TEXT, "
+            "render_info TEXT GENERATED ALWAYS AS (NULL) VIRTUAL)"
+        )
+        connection.execute(
+            "INSERT INTO steps (idx, step_type, status, step_payload) VALUES (1, 14, 3, 'hidden prompt')"
+        )
+    connection.commit()
+    connection.close()
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["processed"] == {}
+    assert len(result["errors"]) == 1
+    expected = {
+        "missing-status": "missing required columns",
+        "duplicate-index": "duplicate idx",
+        "unknown-column": "unsupported columns",
+        "view": "must be a concrete table",
+        "generated-column": "hidden or generated columns",
+    }
+    assert expected[failure] in result["errors"][0]
+
+
+def test_agy_invalid_utf8_does_not_join_distinct_prompt_segments(tmp_path: Path):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    database = root / "invalid-utf8.db"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload BLOB, metadata BLOB, "
+        "task_details BLOB, error_details BLOB, render_info BLOB)"
+    )
+    connection.execute(
+        "INSERT INTO steps VALUES (1, 14, 3, ?, NULL, NULL, NULL, NULL)",
+        (sqlite3.Binary(b"first\xffsecond"),),
+    )
+    connection.commit()
+    connection.close()
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["adapted_unit_receipts"] == {}
+    assert "multiple grounded source segments" in result["errors"][0]
+    assert "firstsecond" not in json.dumps(result, sort_keys=True)
+
+
+@pytest.mark.parametrize("step_type", [14, 99], ids=("prompt-step", "nonprompt-step"))
+def test_agy_duplicate_json_keys_reject_adaptation_and_exclusion(tmp_path: Path, step_type: int):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    database = root / f"duplicate-json-{step_type}.db"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
+        "task_details TEXT, error_details TEXT, render_info TEXT)"
+    )
+    secret_values = ("synthetic first value", "synthetic second value")
+    duplicate_json = f'{{"prompt":"{secret_values[0]}","prompt":"{secret_values[1]}"}}'
+    connection.execute(
+        "INSERT INTO steps VALUES (1, ?, 3, ?, NULL, NULL, NULL, NULL)",
+        (step_type, duplicate_json),
+    )
+    connection.commit()
+    connection.close()
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["adapted_unit_receipts"] == {}
+    assert result["excluded_unit_receipts"] == {}
+    assert "duplicate JSON object keys are ambiguous" in result["errors"][0]
+    redacted = json.dumps(result, sort_keys=True)
+    assert all(value not in redacted for value in secret_values)
+
+
+@pytest.mark.parametrize("step_type", [14, 99], ids=("prompt-step", "nonprompt-step"))
+def test_agy_deeply_nested_json_is_a_source_local_error(tmp_path: Path, step_type: int):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    database = root / f"deep-json-{step_type}.db"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
+        "task_details TEXT, error_details TEXT, render_info TEXT)"
+    )
+    nested = "[" * 10_000 + '"synthetic nested value"' + "]" * 10_000
+    connection.execute(
+        "INSERT INTO steps VALUES (1, ?, 3, ?, NULL, NULL, NULL, NULL)",
+        (step_type, nested),
+    )
+    connection.commit()
+    connection.close()
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["adapted_unit_receipts"] == {}
+    assert result["excluded_unit_receipts"] == {}
+    assert "JSON nesting exceeds the bounded parser limit" in result["errors"][0]
+
+
+@pytest.mark.parametrize("step_type", [14, 99], ids=("prompt-step", "nonprompt-step"))
+@pytest.mark.parametrize(
+    "payload",
+    ['{"outcome":"synthetic"', '["synthetic"', '"synthetic'],
+    ids=("object", "array", "string"),
+)
+def test_agy_malformed_json_looking_carrier_fails_closed(
+    tmp_path: Path,
+    step_type: int,
+    payload: str,
+):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    database = root / f"malformed-json-{step_type}.db"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
+        "task_details TEXT, error_details TEXT, render_info TEXT)"
+    )
+    connection.execute(
+        "INSERT INTO steps VALUES (1, ?, 3, ?, NULL, NULL, NULL, NULL)",
+        (step_type, payload),
+    )
+    connection.commit()
+    connection.close()
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["adapted_unit_receipts"] == {}
+    assert result["excluded_unit_receipts"] == {}
+    assert "malformed or truncated JSON-looking carrier" in result["errors"][0]
+
+
+def test_agy_json_depth_counter_ignores_brackets_inside_prompt_strings(tmp_path: Path):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    prompt = "[" * 1_000 + "synthetic bracket prompt"
+    _agy_database(root / "quoted-brackets.db", json.dumps({"prompt": prompt}))
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert [event["text"] for event in events] == [prompt]
+    assert result["errors"] == []
+
+
+@pytest.mark.parametrize(
+    "marker",
+    ["prompt: ship it", "INSTRUCTIONS = ship it", "role:operator content:ship it", "type:operator ship it"],
+)
+def test_agy_plain_prompt_markers_reject_typed_nonprompt_exclusion(tmp_path: Path, marker: str):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    database = root / "plain-marker.db"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
+        "task_details TEXT, error_details TEXT, render_info TEXT)"
+    )
+    connection.execute(
+        "INSERT INTO steps VALUES (1, 99, 3, ?, NULL, NULL, NULL, NULL)",
+        (marker,),
+    )
+    connection.commit()
+    connection.close()
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["excluded_unit_receipts"] == {}
+    assert "explicit prompt adapter" in result["errors"][0]
+
+
+def test_agy_nested_database_path_role_fails_closed(tmp_path: Path):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    nested = root / "nested"
+    nested.mkdir(parents=True)
+    _agy_database(nested / "conversation.db", "synthetic nested prompt")
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["adapted_unit_receipts"] == {}
+    assert result["excluded_unit_receipts"] == {}
+    assert result["attempted_files"] == 0
+    assert "unsupported database path role" in result["errors"][0]
+
+
+@pytest.mark.parametrize("leaf_kind", ["directory", "fifo"])
+def test_agy_nonregular_database_leaf_fails_before_sqlite_open(tmp_path: Path, leaf_kind: str):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    leaf = root / f"{leaf_kind}.db"
+    if leaf_kind == "directory":
+        leaf.mkdir()
+    else:
+        os.mkfifo(leaf)
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["adapted_unit_receipts"] == {}
+    assert result["excluded_unit_receipts"] == {}
+    assert result["attempted_files"] == 0
+    assert "database leaf is not a regular file" in result["errors"][0]
+
+
+@pytest.mark.parametrize("suffix", ["-wal", "-shm", "-journal"])
+def test_agy_nonregular_sqlite_sidecar_fails_before_sqlite_open(tmp_path: Path, suffix: str):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    database = root / "conversation.db"
+    _agy_database(database, "synthetic direct prompt")
+    os.mkfifo(Path(f"{database}{suffix}"))
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert events == []
+    assert result["adapted_unit_receipts"] == {}
+    assert result["attempted_files"] == 0
+    assert "SQLite sidecar is not a regular file" in result["errors"][0]
+
+
+@pytest.mark.parametrize(
+    ("filename", "sibling_name"),
+    [
+        ("question?mode=ro&x=.db", "question"),
+        ("hash#fragment.db", "hash"),
+        ("percent%25.db", "percent%.db"),
+    ],
+    ids=("question", "fragment", "percent"),
+)
+def test_agy_sqlite_uri_escapes_reserved_filename_characters(
+    tmp_path: Path,
+    filename: str,
+    sibling_name: str,
+):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    candidate = root / filename
+    sibling = root / sibling_name
+    _agy_database(candidate, "correct reserved-path prompt")
+    _agy_database(sibling, "wrong sibling prompt")
+    old = time.time() - 10 * 86400
+    os.utime(sibling, (old, old))
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=1,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert [event["text"] for event in events] == ["correct reserved-path prompt"]
+    assert result["errors"] == []
+
+
+@pytest.mark.parametrize("failure", ["nested-path", "symlink-wal"])
+def test_agy_pre_custody_failure_returns_valid_partial_all_cursor(
+    tmp_path: Path,
+    monkeypatch,
+    failure: str,
+):
+    sources = _load()
+    home = tmp_path / "home"
+    root = home / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    if failure == "nested-path":
+        nested = root / "nested"
+        nested.mkdir()
+        _agy_database(nested / "conversation.db", "synthetic nested prompt")
+    else:
+        database = root / "conversation.db"
+        _agy_database(database, "synthetic direct prompt")
+        outside = tmp_path / "outside-wal"
+        outside.write_bytes(b"synthetic non-SQLite sidecar")
+        Path(f"{database}-wal").symlink_to(outside)
+    lifecycle = _agy_lifecycle(sources, root)
+    lifecycle.HOME = home
+    lifecycle.LOCAL_SOURCES = []
+    lifecycle.OPENCODE_DB = home / ".local" / "share" / "opencode" / "missing.db"
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+
+    events, proposal = sources.scan_native_sources(
+        SimpleNamespace(cursor=tmp_path / "missing-cursor.json"),
+        days=None,
+        max_files=1,
+    )
+
+    assert events == []
+    assert proposal["scope"] == "partial:all"
+    assert proposal["source_unit_count"] == 0
+    family = proposal["source_families"]["agy-cli-conversations"]
+    assert family["discovered"] == 0
+    assert family["errors"] == 1
+    assert all(family[field] == 0 for field in ("converged", "adapted", "excluded", "pending", "unsupported"))
+    assert proposal["adapter_gaps"] == ["agy-cli-conversations"]
+
+
+def test_agy_source_byte_discovery_and_symlink_bounds_fail_closed(tmp_path: Path):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    _agy_database(root / "large.db", "x" * 256)
+    _agy_database(root / "second.db", "bounded second prompt")
+    outside = tmp_path / "outside.db"
+    _agy_database(outside, "outside prompt")
+    (root / "linked.db").symlink_to(outside)
+
+    events, result = sources.scan_agy_conversations(
+        _agy_lifecycle(sources, root),
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=3),
+        limits=_agy_limits(sources, source_bytes=64, discovery=2),
+    )
+
+    assert events == []
+    assert result["processed"] == {}
+    assert result["pending_files"] == 1
+    joined = "\n".join(result["errors"])
+    assert "database discovery exceeds bounded ceiling 2" in joined
+    assert "bounded ceiling is 64" in joined
+    assert "symlink hop" in joined
+
+
 def test_agy_conversation_adapter_obeys_shared_work_unit_cap(tmp_path: Path):
     sources = _load()
-    root = tmp_path / "agy"
-    root.mkdir()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
     _agy_database(root / "one.db", "First bounded prompt with enough material to parse.")
     _agy_database(root / "two.db", "Second bounded prompt with enough material to parse.")
-    lifecycle = SimpleNamespace(
-        AGY_CLI_CONVERSATIONS=root,
-        blob_text_spans=lambda value: [value] if isinstance(value, str) else [],
-        agy_prompt_from_spans=lambda spans: spans[0] if spans else None,
-        normalize_task_body=lambda text: ("", "direct"),
-        iso_from_ts=lambda value: str(value),
-    )
+    lifecycle = _agy_lifecycle(sources, root)
 
     events, result = sources.scan_agy_conversations(
         lifecycle,
@@ -1227,25 +2815,19 @@ def test_agy_conversation_adapter_obeys_shared_work_unit_cap(tmp_path: Path):
 
 def test_agy_wal_only_prompt_append_invalidates_cached_conversation(tmp_path: Path):
     sources = _load()
-    root = tmp_path / "agy"
-    root.mkdir()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
     database = root / "wal.db"
     writer = sqlite3.connect(database)
     assert writer.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
     writer.execute("PRAGMA wal_autocheckpoint=0")
     writer.execute(
-        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, step_payload TEXT, metadata TEXT, "
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
         "task_details TEXT, error_details TEXT, render_info TEXT)"
     )
-    writer.execute("INSERT INTO steps VALUES (1, 14, 'first prompt', NULL, NULL, NULL, NULL)")
+    writer.execute("INSERT INTO steps VALUES (1, 14, 3, 'first prompt', NULL, NULL, NULL, NULL)")
     writer.commit()
-    lifecycle = SimpleNamespace(
-        AGY_CLI_CONVERSATIONS=root,
-        blob_text_spans=lambda value: [value] if isinstance(value, str) else [],
-        agy_prompt_from_spans=lambda spans: spans[0] if spans else None,
-        normalize_task_body=lambda text: ("", "direct"),
-        iso_from_ts=lambda value: str(value),
-    )
+    lifecycle = _agy_lifecycle(sources, root)
 
     first_events, first = sources.scan_agy_conversations(
         lifecycle,
@@ -1254,7 +2836,7 @@ def test_agy_wal_only_prompt_append_invalidates_cached_conversation(tmp_path: Pa
         budget=sources.ScanBudget(limit=1),
     )
     database_before = sources.file_signature(database)
-    writer.execute("INSERT INTO steps VALUES (2, 14, 'second prompt', NULL, NULL, NULL, NULL)")
+    writer.execute("INSERT INTO steps VALUES (2, 14, 3, 'second prompt', NULL, NULL, NULL, NULL)")
     writer.commit()
     assert sources.file_signature(database) == database_before
 
@@ -1274,25 +2856,19 @@ def test_agy_wal_only_prompt_append_invalidates_cached_conversation(tmp_path: Pa
 
 def test_agy_cache_hit_rechecks_wal_generation_before_convergence(tmp_path: Path, monkeypatch):
     sources = _load()
-    root = tmp_path / "agy"
-    root.mkdir()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
     database = root / "cache-race.db"
     writer = sqlite3.connect(database)
     assert writer.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
     writer.execute("PRAGMA wal_autocheckpoint=0")
     writer.execute(
-        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, step_payload TEXT, metadata TEXT, "
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
         "task_details TEXT, error_details TEXT, render_info TEXT)"
     )
-    writer.execute("INSERT INTO steps VALUES (1, 14, 'first prompt', NULL, NULL, NULL, NULL)")
+    writer.execute("INSERT INTO steps VALUES (1, 14, 3, 'first prompt', NULL, NULL, NULL, NULL)")
     writer.commit()
-    lifecycle = SimpleNamespace(
-        AGY_CLI_CONVERSATIONS=root,
-        blob_text_spans=lambda value: [value] if isinstance(value, str) else [],
-        agy_prompt_from_spans=lambda spans: spans[0] if spans else None,
-        normalize_task_body=lambda text: ("", "direct"),
-        iso_from_ts=lambda value: str(value),
-    )
+    lifecycle = _agy_lifecycle(sources, root)
     _events, first = sources.scan_agy_conversations(
         lifecycle,
         {"files": {}},
@@ -1307,14 +2883,17 @@ def test_agy_cache_hit_rechecks_wal_generation_before_convergence(tmp_path: Path
         signature = real_signature(path)
         calls += 1
         if calls == 1:
-            writer.execute("INSERT INTO steps VALUES (2, 14, 'racing prompt', NULL, NULL, NULL, NULL)")
+            writer.execute("INSERT INTO steps VALUES (2, 14, 3, 'racing prompt', NULL, NULL, NULL, NULL)")
             writer.commit()
         return signature
 
     monkeypatch.setattr(sources, "agy_storage_signature", mutate_after_first_signature)
     events, result = sources.scan_agy_conversations(
         lifecycle,
-        {"files": first["processed"]},
+        {
+            "files": first["processed"],
+            "adapted_unit_receipts": first["adapted_unit_receipts"],
+        },
         days=None,
         budget=sources.ScanBudget(limit=1),
     )
@@ -1328,6 +2907,48 @@ def test_agy_cache_hit_rechecks_wal_generation_before_convergence(tmp_path: Path
     assert any("changed during cache validation" in error for error in result["errors"])
 
 
+def test_agy_cache_hit_rechecks_nonwal_sidecar_custody(tmp_path: Path, monkeypatch):
+    sources = _load()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
+    database = root / "cache-sidecar-race.db"
+    _agy_database(database, "synthetic cached prompt")
+    lifecycle = _agy_lifecycle(sources, root)
+    _events, first = sources.scan_agy_conversations(
+        lifecycle,
+        {"files": {}, "adapted_unit_receipts": {}, "excluded_unit_receipts": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+    real_signature = sources.agy_storage_signature
+    calls = 0
+
+    def add_fifo_after_initial_signature(path: Path):
+        nonlocal calls
+        signature = real_signature(path)
+        calls += 1
+        if calls == 1:
+            os.mkfifo(Path(f"{database}-shm"))
+        return signature
+
+    monkeypatch.setattr(sources, "agy_storage_signature", add_fifo_after_initial_signature)
+    events, result = sources.scan_agy_conversations(
+        lifecycle,
+        {
+            "files": first["processed"],
+            "adapted_unit_receipts": first["adapted_unit_receipts"],
+        },
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+    )
+
+    assert calls >= 2
+    assert events == []
+    assert result["processed"] == {}
+    assert result["adapted_unit_receipts"] == {}
+    assert any("sidecar custody changed during cache validation" in error for error in result["errors"])
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -1338,22 +2959,21 @@ def test_agy_cache_hit_rechecks_wal_generation_before_convergence(tmp_path: Path
 )
 def test_unknown_agy_prompt_step_is_an_explicit_source_error(tmp_path: Path, payload: dict):
     sources = _load()
-    root = tmp_path / "agy"
-    root.mkdir()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
     database = root / "future.db"
     connection = sqlite3.connect(database)
     connection.execute(
-        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, step_payload TEXT, metadata TEXT, "
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload TEXT, metadata TEXT, "
         "task_details TEXT, error_details TEXT, render_info TEXT)"
     )
     connection.execute(
-        "INSERT INTO steps VALUES (1, 99, ?, NULL, NULL, NULL, NULL)",
+        "INSERT INTO steps VALUES (1, 99, 3, ?, NULL, NULL, NULL, NULL)",
         (json.dumps(payload),),
     )
     connection.commit()
     connection.close()
-    lifecycle = sources.load_lifecycle_module()
-    lifecycle.AGY_CLI_CONVERSATIONS = root
+    lifecycle = _agy_lifecycle(sources, root)
 
     events, result = sources.scan_agy_conversations(
         lifecycle,
@@ -1374,30 +2994,30 @@ def test_unknown_agy_prompt_step_is_an_explicit_source_error(tmp_path: Path, pay
         {"role": "human", "content": "A hidden human prompt carried inside a bounded binary JSON value."},
         {"role": "operator", "content": "A hidden operator prompt carried inside a bounded binary JSON value."},
         {"prompt": "A hidden future prompt carried inside a bounded binary JSON value."},
+        {"prompt": "x"},
     ],
-    ids=("human-role", "operator-role", "prompt-field"),
+    ids=("human-role", "operator-role", "prompt-field", "short-prompt-field"),
 )
 def test_unknown_agy_binary_json_prompt_carrier_is_an_explicit_source_error(
     tmp_path: Path,
     payload: dict,
 ):
     sources = _load()
-    root = tmp_path / "agy"
-    root.mkdir()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
     database = root / "future-binary.db"
     connection = sqlite3.connect(database)
     connection.execute(
-        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, step_payload BLOB, metadata BLOB, "
+        "CREATE TABLE steps (idx INTEGER, step_type INTEGER, status INTEGER, step_payload BLOB, metadata BLOB, "
         "task_details BLOB, error_details BLOB, render_info BLOB)"
     )
     connection.execute(
-        "INSERT INTO steps VALUES (1, 99, ?, NULL, NULL, NULL, NULL)",
+        "INSERT INTO steps VALUES (1, 99, 3, ?, NULL, NULL, NULL, NULL)",
         (sqlite3.Binary(json.dumps(payload).encode("utf-8")),),
     )
     connection.commit()
     connection.close()
-    lifecycle = sources.load_lifecycle_module()
-    lifecycle.AGY_CLI_CONVERSATIONS = root
+    lifecycle = _agy_lifecycle(sources, root)
 
     events, result = sources.scan_agy_conversations(
         lifecycle,
@@ -1424,6 +3044,9 @@ def test_unknown_agy_binary_json_prompt_carrier_is_an_explicit_source_error(
         ("step_type", float("nan")),
         ("step_type", 14.5),
         ("step_type", "14"),
+        ("status", float("inf")),
+        ("status", 3.5),
+        ("status", "3"),
     ],
     ids=(
         "idx-inf",
@@ -1434,29 +3057,31 @@ def test_unknown_agy_binary_json_prompt_carrier_is_an_explicit_source_error(
         "type-nan",
         "type-float",
         "type-string",
+        "status-inf",
+        "status-float",
+        "status-string",
     ),
 )
 def test_agy_step_identity_requires_exact_nonnegative_integers(tmp_path: Path, field: str, value):
     sources = _load()
-    root = tmp_path / "agy"
-    root.mkdir()
+    root = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    root.mkdir(parents=True)
     database = root / "bad-identity.db"
     connection = sqlite3.connect(database)
     connection.execute(
-        "CREATE TABLE steps (idx, step_type, step_payload TEXT, metadata TEXT, "
+        "CREATE TABLE steps (idx, step_type, status, step_payload TEXT, metadata TEXT, "
         "task_details TEXT, error_details TEXT, render_info TEXT)"
     )
-    identity = {"idx": 1, "step_type": 14}
+    identity = {"idx": 1, "step_type": 14, "status": 3}
     identity[field] = value
     connection.execute(
-        "INSERT INTO steps VALUES (?, ?, 'A grounded prompt long enough for exact source parsing.', "
+        "INSERT INTO steps VALUES (?, ?, ?, 'A grounded prompt long enough for exact source parsing.', "
         "NULL, NULL, NULL, NULL)",
-        (identity["idx"], identity["step_type"]),
+        (identity["idx"], identity["step_type"], identity["status"]),
     )
     connection.commit()
     connection.close()
-    lifecycle = sources.load_lifecycle_module()
-    lifecycle.AGY_CLI_CONVERSATIONS = root
+    lifecycle = _agy_lifecycle(sources, root)
 
     events, result = sources.scan_agy_conversations(
         lifecycle,
@@ -1907,11 +3532,13 @@ def test_all_history_prune_does_not_resurrect_last_stale_source_receipts(tmp_pat
 
 def test_unsupported_source_is_visible_and_blocks_all_scope(tmp_path: Path, monkeypatch):
     sources = _load()
-    unsupported = tmp_path / "plan.md"
-    unsupported.write_text("derived plan", encoding="utf-8")
+    projects = tmp_path / ".claude" / "projects"
+    unsupported = projects / "project" / "rogue.md"
+    unsupported.parent.mkdir(parents=True)
+    unsupported.write_text("unknown markdown", encoding="utf-8")
     lifecycle = _regular_lifecycle(
         sources,
-        [{"source": "claude-plans", "path": unsupported, "mtime": "2026-07-11"}],
+        [{"source": "claude-projects", "path": unsupported, "mtime": "2026-07-11"}],
     )
     monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
 
@@ -1923,9 +3550,9 @@ def test_unsupported_source_is_visible_and_blocks_all_scope(tmp_path: Path, monk
 
     assert cursor["scope"] == "partial:all"
     assert cursor["unsupported_source_count"] == 1
-    assert cursor["adapter_gaps"] == ["claude-plans"]
-    assert cursor["source_coverage"]["claude-plans"]["unsupported"] == 1
-    assert cursor["source_families"]["claude-plans"]["unsupported"] == 1
+    assert cursor["adapter_gaps"] == ["claude-projects"]
+    assert cursor["source_coverage"]["claude-projects"]["unsupported"] == 1
+    assert cursor["source_families"]["claude-projects"]["unsupported"] == 1
 
     cursor_path = tmp_path / "cursor.json"
     cursor_path.write_text(json.dumps(cursor), encoding="utf-8")
@@ -2044,6 +3671,442 @@ def test_structural_non_prompt_exclusions_precede_extension_and_cache(tmp_path: 
     assert cached["source_exclusion_counts"] == result["source_exclusion_counts"]
 
 
+def test_claude_memory_alias_to_exact_in_root_sibling_is_excluded(tmp_path: Path, monkeypatch):
+    sources = _load()
+    lifecycle, _projects, alias, target = _claude_memory_alias_fixture(sources, tmp_path)
+    rows = sources.regular_source_rows(lifecycle, None)
+    monkeypatch.setattr(
+        sources,
+        "_bounded_file_bytes",
+        lambda *_args, **_kwargs: pytest.fail("alias classification must stay metadata-only"),
+    )
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=rows,
+    )
+
+    alias_key = sources.cursor_unit_key("claude-projects", alias)
+    target_key = sources.cursor_unit_key("claude-projects", target)
+    alias_receipt = result["excluded_unit_receipts"][alias_key]
+    assert events == []
+    assert result["errors"] == []
+    assert result["source_alias_blocker_counts"] == {}
+    assert result["source_exclusion_counts"][sources.CLAUDE_PROJECT_MEMORY_ALIAS_ID] == 1
+    assert alias_receipt["contract_id"] == sources.CLAUDE_PROJECT_MEMORY_ALIAS_ID
+    assert alias_receipt["signature"] == sources.source_unit_signature(lifecycle, "claude-projects", alias)
+    assert alias_receipt["related_signatures"]["memory_target"] == sources.file_signature(target)
+    assert result["excluded_unit_receipts"][target_key]["contract_id"] == "claude-project-memory-v1"
+
+
+def test_claude_memory_alias_accepts_only_normalized_exact_sibling(tmp_path: Path, monkeypatch):
+    sources = _load()
+    lifecycle, _projects, alias, _target = _claude_memory_alias_fixture(sources, tmp_path, absolute=True)
+    custody = sources.source_path_custody(lifecycle, "claude-projects", alias)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        rows=[{"source": "claude-projects", "path": alias}],
+    )
+
+    assert custody.alias_contract_id == sources.CLAUDE_PROJECT_MEMORY_ALIAS_ID
+    assert custody.error is None
+    assert events == []
+    assert result["errors"] == []
+    assert result["source_exclusion_counts"] == {sources.CLAUDE_PROJECT_MEMORY_ALIAS_ID: 1}
+
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    _events, partial = sources.scan_native_sources(
+        SimpleNamespace(cursor=tmp_path / "missing-cursor.json"),
+        days=None,
+        max_files=1,
+    )
+    assert partial["scope"] == "partial:all"
+    assert partial["pending_files"] == 1
+    assert sources.validate_source_adapter_cursor(partial) == []
+
+
+def test_claude_memory_alias_to_other_in_root_file_is_blocked(tmp_path: Path):
+    sources = _load()
+    lifecycle, _projects, alias, target = _claude_memory_alias_fixture(sources, tmp_path)
+    other = target.with_name("other.md")
+    other.write_text("synthetic alternate fixture", encoding="utf-8")
+    alias.unlink()
+    alias.symlink_to(Path("memory") / other.name)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        rows=[{"source": "claude-projects", "path": alias}],
+    )
+
+    assert events == []
+    assert len(result["errors"]) == 1
+    assert result["source_alias_blocker_counts"] == {"alias_target_mismatch": 1}
+    assert result["excluded_unit_receipts"] == {}
+
+
+def test_claude_memory_alias_escape_is_blocked(tmp_path: Path):
+    sources = _load()
+    lifecycle, _projects, alias, _target = _claude_memory_alias_fixture(sources, tmp_path)
+    outside = tmp_path / "outside.md"
+    outside.write_text("synthetic outside fixture", encoding="utf-8")
+    alias.unlink()
+    alias.symlink_to(outside)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        rows=[{"source": "claude-projects", "path": alias}],
+    )
+
+    assert events == []
+    assert len(result["errors"]) == 1
+    assert result["source_alias_blocker_counts"] == {"alias_target_mismatch": 1}
+    assert result["excluded_unit_receipts"] == {}
+
+
+def test_claude_memory_alias_chain_is_blocked(tmp_path: Path):
+    sources = _load()
+    lifecycle, _projects, alias, target = _claude_memory_alias_fixture(sources, tmp_path)
+    terminal = target.with_name("terminal.md")
+    terminal.write_text("synthetic terminal fixture", encoding="utf-8")
+    target.unlink()
+    target.symlink_to(terminal.name)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        rows=[{"source": "claude-projects", "path": alias}],
+    )
+
+    assert events == []
+    assert result["source_alias_blocker_counts"] == {"alias_link_chain": 1}
+    assert result["excluded_unit_receipts"] == {}
+
+
+def test_claude_memory_alias_dangling_target_is_blocked(tmp_path: Path):
+    sources = _load()
+    lifecycle, _projects, alias, target = _claude_memory_alias_fixture(sources, tmp_path)
+    target.unlink()
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        rows=[{"source": "claude-projects", "path": alias}],
+    )
+
+    assert events == []
+    assert result["source_alias_blocker_counts"] == {"alias_dangling_target": 1}
+    assert result["excluded_unit_receipts"] == {}
+
+
+def test_claude_memory_alias_cycle_is_blocked(tmp_path: Path):
+    sources = _load()
+    lifecycle, _projects, alias, target = _claude_memory_alias_fixture(sources, tmp_path)
+    target.unlink()
+    target.symlink_to(Path("..") / alias.name)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        rows=[{"source": "claude-projects", "path": alias}],
+    )
+
+    assert events == []
+    assert result["source_alias_blocker_counts"] == {"alias_link_chain": 1}
+    assert result["excluded_unit_receipts"] == {}
+
+
+def test_claude_memory_alias_wrong_target_type_is_blocked(tmp_path: Path):
+    sources = _load()
+    lifecycle, _projects, alias, target = _claude_memory_alias_fixture(sources, tmp_path)
+    target.unlink()
+    target.mkdir()
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        rows=[{"source": "claude-projects", "path": alias}],
+    )
+
+    assert events == []
+    assert result["source_alias_blocker_counts"] == {"alias_target_not_regular": 1}
+    assert result["excluded_unit_receipts"] == {}
+
+
+def test_claude_memory_alias_below_symlinked_directory_is_blocked(tmp_path: Path):
+    sources = _load()
+    projects = tmp_path / ".claude" / "projects"
+    projects.mkdir(parents=True)
+    external_project = tmp_path / "external-project"
+    target = external_project / "memory" / "fixture.md"
+    alias = external_project / target.name
+    target.parent.mkdir(parents=True)
+    target.write_text("synthetic memory fixture", encoding="utf-8")
+    alias.symlink_to(Path("memory") / target.name)
+    (projects / "project").symlink_to(external_project, target_is_directory=True)
+    lexical_alias = projects / "project" / alias.name
+    lifecycle = sources.load_lifecycle_module()
+    lifecycle.LOCAL_SOURCES = [("claude-projects", projects, ("*",))]
+    lifecycle.OPENCODE_DB = tmp_path / "missing-opencode.db"
+    lifecycle.AGY_CLI_CONVERSATIONS = tmp_path / "missing-agy"
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        rows=[{"source": "claude-projects", "path": lexical_alias}],
+    )
+
+    assert events == []
+    assert result["source_alias_blocker_counts"] == {"alias_ancestor_symlink": 1}
+    assert result["excluded_unit_receipts"] == {}
+
+
+def test_claude_memory_alias_retarget_race_never_advances_cursor(tmp_path: Path, monkeypatch):
+    sources = _load()
+    lifecycle, _projects, alias, target = _claude_memory_alias_fixture(sources, tmp_path)
+    other = target.with_name("other.md")
+    other.write_text("synthetic alternate fixture", encoding="utf-8")
+    real_signature = sources.source_unit_signature
+    mutated = False
+
+    def mutate_after_signature(*args, **kwargs):
+        nonlocal mutated
+        signature = real_signature(*args, **kwargs)
+        if Path(args[2]) == alias and not mutated:
+            mutated = True
+            alias.unlink()
+            alias.symlink_to(Path("memory") / other.name)
+        return signature
+
+    monkeypatch.setattr(sources, "source_unit_signature", mutate_after_signature)
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        rows=[{"source": "claude-projects", "path": alias}],
+    )
+
+    key = sources.cursor_unit_key("claude-projects", alias)
+    assert events == []
+    assert result["source_alias_blocker_counts"] == {"alias_target_mismatch": 1}
+    assert key not in result["files"]
+    assert key not in result["excluded_unit_receipts"]
+
+
+def test_exact_live_custody_rejects_memory_alias_changed_after_seal(tmp_path: Path, monkeypatch):
+    sources = _load()
+    lifecycle, _projects, alias, target = _claude_memory_alias_fixture(sources, tmp_path)
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    _events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=tmp_path / "missing-cursor.json"),
+        days=None,
+        max_files=2,
+    )
+    assert cursor["scope"] == "all"
+
+    other = target.with_name("other.md")
+    other.write_text("synthetic alternate fixture", encoding="utf-8")
+    alias.unlink()
+    alias.symlink_to(Path("memory") / other.name)
+
+    from limen.prompt_corpus import validate_live_source_custody
+
+    errors = validate_live_source_custody(cursor)
+    assert any("containment changed" in error or "alias changed" in error for error in errors)
+
+
+def test_memory_alias_second_pass_is_zero_growth_byte_identical_and_public_safe(tmp_path: Path, monkeypatch):
+    sources = _load()
+    lifecycle, projects, alias, target = _claude_memory_alias_fixture(sources, tmp_path)
+    rows = sources.regular_source_rows(lifecycle, None)
+    first_budget = sources.ScanBudget(limit=2)
+    first_events, first = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=first_budget,
+        rows=rows,
+    )
+    first_bytes = json.dumps(first["excluded_unit_receipts"], sort_keys=True, separators=(",", ":")).encode()
+    second_budget = sources.ScanBudget(limit=2)
+    second_events, second = sources.scan_regular_sources(
+        lifecycle,
+        first,
+        days=None,
+        budget=second_budget,
+        rows=rows,
+    )
+    second_bytes = json.dumps(second["excluded_unit_receipts"], sort_keys=True, separators=(",", ":")).encode()
+
+    assert first_events == second_events == []
+    assert second_budget.used == 0
+    assert first_bytes == second_bytes
+    assert second["source_alias_blocker_counts"] == {}
+    alias_key = sources.cursor_unit_key("claude-projects", alias)
+    target_key = sources.cursor_unit_key("claude-projects", target)
+    assert alias_key != target_key
+    assert set(second["excluded_unit_receipts"]) == {alias_key, target_key}
+
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    _events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=tmp_path / "missing-cursor.json"),
+        days=None,
+        max_files=2,
+    )
+    from limen.prompt_corpus import DEFAULT_POLICY, build_snapshot, public_projection
+
+    snapshot = build_snapshot([], [], [], DEFAULT_POLICY, cursor)
+    public = public_projection(snapshot)
+    encoded = json.dumps(public, sort_keys=True)
+    assert public["source_scope"]["source_exclusion_counts"][sources.CLAUDE_PROJECT_MEMORY_ALIAS_ID] == 1
+    assert public["source_scope"]["source_alias_blocker_counts"] == {}
+    assert str(projects) not in encoded
+    assert alias.name not in encoded
+
+
+def test_claude_subagent_cross_session_alias_is_excluded_with_independent_target_custody(
+    tmp_path: Path,
+    monkeypatch,
+):
+    sources = _load()
+    lifecycle, _projects, alias, target = _claude_subagent_alias_fixture(sources, tmp_path)
+    rows = sources.regular_source_rows(lifecycle, None)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=None),
+        rows=rows,
+    )
+
+    alias_key = sources.cursor_unit_key("claude-projects", alias)
+    target_key = sources.cursor_unit_key("claude-projects", target)
+    receipt = result["excluded_unit_receipts"][alias_key]
+    assert [event["text"] for event in events] == ["delegated alias target"]
+    assert {event["authority"] for event in events} == {"derived"}
+    assert result["errors"] == []
+    assert result["unsupported"] == []
+    assert result["source_alias_blocker_counts"] == {}
+    assert receipt["contract_id"] == sources.CLAUDE_SUBAGENT_SESSION_ALIAS_ID
+    assert receipt["related_signatures"]["subagent_target"] == sources.file_signature(target)
+    assert receipt["related_evidence"]["subagent_target"]["target_locator"] == str(target)
+    assert result["files"][target_key] == sources.file_signature(target)
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    _events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=tmp_path / "missing-cursor.json"),
+        days=None,
+        max_files=10,
+    )
+    assert cursor["scope"] == "all"
+    assert sources.validate_source_adapter_cursor(cursor) == []
+    from limen.prompt_corpus import (
+        DEFAULT_POLICY,
+        build_snapshot,
+        public_projection,
+        validate_live_source_custody,
+    )
+
+    assert validate_live_source_custody(cursor) == []
+    public = public_projection(build_snapshot([], [], [], DEFAULT_POLICY, cursor))
+    encoded = json.dumps(public, sort_keys=True)
+    assert str(alias) not in encoded
+    assert str(target) not in encoded
+
+    missing_target = json.loads(json.dumps(cursor))
+    missing_target["source_units"].remove(target_key)
+    missing_target["source_unit_count"] -= 1
+    missing_target["source_units_digest"] = sources.digest(missing_target["source_units"])
+    missing_target["files"].pop(target_key)
+    assert any(
+        "subagent-session alias target lacks independent custody" in error
+        for error in sources.validate_source_adapter_cursor(missing_target)
+    )
+
+
+@pytest.mark.parametrize("near_miss", ["relative", "other-project", "same-session", "link-chain"])
+def test_claude_subagent_alias_near_misses_remain_fail_closed(tmp_path: Path, near_miss: str):
+    sources = _load()
+    lifecycle, projects, alias, target = _claude_subagent_alias_fixture(sources, tmp_path)
+    alias.unlink()
+    if near_miss == "relative":
+        alias.symlink_to(Path("..") / ".." / "target-session" / "subagents" / target.name)
+    elif near_miss == "other-project":
+        other = projects / "other-project" / "target-session" / "subagents" / target.name
+        other.parent.mkdir(parents=True)
+        other.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
+        alias.symlink_to(other)
+    elif near_miss == "same-session":
+        other = alias.with_name("other.jsonl")
+        other.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
+        alias.symlink_to(other)
+    else:
+        chained = target.with_name("chained.jsonl")
+        chained.symlink_to(target)
+        alias.symlink_to(chained)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=1),
+        rows=[{"source": "claude-projects", "path": alias}],
+    )
+
+    assert events == []
+    assert len(result["errors"]) == 1
+    assert sum(result["source_alias_blocker_counts"].values()) == 1
+    assert result["excluded_unit_receipts"] == {}
+
+
+def test_claude_subagent_directory_alias_is_metadata_only_and_not_a_source_unit(tmp_path: Path, monkeypatch):
+    sources = _load()
+    lifecycle, projects, _alias, _target = _claude_subagent_alias_fixture(sources, tmp_path)
+    target_dir = projects / "project" / "target-session" / "subagents" / "agent" / "nested"
+    alias_dir = projects / "project" / "alias-session" / "subagents" / "agent" / "nested"
+    target_dir.mkdir(parents=True)
+    alias_dir.parent.mkdir(parents=True, exist_ok=True)
+    alias_dir.symlink_to(target_dir, target_is_directory=True)
+
+    rows = sources.regular_source_rows(lifecycle, None)
+
+    assert not rows.discovery_errors
+    assert all(Path(row["path"]) != alias_dir for row in rows)
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    _events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=tmp_path / "missing-cursor.json"),
+        days=None,
+        max_files=10,
+    )
+    from limen.prompt_corpus import validate_live_source_custody
+
+    assert cursor["scope"] == "all"
+    assert validate_live_source_custody(cursor) == []
+
+
 def test_structural_exclusion_near_misses_remain_adapter_gaps(tmp_path: Path):
     sources = _load()
     lifecycle = sources.load_lifecycle_module()
@@ -2092,12 +4155,14 @@ def test_structural_exclusion_near_misses_remain_adapter_gaps(tmp_path: Path):
 
     assert events == []
     assert result["errors"] == []
-    assert len(result["unsupported"]) == 4
-    assert result["excluded_unit_receipts"] == {}
+    assert len(result["unsupported"]) == 3
+    nonempty_lock_key = sources.cursor_unit_key("claude-tasks", nonempty_lock)
+    assert nonempty_lock_key in result["excluded_unit_receipts"]
+    assert result["excluded_unit_receipts"][nonempty_lock_key]["contract_id"] == "claude-task-artifact-v1"
     rogue_key = sources.cursor_unit_key("claude-projects", rogue_memory)
     assert result["unsupported_units"][rogue_key] == sources.file_signature(rogue_memory)
     assert rogue_key not in result["files"]
-    assert {row["unsupported"] for row in result["coverage"].values()} == {1, 2}
+    assert {row["unsupported"] for row in result["coverage"].values()} == {1}
 
 
 def test_claude_remote_task_command_adapts_despite_old_file_cache_and_cached_rerun_is_free(
@@ -2243,6 +4308,66 @@ def test_claude_remote_task_command_enforces_its_hashed_adapter_byte_ceiling(tmp
     assert supported is True
     assert records == []
     assert f"adapter ceiling {limit}" in str(error)
+
+
+def test_claude_jsonl_uses_its_hashed_source_ceiling_without_unbounding_other_families(
+    tmp_path: Path,
+    monkeypatch,
+):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    projects = tmp_path / ".claude" / "projects"
+    transcript = projects / "project" / "session.jsonl"
+    transcript.parent.mkdir(parents=True)
+    schema = sources.SOURCE_RECORD_SCHEMAS["claude-project-jsonl-v1"]
+    monkeypatch.setitem(schema, "max_probe_bytes", 4096)
+    monkeypatch.setitem(schema, "max_records", 3)
+    limits = sources.ResourceLimits(
+        max_source_bytes_per_unit=1,
+        max_events_per_unit=1,
+        max_discovery_units=10,
+        max_classifier_input_bytes=1024,
+        max_classifier_output_bytes=1024,
+        max_classifier_stderr_bytes=1024,
+        max_classifier_occurrences=10,
+    )
+    rows = [{"type": "system"}, {"type": "system"}, {"type": "system"}]
+    transcript.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    records, error, supported = sources.strict_native_records(
+        lifecycle,
+        "claude-projects",
+        transcript,
+        sources.file_signature(transcript),
+        limits=limits,
+    )
+    assert supported is True
+    assert error is None
+    assert len(records) == 3
+
+    transcript.write_text("".join(json.dumps(row) + "\n" for row in [*rows, {"type": "system"}]), encoding="utf-8")
+    records, error, supported = sources.strict_native_records(
+        lifecycle,
+        "claude-projects",
+        transcript,
+        sources.file_signature(transcript),
+        limits=limits,
+    )
+    assert supported is True
+    assert records == []
+    assert "record count exceeds bounded ceiling 3" in str(error)
+
+    transcript.write_text("x" * 4097, encoding="utf-8")
+    records, error, supported = sources.strict_native_records(
+        lifecycle,
+        "claude-projects",
+        transcript,
+        sources.file_signature(transcript),
+        limits=limits,
+    )
+    assert supported is True
+    assert records == []
+    assert "bounded ceiling is 4096" in str(error)
 
 
 def test_claude_subagent_and_workflow_paths_force_derived_authority_without_sidechain_flag(
@@ -2721,6 +4846,333 @@ def test_claude_meta_compact_and_tool_originated_user_rows_never_gain_operator_a
     ]
 
 
+@pytest.mark.parametrize("keyset_index", range(5))
+def test_claude_derived_tool_result_prompt_shapes_are_preserved_exactly(
+    tmp_path: Path,
+    keyset_index: int,
+):
+    sources = _load()
+    keyset = sources.CLAUDE_DERIVED_TOOL_RESULT_PROMPT_KEYSETS[keyset_index]
+    result = {}
+    for field in keyset:
+        if field in {"canReadOutputFile", "isAsync"}:
+            result[field] = True
+        elif field in sources.CLAUDE_DERIVED_TOOL_RESULT_INTEGER_FIELDS:
+            result[field] = 1
+        elif field == "content":
+            result[field] = []
+        elif field in {"toolStats", "usage"}:
+            result[field] = {}
+        else:
+            result[field] = "derived prompt" if field == "prompt" else f"fixture-{field}"
+    row = {
+        "type": "user",
+        "sourceToolAssistantUUID": "assistant-source",
+        "message": {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "tool-one",
+                    "content": "ordinary result body",
+                }
+            ],
+        },
+        "toolUseResult": result,
+    }
+
+    events, scan, _transcript = _scan_claude_rows(sources, tmp_path, [row])
+
+    assert scan["errors"] == []
+    assert scan["unsupported"] == []
+    assert [event["text"] for event in events] == ["derived prompt"]
+    assert {event["provenance"] for event in events} == {"delegated_task_frame"}
+    assert {event["authority"] for event in events} == {"derived"}
+
+
+@pytest.mark.parametrize("near_miss", ["extra-key", "nontext-prompt", "missing-marker", "boolean-total"])
+def test_claude_derived_tool_result_prompt_near_misses_stay_unsupported(
+    tmp_path: Path,
+    near_miss: str,
+):
+    sources = _load()
+    result = {
+        "agentId": "agent",
+        "canReadOutputFile": True,
+        "description": "fixture",
+        "isAsync": True,
+        "outputFile": "fixture",
+        "prompt": "derived prompt",
+        "resolvedModel": "fixture",
+        "status": "done",
+    }
+    row = {
+        "type": "user",
+        "sourceToolAssistantUUID": "assistant-source",
+        "message": {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "tool-one", "content": "result"}],
+        },
+        "toolUseResult": result,
+    }
+    if near_miss == "extra-key":
+        result["futureCarrier"] = "unknown"
+    elif near_miss == "nontext-prompt":
+        result["prompt"] = ["not exact text"]
+    elif near_miss == "missing-marker":
+        row.pop("sourceToolAssistantUUID")
+    else:
+        result.clear()
+        result.update(
+            {
+                "agentId": "agent",
+                "agentType": "fixture",
+                "content": [],
+                "prompt": "derived prompt",
+                "resolvedModel": "fixture",
+                "status": "done",
+                "totalDurationMs": True,
+                "totalTokens": 1,
+                "totalToolUseCount": 1,
+                "usage": {},
+            }
+        )
+
+    events, scan, transcript = _scan_claude_rows(sources, tmp_path, [row])
+
+    key = sources.cursor_unit_key("claude-projects", transcript)
+    assert events == []
+    assert scan["unsupported"] == [key]
+    assert key not in scan["files"]
+
+
+def test_claude_derived_tool_result_jobs_are_preserved_as_exact_derived_segments(tmp_path: Path):
+    sources = _load()
+    row = {
+        "type": "user",
+        "sourceToolAssistantUUID": "assistant-source",
+        "message": {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "tool-one", "content": "result"}],
+        },
+        "toolUseResult": {
+            "jobs": [
+                {
+                    "cron": "0 9 * * *",
+                    "durable": True,
+                    "humanSchedule": "daily at nine",
+                    "id": "job-one",
+                    "prompt": "first derived job prompt",
+                    "recurring": True,
+                },
+                {
+                    "cron": "",
+                    "durable": False,
+                    "humanSchedule": "once",
+                    "id": "job-two",
+                    "prompt": "second derived job prompt",
+                    "recurring": False,
+                },
+            ]
+        },
+    }
+
+    events, scan, _transcript = _scan_claude_rows(sources, tmp_path, [row])
+
+    assert scan["errors"] == []
+    assert scan["unsupported"] == []
+    assert [event["text"] for event in events] == [
+        "first derived job prompt",
+        "second derived job prompt",
+    ]
+    assert {event["provenance"] for event in events} == {"delegated_task_frame"}
+    assert {event["authority"] for event in events} == {"derived"}
+
+
+@pytest.mark.parametrize(
+    "near_miss",
+    ["extra-job-key", "nontext-prompt", "missing-marker", "nonboolean-durable", "extra-result-key"],
+)
+def test_claude_derived_tool_result_jobs_near_misses_stay_unsupported(
+    tmp_path: Path,
+    near_miss: str,
+):
+    sources = _load()
+    job = {
+        "cron": "0 9 * * *",
+        "durable": True,
+        "humanSchedule": "daily at nine",
+        "id": "job-one",
+        "prompt": "derived job prompt",
+        "recurring": True,
+    }
+    row = {
+        "type": "user",
+        "sourceToolAssistantUUID": "assistant-source",
+        "message": {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "tool-one", "content": "result"}],
+        },
+        "toolUseResult": {"jobs": [job]},
+    }
+    if near_miss == "extra-job-key":
+        job["futureCarrier"] = "unknown"
+    elif near_miss == "nontext-prompt":
+        job["prompt"] = ["not exact text"]
+    elif near_miss == "missing-marker":
+        row.pop("sourceToolAssistantUUID")
+    elif near_miss == "nonboolean-durable":
+        job["durable"] = 1
+    else:
+        row["toolUseResult"]["status"] = "unknown"
+
+    events, scan, transcript = _scan_claude_rows(sources, tmp_path, [row])
+
+    key = sources.cursor_unit_key("claude-projects", transcript)
+    assert events == []
+    assert scan["unsupported"] == [key]
+    assert key not in scan["files"]
+
+
+def test_claude_exit_plan_allowed_prompts_are_exact_derived_segments(tmp_path: Path):
+    sources = _load()
+    row = {
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "name": "ExitPlanMode",
+                    "input": {
+                        "allowedPrompts": [
+                            {"prompt": "Run the exact focused predicate.", "tool": "Bash"},
+                            {"prompt": "Inspect the bounded receipt.", "tool": "Read"},
+                        ],
+                        "plan": "generated plan body",
+                        "planFilePath": "private plan path",
+                    },
+                }
+            ],
+        },
+    }
+
+    events, scan, _transcript = _scan_claude_rows(sources, tmp_path, [row])
+
+    assert scan["unsupported"] == []
+    assert [event["text"] for event in events] == [
+        "Run the exact focused predicate.",
+        "Inspect the bounded receipt.",
+    ]
+    assert {event["authority"] for event in events} == {"derived"}
+
+
+@pytest.mark.parametrize("near_miss", ["wrong-tool", "extra-item-key", "nontext-prompt"])
+def test_claude_allowed_prompt_near_misses_stay_unsupported(tmp_path: Path, near_miss: str):
+    sources = _load()
+    item = {"prompt": "Run the exact focused predicate.", "tool": "Bash"}
+    tool_use = {
+        "type": "tool_use",
+        "name": "ExitPlanMode",
+        "input": {
+            "allowedPrompts": [item],
+            "plan": "generated plan body",
+            "planFilePath": "private plan path",
+        },
+    }
+    if near_miss == "wrong-tool":
+        tool_use["name"] = "FuturePlanMode"
+    elif near_miss == "extra-item-key":
+        item["future"] = "unknown"
+    else:
+        item["prompt"] = ["not exact text"]
+    row = {
+        "type": "assistant",
+        "message": {"role": "assistant", "content": [tool_use]},
+    }
+
+    events, scan, transcript = _scan_claude_rows(sources, tmp_path, [row])
+
+    assert events == []
+    assert scan["unsupported"] == [sources.cursor_unit_key("claude-projects", transcript)]
+
+
+def test_claude_list_valued_text_attachments_converge_but_media_stays_explicit(tmp_path: Path):
+    sources = _load()
+    textual_rows = [
+        {
+            "type": "attachment",
+            "attachment": {
+                "type": "hook_additional_context",
+                "content": ["first derived context", "second derived context"],
+            },
+        },
+        {
+            "type": "attachment",
+            "attachment": {
+                "type": "queued_command",
+                "prompt": [{"type": "text", "text": "queued exact text"}],
+            },
+        },
+    ]
+    events, scan, _transcript = _scan_claude_rows(sources, tmp_path / "textual", textual_rows)
+
+    assert scan["unsupported"] == []
+    assert [event["text"] for event in events] == [
+        "first derived context",
+        "second derived context",
+        "queued exact text",
+    ]
+    assert [event["provenance"] for event in events] == [
+        "delegated_task_frame",
+        "delegated_task_frame",
+        "unknown_user_input",
+    ]
+
+    media_row = {
+        "type": "attachment",
+        "attachment": {
+            "type": "queued_command",
+            "prompt": [
+                {"type": "text", "text": "must not be partially extracted"},
+                {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": "image/png", "data": "cGl4ZWw="},
+                },
+            ],
+        },
+    }
+    media_events, media_scan, media_path = _scan_claude_rows(sources, tmp_path / "media", [media_row])
+    assert media_events == []
+    assert media_scan["unsupported"] == [sources.cursor_unit_key("claude-projects", media_path)]
+
+
+def test_claude_mixed_user_text_and_media_never_partially_converges(tmp_path: Path):
+    sources = _load()
+    row = {
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "must remain bound to media"},
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": "cGRm",
+                    },
+                },
+            ],
+        },
+    }
+
+    events, scan, transcript = _scan_claude_rows(sources, tmp_path, [row])
+
+    assert events == []
+    assert scan["unsupported"] == [sources.cursor_unit_key("claude-projects", transcript)]
+
+
 def test_claude_tool_result_with_extra_prompt_carrier_is_an_explicit_gap(tmp_path: Path):
     sources = _load()
     lifecycle = sources.load_lifecycle_module()
@@ -3025,31 +5477,1556 @@ def test_source_contract_digest_covers_complete_rule_descriptors(monkeypatch):
     assert changed["digest"] != original["digest"]
 
 
-def test_codex_text_attachment_stays_explicit_gap_without_parent_event_index(tmp_path: Path):
+def _codex_attachment_fixture(
+    sources,
+    tmp_path: Path,
+    *,
+    body: str = "Bounded synthetic attachment request.",
+    parent_texts: list[str] | None = None,
+    duplicate_reference: bool = False,
+    forked: bool = False,
+):
+    attachments = tmp_path / ".codex" / "attachments"
+    attachment = attachments / "fixture-container" / "pasted-text-1.txt"
+    attachment.parent.mkdir(parents=True, exist_ok=True)
+    attachment.write_text(body, encoding="utf-8")
+    sessions = tmp_path / ".codex" / "sessions"
+    session = sessions / "2026" / "07" / "13" / "rollout-fixture.jsonl"
+    session.parent.mkdir(parents=True, exist_ok=True)
+    reference = sources.codex_attachment_reference_line(attachment)
+    active_parent_texts = [reference] if parent_texts is None else parent_texts
+    if duplicate_reference:
+        active_parent_texts = [f"{reference}\n{reference}"]
+    metadata = {"id": "fixture-thread"}
+    if forked:
+        metadata["forked_from_id"] = "fixture-parent"
+    rows = [{"type": "session_meta", "payload": metadata}]
+    rows.extend(
+        {
+            "timestamp": f"2026-07-13T01:00:0{index}Z",
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": text}],
+            },
+        }
+        for index, text in enumerate(active_parent_texts, start=1)
+    )
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    lifecycle = sources.load_lifecycle_module()
+    lifecycle.LOCAL_SOURCES = [
+        ("codex-sessions", sessions, ("*",)),
+        ("codex-attachments", attachments, ("*",)),
+    ]
+    lifecycle.OPENCODE_DB = tmp_path / "missing-opencode.db"
+    lifecycle.AGY_CLI_CONVERSATIONS = tmp_path / ".gemini" / "antigravity-cli" / "conversations"
+    lifecycle.HOME = tmp_path
+    return lifecycle, session, attachment
+
+
+def _codex_attachment_compacted_row(reference: str, *, envelope: str) -> dict[str, object]:
+    """Build only production-exact compacted envelopes used by scanner v4."""
+
+    payload: dict[str, object] = {
+        "message": "",
+        "replacement_history": [
+            {
+                "type": "message",
+                "role": "developer",
+                "content": [{"type": "input_text", "text": "Synthetic provider context."}],
+            },
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": reference}],
+                "internal_chat_message_metadata_passthrough": {"turn_id": f"turn-{envelope}"},
+            },
+            {"type": "compaction", "id": f"cmp-{envelope}", "encrypted_content": "opaque"},
+        ],
+    }
+    if envelope == "legacy":
+        payload["window_id"] = 41
+    elif envelope == "current":
+        payload.update(
+            {
+                "first_window_id": "11111111-1111-1111-1111-111111111111",
+                "previous_window_id": "22222222-2222-2222-2222-222222222222",
+                "window_id": "33333333-3333-3333-3333-333333333333",
+                "window_number": 41,
+            }
+        )
+    else:
+        raise AssertionError(f"unknown compacted envelope: {envelope}")
+    return {
+        "type": "compacted",
+        "timestamp": "2026-07-13T01:00:00Z",
+        "payload": payload,
+    }
+
+
+def _add_exact_codex_media_parent(sources, session: Path, attachment: Path) -> list[dict]:
+    """Attach one strict PNG to the canonical reference and its exact transport row."""
+
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    reference = sources.codex_attachment_reference_line(attachment)
+    message = f"[Image #1]\n{reference}"
+    rows[1]["payload"]["content"] = [
+        {"type": "input_text", "text": message},
+        {"type": "input_image", "detail": "high", "image_url": VALID_CODEX_PNG_DATA_URL},
+    ]
+    placeholder = "[Image #1]"
+    rows.append(
+        {
+            "timestamp": "2026-07-13T01:00:02Z",
+            "type": "event_msg",
+            "payload": {
+                "type": "user_message",
+                "message": message,
+                "images": [],
+                "local_images": ["/private/tmp/codex-integration-image.png"],
+                "text_elements": [
+                    {
+                        "placeholder": placeholder,
+                        "byte_range": {"start": 0, "end": len(placeholder.encode("utf-8"))},
+                    }
+                ],
+            },
+        }
+    )
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    return rows
+
+
+def _scan_codex_attachment_pair(sources, lifecycle, session: Path, attachment: Path):
+    return sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+
+@pytest.mark.parametrize("envelope", ["legacy", "current"])
+def test_codex_attachment_scanner_v4_compacted_replay_is_never_a_second_parent(
+    tmp_path: Path,
+    envelope: str,
+):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    rows.insert(
+        1,
+        _codex_attachment_compacted_row(
+            sources.codex_attachment_reference_line(attachment),
+            envelope=envelope,
+        ),
+    )
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = _scan_codex_attachment_pair(sources, lifecycle, session, attachment)
+
+    attachment_events = [event for event in events if event["source"] == "codex-attachments"]
+    assert result["errors"] == []
+    assert result["unsupported"] == []
+    assert len(attachment_events) == 1
+    assert attachment_events[0]["authority"] == "operator"
+    assert result["adapted_unit_receipts"][attachment_key]["contract_id"] == ("codex-pasted-text-attachment-v1")
+    assert result["parent_completeness_unknown"] == []
+
+
+@pytest.mark.parametrize("mutation", ["extra-payload-key", "unknown-role", "unknown-content"])
+def test_codex_attachment_scanner_v4_malformed_compacted_replay_fails_closed(
+    tmp_path: Path,
+    mutation: str,
+):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    replay = _codex_attachment_compacted_row(
+        sources.codex_attachment_reference_line(attachment),
+        envelope="current",
+    )
+    payload = replay["payload"]
+    assert isinstance(payload, dict)
+    history = payload["replacement_history"]
+    assert isinstance(history, list) and isinstance(history[1], dict)
+    if mutation == "extra-payload-key":
+        payload["unknown"] = True
+    elif mutation == "unknown-role":
+        history[1]["role"] = "assistant"
+    else:
+        content = history[1]["content"]
+        assert isinstance(content, list) and isinstance(content[0], dict)
+        content[0]["unknown"] = True
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    rows.insert(1, replay)
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    session_key = sources.cursor_unit_key("codex-sessions", session)
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = _scan_codex_attachment_pair(sources, lifecycle, session, attachment)
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert result["errors"]
+    assert session_key not in result["files"]
+    assert attachment_key in result["unsupported_units"]
+    assert attachment_key not in result["adapted_unit_receipts"]
+    assert result["parent_completeness_unknown"] == [session_key]
+
+
+def test_codex_attachment_scanner_v4_replay_only_reference_stays_unbound(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path, parent_texts=[])
+    replay = _codex_attachment_compacted_row(
+        sources.codex_attachment_reference_line(attachment),
+        envelope="current",
+    )
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    rows.append(replay)
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = _scan_codex_attachment_pair(sources, lifecycle, session, attachment)
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert result["errors"] == []
+    assert attachment_key in result["unsupported_units"]
+    assert attachment_key not in result["adapted_unit_receipts"]
+    assert result["parent_completeness_unknown"] == []
+
+
+def test_codex_attachment_scanner_v4_valid_png_and_reference_bind_together(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    _add_exact_codex_media_parent(sources, session, attachment)
+    session_key = sources.cursor_unit_key("codex-sessions", session)
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = _scan_codex_attachment_pair(sources, lifecycle, session, attachment)
+
+    attachment_events = [event for event in events if event["source"] == "codex-attachments"]
+    media_events = [event for event in events if event["body_kind"] == "nontext_input"]
+    assert result["errors"] == []
+    assert result["unsupported"] == []
+    assert len(attachment_events) == 1
+    assert len(media_events) == 1
+    assert media_events[0]["text"].startswith("codex-input-image-v1:sha256=")
+    assert VALID_CODEX_PNG_DATA_URL not in media_events[0]["text"]
+    assert result["adapted_unit_receipts"][session_key]["contract_id"] == "codex-session-jsonl-v2"
+    assert result["adapted_unit_receipts"][attachment_key]["contract_id"] == ("codex-pasted-text-attachment-v1")
+
+
+@pytest.mark.parametrize("mutation", ["extra-key", "bad-detail", "bad-base64"])
+def test_codex_attachment_scanner_v4_malformed_coexisting_media_fails_closed(
+    tmp_path: Path,
+    mutation: str,
+):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = _add_exact_codex_media_parent(sources, session, attachment)
+    image = rows[1]["payload"]["content"][1]
+    if mutation == "extra-key":
+        image["unknown"] = True
+    elif mutation == "bad-detail":
+        image["detail"] = "auto"
+    else:
+        image["image_url"] = "data:image/png;base64,not-valid!"
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    session_key = sources.cursor_unit_key("codex-sessions", session)
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = _scan_codex_attachment_pair(sources, lifecycle, session, attachment)
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert result["errors"]
+    assert session_key not in result["files"]
+    assert attachment_key in result["unsupported_units"]
+    assert attachment_key not in result["adapted_unit_receipts"]
+
+
+def test_codex_attachment_scanner_v4_accepts_bounded_large_nonuser_row(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    rows.insert(
+        1,
+        {
+            "type": "response_item",
+            "timestamp": "2026-07-13T01:00:00Z",
+            "payload": {
+                "type": "function_call_output",
+                "output": "x" * (1024 * 1024 + 4096),
+            },
+        },
+    )
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = _scan_codex_attachment_pair(sources, lifecycle, session, attachment)
+
+    assert result["errors"] == []
+    assert result["unsupported"] == []
+    assert len([event for event in events if event["source"] == "codex-attachments"]) == 1
+    assert attachment_key in result["adapted_unit_receipts"]
+    assert result["parent_completeness_unknown"] == []
+
+
+def test_codex_attachment_scanner_v4_invalidates_v3_cached_receipts(tmp_path: Path, monkeypatch):
+    sources = _load()
+    assert sources.SCANNER_VERSION == 4
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    missing = tmp_path / "missing-cursor.json"
+    first_events, first = sources.scan_native_sources(
+        SimpleNamespace(cursor=missing),
+        days=None,
+        max_files=2,
+    )
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+    assert first_events
+    assert attachment_key in first["adapted_unit_receipts"]
+    stale = json.loads(json.dumps(first))
+    stale["scanner_version"] = 3
+    cursor_path = tmp_path / "scanner-v3-cursor.json"
+    cursor_path.write_text(json.dumps(stale), encoding="utf-8")
+
+    replacement_events, replacement = sources.scan_native_sources(
+        SimpleNamespace(cursor=cursor_path),
+        days=None,
+        max_files=2,
+    )
+
+    assert replacement_events
+    assert replacement["scanner_version"] == 4
+    assert replacement["work_units_used"] == 2
+    assert attachment_key in replacement["adapted_unit_receipts"]
+    assert replacement["source_errors"] == []
+    assert replacement["unsupported_source_count"] == 0
+
+
+def test_codex_attachment_scanner_v4_integrated_second_pass_is_byte_identical(
+    tmp_path: Path,
+    monkeypatch,
+):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = _add_exact_codex_media_parent(sources, session, attachment)
+    rows.insert(
+        1,
+        _codex_attachment_compacted_row(
+            sources.codex_attachment_reference_line(attachment),
+            envelope="current",
+        ),
+    )
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    paths = sources.LedgerPaths.for_root(
+        tmp_path / "ledger",
+        policy=ROOT / "docs" / "prompt-corpus-policy.json",
+    )
+
+    first_events, first_cursor = sources.scan_native_sources(paths, days=None, max_files=2)
+    first_snapshot = sources.update_ledger(paths, events=first_events, cursor=first_cursor)
+
+    def canonical_bytes() -> dict[str, str]:
+        files = [
+            paths.event_journal,
+            paths.outcome_journal,
+            paths.cursor,
+            paths.private_snapshot,
+            paths.public_snapshot,
+            paths.public_markdown,
+            *sorted(path for path in paths.raw_objects.rglob("*") if path.is_file()),
+            *sorted(path for path in paths.source_scan_receipts.rglob("*") if path.is_file()),
+        ]
+        return {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in files if path.exists()}
+
+    first_bytes = canonical_bytes()
+    second_events, second_cursor = sources.scan_native_sources(paths, days=None, max_files=2)
+    second_snapshot = sources.update_ledger(paths, events=second_events, cursor=second_cursor)
+
+    assert first_cursor["scanner_version"] == 4
+    assert first_cursor["scope"] == "all"
+    assert first_cursor["adapter_gaps"] == []
+    assert first_cursor["source_errors"] == []
+    assert first_cursor["unsupported_source_count"] == 0
+    assert first_snapshot["appended"]["occurrences"] > 0
+    assert second_events == []
+    assert second_cursor["work_units_used"] == 0
+    assert second_snapshot["write_changed"] is False
+    assert second_snapshot["appended"] == {
+        "occurrences": 0,
+        "atoms": 0,
+        "outcomes": 0,
+        "reclassified": 0,
+    }
+    assert canonical_bytes() == first_bytes
+
+
+@pytest.mark.parametrize(
+    ("forked", "expected_provenance", "expected_authority"),
+    [
+        (False, "operator_typed", "operator"),
+        (True, "continuation_summary", "derived"),
+    ],
+)
+def test_codex_pasted_text_attachment_binds_to_one_parent_and_inherits_authority(
+    tmp_path: Path,
+    forked: bool,
+    expected_provenance: str,
+    expected_authority: str,
+):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path, forked=forked)
+    key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    attachment_events = [event for event in events if event["source"] == "codex-attachments"]
+    parent_events = [event for event in events if event["source"] == "codex-sessions"]
+    assert result["errors"] == []
+    assert result["unsupported"] == []
+    assert len(attachment_events) == len(parent_events) == 1
+    assert attachment_events[0]["text"] == "Bounded synthetic attachment request."
+    assert attachment_events[0]["session_ref"] == parent_events[0]["session_ref"]
+    assert attachment_events[0]["timestamp"] == parent_events[0]["timestamp"]
+    assert attachment_events[0]["provenance"] == expected_provenance
+    assert attachment_events[0]["authority"] == expected_authority
+    receipt = result["adapted_unit_receipts"][key]
+    assert receipt["contract_id"] == "codex-pasted-text-attachment-v1"
+    assert set(receipt["related_signatures"]) == {"parent_session"}
+    assert set(receipt["related_evidence"]) == {"parent_event"}
+    assert sources.source_contract_receipt_applies(
+        receipt["contract_id"],
+        "codex-attachments",
+        str(attachment),
+        signature=sources.file_signature(attachment),
+        related_signatures=receipt["related_signatures"],
+        related_evidence=receipt["related_evidence"],
+    )
+    assert result["source_adapter_counts"] == {
+        "codex-pasted-text-attachment-v1": 1,
+        "codex-session-jsonl-v2": 1,
+    }
+    assert result["coverage"]["codex-attachments"]["adapted"] == 1
+
+
+@pytest.mark.parametrize("ambiguity", ["missing", "multiple-events", "duplicate-reference"])
+def test_codex_attachment_missing_or_ambiguous_parent_fails_closed(
+    tmp_path: Path,
+    ambiguity: str,
+):
+    sources = _load()
+    parent_texts = [] if ambiguity == "missing" else None
+    lifecycle, session, attachment = _codex_attachment_fixture(
+        sources,
+        tmp_path,
+        parent_texts=parent_texts,
+        duplicate_reference=ambiguity == "duplicate-reference",
+    )
+    if ambiguity == "multiple-events":
+        reference = sources.codex_attachment_reference_line(attachment)
+        lifecycle, session, attachment = _codex_attachment_fixture(
+            sources,
+            tmp_path,
+            parent_texts=[reference, reference],
+        )
+    key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert result["errors"] == []
+    assert result["unsupported"] == [key]
+    assert result["unsupported_units"][key] == sources.file_signature(attachment)
+    assert key not in result["files"]
+    assert key not in result["adapted_unit_receipts"]
+
+
+def test_codex_attachment_traversal_reference_does_not_bind(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path, parent_texts=[])
+    relative_alias = attachment.parent / ".." / attachment.parent.name / attachment.name
+    traversal_reference = f"pasted text file: {relative_alias}. Read this file before continuing."
+    lifecycle, session, attachment = _codex_attachment_fixture(
+        sources,
+        tmp_path,
+        parent_texts=[traversal_reference],
+    )
+    key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert result["unsupported"] == [key]
+    assert key not in result["adapted_unit_receipts"]
+
+
+@pytest.mark.parametrize("symlink_kind", ["file", "directory"])
+def test_codex_attachment_symlink_never_receives_adapter_custody(tmp_path: Path, symlink_kind: str):
+    sources = _load()
+    attachments = tmp_path / ".codex" / "attachments"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_attachment = outside / "pasted-text-1.txt"
+    outside_attachment.write_text("Synthetic outside body.", encoding="utf-8")
+    if symlink_kind == "file":
+        attachment = attachments / "fixture-container" / "pasted-text-1.txt"
+        attachment.parent.mkdir(parents=True)
+        attachment.symlink_to(outside_attachment)
+    else:
+        attachments.mkdir(parents=True)
+        linked_parent = attachments / "fixture-container"
+        linked_parent.symlink_to(outside, target_is_directory=True)
+        attachment = linked_parent / "pasted-text-1.txt"
+    sessions = tmp_path / ".codex" / "sessions"
+    session = sessions / "rollout-fixture.jsonl"
+    session.parent.mkdir(parents=True)
+    session.write_text(
+        json.dumps({"type": "session_meta", "payload": {"id": "fixture-thread"}})
+        + "\n"
+        + json.dumps(
+            {
+                "timestamp": "2026-07-13T01:00:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": sources.codex_attachment_reference_line(attachment)}],
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    lifecycle = sources.load_lifecycle_module()
+    lifecycle.LOCAL_SOURCES = [
+        ("codex-sessions", sessions, ("*",)),
+        ("codex-attachments", attachments, ("*",)),
+    ]
+    lifecycle.OPENCODE_DB = tmp_path / "missing-opencode.db"
+    lifecycle.AGY_CLI_CONVERSATIONS = tmp_path / "missing-agy"
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert result["adapted_unit_receipts"] == {}
+    assert len(result["errors"]) == 1
+    assert "symlink hop" in result["errors"][0]
+
+
+def test_codex_attachment_enforces_byte_and_encoding_bounds(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    key = sources.cursor_unit_key("codex-attachments", attachment)
+    limit = sources.SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]["max_probe_bytes"]
+    attachment.write_bytes(b"x" * (limit + 1))
+
+    events, oversized = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert "bounded byte ceiling" in " ".join(oversized["errors"])
+    assert key not in oversized["adapted_unit_receipts"]
+    assert {receipt["contract_id"] for receipt in oversized["adapted_unit_receipts"].values()} == {
+        "codex-session-jsonl-v2"
+    }
+
+    attachment.write_bytes(b"\xff\xfe\xfa")
+    events, malformed = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert "strict UTF-8" in " ".join(malformed["errors"])
+    assert key not in malformed["adapted_unit_receipts"]
+    assert {receipt["contract_id"] for receipt in malformed["adapted_unit_receipts"].values()} == {
+        "codex-session-jsonl-v2"
+    }
+
+
+def test_codex_attachment_streams_parent_larger_than_the_regular_source_limit(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    limits = sources.runtime_limits({"resource_limits": {"max_source_bytes_per_unit": 256}})
+    key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        limits=limits,
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    attachment_events = [event for event in events if event["source"] == "codex-attachments"]
+    assert len(attachment_events) == 1
+    assert attachment_events[0]["provenance"] == "operator_typed"
+    assert result["adapted_unit_receipts"][key]["contract_id"] == "codex-pasted-text-attachment-v1"
+    assert result["coverage"]["codex-sessions"]["errors"] == 0
+    assert result["errors"] == []
+
+
+def test_codex_attachment_reordered_oversized_echo_fails_closed_in_regular_and_streaming_modes(
+    tmp_path: Path,
+    monkeypatch,
+):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    rows.insert(
+        1,
+        {
+            "payload": {
+                "message": "x" * 12000,
+                "local_images": [],
+                "text_elements": [],
+                "type": "user_message",
+            },
+            "timestamp": "2026-07-13T01:00:00Z",
+            "type": "event_msg",
+        },
+    )
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    signature = sources.file_signature(session)
+    assert signature is not None
+    rule = sources.SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]
+    monkeypatch.setitem(rule, "max_parent_record_bytes", 1024)
+    limits = sources.runtime_limits({})
+
+    regular_events, regular_error, regular_completeness_unknown = sources.targeted_codex_attachment_parent_events(
+        lifecycle,
+        session,
+        rows,
+        limits=limits,
+    )
+    streaming_events, streaming_error, streaming_completeness_unknown = (
+        sources.bounded_codex_attachment_parent_events_from_path(
+            lifecycle,
+            session,
+            signature,
+            limits=limits,
+        )
+    )
+
+    assert regular_events == streaming_events == []
+    assert regular_error == streaming_error
+    assert regular_error is not None and "completeness is unknown" in regular_error
+    assert regular_completeness_unknown is streaming_completeness_unknown is True
+
+    projections = []
+    session_key = sources.cursor_unit_key("codex-sessions", session)
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+    scan_rows = [
+        {"source": "codex-sessions", "path": session},
+        {"source": "codex-attachments", "path": attachment},
+    ]
+    for max_source_bytes in (1048576, 128):
+        events, result = sources.scan_regular_sources(
+            lifecycle,
+            {"files": {}},
+            days=None,
+            budget=sources.ScanBudget(limit=2),
+            limits=sources.runtime_limits({"resource_limits": {"max_source_bytes_per_unit": max_source_bytes}}),
+            rows=scan_rows,
+        )
+        assert not [event for event in events if event["source"] == "codex-attachments"]
+        assert result["parent_completeness_unknown"] == [session_key]
+        assert result["unsupported"] == [attachment_key]
+        assert attachment_key not in result["adapted_unit_receipts"]
+        projections.append((result["errors"], result["unsupported"], result["parent_completeness_unknown"]))
+    assert projections[0] == projections[1]
+
+
+@pytest.mark.parametrize("max_source_bytes", [1048576, 128])
+def test_codex_attachment_multi_session_identity_fails_regular_and_streaming(
+    tmp_path: Path,
+    max_source_bytes: int,
+):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    rows.insert(1, {"type": "session_meta", "payload": {"id": "fixture-second-thread"}})
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    limits = sources.runtime_limits({"resource_limits": {"max_source_bytes_per_unit": max_source_bytes}})
+    key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        limits=limits,
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert key not in result["adapted_unit_receipts"]
+    assert result["unsupported"] == [key]
+    assert "session identity is ambiguous" in " ".join(result["errors"])
+
+
+def test_codex_attachment_actual_bytes_reject_stale_signature_growth(tmp_path: Path, monkeypatch):
+    sources = _load()
+    lifecycle, session, _attachment = _codex_attachment_fixture(sources, tmp_path)
+    stale_signature = sources.file_signature(session)
+    assert stale_signature is not None
+    rule = sources.SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]
+    byte_ceiling = int(stale_signature["size"]) + 16
+    monkeypatch.setitem(rule, "max_parent_probe_bytes", byte_ceiling)
+    with session.open("ab") as handle:
+        handle.write(b" " * 64)
+
+    events, error, parent_completeness_unknown = sources.bounded_codex_attachment_parent_events_from_path(
+        lifecycle,
+        session,
+        stale_signature,
+        limits=sources.runtime_limits({}),
+    )
+
+    assert events == []
+    assert error is not None and f"byte ceiling {byte_ceiling}" in error
+    assert parent_completeness_unknown is True
+
+
+def test_codex_attachment_streaming_parent_caps_fail_closed(tmp_path: Path, monkeypatch):
+    sources = _load()
+    lifecycle, session, _attachment = _codex_attachment_fixture(sources, tmp_path)
+    signature = sources.file_signature(session)
+    assert signature is not None
+    rule = sources.SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]
+    monkeypatch.setitem(rule, "max_parent_records", 1)
+
+    events, error, parent_completeness_unknown = sources.bounded_codex_attachment_parent_events_from_path(
+        lifecycle,
+        session,
+        signature,
+        limits=sources.runtime_limits({}),
+    )
+
+    assert events == []
+    assert error is not None and "record count exceeds" in error
+    assert parent_completeness_unknown is True
+
+    monkeypatch.setitem(rule, "max_parent_records", 100)
+    monkeypatch.setitem(rule, "max_parent_probe_bytes", 1)
+    events, error, parent_completeness_unknown = sources.bounded_codex_attachment_parent_events_from_path(
+        lifecycle,
+        session,
+        signature,
+        limits=sources.runtime_limits({}),
+    )
+    assert events == []
+    assert error is not None and "byte ceiling" in error
+    assert parent_completeness_unknown is True
+
+
+def test_codex_attachment_malformed_parent_reference_fails_closed(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    reference = sources.codex_attachment_reference_line(attachment)
+    session.write_text(
+        '{"type":"response_item","payload":{"type":"message","role":"user",'
+        f'"content":[{{"type":"input_text","text":"{reference}"}}]'
+        "\n",
+        encoding="utf-8",
+    )
+    key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert key not in result["adapted_unit_receipts"]
+    assert result["unsupported"] == [key]
+    assert result["coverage"]["codex-sessions"]["errors"] == 1
+
+
+def test_codex_attachment_malformed_parent_metadata_fails_closed(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    rows[0]["payload"] = "invalid"
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert key not in result["adapted_unit_receipts"]
+    assert result["unsupported"] == [key]
+    assert "session metadata is malformed" in " ".join(result["errors"])
+
+
+def test_codex_attachment_malformed_transport_echo_fails_parent_completeness_closed(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    rows.insert(
+        1,
+        {
+            "type": "event_msg",
+            "payload": {
+                "type": "user_message",
+                "message": "Synthetic malformed transport envelope.",
+            },
+        },
+    )
+    session.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    events, result = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=[
+            {"source": "codex-sessions", "path": session},
+            {"source": "codex-attachments", "path": attachment},
+        ],
+    )
+
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+    session_key = sources.cursor_unit_key("codex-sessions", session)
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert result["parent_completeness_unknown"] == [session_key]
+    assert result["unsupported"] == [attachment_key]
+    assert attachment_key not in result["adapted_unit_receipts"]
+    assert "unknown Codex user record envelope" in " ".join(result["errors"])
+
+
+def _append_oversized_incomplete_codex_parent_row(
+    sources,
+    session: Path,
+    attachment: Path,
+    mutation: str,
+    *,
+    padding_size: int = 4096,
+) -> bytes:
+    if mutation == "hidden-second-session-meta":
+        row = {
+            "type": "session_meta",
+            "payload": {
+                "padding": "x" * padding_size,
+                "id": "fixture-hidden-second-thread",
+            },
+        }
+        encoded = json.dumps(row).encode("utf-8")
+        assert encoded.index(b"fixture-hidden-second-thread") > 1024
+    elif mutation == "unicode-escaped-second-reference":
+        reference = sources.codex_attachment_reference_line(attachment)
+        row = {
+            "timestamp": "2026-07-13T01:00:09Z",
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": reference},
+                    {"type": "input_text", "text": "x" * padding_size},
+                ],
+            },
+        }
+        serialized = json.dumps(row)
+        escaped_reference = "".join(f"\\u{ord(character):04x}" for character in reference)
+        serialized = serialized.replace(json.dumps(reference), f'"{escaped_reference}"', 1)
+        encoded = serialized.encode("utf-8")
+        assert b"pasted text file: " not in encoded
+    else:
+        raise AssertionError(f"unknown mutation fixture: {mutation}")
+    assert len(encoded) > 1024
+    with session.open("ab") as handle:
+        handle.write(encoded + b"\n")
+    return encoded
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["hidden-second-session-meta", "unicode-escaped-second-reference"],
+)
+def test_codex_attachment_unknown_parent_completeness_invalidates_cached_receipt(
+    tmp_path: Path,
+    monkeypatch,
+    mutation: str,
+):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rule = sources.SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]
+    monkeypatch.setitem(rule, "max_parent_record_bytes", 1024)
+    scan_rows = [
+        {"source": "codex-sessions", "path": session},
+        {"source": "codex-attachments", "path": attachment},
+    ]
+    _events, first = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=scan_rows,
+    )
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+    session_key = sources.cursor_unit_key("codex-sessions", session)
+    assert attachment_key in first["adapted_unit_receipts"]
+
+    _append_oversized_incomplete_codex_parent_row(sources, session, attachment, mutation)
+    signature = sources.file_signature(session)
+    assert signature is not None
+    parent_events, parent_error, parent_completeness_unknown = sources.bounded_codex_attachment_parent_events_from_path(
+        lifecycle,
+        session,
+        signature,
+        limits=sources.runtime_limits({}),
+    )
+    assert parent_events == []
+    assert parent_error is not None and "completeness is unknown" in parent_error
+    assert parent_completeness_unknown is True
+
+    events, second = sources.scan_regular_sources(
+        lifecycle,
+        first,
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=scan_rows,
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert second["parent_completeness_unknown"] == [session_key]
+    assert second["unsupported"] == [attachment_key]
+    assert attachment_key not in second["adapted_unit_receipts"]
+    assert attachment_key not in second["files"]
+    assert second["files"].get(session_key) != sources.file_signature(session)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["hidden-second-session-meta", "unicode-escaped-second-reference"],
+)
+def test_codex_attachment_unknown_parent_completeness_keeps_receipt_unresolved_and_all_scope_partial(
+    tmp_path: Path,
+    monkeypatch,
+    mutation: str,
+):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rule = sources.SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]
+    _append_oversized_incomplete_codex_parent_row(
+        sources,
+        session,
+        attachment,
+        mutation,
+        padding_size=int(rule["max_parent_record_bytes"]) + 4096,
+    )
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+    session_key = sources.cursor_unit_key("codex-sessions", session)
+
+    events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=tmp_path / "missing-cursor.json"),
+        days=None,
+        max_files=2,
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert cursor["scope"] == "partial:all"
+    assert cursor["target_scope"] == "all"
+    assert cursor["all_baseline_complete"] is False
+    assert {attachment_key, session_key}.issubset(cursor["unresolved_units"])
+    assert cursor["unsupported_units"][attachment_key] == sources.file_signature(attachment)
+    assert attachment_key not in cursor["adapted_unit_receipts"]
+    assert {"codex-attachments", "codex-sessions"}.issubset(cursor["adapter_gaps"])
+    assert "bounded byte ceiling" in " ".join(cursor["source_errors"])
+    assert sources.validate_source_adapter_cursor(cursor) == []
+
+
+def test_codex_attachment_parent_replay_invalidates_cached_receipt(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = [
+        {"source": "codex-sessions", "path": session},
+        {"source": "codex-attachments", "path": attachment},
+    ]
+    _events, first = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=rows,
+    )
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+    reference = sources.codex_attachment_reference_line(attachment)
+    existing = session.read_text(encoding="utf-8")
+    replay = {
+        "timestamp": "2026-07-13T01:00:09Z",
+        "type": "response_item",
+        "payload": {
+            "type": "message",
+            "role": "user",
+            "content": [{"type": "input_text", "text": reference}],
+        },
+    }
+    session.write_text(existing + json.dumps(replay) + "\n", encoding="utf-8")
+
+    events, second = sources.scan_regular_sources(
+        lifecycle,
+        first,
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=rows,
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert second["unsupported"] == [attachment_key]
+    assert attachment_key not in second["adapted_unit_receipts"]
+    assert attachment_key not in second["files"]
+
+
+def test_codex_attachment_session_identity_ambiguity_invalidates_cached_receipt(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    scan_rows = [
+        {"source": "codex-sessions", "path": session},
+        {"source": "codex-attachments", "path": attachment},
+    ]
+    _events, first = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=scan_rows,
+    )
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+    assert attachment_key in first["adapted_unit_receipts"]
+    session_rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    session_rows.insert(1, {"type": "session_meta", "payload": {"id": "fixture-second-thread"}})
+    session.write_text("".join(json.dumps(row) + "\n" for row in session_rows), encoding="utf-8")
+
+    events, second = sources.scan_regular_sources(
+        lifecycle,
+        first,
+        days=None,
+        budget=sources.ScanBudget(limit=2),
+        rows=scan_rows,
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert second["unsupported"] == [attachment_key]
+    assert attachment_key not in second["adapted_unit_receipts"]
+    assert attachment_key not in second["files"]
+    assert "session identity is ambiguous" in " ".join(second["errors"])
+
+
+def test_codex_attachment_cached_second_pass_is_zero_growth(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = [
+        {"source": "codex-sessions", "path": session},
+        {"source": "codex-attachments", "path": attachment},
+    ]
+    first_budget = sources.ScanBudget(limit=2)
+    first_events, first = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=first_budget,
+        rows=rows,
+    )
+    first_receipts = json.dumps(first["adapted_unit_receipts"], sort_keys=True)
+
+    second_budget = sources.ScanBudget(limit=2)
+    second_events, second = sources.scan_regular_sources(
+        lifecycle,
+        first,
+        days=None,
+        budget=second_budget,
+        rows=rows,
+    )
+
+    assert len(first_events) == 2
+    assert first_budget.used == 2
+    assert second_events == []
+    assert second_budget.used == 0
+    assert second["errors"] == []
+    assert second["unsupported"] == []
+    assert json.dumps(second["adapted_unit_receipts"], sort_keys=True) == first_receipts
+
+
+def test_codex_attachment_bounded_scan_converges_over_three_passes(tmp_path: Path):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    rows = [
+        {"source": "codex-sessions", "path": session},
+        {"source": "codex-attachments", "path": attachment},
+    ]
+    session_key = sources.cursor_unit_key("codex-sessions", session)
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    first_budget = sources.ScanBudget(limit=1)
+    first_events, first = sources.scan_regular_sources(
+        lifecycle,
+        {"files": {}},
+        days=None,
+        budget=first_budget,
+        rows=rows,
+    )
+
+    assert len(first_events) == 1
+    assert first_events[0]["source"] == "codex-sessions"
+    assert first_budget.used == 1
+    assert first["pending_files"] == 1
+    assert first["coverage"]["codex-attachments"]["pending"] == 1
+    assert session_key in first["files"]
+    assert attachment_key not in first["files"]
+    assert attachment_key not in first["adapted_unit_receipts"]
+
+    second_budget = sources.ScanBudget(limit=1)
+    second_events, second = sources.scan_regular_sources(
+        lifecycle,
+        first,
+        days=None,
+        budget=second_budget,
+        rows=rows,
+    )
+    second_receipts = json.dumps(second["adapted_unit_receipts"], sort_keys=True)
+
+    assert len(second_events) == 1
+    assert second_events[0]["source"] == "codex-attachments"
+    assert second_budget.used == 1
+    assert second["pending_files"] == 0
+    assert second["errors"] == []
+    assert second["unsupported"] == []
+    assert attachment_key in second["files"]
+    assert attachment_key in second["adapted_unit_receipts"]
+
+    third_budget = sources.ScanBudget(limit=1)
+    third_events, third = sources.scan_regular_sources(
+        lifecycle,
+        second,
+        days=None,
+        budget=third_budget,
+        rows=rows,
+    )
+
+    assert third_events == []
+    assert third_budget.used == 0
+    assert third["pending_files"] == 0
+    assert third["errors"] == []
+    assert third["unsupported"] == []
+    assert json.dumps(third["adapted_unit_receipts"], sort_keys=True) == second_receipts
+
+
+def test_codex_attachment_native_ledger_second_pass_changes_no_canonical_bytes(
+    tmp_path: Path,
+    monkeypatch,
+):
+    sources = _load()
+    lifecycle, _session, _attachment = _codex_attachment_fixture(sources, tmp_path)
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    root = tmp_path / "ledger"
+    paths = sources.LedgerPaths.for_root(
+        root,
+        policy=ROOT / "docs" / "prompt-corpus-policy.json",
+    )
+
+    first_events, first_cursor = sources.scan_native_sources(
+        paths,
+        days=None,
+        max_files=2,
+    )
+    first_snapshot = sources.update_ledger(paths, events=first_events, cursor=first_cursor)
+
+    def canonical_bytes() -> dict[str, str]:
+        files = [
+            paths.event_journal,
+            paths.outcome_journal,
+            paths.cursor,
+            paths.private_snapshot,
+            paths.public_snapshot,
+            paths.public_markdown,
+            *sorted(path for path in paths.raw_objects.rglob("*") if path.is_file()),
+            *sorted(path for path in paths.source_scan_receipts.rglob("*") if path.is_file()),
+        ]
+        return {
+            str(index): hashlib.sha256(path.read_bytes()).hexdigest()
+            for index, path in enumerate(files)
+            if path.exists()
+        }
+
+    first_bytes = canonical_bytes()
+    second_events, second_cursor = sources.scan_native_sources(
+        paths,
+        days=None,
+        max_files=2,
+    )
+    second_snapshot = sources.update_ledger(paths, events=second_events, cursor=second_cursor)
+
+    assert first_cursor["scope"] == "all"
+    assert first_cursor["adapter_gaps"] == []
+    assert first_cursor["work_units_used"] == 2
+    assert first_snapshot["appended"]["occurrences"] == 2
+    assert second_events == []
+    assert second_cursor["work_units_used"] == 0
+    assert second_snapshot["write_changed"] is False
+    assert second_snapshot["appended"] == {
+        "occurrences": 0,
+        "atoms": 0,
+        "outcomes": 0,
+        "reclassified": 0,
+    }
+    assert canonical_bytes() == first_bytes
+
+
+def test_codex_attachment_ambiguous_session_identity_keeps_all_scope_partial(
+    tmp_path: Path,
+    monkeypatch,
+):
+    sources = _load()
+    lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
+    session_rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
+    session_rows.insert(1, {"type": "session_meta", "payload": {"id": "fixture-second-thread"}})
+    session.write_text("".join(json.dumps(row) + "\n" for row in session_rows), encoding="utf-8")
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    attachment_key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=tmp_path / "missing-cursor.json"),
+        days=None,
+        max_files=2,
+    )
+
+    assert not [event for event in events if event["source"] == "codex-attachments"]
+    assert cursor["scope"] == "partial:all"
+    assert cursor["all_baseline_complete"] is False
+    assert attachment_key in cursor["unresolved_units"]
+    assert attachment_key not in cursor["adapted_unit_receipts"]
+    assert {"codex-attachments", "codex-sessions"}.issubset(cursor["adapter_gaps"])
+
+
+@pytest.mark.parametrize(
+    ("name", "body"),
+    [
+        ("pasted-text-1.txt", "potentially prompt-bearing attachment"),
+        (
+            "detached.json",
+            json.dumps(
+                {
+                    "timestamp": "2026-07-12T12:00:00Z",
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": "detached JSON prompt"}],
+                    },
+                }
+            ),
+        ),
+        (
+            "detached.jsonl",
+            json.dumps(
+                {
+                    "timestamp": "2026-07-12T12:00:00Z",
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": "detached JSONL prompt"}],
+                    },
+                }
+            )
+            + "\n",
+        ),
+    ],
+)
+def test_detached_codex_attachment_remains_an_explicit_gap(tmp_path: Path, name: str, body: str):
     sources = _load()
     lifecycle = sources.load_lifecycle_module()
     attachments = tmp_path / ".codex" / "attachments"
-    attachment = attachments / "opaque-parent" / "pasted-text-1.txt"
+    attachment = attachments / "opaque-parent" / name
     attachment.parent.mkdir(parents=True)
-    attachment.write_text("potentially prompt-bearing attachment", encoding="utf-8")
+    attachment.write_text(body, encoding="utf-8")
     lifecycle.LOCAL_SOURCES = [("codex-attachments", attachments, ("*",))]
     lifecycle.OPENCODE_DB = tmp_path / "missing-opencode.db"
     lifecycle.AGY_CLI_CONVERSATIONS = tmp_path / "missing-agy"
     row = {"source": "codex-attachments", "path": attachment}
     key = sources.cursor_unit_key("codex-attachments", attachment)
-    signature = sources.file_signature(attachment)
     events, result = sources.scan_regular_sources(
         lifecycle,
-        {"files": {}, "unsupported_units": {key: signature}},
+        {"files": {}, "unsupported_units": {}},
         days=None,
         budget=sources.ScanBudget(limit=1),
         rows=[row],
     )
 
     assert events == []
+    assert result["errors"] == []
     assert result["unsupported"] == [key]
-    assert result["adapted_unit_receipts"] == {}
+    assert result["unsupported_units"][key] == sources.file_signature(attachment)
+    assert result["excluded_unit_receipts"] == {}
+    assert result["coverage"]["codex-attachments"]["excluded"] == 0
     assert result["coverage"]["codex-attachments"]["unsupported"] == 1
+    assert "codex-attachment-v1" not in sources.source_adapter_contract()["exclusion_ids"]
+
+
+@pytest.mark.parametrize(
+    ("name", "body"),
+    [
+        ("pasted-text-1.txt", "potentially prompt-bearing attachment"),
+        (
+            "detached.json",
+            json.dumps(
+                {
+                    "timestamp": "2026-07-12T12:00:00Z",
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": "detached JSON prompt"}],
+                    },
+                }
+            ),
+        ),
+        (
+            "detached.jsonl",
+            json.dumps(
+                {
+                    "timestamp": "2026-07-12T12:00:00Z",
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": "detached JSONL prompt"}],
+                    },
+                }
+            )
+            + "\n",
+        ),
+    ],
+)
+def test_detached_codex_attachment_keeps_all_scope_partial(
+    tmp_path: Path,
+    monkeypatch,
+    name: str,
+    body: str,
+):
+    sources = _load()
+    attachments = tmp_path / ".codex" / "attachments"
+    attachment = attachments / "opaque-parent" / name
+    attachment.parent.mkdir(parents=True)
+    attachment.write_text(body, encoding="utf-8")
+    lifecycle = sources.load_lifecycle_module()
+    lifecycle.LOCAL_SOURCES = [("codex-attachments", attachments, ("*",))]
+    lifecycle.OPENCODE_DB = tmp_path / "missing-opencode.db"
+    lifecycle.AGY_CLI_CONVERSATIONS = tmp_path / "missing-agy"
+    lifecycle.HOME = tmp_path / "missing-home"
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    key = sources.cursor_unit_key("codex-attachments", attachment)
+
+    events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=tmp_path / "missing-cursor.json"),
+        days=None,
+        max_files=1,
+    )
+
+    assert events == []
+    assert cursor["scope"] == "partial:all"
+    assert cursor["unsupported_source_count"] == 1
+    assert cursor["unsupported_units"][key] == sources.file_signature(attachment)
+    assert cursor["adapter_gaps"] == ["codex-attachments"]
+    assert cursor["excluded_unit_receipts"] == {}
+    assert key not in cursor["files"]
+    assert sources.validate_source_adapter_cursor(cursor) == []
+
+
+def test_removed_codex_attachment_contract_resets_stale_cursor_to_gap(tmp_path: Path, monkeypatch):
+    sources = _load()
+    attachments = tmp_path / ".codex" / "attachments"
+    attachment = attachments / "opaque-parent" / "detached.json"
+    attachment.parent.mkdir(parents=True)
+    attachment.write_text(json.dumps({"role": "user", "content": "detached prompt"}), encoding="utf-8")
+    lifecycle = sources.load_lifecycle_module()
+    lifecycle.LOCAL_SOURCES = [("codex-attachments", attachments, ("*",))]
+    lifecycle.OPENCODE_DB = tmp_path / "missing-opencode.db"
+    lifecycle.AGY_CLI_CONVERSATIONS = tmp_path / "missing-agy"
+    lifecycle.HOME = tmp_path / "missing-home"
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    key = sources.cursor_unit_key("codex-attachments", attachment)
+    signature = sources.file_signature(attachment)
+    assert signature is not None
+    stale_contract = json.loads(json.dumps(sources.source_adapter_contract()))
+    stale_contract["digest"] = "a" * 64
+    stale_contract["exclusion_ids"] = sorted([*stale_contract["exclusion_ids"], "codex-attachment-v1"])
+    stale_contract["exclusion_sources"]["codex-attachment-v1"] = "codex-attachments"
+    cursor_path = tmp_path / "cursor.json"
+    cursor_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "scanner_version": sources.SCANNER_VERSION,
+                "scope": "partial:all",
+                "target_scope": "all",
+                "all_baseline_complete": False,
+                "source_adapter_contract": stale_contract,
+                "files": {},
+                "unsupported_units": {},
+                "unresolved_units": [],
+                "excluded_unit_receipts": {
+                    key: {
+                        "version": sources.SOURCE_ADAPTER_CONTRACT_VERSION,
+                        "disposition": "excluded",
+                        "contract_id": "codex-attachment-v1",
+                        "contract_digest": stale_contract["digest"],
+                        "signature": signature,
+                        "related_signatures": {},
+                    }
+                },
+                "adapted_unit_receipts": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    events, cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=cursor_path),
+        days=None,
+        max_files=1,
+    )
+
+    assert events == []
+    assert cursor["replace_files"] is True
+    assert cursor["excluded_unit_receipts"] == {}
+    assert cursor["unsupported_units"][key] == signature
+    assert cursor["scope"] == "partial:all"
+    assert cursor["adapter_gaps"] == ["codex-attachments"]
+    assert sources.validate_source_adapter_cursor(cursor) == []
+
+
+@pytest.mark.parametrize(
+    ("relative", "payload", "expected_contract"),
+    [
+        ("artifact.bin", b"provider artifact", None),
+        ("session/artifact.bin", b"provider artifact", "claude-task-artifact-v1"),
+        ("session/.lock", b"", "claude-task-lock-v1"),
+        ("session/.highwatermark", b"42\n", "claude-task-watermark-v1"),
+        ("session/nested/.lock", b"", "claude-task-artifact-v1"),
+        ("session/nested/.highwatermark", b"42\n", "claude-task-artifact-v1"),
+    ],
+)
+def test_claude_task_exclusion_candidate_matches_receipt_depth(
+    tmp_path: Path,
+    relative: str,
+    payload: bytes,
+    expected_contract: str | None,
+):
+    sources = _load()
+    lifecycle = sources.load_lifecycle_module()
+    tasks = tmp_path / ".claude" / "tasks"
+    artifact = tasks / relative
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_bytes(payload)
+    lifecycle.LOCAL_SOURCES = [("claude-tasks", tasks, ("*",))]
+    signature = sources.file_signature(artifact)
+    assert signature is not None
+
+    candidate = sources.source_exclusion_candidate_id(
+        lifecycle,
+        "claude-tasks",
+        artifact,
+        signature,
+    )
+
+    assert candidate == expected_contract
+    if expected_contract is None:
+        assert not sources.source_contract_receipt_applies(
+            "claude-task-artifact-v1",
+            "claude-tasks",
+            str(artifact),
+            signature=signature,
+        )
+    else:
+        assert sources.source_contract_receipt_applies(
+            expected_contract,
+            "claude-tasks",
+            str(artifact),
+            signature=signature,
+        )
 
 
 def test_symlinked_exclusion_never_receives_a_contract_receipt(tmp_path: Path):

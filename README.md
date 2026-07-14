@@ -42,6 +42,10 @@ limen dispatch --agent jules --limit 100 --live
 # Check the board and budget
 limen status
 
+# Inspect partial board progress, source readiness, and work-loan metadata
+limen progress
+limen progress --view workstream --scope financial --all
+
 # Harvest results from completed dispatches
 limen harvest
 ```
@@ -65,6 +69,7 @@ Mounts `./tasks.yaml` into the API container.
 | `limen doctor` | `--agent` (default jules), `--json-output`, `--report-file` | Report local readiness for dispatch and stale-claim recovery. |
 | `limen qa` | `--agent` (default jules), `--json-output`, `--report-file` | Report QA lifecycle gates and steering queues without mutating tasks. |
 | `limen status` | `--agent`, `--status` | Show the task board. |
+| `limen progress` | `--view`, `--scope`, `--level`, `--all`, `--json-output`, `--report-file`, `--ascii` | Inspect the partial board-progress and source-coverage lens. |
 | `limen harvest` | `--agent` | Check for completed dispatches and update task states. |
 | `limen workstream` | `--from`, `--prompt`, `--prompt-file`, `--codex`, `--shell` | Create/reuse a repo worktree plus a private `.limen-workstream/README.md` and `kickstart.sh`. |
 
@@ -216,7 +221,7 @@ Every AI agent reads `tasks.yaml` at session start, finds open tasks matching th
 - **Jules** — async coding agent (Google). Dispatch via `jules new --repo`.
 - **Copilot** — GitHub Copilot coding agent lane. Dispatch assigns an existing GitHub issue to `copilot-swe-agent`; census marks it down until `LIMEN_COPILOT_ENABLED=1` or `LIMEN_COPILOT_HEALTH_REPO` confirms assignability.
 - **Warp/Oz** — paid service lanes via `LIMEN_WARP_DISPATCH_CMD`, `LIMEN_OZ_DISPATCH_CMD`, or the generic `agent-dispatch` adapter.
-- **GitHub Actions** — runner lane via `gh workflow run` against `LIMEN_GITHUB_ACTIONS_WORKFLOW` (default `limen-agent.yml`).
+- **GitHub Actions** — public verification-only runner lane for a dedicated verifier child after its implementation parent has merged custody; dispatches the live-discovered `LIMEN_GITHUB_ACTIONS_WORKFLOW` (default `limen-agent.yml`) through a validated control branch/tag independently pinned to an exact control SHA.
 
 ## Support / Sponsor
 

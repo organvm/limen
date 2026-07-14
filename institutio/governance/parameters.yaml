@@ -51,17 +51,35 @@ parameters:
     note: "Repo home is a decision, not a constant. Extracting later is a clean git subtree."
 
   LIMEN_ASYNC_MAX:
-    default: "clamp(hw.ncpu, 4, 12) — derived at plist generation, override only via env"
+    default: "hw.ncpu — derived at plist generation, override only via env"
     env: LIMEN_ASYNC_MAX
     self_update: none
     owner: dispatch
-    note: "Global concurrency ceiling for local async dispatch workers. 2026-07-08 incident: a manually pinned 1 in the live plist starved every local lane for a night (12 PRs vs 23-40/day baseline) while budget sat 493/600 unused. The cap is decided by gen-launchd-plist.sh's derivation, never by hand; the vitals-pressure gate is the runtime backpressure."
+    note: "Host-sized concurrency ceiling for local async dispatch workers. It derives from live CPU count with no literal fleet cap; per-lane limits prevent monopolization and VITALS supplies runtime memory backpressure. Remote lanes do not consume it. A manual override remains an escape hatch."
   LIMEN_ASYNC_LOCAL_PER_LANE:
     default: "$LIMEN_LOCAL_LIMIT"
     env: LIMEN_ASYNC_LOCAL_PER_LANE
     self_update: none
     owner: dispatch
     note: "Per-lane launch room for local async workers. Remote lanes such as Jules use live provider runway and --per-lane; this knob prevents a remote burst command from becoming 100 local OpenCode/Agy processes."
+  LIMEN_REMOTE_BASE_REF:
+    default: "HEAD"
+    env: LIMEN_REMOTE_BASE_REF
+    self_update: none
+    owner: dispatch
+    note: "Public target ref resolved through the remote GitHub owner to an exact pushed SHA before deterministic off-box verification."
+  LIMEN_GITHUB_ACTIONS_CONTROL_REF:
+    default: "<live remote default branch>"
+    env: LIMEN_GITHUB_ACTIONS_CONTROL_REF
+    self_update: none
+    owner: dispatch
+    note: "Optional explicit short branch/tag name. When unset, discovery uses the live remote default branch. HEAD, raw SHAs, pull refs, unprotected branches, ambiguous branch/tag names, and unsafe ref syntax fail closed. The branch/tag and its exact re-resolved SHA are packet- and receipt-bound."
+  LIMEN_REMOTE_RECEIPT_ROOT:
+    default: "$LIMEN_ROOT/logs/remote-execution"
+    env: LIMEN_REMOTE_RECEIPT_ROOT
+    self_update: none
+    owner: dispatch
+    note: "Local content-addressed observation store for public GitHub Actions run IDs, URLs, exact SHAs, predicate digests, and durable receipt identities. Raw provider output and credentials are excluded."
   LIMEN_FACTS_APPLY:
     default: 0
     env: LIMEN_FACTS_APPLY
@@ -80,6 +98,25 @@ parameters:
     self_update: none
     owner: dispatch
     note: "Async dispatch is the enacted fleet mode (overnight-watch expects 1). Generator default was 0 until 2026-07-09, when a regen under a bare session env silently rendered async OFF — the default now matches the enacted state."
+
+  LIMEN_PROBE_ATTEMPTS:
+    default: "40 for the API runtime; 80 for the Worker runtime"
+    env: LIMEN_PROBE_ATTEMPTS
+    self_update: none
+    owner: dispatch
+    note: "Maximum readiness attempts for either local runtime probe. Tests lower this value to exercise the terminal-failure cleanup path without a long wait."
+  LIMEN_PROBE_RETRY_DELAY:
+    default: 0.25
+    env: LIMEN_PROBE_RETRY_DELAY
+    self_update: none
+    owner: dispatch
+    note: "Seconds between local runtime readiness attempts."
+  LIMEN_PROBE_TERM_GRACE:
+    default: 2
+    env: LIMEN_PROBE_TERM_GRACE
+    self_update: none
+    owner: dispatch
+    note: "Seconds allowed for a directly owned probe server to exit after TERM before its isolated process group receives KILL."
 
   LIMEN_LOCAL_FLOOR:
     default: 0
@@ -115,13 +152,13 @@ parameters:
     env: LIMEN_VITALS_CRIT
     self_update: none
     owner: vitals
-    note: "At >=critical (4): idle beat (skip dispatch-heavy work) AND shed running discretionary load (e.g. ollama) before jetsam escalates."
+    note: "At >=critical (4): block new local checkout work and shed running discretionary load (e.g. ollama) before jetsam escalates; off-box provider lanes remain eligible."
   VITALS_THROTTLE_DIVISOR:
     default: 2
     env: LIMEN_VITALS_THROTTLE_DIVISOR
     self_update: none
     owner: vitals
-    note: "Divisor applied to LIMEN_ASYNC_MAX while memory pressure is at warn (floor 1). Graduated backpressure: throttle at warn, idle+shed only at critical."
+    note: "Divisor applied to both async local slots and synchronous local workers while memory pressure is at warn (floor 1). At critical, local admission sheds while off-box lanes continue."
   VITALS_HEAVY_SURFACE_LIMIT:
     default: 1
     env: LIMEN_VITALS_HEAVY_LIMIT
@@ -231,6 +268,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "Public receipt document emitted from the always-working lifecycle index. Contains aggregate statuses and receipt paths, not private raw prompt content."
+  LIMEN_ALWAYS_WORKING_SCRIPT:
+    default: "$LIMEN_ROOT/scripts/always-working.py"
+    env: LIMEN_ALWAYS_WORKING_SCRIPT
+    self_update: none
+    owner: continuity
+    note: "Executable producer used by overnight-watch for the bounded alternate-work snapshot. Tests and isolated deployments may replace the path without changing dispatch code."
   LIMEN_ALWAYS_WORKING_BEFORE_DISPATCH:
     default: "1"
     env: LIMEN_ALWAYS_WORKING_BEFORE_DISPATCH
@@ -513,6 +556,30 @@ parameters:
     self_update: none
     owner: continuity
     note: "DATA_ONLY push guard (issue #872 / PREC-2026-07-10-direct-push-lane-rots-main). When on (default), the autonomic direct-push lanes (scripts/capture.sh, scripts/continuation-beat.py) refuse to stage SOURCE (code/config that belongs behind pr-gate) onto a repo's `main` when that repo has .github/workflows/pr-gate.yml — so no uncommitted .py in the live checkout ever reaches protected main un-CI'd. Refused source is left on disk (reversible) and surfaced; route it via PR. `off` disables the guard. Non-main branches and ungated repos are unaffected either way."
+  LIMEN_RECLAIM:
+    default: "1"
+    env: LIMEN_RECLAIM
+    self_update: none
+    owner: continuity
+    note: "Master live-enable switch for the heartbeat worktree reaper. Worktree admission requires the registered live value 1; disabling reclaim blocks new local worktree creation while remote lanes continue."
+  LIMEN_RECLAIM_MAX:
+    default: 50
+    env: LIMEN_RECLAIM_MAX
+    self_update: none
+    owner: continuity
+    note: "Maximum accepted worktree roots physically removed per reclaim-worktrees apply run. Additional eligible roots are durably listed in deferred_over_cap; a nonempty deferred list blocks new local worktree creation until the next drain."
+  LIMEN_BEAT_DRAIN:
+    default: 3
+    env: LIMEN_BEAT_DRAIN
+    self_update: none
+    owner: continuity
+    note: "Heartbeat voice cadence, in beats, for drain and its worktree-reclaim pass. Combined with LIMEN_LOOP_MAX and LIMEN_RECLAIM_TIMEOUT to derive the worst-case durable reaper receipt freshness window."
+  LIMEN_LOOP_MAX:
+    default: 1800
+    env: LIMEN_LOOP_MAX
+    self_update: none
+    owner: continuity
+    note: "Maximum heartbeat-loop backoff in seconds. Worktree admission uses this live scheduler bound with LIMEN_BEAT_DRAIN and LIMEN_RECLAIM_TIMEOUT; it is not a worktree-count cap."
   LIMEN_RECLAIM_GENERATED:
     default: "1"
     env: LIMEN_RECLAIM_GENERATED
@@ -927,6 +994,42 @@ parameters:
     self_update: "updated by scripts/overnight-watch.py"
     owner: continuity
     note: "Deduped active alert path for overnight monitor failures; replaces long interactive-agent polling loops with WATCH_ALERT receipts."
+  LIMEN_OVERNIGHT_LANE_SWITCH_LOCK:
+    default: "$LIMEN_ROOT/logs/overnight-lane-switch.lock"
+    env: LIMEN_OVERNIGHT_LANE_SWITCH_LOCK
+    self_update: none
+    owner: continuity
+    note: "Short critical-section lock for selecting, ticketing, and launching at most one exact alternate owner packet when the generic overnight value gate is closed."
+  LIMEN_OVERNIGHT_PROVIDER_MAX_AGE_MIN:
+    default: 90
+    env: LIMEN_OVERNIGHT_PROVIDER_MAX_AGE_MIN
+    self_update: none
+    owner: dispatch
+    note: "Maximum age in minutes for provider headroom telemetry accepted by the overnight exact-lane selector; stale capacity evidence fails closed."
+  LIMEN_USAGE_JSON:
+    default: "$LIMEN_ROOT/logs/usage.json"
+    env: LIMEN_USAGE_JSON
+    self_update: "refreshed by scripts/usage-telemetry.py"
+    owner: dispatch
+    note: "Provider headroom snapshot consumed by the overnight exact-lane selector. Override supports isolated tests without redirecting other Limen receipts."
+  LIMEN_OVERNIGHT_TRIAL_RECEIPT:
+    default: "$LIMEN_ROOT/logs/overnight-trial.json"
+    env: LIMEN_OVERNIGHT_TRIAL_RECEIPT
+    self_update: "content-addressed finalization by scripts/overnight-watch.py"
+    owner: continuity
+    note: "Counts-only prospective eight-hour unattended-trial receipt; exact bounded-source reconstruction plus evaluator, normalized-input, and content hashes bind the proof without publishing prompt bodies."
+  LIMEN_OVERNIGHT_TRIAL_WINDOW:
+    default: "$LIMEN_ROOT/logs/overnight-trial-window.json"
+    env: LIMEN_OVERNIGHT_TRIAL_WINDOW
+    self_update: "started and finalized by scripts/overnight-watch.py"
+    owner: continuity
+    note: "Single-writer lifecycle marker for the fixed eight-hour unattended trial; active markers cannot be replaced or backfilled and keep Omega red until automatic finalization records terminal custody."
+  LIMEN_OVERNIGHT_TRIAL_OBSERVATIONS:
+    default: "$LIMEN_ROOT/logs/overnight-trial-observations.jsonl"
+    env: LIMEN_OVERNIGHT_TRIAL_OBSERVATIONS
+    self_update: "append-only hash-chain by scripts/overnight-watch.py"
+    owner: continuity
+    note: "Counts-and-hashes-only prospective observation chain. Trial start seals its byte prefix; each heartbeat binds one new watch append, first-seen task events, prompt-journal prefixes, handoff custody, provider session proof, and predicate plus durable-receipt proof."
   LIMEN_OVERNIGHT_WATCH_MAX_LOG_AGE_SEC:
     default: 1200
     env: LIMEN_OVERNIGHT_WATCH_MAX_LOG_AGE_SEC
@@ -1011,6 +1114,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "Attached --watch loop interval; launchd should normally run one-shot invocations instead."
+  LIMEN_TARGETED_RECOVERY_GRACE:
+    default: "derived from the live async worker timeout"
+    env: LIMEN_TARGETED_RECOVERY_GRACE
+    self_update: none
+    owner: dispatch
+    note: "Minimum marker or markerless-claim age in seconds before exact orphan recovery may reopen a dispatched task. Tests may lower it explicitly; production derives the default from the worker timeout."
   LIMEN_PUBLIC_SITE_URL:
     default: "https://device-streaming-067d747a.web.app"
     env: LIMEN_PUBLIC_SITE_URL
@@ -1135,6 +1244,30 @@ parameters:
     self_update: none
     owner: mail
     note: "Max obligations-ledger age before scripts/check-mail-answered.py fails: a ledger not rebuilt within this window means the C_MAIL beat/effector is not running (the 2026-06 silent-freeze failure mode)."
+  LIMEN_UMA_ROOT:
+    default: "~/Workspace/universal-mail--automation"
+    env: LIMEN_UMA_ROOT
+    self_update: none
+    owner: mail
+    note: "Checkout path of the universal-mail--automation engine (the C_MAIL effector). scripts/check-mail-tiers.py reads core/protocols.py from here to cross-check that every dangerous protocol class is held; absent (e.g. CI) → that cross-check advisory-skips, never fails."
+  LIMEN_MAIL_SEND:
+    default: 0
+    env: LIMEN_MAIL_SEND
+    self_update: none
+    owner: mail
+    note: "The auto-send arm for send_drafts.py (the tiered fail-closed sender), the send analog of LIMEN_MAIL_DRAFTS. 0 (default) = DISARMED: the beat dry-runs the sender (logs would-sends, sends nothing). 1 = armed: send only opt-in SAFE-tier obligations with complete bracket-free text per mail-tiers.yaml; legal/money/personal HOLD is never sent, and absent a keyed SMTP credential it still fails closed. His valve — the safe set grows on trust."
+  LIMEN_MAIL_SEND_MAX:
+    default: 10
+    env: LIMEN_MAIL_SEND_MAX
+    self_update: none
+    owner: mail
+    note: "Safety cap on how many SAFE-tier replies send_drafts.py may send per run, so an armed run can never blast the whole ledger."
+  LIMEN_MAIL_ANSWERED_CHECK:
+    default: 1
+    env: LIMEN_MAIL_ANSWERED_CHECK
+    self_update: none
+    owner: mail
+    note: "Beat gate for the mail-answered sensor (scripts/check-mail-answered.py): 1 (default) surfaces a stale ledger or a reply-owed-without-draft in the beat log — the sensor that would have caught the 2026-06 silent freeze. 0 skips it."
   LIMEN_PRIVATE_MAIL_STORY:
     default: "$LIMEN_ROOT/.limen-private/mail-story"
     env: LIMEN_PRIVATE_MAIL_STORY
@@ -1940,11 +2073,41 @@ parameters:
     owner: observatory
     note: "Cadence (every N beats) of the OBSERVATORY loop declared in sensors.yaml. The generic scheduled runner resolves this override; metabolize.sh contains no sensor-specific cadence constant."
   LIMEN_OBSERVATORY_TIMEOUT:
-    default: 240
+    default: 480
     env: LIMEN_OBSERVATORY_TIMEOUT
     self_update: none
     owner: observatory
-    note: "Per-run timeout (seconds) resolved by the generic sensor runner for the OBSERVATORY loop. The runner kills the command group on overrun and the beat continues fail-open."
+    note: "Per-run timeout (seconds) resolved by the generic sensor runner for the OBSERVATORY loop. The runner kills the command group on overrun and the beat continues fail-open. 480 covers the full-field pass (~50 light snapshots + 17 estate surfaces on top of the deep winners; the 3-winner loop measured 106s)."
+  OBSERVATORY_FIELD_LIMIT:
+    default: 50
+    env: OBSERVATORY_FIELD_LIMIT
+    self_update: none
+    owner: observatory
+    note: "The whole day's trending FIELD studied per beat (one bounded search; GitHub caps a page at 100). The top OBSERVATORY_WINNERS_LIMIT of the field get the deep treatment (full snapshot + matched controls); the tail gets light snapshots (meta+README, 2 calls each) for prevalence and inward-facing evidence. Never below the winners limit; the collect report records field_total/field_studied/field_dropped — no silent caps. Degrades to the winners limit when gh rate headroom < 20% (recorded as degraded: true)."
+  LIMEN_BIFRONS:
+    default: 1
+    env: LIMEN_BIFRONS
+    self_update: none
+    owner: bifrons
+    note: "Master on/off for the registry-declared BIFRONS star<->contribution portal sensor (bifrons-portal in sensors.yaml). Ships LIVE (1): the metabolize beat is read-only absorb + internal prepare — no send, no spend — so it runs unbidden per the aliveness law. 0 gates it dormant. The one external write (an upstream PR) rides the existing outbound-send valve, never a BIFRONS lever."
+  LIMEN_BEAT_BIFRONS:
+    default: 24
+    env: LIMEN_BEAT_BIFRONS
+    self_update: none
+    owner: bifrons
+    note: "Cadence (every N beats) of the BIFRONS portal beat declared in sensors.yaml. The generic scheduled runner resolves this override; metabolize.sh contains no sensor-specific cadence constant."
+  LIMEN_BIFRONS_TIMEOUT:
+    default: 180
+    env: LIMEN_BIFRONS_TIMEOUT
+    self_update: none
+    owner: bifrons
+    note: "Per-run timeout (seconds) resolved by the generic sensor runner for the BIFRONS portal beat. The runner kills the command group on overrun and the beat continues fail-open."
+  LIMEN_BIFRONS_BUDGET:
+    default: 3
+    env: LIMEN_BIFRONS_BUDGET
+    self_update: none
+    owner: bifrons
+    note: "Max new stars/exchanges the BIFRONS beat absorbs + prepares per cycle (bounds gh-API usage; the effector is `organvm portal metabolize --budget N`). Small by design — the beat converges over many cycles rather than one heavy sweep."
   OBSERVATORY_APPLY:
     default: 0
     env: OBSERVATORY_APPLY
@@ -1994,17 +2157,17 @@ parameters:
     owner: limen-daemon
     note: "When 1, scripts/drain.sh passes --apply to reclaim-worktrees.py. The reaper still refuses dirty, unique-unpushed, unmerged, active, or live/self roots. Set 0 for preview-only operation."
   LIMEN_WORKTREE_DEBT_GATE:
-    default: "1"               # ON — debt suppresses routine generated build-out, not recovery work
+    default: "1"               # ON — per-candidate worktree custody admission active
     env: LIMEN_WORKTREE_DEBT_GATE
     self_update: none
     owner: limen-daemon
-    note: "When enabled, generate-backlog.py and dispatch selection suppress routine generated build-out if preserved worktree debt exceeds LIMEN_WORKTREE_DEBT_MAX. Explicit targeted/recovery work still runs."
-  LIMEN_WORKTREE_DEBT_MAX:
-    default: 12                # above this, the fleet must metabolize existing work before making more
-    env: LIMEN_WORKTREE_DEBT_MAX
+    note: "Master switch for per-candidate marginal worktree admission (limen.worktree_debt.take_admission_snapshot). When ON, a NEW LOCAL worktree is admitted only when the host can take custody — free disk >= LIMEN_DISK_FLOOR_GIB, VITALS not shedding, and, whenever lifecycle targets exist, a fresh heartbeat reaper apply receipt proves the inventory is draining. Remote lanes are never gated. There is NO tolerated debt count; completion is debt == 0. Set 0 as the documented operator override to admit all local work regardless of custody."
+  LIMEN_RECLAIM_EVERY_MIN:
+    default: 30                # reclaim-worktrees self-throttle; input to scheduler-derived freshness
+    env: LIMEN_RECLAIM_EVERY_MIN
     self_update: none
     owner: limen-daemon
-    note: "Maximum preserved dirty/unique-unpushed/not-Git worktree roots tolerated before routine generated build-out pauses. Keeps prompt-started work visible and prevents the conductor from outrunning its own closeout lifecycle."
+    note: "Minutes between real reclaim-worktrees.py --apply passes (self-throttle so it is cheap to call every beat). Worktree admission derives freshness as max(2 * this cadence, LIMEN_BEAT_DRAIN * LIMEN_LOOP_MAX / 60 + LIMEN_RECLAIM_TIMEOUT / 60); a stale or incoherent applied receipt blocks new local worktree creation until the reaper drains."
   LIMEN_WORKTREE_REAPABLE_MAX:
     default: 0
     env: LIMEN_WORKTREE_REAPABLE_MAX
@@ -2125,7 +2288,7 @@ parameters:
     env: LIMEN_LAUNCHAGENT_LIVENESS_CHECK
     self_update: none
     owner: tabularius
-    note: "Beat gate for the launch-agent liveness predicate (scripts/launch-agent-liveness.py --check) run each beat by metabolize.sh section 0g4. The invariant spec/critical-launch-agents.json names the launchd organs that MUST stay alive (the MONETA mint + its Cloudflare tunnel = the first-dollar revenue rail; creds-hydrate = the credential organ; ianva gateway = L-IANVA-LOCAL). A 2026-07-09 mass launchd-quiesce (fork-crash mitigation) disabled 11 agents and restored only the heartbeat, leaving the mint dark for days while armed-valve-audit saw it down every beat with no effector (the sensor-without-effector defect this closes). Read-only --check surfaces any down critical organ; the armed LIMEN_LAUNCHAGENT_HEAL effector restores it. macOS-only signal; fails OPEN off-darwin. Set 0 to silence."
+    note: "Beat gate for the launch-agent liveness predicate (scripts/launch-agent-liveness.py --check), sensor section 0g4 in sensors.yaml — run on its declared cadence in BOTH beat lanes (metabolize + the heartbeat scheduled derive lane, live-wired 2026-07-13). The invariant spec/critical-launch-agents.json names the launchd organs that MUST stay alive (the MONETA mint + its Cloudflare tunnel = the first-dollar revenue rail; creds-hydrate = the credential organ; ianva gateway = L-IANVA-LOCAL). A 2026-07-09 mass launchd-quiesce (fork-crash mitigation) disabled 11 agents and restored only the heartbeat, leaving the mint dark for days while armed-valve-audit saw it down every beat with no effector (the sensor-without-effector defect this closes). Read-only --check surfaces any down critical organ; the armed LIMEN_LAUNCHAGENT_HEAL effector restores it. macOS-only signal; fails OPEN off-darwin. Set 0 to silence."
 
   LIMEN_LAUNCHAGENT_HEAL:
     default: "0"               # OFF — the effector. The single durable grant to auto-restore down critical organs.
@@ -2133,6 +2296,20 @@ parameters:
     self_update: none
     owner: tabularius
     note: "The effector for the launch-agent liveness invariant (scripts/launch-agent-liveness.py --apply, sensor section 0g4, gated by when_env). When 1, the beat re-bootstraps + kickstarts any critical organ in spec/critical-launch-agents.json that is down — restoring a plist from ~/Library/LaunchAgents.disabled/ if a quiesce quarantined it. This is the SINGLE durable human grant that closes the sensor-without-effector defect: arm once and the daemon keeps the mint / tunnel / credential organ alive across quiesce + reboot forever, without a per-incident approval. OFF by default because it re-enables persistent launchd services (an authorization, not a default). Owner arms it in the daemon env (~/.limen.env)."
+
+  LIMEN_BEAT_LAUNCHAGENT_LIVENESS:
+    default: 4
+    env: LIMEN_BEAT_LAUNCHAGENT_LIVENESS
+    self_update: none
+    owner: tabularius
+    note: "Cadence (every N beats) of the launch-agent liveness sensor (sensors.yaml 0g4) in the heartbeat's scheduled derive lane. 4 follows the prompt-corpus-control precedent for a cheap check — this one guards the first-dollar revenue rail (mint + tunnel + credential organ), so it runs tight. The generic scheduled runner resolves this override; heartbeat-loop.sh contains no sensor-specific cadence constant."
+
+  LIMEN_LAUNCHAGENT_LIVENESS_TIMEOUT:
+    default: 300
+    env: LIMEN_LAUNCHAGENT_LIVENESS_TIMEOUT
+    self_update: none
+    owner: tabularius
+    note: "Per-run timeout (seconds) resolved by the generic sensor runner for the liveness pass. Sized to the founding incident: the 2026-07-09 quiesce restore walked 4 down agents in ≈264 s with --apply armed — gitvs's 120 would kill a multi-agent restore mid-flight. The runner kills the whole command group on overrun and the beat continues fail-open."
 
   LIMEN_CRITICAL_AGENTS_FILE:
     default: ""                # empty = spec/critical-launch-agents.json; also the --agents-file flag
@@ -2173,7 +2350,49 @@ parameters:
     env: LIMEN_BEAT_DERIVE
     self_update: none
     owner: governance
-    note: "The continuous metabolize sensor loop is registry-derived and default-on after #935; the deleted hand-wired blocks are not a fallback, so 0 skips that pass as an escape hatch. The same generic runner now owns scheduled heartbeat cadence, timeout, conditional argv, voice stamps, Omega eligibility, and armed-valve metadata from sensors.yaml. Keep the integration drain in place until the bounded scheduled canary is receipted."
+    note: "The continuous metabolize sensor loop is registry-derived and default-on after #935; the deleted hand-wired blocks are not a fallback, so 0 skips that pass as an escape hatch. The same generic runner now owns scheduled heartbeat cadence, timeout, conditional argv, voice stamps, Omega eligibility, and armed-valve metadata from sensors.yaml. The heartbeat's scheduled lane is live-wired too (heartbeat-loop.sh fallback 1, held equal to this default by test_derive_fallback_matches_panel_default): the post-#921 integration drain was released by the 2026-07-13 dry + live-parity canary receipts (PR #1013 body)."
+
+  LIMEN_SENSOR_CANARY:
+    default: "1"
+    env: LIMEN_SENSOR_CANARY
+    self_update: none
+    owner: tabularius
+    note: "Gate for the sensor-canary rung (sensors.yaml 0g5): derives 'merged but never observed live' from the voice stamps the scheduled runner writes (logs/.voice/<id>), so the canary ritual is mechanized instead of operator memory. NEVER-RAN / STALE on a live-lane (heartbeat-source) sensor exits 1 (advisory in the beat); a metabolize-only scheduled sensor is owner-routed, never red — a lever-parked organ must not read as a failure every beat. Set 0 to silence."
+
+  LIMEN_BEAT_SENSOR_CANARY:
+    default: 8
+    env: LIMEN_BEAT_SENSOR_CANARY
+    self_update: none
+    owner: tabularius
+    note: "Cadence (every N beats) of the sensor-canary rung in the heartbeat's scheduled derive lane — matches the gitvs precedent for a cheap audit pass. The generic scheduled runner resolves this override; heartbeat-loop.sh contains no sensor-specific cadence constant."
+
+  LIMEN_RECLASSIFY:
+    default: "1"
+    env: LIMEN_RECLASSIFY
+    self_update: none
+    owner: tabularius
+    note: "Gate for the needs_human-truth rung (sensors.yaml 0g6): scripts/reclassify-needs-human.py separates his real atoms from mislabeled fleet work on cadence. DRY by default — five visible buckets (KEEP/CHRONIC/FLIP/STALE/REVIEW) written to docs/RECLASSIFY-PROPOSAL.md, zero board writes. The flip/park effector is the separate safety valve LIMEN_RECLASSIFY_APPLY. Set 0 to silence."
+
+  LIMEN_BEAT_RECLASSIFY:
+    default: 12
+    env: LIMEN_BEAT_RECLASSIFY
+    self_update: none
+    owner: tabularius
+    note: "Cadence (every N beats) of the needs_human reclassify rung in the heartbeat's scheduled derive lane. The generic scheduled runner resolves this override; heartbeat-loop.sh contains no sensor-specific cadence constant."
+
+  LIMEN_RECLASSIFY_TIMEOUT:
+    default: 60
+    env: LIMEN_RECLASSIFY_TIMEOUT
+    self_update: none
+    owner: tabularius
+    note: "Per-pass wall-clock bound (seconds) for the needs_human reclassify rung — one board read plus a proposal-doc write; 60s is generous headroom."
+
+  LIMEN_RECLASSIFY_APPLY:
+    default: "0"
+    env: LIMEN_RECLASSIFY_APPLY
+    self_update: none
+    owner: tabularius
+    note: "Arms the needs_human reclassify effector: 0 (default) reports the buckets only; 1 flips FLIP tasks needs_human->open and parks CHRONIC tasks needs_human->failed_blocked each cadence (status-only + provenance labels, idempotent, reversible; KEEP/STALE/REVIEW never auto-touched). Ships DARK — armed by lever L-RECLASSIFY-APPLY."
 
   LIMEN_PROMPT_ATOM_CONTROL:
     default: "0"
@@ -2524,6 +2743,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "overnight-watch.py: lookback window in hours for its value-gate check on overnight sessions — the overnight sibling of LIMEN_VALUE_GATE_HOURS."
+  LIMEN_VALUE_DISCOVERY_DISPOSITIONS_FILE:
+    default: "$LIMEN_ROOT/value-discovery-dispositions.json"
+    env: LIMEN_VALUE_DISCOVERY_DISPOSITIONS_FILE
+    self_update: "updated only by merged discovery-ranking receipts"
+    owner: feed
+    note: "Tracked ranked/archival terminal decisions consumed by discover-value.py so board compaction cannot rediscover an already-assessed repository."
 
   # --- session-walk organ (full-horizon walk census, both vendors) --------------
   LIMEN_SESSION_WALK:

@@ -6,9 +6,148 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.jules_remote import JulesRemoteSession, JulesRemoteSnapshot  # noqa: E402
 from limen.models import Budget, BudgetTrack, DispatchLogEntry, LimenFile, Portal, Task  # noqa: E402
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "recover.py"
+SID = "12345678901234567890"
+
+
+def _load_recover(name: str):
+    spec = importlib.util.spec_from_file_location(name, SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _write_dispatched_claim(tasks_path: Path, *, target_agent: str = "jules") -> None:
+    now = dt.datetime.now(dt.timezone.utc)
+    save_limen_file(
+        tasks_path,
+        LimenFile(
+            portal=Portal(budget=Budget(daily=300, per_agent={}, track=BudgetTrack(date=str(now.date())))),
+            tasks=[
+                Task(
+                    id="STALE-CLAIM",
+                    title="stale claim",
+                    repo="organvm/example",
+                    target_agent=target_agent,
+                    status="dispatched",
+                    created=now.date(),
+                    dispatch_log=[
+                        DispatchLogEntry(
+                            timestamp=now,
+                            agent=target_agent,
+                            session_id=SID if target_agent == "jules" else "local-session",
+                            status="dispatched",
+                        )
+                    ],
+                )
+            ],
+        ),
+    )
+
+
+def _run_recover_with_snapshot(tasks_path: Path, monkeypatch, snapshot: JulesRemoteSnapshot):
+    module = _load_recover(f"recover_uut_{id(snapshot)}")
+    monkeypatch.setattr(module, "live_jules_sessions", lambda _session_ids=(): snapshot)
+    monkeypatch.setattr(sys, "argv", ["recover", "--tasks", str(tasks_path), "--apply"])
+    assert module.main() == 0
+    return load_limen_file(tasks_path).tasks[0]
+
+
+def test_recover_holds_non_exhaustive_catalog_miss(tmp_path, monkeypatch):
+    tasks_path = tmp_path / "tasks.yaml"
+    _write_dispatched_claim(tasks_path)
+    other_sid = "99999999999999999999"
+    snapshot = JulesRemoteSnapshot(
+        available=True,
+        sessions={other_sid: JulesRemoteSession(other_sid, "completed")},
+        exhaustive=False,
+    )
+
+    task = _run_recover_with_snapshot(tasks_path, monkeypatch, snapshot)
+
+    assert task.status == "dispatched"
+    assert task.target_agent == "jules"
+
+
+def test_recover_holds_present_unknown_and_completed_sessions(tmp_path, monkeypatch):
+    for status in ("unknown", "in_progress", "completed"):
+        tasks_path = tmp_path / status / "tasks.yaml"
+        tasks_path.parent.mkdir()
+        _write_dispatched_claim(tasks_path)
+        snapshot = JulesRemoteSnapshot(
+            available=True,
+            sessions={SID: JulesRemoteSession(SID, status)},
+            exhaustive=False,
+        )
+
+        task = _run_recover_with_snapshot(tasks_path, monkeypatch, snapshot)
+
+        assert task.status == "dispatched"
+        assert task.target_agent == "jules"
+
+
+def test_recover_reopens_only_confirmed_absent_session(tmp_path, monkeypatch):
+    tasks_path = tmp_path / "tasks.yaml"
+    _write_dispatched_claim(tasks_path)
+    snapshot = JulesRemoteSnapshot(available=True, sessions={}, exhaustive=True)
+
+    task = _run_recover_with_snapshot(tasks_path, monkeypatch, snapshot)
+
+    assert task.status == "open"
+    assert task.target_agent == "jules"
+    assert "orphaned" in task.dispatch_log[-1].output
+
+
+def test_recover_populates_session_specific_absence_for_catalog_miss(tmp_path, monkeypatch):
+    tasks_path = tmp_path / "tasks.yaml"
+    _write_dispatched_claim(tasks_path)
+    module = _load_recover("recover_session_absence_probe")
+    catalog = JulesRemoteSnapshot(available=True, sessions={}, exhaustive=False)
+    monkeypatch.setattr(module, "probe_jules_remote_sessions", lambda: catalog)
+
+    def enrich(snapshot, session_ids):
+        assert snapshot is catalog
+        assert tuple(session_ids) == (SID,)
+        return JulesRemoteSnapshot(
+            available=True,
+            sessions={},
+            exhaustive=False,
+            confirmed_absent=frozenset({SID}),
+            absence_probe_outcomes={SID: "confirmed_absent"},
+        )
+
+    monkeypatch.setattr(module, "probe_jules_remote_session_absences", enrich)
+    monkeypatch.setattr(sys, "argv", ["recover", "--tasks", str(tasks_path), "--apply"])
+
+    assert module.main() == 0
+    task = load_limen_file(tasks_path).tasks[0]
+    assert task.status == "open"
+    assert "orphaned" in task.dispatch_log[-1].output
+
+
+def test_recover_holds_when_jules_cli_is_unavailable(tmp_path, monkeypatch):
+    tasks_path = tmp_path / "tasks.yaml"
+    _write_dispatched_claim(tasks_path)
+    snapshot = JulesRemoteSnapshot(available=False, sessions={}, error="not installed")
+
+    task = _run_recover_with_snapshot(tasks_path, monkeypatch, snapshot)
+
+    assert task.status == "dispatched"
+    assert task.target_agent == "jules"
+
+
+def test_recover_does_not_apply_remote_logic_to_non_jules_claim(tmp_path, monkeypatch):
+    tasks_path = tmp_path / "tasks.yaml"
+    _write_dispatched_claim(tasks_path, target_agent="codex")
+    snapshot = JulesRemoteSnapshot(available=True, sessions={}, exhaustive=True)
+
+    task = _run_recover_with_snapshot(tasks_path, monkeypatch, snapshot)
+
+    assert task.status == "dispatched"
+    assert task.target_agent == "codex"
 
 
 def test_recover_reopens_failed_jules_remote_session(tmp_path, monkeypatch):
@@ -40,7 +179,11 @@ def test_recover_reopens_failed_jules_remote_session(tmp_path, monkeypatch):
     spec = importlib.util.spec_from_file_location("recover_uut", SCRIPT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    monkeypatch.setattr(module, "live_jules_sessions", lambda: {"16647959386662614769": "failed"})
+    monkeypatch.setattr(
+        module,
+        "live_jules_sessions",
+        lambda _session_ids=(): {"16647959386662614769": "failed"},
+    )
     monkeypatch.setattr(sys, "argv", ["recover", "--tasks", str(tasks_path), "--apply"])
 
     assert module.main() == 0
@@ -79,7 +222,11 @@ def test_recover_reopens_jules_session_awaiting_feedback(tmp_path, monkeypatch):
     spec = importlib.util.spec_from_file_location("recover_uut_feedback", SCRIPT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    monkeypatch.setattr(module, "live_jules_sessions", lambda: {"15175913208909090857": "awaiting_user_feedback"})
+    monkeypatch.setattr(
+        module,
+        "live_jules_sessions",
+        lambda _session_ids=(): {"15175913208909090857": "awaiting_user_feedback"},
+    )
     monkeypatch.setattr(sys, "argv", ["recover", "--tasks", str(tasks_path), "--apply"])
 
     assert module.main() == 0
@@ -118,7 +265,11 @@ def test_recover_reopens_jules_session_awaiting_plan_approval(tmp_path, monkeypa
     spec = importlib.util.spec_from_file_location("recover_uut_plan_approval", SCRIPT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    monkeypatch.setattr(module, "live_jules_sessions", lambda: {"10569058041124478902": "awaiting_plan_approval"})
+    monkeypatch.setattr(
+        module,
+        "live_jules_sessions",
+        lambda _session_ids=(): {"10569058041124478902": "awaiting_plan_approval"},
+    )
     monkeypatch.setattr(sys, "argv", ["recover", "--tasks", str(tasks_path), "--apply"])
 
     assert module.main() == 0
@@ -176,7 +327,7 @@ def test_recover_task_id_limits_remote_reopen(tmp_path, monkeypatch):
     monkeypatch.setattr(
         module,
         "live_jules_sessions",
-        lambda: {
+        lambda _session_ids=(): {
             "10569058041124478902": "awaiting_plan_approval",
             "14435689243703333273": "awaiting_plan_approval",
         },
@@ -315,9 +466,9 @@ def test_recover_escalates_repeated_noop_failures(tmp_path, monkeypatch):
 
     assert module.main() == 0
     task = load_limen_file(tasks_path).tasks[0]
-    assert task.status == "needs_human"
+    assert task.status == "failed_blocked"  # fleet debt (repeated no-op), off the human surface
     assert task.target_agent == "codex"
-    assert task.labels == ["noop", "tried:codex"]
-    assert task.dispatch_log[-1].status == "needs_human"
+    assert task.labels == ["noop", "tried:codex", "chronic-fleet-debt"]
+    assert task.dispatch_log[-1].status == "failed_blocked"
     assert "repeated no-op failures (2)" in task.dispatch_log[-1].output
-    assert "stop fresh cascade" in task.dispatch_log[-1].output
+    assert "failed_blocked" in task.dispatch_log[-1].output

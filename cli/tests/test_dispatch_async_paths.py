@@ -26,14 +26,18 @@ def test_async_run_paths_preserve_slash_task_ids(monkeypatch, tmp_path):
 
     task_id = "TASK-LED-rev-organvm/the-invisibl"
     agent = "opencode"
+    reservation_id = f"async-reserve:{'a' * 32}"
 
     assert "/" not in dispatch_async._run_stem(task_id)
     assert dispatch_async._run_stem(task_id) == worker._run_stem(task_id)
     assert dispatch_async._run_log_path(task_id).parent == tmp_path / "logs" / "async-runs"
-    assert worker._result_path(task_id).parent == tmp_path / "logs" / "async-runs"
+    assert worker._result_path(task_id, reservation_id) == dispatch_async._result_path(task_id, reservation_id)
+    assert worker._running_marker_path(task_id, agent, reservation_id) == dispatch_async._running_marker_path(
+        task_id, agent, reservation_id
+    )
 
     dispatch_async.RUNS.mkdir(parents=True)
-    marker = dispatch_async._running_marker_path(task_id, agent)
+    marker = dispatch_async._running_marker_path(task_id, agent, reservation_id)
     marker.write_text(
         json.dumps(
             {
@@ -41,17 +45,20 @@ def test_async_run_paths_preserve_slash_task_ids(monkeypatch, tmp_path):
                 "agent": agent,
                 "task_id": task_id,
                 "pid": 999999,
+                "reservation_id": reservation_id,
             }
         )
     )
-    dispatch_async._result_path(task_id).write_text(json.dumps({"task_id": task_id, "agent": agent, "result": True}))
+    dispatch_async._result_path(task_id, reservation_id).write_text(
+        json.dumps({"task_id": task_id, "agent": agent, "result": True, "reservation_id": reservation_id})
+    )
 
     assert dispatch_async._running_task_ids() == {task_id}
     assert dispatch_async._result_task_ids() == {task_id}
     assert dispatch_async._running_for(agent) == 1
     assert dispatch_async._running_local() == 1
 
-    dispatch_async._clear_running_markers(task_id)
+    dispatch_async._clear_running_markers(task_id, reservation_id)
     assert not marker.exists()
 
 
@@ -67,6 +74,8 @@ def _task(task_id: str, agent: str) -> Task:
 
 def test_async_reservation_uses_live_usage_not_stale_board_caps(monkeypatch, tmp_path):
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    # This test owns provider usage arithmetic; dedicated admission tests own host-custody probes.
+    monkeypatch.setenv("LIMEN_WORKTREE_DEBT_GATE", "0")
     dispatch_async = _load_script("dispatch_async_usage_math_test", "scripts/dispatch-async.py")
     dispatch_async.RUNS.mkdir(parents=True)
 
