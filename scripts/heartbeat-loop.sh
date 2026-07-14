@@ -28,11 +28,23 @@ export LIMEN_ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
 # Pin the daemon to its OWN python — a STABLE binary path (created with `venv --copies`) so a single
 # one-time macOS Full Disk Access grant on that ONE binary survives Homebrew python upgrades and lets the
 # usage organ read vendor app-data (~/.codex, ~/.claude, ~/.gemini) WITHOUT the recurring TCC consent
-# prompt. Structural, not best-effort: prepend the venv AND verify python3 resolves inside it. If the venv
-# is missing we fall back to system python but LOG it loudly — so the daemon never silently runs an
-# ungranted interpreter that re-triggers the prompt, and never dead-stops. ([[no-never-happens-again]])
+# prompt. Structural, not best-effort: prepend the venv AND verify python3 resolves inside it.
+# If the venv is missing or unhealthy, SELF-HEAL first (573 WARNs 2026-07-09→07-14 while the
+# prescribed remedy sat unrun — a sensor without an effector); only if the bootstrap fails do we
+# fall back to system python, LOGGED loudly, so the daemon never silently runs an ungranted
+# interpreter and never dead-stops. ([[no-never-happens-again]])
 LIMEN_VENV_PY="$LIMEN_ROOT/.venv/bin/python3"
-if [ -x "$LIMEN_VENV_PY" ]; then
+# Healthy = the pinned binary imports the limen package. A bare -x check passes a partial
+# bootstrap (venv created, pip failed) while every `python3 -m limen` beat step dies.
+venv_ok() { [ -x "$LIMEN_VENV_PY" ] && "$LIMEN_VENV_PY" -c "import limen, yaml" >/dev/null 2>&1; }
+if ! venv_ok; then
+  echo "$(date '+%F %T') INFO: pinned interpreter missing/unhealthy — bootstrapping $LIMEN_ROOT/.venv" \
+       >> "$LIMEN_ROOT/logs/heartbeat.out.log" 2>/dev/null || true
+  python3 -m venv --copies "$LIMEN_ROOT/.venv" >> "$LIMEN_ROOT/logs/heartbeat.out.log" 2>&1 || true
+  "$LIMEN_ROOT/.venv/bin/pip" install --quiet --editable "$LIMEN_ROOT/cli" pyyaml \
+       >> "$LIMEN_ROOT/logs/heartbeat.out.log" 2>&1 || true
+fi
+if venv_ok; then
   export PATH="$LIMEN_ROOT/.venv/bin:$PATH"; hash -r 2>/dev/null || true
   export LIMEN_PY="$LIMEN_VENV_PY"
 else
@@ -145,6 +157,17 @@ if [ "$LOCAL_LIMIT" -gt 3 ] && [ "${LIMEN_ALLOW_HIGH_LOCAL_LIMIT:-0}" != "1" ]; 
   echo "  local limit capped: requested $LOCAL_LIMIT -> 3 (set LIMEN_ALLOW_HIGH_LOCAL_LIMIT=1 to override)"
   LOCAL_LIMIT=3
 fi
+
+# Local TOTAL concurrency derives from the live host. The per-lane bound above prevents one lane
+# from monopolizing it, VITALS applies memory backpressure, and remote lanes consume neither value.
+_host_local_ceiling="$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 1)"
+case "$_host_local_ceiling" in
+  ''|*[!0-9]*|0) _host_local_ceiling=1 ;;
+esac
+HOST_LOCAL_CEILING="${LIMEN_ASYNC_MAX:-$_host_local_ceiling}"
+case "$HOST_LOCAL_CEILING" in
+  ''|*[!0-9]*|0) HOST_LOCAL_CEILING="$_host_local_ceiling" ;;
+esac
 
 # base tempo (adaptive) + voice subdivisions (configurable)
 MIN="${LIMEN_LOOP_MIN:-120}"; MAX="${LIMEN_LOOP_MAX:-1800}"; beat="$MIN"
@@ -289,12 +312,12 @@ while true; do
   # VITALS GATE (VIGILIA build #1) — memory pressure is a NORMAL condition, not a crash.
   # The autonomic CFO, graduated: at >= warn dispatch CONTINUES at a reduced cap (a 16 GB host
   # lives at warn under normal load — a full idle beat here starved the fleet for a night,
-  # 2026-07-08: 273 skipped beats with budget unused); only >= critical idles the beat and
-  # sheds ollama. Fail-OPEN: any fault → 'ok' → the beat proceeds.
+  # 2026-07-08: 273 skipped beats with budget unused). At critical, local admission sheds while
+  # off-box lanes continue; VITALS also sheds ollama. Fail-OPEN: any sensor fault → 'ok'.
   if [ "${LIMEN_VIGILIA:-1}" = "1" ]; then
     _vitals="$(python3 -m limen.vigilia vitals-gate 2>/dev/null || echo ok)"
     if [ "$_vitals" = "shed" ]; then
-      echo "  vitals: memory pressure ≥ critical — skip dispatch-heavy work; light organs still fire"
+      echo "  vitals: memory pressure ≥ critical — shed local work; off-box lanes remain eligible"
       VITALS_PRESSURE=1
     elif [ "$_vitals" = "throttle" ]; then
       echo "  vitals: memory pressure ≥ warn — dispatch throttled (cap ÷ ${LIMEN_VITALS_THROTTLE_DIVISOR:-2})"
@@ -304,7 +327,7 @@ while true; do
   EFFECTIVE_LANES="$LANES"
   EFFECTIVE_DISPATCH_LANES="$DISPATCH_LANES"
   if [ "$VITALS_PRESSURE" = "1" ]; then
-    echo "── vitals-pressure: dispatch will be skipped after maintenance ──"
+    echo "── vitals-pressure: local admission shed; remote dispatch remains live ──"
   fi
     # SUBSTRATE SELF-HEAL — re-converge this checkout to the release (origin/main) before doing
     # work, so the beat always runs the latest code (push = deploy). ff-only, data-preserving,
@@ -344,6 +367,9 @@ while true; do
 
     if [ "$MODE" != "dispatch" ]; then
       echo "autonomy mode=$MODE — telemetry/status only; queue mutation and dispatch skipped"
+      # HANDOFF — even an observe-only beat refreshes the warm-resume packet.  The heartbeat does
+      # not invoke metabolize.sh, so this direct seam is required to keep continuity truthful.
+      python3 "$LIMEN_ROOT/scripts/handoff-relay.py" 2>&1 | tail -1 || true
       python3 "$LIMEN_ROOT/scripts/emit-tick.py" 2>&1 | tail -1 || true
       play "$C_WEB" && bash "$LIMEN_ROOT/scripts/refresh-web.sh" >>"$LIMEN_ROOT/logs/refresh-web.log" 2>&1 || true  # NO pipe: refresh-web backgrounds the http.server, which can inherit a pipe's write-end and block `tail` on EOF forever → wedged the whole daemon before the first beat (2026-06-23). Redirect to a log instead.
       beat="$MAX"
@@ -411,37 +437,53 @@ while true; do
         PYTHONPATH="$PYTHONPATH" timeout "${LIMEN_RECLAIM_TIMEOUT:-300}" python3 "$LIMEN_ROOT/scripts/reclaim-worktrees.py" "${reclaim_args[@]}" 2>&1 | tail -4 || true
       fi
 
+      # LIFECYCLE PRESSURE — refresh the counts-only worktree-debt cache on the existing drain
+      # cadence, after any accepted reclaim. The generator's own throttle avoids repeating the
+      # estate-wide git census on fast beats; the outer timeout bounds this non-hot-path producer.
+      # always-working.py derives freshness from this exact cadence + throttle + timeout, so a
+      # zero-debt receipt remains green until the next scheduled refresh while stale/missing state
+      # fails closed. This never runs in the per-candidate dispatch path.
+      if [ "${DRAIN_VOICE_DUE:-0}" = "1" ]; then
+        timeout "${LIMEN_RECLAIM_TIMEOUT:-300}" \
+          python3 "$LIMEN_ROOT/scripts/session-lifecycle-pressure.py" --write \
+            --throttle "${LIMEN_LIFECYCLE_PRESSURE_THROTTLE:-1800}" 2>&1 | tail -2 || true
+      fi
+
       # BUILD — dispatch every beat. Default = SYNC parallel (reserve→run→commit, beat waits for the
       # slowest agent). Opt in to ASYNC (LIMEN_DISPATCH_ASYNC=1): fire detached workers + harvest
       # finished runs → fast beats, a slow agent never gates the beat (the throughput 10x). Async is
       # OFF by default; flip the env + restart between beats to enable. See dispatch-async.py.
-      if [ "$VITALS_PRESSURE" = "1" ]; then
-        echo "── vitals-pressure: dispatch skipped; merge/heal/status organs already ran ──"
-      else
-        _dt0=$SECONDS
-        _async_max="${LIMEN_ASYNC_MAX:-12}"
-        if [ "$VITALS_THROTTLE" = "1" ]; then
-          _async_max=$(( _async_max / ${LIMEN_VITALS_THROTTLE_DIVISOR:-2} ))
-          [ "$_async_max" -lt 1 ] && _async_max=1
-        fi
-        if [ "${LIMEN_DISPATCH_ASYNC:-0}" = "1" ]; then
-          out="$(dispatch_bounded python3 "$LIMEN_ROOT/scripts/dispatch-async.py" --lanes "$DISPATCH_LANES" \
-                  --per-lane "$LOCAL_LIMIT" --max "$_async_max" 2>&1)"; _drc=$?
-        else
-          out="$(dispatch_bounded python3 "$LIMEN_ROOT/scripts/dispatch-parallel.py" --lanes "$DISPATCH_LANES" \
-                  --per-lane "$LOCAL_LIMIT" --workers "${LIMEN_WORKERS:-8}" 2>&1)"; _drc=$?
-        fi
-        # timeout(1) exits 124 (TERM) or 128+9=137 (our -s KILL) when the ceiling fires → a lane run
-        # blew past its per-lane bound and dispatch.py's Python timeout failed to kill it. SURFACE it
-        # loudly so the regression is visible in the beat log (and to the watchdog) instead of a silent
-        # ~90min dark window; the beat is already UNBLOCKED (dispatch was SIGKILLed). ([[no-never-happens-again]])
-        if [ "$_drc" = 137 ] || [ "$_drc" = 124 ]; then
-          echo "── ⚠ DISPATCH CEILING HIT after ${LIMEN_DISPATCH_CEILING}s (beat dispatch took $((SECONDS-_dt0))s) — a lane run exceeded its bound and was SIGKILLed; beat unblocked. Per-lane timeout failed to fire → investigate dispatch.py _run_capture. ──"
-        fi
-        echo "$out" | tail -8
-        echo "$out" | grep -qE "→ PR|dispatched/PR|  dispatched:|launched [1-9][0-9]*" && worked=1
-        stamp dispatch
+      _dt0=$SECONDS
+      _async_max="$HOST_LOCAL_CEILING"
+      _sync_workers="${LIMEN_WORKERS:-$HOST_LOCAL_CEILING}"
+      case "$_sync_workers" in
+        ''|*[!0-9]*|0) _sync_workers="$HOST_LOCAL_CEILING" ;;
+      esac
+      if [ "$VITALS_THROTTLE" = "1" ]; then
+        _async_max=$(( _async_max / ${LIMEN_VITALS_THROTTLE_DIVISOR:-2} ))
+        _sync_workers=$(( _sync_workers / ${LIMEN_VITALS_THROTTLE_DIVISOR:-2} ))
+        [ "$_async_max" -lt 1 ] && _async_max=1
+        [ "$_sync_workers" -lt 1 ] && _sync_workers=1
       fi
+      # At critical pressure the Python admission snapshot blocks every census-local candidate;
+      # the dispatcher still runs so Jules/GitHub Actions/other off-box lanes keep producing.
+      if [ "${LIMEN_DISPATCH_ASYNC:-0}" = "1" ]; then
+        out="$(dispatch_bounded python3 "$LIMEN_ROOT/scripts/dispatch-async.py" --lanes "$DISPATCH_LANES" \
+                --per-lane "$LOCAL_LIMIT" --max "$_async_max" 2>&1)"; _drc=$?
+      else
+        out="$(dispatch_bounded python3 "$LIMEN_ROOT/scripts/dispatch-parallel.py" --lanes "$DISPATCH_LANES" \
+                --per-lane "$LOCAL_LIMIT" --workers "$_sync_workers" 2>&1)"; _drc=$?
+      fi
+      # timeout(1) exits 124 (TERM) or 128+9=137 (our -s KILL) when the ceiling fires → a lane run
+      # blew past its per-lane bound and dispatch.py's Python timeout failed to kill it. SURFACE it
+      # loudly so the regression is visible in the beat log (and to the watchdog) instead of a silent
+      # ~90min dark window; the beat is already UNBLOCKED (dispatch was SIGKILLed). ([[no-never-happens-again]])
+      if [ "$_drc" = 137 ] || [ "$_drc" = 124 ]; then
+        echo "── ⚠ DISPATCH CEILING HIT after ${LIMEN_DISPATCH_CEILING}s (beat dispatch took $((SECONDS-_dt0))s) — a lane run exceeded its bound and was SIGKILLed; beat unblocked. Per-lane timeout failed to fire → investigate dispatch.py _run_capture. ──"
+      fi
+      echo "$out" | tail -8
+      echo "$out" | grep -qE "→ PR|dispatched/PR|  dispatched:|launched [1-9][0-9]*" && worked=1
+      stamp dispatch
     else
       echo "── queue lock held by a supervisor — skipping mutation this beat ──"
     fi
@@ -468,9 +510,12 @@ while true; do
   due_voice heal "$C_HEAL"    && stamp heal
   # Scheduled registry sensors — cadence, timeout, conditional argv, voice id, and gate all come
   # from sensors.yaml. The runner knows no sensor names, so a rename or a newly-declared scheduled
-  # sensor needs no shell edit. Dark-first: this path stays behind the existing derive flag until
-  # dry canaries and one explicitly feature-flagged live beat prove parity.
-  if [ "${LIMEN_BEAT_DERIVE:-0}" = "1" ]; then
+  # sensor needs no shell edit. Default-ON: the fallback matches the parameter-panel default and
+  # metabolize.sh (the :-0/:-1/"1" three-way drift kept this lane dark — github-estate-reconcile and
+  # the 0g4 liveness rung never executed live). Released by the 2026-07-13 canary receipts (dry +
+  # one live-parity pass; PR #1013 body). Loop-body edit:
+  # takes effect only after `launchctl kickstart -k gui/$(id -u)/com.limen.heartbeat`.
+  if [ "${LIMEN_BEAT_DERIVE:-1}" = "1" ]; then
     python3 "$LIMEN_ROOT/scripts/beat-sensors.py" --run --source heartbeat --scheduled-only \
       --beat "$c" --loop-max "$MAX" --voice-dir "$VOICED" || true
   fi
@@ -577,7 +622,7 @@ while true; do
   # (--apply) stays a human lever until he classifies what's safe to purge. Lockless, fail-open —
   # never gates the beat. Gate off with LIMEN_CVSTOS=0.
   due_voice cvstos "$C_CVSTOS" && [ "${LIMEN_CVSTOS:-1}" = "1" ] && \
-    { python3 "$LIMEN_ROOT/scripts/cvstos-organ.py" 2>&1 | tail -1 || true; stamp cvstos; }
+    { timeout "${LIMEN_RECLAIM_TIMEOUT:-300}" python3 "$LIMEN_ROOT/scripts/cvstos-organ.py" 2>&1 | tail -1 || true; stamp cvstos; }
   # VVLTVS — the countenance (sibling of CVSTOS: CVSTOS faces the machine, VVLTVS faces the world).
   # Every C_VVLTVS beats: verify the public face reflects the live SSOT — the profile bio + portfolio
   # copies vs organvm-corpvs-testamentvm/system-metrics.json — and surface the contribution-mix radar
@@ -685,6 +730,9 @@ while true; do
     python3 "$LIMEN_ROOT/scripts/evocator.py" --apply 2>&1 | tail -2 || true
     stamp evocator
   fi
+  # HANDOFF — final read after this beat's board, usage, reconciliation, and provider mutations.
+  # metabolize.sh has its own caller, but the live heartbeat never invokes metabolize.
+  python3 "$LIMEN_ROOT/scripts/handoff-relay.py" 2>&1 | tail -1 || true
   # adaptive tempo: tighten to MIN whenever work is flowing OR the OPEN QUEUE is non-empty (so a
   # beat that produced no PR this cycle — all no-op / still-running — doesn't back off to 30min
   # while tasks wait); exponential backoff to MAX only when genuinely idle (empty queue, no PR).

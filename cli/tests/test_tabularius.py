@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 import subprocess
 
+import limen.tabularius as tabularius
+import pytest
 from limen.io import load_limen_file, queue_lock, save_limen_file
 from limen.models import LimenFile, Task
 from limen.tabularius import (
@@ -33,13 +35,22 @@ from limen.tabularius import (
     pending_count,
     preserve_board_projection,
     submit_ticket,
+    task_state_sha256,
 )
 
 _NOW = datetime(2026, 7, 2, 12, 0, 0, tzinfo=timezone.utc)
 
 
 def _task(tid: str, **over) -> dict:
-    base = {"id": tid, "title": f"task {tid}", "target_agent": "jules", "created": "2026-07-01"}
+    base = {
+        "id": tid,
+        "title": f"task {tid}",
+        "repo": "organvm/limen",
+        "target_agent": "jules",
+        "created": "2026-07-01",
+        "predicate": f"pytest -q -k {tid}",
+        "receipt_target": f"github:organvm/limen:pull-request:{tid}",
+    }
     base.update(over)
     return base
 
@@ -79,6 +90,7 @@ def _ticket(intent: str, task_id: str | None = None, ts: datetime = _NOW, **over
         task_id=task_id,
         patch=over.pop("patch", None),
         log=over.pop("log", None),
+        precondition=over.pop("precondition", None),
     )
 
 
@@ -196,6 +208,70 @@ def test_tickets_apply_in_timestamp_order(tmp_path):
     assert t1.status == "done"  # latest ticket wins the final status
 
 
+def test_exact_task_precondition_rejects_archive_after_concurrent_claim(tmp_path):
+    board = _seed_board(tmp_path)
+    original = {task.id: task for task in load_limen_file(board).tasks}["T-1"]
+    original_state = original.model_dump(mode="json", exclude_none=True)
+    claim = _ticket(
+        INTENT_STATUS,
+        task_id="T-1",
+        ts=datetime(2026, 7, 2, 12, 0, tzinfo=timezone.utc),
+        log={"status": "dispatched", "output": "concurrent claim"},
+    )
+    archive = _ticket(
+        INTENT_UPSERT,
+        task_id="T-1",
+        ts=datetime(2026, 7, 2, 12, 1, tzinfo=timezone.utc),
+        patch={"status": "archived"},
+        log={"status": "archived", "output": "stale migration"},
+        precondition={"status": "open", "task_sha256": task_state_sha256(original_state)},
+    )
+    submit_ticket(board, claim)
+    submit_ticket(board, archive)
+
+    result = drain_once(board)
+
+    assert (result.applied, result.rejected) == (1, 1)
+    current = {task.id: task for task in load_limen_file(board).tasks}["T-1"]
+    assert current.status == "dispatched"
+    reason = (_rejected(board) / f"{archive.ticket_id}.json.reason.txt").read_text()
+    assert "invalidated regardless of timestamp order" in reason
+
+
+@pytest.mark.parametrize("claim_status", ["dispatched", "in_progress"])
+def test_batch_admission_rejects_archive_before_later_active_claim(tmp_path, claim_status):
+    board = _seed_board(tmp_path)
+    original = {task.id: task for task in load_limen_file(board).tasks}["T-1"]
+    original_state = original.model_dump(mode="json", exclude_none=True)
+    archive = _ticket(
+        INTENT_UPSERT,
+        task_id="T-1",
+        ts=datetime(2026, 7, 2, 12, 0, tzinfo=timezone.utc),
+        patch={"status": "archived"},
+        log={"status": "archived", "output": "migration archive"},
+        precondition={"status": "open", "task_sha256": task_state_sha256(original_state)},
+    )
+    later_claim = _ticket(
+        INTENT_STATUS,
+        task_id="T-1",
+        ts=datetime(2026, 7, 2, 12, 1, tzinfo=timezone.utc),
+        log={"status": claim_status, "output": "later concurrent claim"},
+    )
+    submit_ticket(board, archive)
+    submit_ticket(board, later_claim)
+
+    preview = drain_once(board, dry_run=True)
+    assert (preview.applied, preview.rejected, preview.pending) == (1, 1, 2)
+    result = drain_once(board)
+
+    assert (result.applied, result.rejected) == (1, 1)
+    current = {task.id: task for task in load_limen_file(board).tasks}["T-1"]
+    assert current.status == claim_status
+    assert [entry.status for entry in current.dispatch_log] == [claim_status]
+    reason = (_rejected(board) / f"{archive.ticket_id}.json.reason.txt").read_text()
+    assert "invalidated regardless of timestamp order" in reason
+
+
 # --- one bad ticket never breaks the batch or the board -----------------------------------------
 def test_bad_ticket_quarantined_good_ticket_survives(tmp_path):
     board = _seed_board(tmp_path)
@@ -213,6 +289,51 @@ def test_bad_ticket_quarantined_good_ticket_survives(tmp_path):
     # the bad ticket landed in rejected/ with a reason sidecar, board still valid
     assert (_rejected(board) / f"{bad.ticket_id}.json").exists()
     assert (_rejected(board) / f"{bad.ticket_id}.json.reason.txt").exists()
+
+
+def test_bypassed_untyped_new_ticket_is_quarantined_without_blocking_typed_sibling(tmp_path):
+    board = _seed_board(tmp_path)
+    good = _ticket(INTENT_UPSERT, task_id="T-typed", patch=_task("T-typed", status="open"))
+    bad_patch = _task("T-untyped", status="open")
+    bad_patch.pop("predicate")
+    bad_patch.pop("receipt_target")
+    bad = _ticket(INTENT_UPSERT, task_id="T-untyped", patch=bad_patch)
+    submit_ticket(board, bad)
+    submit_ticket(board, good)
+
+    result = drain_once(board)
+
+    assert result.applied == 1 and result.rejected == 1
+    assert "T-typed" in {task.id for task in load_limen_file(board).tasks}
+    assert "T-untyped" not in {task.id for task in load_limen_file(board).tasks}
+    reason = (_rejected(board) / f"{bad.ticket_id}.json.reason.txt").read_text()
+    assert "predicate must be one executable command" in reason
+
+
+def test_bypassed_legacy_active_transition_is_quarantined_without_blocking_sibling(tmp_path):
+    board = _seed_board(tmp_path)
+    current = load_limen_file(board)
+    legacy = next(task for task in current.tasks if task.id == "T-0")
+    legacy.status = "needs_human"
+    legacy.predicate = None
+    legacy.receipt_target = None
+    save_limen_file(board, current)
+
+    bad = _ticket(INTENT_STATUS, task_id="T-0", log={"status": "dispatched"})
+    good = _ticket(INTENT_STATUS, task_id="T-1", log={"status": "done"})
+    submit_ticket(board, bad)
+    submit_ticket(board, good)
+
+    result = drain_once(board)
+
+    assert result.applied == 1 and result.rejected == 1
+    tasks = {task.id: task for task in load_limen_file(board).tasks}
+    assert tasks["T-0"].status == "needs_human"
+    assert tasks["T-1"].status == "done"
+    assert (
+        "predicate must be one executable command"
+        in (_rejected(board) / f"{bad.ticket_id}.json.reason.txt").read_text()
+    )
 
 
 def test_bad_meta_ticket_quarantined_good_ticket_survives(tmp_path):
@@ -256,20 +377,31 @@ def test_unparseable_ticket_is_quarantined(tmp_path):
 
 
 # --- never dead-stop: a held lock defers, and the collapse-guard fences a bad batch --------------
-def test_held_lock_defers_without_touching_board(tmp_path):
+def test_held_lock_defers_without_touching_board(tmp_path, monkeypatch):
     board = _seed_board(tmp_path)
     submit_ticket(board, _ticket(INTENT_UPSERT, task_id="T-x", patch=_task("T-x", status="open")))
     before = board.read_text()
+    real_parse = tabularius._parse_pending
+    parse_calls = 0
+
+    def counted_parse(inbox):
+        nonlocal parse_calls
+        parse_calls += 1
+        return real_parse(inbox)
+
+    monkeypatch.setattr(tabularius, "_parse_pending", counted_parse)
     # simulate a legacy writer holding the queue lock
     with queue_lock(board) as locked:
         assert locked
         result = drain_once(board, lock_timeout=1)
     assert result.deferred is True and result.wrote is False
+    assert parse_calls == 0  # publisher's locked phase was never observed as a prefix
     assert board.read_text() == before  # board untouched
     assert pending_count(board) == 1  # ticket still waiting
 
     # once the lock is free, the same ticket lands
     assert drain_once(board).applied == 1
+    assert parse_calls == 1
     assert "T-x" in {t.id for t in load_limen_file(board).tasks}
 
 
@@ -345,4 +477,9 @@ def test_submit_task_upsert_validates_before_emitting(tmp_path):
     # a dict missing the required `id` — must raise at submit, not land a ticket
     with pytest.raises((ValueError, Exception)):
         submit_task_upsert(board, {"title": "no id"}, agent="gen")
+    untyped = _task("NEW-UNTYPED", status="open")
+    untyped.pop("predicate")
+    untyped.pop("receipt_target")
+    with pytest.raises(ValueError, match="predicate"):
+        submit_task_upsert(board, untyped, agent="gen")
     assert pending_count(board) == 0  # nothing entered the inbox

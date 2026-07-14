@@ -88,7 +88,7 @@ def test_release_stale_reopens_tasks_only_when_not_dry_run(client: TestClient, t
                 "id": "LIMEN-002",
                 "title": "Stale active task",
                 "repo": "4444J99/limen",
-                "target_agent": "jules",
+                "target_agent": "codex",
                 "priority": "high",
                 "budget_cost": 1,
                 "status": "dispatched",
@@ -117,6 +117,45 @@ def test_release_stale_reopens_tasks_only_when_not_dry_run(client: TestClient, t
     task = read_board(tmp_path)["tasks"][0]
     assert task["status"] == "open"
     assert task["dispatch_log"][-1]["session_id"] == "release-stale"
+
+
+def test_release_stale_api_holds_jules_when_remote_probe_is_unavailable(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    write_board(
+        tmp_path / "tasks.yaml",
+        [
+            {
+                "id": "JULES-STALE",
+                "title": "Remote claim",
+                "repo": "organvm/limen",
+                "target_agent": "jules",
+                "priority": "high",
+                "budget_cost": 1,
+                "status": "dispatched",
+                "created": "2026-06-01",
+                "dispatch_log": [
+                    {
+                        "timestamp": "2026-06-01T00:00:00+00:00",
+                        "agent": "jules",
+                        "session_id": "12345678901234567890",
+                        "status": "dispatched",
+                    }
+                ],
+            }
+        ],
+    )
+
+    response = client.post("/api/release-stale?hours=24&dry_run=false")
+
+    assert response.status_code == 200
+    assert response.json()["count"] == 0
+    assert response.json()["candidate_count"] == 1
+    assert response.json()["held"] == ["JULES-STALE"]
+    assert response.json()["released"] == []
+    assert response.json()["remote_probe"]["status"] == "unavailable"
+    assert read_board(tmp_path)["tasks"][0]["status"] == "dispatched"
 
 
 def test_live_dispatch_mutates_after_command_success(
@@ -160,6 +199,52 @@ def test_live_dispatch_mutates_after_command_success(
     assert board["portal"]["budget"]["track"]["per_agent"]["codex"] == 2
 
 
+def test_live_dispatch_does_not_normalize_over_budget_unselected_sibling(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dispatch_bin = tmp_path / "agent-dispatch"
+    dispatch_bin.write_text("#!/bin/sh\nprintf 'ok\\n'\n")
+    dispatch_bin.chmod(dispatch_bin.stat().st_mode | stat.S_IXUSR)
+    monkeypatch.setenv("LIMEN_DISPATCH_CMD", str(dispatch_bin))
+    write_board(
+        tmp_path / "tasks.yaml",
+        [
+            {
+                "id": "OVER-BUDGET",
+                "title": "Do not mutate this legacy sibling",
+                "repo": "4444J99/limen",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 11,
+                "status": "open",
+                "created": "2026-06-03",
+            },
+            {
+                "id": "AFFORDABLE",
+                "title": "Dispatch this task",
+                "repo": "4444J99/limen",
+                "target_agent": "codex",
+                "priority": "high",
+                "budget_cost": 1,
+                "status": "open",
+                "predicate": "pytest -q web/api/tests/test_main.py",
+                "receipt_target": "github:4444J99/limen:pull-request:AFFORDABLE",
+                "created": "2026-06-03",
+            },
+        ],
+    )
+
+    response = client.post("/api/dispatch", json={"agent": "codex", "limit": 1, "live": True})
+
+    assert response.status_code == 200
+    tasks = {task["id"]: task for task in read_board(tmp_path)["tasks"]}
+    assert tasks["AFFORDABLE"]["status"] == "dispatched"
+    assert "predicate" not in tasks["OVER-BUDGET"]
+    assert "receipt_target" not in tasks["OVER-BUDGET"]
+
+
 def test_github_storage_create_task_uses_contents_sha(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[str, str, dict | None]] = []
     board = yaml.safe_dump(
@@ -198,6 +283,8 @@ def test_github_storage_create_task_uses_contents_sha(monkeypatch: pytest.Monkey
             "title": "GitHub backed task",
             "repo": "4444J99/limen",
             "target_agent": "jules",
+            "predicate": "pytest -q web/api/tests/test_main.py",
+            "receipt_target": "github:4444J99/limen:pull-request:LIMEN-004",
         },
     )
 
@@ -537,6 +624,8 @@ def test_assign_task_updates_steering_fields_and_logs(client: TestClient, tmp_pa
             "priority": "high",
             "budget_cost": 2,
             "status": "open",
+            "predicate": "pytest -q web/api/tests/test_main.py",
+            "receipt_target": "github:4444J99/limen:pull-request:LIMEN-011",
             "note": "Route through Jules after QA steering",
             "session_id": "qa-panel",
         },
@@ -606,7 +695,11 @@ def test_assign_task_respects_token(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     response = client.post(
         "/api/tasks/LIMEN-012/assign",
         headers={"Authorization": "Bearer secret"},
-        json={"target_agent": "jules"},
+        json={
+            "target_agent": "jules",
+            "predicate": "pytest -q web/api/tests/test_main.py",
+            "receipt_target": "github:4444J99/limen:pull-request:LIMEN-012",
+        },
     )
     assert response.status_code == 200
 
@@ -911,6 +1004,62 @@ def test_create_task_rejects_malformed_untrusted_fields(client: TestClient, tmp_
         },
     )
     assert bad_budget.status_code == 422
+
+
+def test_create_and_open_update_enforce_typed_intake_contract(client: TestClient, tmp_path: Path) -> None:
+    assert main.TaskCreate.model_fields["predicate"].is_required()
+    assert main.TaskCreate.model_fields["receipt_target"].is_required()
+    write_board(
+        tmp_path / "tasks.yaml",
+        [
+            {
+                "id": "LIMEN-CONTRACT-LEGACY",
+                "title": "Legacy terminal task",
+                "repo": "organvm/limen",
+                "target_agent": "codex",
+                "status": "needs_human",
+                "created": "2026-07-01",
+            }
+        ],
+    )
+
+    missing = client.post(
+        "/api/tasks",
+        json={
+            "id": "LIMEN-CONTRACT-MISSING",
+            "title": "Missing typed contract",
+            "repo": "organvm/limen",
+            "target_agent": "codex",
+        },
+    )
+    assert missing.status_code == 422
+    assert {error["loc"][-1] for error in missing.json()["detail"]} == {"predicate", "receipt_target"}
+
+    created = client.post(
+        "/api/tasks",
+        json={
+            "id": "LIMEN-CONTRACT-OK",
+            "title": "Typed task",
+            "repo": "organvm/limen",
+            "target_agent": "codex",
+            "predicate": "pytest -q web/api/tests/test_main.py",
+            "receipt_target": "github:organvm/limen:pull-request:LIMEN-CONTRACT-OK",
+        },
+    )
+    assert created.status_code == 200
+    assert created.json()["task"]["predicate"].startswith("pytest")
+
+    invalid_update = client.patch(
+        "/api/tasks/LIMEN-CONTRACT-OK",
+        json={"predicate": "tests should pass"},
+    )
+    assert invalid_update.status_code == 422
+
+    bypassed_dispatch = client.patch(
+        "/api/tasks/LIMEN-CONTRACT-LEGACY",
+        json={"status": "dispatched"},
+    )
+    assert bypassed_dispatch.status_code == 422
 
 
 def test_dispatch_rejects_invalid_agent_limit_and_task_id(client: TestClient, tmp_path: Path) -> None:

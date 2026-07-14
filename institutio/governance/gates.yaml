@@ -208,7 +208,17 @@ gates:
     paths: ["scripts/omega.sh", "scripts/tests/omega.test.sh"]
     scoped: false
     owner: omega
-    note: "The fixed-point composer's tally/exit/stamp contract; SKIP is never a silent PASS."
+    note: "The fixed-point composer's version/hash/tally/strict contract; SKIP is never a silent PASS."
+  main-green-test:
+    command: "python3 -m pytest cli/tests/test_check_main_green.py -q"
+    paths: ["scripts/check-main-green.py", "cli/tests/test_check_main_green.py", "scripts/omega.sh"]
+    owner: omega
+    note: "Workflow-filtered completed CI must match the full current origin/main head; a prior or pending run is never green proof."
+  handoff-relay-test:
+    command: "python3 -m pytest cli/tests/test_handoff_relay.py -q"
+    paths: ["scripts/handoff-relay.py", "scripts/heartbeat-loop.sh", "scripts/metabolize.sh", "scripts/hooks/session-closeout.sh", "cli/tests/test_handoff_relay.py"]
+    owner: continuity
+    note: "The warm-resume packet carries authoritative budget/provider/next truth and refreshes across heartbeat, metabolize, and SessionEnd seams."
 
   # ── session/docs/board predicates ───────────────────────────────────────────
   session-orient:
@@ -239,11 +249,11 @@ gates:
     owner: board
     note: "Task-board statuses match the canonical vocabulary (pr-gate separately guards parse/load)."
   worktree-debt:
-    command: "python3 scripts/worktree-debt.py --fail-over-cap --fail-reapable-over-cap"
+    command: "python3 scripts/worktree-debt.py --fail-on-debt --fail-reapable-over-cap"
     paths: ["scripts/worktree-debt.py", "cli/src/limen/worktree_debt.py", "cli/src/limen/worktree_roots.py", "scripts/reclaim-worktrees.py"]
     scoped: false
     owner: lifecycle
-    note: "Hard lifecycle-debt gate: dirty/unpushed roots stay capped, and clean remote-preserved roots must be reaped or explicitly blocked."
+    note: "Exact-zero lifecycle-debt gate: completion is debt == 0 — every dirty/unpushed/not-git root must be landed, reassigned, or preserved into a terminal receipt, and clean remote-preserved roots reaped or explicitly blocked. No tolerated count."
   workflow-yaml:
     command: "python3 -c \"import pathlib, yaml; [yaml.safe_load(p.read_text()) for p in sorted(pathlib.Path('.github/workflows').glob('*.y*ml'))]\""
     paths: [".github/workflows/**"]
@@ -275,6 +285,12 @@ gates:
     ci_job: "pr-gate.yml:pr-gate"
     owner: governance
     note: "SENSORS registry drift: the beat's continuous-runtime sensors are declared data (sensors.yaml), the third VIGILIA axis beside GATES + PARAMETERS. Asserts schema, that every step's script exists, every gate is declared (panel or baseline), and every registry gate appears in the beat sources — a drifted sensor is a red check, not a memory chore."
+  check-mail-tiers:
+    command: "python3 scripts/check-mail-tiers.py"
+    paths: ["institutio/governance/mail-tiers.yaml", "scripts/check-mail-tiers.py"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: mail
+    note: "MAIL-TIERS registry drift: the correspondence organ's send-tier decision is declared data (mail-tiers.yaml), the fourth VIGILIA-shaped panel. Asserts schema, well-formed no_reply suppressors, the hold-covers-{legal,money,verify_first} safety invariant that makes auto-send safe by construction, and bracket-free SAFE templates; when the UMA checkout is present it cross-checks every dangerous protocol class is held."
 
   # ── GitHub estate (GITVS — the GitHub custodian) ────────────────────────────
   gitvs-parity:

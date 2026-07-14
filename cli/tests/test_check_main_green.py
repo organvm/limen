@@ -26,7 +26,7 @@ def _seed(tmp: Path, conclusion: str) -> None:
             {
                 "checked_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
                 "conclusion": conclusion,
-                "head_sha": "deadbeef",
+                "head_sha": "deadbeef" * 5,
                 "url": "https://github.com/organvm/limen/actions/runs/1",
             }
         ),
@@ -90,6 +90,8 @@ def test_red_verdict_emits_one_idempotent_task(tmp_path):
     assert tasks[0].id == "HEAL-mainred-organvm-limen"
     assert "deadbeef" in tasks[0].title  # the SHA lives in the title, not the id
     assert tasks[0].priority == "critical" and "mainred" in tasks[0].labels
+    assert "deadbeef" * 5 in tasks[0].predicate
+    assert "gh pr list" not in tasks[0].predicate
     # idempotent: a second run adds nothing
     run(tmp_path, apply=True)
     assert len(load_limen_file(tmp_path / "tasks.yaml").tasks) == 1
@@ -104,12 +106,14 @@ def test_moving_red_trunk_converges_on_one_task(tmp_path):
     _seed(tmp_path, "failure")  # (re-stamps checked_at; head_sha would differ live)
     # rewrite the cache with a different SHA to simulate the trunk moving while still red
     stamp = json.loads((tmp_path / "logs" / "main-green.json").read_text())
-    stamp["head_sha"] = "feedface"
+    stamp["head_sha"] = "feedface" * 5
     (tmp_path / "logs" / "main-green.json").write_text(json.dumps(stamp), encoding="utf-8")
     run(tmp_path, apply=True)
     tasks = load_limen_file(tmp_path / "tasks.yaml").tasks
     assert len(tasks) == 1  # still ONE canonical task
     assert tasks[0].id == "HEAL-mainred-organvm-limen"
+    assert "feedface" * 5 in tasks[0].predicate
+    assert "deadbeef" * 5 not in tasks[0].predicate
 
 
 def test_recurrence_reopens_healed_task(tmp_path):
@@ -204,3 +208,65 @@ def test_wedge_impact_counts_fresh_only():
     fresh = [_pr(200 + n, [("pr-gate", "FAILURE")], updated="2026-07-10T00:00:00Z") for n in range(6)]
     v = m.wedge_impact(stale + fresh, {"pr-gate"}, fresh_since="2026-07-09T00:00:00Z", k=5)
     assert v["wedged_prs"] == 6 and v["considered"] == 6
+
+
+# --- Omega exact-head contract ---------------------------------------------------------------
+
+
+def _run_row(head, *, conclusion="success", status="completed", event="push"):
+    return {
+        "databaseId": 1,
+        "conclusion": conclusion,
+        "status": status,
+        "headSha": head,
+        "url": "https://github.com/organvm/limen/actions/runs/1",
+        "event": event,
+    }
+
+
+def test_exact_head_selector_ignores_prior_pending_and_non_push_runs():
+    m = _load()
+    current = "a" * 40
+    prior = "b" * 40
+    runs = [
+        _run_row(current, status="in_progress"),
+        _run_row(current, event="workflow_dispatch"),
+        _run_row(prior),
+        _run_row(current),
+    ]
+    assert m.select_completed_push_run(runs, head_sha=current) == runs[-1]
+    assert m.select_completed_push_run(runs[:3], head_sha=current) is None
+
+
+def test_exact_head_check_requires_success_for_current_remote_main(monkeypatch, capsys):
+    m = _load()
+    current = "a" * 40
+    monkeypatch.setattr(m, "_remote_main_head", lambda: current)
+    monkeypatch.setattr(m, "_gh_main_runs", lambda: [_run_row("b" * 40), _run_row(current)])
+    assert m.exact_head_check() == 0
+    assert "EXACT-HEAD GREEN" in capsys.readouterr().out
+
+    monkeypatch.setattr(m, "_gh_main_runs", lambda: [_run_row(current, conclusion="failure")])
+    assert m.exact_head_check() == 1
+    assert "EXACT-HEAD RED" in capsys.readouterr().out
+
+
+def test_exact_head_check_fails_closed_without_matching_completed_run(monkeypatch, capsys):
+    m = _load()
+    current = "a" * 40
+    monkeypatch.setattr(m, "_remote_main_head", lambda: current)
+    monkeypatch.setattr(m, "_gh_main_runs", lambda: [_run_row(current, status="in_progress")])
+    assert m.exact_head_check() == 1
+    assert "no completed" in capsys.readouterr().out
+
+
+def test_remote_main_head_reads_owner_ref_not_cached_tracking_ref(monkeypatch):
+    m = _load()
+    current = "c" * 40
+
+    def fake_run(args, **kwargs):
+        assert args[-4:] == ["ls-remote", "--exit-code", "origin", "refs/heads/main"]
+        return subprocess.CompletedProcess(args, 0, f"{current}\trefs/heads/main\n", "")
+
+    monkeypatch.setattr(m.subprocess, "run", fake_run)
+    assert m._remote_main_head() == current

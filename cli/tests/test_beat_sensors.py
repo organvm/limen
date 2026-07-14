@@ -7,6 +7,7 @@ tests never execute the real beat sensors.
 import importlib.util
 import os
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -218,14 +219,141 @@ sensors:
     assert m._step_command(step) == "python3 scripts/arbitrary.py base --apply 'two words'"
 
     assert m.list_omega(registry) == 0
-    assert capsys.readouterr().out == "arbitrary.future.id\t0\tdet\tarbitrary parity\n"
+    assert capsys.readouterr().out == (
+        "arbitrary.future.id\t0\tdet\tarbitrary parity\tpython3 scripts/arbitrary.py check\t7\n"
+    )
     calls = []
     monkeypatch.setattr(m, "_run_command", lambda command, **kwargs: calls.append((command, kwargs)) or 0)
     assert m.run_omega("arbitrary.future.id", 0, registry=registry) == 0
     assert calls == [("python3 scripts/arbitrary.py check", {"timeout": 7, "quiet": False})]
 
 
+def test_renamed_omega_capability_without_timeout_is_typed_and_executes(tmp_path, monkeypatch, capsys):
+    m = _mod()
+    registry = tmp_path / "no-timeout-capability.yaml"
+    registry.write_text(
+        """\
+sensors:
+  independently.renamed.no-timeout.v47:
+    section: heartbeat
+    title: independently renamed future sensor
+    gate: null
+    source: [metabolize]
+    steps:
+      - command: "python3 scripts/arbitrary.py beat"
+        severity: silent
+        escalation: skipped
+    omega_eligible:
+      - label: independently renamed fixed point
+        tier: det
+        command: "python3 scripts/arbitrary.py verify"
+""",
+        encoding="utf-8",
+    )
+
+    assert m.list_omega(registry) == 0
+    assert capsys.readouterr().out == (
+        "independently.renamed.no-timeout.v47\t0\tdet\tindependently renamed fixed point\t"
+        "python3 scripts/arbitrary.py verify\tnull\n"
+    )
+
+    calls = []
+    monkeypatch.setattr(m, "_run_command", lambda command, **kwargs: calls.append((command, kwargs)) or 0)
+    assert m.run_omega("independently.renamed.no-timeout.v47", 0, registry=registry) == 0
+    assert calls == [("python3 scripts/arbitrary.py verify", {"timeout": None, "quiet": False})]
+
+
 def test_command_timeout_kills_the_bounded_process_group():
     m = _mod()
     command = f"{sys.executable} -c 'import time; time.sleep(5)'"
     assert m._run_command(command, timeout=1, quiet=True) == 124
+
+
+CANARY_FIXTURE = """\
+sensors:
+  live-lane-sensor:
+    section: heartbeat
+    title: live lane scheduled sensor
+    gate: null
+    source: [heartbeat]
+    cadence: {env: TEST_CANARY_LIVE_CADENCE, default: 4}
+    steps:
+      - command: "python3 scripts/example.py"
+        severity: silent
+        escalation: skipped
+  parked-organ:
+    section: heartbeat
+    title: metabolize-only scheduled organ (lever-parked)
+    gate: null
+    source: [metabolize]
+    owner: observatory
+    cadence: {env: TEST_CANARY_PARKED_CADENCE, default: 24}
+    steps:
+      - command: "python3 scripts/example.py"
+        severity: silent
+        escalation: skipped
+  unscheduled:
+    section: "0x"
+    title: no cadence — outside the canary's scope
+    gate: null
+    source: [metabolize]
+    steps:
+      - command: "python3 scripts/example.py"
+        severity: silent
+        escalation: skipped
+"""
+
+
+def _canary_setup(tmp_path):
+    registry = tmp_path / "canary.yaml"
+    registry.write_text(CANARY_FIXTURE, encoding="utf-8")
+    voice_dir = tmp_path / "voices"
+    voice_dir.mkdir()
+    return registry, voice_dir
+
+
+def test_canary_never_ran_live_lane_exits_1_and_names_the_sensor(tmp_path, capsys):
+    """The mechanized canary ritual: a live-lane (heartbeat-source) scheduled sensor with no voice
+    stamp is exactly the post-#921 defect class — merged, declared, never observed live."""
+    m = _mod()
+    registry, voice_dir = _canary_setup(tmp_path)
+    assert m.canary(registry=registry, loop_max=60, voice_dir=voice_dir) == 1
+    out = capsys.readouterr().out
+    assert "NEVER-RAN live-lane-sensor" in out
+    assert "unscheduled" not in out  # no cadence → outside the canary's scope
+
+
+def test_canary_fresh_stamps_are_green(tmp_path, capsys):
+    m = _mod()
+    registry, voice_dir = _canary_setup(tmp_path)
+    for sid in ("live-lane-sensor", "parked-organ"):
+        (voice_dir / sid).write_text("now\n", encoding="utf-8")
+    assert m.canary(registry=registry, loop_max=60, voice_dir=voice_dir) == 0
+    assert "sensor-canary: OK" in capsys.readouterr().out
+
+
+def test_canary_stale_stamp_exits_1(tmp_path, capsys):
+    """Bound is cadence × loop_max × 2 (twice the worst-case wall-clock for one cadence window):
+    live-lane cadence 4 × loop_max 60 × 2 = 480 s — a stamp backdated past it must read STALE."""
+    m = _mod()
+    registry, voice_dir = _canary_setup(tmp_path)
+    for sid in ("live-lane-sensor", "parked-organ"):
+        stamp = voice_dir / sid
+        stamp.write_text("old\n", encoding="utf-8")
+    os.utime(voice_dir / "live-lane-sensor", (time.time() - 1000, time.time() - 1000))
+    assert m.canary(registry=registry, loop_max=60, voice_dir=voice_dir) == 1
+    out = capsys.readouterr().out
+    assert "STALE live-lane-sensor" in out
+
+
+def test_canary_metabolize_only_finding_is_owner_routed_not_red(tmp_path, capsys):
+    """A metabolize-only scheduled sensor that never ran is usually an organ parked behind its
+    activation lever (observatory-run) — the canary prints it routed to its owner but exits 0:
+    a parked lever must never read as red every beat."""
+    m = _mod()
+    registry, voice_dir = _canary_setup(tmp_path)
+    (voice_dir / "live-lane-sensor").write_text("now\n", encoding="utf-8")
+    assert m.canary(registry=registry, loop_max=60, voice_dir=voice_dir) == 0
+    out = capsys.readouterr().out
+    assert "NEVER-RAN parked-organ" in out
+    assert "owner observatory" in out

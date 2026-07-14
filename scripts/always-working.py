@@ -25,6 +25,8 @@ from typing import Any
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(ROOT / "cli" / "src"))
+from limen.worktree_debt import REAPABLE_REASONS  # noqa: E402
+
 HOME = Path.home()
 WORKSPACE = Path(os.environ.get("LIMEN_WORKSPACE_ROOT", HOME / "Workspace"))
 PRIVATE_ROOT = Path(os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus"))
@@ -65,6 +67,8 @@ ESTATE_CUSTODY_RECEIPT = ROOT / "docs" / "estate-custody-implementation-receipts
 GENERATED_STATE_RECLAIM_LOG = ROOT / "logs" / "reclaim-generated-state.jsonl"
 TOOL_CACHE_RECLAIM_LOG = ROOT / "logs" / "reclaim-tool-caches.jsonl"
 OLLAMA_MODEL_RECLAIM_LOG = ROOT / "logs" / "reclaim-ollama-models.jsonl"
+CVSTOS_STATE = ROOT / "logs" / "cvstos-organ-state.json"
+LIFECYCLE_PRESSURE_STATE = ROOT / "logs" / "session-lifecycle-pressure.json"
 OPENCODE_DB_INTAKE_DOC = ROOT / "docs" / "opencode-db-corpus-intake.md"
 SUBSTRATE_STORAGE_INDEX = PRIVATE_ROOT / "lifecycle" / "substrate-storage-pressure.json"
 WORKTREE_RECLAIM_CANDIDATES_DOC = ROOT / "docs" / "worktree-reclaim-candidates.md"
@@ -380,15 +384,125 @@ def _short_command_receipt(args: list[str], *, timeout: int = 90) -> dict[str, A
     }
 
 
-def substrate_lifecycle_receipt() -> dict[str, Any]:
-    cvstos = _short_command_receipt([sys.executable, str(ROOT / "scripts" / "cvstos-organ.py"), "--check"])
-    worktree_debt = _short_command_receipt(
-        [sys.executable, str(ROOT / "scripts" / "worktree-debt.py"), "--fail-over-cap"]
+def _cached_state(path: Path) -> tuple[dict[str, Any], float | None]:
+    data = load_json(path, {})
+    if not isinstance(data, dict):
+        return {}, None
+    try:
+        age_seconds = max(0.0, dt.datetime.now().timestamp() - path.stat().st_mtime)
+    except OSError:
+        age_seconds = None
+    return data, age_seconds
+
+
+def _positive_env_int(name: str, default: int, *, allow_zero: bool = False) -> int:
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+    if value < 0 or (value == 0 and not allow_zero):
+        return default
+    return value
+
+
+def _lifecycle_cache_windows() -> tuple[int, int]:
+    """Return freshness bounds derived from the heartbeat's actual producer cadences."""
+    loop_max = _positive_env_int("LIMEN_LOOP_MAX", 1800)
+    producer_timeout = _positive_env_int("LIMEN_RECLAIM_TIMEOUT", 300)
+    cvstos_cadence = _positive_env_int("LIMEN_BEAT_CVSTOS", 24)
+    pressure_cadence = _positive_env_int("LIMEN_BEAT_DRAIN", 3)
+    pressure_throttle = _positive_env_int(
+        "LIMEN_LIFECYCLE_PRESSURE_THROTTLE", 1800, allow_zero=True
     )
+
+    # A throttled producer can be called just before its snapshot becomes eligible, then wait one
+    # full scheduler cadence before the next call. Include both intervals and the bounded command
+    # runtime. CVSTOS is not internally throttled, so only its cadence and runtime apply.
+    cvstos_window = cvstos_cadence * loop_max + producer_timeout
+    pressure_window = pressure_throttle + pressure_cadence * loop_max + producer_timeout
+    return cvstos_window, pressure_window
+
+
+def substrate_lifecycle_receipt() -> dict[str, Any]:
+    # This function runs before every dispatch reservation. Full CVSTOS + worktree classification
+    # costs roughly two estate scans (>100s on the current host), so consume the heartbeat's cached,
+    # counts-only receipts here. Exact classification remains in the assignment/closeout predicate.
+    cvstos_state, cvstos_age = _cached_state(CVSTOS_STATE)
+    pressure_state, pressure_age = _cached_state(LIFECYCLE_PRESSURE_STATE)
+    worktrees_raw = pressure_state.get("worktrees")
+    worktrees = worktrees_raw if isinstance(worktrees_raw, dict) else {}
+    try:
+        raw_debt = worktrees["debt"]
+        debt = raw_debt if isinstance(raw_debt, int) and not isinstance(raw_debt, bool) and raw_debt >= 0 else None
+    except (TypeError, ValueError):
+        debt = None
+    except KeyError:
+        debt = None
+    by_reason_raw = worktrees.get("by_reason")
+    by_reason = by_reason_raw if isinstance(by_reason_raw, dict) else None
+    reapable_by_reason: dict[str, int] = {}
+    if by_reason is not None:
+        for reason in REAPABLE_REASONS:
+            raw_count = by_reason.get(reason, 0)
+            if not isinstance(raw_count, int) or isinstance(raw_count, bool) or raw_count < 0:
+                reapable_by_reason = {}
+                reapable = None
+                break
+            reapable_by_reason[reason] = raw_count
+        else:
+            reapable = sum(reapable_by_reason.values())
+    else:
+        reapable = None
+    pressure_error = worktrees.get("error")
+    pressure_complete = worktrees.get("complete")
+    pressure_valid = bool(
+        isinstance(worktrees_raw, dict)
+        and debt is not None
+        and isinstance(by_reason_raw, dict)
+        and isinstance(pressure_error, str)
+        and isinstance(pressure_complete, bool)
+        and pressure_complete == (debt == 0)
+    )
+    cvstos_at_factory = cvstos_state.get("at_factory")
+    cvstos_open_invariants = cvstos_state.get("open_invariants")
+    cvstos_worktree_has_debt = cvstos_state.get("worktree_has_debt")
+    cvstos_valid = bool(
+        isinstance(cvstos_at_factory, bool)
+        and isinstance(cvstos_open_invariants, list)
+        and isinstance(cvstos_worktree_has_debt, bool)
+        and cvstos_at_factory == (len(cvstos_open_invariants) == 0)
+        and (not cvstos_at_factory or cvstos_worktree_has_debt is False)
+    )
+    cvstos_window, pressure_window = _lifecycle_cache_windows()
+    cvstos = {
+        "source": relpath(CVSTOS_STATE),
+        "age_seconds": round(cvstos_age, 1) if cvstos_age is not None else None,
+        "freshness_window_seconds": cvstos_window,
+        "valid": cvstos_valid,
+        "fresh": cvstos_age is not None and cvstos_age <= cvstos_window,
+        "ok": cvstos_valid and cvstos_at_factory is True,
+        "open_invariant_count": len(cvstos_state.get("open_invariants") or []),
+    }
+    worktree_debt = {
+        "source": relpath(LIFECYCLE_PRESSURE_STATE),
+        "age_seconds": round(pressure_age, 1) if pressure_age is not None else None,
+        "freshness_window_seconds": pressure_window,
+        "valid": pressure_valid,
+        "fresh": pressure_age is not None and pressure_age <= pressure_window,
+        "debt": debt,
+        "debt_target": 0,
+        "reapable": reapable,
+        "reapable_target": 0,
+        "reapable_by_reason": reapable_by_reason,
+        "error": pressure_error if isinstance(pressure_error, str) else "invalid pressure receipt",
+        "ok": pressure_valid and not pressure_error and debt == 0 and reapable == 0,
+    }
     return {
         "cvstos": cvstos,
         "worktree_debt": worktree_debt,
-        "predicate_ok": bool(cvstos["ok"] and worktree_debt["ok"]),
+        "predicate_ok": bool(
+            cvstos["fresh"] and cvstos["ok"] and worktree_debt["fresh"] and worktree_debt["ok"]
+        ),
         "generated_state_reclaim": reclaim_log_summary(
             GENERATED_STATE_RECLAIM_LOG, ("changed_roots", "failed_roots")
         ),
@@ -470,10 +584,10 @@ def profile_receipt() -> dict[str, Any]:
         ],
         "assignment_packet": {
             "lane_fit": "codex-integrator",
-            "repo": relpath(PROFILE_REPO),
+            "repo": VISIBLE_PROFILE_REPO,
             "task": "Project the existing positioning/frontdoor and current metrics onto the profile README; fix stale counts and dead links.",
             "predicate": "python3 scripts/test_sync_readme.py && python3 scripts/sync-readme.py --check",
-            "receipt_target": relpath(PROFILE_REPO / "README.md"),
+            "receipt_target": f"git:{VISIBLE_PROFILE_REPO}:README.md",
             "stop_condition": "profile README has current metrics, live links, and evidence-backed top-engineer positioning",
         },
     }
@@ -612,10 +726,10 @@ def mail_receipts() -> list[dict[str, Any]]:
             **common,
             "assignment_packet": {
                 "lane_fit": "local-codex-or-opencode",
-                "repo": relpath(ROOT),
+                "repo": "organvm/limen",
                 "task": "Use existing mail-story atoms and UMA obligations to classify the active flagged set; draft/park, never send.",
                 "predicate": "python3 scripts/mail-story-ledger.py --scope flagged --write",
-                "receipt_target": relpath(ROOT / "docs" / "mail-story-ledger.md"),
+                "receipt_target": "git:organvm/limen:docs/mail-story-ledger.md",
                 "stop_condition": "flagged set has classified atoms, obligations, and needs-human buckets",
             },
         },
@@ -635,10 +749,10 @@ def mail_receipts() -> list[dict[str, Any]]:
             **{**common, "evidence": {**common["evidence"], "mail_story": history_story}},
             "assignment_packet": {
                 "lane_fit": "local-codex-or-opencode",
-                "repo": relpath(ROOT),
+                "repo": "organvm/limen",
                 "task": "Continue the historical metadata sweep from existing receipts; emit batch cursor/count receipt before any thread enrichment.",
                 "predicate": "python3 scripts/mail-story-ledger.py --scope all --limit 500 --write",
-                "receipt_target": relpath(ROOT / "docs" / "mail-story-ledger.md"),
+                "receipt_target": "git:organvm/limen:docs/mail-story-ledger.md",
                 "stop_condition": "next 500 historical messages are atomized or a precise cursor/blocker is recorded",
             },
         },
@@ -685,10 +799,10 @@ def repo_surface_receipt() -> dict[str, Any]:
         ],
         "assignment_packet": {
             "lane_fit": "agy-or-opencode-readonly",
-            "repo": relpath(ROOT),
+            "repo": "organvm/limen",
             "task": "Harvest existing repo-surface and consolidation receipts, then assign only missing classifications.",
             "predicate": "python3 scripts/repo-surface-ledger.py --scan-root ~/Workspace --max-depth 6 --write",
-            "receipt_target": relpath(ROOT / "docs" / "repo-surface-ledger.md"),
+            "receipt_target": "git:organvm/limen:docs/repo-surface-ledger.md",
             "stop_condition": "all discovered roots are classified or recorded with blocker/gate",
         },
     }
@@ -719,10 +833,10 @@ def prompt_packet_receipt() -> dict[str, Any]:
         ],
         "assignment_packet": {
             "lane_fit": "codex-conductor",
-            "repo": relpath(ROOT),
+            "repo": "organvm/limen",
             "task": "Map each open prompt packet to merged PR, open PR, owner task, supersession, or precise blocker.",
             "predicate": "python3 scripts/prompt-packet-ledger.py --write",
-            "receipt_target": relpath(ROOT / "docs" / "prompt-packet-ledger.md"),
+            "receipt_target": "git:organvm/limen:docs/prompt-packet-ledger.md",
             "stop_condition": "open prompt packet count is zero or every packet has an owner receipt",
         },
     }
@@ -810,10 +924,10 @@ def value_repo_receipt() -> dict[str, Any]:
         ],
         "assignment_packet": {
             "lane_fit": "jules-or-opencode-repo-specific",
-            "repo": ",".join(repos[:5]),
+            "repo": "organvm/limen",
             "task": "Harvest existing PRs/tasks for top value repos, then assign only clean bounded ship predicates.",
             "predicate": "python3 scripts/product-ledger.py --write",
-            "receipt_target": relpath(ROOT / "docs" / "product-ledger.md"),
+            "receipt_target": "git:organvm/limen:docs/product-ledger.md",
             "stop_condition": "top value repo has shipped PR, open PR with predicate, owner task, or blocker",
         },
     }
@@ -909,7 +1023,7 @@ def estate_custody_receipt() -> dict[str, Any]:
         ],
         "assignment_packet": {
             "lane_fit": "codex-conductor",
-            "repo": relpath(ROOT),
+            "repo": "organvm/limen",
             "task": (
                 "Build the run-and-gun estate lifecycle: external SSDs hold durable private/raw data, "
                 "processed/redacted corpora, repo/org mirrors, photos/media packages, and recovery copies; "
@@ -923,7 +1037,7 @@ def estate_custody_receipt() -> dict[str, Any]:
                 "python3 scripts/substrate-ledger.py --write && "
                 "python3 scripts/vltima-prior-excavations.py --write"
             ),
-            "receipt_target": relpath(ESTATE_CUSTODY_RECEIPT),
+            "receipt_target": "git:organvm/limen:docs/estate-custody-implementation-receipts.json",
             "stop_condition": (
                 "external estate cleanup, prompt chronology, repo/org custody, photos processing, and "
                 "pain-point productization each have owner receipts without destructive local-only action"
@@ -990,14 +1104,14 @@ def contribution_balance_receipt() -> dict[str, Any]:
         ],
         "assignment_packet": {
             "lane_fit": "codex-conductor",
-            "repo": contribution_balance_public_path(ROOT),
+            "repo": "organvm/limen",
             "task": (
                 "Use the live contribution balance as a value gate: route the next public work to "
                 "substantive PR review first, then real issue criteria and PR packaging, before more "
                 "commit-heavy implementation churn."
             ),
             "predicate": f"python3 scripts/github-contribution-balance.py --login {CONTRIBUTION_BALANCE_LOGIN} --json",
-            "receipt_target": contribution_balance_public_path(ROOT / "docs" / "always-working.md"),
+            "receipt_target": "git:organvm/limen:docs/always-working.md",
             "stop_condition": "reviews/issues/PRs have owner receipts and commit-only churn is no longer the next public action",
         },
     }
@@ -1054,14 +1168,14 @@ def credential_wall_receipt() -> dict[str, Any]:
         ],
         "assignment_packet": {
             "lane_fit": "codex-integrator",
-            "repo": relpath(ROOT),
+            "repo": "organvm/limen",
             "task": (
                 "Keep token/scope failures out of chat by registering every current credential atom "
                 "and adding a historical tombstone receipt for formerly exposed or rotated tokens. "
                 "Never record secret values."
             ),
             "predicate": "python3 scripts/credential-wall.py --check && test -f docs/credential-token-tombstone-audit.md",
-            "receipt_target": relpath(CREDENTIAL_TOMBSTONE_DOC),
+            "receipt_target": "git:organvm/limen:docs/credential-token-tombstone-audit.md",
             "stop_condition": "current credential wall passes and historic token existence/revocation custody is recorded without values",
         },
     }
@@ -1111,10 +1225,10 @@ def tabularius_receipt() -> dict[str, Any]:
         "existing_receipts": [relpath(doc), relpath(audit_doc), relpath(ROOT / "cli" / "src" / "limen" / "tabularius.py")],
         "assignment_packet": {
             "lane_fit": "codex-integrator",
-            "repo": relpath(ROOT),
+            "repo": "organvm/limen",
             "task": "Convert status/result writers to keeper tickets; preserve tasks.yaml drift as separate board state.",
             "predicate": "python3 scripts/task-writer-audit.py && PYTHONPATH=cli/src python3 -m pytest cli/tests/test_tabularius.py -q",
-            "receipt_target": relpath(audit_doc),
+            "receipt_target": "git:organvm/limen:docs/tabularius-writer-audit.md",
             "stop_condition": "non-keeper status/result direct writers are converted or explicitly owner-recorded",
         },
     }
@@ -1190,11 +1304,11 @@ def substrate_receipt() -> dict[str, Any]:
         ],
         "assignment_packet": {
             "lane_fit": "codex-local",
-            "repo": relpath(ROOT),
+            "repo": "organvm/limen",
             "task": "Reclaim ignored generated state, preserve or owner-route local-only payloads, and keep Scratch as the active work substrate.",
-            "predicate": "python3 scripts/reclaim-generated-state.py --apply && python3 scripts/reclaim-tool-caches.py --apply && python3 scripts/reclaim-ollama-models.py --apply && python3 scripts/substrate-storage-pressure.py --write && python3 scripts/cvstos-organ.py --check && python3 scripts/worktree-debt.py --fail-over-cap",
-            "receipt_target": relpath(ROOT / "logs" / "cvstos-organ-state.json"),
-            "stop_condition": "free disk is at target, temp writes are usable, and reclaimable worktree debt is owner-routed",
+            "predicate": "python3 scripts/reclaim-generated-state.py --apply && python3 scripts/reclaim-tool-caches.py --apply && python3 scripts/reclaim-ollama-models.py --apply && python3 scripts/substrate-storage-pressure.py --write && python3 scripts/cvstos-organ.py --check && python3 scripts/worktree-debt.py --fail-on-debt --fail-reapable-over-cap",
+            "receipt_target": "git:organvm/limen:docs/estate-custody-implementation-receipts.json",
+            "stop_condition": "free disk is at target, temp writes are usable, worktree debt is exactly zero, and reapable roots are zero",
         },
     }
 
@@ -1212,6 +1326,11 @@ def build_snapshot() -> dict[str, Any]:
         value_repo_receipt(),
         tabularius_receipt(),
     ]
+    # Carry the already-derived lane choice in the machine snapshot so downstream
+    # conductors can validate and route one packet without copying this workstream
+    # map or guessing a provider from prose such as ``lane_fit``.
+    for item in items:
+        item["target_agent"] = AGENT_BY_WORKSTREAM.get(str(item.get("workstream") or ""), "codex")
     items = sorted(items, key=lambda row: (int(row["priority"]), str(row["id"])))
     open_items = [item for item in items if item["status"] in REQUIRED_OPEN]
     blocked_items = [item for item in items if item["status"] == STATUS_BLOCKED]
@@ -1349,7 +1468,7 @@ def _task_from_item(item: dict[str, Any]) -> dict[str, Any]:
         "description": str(item.get("verdict") or ""),
         "repo": str(packet.get("repo") or relpath(ROOT)),
         "type": "coordination",
-        "target_agent": AGENT_BY_WORKSTREAM.get(workstream, "codex"),
+        "target_agent": str(item.get("target_agent") or AGENT_BY_WORKSTREAM.get(workstream, "codex")),
         "workstream": workstream,
         "priority": _priority(item),
         "budget_cost": 1,
@@ -1357,6 +1476,8 @@ def _task_from_item(item: dict[str, Any]) -> dict[str, Any]:
         "labels": ["always-working", "receipt-first", workstream],
         "urls": [str(value) for value in item.get("existing_receipts") or []][:10],
         "context": context,
+        "predicate": str(packet.get("predicate") or ""),
+        "receipt_target": str(packet.get("receipt_target") or ""),
         "created": dt.datetime.now(dt.timezone.utc).date().isoformat(),
     }
 

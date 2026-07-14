@@ -120,7 +120,7 @@ def dispatch(agent, budget, dry_run, task, limit):
 @click.option("--json-output", "json_output", is_flag=True, help="Print machine-readable JSON")
 @click.option("--report-file", default=None, help="Write machine-readable JSON to this path")
 def release_stale(hours, agent, dry_run, json_output, report_file):
-    """Reopen dispatched/in-progress tasks whose latest event is stale."""
+    """Route stale claims; Jules claims reopen only after confirmed remote absence."""
     root = resolve_root()
     tasks_path = resolve_tasks_path(root)
     limen = load_limen_file(tasks_path)
@@ -302,6 +302,11 @@ def harvest(agent):
 
 
 @main.command("workstream")
+@click.option(
+    "--autonomous",
+    is_flag=True,
+    help="Require a prompt, embed the live derive-not-force contract, and start Codex with the README.",
+)
 @click.option("--codex", "launch_codex", is_flag=True, help="Open Codex in the worktree after creating the packet.")
 @click.option(
     "--shell", "launch_shell", is_flag=True, help="Open a login shell in the worktree after creating the packet."
@@ -311,14 +316,28 @@ def harvest(agent):
 @click.option(
     "--prompt-file", default=None, type=click.Path(exists=True), help="Prompt packet file to embed in README.md."
 )
+@click.option("--workstream", "workstream_handle", default=None, help="Pin the capsule to one purpose channel.")
 @click.option("--no-readme", is_flag=True, help="Create/reuse the worktree without writing the private kickoff packet.")
 @click.argument("repo")
 @click.argument("slug")
-def workstream(launch_codex, launch_shell, from_ref, prompt_text, prompt_file, no_readme, repo, slug):
+def workstream(
+    autonomous,
+    launch_codex,
+    launch_shell,
+    from_ref,
+    prompt_text,
+    prompt_file,
+    workstream_handle,
+    no_readme,
+    repo,
+    slug,
+):
     """Create/reuse a repo worktree plus a private kickoff README and kickstart command."""
     root = resolve_limen_repo_root()
     script = root / "scripts" / "start-worktree-session.sh"
     args = ["bash", str(script)]
+    if autonomous:
+        args.append("--autonomous")
     if launch_codex:
         args.append("--codex")
     if launch_shell:
@@ -329,6 +348,8 @@ def workstream(launch_codex, launch_shell, from_ref, prompt_text, prompt_file, n
         args.extend(["--prompt", prompt_text])
     if prompt_file:
         args.extend(["--prompt-file", prompt_file])
+    if workstream_handle:
+        args.extend(["--workstream", workstream_handle])
     if no_readme:
         args.append("--no-readme")
     args.extend([repo, slug])
