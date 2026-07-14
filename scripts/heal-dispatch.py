@@ -25,8 +25,12 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling scripts/ for _human_signals
+from limen.chronic import CHRONIC_FLEET_DEBT_LABEL, chronic_escalated_to_needs_human  # noqa: E402
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.models import DispatchLogEntry  # noqa: E402
+
+from _human_signals import is_human_gated, lever_ids  # noqa: E402
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 LOCKD = ROOT / "logs" / ".queue.lock.d"
@@ -65,9 +69,13 @@ def main():
     nopr_ids = {x["id"] for x in det.get("DISPATCHED_NO_PR", [])}
     open_pr_ids = {x["id"] for x in det.get("PR_OPEN", [])}
     # CHRONIC: reopened >=3x, never produced a PR (verify-dispatch surfaces these). Re-looping them
-    # just burns capacity with zero output, so ESCALATE to needs_human (surface to the human, the
-    # cheapest path) instead of silently recycling. Reversible status flip. ([[no-never-happens-again]])
+    # just burns capacity with zero output — stop them, routed by OWNERSHIP: a human-gated task
+    # (lever tag / registered lever / BLD2 / credential cluster — _human_signals, shared with
+    # reclassify-needs-human.py so both sides of the truth loop agree — or the exact `needs-human`
+    # label, heal-board's rule) stays on the human surface; everything else parks in failed_blocked
+    # (fleet debt; nothing recycles it). Reversible status flips. ([[no-never-happens-again]])
     chronic_ids = {x["id"] for x in verify.get("chronic", [])}
+    levers = lever_ids(ROOT)
 
     if not acquire_lock():
         print("queue lock held by daemon — skipping this pass (will retry next tick)")
@@ -76,19 +84,49 @@ def main():
         path = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
         lf = load_limen_file(path)
         now = datetime.datetime.now(datetime.timezone.utc)
-        merged_done, open_pr_done, reopened, escalated = [], [], [], []
+        merged_done, open_pr_done, reopened, parked, rehomed = [], [], [], [], []
+
+        def park_chronic(t, why: str):
+            """Park chronic fleet-debt in failed_blocked; a human-gated task (his-hand signals or
+            the exact `needs-human` label) stays on the human surface. The kept write says "kept",
+            never "escalat…", so chronic_escalated_to_needs_human() can never re-home it later."""
+            if "needs-human" in (t.labels or []) or is_human_gated(t, levers):
+                t.status = "needs_human"
+                out = f"heal-dispatch: {why} → needs_human (kept: human-gated)"
+            else:
+                t.status = "failed_blocked"
+                if CHRONIC_FLEET_DEBT_LABEL not in (t.labels or []):
+                    t.labels = list(t.labels or []) + [CHRONIC_FLEET_DEBT_LABEL]
+                out = f"heal-dispatch: {why} → failed_blocked (fleet-debt, off the human surface)"
+            t.updated = now
+            t.dispatch_log.append(DispatchLogEntry(
+                timestamp=now, agent="limen", session_id="heal", status=t.status, output=out))
+            parked.append(f"{t.id} → {t.status}")
 
         for t in lf.tasks:
-            # CHRONIC escalation runs on the churning (open/failed) chronic tasks, NOT the dispatched
-            # ones the loop below handles — stop them re-looping; surface for a human. Idempotent
-            # (skips ones already needs_human). Reversible.
+            # CHRONIC parking runs on the churning (open/failed) chronic tasks, NOT the dispatched
+            # ones the loop below handles — stop them re-looping without polluting the human
+            # surface. Idempotent (a parked task is neither open/failed nor chronic-listed again).
             if t.id in chronic_ids and t.status in ("open", "failed"):
-                t.status = "needs_human"
+                park_chronic(t, "chronic (reopened ≥3×, never a PR)")
+                continue
+            # SELF-MIGRATION: a task the machine previously escalated to needs_human for chronic
+            # churn is fleet-debt mis-homed on the human surface — re-home it to failed_blocked,
+            # unless it is human-gated (same ownership rule as the inflow above). Log-evidence
+            # predicate, not the verify chronic list (chronic_tasks() never scans needs_human).
+            # Structurally idempotent: once moved, no branch matches it again.
+            if (t.status == "needs_human" and "needs-human" not in (t.labels or [])
+                    and not is_human_gated(t, levers)
+                    and chronic_escalated_to_needs_human(t)):
+                t.status = "failed_blocked"
                 t.updated = now
+                if CHRONIC_FLEET_DEBT_LABEL not in (t.labels or []):
+                    t.labels = list(t.labels or []) + [CHRONIC_FLEET_DEBT_LABEL]
                 t.dispatch_log.append(DispatchLogEntry(
-                    timestamp=now, agent="limen", session_id="heal", status="needs_human",
-                    output="heal-dispatch: chronic (reopened ≥3×, never a PR) → escalated, stop re-looping"))
-                escalated.append(t.id)
+                    timestamp=now, agent="limen", session_id="heal", status="failed_blocked",
+                    output="heal-dispatch: chronic escalation re-homed needs_human → failed_blocked "
+                           "(fleet-debt, not a human atom)"))
+                rehomed.append(t.id)
                 continue
             if t.status != "dispatched":   # re-check fresh state under lock
                 continue
@@ -114,13 +152,7 @@ def main():
                 if t.id in nopr_ids and PR_RE.search(last_session(t)):
                     continue
                 if t.id in chronic_ids:
-                    t.status = "needs_human"
-                    t.updated = now
-                    t.dispatch_log.append(DispatchLogEntry(
-                        timestamp=now, agent="limen", session_id="heal",
-                        status="needs_human",
-                        output="heal-dispatch: dispatched with no PR and chronic (reopened ≥3×) → escalated, stop re-looping"))
-                    escalated.append(t.id)
+                    park_chronic(t, "dispatched with no PR and chronic (reopened ≥3×)")
                     continue
                 t.status = "open"
                 t.target_agent = t.target_agent or CASCADE_TOP
@@ -134,15 +166,17 @@ def main():
 
         print(f"heal-dispatch: {len(merged_done)} merged→done, "
               f"{len(open_pr_done)} open-pr→done, {len(reopened)} stuck→open, "
-              f"{len(escalated)} chronic→needs_human")
+              f"{len(parked)} chronic→parked, {len(rehomed)} needs_human→failed_blocked re-homed")
         for i in merged_done:
             print(f"    merged: {i}")
         for i in open_pr_done:
             print(f"    open:   {i}")
         for i in reopened:
             print(f"    reopen: {i}")
-        for i in escalated:
-            print(f"    escalate: {i}")
+        for i in parked:
+            print(f"    park:   {i}")
+        for i in rehomed:
+            print(f"    rehome: {i}")
         if args.apply:
             save_limen_file(path, lf)
             print("  APPLIED -> tasks.yaml")
