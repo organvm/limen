@@ -2085,6 +2085,10 @@ _CLAUDE_NO_MODAL_MODE = "dontAsk"
 _CLAUDE_REQUIRED_BUILD_TOOLS = frozenset({"Bash", "Edit", "Write"})
 
 
+class ClaudeLaunchContractError(RuntimeError):
+    """The internal Claude argv could wait for unavailable operator input."""
+
+
 def _option_values(argv: list[str], *names: str) -> list[str]:
     """Return values supplied as either ``--flag value`` or ``--flag=value``."""
 
@@ -2108,28 +2112,34 @@ def _assert_claude_no_modal_contract(argv: list[str]) -> None:
     """
 
     if "-p" not in argv and "--print" not in argv:
-        raise RuntimeError("Claude fleet launch must use non-interactive print mode")
+        raise ClaudeLaunchContractError("Claude fleet launch must use non-interactive print mode")
     modes = _option_values(argv, "--permission-mode")
     if modes != [_CLAUDE_NO_MODAL_MODE]:
         rendered = ", ".join(modes) if modes else "missing"
-        raise RuntimeError(f"Claude fleet launch must use exactly one dontAsk permission mode (got {rendered})")
+        raise ClaudeLaunchContractError(
+            f"Claude fleet launch must use exactly one dontAsk permission mode (got {rendered})"
+        )
     if _option_values(argv, "--permission-prompt-tool"):
-        raise RuntimeError("Claude fleet launch must not install a permission-prompt callback")
+        raise ClaudeLaunchContractError("Claude fleet launch must not install a permission-prompt callback")
     if {"--dangerously-skip-permissions", "--allow-dangerously-skip-permissions"} & set(argv):
-        raise RuntimeError("Claude fleet launch must not enable bypassPermissions")
+        raise ClaudeLaunchContractError("Claude fleet launch must not enable bypassPermissions")
 
     allowed: set[str] = set()
     for value in _option_values(argv, "--allowedTools", "--allowed-tools"):
         allowed.update(part for part in re.split(r"[\s,]+", value) if part)
     missing = sorted(_CLAUDE_REQUIRED_BUILD_TOOLS - allowed)
     if missing:
-        raise RuntimeError(f"Claude fleet launch is missing required pre-approved build tools: {', '.join(missing)}")
+        raise ClaudeLaunchContractError(
+            f"Claude fleet launch is missing required pre-approved build tools: {', '.join(missing)}"
+        )
 
     disallowed: set[str] = set()
     for value in _option_values(argv, "--disallowedTools", "--disallowed-tools"):
         disallowed.update(part for part in re.split(r"[\s,]+", value) if part)
     if "AskUserQuestion" not in disallowed:
-        raise RuntimeError("Claude fleet launch must remove AskUserQuestion from its unattended tool surface")
+        raise ClaudeLaunchContractError(
+            "Claude fleet launch must remove AskUserQuestion from its unattended tool surface"
+        )
 
 
 _LOCAL_BIN: dict[str, str] = {
@@ -4109,6 +4119,12 @@ def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str:
     if not agent_can_run_task(agent, task):
         print(f"  SKIP {task.id}: {agent} is gated for Limen registry discovery tasks")
         return False
+    if agent == "claude":
+        try:
+            _assert_claude_no_modal_contract(list(_LOCAL_AGENTS[agent]))
+        except ClaudeLaunchContractError as exc:
+            print(f"  BLOCKED {task.id}: {exc}; refusing provider launch so the lane can cascade")
+            return False
     if agent == "opencode" and "-m" not in _agent_argv(agent, task):
         reason = "no code-capable model is exposed by the live OpenCode catalog"
         if dry_run:

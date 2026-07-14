@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 import limen.dispatch as D
+from limen.models import Task
 
 
 def test_real_claude_dispatch_argv_is_noninteractive_and_fail_closed(monkeypatch):
@@ -125,5 +128,17 @@ def test_static_flag_drift_is_rejected_at_runtime(monkeypatch):
         ["-p", "--permission-mode", "acceptEdits", "--allowedTools", "Bash,Edit,Write"],
     )
 
-    with pytest.raises(RuntimeError, match="exactly one dontAsk"):
+    with pytest.raises(D.ClaudeLaunchContractError, match="exactly one dontAsk"):
         D._agent_argv("claude")
+
+
+def test_contract_drift_blocks_only_the_lane_so_dispatch_can_cascade(monkeypatch, capsys):
+    monkeypatch.setitem(
+        D._LOCAL_AGENTS,
+        "claude",
+        ["-p", "--permission-mode", "auto", "--allowedTools", "Bash,Edit,Write"],
+    )
+    task = Task(id="T-NO-MODAL", title="fixture", target_agent="claude", created=date(2026, 7, 14))
+
+    assert D._call_local_agent("claude", task, dry_run=False) is False
+    assert "refusing provider launch so the lane can cascade" in capsys.readouterr().out
