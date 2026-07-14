@@ -191,9 +191,7 @@ def test_chronic_active_receipt_owner_is_not_parked(tmp_path):
                 "repo": "novel/harbor",
                 "predicate": 'test "$(gh pr view 88 --repo novel/harbor --json state --jq .state)" = MERGED',
                 "receipt_target": "https://github.com/novel/harbor/pull/88",
-                "dispatch_log": [
-                    {"timestamp": created, "agent": "limen", "session_id": "retry", "status": "open"}
-                ],
+                "dispatch_log": [{"timestamp": created, "agent": "limen", "session_id": "retry", "status": "open"}],
             },
             {
                 "id": "owner-lantern",
