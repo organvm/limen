@@ -69,10 +69,11 @@
 
 ## Design consequences (the real no-modal boundary)
 
-1. Limen invokes Claude with `-p --permission-mode dontAsk` and an explicit build-tool
-   allowlist. In this mode, anything not pre-approved is denied instead of invoking a
-   permission callback. The dispatcher can then fail/cascade the attempt; it never waits
-   for a person who is not present.
+1. Limen invokes Claude with `-p --permission-mode dontAsk` and explicitly pre-approves
+   file mutation. Bash/network authorization remains in effective user/project/managed
+   rules; Limen does not inject a blanket shell grant. Anything unresolved is denied
+   instead of invoking a permission callback. The dispatcher can then fail/cascade the
+   attempt; it never waits for a person who is not present.
 2. `acceptEdits` still prompts for Bash. `auto` reduces prompts but can fall back to them
    after classifier denials. `bypassPermissions` removes the safety boundary and still has
    root/home deletion circuit breakers, so it is not the host fleet contract.

@@ -428,9 +428,10 @@ checks.
 - You have access to the full filesystem — `$LIMEN_ROOT/tasks.yaml` is a regular file.
 - Support `limen` as a subagent: when asked, run the limen CLI or read/write tasks.yaml directly.
 - **Fleet launches never wait on permissions.** Limen-owned non-interactive Claude dispatch uses
-  `--permission-mode dontAsk` with an explicit build-tool allowlist. A tool outside that surface, or
-  one matched by an operator/managed ask or deny rule, must fail closed and let the dispatcher
-  cascade or owner-route it; it must never become an approval modal. Do not replace this with
+  `--permission-mode dontAsk` with an explicit file-mutation allowlist. Bash/network policy remains
+  owned by effective user/project/managed rules; Limen does not inject a blanket shell grant. A tool
+  outside that surface, or one matched by an ask or deny rule, must fail closed and let the
+  dispatcher cascade or owner-route it; it must never become an approval modal. Do not replace this with
   `acceptEdits` or `auto` (both can prompt), or `bypassPermissions` (unsafe on the host). This fleet
   contract does not change the operator's settings or any interactive/user-started Claude session.
 - **Tier subagent fan-out by job.** Task/Workflow subagents inherit the session model; pick each agent's tier by its job (`.claude/agents/` types, or an explicit `model`/`effort`) so trivial workers never ride Opus. Authority: `cli/src/limen/model_selection.py`; details in CLAUDE.md → Parallel Exploration & Fan-Out.

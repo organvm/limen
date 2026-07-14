@@ -2068,7 +2068,10 @@ _LOCAL_AGENTS: dict[str, list[str]] = {
         "--permission-mode",
         "dontAsk",
         "--allowedTools",
-        "Bash,Edit,Write,NotebookEdit,Skill,WebFetch,WebSearch",
+        # File mutation is required for a build lane. Bash/network policy remains
+        # owned by the effective user/project/managed rules; Limen must not add a
+        # new blanket shell grant merely to avoid prompts.
+        "Edit,Write,NotebookEdit",
         # A print-mode fleet run has no human on stdin.  Removing the question
         # tool keeps requirement clarification fail-closed as well as permissions.
         "--disallowedTools",
@@ -2082,7 +2085,7 @@ _LOCAL_AGENTS: dict[str, list[str]] = {
 }
 
 _CLAUDE_NO_MODAL_MODE = "dontAsk"
-_CLAUDE_REQUIRED_BUILD_TOOLS = frozenset({"Bash", "Edit", "Write"})
+_CLAUDE_REQUIRED_BUILD_TOOLS = frozenset({"Edit", "Write"})
 
 
 class ClaudeLaunchContractError(RuntimeError):
@@ -2131,6 +2134,10 @@ def _assert_claude_no_modal_contract(argv: list[str]) -> None:
     if missing:
         raise ClaudeLaunchContractError(
             f"Claude fleet launch is missing required pre-approved build tools: {', '.join(missing)}"
+        )
+    if "Bash" in allowed:
+        raise ClaudeLaunchContractError(
+            "Claude fleet launch must not add a blanket Bash grant; shell policy belongs to effective settings"
         )
 
     disallowed: set[str] = set()

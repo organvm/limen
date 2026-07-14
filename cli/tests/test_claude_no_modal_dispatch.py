@@ -18,7 +18,8 @@ def test_real_claude_dispatch_argv_is_noninteractive_and_fail_closed(monkeypatch
     assert argv[0] == "-p"
     assert D._option_values(argv, "--permission-mode") == ["dontAsk"]
     allowed = set(D._option_values(argv, "--allowedTools")[0].split(","))
-    assert {"Bash", "Edit", "Write"} <= allowed
+    assert {"Edit", "Write"} <= allowed
+    assert "Bash" not in allowed
     assert D._option_values(argv, "--disallowedTools") == ["AskUserQuestion"]
 
 
@@ -63,11 +64,26 @@ def test_interactive_claude_launch_fails_before_launch():
         D._assert_claude_no_modal_contract(argv)
 
 
-@pytest.mark.parametrize("allowed", ["Edit,Write", "Bash,Write", "Bash,Edit"])
+@pytest.mark.parametrize("allowed", ["Write", "Edit", "NotebookEdit"])
 def test_missing_core_build_tool_fails_before_launch(allowed):
     argv = ["-p", "--permission-mode=dontAsk", "--allowed-tools", allowed]
 
     with pytest.raises(RuntimeError, match="missing required pre-approved build tools"):
+        D._assert_claude_no_modal_contract(argv)
+
+
+def test_blanket_bash_grant_fails_before_launch():
+    argv = [
+        "-p",
+        "--permission-mode",
+        "dontAsk",
+        "--allowedTools",
+        "Bash,Edit,Write",
+        "--disallowedTools",
+        "AskUserQuestion",
+    ]
+
+    with pytest.raises(D.ClaudeLaunchContractError, match="must not add a blanket Bash grant"):
         D._assert_claude_no_modal_contract(argv)
 
 
@@ -77,7 +93,7 @@ def test_permission_prompt_callback_fails_before_launch():
         "--permission-mode",
         "dontAsk",
         "--allowedTools",
-        "Bash Edit Write",
+        "Edit Write",
         "--permission-prompt-tool",
         "mcp__permissions__approve",
     ]
@@ -93,7 +109,7 @@ def test_bypass_enabling_flags_fail_before_launch(flag):
         "--permission-mode",
         "dontAsk",
         "--allowedTools",
-        "Bash,Edit,Write",
+        "Edit,Write",
         "--disallowedTools",
         "AskUserQuestion",
         flag,
@@ -104,7 +120,7 @@ def test_bypass_enabling_flags_fail_before_launch(flag):
 
 
 def test_question_tool_must_be_removed_before_launch():
-    argv = ["-p", "--permission-mode", "dontAsk", "--allowedTools", "Bash,Edit,Write"]
+    argv = ["-p", "--permission-mode", "dontAsk", "--allowedTools", "Edit,Write"]
 
     with pytest.raises(RuntimeError, match="must remove AskUserQuestion"):
         D._assert_claude_no_modal_contract(argv)
