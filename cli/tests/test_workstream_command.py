@@ -53,9 +53,7 @@ def test_workstream_command_writes_private_kickstart_packet(tmp_path: Path, monk
     assert ".limen-workstream" not in _git("status", "--short", cwd=wt).stdout
 
 
-def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(tmp_path: Path, monkeypatch) -> None:
     repo = tmp_path / "demo-repo"
     repo.mkdir()
     _git("init", "-q", "-b", "main", cwd=repo)
