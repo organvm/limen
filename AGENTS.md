@@ -114,7 +114,7 @@ Tracked ledgers remain redacted; raw prompt bodies, private paths, full hashes, 
 material stay in `.limen-private/session-corpus`. Board mutations derived from corpus review still go
 through TABVLARIVS, and task statuses still use only the canonical state vocabulary below.
 
-## Universal Work Universe and Progress Truth
+## Board Progress and Source-Coverage Truth
 
 Lifecycle debt is first-class portfolio work. A preserved branch, merged PR, exact owner blocker,
 or safely reclaimed cache is real value when it closes ambiguity or preservation risk; do not dismiss
@@ -143,6 +143,13 @@ ranking when available. Record requested capacity as a debit, expected value as 
 predicate plus receipt target as collateral. After execution, reconcile forecast to actual durable
 credit and actual spend. A terminal board state is only a credit claim until the owning receipt passes;
 do not let a high-cost attempt inherit the value it merely intended to create.
+
+`limen progress` is only the partial task-board projection and source-readiness lens for this
+doctrine. It does not ingest the source-owned leaves behind prompt, GitHub-estate, lifecycle, mail,
+financial, or contribution receipts. Its `scope: partial` output, source contract hashes, and
+separate board / coverage / verified-receipt debt counts must not be represented as whole-estate
+proof. Dynamic source enumeration, actual spend/value reconciliation, historical comparison, and an
+interactive TUI require their own owner receipts.
 
 ## Dynamic Provider Selection
 

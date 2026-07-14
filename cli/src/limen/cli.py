@@ -215,20 +215,21 @@ def status(agent, status):
     "--json-output",
     "json_output",
     is_flag=True,
-    help="Print the complete machine-readable universe.",
+    help="Print the bounded machine-readable board and source-coverage lens.",
 )
 @click.option(
     "--report-file",
     type=click.Path(path_type=Path),
     default=None,
-    help="Write the complete machine-readable universe to a JSON receipt.",
+    help="Write the bounded board and source-coverage lens to a JSON receipt.",
 )
 def progress(view, scope, level, limit, show_all, ascii_only, json_output, report_file):
-    """Zoom from portfolio progress bars into every active debt leaf.
+    """Filter the partial task-board projection and source-coverage lens.
 
-    Sources are coverage-aware: a dark or stale estate sensor remains visible as
-    debt.  Origin and horizon are explicit metadata only; Limen never guesses
-    whether a task is a human prompt, obligation, system recommendation, or
+    Dark, stale, partial, capped, unavailable, failed, or incomplete source
+    contracts remain visible as coverage debt.  Source-owned leaves are not
+    imported.  Origin and horizon are explicit metadata only; Limen never
+    guesses whether a task is a human prompt, obligation, recommendation, or
     past/present/future work from title resemblance.
     """
 
@@ -236,7 +237,7 @@ def progress(view, scope, level, limit, show_all, ascii_only, json_output, repor
     tasks_path = resolve_tasks_path(root)
     if not tasks_path.exists():
         click.echo("tasks.yaml not found", err=True)
-        raise click.ClickException("cannot build progress universe")
+        raise click.ClickException("cannot build board-progress lens")
     limen = load_limen_file(tasks_path)
     snapshot = build_progress_snapshot(limen, root)
     if report_file:
