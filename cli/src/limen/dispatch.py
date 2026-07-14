@@ -2009,7 +2009,10 @@ def _call_warp_oz(agent: str, task: Task, dry_run: bool) -> bool | str:
 #   - codex: needs --skip-git-repo-check (else aborts outside a "trusted" dir)
 #     and --sandbox workspace-write (default sandbox is read-only). exec is
 #     already non-interactive (approval: never).
-#   - claude: -p prints; --permission-mode acceptEdits lets it apply edits.
+#   - claude: -p is non-interactive; dontAsk plus an explicit build-tool allowlist
+#     runs authorized work and turns every residual permission decision into a hard
+#     denial instead of a modal.  Auto can fall back to prompting, acceptEdits still
+#     prompts for Bash, and bypassPermissions is not safe on the host.
 #   - opencode/agy: edit by default in run/-p mode (verified READY headless).
 #   - gemini: requires GEMINI_API_KEY / settings.json auth (not configured;
 #     lane is wired but will fail until auth is set).
@@ -2060,12 +2063,75 @@ _LOCAL_AGENTS: dict[str, list[str]] = {
     # ("acknowledged, ready to assist") and wrote nothing. Flags first, -p last.
     "agy": ["--dangerously-skip-permissions", "-p"],
     "antigravity": ["--dangerously-skip-permissions", "-p"],
-    "claude": ["-p", "--permission-mode", "acceptEdits"],
+    "claude": [
+        "-p",
+        "--permission-mode",
+        "dontAsk",
+        "--allowedTools",
+        "Bash,Edit,Write,NotebookEdit,Skill,WebFetch,WebSearch",
+        # A print-mode fleet run has no human on stdin.  Removing the question
+        # tool keeps requirement clarification fail-closed as well as permissions.
+        "--disallowedTools",
+        "AskUserQuestion",
+        "--no-chrome",
+    ],
     # ollama: the local, unmetered floor. `ollama run <model> <prompt>` runs once,
     # non-interactively. The <model> is a POSITIONAL after `run` (not a -m flag), injected
     # lazily in _agent_argv() and DERIVED from `ollama list` — never pinned (see ollama_model).
     "ollama": ["run"],
 }
+
+_CLAUDE_NO_MODAL_MODE = "dontAsk"
+_CLAUDE_REQUIRED_BUILD_TOOLS = frozenset({"Bash", "Edit", "Write"})
+
+
+def _option_values(argv: list[str], *names: str) -> list[str]:
+    """Return values supplied as either ``--flag value`` or ``--flag=value``."""
+
+    values: list[str] = []
+    for index, value in enumerate(argv):
+        for name in names:
+            if value == name and index + 1 < len(argv):
+                values.append(argv[index + 1])
+            elif value.startswith(f"{name}="):
+                values.append(value.split("=", 1)[1])
+    return values
+
+
+def _assert_claude_no_modal_contract(argv: list[str]) -> None:
+    """Refuse to launch a fleet Claude process that can open an input modal.
+
+    ``dontAsk`` is the only host-safe Claude CLI mode whose documented contract
+    converts unresolved permission checks into denials.  This is a runtime guard,
+    not just a test expectation: future flag drift must stop the lane before the
+    provider process starts.
+    """
+
+    if "-p" not in argv and "--print" not in argv:
+        raise RuntimeError("Claude fleet launch must use non-interactive print mode")
+    modes = _option_values(argv, "--permission-mode")
+    if modes != [_CLAUDE_NO_MODAL_MODE]:
+        rendered = ", ".join(modes) if modes else "missing"
+        raise RuntimeError(f"Claude fleet launch must use exactly one dontAsk permission mode (got {rendered})")
+    if _option_values(argv, "--permission-prompt-tool"):
+        raise RuntimeError("Claude fleet launch must not install a permission-prompt callback")
+    if {"--dangerously-skip-permissions", "--allow-dangerously-skip-permissions"} & set(argv):
+        raise RuntimeError("Claude fleet launch must not enable bypassPermissions")
+
+    allowed: set[str] = set()
+    for value in _option_values(argv, "--allowedTools", "--allowed-tools"):
+        allowed.update(part for part in re.split(r"[\s,]+", value) if part)
+    missing = sorted(_CLAUDE_REQUIRED_BUILD_TOOLS - allowed)
+    if missing:
+        raise RuntimeError(f"Claude fleet launch is missing required pre-approved build tools: {', '.join(missing)}")
+
+    disallowed: set[str] = set()
+    for value in _option_values(argv, "--disallowedTools", "--disallowed-tools"):
+        disallowed.update(part for part in re.split(r"[\s,]+", value) if part)
+    if "AskUserQuestion" not in disallowed:
+        raise RuntimeError("Claude fleet launch must remove AskUserQuestion from its unattended tool surface")
+
+
 _LOCAL_BIN: dict[str, str] = {
     # opencode-clock wraps the real opencode binary with an internal usage clock
     # (token tracking from SQLite DB) and presence beacon. Falls through to plain
@@ -2111,6 +2177,7 @@ def _agent_argv(agent: str, task: Task | None = None) -> list[str]:
             # the claude CLI uses --model (it has NO -m short flag, unlike codex/opencode);
             # `claude -m …` → "error: unknown option '-m'" and the whole dispatch fails.
             flags += ["--model", model]
+        _assert_claude_no_modal_contract(flags)
     elif agent == "ollama":
         # `ollama run <model> <prompt>` — model is a POSITIONAL right after `run`, derived at
         # call-time. No model pulled → no model arg (the run will error and the lane stays the
