@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from limen_mcp import runtime_requirements
 from limen_mcp.intake import normalize_selected_legacy_task, validate_intake_contract
 
-VALID_STATUSES = {"open", "dispatched", "in_progress", "done", "failed", "failed_blocked", "needs_human", "archived"}
+VALID_STATUSES = {"open", "dispatched", "in_progress", "done", "failed", "failed_blocked", "failed_chronic", "needs_human", "archived"}
 VALID_PRIORITIES = {"critical", "high", "medium", "low", "backlog"}
 VALID_AGENTS = {
     "jules",

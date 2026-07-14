@@ -10,15 +10,22 @@ Classification is DERIVED from signals, never a pinned id list:
   * KEEP (real human atom): needs a secret/credential/account, admin/branch-protection, the merge
     gate, or an irreversible/backup-gated cutover. Also the `BLD2-*` deploy batch (blocked on the
     Cloudflare wrangler credential — his hand).
-  * FLIP -> open: a code/docs task in a repo with NO human-only signal — the fleet can just do it.
+  * DEBT -> failed_chronic: FLEET debt masquerading as a human gate — a chronic (reopened ≥3×, no PR)
+    or repeated-no-op task the count-based escalators (heal-dispatch/recover) dumped in `needs_human`.
+    It is a fleet failure, not a human decision, so it parks in `failed_chronic` (terminal, not
+    re-dispatched). NEVER flipped to `open`: flipping chronic->open is exactly what ping-ponged
+    252/290 tasks straight back to needs_human within a day.
+  * FLIP -> open: a code/docs task in a repo with NO human-only signal and NOT chronic — fleet does it.
   * STALE: its precondition is already satisfied (e.g. "live-dispatch across vendors" while the
     daemon is already dispatching) -> recommend close, don't re-queue.
   * REVIEW: an `ACTIVATION AUDIT: skip|kill` decision — "kill" is irreversible, so NEVER auto-flip;
     a one-pass human/triage call.
 
-Dry-run by default: prints the four buckets so every decision is visible. With --apply it flips ONLY
-the FLIP bucket `needs_human -> open`, lockless + atomic (re-read fresh under the limen save path,
-exactly like generate-revenue-backlog), and never touches KEEP / STALE / REVIEW. Fully reversible.
+Dry-run by default: prints the buckets so every decision is visible. With --apply it moves the DEBT
+bucket `needs_human -> failed_chronic` and (unless --debt-only) the FLIP bucket `needs_human -> open`,
+lockless + atomic (re-read fresh under the limen save path, exactly like generate-revenue-backlog),
+and never touches KEEP / STALE / REVIEW. Fully reversible. `--apply --debt-only` is the beat guard:
+it keeps `needs_human` meaning ONLY his hand by auto-parking any chronic straggler in failed_chronic.
 """
 from __future__ import annotations
 
@@ -73,6 +80,22 @@ _LEVER_IDS = _lever_ids()
 # Explicit lever tag on a task — the surest human-atom signal, independent of the credential cluster.
 _LEVER_MARKER = re.compile(r"needs-human \(L-|\[his-hand\]", re.IGNORECASE)
 
+# FLEET DEBT masquerading as a human gate: a needs_human task carrying a chronic/no-op escalation
+# receipt in its dispatch_log, or the structural chronic signature (reopened ≥3× with no PR ever).
+# The count-based escalators (heal-dispatch/recover) dumped ~333 of these here — fleet failure, not a
+# human decision. They move to failed_chronic (terminal), NEVER flip to `open`.
+_DEBT_RECEIPT = re.compile(r"chronic \(reopened|repeated no-op failures|parked as fleet-debt", re.IGNORECASE)
+
+
+def _is_fleet_debt(task) -> bool:
+    log = getattr(task, "dispatch_log", None) or []
+    for e in log:
+        if _DEBT_RECEIPT.search(str(getattr(e, "output", "") or "")):
+            return True
+    reopens = sum(1 for e in log if str(getattr(e, "status", "")) == "open")
+    ever_pr = any("/pull/" in str(u) for u in (getattr(task, "urls", None) or []))
+    return reopens >= 3 and not ever_pr
+
 
 def _live_root() -> Path:
     """The live checkout, even when run from a worktree (whose logs/ are stale): strip a trailing
@@ -112,6 +135,11 @@ def classify(task, dispatch_live: bool) -> str:
         return "REVIEW"
     if _HUMAN_SIGNALS.search(blob):
         return "KEEP"
+    # Fleet debt is checked AFTER every KEEP/REVIEW signal (a real lever that happens to be chronic
+    # stays his hand) but BEFORE FLIP — so a chronic code/docs task parks in failed_chronic instead of
+    # ping-ponging back to needs_human via open.
+    if _is_fleet_debt(task):
+        return "DEBT"
     if _STALE_SIGNAL.search(blob) and dispatch_live:
         return "STALE"
     if task.type in ("code", "docs") and task.repo:
@@ -121,6 +149,7 @@ def classify(task, dispatch_live: bool) -> str:
 
 _REASON = {
     "KEEP": "real human atom (secret/account/admin/merge-gate/cutover/credential-gated deploy)",
+    "DEBT": "fleet debt (chronic reopen / repeated no-op) — park in failed_chronic, NOT his hand",
     "FLIP": "fleet-buildable code/docs — no human-only signal",
     "STALE": "precondition already satisfied (daemon already dispatching) — recommend close",
     "REVIEW": "irreversible/ambiguous (skip-vs-kill) — one human triage pass",
@@ -131,7 +160,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", default=os.environ.get("LIMEN_TASKS", "tasks.yaml"))
     ap.add_argument("--apply", action="store_true",
-                    help="flip ONLY the FLIP bucket needs_human->open (lockless, atomic, reversible)")
+                    help="apply: DEBT->failed_chronic and (unless --debt-only) FLIP->open (lockless, atomic, reversible)")
+    ap.add_argument("--debt-only", action="store_true",
+                    help="with --apply, move ONLY the DEBT bucket needs_human->failed_chronic (the beat guard)")
     args = ap.parse_args()
 
     path = Path(args.tasks)
@@ -139,7 +170,7 @@ def main() -> int:
     dispatch_live = _dispatch_is_live()
     nh = [t for t in lf.tasks if t.status == "needs_human"]
 
-    buckets: dict[str, list] = {"KEEP": [], "FLIP": [], "STALE": [], "REVIEW": []}
+    buckets: dict[str, list] = {"KEEP": [], "DEBT": [], "FLIP": [], "STALE": [], "REVIEW": []}
     for t in nh:
         buckets[classify(t, dispatch_live)].append(t)
 
@@ -151,17 +182,20 @@ def main() -> int:
         "",
         f"- **KEEP — {len(buckets['KEEP'])}** genuinely need your hand (secret / account / admin / "
         "merge gate / irreversible cutover / Cloudflare-credential-gated deploy).",
+        f"- **DEBT — {len(buckets['DEBT'])}** are FLEET debt (chronic reopen / repeated no-op) the "
+        "escalators dumped in `needs_human`. `--apply` parks them in `failed_chronic` (terminal), "
+        "NOT `open`. This is why the count lied. Reversible.",
         f"- **FLIP — {len(buckets['FLIP'])}** are fleet-buildable code/docs parked behind a false gate. "
         "`--apply` flips these to `open` so the fleet does them. Reversible.",
         f"- **STALE — {len(buckets['STALE'])}** precondition already met — recommend close, don't re-queue.",
         f"- **REVIEW — {len(buckets['REVIEW'])}** one quick triage call (skip vs *kill* — kill is "
         "irreversible, never auto-flipped).",
         "",
-        "> `--apply` changes ONLY the FLIP bucket; KEEP / STALE / REVIEW are never auto-touched. "
-        "Flipping `needs_human -> open` only lets the fleet *attempt* the work — fully reversible.",
+        "> `--apply` changes ONLY DEBT (`->failed_chronic`) and FLIP (`->open`); KEEP / STALE / REVIEW "
+        "are never auto-touched. Both moves are reversible.",
         "",
     ]
-    for b in ("FLIP", "STALE", "REVIEW", "KEEP"):
+    for b in ("DEBT", "FLIP", "STALE", "REVIEW", "KEEP"):
         md += [f"## {b} — {_REASON[b]}", "", "| id | type | repo | title |", "|---|---|---|---|"]
         for t in buckets[b]:
             md.append(f"| `{t.id}` | {t.type} | {t.repo or '—'} | {(t.title or '')[:70]} |")
@@ -176,15 +210,21 @@ def main() -> int:
 
     # console -------------------------------------------------------------------------------------
     print(f"# reclassify-needs-human: {len(nh)} needs_human  (dispatch_live={dispatch_live})")
-    for b in ("KEEP", "FLIP", "STALE", "REVIEW"):
+    for b in ("KEEP", "DEBT", "FLIP", "STALE", "REVIEW"):
         print(f"  {b:6} {len(buckets[b]):2}  — {_REASON[b]}")
     flip_ids = [t.id for t in buckets["FLIP"]]
-    print("\nFLIP -> open:")
-    for t in buckets["FLIP"]:
+    debt_ids = [t.id for t in buckets["DEBT"]]
+    print("\nDEBT -> failed_chronic:")
+    for t in buckets["DEBT"]:
         print(f"  {t.id:52.52} {(t.title or '')[:50]}")
+    if not args.debt_only:
+        print("\nFLIP -> open:")
+        for t in buckets["FLIP"]:
+            print(f"  {t.id:52.52} {(t.title or '')[:50]}")
 
     if not args.apply:
-        print(f"\ndry-run — re-run with --apply to flip {len(flip_ids)} tasks needs_human->open.")
+        moves = f"{len(debt_ids)} DEBT->failed_chronic" + ("" if args.debt_only else f" + {len(flip_ids)} FLIP->open")
+        print(f"\ndry-run — re-run with --apply to move {moves}.")
         print("wrote docs/RECLASSIFY-PROPOSAL.md")
         return 0
 
@@ -193,20 +233,30 @@ def main() -> int:
     # contention — next run simply re-applies (self-healing), mirroring generate-revenue-backlog.
     fresh = load_limen_file(path)
     flip_set = set(flip_ids)
+    debt_set = set(debt_ids)
     stamp = date.today().isoformat()
-    changed = 0
+    parked = flipped = 0
     for t in fresh.tasks:
-        if t.id in flip_set and t.status == "needs_human":
+        if t.status != "needs_human":
+            continue
+        if t.id in debt_set:
+            t.status = "failed_chronic"
+            t.updated = stamp
+            if "reclassified-fleet-debt" not in (t.labels or []):
+                t.labels = list(t.labels or []) + ["reclassified-fleet-debt"]
+            parked += 1
+        elif t.id in flip_set and not args.debt_only:
             t.status = "open"
             t.updated = stamp
             if "reclassified-from-needs-human" not in (t.labels or []):
                 t.labels = list(t.labels or []) + ["reclassified-from-needs-human"]
-            changed += 1
-    if not changed:
-        print("\n(nothing to flip after fresh re-read — already applied.)")
+            flipped += 1
+    if not (parked or flipped):
+        print("\n(nothing to reclassify after fresh re-read — already applied.)")
         return 0
     save_limen_file(path, fresh)
-    print(f"\napplied: flipped {changed} tasks needs_human->open -> {path} (route+dispatch separately).")
+    print(f"\napplied: {parked} needs_human->failed_chronic (fleet debt), "
+          f"{flipped} needs_human->open (buildable) -> {path} (route+dispatch separately).")
     return 0
 
 

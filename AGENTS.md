@@ -228,12 +228,16 @@ Do not invent states.
 | `done` | Completed successfully |
 | `failed` | Attempted, did not succeed — retryable |
 | `failed_blocked` | Stopped by an external blocker (billing / auth / infra) |
+| `failed_chronic` | Chronically failed — reopened ≥3× with no PR, or repeated no-ops; parked so the fleet stops re-looping (fleet debt, **not** a human gate) |
 | `needs_human` | Cannot proceed without a human action |
 | `archived` | Closed and suppressed from active steering |
 
 Normal flow: `open → dispatched → in_progress → done → archived`. From `in_progress` a task may
-instead move to `failed`, `failed_blocked`, or `needs_human`. A stale `dispatched`/`in_progress`
-claim is released back to `open` (see Session End Ritual). There is **no** `completed` state — use `done`.
+instead move to `failed`, `failed_blocked`, or `needs_human`. When the fleet reopens a task ≥3×
+without ever producing a PR (or loops on no-ops), the circuit breaker parks it in `failed_chronic`
+so it stops burning capacity — that is fleet debt, distinct from `needs_human` (a deliberate human
+gate). A stale `dispatched`/`in_progress` claim is released back to `open` (see Session End Ritual).
+There is **no** `completed` state — use `done`.
 
 ### Transition Rules
 

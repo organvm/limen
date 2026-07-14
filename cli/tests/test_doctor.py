@@ -110,6 +110,13 @@ def test_lifecycle_failed_blocked() -> None:
     assert info["phase"] == "recover"
 
 
+def test_lifecycle_failed_chronic() -> None:
+    # fleet debt (reopened >=3x / repeated no-op) parks here — terminal, recover phase, NOT his hand
+    task = _task(status="failed_chronic")
+    info = _task_lifecycle(task, set())
+    assert info["phase"] == "recover"
+
+
 def test_lifecycle_needs_human() -> None:
     task = _task(status="needs_human")
     info = _task_lifecycle(task, set())

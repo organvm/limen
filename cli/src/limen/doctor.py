@@ -226,7 +226,7 @@ def _task_lifecycle(task: Task, stale_ids: set[str]) -> TaskLifecycle:
         phase = "archived"
     elif task.status == "done":
         phase = "archive"
-    elif stale or task.status in ("failed", "failed_blocked", "needs_human"):
+    elif stale or task.status in ("failed", "failed_blocked", "failed_chronic", "needs_human"):
         phase = "recover"
     elif has_pr or task.status in ("dispatched", "in_progress"):
         phase = "verify"

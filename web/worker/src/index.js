@@ -2,7 +2,7 @@ import YAML from "yaml";
 
 const GITHUB_API = "https://api.github.com";
 const VERIFY_STATUSES = new Set(["done", "needs_human", "failed", "failed_blocked"]);
-const VALID_STATUSES = new Set(["open", "dispatched", "in_progress", "done", "failed", "failed_blocked", "needs_human", "archived"]);
+const VALID_STATUSES = new Set(["open", "dispatched", "in_progress", "done", "failed", "failed_blocked", "failed_chronic", "needs_human", "archived"]);
 const VALID_PRIORITIES = new Set(["critical", "high", "medium", "low", "backlog"]);
 const VALID_AGENTS = new Set(["jules", "claude", "gemini", "opencode", "codex", "copilot", "agy", "warp", "oz", "github_actions", "any"]);
 const VALID_DISPATCH_AGENTS = new Set([...VALID_AGENTS].filter((agent) => agent !== "any"));
@@ -281,7 +281,7 @@ function deriveThroughput(data, events, now = new Date()) {
   const byEventDate = countBy(events, (event) => new Date(event.timestamp_ms).toISOString().slice(0, 10));
   const done = (byStatus.done || 0) + (byStatus.archived || 0);
   const recordedStarts = (byEventStatus.dispatched || 0) + (byEventStatus.in_progress || 0);
-  const recordedFinishes = (byEventStatus.done || 0) + (byEventStatus.failed || 0) + (byEventStatus.failed_blocked || 0) + (byEventStatus.archived || 0);
+  const recordedFinishes = (byEventStatus.done || 0) + (byEventStatus.failed || 0) + (byEventStatus.failed_blocked || 0) + (byEventStatus.failed_chronic || 0) + (byEventStatus.archived || 0);
   const expectedCapacityRuns = dailyCapacity * ageDays;
   return {
     first_created: firstCreated,
@@ -415,7 +415,7 @@ function taskLifecycle(task, staleIds) {
   let phase = "assign";
   if (status === "archived") phase = "archived";
   else if (status === "done") phase = "archive";
-  else if (stale || ["failed", "failed_blocked", "needs_human"].includes(status)) phase = "recover";
+  else if (stale || ["failed", "failed_blocked", "failed_chronic", "needs_human"].includes(status)) phase = "recover";
   else if (has_pr || ["dispatched", "in_progress"].includes(status)) phase = "verify";
   const gates = {
     archived: "suppressed from active steering",
@@ -749,7 +749,7 @@ async function route(request, env) {
       if (sessionId.response) return sessionId.response;
       const note = validateText(body.note, "note", env, { defaultValue: "", max: 2000 });
       if (note.response) return note.response;
-      if (!["dispatched", "in_progress", "needs_human", "failed", "failed_blocked", "done"].includes(task.status)) return error("only active, attention, or done tasks can be verified", 409, env);
+      if (!["dispatched", "in_progress", "needs_human", "failed", "failed_blocked", "failed_chronic", "done"].includes(task.status)) return error("only active, attention, or done tasks can be verified", 409, env);
       task.status = status.value;
       appendLog(task, "qa", sessionId.value, task.status, note.value || `QA verified task as ${task.status}`);
       await saveBoard(env, doc.data, doc.sha);

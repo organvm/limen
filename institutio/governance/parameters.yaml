@@ -2366,6 +2366,13 @@ parameters:
     owner: tabularius
     note: "Cadence (every N beats) of the sensor-canary rung in the heartbeat's scheduled derive lane — matches the gitvs precedent for a cheap audit pass. The generic scheduled runner resolves this override; heartbeat-loop.sh contains no sensor-specific cadence constant."
 
+  LIMEN_NEEDS_HUMAN_HONEST:
+    default: "1"
+    env: LIMEN_NEEDS_HUMAN_HONEST
+    self_update: none
+    owner: tabularius
+    note: "Gate for the needs-human-honest rung (sensors.yaml 0g6): each beat it parks any chronic straggler (reopened >=3x / repeated no-op) still mislabeled needs_human into failed_chronic via reclassify-needs-human.py --apply --debt-only. The producer fix (heal-dispatch/recover -> failed_chronic) is the root; this is the self-healing net that keeps needs_human meaning ONLY his hand. --debt-only NEVER flips buildable tasks to open, so no ping-pong against heal-dispatch. Idempotent, a no-op once the board is clean. Set 0 to silence."
+
   LIMEN_PROMPT_ATOM_CONTROL:
     default: "0"
     env: LIMEN_PROMPT_ATOM_CONTROL

@@ -95,17 +95,17 @@ def main() -> int:
         if t.status == "failed":
             repeated_noop_count = _repeated_noop_failure_count(t)
             if repeated_noop_count:
-                t.status = "needs_human"
+                t.status = "failed_chronic"
                 t.updated = now
                 t.dispatch_log.append(
                     DispatchLogEntry(
                         timestamp=now,
                         agent="limen",
                         session_id="heal",
-                        status="needs_human",
+                        status="failed_chronic",
                         output=(
                             f"recover: repeated no-op failures ({repeated_noop_count}) "
-                            "-> needs_human; stop fresh cascade"
+                            "-> parked as fleet-debt (failed_chronic); stop fresh cascade"
                         ),
                     )
                 )

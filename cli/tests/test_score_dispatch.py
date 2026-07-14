@@ -74,11 +74,19 @@ def test_grades_each_resolved_class(tmp_path: Path):
     assert "D-open" not in recs and "D-disp" not in recs, "in-flight tasks are not yet weighable"
 
 
-def test_chronic_needs_human_is_wasted(tmp_path: Path):
-    tasks = [_task("CHRONIC", "needs_human", reopens=3, attempts=3)]
+def test_failed_chronic_is_wasted(tmp_path: Path):
+    # fleet debt (reopened >=3x, never a PR) parks in failed_chronic and is graded wasted spend
+    tasks = [_task("CHRONIC", "failed_chronic", reopens=3, attempts=3)]
     recs = {r["task_id"]: r for r in _records(_run(tmp_path, tasks, "--backfill", "--print"))}
     assert recs["CHRONIC"]["grade"] == "wasted", "reopened >=3x, never a PR → wasted"
     assert recs["CHRONIC"]["sunk"] > 0
+
+
+def test_needs_human_is_a_real_gate_not_weighable(tmp_path: Path):
+    # needs_human now means ONLY a human gate — pending his hand, never graded as wasted fleet spend
+    tasks = [_task("GATE", "needs_human", reopens=3, attempts=3)]
+    recs = {r["task_id"]: r for r in _records(_run(tmp_path, tasks, "--backfill", "--print"))}
+    assert "GATE" not in recs, "needs_human is a pending human gate, not a weighable terminal"
 
 
 def test_idempotent_append(tmp_path: Path):

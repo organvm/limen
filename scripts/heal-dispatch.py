@@ -65,8 +65,9 @@ def main():
     nopr_ids = {x["id"] for x in det.get("DISPATCHED_NO_PR", [])}
     open_pr_ids = {x["id"] for x in det.get("PR_OPEN", [])}
     # CHRONIC: reopened >=3x, never produced a PR (verify-dispatch surfaces these). Re-looping them
-    # just burns capacity with zero output, so ESCALATE to needs_human (surface to the human, the
-    # cheapest path) instead of silently recycling. Reversible status flip. ([[no-never-happens-again]])
+    # just burns capacity with zero output, so PARK them in failed_chronic (fleet debt — terminal,
+    # not re-dispatched) instead of silently recycling. NOT needs_human: this is a fleet failure, not
+    # a human decision, and conflating them made the gate count lie. Reversible status flip.
     chronic_ids = {x["id"] for x in verify.get("chronic", [])}
 
     if not acquire_lock():
@@ -80,14 +81,16 @@ def main():
 
         for t in lf.tasks:
             # CHRONIC escalation runs on the churning (open/failed) chronic tasks, NOT the dispatched
-            # ones the loop below handles — stop them re-looping; surface for a human. Idempotent
-            # (skips ones already needs_human). Reversible.
+            # ones the loop below handles — stop them re-looping. This is FLEET DEBT, not a human gate:
+            # park it in failed_chronic (terminal, not re-dispatched), NEVER needs_human — routing it
+            # to needs_human is what made the "gated on him" count lie and ping-pong against the
+            # reclassify drain. Idempotent (skips ones already failed_chronic). Reversible.
             if t.id in chronic_ids and t.status in ("open", "failed"):
-                t.status = "needs_human"
+                t.status = "failed_chronic"
                 t.updated = now
                 t.dispatch_log.append(DispatchLogEntry(
-                    timestamp=now, agent="limen", session_id="heal", status="needs_human",
-                    output="heal-dispatch: chronic (reopened ≥3×, never a PR) → escalated, stop re-looping"))
+                    timestamp=now, agent="limen", session_id="heal", status="failed_chronic",
+                    output="heal-dispatch: chronic (reopened ≥3×, never a PR) → parked as fleet-debt, stop re-looping"))
                 escalated.append(t.id)
                 continue
             if t.status != "dispatched":   # re-check fresh state under lock
@@ -114,12 +117,12 @@ def main():
                 if t.id in nopr_ids and PR_RE.search(last_session(t)):
                     continue
                 if t.id in chronic_ids:
-                    t.status = "needs_human"
+                    t.status = "failed_chronic"
                     t.updated = now
                     t.dispatch_log.append(DispatchLogEntry(
                         timestamp=now, agent="limen", session_id="heal",
-                        status="needs_human",
-                        output="heal-dispatch: dispatched with no PR and chronic (reopened ≥3×) → escalated, stop re-looping"))
+                        status="failed_chronic",
+                        output="heal-dispatch: dispatched with no PR and chronic (reopened ≥3×) → parked as fleet-debt, stop re-looping"))
                     escalated.append(t.id)
                     continue
                 t.status = "open"
@@ -134,7 +137,7 @@ def main():
 
         print(f"heal-dispatch: {len(merged_done)} merged→done, "
               f"{len(open_pr_done)} open-pr→done, {len(reopened)} stuck→open, "
-              f"{len(escalated)} chronic→needs_human")
+              f"{len(escalated)} chronic→failed_chronic")
         for i in merged_done:
             print(f"    merged: {i}")
         for i in open_pr_done:

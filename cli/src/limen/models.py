@@ -13,6 +13,7 @@ VALID_STATUSES = {
     "done",
     "failed",
     "failed_blocked",
+    "failed_chronic",
     "needs_human",
     "archived",
 }

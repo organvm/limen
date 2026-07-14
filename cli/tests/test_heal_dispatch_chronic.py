@@ -1,6 +1,8 @@
 """heal-dispatch chronic escalation: a chronic task (reopened >=3x, never a PR — surfaced by
-verify-dispatch into dispatch-verify.json) must be escalated to needs_human, NOT silently re-looped.
-Reversible status flip; a non-chronic open task is left untouched."""
+verify-dispatch into dispatch-verify.json) must be parked in failed_chronic (fleet debt — terminal,
+not re-dispatched), NOT needs_human (a human gate) and NOT silently re-looped. Routing chronic fleet
+debt to needs_human is what made the "gated on him" count lie and ping-pong against the reclassify
+drain. Reversible status flip; a non-chronic open task is left untouched."""
 
 import json
 import os
@@ -13,7 +15,7 @@ import yaml
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "heal-dispatch.py"
 
 
-def test_chronic_open_task_escalated_to_needs_human(tmp_path):
+def test_chronic_open_task_parked_as_fleet_debt(tmp_path):
     root = tmp_path
     (root / "logs").mkdir()
     created = "2026-06-20T00:00:00+00:00"
@@ -55,5 +57,5 @@ def test_chronic_open_task_escalated_to_needs_human(tmp_path):
     r = subprocess.run([sys.executable, str(SCRIPT), "--apply"], env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     out = {t["id"]: t for t in yaml.safe_load((root / "tasks.yaml").read_text())["tasks"]}
-    assert out["CHRONIC1"]["status"] == "needs_human", out["CHRONIC1"]
+    assert out["CHRONIC1"]["status"] == "failed_chronic", out["CHRONIC1"]  # fleet debt, NOT needs_human
     assert out["FRESH1"]["status"] == "open", out["FRESH1"]  # non-chronic untouched

@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from limen_intake import IntakeContractError, normalize_selected_legacy_task, validate_intake_contract
 
-VALID_STATUSES = {"open", "dispatched", "in_progress", "done", "failed", "failed_blocked", "needs_human", "archived"}
+VALID_STATUSES = {"open", "dispatched", "in_progress", "done", "failed", "failed_blocked", "failed_chronic", "needs_human", "archived"}
 VALID_PRIORITIES = {"critical", "high", "medium", "low", "backlog"}
 VALID_AGENTS = {
     "jules",
@@ -609,7 +609,7 @@ def throughput(data: dict[str, Any]) -> dict[str, Any]:
     recorded_events = sum(by_event_status.values())
     recorded_starts = sum(by_event_status.get(status, 0) for status in ("dispatched", "in_progress"))
     recorded_finishes = sum(
-        by_event_status.get(status, 0) for status in ("done", "failed", "failed_blocked", "archived")
+        by_event_status.get(status, 0) for status in ("done", "failed", "failed_blocked", "failed_chronic", "archived")
     )
     unrecorded_capacity_runs = max(0, expected_capacity_runs - recorded_starts)
     return {
@@ -708,7 +708,7 @@ def task_lifecycle(task: dict[str, Any], stale_ids: set[str]) -> dict[str, Any]:
         phase = "archived"
     elif status == "done":
         phase = "archive"
-    elif stale or status in ("failed", "failed_blocked", "needs_human"):
+    elif stale or status in ("failed", "failed_blocked", "failed_chronic", "needs_human"):
         phase = "recover"
     elif has_pr or status in ("dispatched", "in_progress"):
         phase = "verify"
@@ -1303,7 +1303,7 @@ def verify_task(task_id: str, req: VerifyRequest, authorization: str | None = He
     doc = load_board_doc()
     data = doc.data
     task = find_task(data, task_id)
-    if task.get("status") not in ("dispatched", "in_progress", "needs_human", "failed", "failed_blocked", "done"):
+    if task.get("status") not in ("dispatched", "in_progress", "needs_human", "failed", "failed_blocked", "failed_chronic", "done"):
         raise HTTPException(status_code=409, detail="only active, attention, or done tasks can be verified")
     task["status"] = req.status
     append_log(task, "qa", req.session_id, req.status, req.note or f"QA verified task as {req.status}")
