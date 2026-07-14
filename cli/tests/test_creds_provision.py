@@ -24,7 +24,10 @@ def _run(cred_map_json, command="check", extra_args=None):
     env = {**os.environ, **_NO_POLICY, "LIMEN_CREDS_MAP": cred_map_json}
     return subprocess.run(
         [sys.executable, str(PROVISION), command, *(extra_args or [])],
-        capture_output=True, text=True, timeout=30, env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env=env,
     )
 
 
@@ -44,8 +47,10 @@ def test_check_green_when_secret_in_automation_vault():
 
 def test_derive_backed_lane_is_exempt():
     """A `derive` lane (keyring source) in a non-readable vault is NOT a hard fail — op isn't needed."""
-    r = _run('[{"lane":"gh","ref":"op://GitHub-Tokens/t/password","derive":["gh","auth","token"],'
-             '"env":["GH_TOKEN"],"enabled":true,"required":true}]')
+    r = _run(
+        '[{"lane":"gh","ref":"op://GitHub-Tokens/t/password","derive":["gh","auth","token"],'
+        '"env":["GH_TOKEN"],"enabled":true,"required":true}]'
+    )
     assert r.returncode == 0
     assert "derive-exempt" in r.stdout
 
