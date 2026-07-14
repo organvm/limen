@@ -4,7 +4,7 @@ import subprocess
 from datetime import date, datetime
 from pathlib import Path
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import yaml
 from mcp.server.fastmcp import FastMCP
@@ -80,6 +80,22 @@ class DispatchLogEntry(BaseModel):
         raise ValueError("dispatch event status must be canonical (legacy composite rows are read-only)")
 
 
+class ExecutionRequirement(BaseModel):
+    """A live control-host prerequisite that must clear before dispatch."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["mount"]
+    path: str = Field(min_length=1, max_length=4096)
+
+    @field_validator("path")
+    @classmethod
+    def validate_absolute_path(cls, value: str) -> str:
+        if "\x00" in value or not os.path.isabs(value):
+            raise ValueError("execution requirement path must be absolute")
+        return value
+
+
 class Task(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -97,6 +113,7 @@ class Task(BaseModel):
     context: Optional[str] = None
     predicate: Optional[str] = None
     receipt_target: Optional[str] = None
+    execution_requirements: Optional[List[ExecutionRequirement]] = None
     claude_tier: Optional[str] = None
     depends_on: List[str] = Field(default_factory=list)
     created: date

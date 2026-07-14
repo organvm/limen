@@ -28,6 +28,7 @@ def _task() -> dict[str, object]:
         "context": "bounded execution context",
         "predicate": "python3 scripts/check.py",
         "receipt_target": "git:organvm/limen:logs/check.json",
+        "execution_requirements": [{"kind": "mount", "path": "/runtime/volume-a"}],
         "claude_tier": "sonnet",
         "depends_on": ["FOUNDATION-ONE"],
     }
@@ -54,6 +55,7 @@ def test_execution_contract_payload_is_versioned_and_label_order_is_canonical() 
         "context": "bounded execution context",
         "predicate": "python3 scripts/check.py",
         "receipt_target": "git:organvm/limen:logs/check.json",
+        "execution_requirements": [{"kind": "mount", "path": "/runtime/volume-a"}],
         "claude_tier": "sonnet",
         "depends_on": ["FOUNDATION-ONE"],
     }
@@ -77,6 +79,7 @@ def test_every_execution_input_changes_the_hash() -> None:
         "context": "changed context",
         "predicate": "python3 scripts/other.py",
         "receipt_target": "git:organvm/limen:logs/other.json",
+        "execution_requirements": [{"kind": "mount", "path": "/runtime/volume-b"}],
         "claude_tier": "haiku",
         "depends_on": ["FOUNDATION-TWO"],
     }
@@ -118,6 +121,8 @@ def test_budget_cost_rejects_lossy_or_out_of_schema_values(budget: object) -> No
         ("labels", ["ok", 3]),
         ("urls", ("https://example.test",)),
         ("depends_on", [None]),
+        ("execution_requirements", "not-a-list"),
+        ("execution_requirements", [{"kind": "mount"}]),
     ],
 )
 def test_contract_rejects_unsupported_field_types(field: str, value: object) -> None:
