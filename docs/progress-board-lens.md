@@ -74,11 +74,13 @@ is a board credit claim; only explicit receipt-verification evidence reduces
 Each JSON snapshot includes:
 
 - a SHA-256 of the normalized task board;
-- the raw SHA-256 and read state of each named source receipt; and
-- one contract hash over those inputs, the surface schema, and `scope: partial`.
+- both raw-byte and canonical parsed-JSON SHA-256 values for each readable source receipt; and
+- one contract hash over the normalized board, canonical source hashes (or raw bytes for invalid
+  input), read states, the surface schema, and `scope: partial`.
 
 The generation timestamp is intentionally outside the content hash because freshness changes with
-evaluation time. Equal input hashes prove equal input content, not equal freshness verdicts.
+evaluation time. JSON whitespace and object-key order do not change the contract hash. Equal input
+hashes prove equal semantic input content, not equal freshness verdicts.
 
 ## Work intentionally left to owner packets
 

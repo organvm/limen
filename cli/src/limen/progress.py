@@ -261,20 +261,23 @@ def _groups(rows: list[dict[str, Any]], field: str) -> list[dict[str, Any]]:
     return sorted(grouped, key=lambda item: (-int(item["active_debt"]), str(item[field])))
 
 
-def _read_source(path: Path) -> tuple[Any | None, str | None, str | None]:
-    """Return payload, raw content hash, and a read-level debt status."""
+def _read_source(
+    path: Path,
+) -> tuple[Any | None, str | None, str | None, str | None]:
+    """Return payload, raw/canonical hashes, and a read-level debt status."""
 
     try:
         raw = path.read_bytes()
     except FileNotFoundError:
-        return None, None, "dark"
+        return None, None, None, "dark"
     except OSError:
-        return None, None, "unavailable"
-    digest = sha256(raw).hexdigest()
+        return None, None, None, "unavailable"
+    raw_digest = sha256(raw).hexdigest()
     try:
-        return json.loads(raw.decode("utf-8")), digest, None
+        payload = json.loads(raw.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeError):
-        return None, digest, "failed"
+        return None, raw_digest, None, "failed"
+    return payload, raw_digest, _json_sha256(payload), None
 
 
 def _semantic_value_status(value: Any) -> str | None:
@@ -328,6 +331,7 @@ def _semantic_source_status(payload: Any) -> str:
         "freshness",
         "remote",
         "scan",
+        "scope",
         "source",
         "summary",
         "worktrees",
@@ -336,8 +340,10 @@ def _semantic_source_status(payload: Any) -> str:
         "authority",
         "availability",
         "completeness",
+        "coverage",
         "coverage_status",
         "result",
+        "scope",
         "state",
         "status",
         "verdict",
@@ -360,6 +366,18 @@ def _semantic_source_status(payload: Any) -> str:
                 markers.add("capped")
             elif key in {"complete", "is_complete", "fully_complete"} and value is False:
                 markers.add("incomplete")
+            elif key == "completeness" and value is False:
+                markers.add("incomplete")
+            elif key in {"coverage", "scope"} and value is False:
+                markers.add("partial")
+            elif isinstance(value, bool) and value is False and key.endswith(("_complete", "_exhaustive")):
+                markers.add("incomplete")
+            elif (
+                isinstance(value, bool)
+                and value is False
+                and key.endswith(("_covered", "_enumerated", "_included", "_scanned"))
+            ):
+                markers.add("partial")
             elif key in {"ready", "is_ready", "valid"} and value is False:
                 markers.add("incomplete")
             elif key in {"partial", "is_partial"} and value is True:
@@ -452,11 +470,11 @@ def _source_coverage(root: Path, now: datetime) -> list[dict[str, Any]]:
     )
     rows: list[dict[str, Any]] = []
     for source_id, label, path, max_age in definitions:
-        payload, content_sha256, read_status = _read_source(path)
+        payload, content_sha256, normalized_sha256, read_status = _read_source(path)
         generated = _timestamp(payload)
         age = _age_hours(generated, now)
         semantic_status = read_status or _semantic_source_status(payload)
-        freshness_status = "undated" if generated is None else "ready"
+        freshness_status = "undated" if generated is None else ("failed" if age is None else "ready")
         if age is not None and age > max_age:
             freshness_status = "stale"
         if source_id == "mail" and isinstance(payload, dict):
@@ -478,6 +496,7 @@ def _source_coverage(root: Path, now: datetime) -> list[dict[str, Any]]:
                 "age_hours": age,
                 "max_age_hours": max_age,
                 "content_sha256": content_sha256,
+                "normalized_sha256": normalized_sha256,
                 "content_state": read_status or "valid_json",
             }
         )
@@ -510,7 +529,11 @@ def build_progress_snapshot(limen: LimenFile, root: Path, *, now: datetime | Non
             {
                 "id": row["id"],
                 "path": row["path"],
-                "content_sha256": row["content_sha256"],
+                # Valid JSON is contract-addressed canonically, so formatting
+                # and object-key order do not create false input drift. Invalid
+                # bytes remain content-addressed by their raw digest.
+                "normalized_sha256": row["normalized_sha256"],
+                "invalid_content_sha256": (row["content_sha256"] if row["normalized_sha256"] is None else None),
                 "content_state": row["content_state"],
             }
             for row in source_rows

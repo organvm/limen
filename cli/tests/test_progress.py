@@ -209,6 +209,73 @@ def test_non_exhaustive_source_is_capped_debt(tmp_path: Path) -> None:
     assert "capped" in portfolio["debt_reasons"]
 
 
+def test_explicit_false_scope_inclusion_is_partial_debt(tmp_path: Path) -> None:
+    _write_source(
+        tmp_path,
+        "portfolio",
+        {
+            "generated_at": "2026-07-13T11:30:00Z",
+            "status": "ready",
+            "scope": {
+                "source": "remote API",
+                "local_only_and_other_forges_included": False,
+            },
+        },
+    )
+
+    snapshot = build_progress_snapshot(
+        _board(),
+        tmp_path,
+        now=datetime(2026, 7, 13, 12, tzinfo=UTC),
+    )
+    portfolio = next(row for row in snapshot["source_coverage"] if row["id"] == "portfolio")
+
+    assert portfolio["status"] == "partial"
+    assert "partial" in portfolio["debt_reasons"]
+
+
+def test_explicit_false_completeness_is_incomplete_debt(tmp_path: Path) -> None:
+    _write_source(
+        tmp_path,
+        "portfolio",
+        {
+            "generated_at": "2026-07-13T11:30:00Z",
+            "status": "ready",
+            "completeness": False,
+        },
+    )
+
+    snapshot = build_progress_snapshot(
+        _board(),
+        tmp_path,
+        now=datetime(2026, 7, 13, 12, tzinfo=UTC),
+    )
+    portfolio = next(row for row in snapshot["source_coverage"] if row["id"] == "portfolio")
+
+    assert portfolio["status"] == "incomplete"
+    assert "incomplete" in portfolio["debt_reasons"]
+
+
+def test_invalid_nonempty_timestamp_is_freshness_debt(tmp_path: Path) -> None:
+    _write_source(
+        tmp_path,
+        "handoff",
+        {"generated_at": "not-a-timestamp", "status": "ready"},
+    )
+
+    snapshot = build_progress_snapshot(
+        _board(),
+        tmp_path,
+        now=datetime(2026, 7, 13, 12, tzinfo=UTC),
+    )
+    handoff = next(row for row in snapshot["source_coverage"] if row["id"] == "handoff")
+
+    assert handoff["semantic_status"] == "ready"
+    assert handoff["freshness_status"] == "failed"
+    assert handoff["status"] == "failed"
+    assert "failed" in handoff["debt_reasons"]
+
+
 def test_nested_incomplete_and_fresh_stale_flags_are_debt(tmp_path: Path) -> None:
     generated_at = "2026-07-13T11:30:00Z"
     _write_source(
@@ -253,6 +320,37 @@ def test_snapshot_content_addresses_board_and_source_inputs(tmp_path: Path) -> N
     assert changed["input_contract"]["sha256"] != first["input_contract"]["sha256"]
     omega = next(row for row in changed["source_coverage"] if row["id"] == "omega")
     assert len(omega["content_sha256"]) == 64
+    assert len(omega["normalized_sha256"]) == 64
+
+
+def test_source_contract_hash_normalizes_valid_json_formatting(tmp_path: Path) -> None:
+    now = datetime(2026, 7, 13, 12, tzinfo=UTC)
+    path = tmp_path / SOURCE_PATHS["omega"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        '{"generated_at":"2026-07-13T11:30:00Z","status":"ready","complete":true}',
+        encoding="utf-8",
+    )
+    compact = build_progress_snapshot(_board(), tmp_path, now=now)
+    compact_omega = next(row for row in compact["source_coverage"] if row["id"] == "omega")
+
+    path.write_text(
+        '{\n  "complete": true,\n  "status": "ready",\n  "generated_at": "2026-07-13T11:30:00Z"\n}\n',
+        encoding="utf-8",
+    )
+    reformatted = build_progress_snapshot(_board(), tmp_path, now=now)
+    reformatted_omega = next(row for row in reformatted["source_coverage"] if row["id"] == "omega")
+
+    assert compact_omega["content_sha256"] != reformatted_omega["content_sha256"]
+    assert compact_omega["normalized_sha256"] == reformatted_omega["normalized_sha256"]
+    assert compact["input_contract"]["sha256"] == reformatted["input_contract"]["sha256"]
+
+    path.write_text(
+        '{"generated_at":"2026-07-13T11:30:00Z","status":"partial","complete":true}',
+        encoding="utf-8",
+    )
+    changed = build_progress_snapshot(_board(), tmp_path, now=now)
+    assert changed["input_contract"]["sha256"] != compact["input_contract"]["sha256"]
 
 
 def test_verified_receipt_debt_requires_explicit_evidence(tmp_path: Path) -> None:
