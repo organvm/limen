@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 
 import pytest
 
 from limen.dispatch import _dispatchable
 from limen.models import Task
 from limen.runtime_requirements import evaluate_execution_requirements
+
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _task(**over: object) -> Task:
@@ -69,3 +73,20 @@ def test_raw_malformed_requirement_fails_closed() -> None:
 
     assert result.ready is False
     assert result.blockers == ("execution_requirements must be a list",)
+
+
+def test_raw_mounted_requirement_with_extra_key_fails_closed() -> None:
+    result = evaluate_execution_requirements(
+        {"execution_requirements": [{"kind": "mount", "path": "/runtime/volume", "unexpected": "value"}]},
+        mount_probe=lambda _path: True,
+    )
+
+    assert result.ready is False
+    assert result.blockers == ("execution_requirements[0] must contain exactly kind/path",)
+
+
+def test_mcp_runtime_evaluator_stays_byte_identical_to_cli_authority() -> None:
+    cli_source = ROOT / "cli" / "src" / "limen" / "runtime_requirements.py"
+    mcp_source = ROOT / "mcp" / "src" / "limen_mcp" / "runtime_requirements.py"
+
+    assert mcp_source.read_bytes() == cli_source.read_bytes()
