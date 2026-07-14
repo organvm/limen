@@ -217,12 +217,15 @@ the work is merged or proven patch-equivalent to the remote default branch.
 ## Continuation Capsules
 
 Every closeout and every new autonomous initiative must leave or begin from one continuation capsule.
-Use the existing worktree launcher (`limen workstream` / `scripts/start-worktree-session.sh`) instead
-of inventing a parallel session framework.
+For repository-backed work, use the existing worktree launcher (`limen workstream` /
+`scripts/start-worktree-session.sh`) instead of inventing a parallel session framework. If no Git
+repository is a logical owner, use an isolated owner-native workspace or remote receipt and explain
+that choice in the capsule; never manufacture a fake worktree merely to satisfy the form.
 
 A continuation capsule contains:
 
-- one isolated worktree and single-purpose branch;
+- one isolated worktree and single-purpose branch when repository-backed, otherwise one isolated
+  owner-native workspace or durable remote surface;
 - a README with the objective, current evidence links, authorities, prohibitions, first probes,
   executable predicates, ownership rules, and session-switch conditions;
 - one copy/paste command that enters the worktree and starts the next agent with that README as its
