@@ -23,7 +23,10 @@ def _run(tmp: Path, p: Path, *args: str) -> None:
     env = dict(os.environ, LIMEN_ROOT=str(tmp), LIMEN_TASKS=str(p))
     r = subprocess.run(
         [sys.executable, str(SCRIPT), "--tasks", str(p), *args],
-        env=env, capture_output=True, text=True, timeout=60,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
     )
     assert r.returncode == 0, r.stderr
 
@@ -38,12 +41,34 @@ def _chronic_log() -> list[dict]:
 
 def _tasks() -> list[dict]:
     return [
-        {"id": "CHRONIC", "title": "chronic build", "created": "2026-06-01", "status": "needs_human",
-         "target_agent": "codex", "type": "code", "repo": "o/r", "dispatch_log": _chronic_log()},
-        {"id": "LEVER", "title": "needs-human (L-SOCIAL-SEND) pull the publish", "created": "2026-06-01",
-         "status": "needs_human", "target_agent": "claude", "dispatch_log": []},
-        {"id": "BUILDABLE", "title": "add a README", "created": "2026-06-01", "status": "needs_human",
-         "target_agent": "codex", "type": "code", "repo": "o/r", "dispatch_log": []},
+        {
+            "id": "CHRONIC",
+            "title": "chronic build",
+            "created": "2026-06-01",
+            "status": "needs_human",
+            "target_agent": "codex",
+            "type": "code",
+            "repo": "o/r",
+            "dispatch_log": _chronic_log(),
+        },
+        {
+            "id": "LEVER",
+            "title": "needs-human (L-SOCIAL-SEND) pull the publish",
+            "created": "2026-06-01",
+            "status": "needs_human",
+            "target_agent": "claude",
+            "dispatch_log": [],
+        },
+        {
+            "id": "BUILDABLE",
+            "title": "add a README",
+            "created": "2026-06-01",
+            "status": "needs_human",
+            "target_agent": "codex",
+            "type": "code",
+            "repo": "o/r",
+            "dispatch_log": [],
+        },
     ]
 
 
