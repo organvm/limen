@@ -13,8 +13,9 @@ A closeout means **ZERO open or dangling items** — no caveats, no "still open"
 2. **Close every gap.** For each open item, either resolve it now or record it in *its own owner's* record (the repo/ledger that owns it) with the cheapest path to resolution. Nothing parked in a throwaway list.
 3. **Reach an idempotent fixed point.** Run the done-predicate (`scripts/verify-whole.sh` or the task's `done.sh`). Re-run until it produces **no changes** and exits 0. If a re-run still mutates state, you are not done — return to step 2.
 4. **Commit loose work across all repos.** `git add <path>` explicitly (**never `-A`**); commit; confirm `git status` is clean everywhere you touched. Push staged branches — but leave merges/deploys to Anthony.
-5. **Produce a relay handoff.** A concise RELAY/closeout note: what changed, the proof (predicate output), and only the genuinely human-gated remainder — each already recorded in its owner.
+5. **Produce a continuation capsule.** Use the canonical worktree launcher to create an isolated next-session worktree with a README prompt, live environment probes, executable completion/switch predicates, and a durable owner receipt. The capsule defines how current reality derives the next lane and ending; it never hard-codes a future provider, task count, or verdict.
+6. **Produce a relay handoff.** A concise RELAY/closeout note: what changed, the proof (predicate output), the capsule's one-line launch command, and only the genuinely human-gated remainder — each already recorded in its owner.
 
 ## Gate
 
-Do **not** declare closeout until: every owner records its own remaining work, the verification re-runs to a zero-change fixed point, and all loose work is committed. Closeout means ZERO open items.
+Do **not** declare closeout until: every owner records its own remaining work, the verification re-runs to a zero-change fixed point, all loose work is committed, and the successor capsule is remotely durable with a tested launch command. Closeout means ZERO open items.
