@@ -104,6 +104,20 @@ def test_type_and_workstream_are_independently_fingerprinted() -> None:
     assert execution_contract_hash(changed_workstream) != original_hash
 
 
+def test_missing_none_and_empty_requirements_are_contract_equivalent() -> None:
+    missing = _task()
+    missing.pop("execution_requirements")
+    explicit_none = deepcopy(missing)
+    explicit_none["execution_requirements"] = None
+    explicit_empty = deepcopy(missing)
+    explicit_empty["execution_requirements"] = []
+
+    assert execution_contract_payload(missing) == execution_contract_payload(explicit_none)
+    assert execution_contract_payload(missing) == execution_contract_payload(explicit_empty)
+    assert execution_contract_hash(missing) == execution_contract_hash(explicit_none)
+    assert execution_contract_hash(missing) == execution_contract_hash(explicit_empty)
+
+
 @pytest.mark.parametrize("budget", [True, False, 1.0, 1.9, "1", None, 0, 1001])
 def test_budget_cost_rejects_lossy_or_out_of_schema_values(budget: object) -> None:
     task = _task()
