@@ -2105,6 +2105,47 @@ def _option_values(argv: list[str], *names: str) -> list[str]:
     return values
 
 
+def _claude_tool_rules(values: list[str]) -> set[str]:
+    """Split comma/space-separated Claude tool rules without splitting rule bodies."""
+
+    rules: set[str] = set()
+    for value in values:
+        start = 0
+        depth = 0
+        for index, char in enumerate(value):
+            if char == "(":
+                depth += 1
+            elif char == ")" and depth:
+                depth -= 1
+            elif depth == 0 and (char == "," or char.isspace()):
+                if rule := value[start:index].strip():
+                    rules.add(rule)
+                start = index + 1
+        if rule := value[start:].strip():
+            rules.add(rule)
+    return rules
+
+
+def _is_blanket_claude_authority(rule: str) -> bool:
+    """Return whether an allow rule grants all shell or built-in network use."""
+
+    if rule in {"Bash", "WebFetch", "WebSearch"}:
+        return True
+    bash = re.fullmatch(r"Bash\((.*)\)", rule)
+    if bash:
+        specifier = bash.group(1).strip()
+        if specifier.startswith(":"):
+            specifier = specifier[1:]
+        if specifier and set(specifier) == {"*"}:
+            return True
+    web_fetch = re.fullmatch(r"WebFetch\(domain:(.*)\)", rule)
+    if web_fetch:
+        domain = web_fetch.group(1).rstrip(".")
+        if domain and set(domain) == {"*"}:
+            return True
+    return False
+
+
 def _assert_claude_no_modal_contract(argv: list[str]) -> None:
     """Refuse to launch a fleet Claude process that can open an input modal.
 
@@ -2127,22 +2168,20 @@ def _assert_claude_no_modal_contract(argv: list[str]) -> None:
     if {"--dangerously-skip-permissions", "--allow-dangerously-skip-permissions"} & set(argv):
         raise ClaudeLaunchContractError("Claude fleet launch must not enable bypassPermissions")
 
-    allowed: set[str] = set()
-    for value in _option_values(argv, "--allowedTools", "--allowed-tools"):
-        allowed.update(part for part in re.split(r"[\s,]+", value) if part)
+    allowed = _claude_tool_rules(_option_values(argv, "--allowedTools", "--allowed-tools"))
     missing = sorted(_CLAUDE_REQUIRED_BUILD_TOOLS - allowed)
     if missing:
         raise ClaudeLaunchContractError(
             f"Claude fleet launch is missing required pre-approved build tools: {', '.join(missing)}"
         )
-    if "Bash" in allowed:
+    blanket = sorted(rule for rule in allowed if _is_blanket_claude_authority(rule))
+    if blanket:
         raise ClaudeLaunchContractError(
-            "Claude fleet launch must not add a blanket Bash grant; shell policy belongs to effective settings"
+            "Claude fleet launch must not add blanket Bash/network grants; effective settings own them "
+            f"(got {', '.join(blanket)})"
         )
 
-    disallowed: set[str] = set()
-    for value in _option_values(argv, "--disallowedTools", "--disallowed-tools"):
-        disallowed.update(part for part in re.split(r"[\s,]+", value) if part)
+    disallowed = _claude_tool_rules(_option_values(argv, "--disallowedTools", "--disallowed-tools"))
     if "AskUserQuestion" not in disallowed:
         raise ClaudeLaunchContractError(
             "Claude fleet launch must remove AskUserQuestion from its unattended tool surface"

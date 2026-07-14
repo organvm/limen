@@ -72,19 +72,47 @@ def test_missing_core_build_tool_fails_before_launch(allowed):
         D._assert_claude_no_modal_contract(argv)
 
 
-def test_blanket_bash_grant_fails_before_launch():
+@pytest.mark.parametrize(
+    "grant",
+    [
+        "Bash",
+        "Bash(*)",
+        "Bash(**)",
+        "Bash(:*)",
+        "Bash( *)",
+        "WebFetch",
+        "WebFetch(domain:*)",
+        "WebFetch(domain:*.)",
+        "WebSearch",
+    ],
+)
+def test_blanket_shell_or_network_grant_fails_before_launch(grant):
     argv = [
         "-p",
         "--permission-mode",
         "dontAsk",
         "--allowedTools",
-        "Bash,Edit,Write",
+        f"{grant},Edit,Write",
         "--disallowedTools",
         "AskUserQuestion",
     ]
 
-    with pytest.raises(D.ClaudeLaunchContractError, match="must not add a blanket Bash grant"):
+    with pytest.raises(D.ClaudeLaunchContractError, match="must not add blanket Bash/network grants"):
         D._assert_claude_no_modal_contract(argv)
+
+
+def test_scoped_shell_and_network_rules_are_not_blanket_grants():
+    argv = [
+        "-p",
+        "--permission-mode",
+        "dontAsk",
+        "--allowedTools",
+        "Bash(git status *),WebFetch(domain:github.com),Edit,Write",
+        "--disallowedTools",
+        "AskUserQuestion",
+    ]
+
+    D._assert_claude_no_modal_contract(argv)
 
 
 def test_permission_prompt_callback_fails_before_launch():
