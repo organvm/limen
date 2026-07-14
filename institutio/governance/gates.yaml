@@ -197,6 +197,12 @@ gates:
     scoped: false
     owner: lifecycle
     note: "Path-aware trusted-Bash decision matrix (hermetic fixture) — the permission-hang killer; destructive verbs auto-approved only on disposable/in-repo paths, force-push/shred never."
+  worktree-session-launcher-test:
+    command: "bash scripts/tests/start-worktree-session.test.sh"
+    paths: ["scripts/start-worktree-session.sh", "scripts/tests/start-worktree-session.test.sh"]
+    scoped: false
+    owner: lifecycle
+    note: "Task-agent launcher denies shared-checkout starts unless the live checkout is explicit control plane, then proves each task gets a distinct worktree."
   dispatch-admission:
     command: "python3 scripts/check-dispatch-admission.py"
     paths: ["scripts/dispatch-admission.py", "scripts/check-dispatch-admission.py"]

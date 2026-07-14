@@ -4,12 +4,12 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/start-worktree-session.sh [--codex] [--shell] [--from <branch-or-ref>] [--prompt <text>] [--prompt-file <path>] [--workstream <handle>] <repo-or-alias> <slug>
+  scripts/start-worktree-session.sh [--control-plane] [--codex] [--shell] [--from <branch-or-ref>] [--prompt <text>] [--prompt-file <path>] [--workstream <handle>] <repo-or-alias> <slug>
 
 Examples:
   scripts/start-worktree-session.sh portvs triptych-story
-  scripts/start-worktree-session.sh --codex portvs triptych-story
-  scripts/start-worktree-session.sh --shell --prompt-file /tmp/prompt.md domus package-map
+  scripts/start-worktree-session.sh --control-plane --codex portvs triptych-story
+  scripts/start-worktree-session.sh --control-plane --shell --prompt-file /tmp/prompt.md domus package-map
   scripts/start-worktree-session.sh --workstream contributions --prompt 'drain the code lane' limen contrib-run
 
 --workstream pins the worker to ONE purpose channel (contributions/correspondence/… — see
@@ -27,9 +27,14 @@ Creates or reuses:
 
 The target repo's .git/info/exclude is updated so .worktrees/ and the private
 workstream README never appear as Git noise.
+
+--control-plane is required when --codex or --shell is launched from an existing
+checkout. It makes the live checkout a launcher only; the task agent still starts
+inside the dedicated worktree.
 USAGE
 }
 
+control_plane=0
 launch_codex=0
 launch_shell=0
 from_ref=""
@@ -40,6 +45,10 @@ write_readme=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --control-plane)
+      control_plane=1
+      shift
+      ;;
     --codex)
       launch_codex=1
       shift
@@ -146,6 +155,23 @@ repo="$(cd "$repo" && pwd -P)"
 if ! git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "not a git repo: $repo" >&2
   exit 1
+fi
+
+script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+control_root="${LIMEN_LIVE_ROOT:-${LIMEN_ROOT:-$script_root}}"
+if [[ -d "$control_root" ]]; then
+  control_root="$(cd "$control_root" && pwd -P)"
+fi
+caller_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -n "$caller_top" ]]; then
+  caller_top="$(cd "$caller_top" && pwd -P)"
+fi
+if [[ "$control_plane" -ne 1 && ( "$launch_codex" -eq 1 || "$launch_shell" -eq 1 ) ]]; then
+  if [[ -n "$caller_top" && ( "$caller_top" == "$control_root" || "$caller_top" == "$repo" ) ]]; then
+    echo "refusing to launch a task agent from shared checkout: $caller_top" >&2
+    echo "rerun with --control-plane so this checkout is only the launcher, or cd into a dedicated worktree first" >&2
+    exit 1
+  fi
 fi
 
 slug="$(
