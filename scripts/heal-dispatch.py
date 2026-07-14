@@ -15,6 +15,7 @@ between the verify pass and now). Dry-run by default; --apply to write.
 
 Usage:  python3 scripts/heal-dispatch.py [--apply]
 """
+
 import argparse
 import datetime
 import json
@@ -26,6 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.dispatch_ownership import active_typed_pr_owner_id  # noqa: E402
 from limen.models import DispatchLogEntry  # noqa: E402
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
@@ -64,9 +66,10 @@ def main():
     closed_ids = {x["id"] for x in det.get("PR_CLOSED", [])}
     nopr_ids = {x["id"] for x in det.get("DISPATCHED_NO_PR", [])}
     open_pr_ids = {x["id"] for x in det.get("PR_OPEN", [])}
-    # CHRONIC: reopened >=3x, never produced a PR (verify-dispatch surfaces these). Re-looping them
-    # just burns capacity with zero output, so ESCALATE to needs_human (surface to the human, the
-    # cheapest path) instead of silently recycling. Reversible status flip. ([[no-never-happens-again]])
+    # CHRONIC: reopened >=3x, never produced a PR (verify-dispatch surfaces these). Re-looping an
+    # unowned attempt just burns capacity with zero output, so ESCALATE to needs_human instead of
+    # silently recycling. The active-owner predicate is re-checked on the freshly loaded board
+    # under the lock below so a successor created after verification cannot be falsely escalated.
     chronic_ids = {x["id"] for x in verify.get("chronic", [])}
 
     if not acquire_lock():
@@ -83,21 +86,35 @@ def main():
             # ones the loop below handles — stop them re-looping; surface for a human. Idempotent
             # (skips ones already needs_human). Reversible.
             if t.id in chronic_ids and t.status in ("open", "failed"):
+                if active_typed_pr_owner_id(t, lf.tasks) is not None:
+                    continue
                 t.status = "needs_human"
                 t.updated = now
-                t.dispatch_log.append(DispatchLogEntry(
-                    timestamp=now, agent="limen", session_id="heal", status="needs_human",
-                    output="heal-dispatch: chronic (reopened ≥3×, never a PR) → escalated, stop re-looping"))
+                t.dispatch_log.append(
+                    DispatchLogEntry(
+                        timestamp=now,
+                        agent="limen",
+                        session_id="heal",
+                        status="needs_human",
+                        output="heal-dispatch: chronic (reopened ≥3×, never a PR) → escalated, stop re-looping",
+                    )
+                )
                 escalated.append(t.id)
                 continue
-            if t.status != "dispatched":   # re-check fresh state under lock
+            if t.status != "dispatched":  # re-check fresh state under lock
                 continue
             if t.id in merged_ids:
                 t.status = "done"
                 t.updated = now
-                t.dispatch_log.append(DispatchLogEntry(
-                    timestamp=now, agent="limen", session_id="heal",
-                    status="done", output="heal-dispatch: PR merged → done"))
+                t.dispatch_log.append(
+                    DispatchLogEntry(
+                        timestamp=now,
+                        agent="limen",
+                        session_id="heal",
+                        status="done",
+                        output="heal-dispatch: PR merged → done",
+                    )
+                )
                 merged_done.append(t.id)
             elif t.id in open_pr_ids:
                 # work produced an OPEN PR (awaiting merge) — mark done at the dispatch level
@@ -105,9 +122,15 @@ def main():
                 # itself is tracked separately (PR-close backlog), gated on CI/billing.
                 t.status = "done"
                 t.updated = now
-                t.dispatch_log.append(DispatchLogEntry(
-                    timestamp=now, agent="limen", session_id="heal",
-                    status="done", output="heal-dispatch: PR open (awaiting merge) → done"))
+                t.dispatch_log.append(
+                    DispatchLogEntry(
+                        timestamp=now,
+                        agent="limen",
+                        session_id="heal",
+                        status="done",
+                        output="heal-dispatch: PR open (awaiting merge) → done",
+                    )
+                )
                 open_pr_done.append(t.id)
             elif t.id in closed_ids or t.id in nopr_ids:
                 # NO_PR: only reopen if STILL no PR url (daemon may have re-dispatched)
@@ -116,10 +139,15 @@ def main():
                 if t.id in chronic_ids:
                     t.status = "needs_human"
                     t.updated = now
-                    t.dispatch_log.append(DispatchLogEntry(
-                        timestamp=now, agent="limen", session_id="heal",
-                        status="needs_human",
-                        output="heal-dispatch: dispatched with no PR and chronic (reopened ≥3×) → escalated, stop re-looping"))
+                    t.dispatch_log.append(
+                        DispatchLogEntry(
+                            timestamp=now,
+                            agent="limen",
+                            session_id="heal",
+                            status="needs_human",
+                            output="heal-dispatch: dispatched with no PR and chronic (reopened ≥3×) → escalated, stop re-looping",
+                        )
+                    )
                     escalated.append(t.id)
                     continue
                 t.status = "open"
@@ -127,14 +155,22 @@ def main():
                 t.labels = [x for x in t.labels if not x.startswith("tried:")]
                 t.updated = now
                 why = "PR closed unmerged" if t.id in closed_ids else "dispatched but no PR (silent no-op)"
-                t.dispatch_log.append(DispatchLogEntry(
-                    timestamp=now, agent="limen", session_id="heal",
-                    status="open", output=f"heal-dispatch: {why} → reopened"))
+                t.dispatch_log.append(
+                    DispatchLogEntry(
+                        timestamp=now,
+                        agent="limen",
+                        session_id="heal",
+                        status="open",
+                        output=f"heal-dispatch: {why} → reopened",
+                    )
+                )
                 reopened.append(t.id)
 
-        print(f"heal-dispatch: {len(merged_done)} merged→done, "
-              f"{len(open_pr_done)} open-pr→done, {len(reopened)} stuck→open, "
-              f"{len(escalated)} chronic→needs_human")
+        print(
+            f"heal-dispatch: {len(merged_done)} merged→done, "
+            f"{len(open_pr_done)} open-pr→done, {len(reopened)} stuck→open, "
+            f"{len(escalated)} chronic→needs_human"
+        )
         for i in merged_done:
             print(f"    merged: {i}")
         for i in open_pr_done:
