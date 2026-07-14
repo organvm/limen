@@ -394,6 +394,11 @@ def harvest(agent):
 
 @main.command("workstream")
 @click.option(
+    "--autonomous",
+    is_flag=True,
+    help="Require a prompt, embed the live derive-not-force contract, and start Codex with the README.",
+)
+@click.option(
     "--codex",
     "launch_codex",
     is_flag=True,
@@ -428,14 +433,17 @@ def harvest(agent):
     is_flag=True,
     help="Create/reuse the worktree without writing the private kickoff packet.",
 )
+@click.option("--workstream", "workstream_handle", default=None, help="Pin the capsule to one purpose channel.")
 @click.argument("repo")
 @click.argument("slug")
 def workstream(
+    autonomous,
     launch_codex,
     launch_shell,
     from_ref,
     prompt_text,
     prompt_file,
+    workstream_handle,
     no_readme,
     repo,
     slug,
@@ -444,6 +452,8 @@ def workstream(
     root = resolve_limen_repo_root()
     script = root / "scripts" / "start-worktree-session.sh"
     args = ["bash", str(script)]
+    if autonomous:
+        args.append("--autonomous")
     if launch_codex:
         args.append("--codex")
     if launch_shell:
@@ -454,6 +464,8 @@ def workstream(
         args.extend(["--prompt", prompt_text])
     if prompt_file:
         args.extend(["--prompt-file", prompt_file])
+    if workstream_handle:
+        args.extend(["--workstream", workstream_handle])
     if no_readme:
         args.append("--no-readme")
     args.extend([repo, slug])

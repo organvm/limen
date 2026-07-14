@@ -6,13 +6,14 @@
   "levers": [
     {
       "id": "L-MAIL-AUTOMATION-GRANT",
-      "label": "Grant macOS Automation permission for the heartbeat to control Mail.app, then set LIMEN_MAIL_DRAFTS=1 — this turns the restored C_MAIL draft effector from enrich-only (draft text on the obligations face) into real, one-tap-ready Drafts in your mailbox.",
+      "label": "OPTIONAL fallback — the macOS Automation grant is no longer required for Gmail drafts. The keyed headless path (UMA PR #168 + the creds-hydrate gmail lanes, 2026-07-14) now persists reply drafts to [Gmail]/Drafts over IMAP with NO GUI tap. This grant only still matters for real Drafts on NON-Gmail accounts (iCloud/Outlook) via Apple Mail, and only if you set LIMEN_MAIL_DRAFTS=1.",
       "owner": "yours",
-      "cost": "~1 min once, durable",
-      "gate": "macOS TCC Automation (GUI approval) + one env flag",
-      "unlocks": "autonomic per-beat draft creation for reply-owed mail (draft-only; never auto-sent)",
-      "source_task": "mail organ · C_MAIL draft effector (limen PR #958)",
-      "note": "System Settings -> Privacy & Security -> Automation -> allow the limen heartbeat (or osascript/Terminal) to control Mail. Or run `bash scripts/mail-beat.sh` once in Terminal and click Allow at the prompt, then recreate the pinned interpreter so the grant sticks: `python3 -m venv --copies ~/Workspace/limen/.venv`. Then set LIMEN_MAIL_DRAFTS=1 in the daemon env. Enrich-only works with no grant; this only unlocks real Drafts. Send stays draft-only regardless.",
+      "cost": "~1 min once, durable — OR skip entirely (keyed path covers Gmail headlessly)",
+      "status": "optional-fallback (keyed IMAP path designs the grant out for Gmail)",
+      "gate": "macOS TCC Automation (GUI approval) + one env flag — only for non-Gmail accounts' drafts",
+      "unlocks": "autonomic per-beat draft creation on non-Gmail accounts (draft-only; never auto-sent). Gmail drafts already work headlessly once creds-hydrate lands GMAIL_APP_PASSWORD + GMAIL_USER in ~/.limen.env.",
+      "source_task": "mail organ · C_MAIL draft effector (limen PR #958); designed out for Gmail by the keyed path (UMA #168 + creds lane)",
+      "note": "No longer on your critical path. The keyed path: creds-hydrate hydrates op://Private/gmail-app-pw-2026-06-06 (password → GMAIL_APP_PASSWORD, username → GMAIL_USER) into ~/.limen.env each beat; UMA draft_writer._select_saver then APPENDs Gmail drafts via IMAP, no AppleScript, no grant. If you ever want headless drafts for a NON-Gmail account too: System Settings -> Privacy & Security -> Automation -> allow the limen heartbeat (or osascript/Terminal) to control Mail, run `bash scripts/mail-beat.sh` once in Terminal and click Allow, recreate the pinned interpreter (`python3 -m venv --copies ~/Workspace/limen/.venv`), and set LIMEN_MAIL_DRAFTS=1. Send stays draft-only / disarmed regardless.",
       "issue": 960
     },
     {
@@ -97,7 +98,8 @@
         "Until launchd lands, after any reboot/logout restart in one line: cd ianva && PYTHONPATH=$PWD/src python3 -m ianva.cli up  (binds :7666 in ~7s).",
         "Optional, later — populate upstreams (build-mcp-registry.py, or ~/.config/ianva/upstreams.json); the local face needs none, upstreams only matter for the cloud connector (see L-IANVA-CLOUD)."
       ],
-      "issue": 262
+      "issue": 262,
+      "discharged": "2026-07-10 (recorded 2026-07-14) — the one remaining flip was done: ~/Library/LaunchAgents/com.ianva.gateway.plist installed 7/10 17:57, service running since (launchctl: never exited), gateway listening on :7666 (verified 2026-07-14). Receipt: needs-human issue #262 CLOSED."
     },
     {
       "id": "L-IANVA-CLOUD",
@@ -517,7 +519,9 @@
       "gate": "auto-mode classifier denies the agent appending a persistence-arming env flag (Unauthorized Persistence) — this arming is deliberately your hand",
       "unlocks": "recurrence immunity for the 2026-07-09 quiesce class; creds-hydrate auto-restores on the next due beat; armed-valve-audit flips this valve from SILENT-OFF to ARMED",
       "source_task": "sensor-lane live-wire · limen PR #1013 + #1020 · plan 2026-07-13",
-      "note": "One-liner: printf '\\nexport LIMEN_LAUNCHAGENT_HEAL=1\\n' >> ~/.limen.env && launchctl kickstart -k gui/$(id -u)/com.limen.heartbeat. The kickstart refreshes the heartbeat lane immediately (its shell sources ~/.limen.env at startup only); the metabolize lane picks the grant up on its own next pass either way. Verify after the next due beat: launchctl print gui/$(id -u)/com.limen.creds-hydrate exits 0 and logs/launch-agent-liveness.json shows green:true. creds-hydrate's write_env preserves unmanaged lines, so the grant survives hydration rewrites."
+      "note": "One-liner: printf '\\nexport LIMEN_LAUNCHAGENT_HEAL=1\\n' >> ~/.limen.env && launchctl kickstart -k gui/$(id -u)/com.limen.heartbeat. The kickstart refreshes the heartbeat lane immediately (its shell sources ~/.limen.env at startup only); the metabolize lane picks the grant up on its own next pass either way. Verify after the next due beat: launchctl print gui/$(id -u)/com.limen.creds-hydrate exits 0 and logs/launch-agent-liveness.json shows green:true. creds-hydrate's write_env preserves unmanaged lines, so the grant survives hydration rewrites.",
+      "discharged": "2026-07-14 — operator ran the append himself; `export LIMEN_LAUNCHAGENT_HEAL=1` verified present (once) in ~/.limen.env. Heartbeat lane applies on its next restart/reboot; the metabolize lane picks the grant up on its own next pass. Same morning he also restored + bootstrapped com.limen.creds-hydrate (ran clean, 4 hydrated).",
+      "issue": 1046
     }
   ]
 }
