@@ -244,6 +244,24 @@ closure receipts above. If context, value, resource, provider, or human gates re
 the successor capsule and its launch command before ending. A closeout without that command is
 incomplete; a new autonomous session without a capsule must create one before broad execution.
 
+## Bounded Composition
+
+A long-running campaign or whole-repo gate may exist only as a thin orchestrator over independently
+owned, bounded units. Every unit declares its inputs, owner, predicate, execution profile, finite
+retry policy, bounded-output policy, and durable receipt. The aggregate preserves completed receipts,
+resumes from them, and reports counts plus links; it never reruns successful children or emits their
+full logs.
+
+Apply the same rule to artifacts: README files are indexes over cohesive modules, not concatenated
+prompts, reports, transcripts, or append-only scrawl. Split on semantic ownership and independently
+testable interfaces, not an arbitrary line count. A file repeatedly changed for unrelated reasons has
+already exposed a missing module boundary.
+
+CI must shard module predicates and run eligible shards in parallel. The final integration gate checks
+the shard receipts plus only genuine cross-module seams. Each shard has an execution-profile timeout,
+finite transient retry policy, output cap, and stable receipt; no unbounded wait, retry, or log stream
+is a valid verification strategy.
+
 ## Task States
 
 The canonical state set lives in code — `VALID_STATUSES` in `mcp/src/limen_mcp/server.py` — and
@@ -458,6 +476,13 @@ checks.
 - You are Claude. Read this file as part of your startup instructions.
 - You have access to the full filesystem — `$LIMEN_ROOT/tasks.yaml` is a regular file.
 - Support `limen` as a subagent: when asked, run the limen CLI or read/write tasks.yaml directly.
+- **Fleet launches never wait on permissions.** Limen-owned non-interactive Claude dispatch uses
+  `--permission-mode dontAsk` with an explicit file-mutation allowlist. Bash/network policy remains
+  owned by effective user/project/managed rules; Limen does not inject a blanket shell grant. A tool
+  outside that surface, or one matched by an ask or deny rule, must fail closed and let the
+  dispatcher cascade or owner-route it; it must never become an approval modal. Do not replace this with
+  `acceptEdits` or `auto` (both can prompt), or `bypassPermissions` (unsafe on the host). This fleet
+  contract does not change the operator's settings or any interactive/user-started Claude session.
 - **Tier subagent fan-out by job.** Task/Workflow subagents inherit the session model; pick each agent's tier by its job (`.claude/agents/` types, or an explicit `model`/`effort`) so trivial workers never ride Opus. Authority: `cli/src/limen/model_selection.py`; details in CLAUDE.md → Parallel Exploration & Fan-Out.
 - **Fable plans, cheaper tiers build.** Fable's role is PLAN-ONLY: it does the deep analysis, emits a build packet into a worktree, and hands off to a cheaper tier (Opus/Sonnet/Haiku) that builds; building on Fable is prohibited. It is acceptance-gated (`scripts/fable-allotment.py accept ...`, `LIMEN_FABLE_ACCEPTANCE=<receipt>`) AND live runtime-capped against actual weekly tokens burned (40% deliberate / 50% hard, `scripts/fable-allotment.py balance` → `logs/fable-allotment.json`, enforced in `cli/src/limen/model_selection.py`). Full doctrine + caps: `docs/fable-allotment.md`.
 
