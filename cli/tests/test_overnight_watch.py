@@ -261,9 +261,7 @@ def test_pause_marker_exits_zero_with_blocked_receipt_before_expensive_work(tmp_
         receipt["overnight_counts"][key] == 0
         for key in ("launched", "harvested", "reaped", "done", "failed", "no_op", "timed_out")
     )
-    assert json.loads(module.STATE_PATH.read_text(encoding="utf-8"))["latest_tick"] == (
-        "2026-07-14T09:20:00+00:00"
-    )
+    assert json.loads(module.STATE_PATH.read_text(encoding="utf-8"))["latest_tick"] == ("2026-07-14T09:20:00+00:00")
     assert not module.TRIAL_OBSERVATION_PATH.exists()
     assert "Status: `blocked`" in module.RECEIPT_MD.read_text(encoding="utf-8")
 
