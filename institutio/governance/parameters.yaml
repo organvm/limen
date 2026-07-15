@@ -628,6 +628,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "Pushed-reap escape hatch — DEFAULT OFF. The standing policy is merge-before-reap (pushed preservation is not closure), so a clean, idle, pushed-but-unmerged worktree is KEPT as not-merged-to-default (enacted by test_reclaim_keeps_clean_pushed_unmerged_branch). Set 1 to flip that class to reapable: reachable_from_remote ⇒ every byte is on origin and re-cloneable, so removing the local checkout loses zero work and the branch + its PR/babysitting lifecycle continue on origin. This is the opt-in lever that drains the pushed-but-unmerged backlog (the dominant boot-disk pin — hundreds of roots) toward the free-space target; classified clean+pushed+idle under the standing grant. Enabling it is an operator policy decision (it overrides merge-before-reap), homed as a lever, not defaulted on. The unpushed/dirty/active guardrails are unchanged — unpreserved work is NEVER reaped."
+  LIMEN_RECLAIM_ORPHANS:
+    default: "0"
+    env: LIMEN_RECLAIM_ORPHANS
+    self_update: none
+    owner: continuity
+    note: "Dead-gitdir orphan sweep — DEFAULT OFF (observable-first). A worktree checkout under a THROWAWAY root (dispatch/scratch) whose `.git` pointer targets a superproject gitdir that no longer exists is prune-race debris: `git worktree prune` (clone-maintenance.sh) reaped the gitdir while the worktree's volume (Scratch) was briefly unmounted, and the checkout returned orphaned on remount — classified not-a-git-dir, uncleanable by the git-dependent loss-free gates, and the dominant cause of the 2026-07-15 worktree-debt tripling (372/537 roots). Set 1 to arm the sweep: reclaim-worktrees.py reaps (rmtree) such orphans past their root's min-age (reason orphan-dead-gitdir+throwaway+idle, under the standing grant). Loss-free by construction: the orphan's git identity — and any unpushed commits — are ALREADY unrecoverable via the checkout (the gitdir that held them is gone), and committed work persists on origin. Confined to throwaway roots only — never .claude/worktrees, repo-local, or registered cells (which may hold hand-dev work). The prune GUARD in clone-maintenance.sh stops new orphans being manufactured; this drains the existing backlog."
   LIMEN_CLONE_REAP_STANDING_ACCEPTANCE:
     default: "1"
     env: LIMEN_CLONE_REAP_STANDING_ACCEPTANCE

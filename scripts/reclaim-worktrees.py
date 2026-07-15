@@ -42,7 +42,13 @@ Env: LIMEN_WORKTREE_ROOT, LIMEN_RECLAIM_MIN_AGE_H (6), LIMEN_RECLAIM_CLAUDE_WT (
      LIMEN_RECLAIM_CLAUDE_AGE_H (24), LIMEN_RECLAIM_REPO_LOCAL_WT, LIMEN_RECLAIM_REPO_LOCAL_AGE_H,
      LIMEN_RECLAIM_AGY_SCRATCH, LIMEN_AGY_SCRATCH_ROOT, LIMEN_AGY_SCRATCH_MIN_IDLE_H,
      LIMEN_RECLAIM_REGISTERED_WT, LIMEN_RECLAIM_REGISTERED_AGE_H, LIMEN_RECLAIM_MAIN_REPOS,
-     LIMEN_RECLAIM_WORKSPACE_ROOTS, LIMEN_RECLAIM_MAX (50), LIMEN_RECLAIM_EVERY_MIN (30).
+     LIMEN_RECLAIM_WORKSPACE_ROOTS, LIMEN_RECLAIM_MAX (50), LIMEN_RECLAIM_EVERY_MIN (30),
+     LIMEN_RECLAIM_ORPHANS (0 — observable-first arm for the dead-gitdir orphan sweep).
+
+Dead-gitdir orphan sweep (LIMEN_RECLAIM_ORPHANS=1): a checkout under a THROWAWAY root whose `.git`
+pointer targets a superproject gitdir that no longer exists (prune-race debris — `git worktree prune`
+fired while its volume was unmounted) is, past min-age, reaped via rmtree. Its git identity is
+already unrecoverable via the checkout; committed work persists on origin. Default OFF.
 """
 
 from __future__ import annotations
@@ -322,6 +328,59 @@ PUSHED_OK = os.environ.get("LIMEN_RECLAIM_PUSHED_OK", "0") != "0"
 # pre-accepted for removal without a per-root ledger event.
 STANDING_ACCEPTANCE_REASONS = {"clean+merged+idle", "receipt-remote-merged+clean+idle", "clean+pushed+idle"}
 
+# ── DEAD-GITDIR ORPHAN SWEEP (LIMEN_RECLAIM_ORPHANS, declared in parameters.yaml). DEFAULT OFF —
+# observable-first. A worktree checkout whose `.git` pointer targets a superproject gitdir that no
+# longer exists is prune-race debris: `git worktree prune` (clone-maintenance.sh) reaps the gitdir
+# whenever the worktree's volume (Scratch) is briefly unmounted, and the checkout returns orphaned
+# on remount. Its git identity — and any UNPUSHED commits — are ALREADY unrecoverable via this
+# checkout (the gitdir that held them is gone); only stale working-tree files remain. Under a
+# THROWAWAY root, idle past min-age, that is disposable debris the reaper's git-dependent loss-free
+# gates can't classify (no working git). When armed, such orphans are reaped (rmtree); the branch's
+# committed work, if any, persists on origin (dispatch pushes) and is annotated when derivable.
+ORPHAN_SWEEP = os.environ.get("LIMEN_RECLAIM_ORPHANS", "0") != "0"
+ORPHAN_REASON = "orphan-dead-gitdir+throwaway+idle"
+if ORPHAN_SWEEP:
+    STANDING_ACCEPTANCE_REASONS = STANDING_ACCEPTANCE_REASONS | {ORPHAN_REASON}
+# Only THROWAWAY creation roots are eligible for orphan reap — never interactive/registered cells
+# (.claude/worktrees, repo-local, registered) which may hold hand-dev work.
+_THROWAWAY_SOURCE_PREFIXES = ("dispatch-root", "dispatch-clone-cache", "legacy-dispatch-root", "agy-scratch")
+
+
+def _is_throwaway_source(source: str) -> bool:
+    return any((source or "").startswith(p) for p in _THROWAWAY_SOURCE_PREFIXES)
+
+
+def orphan_gitdir_name(d: Path) -> str | None:
+    """If d/.git is a worktree pointer whose target gitdir no longer exists, return the pointer's
+    worktree-admin name (the dead gitdir's basename). Else None. This is the dead-gitdir orphan
+    signal — distinct from a plain non-git directory (which has no gitdir pointer at all)."""
+    gitfile = d / ".git"
+    try:
+        if not gitfile.is_file():
+            return None
+        text = gitfile.read_text(errors="replace").strip()
+    except OSError:
+        return None
+    if not text.startswith("gitdir:"):
+        return None
+    gitdir = text.split("gitdir:", 1)[1].strip()
+    if not gitdir or Path(gitdir).exists():
+        return None  # gitdir alive ⇒ a registered worktree, not an orphan
+    return Path(gitdir).name
+
+
+def orphan_branch_on_origin(name: str) -> bool:
+    """Best-effort: is a remote branch present whose last path-segment matches this orphan's
+    worktree-admin name? git derives the admin name from the branch, so a match is evidence the
+    committed work is preserved on origin (annotation only — the reap gate is throwaway+idle)."""
+    if not name:
+        return False
+    r = git(["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin"], LIMEN_ROOT)
+    if r.returncode != 0:
+        return False
+    segs = {ref.rsplit("/", 1)[-1] for ref in r.stdout.split() if ref}
+    return name in segs
+
 
 def reclaim_accepted(path: Path, action: str, reason: str, acceptance_events) -> tuple[bool, str]:
     if STANDING_ACCEPTANCE and reason in STANDING_ACCEPTANCE_REASONS:
@@ -377,8 +436,9 @@ def superproject(cwd) -> str | None:
     return None
 
 
-def classify(d: Path, now: float, min_age_h: float, preservation_receipts=None):
-    """Return (action, reason). action in {remove-worktree, remove-clone, remove-residue, skip}."""
+def classify(d: Path, now: float, min_age_h: float, preservation_receipts=None, source: str = ""):
+    """Return (action, reason). action in {remove-worktree, remove-clone, remove-residue,
+    remove-orphan, skip}."""
     preservation_receipts = preservation_receipts or {}
     try:
         if d.resolve() in _SELF_GUARD:
@@ -390,6 +450,19 @@ def classify(d: Path, now: float, min_age_h: float, preservation_receipts=None):
     if git(["rev-parse", "--is-inside-work-tree"], d).returncode != 0:
         if is_generated_log_shell(d):
             return "remove-residue", "generated-log-shell"
+        # Dead-gitdir orphan (prune-race debris): only under a throwaway root, past min-age, and
+        # only when the sweep is armed. The git-dependent loss-free gates below cannot run (no
+        # working git), so eligibility rests on the throwaway-root contract + idleness. Committed
+        # work, if any, is preserved on origin (annotated when derivable); unpushed commits are
+        # already gone with the pruned gitdir, so rmtree loses nothing this checkout could recover.
+        if ORPHAN_SWEEP and _is_throwaway_source(source) and orphan_gitdir_name(d) is not None:
+            try:
+                age_h = (now - d.stat().st_mtime) / 3600.0
+            except OSError:
+                return "skip", "not-a-git-dir"
+            if age_h >= min_age_h:
+                return "remove-orphan", ORPHAN_REASON
+            return "skip", f"orphan-active(<{min_age_h:g}h)"
         return "skip", "not-a-git-dir"
     age_h = (now - d.stat().st_mtime) / 3600.0
     if age_h < min_age_h:
@@ -501,11 +574,11 @@ def main():
         return 0
     preservation_receipts = load_preservation_receipts()
     reclaim_acceptance = load_reclaim_acceptance()
-    dirs = [(target.path, target.min_age_h) for target in targets]
+    dirs = [(target.path, target.min_age_h, target.source) for target in targets]
     removed, skipped, failed, deferred = [], [], [], []
     would_reclaim = []
-    for d, min_age_h in dirs:
-        action, reason = classify(d, now, min_age_h, preservation_receipts)
+    for d, min_age_h, source in dirs:
+        action, reason = classify(d, now, min_age_h, preservation_receipts, source=source)
         if action == "skip":
             skipped.append((d.name, reason))
             continue
