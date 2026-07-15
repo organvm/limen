@@ -1,5 +1,12 @@
 # Objective and routing
 
+## Current phase: restart and study
+
+The immediate objective is a quiet, durable boundary: no autonomous launches while the operator
+restarts the machine and studies the July 1-15 work. Begin with the reading order in `receipts.md`.
+Do not remove `logs/AUTONOMY_PAUSED` or begin the work-loan phase until the operator explicitly says
+to resume after that study.
+
 Move the system from the July 9-14 closeout receipt to the next truthful, durable state. The live
 environment chooses the work; this module defines what a candidate must prove before it may borrow
 resources.

@@ -1,5 +1,9 @@
 # Runtime decision contract
 
+The restart-study hold outranks normal lane selection. If `logs/AUTONOMY_PAUSED` exists with the
+operator's `2026-07-15` study reason, derive `wait_relay`, perform only read-only study/probes, and
+leave the marker in place. An explicit post-study resume from the operator is the release event.
+
 Before selecting or mutating work, re-probe current reality:
 
 1. Compare exact local, base, default, and CI heads.

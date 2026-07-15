@@ -1,5 +1,12 @@
 # Live decision protocol
 
+## Current boundary: `wait_relay`
+
+The operator requested a restart and study interval. While the pause marker exists, the only valid
+boundary is `wait_relay`: read the receipts, take no execution loan, and preserve every current
+owner. After an explicit post-study resume, remove the marker, repeat every live probe below, and
+derive a new state from that evidence; do not continue from the counts frozen in `receipts.md`.
+
 ## First probes
 
 Run these or their current canonical replacements before selecting work. An absent or stale command

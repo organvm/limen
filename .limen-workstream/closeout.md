@@ -7,3 +7,5 @@
 - Record changed paths, the exact predicate/result, local and remote custody, and any named external
   gate.
 - At a session boundary, leave the next capsule index and one launch command.
+- During the restart-study hold, do not turn a read-only review into execution. The operator's
+  explicit resume is the only release predicate; restarting the computer alone is not a resume.
