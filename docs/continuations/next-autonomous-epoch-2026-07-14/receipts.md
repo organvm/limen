@@ -64,6 +64,17 @@ The new session must read the capsule modules, observe the pause, wait for the o
 resume, then re-probe remote main, PR state, board, handoff, usage, disk, mounts, active owners, and
 lifecycle custody before any mutation.
 
+## Capsule verification
+
+- All four `.limen-workstream` modules were present and non-empty; `bash -n` accepted
+  `kickstart.sh`.
+- The launch command was exercised twice with Codex intentionally absent from `PATH` and
+  `SHELL=/usr/bin/true`; both passes exited 0 with the same clean branch status.
+- The capsule worktree was clean and its local HEAD, upstream, and remote branch ref matched after
+  the final push.
+- `python3 scripts/tabularius-organ.py --check` was an empty-inbox fixed point, and two governor
+  probes continued to report the intentional pause.
+
 ## Existing owners to re-probe
 
 - Original serial PR queue: #1029 through #1036.
