@@ -80,6 +80,9 @@ jobs:
       - name: Validate naming canon (NOMENCLATOR · INDEX·NOMINVM)
         run: python scripts/nomenclator.py
 
+      - name: PII containment gate (protects person-adjacent organ paths)
+        run: python scripts/check-pii.py
+
       - name: No-hardcode gate (VIGILIA parameter panel ratchet)
         run: python scripts/check-params.py
 
