@@ -248,18 +248,43 @@ DEFAULT_MAP: list[dict] = [
         "enabled": False,
     },
     {
-        # The Gmail app-password for the autonomous mail lane (C_MAIL keyless drafts/sweep). The secret
+        # The Gmail app-password for the autonomous mail lane (C_MAIL keyless drafts/sends). The secret
         # ALREADY EXISTS in 1Password — nothing to mint. Registered here as the credential's canonical HOME
-        # so it never resurfaces as a "generate a credential" chat/lever again. enabled=False because its
-        # real CONSUMER is a CI secret, not a local subprocess: the deploy target is the GitHub Actions
-        # secret GMAIL_APP_PASSWORD on organvm/domus, landed once via `op read <ref> | gh secret set
-        # GMAIL_APP_PASSWORD -R organvm/domus` (value streams op→gh, never on screen). Flip to True only if
-        # a local lane is ever switched to read GMAIL_APP_PASSWORD from ~/.limen.env directly.
+        # so it never resurfaces as a "generate a credential" chat/lever again.
+        # ENABLED 2026-07-14: the pre-written condition on line "flip to True only if a local lane reads
+        # GMAIL_APP_PASSWORD from ~/.limen.env directly" is now SATISFIED — the keyed headless draft path
+        # (UMA draft_writer._select_saver → IMAPProvider.create_draft, and send_drafts._smtp_creds) reads
+        # GMAIL_APP_PASSWORD from the env this lane hydrates. This designs out the macOS TCC Automation grant
+        # (lever L-MAIL-AUTOMATION-GRANT #960) for draft-save: a beat persists drafts to [Gmail]/Drafts over
+        # IMAP with no GUI tap. The separate domus gh_secret lane above still lands the CI secret. SENDING
+        # stays disarmed (LIMEN_MAIL_SEND=0) regardless — this only enables headless drafts.
         # See L-GMAIL-CRED / issue #261, the Wall index #320, memory: gmail-mutation-cascade-avenues.
         "lane": "gmail (C_MAIL app-password)",
         "ref": "op://Private/gmail-app-pw-2026-06-06/password",
         "env": ["GMAIL_APP_PASSWORD"],
-        "enabled": False,
+        "enabled": True,
+        # REQUIRED for the autonomous mail organ: without it the keyed IMAP path (draft-save
+        # AND gmail_imap_sweep archive) cannot authenticate, so nothing auto-cleans Gmail. A
+        # `required` lane that fails to materialize is a LOUD --verify failure (not a silent
+        # skip) — the beat log surfaces it every beat. If this is red, the op:// item is not
+        # readable by the service account (vault grant / field name — Wall #320, issue #261).
+        "required": True,
+    },
+    {
+        # The Gmail ACCOUNT ADDRESS for the keyed mail lane — NOT a secret (it appears in every From: header),
+        # but the keyed path needs it: draft_writer._select_saver and send_drafts._smtp_creds both require a
+        # user (IMAP_USER/GMAIL_USER) alongside the app-password, or they fail closed and fall back to the
+        # TCC-gated AppleScript path. Routed from the SAME 1Password item's `username` field so the address
+        # never lands as a hardcode in this PUBLIC file (derive-never-pin + PII-clean): only the op:// ref is
+        # in code; the value materializes solely into ~/.limen.env on the daemon. Fail-open: if the item has
+        # no username field, the lane simply doesn't hydrate (surfaced by --verify in the beat log, never a
+        # chat task) and the keyed path stays dormant — nothing breaks. [[gmail-mutation-cascade-avenues]]
+        "lane": "gmail (C_MAIL account address)",
+        "ref": "op://Private/gmail-app-pw-2026-06-06/username",
+        "env": ["GMAIL_USER"],
+        "enabled": True,
+        # REQUIRED alongside the app-password — the keyed path needs the account address too.
+        "required": True,
     },
     {
         # The ianva cloud-connector bearer token (the one re-auth a local gateway physically cannot fix —
@@ -795,6 +820,11 @@ def main() -> int:
     if args.verify:
         print(f"creds-hydrate --verify ({ENV_FILE}) — authenticating each materialized credential:")
         any_invalid = False
+        # A `required` lane that never materialized is a DEFECT — but only when the floor is
+        # OTHERWISE configured (hydration ran, materialized other creds, yet this required one
+        # failed to land → the op:// read is silently failing). On a truly EMPTY floor (fresh
+        # machine / CI, nothing set up yet) stay quiet: report "?" and exit 0, no false alarm.
+        floor_populated = any(_env_value(x) for e in cred_map for x in e.get("env", []))
         for e in cred_map:
             envs = e.get("env", [])
             sinks = _gh_sinks(e)
@@ -807,7 +837,18 @@ def main() -> int:
                 continue
             val = _env_value(envs[0]) if envs else None
             if not val:
-                print(f"  ? {e['lane']:28} {','.join(envs) or '(file only)'} — not materialized (run --apply)")
+                if e.get("required") and floor_populated:
+                    # A REQUIRED lane missing on a configured floor is a DEFECT, not a shrug: the
+                    # op:// read is failing silently (fail-open skip on --apply) and an organ
+                    # downstream is starving. Surface it as loud as a dead token so the beat log
+                    # flags it — never let a required credential rot green. (Root cause: the op://
+                    # item is not readable — vault grant / field name / item moved. Wall #320, #261.)
+                    print(f"  ✗ {e['lane']:28} {','.join(envs)} — REQUIRED, NOT materialized "
+                          f"(op:// read is failing → check {e.get('ref', 'the op:// item')} is readable)")
+                    any_invalid = True
+                else:
+                    tail = " (REQUIRED — will alarm once the floor is configured)" if e.get("required") else " (run --apply)"
+                    print(f"  ? {e['lane']:28} {','.join(envs) or '(file only)'} — not materialized{tail}")
                 continue
             state, detail = probe_cred(e, val)
             del val

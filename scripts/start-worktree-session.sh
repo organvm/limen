@@ -4,16 +4,20 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/start-worktree-session.sh [--codex] [--shell] [--from <branch-or-ref>] [--prompt <text>] [--prompt-file <path>] [--workstream <handle>] <repo-or-alias> <slug>
+  scripts/start-worktree-session.sh [--autonomous] [--codex] [--shell] [--from <branch-or-ref>] [--prompt <text>] [--prompt-file <path>] [--workstream <handle>] <repo-or-alias> <slug>
 
 Examples:
   scripts/start-worktree-session.sh portvs triptych-story
   scripts/start-worktree-session.sh --codex portvs triptych-story
+  scripts/start-worktree-session.sh --autonomous --codex --prompt-file /tmp/next-session.md limen next-epoch
   scripts/start-worktree-session.sh --shell --prompt-file /tmp/prompt.md domus package-map
   scripts/start-worktree-session.sh --workstream contributions --prompt 'drain the code lane' limen contrib-run
 
 --workstream pins the worker to ONE purpose channel (contributions/correspondence/… — see
 docs/lanes/). It is stamped into the kickoff packet so the session stays single-purpose.
+
+--autonomous requires an explicit prompt and turns the README into the initial Codex prompt. The
+packet defines live probes and completion/switch predicates; it never predeclares the ending.
 
 Aliases:
   portvs, portus  /Users/4jp/Workspace/4444J99/portvs
@@ -23,13 +27,15 @@ Aliases:
 
 Creates or reuses:
   <repo>/.worktrees/<slug> on branch work/<slug>
-  <repo>/.worktrees/<slug>/.limen-workstream/README.md
+  <repo>/.worktrees/<slug>/.limen-workstream/README.md as a thin prompt index
+  <repo>/.worktrees/<slug>/.limen-workstream/{manifest,intent,runtime,closeout}.md
 
 The target repo's .git/info/exclude is updated so .worktrees/ and the private
-workstream README never appear as Git noise.
+capsule never appear as Git noise.
 USAGE
 }
 
+autonomous=0
 launch_codex=0
 launch_shell=0
 from_ref=""
@@ -40,6 +46,10 @@ write_readme=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --autonomous)
+      autonomous=1
+      shift
+      ;;
     --codex)
       launch_codex=1
       shift
@@ -110,6 +120,19 @@ done
 if [[ $# -ne 2 ]]; then
   usage >&2
   exit 2
+fi
+
+if [[ "$autonomous" -eq 1 && "$write_readme" -ne 1 ]]; then
+  echo "--autonomous cannot be combined with --no-readme" >&2
+  exit 2
+fi
+if [[ "$autonomous" -eq 1 && -z "$prompt_text" && -z "$prompt_file" ]]; then
+  echo "--autonomous requires --prompt or --prompt-file" >&2
+  exit 2
+fi
+if [[ -n "$prompt_file" && ! -f "$prompt_file" ]]; then
+  echo "prompt file not found: $prompt_file" >&2
+  exit 1
 fi
 
 repo_arg="$1"
@@ -218,114 +241,32 @@ echo "branch: $branch"
 [[ -n "$workstream" ]] && echo "workstream: $workstream"
 
 if [[ "$write_readme" -eq 1 ]]; then
-  readme_dir="$wt/.limen-workstream"
-  readme="$readme_dir/README.md"
-  kickstart="$readme_dir/kickstart.sh"
-  mkdir -p "$readme_dir"
+  capsule_dir="$wt/.limen-workstream"
+  readme="$capsule_dir/README.md"
 
   if [[ -n "$prompt_file" ]]; then
-    if [[ ! -f "$prompt_file" ]]; then
-      echo "prompt file not found: $prompt_file" >&2
-      exit 1
-    fi
     prompt_payload="$(cat "$prompt_file")"
   elif [[ -n "$prompt_text" ]]; then
     prompt_payload="$prompt_text"
   else
-    prompt_payload="No explicit prompt was supplied. Add the current ask, constraints, and evidence links here before starting long work."
+    prompt_payload="No explicit prompt was supplied. Add one bounded objective and its owner contract before execution."
   fi
 
-  now_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-  head_short="$(git -C "$wt" rev-parse --short HEAD)"
-  upstream_ref="$(git -C "$wt" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
-  origin_url="$(git -C "$repo" remote get-url origin 2>/dev/null || true)"
-  status_line="$(git -C "$wt" status --short --branch | head -n 1)"
-  readme_action="wrote"
-
-  cat > "$readme" <<EOF
-# Workstream: $slug
-
-Created: $now_utc
-
-## Location
-
-- Repo: \`$repo\`
-- Worktree: \`$wt\`
-- Branch: \`$branch\`
-- Workstream: \`${workstream:-unassigned}\`
-- Base ref: \`$from_ref\`
-- HEAD: \`$head_short\`
-- Upstream: \`${upstream_ref:-none yet}\`
-- Origin: \`${origin_url:-none}\`
-- Status at kickoff: \`$status_line\`
-
-## Kickstart Command
-
-\`\`\`bash
-bash "$kickstart"
-\`\`\`
-
-That command works from Terminal, Kitty, Ghostty, Warp, or any normal shell. The expanded command is:
-
-\`\`\`bash
-cd "$wt"
-if git remote get-url origin >/dev/null 2>&1; then
-  git fetch --prune
-fi
-git status --short --branch
-codex
-\`\`\`
-
-For a plain shell instead of Codex:
-
-\`\`\`bash
-cd "$wt"
-\${SHELL:-/bin/zsh} -l
-\`\`\`
-
-## Prompt Packet
-
-$prompt_payload
-
-## First Five Minutes
-
-1. Re-read the nearest \`AGENTS.md\` or project instruction file.
-2. Check local/remote state: \`git status --short --branch\`, \`git branch -vv\`, \`git remote -v\`.
-3. Identify generated/heavy directories before running builds.
-4. Write the smallest source diff that moves the workstream.
-5. Commit and push source work before deleting or reclaiming local state.
-
-## Closeout Rules
-
-- This worktree is ONE workstream (\`${workstream:-unassigned}\`) — keep it single-purpose. If another lane's work surfaces, seed it under its own workstream instead of mixing it in here.
-- Do not leave Git-visible generated files unclassified.
-- Push useful source commits or create a remote receipt before local cleanup.
-- First source push from a new workstream branch: \`git push -u origin HEAD\`.
-- Keep private data in ignored/private paths; summarize evidence instead of pasting secrets or personal content.
-- If the workstream creates large media, write a manifest first, then choose archive/offload/regenerate policy before deleting.
-- Final report must include changed paths, verification command, local/remote status, and any deletion/offload decision still waiting on the human.
-EOF
-  cat > "$kickstart" <<EOF
-#!/usr/bin/env bash
-set -euo pipefail
-cd "$wt"
-if git remote get-url origin >/dev/null 2>&1; then
-  git fetch --prune
-fi
-git status --short --branch
-if command -v codex >/dev/null 2>&1; then
-  exec codex
-fi
-exec "\${SHELL:-/bin/zsh}" -l
-EOF
-  chmod +x "$kickstart"
-
-  echo "workstream readme: $readme ($readme_action)"
-  echo "kickstart command: bash $kickstart"
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # shellcheck source=scripts/lib/workstream-capsule.sh
+  source "$script_dir/lib/workstream-capsule.sh"
+  render_workstream_capsule \
+    "$wt" "$repo" "$slug" "$branch" "$workstream" "$from_ref" "$autonomous" \
+    "$prompt_payload" "$script_dir/../spec/continuation-capsule"
 fi
 
 if [[ "$launch_codex" -eq 1 ]]; then
   cd "$wt"
+  if [[ "$autonomous" -eq 1 ]]; then
+    capsule_prompt=""
+    IFS= read -r -d '' capsule_prompt < "$readme" || true
+    exec codex "$capsule_prompt"
+  fi
   exec codex
 fi
 

@@ -71,8 +71,15 @@ organs:
     layer: autonomic
     home: limen (creds-hydrate.py, _load_limen_env, com.limen.creds-hydrate.plist)
     status: partial
-    role: "creds/secrets/env → don't break, don't re-ask. 1Password → ~/.limen.env → tools."
-    residual: "6 of 7 creds never minted/wired; Claude auth deliberately disabled; Gmail app-pw not in the map (op://Private/gmail-app-pw-2026-06-06 → GH secret GMAIL_APP_PASSWORD). Mostly his-lever mints + 2 wiring fixes."
+    role: "creds/secrets/env CONSUMPTION → don't break, don't re-ask. 1Password → ~/.limen.env → tools."
+    residual: "Consumption side. The upstream PROVISIONING (which vault the service account reads) is owned by the `clavis` organ below; creds-hydrate --verify (required-loud, PR #1061) surfaces a dead/absent materialized value; clavis check surfaces the vault-level cause."
+
+  - name: clavis
+    layer: autonomic
+    home: limen (scripts/creds-provision.py, institutio/governance/credentials.yaml, sensor 0a1)
+    status: partial
+    role: "credential + service-account PROVISIONING as code. Owns the fleet SA and the single vault it reads: every op-sourced secret must live in one SA-owned automation vault (1Password SA grants are IMMUTABLE, so one vault is the only stable shape). `check` = the forever-predicate (red until SA-homed); `bootstrap` = the one owner-op seed; `apply` = idempotent conformance."
+    residual: "The estate is not yet SA-homed: the fleet SA carries ZERO vault grants, so nothing hydrates from op (the floor coasts on a stale ~/.limen.env). One-time `creds-provision bootstrap` (owner op) mints the SA against the automation vault, migrates the secrets in, then the predicate is green forever. Homed Wall #320 (supersedes the mis-filed 'non-blocking' #288)."
 
   - name: authority
     layer: autonomic
@@ -102,6 +109,13 @@ organs:
     status: built
     role: "The body feels whether its own organs are firing (9-rung liveness + self-heal)."
     residual: "Feed the-seat: organ-health.json should drive this registry's per-organ status."
+
+  - name: correspondence
+    layer: somatic
+    home: "limen (scripts/mail-beat.sh = C_MAIL effector; institutio/governance/mail-tiers.yaml = tier registry; scripts/check-mail-answered.py = the mail-answered sensor; scripts/creds-hydrate.py = the keyed gmail lanes) + universal-mail--automation (obligations_build/draft_writer/send_drafts; IMAPProvider.append/create_draft = the headless draft path)"
+    status: partial
+    role: "The inbound mail voice: sweep → obligations ledger → tiered draft (headless via keyed IMAP APPEND) → fail-closed SAFE-tier send. Answers reply-owed mail so the operator is never the default send button."
+    residual: "Sender ships DISARMED (LIMEN_MAIL_SEND=0); SAFE tier is opt-in and currently empty (grows on trust) — arming is the operator's valve. The keyed headless draft path is BUILT (UMA #168 + creds-hydrate gmail lanes, 2026-07-14): it designs out the macOS TCC grant for Gmail drafts, downgrading lever L-MAIL-AUTOMATION-GRANT #960 to an optional fallback (non-Gmail accounts only). status→full once a SAFE intent is deliberately opted in and armed."
 
   # ----------------------------------------------------------------- FACE
   - name: face

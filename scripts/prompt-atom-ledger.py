@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import contextlib
 import datetime as dt
 import hashlib
@@ -14,10 +16,12 @@ import re
 import shlex
 import signal
 import sqlite3
+import struct
 import subprocess
 import sys
 import threading
 import time
+import zlib
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -51,6 +55,17 @@ from limen.prompt_corpus import (  # noqa: E402
 from limen.prompt_sources import (  # noqa: E402
     AGY_CONVERSATION_UNIT_SIGNATURE_FIELDS,
     AGY_HISTORY_KEYSETS,
+    CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+    CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+    CLAUDE_DERIVED_TOOL_RESULT_INTEGER_FIELDS,
+    CLAUDE_DERIVED_TOOL_RESULT_JOB_KEYS,
+    CLAUDE_DERIVED_TOOL_RESULT_PROMPT_KEYSETS,
+    CLAUDE_DERIVED_TOOL_RESULT_TEXT_FIELDS,
+    CLAUDE_EXIT_PLAN_ALLOWED_PROMPT_INPUT_KEYS,
+    CLAUDE_EXIT_PLAN_ALLOWED_PROMPT_KEYS,
+    CODEX_COMPACTED_MESSAGE_KEYSETS,
+    CODEX_COMPACTED_PAYLOAD_KEYSETS,
+    CODEX_COMPACTION_ITEM_KEYSETS,
     CODEX_HISTORY_KEYSETS,
     CODEX_BYTE_RANGE_KEYS,
     CODEX_EVENT_USER_PAYLOAD_KEYSETS,
@@ -77,13 +92,29 @@ from limen.prompt_sources import (  # noqa: E402
     GEMINI_NONUSER_RECORD_KEYSETS,
     GEMINI_SET_KEYSETS,
     GEMINI_USER_RECORD_KEYSETS,
+    OPENCODE_ASSISTANT_MESSAGE_KEYSETS,
+    OPENCODE_TASK_TOOL_INPUT_KEYSETS,
+    OPENCODE_TASK_TOOL_METADATA_KEYSETS,
+    OPENCODE_TASK_TOOL_PART_KEYS,
+    OPENCODE_TASK_TOOL_STATE_KEYSETS,
+    OPENCODE_TASK_TOOL_TIME_KEYSETS,
     OPENCODE_USER_MESSAGE_KEYS,
     OPENCODE_USER_PART_KEYSETS,
+    OPENCODE_USER_SUMMARY_DIFF_KEYS,
+    OPENCODE_USER_SUMMARY_KEYS,
+    OPENCODE_USER_SUMMARY_MAX_BYTES,
     OPENCODE_UNIT_SIGNATURE_FIELDS,
     PROMPT_SOURCE_SCANNER_VERSION,
     SOURCE_ADAPTER_CONTRACT_VERSION,
     SOURCE_ADAPTER_RULES,
+    SOURCE_ALIAS_BLOCKER_REASONS,
     SOURCE_FILE_SIGNATURE_FIELDS,
+    SOURCE_MISSING_EXCLUSION_ID,
+    SOURCE_RECORD_SCHEMAS,
+    SourcePathCustody,
+    agy_conversation_root_error,
+    agy_conversation_storage_error,
+    inspect_source_path_custody,
     source_adapter_contract,
     source_contract_receipt_applies,
 )
@@ -147,6 +178,7 @@ class DiscoveredRows(list[dict[str, Any]]):
     def __init__(self) -> None:
         super().__init__()
         self.discovery_errors: list[tuple[str, str]] = []
+        self.source_alias_blocker_counts: Counter[str] = Counter()
         self.truncated_source: str | None = None
         self.discovered_count = 0
 
@@ -758,6 +790,15 @@ def active_scan_lanes(lifecycle: Any, rows: Sequence[dict[str, Any]]) -> set[str
         lanes.add("opencode")
     agy_root = getattr(lifecycle, "AGY_CLI_CONVERSATIONS", None)
     if agy_root is not None and Path(agy_root).is_dir():
+        home = getattr(lifecycle, "HOME", None)
+        root_error = (
+            agy_conversation_root_error(Path(home), Path(agy_root))
+            if home is not None
+            else "configured HOME is unavailable"
+        )
+        if root_error:
+            lanes.add("agy")
+            return lanes
         try:
             if next(Path(agy_root).rglob("*.db"), None) is not None:
                 lanes.add("agy")
@@ -890,27 +931,73 @@ def canonical_source_root(lifecycle: Any, source: str) -> Path | None:
     return None
 
 
+def containing_source_root(lifecycle: Any, source: str, path: Path) -> Path | None:
+    """Select the most specific declared root that lexically contains this unit."""
+
+    lexical_path = path.expanduser().absolute()
+    candidates: list[Path] = []
+    for item in getattr(lifecycle, "LOCAL_SOURCES", ()):
+        if not isinstance(item, (tuple, list)) or len(item) < 2 or str(item[0]) != source:
+            continue
+        root = Path(item[1])
+        lexical_root = root.expanduser().absolute()
+        try:
+            lexical_path.relative_to(lexical_root) if lexical_path != lexical_root else None
+        except ValueError:
+            continue
+        candidates.append(root)
+    if candidates:
+        return max(candidates, key=lambda candidate: len(candidate.expanduser().absolute().parts))
+    return canonical_source_root(lifecycle, source)
+
+
+def source_path_custody(
+    lifecycle: Any,
+    source: str,
+    path: Path,
+    *,
+    containment_root: Path | None = None,
+) -> SourcePathCustody:
+    root = containment_root or containing_source_root(lifecycle, source, path) or path.parent
+    return inspect_source_path_custody(
+        source,
+        path,
+        root,
+        isolated_home=SOURCE_HOME_OVERRIDE,
+    )
+
+
 def source_relative_path(lifecycle: Any, source: str, path: Path) -> Path | None:
-    """Return a canonical source-relative path, rejecting symlinks below its declared root."""
+    """Return a source-relative role after typed direct-or-alias custody succeeds."""
 
     root_path = canonical_source_root(lifecycle, source)
     if root_path is None:
         return None
-    try:
-        lexical_root = root_path.expanduser().absolute()
-        lexical_path = path.expanduser().absolute()
-        relative = lexical_path.relative_to(lexical_root)
-        current = lexical_path
-        while current != lexical_root:
-            if current.is_symlink():
-                return None
-            current = current.parent
-        resolved_root = lexical_root.resolve(strict=True)
-        resolved_path = lexical_path.resolve(strict=True)
-        resolved_path.relative_to(resolved_root)
-    except (OSError, ValueError):
+    custody = source_path_custody(lifecycle, source, path, containment_root=root_path)
+    return custody.relative if custody.error is None else None
+
+
+def source_unit_signature(
+    lifecycle: Any,
+    source: str,
+    path: Path,
+    *,
+    containment_root: Path | None = None,
+) -> dict[str, int] | None:
+    custody = source_path_custody(
+        lifecycle,
+        source,
+        path,
+        containment_root=containment_root,
+    )
+    if custody.error is not None:
         return None
-    return relative
+    if custody.alias_contract_id in {
+        CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+        CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+    }:
+        return custody.unit_signature
+    return file_signature(path)
 
 
 def _bounded_file_bytes(path: Path, signature: dict[str, Any], *, maximum: int) -> bytes | None:
@@ -943,9 +1030,14 @@ def source_exclusion_candidate_id(
 ) -> str | None:
     """Return a path/metadata-only exclusion candidate without reading content."""
 
-    relative = source_relative_path(lifecycle, source, path)
-    if relative is None:
+    custody = source_path_custody(lifecycle, source, path)
+    relative = custody.relative
+    if custody.error is not None or relative is None:
         return None
+    if custody.alias_contract_id == CLAUDE_PROJECT_MEMORY_ALIAS_ID:
+        return custody.alias_contract_id
+    if custody.alias_contract_id == CLAUDE_SUBAGENT_SESSION_ALIAS_ID:
+        return custody.alias_contract_id if path.is_file() else None
     parts = relative.parts
     suffix = path.suffix.lower()
 
@@ -955,12 +1047,10 @@ def source_exclusion_candidate_id(
         return None
     if source == "claude-plans":
         return "claude-generated-plan-v1"
-    if source == "codex-attachments":
-        return "codex-attachment-v1"
-    if source == "claude-tasks" and len(parts) >= 1:
-        if path.name == ".lock" and int(signature.get("size") or 0) == 0:
+    if source == "claude-tasks" and len(parts) >= 2:
+        if len(parts) == 2 and path.name == ".lock" and int(signature.get("size") or 0) == 0:
             return "claude-task-lock-v1"
-        if path.name == ".highwatermark":
+        if len(parts) == 2 and path.name == ".highwatermark":
             return "claude-task-watermark-v1"
         if suffix not in (".json", ".jsonl", ".md"):
             return "claude-task-artifact-v1"
@@ -1009,7 +1099,22 @@ def confirm_source_exclusion(
         return None
     related: dict[str, dict[str, Any]] = {}
     related_evidence: dict[str, dict[str, str]] = {}
-    if candidate_id == "claude-project-memory-mirror-v1":
+    if candidate_id in {
+        CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+        CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+    }:
+        custody = source_path_custody(lifecycle, source, path)
+        if (
+            custody.error is not None
+            or custody.alias_contract_id != candidate_id
+            or custody.unit_signature != signature
+            or custody.related_signatures is None
+            or custody.related_evidence is None
+        ):
+            return None
+        related = dict(custody.related_signatures)
+        related_evidence = dict(custody.related_evidence)
+    elif candidate_id == "claude-project-memory-mirror-v1":
         sibling = path.parent / "memory" / path.name
         sibling_signature = _memory_mirror_signature(lifecycle, source, path)
         if sibling_signature is None or sibling_signature.get("size") != signature.get("size"):
@@ -1040,10 +1145,35 @@ def current_exclusion_related_signatures(
     path: Path,
     candidate_id: str,
 ) -> dict[str, dict[str, Any]] | None:
+    if candidate_id in {
+        CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+        CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+    }:
+        custody = source_path_custody(lifecycle, source, path)
+        if custody.error is not None or custody.alias_contract_id != candidate_id:
+            return None
+        return dict(custody.related_signatures or {})
     if candidate_id != "claude-project-memory-mirror-v1":
         return {}
     signature = _memory_mirror_signature(lifecycle, source, path)
     return {"memory_sibling": signature} if signature is not None else None
+
+
+def current_exclusion_related_evidence(
+    lifecycle: Any,
+    source: str,
+    path: Path,
+    candidate_id: str,
+) -> dict[str, dict[str, Any]] | None:
+    if candidate_id in {
+        CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+        CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+    }:
+        custody = source_path_custody(lifecycle, source, path)
+        if custody.error is not None or custody.alias_contract_id != candidate_id:
+            return None
+        return dict(custody.related_evidence or {})
+    return None
 
 
 def source_unit_receipt_matches(
@@ -1056,6 +1186,7 @@ def source_unit_receipt_matches(
     locator: str,
     signature: dict[str, Any],
     related_signatures: dict[str, dict[str, Any]] | None = None,
+    expected_related_evidence: dict[str, dict[str, Any]] | None = None,
 ) -> bool:
     related_evidence = receipt.get("related_evidence", {}) if isinstance(receipt, dict) else {}
     return bool(
@@ -1066,6 +1197,7 @@ def source_unit_receipt_matches(
         and receipt.get("contract_digest") == contract_digest
         and receipt.get("signature") == signature
         and receipt.get("related_signatures", {}) == (related_signatures or {})
+        and (expected_related_evidence is None or related_evidence == expected_related_evidence)
         and source_contract_receipt_applies(
             contract_id,
             source,
@@ -1083,7 +1215,24 @@ def native_source_adapter_candidate_id(
     path: Path,
 ) -> str | None:
     relative = source_relative_path(lifecycle, source, path)
-    if source != "claude-projects" or relative is None or path.suffix.lower() != ".json":
+    if relative is None:
+        return None
+    if source == "codex-attachments":
+        if len(relative.parts) == 2 and re.fullmatch(r"pasted-text-[1-9][0-9]*\.txt", path.name):
+            return "codex-pasted-text-attachment-v1"
+        return None
+    if source == "codex-sessions":
+        parts = relative.parts
+        if (
+            len(parts) == 4
+            and re.fullmatch(r"20[0-9]{2}", parts[0])
+            and re.fullmatch(r"(?:0[1-9]|1[0-2])", parts[1])
+            and re.fullmatch(r"(?:0[1-9]|[12][0-9]|3[01])", parts[2])
+            and re.fullmatch(r"rollout-.+\.jsonl", parts[3])
+        ):
+            return "codex-session-jsonl-v2"
+        return None
+    if source != "claude-projects" or path.suffix.lower() != ".json":
         return None
     if len(relative.parts) == 4 and relative.parts[2] == "remote-agents":
         return "claude-remote-task-command-v1"
@@ -1159,7 +1308,44 @@ def canonical_file_session_id(source: str, path: Path, records: list[dict[str, A
                     candidates.append(value)
     if not candidates:
         return None
-    return next((value for value in candidates if value in path.name), candidates[0])
+    path_matches = [value for value in candidates if value in path.name]
+    if len(path_matches) == 1:
+        return path_matches[0]
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
+def codex_session_identity_error(path: Path, records: list[dict[str, Any]]) -> str | None:
+    """Require one canonical file identity while permitting exact resume metadata."""
+
+    candidates: list[str] = []
+    for obj in records:
+        if obj.get("type") != "session_meta":
+            continue
+        payload = obj.get("payload")
+        if not isinstance(payload, dict):
+            return "Codex session metadata is malformed"
+        identity_count = 0
+        for key in ("id", "session_id"):
+            if key not in payload:
+                continue
+            value = payload.get(key)
+            if not isinstance(value, str) or not value:
+                return "Codex session identity is malformed"
+            identity_count += 1
+            if value not in candidates:
+                candidates.append(value)
+        if identity_count == 0:
+            return "Codex session identity is malformed"
+    if not candidates:
+        return "Codex session has no canonical identity"
+    if len(candidates) == 1:
+        return None
+    path_matches = [value for value in candidates if value in path.name]
+    if len(path_matches) != 1:
+        return "Codex session identity is ambiguous"
+    return None
 
 
 def codex_file_is_forked(source: str, records: list[dict[str, Any]]) -> bool:
@@ -1253,6 +1439,127 @@ def claude_assistant_prompt_fields(name: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys((*CLAUDE_ASSISTANT_PROMPT_FIELDS["*"], *CLAUDE_ASSISTANT_PROMPT_FIELDS.get(name, ()))))
 
 
+def claude_exit_plan_allowed_prompts(tool_input: Any) -> list[str] | None:
+    """Return only the exact, provider-emitted ExitPlanMode permission prompts."""
+
+    if not isinstance(tool_input, dict) or tuple(sorted(tool_input)) != tuple(
+        sorted(CLAUDE_EXIT_PLAN_ALLOWED_PROMPT_INPUT_KEYS)
+    ):
+        return None
+    if not isinstance(tool_input.get("plan"), str) or not isinstance(tool_input.get("planFilePath"), str):
+        return None
+    allowed = tool_input.get("allowedPrompts")
+    if not isinstance(allowed, list):
+        return None
+    prompts: list[str] = []
+    for item in allowed:
+        if (
+            not isinstance(item, dict)
+            or tuple(sorted(item)) != tuple(sorted(CLAUDE_EXIT_PLAN_ALLOWED_PROMPT_KEYS))
+            or not isinstance(item.get("prompt"), str)
+            or not item["prompt"].strip()
+            or not isinstance(item.get("tool"), str)
+            or not item["tool"].strip()
+        ):
+            return None
+        prompts.append(str(item["prompt"]))
+    return prompts
+
+
+def claude_derived_tool_result_prompt(obj: dict[str, Any]) -> str | None:
+    """Extract the exact delegated prompt echoed by a Claude subagent result."""
+
+    marker = obj.get("sourceToolAssistantUUID")
+    result = obj.get("toolUseResult")
+    allowed_keysets = {tuple(sorted(keyset)) for keyset in CLAUDE_DERIVED_TOOL_RESULT_PROMPT_KEYSETS}
+    if (
+        not isinstance(marker, str)
+        or not marker
+        or not isinstance(result, dict)
+        or tuple(sorted(result)) not in allowed_keysets
+    ):
+        return None
+    for field in CLAUDE_DERIVED_TOOL_RESULT_TEXT_FIELDS:
+        if field in result and not isinstance(result.get(field), str):
+            return None
+    for field in CLAUDE_DERIVED_TOOL_RESULT_INTEGER_FIELDS:
+        if field in result and (isinstance(result.get(field), bool) or not isinstance(result.get(field), int)):
+            return None
+    for field in ("canReadOutputFile", "isAsync"):
+        if field in result and not isinstance(result.get(field), bool):
+            return None
+    if "content" in result and not isinstance(result.get("content"), list):
+        return None
+    for field in ("toolStats", "usage"):
+        if field in result and not isinstance(result.get(field), dict):
+            return None
+    prompt = result.get("prompt")
+    return prompt if isinstance(prompt, str) and prompt.strip() else None
+
+
+def claude_derived_tool_result_job_prompts(obj: dict[str, Any]) -> list[str] | None:
+    """Extract prompts from the exact provider-emitted durable-job result envelope."""
+
+    marker = obj.get("sourceToolAssistantUUID")
+    result = obj.get("toolUseResult")
+    if (
+        not isinstance(marker, str)
+        or not marker
+        or not isinstance(result, dict)
+        or set(result) != {"jobs"}
+        or not isinstance(result.get("jobs"), list)
+    ):
+        return None
+    prompts: list[str] = []
+    for job in result["jobs"]:
+        if (
+            not isinstance(job, dict)
+            or tuple(sorted(job)) != tuple(sorted(CLAUDE_DERIVED_TOOL_RESULT_JOB_KEYS))
+            or any(not isinstance(job.get(field), str) for field in ("cron", "humanSchedule", "id", "prompt"))
+            or any(not isinstance(job.get(field), bool) for field in ("durable", "recurring"))
+            or not job["id"].strip()
+            or not job["prompt"].strip()
+        ):
+            return None
+        prompts.append(str(job["prompt"]))
+    return prompts
+
+
+def claude_attachment_prompt_texts(attachment: dict[str, Any]) -> list[str] | None:
+    """Parse exact textual attachment envelopes; media remains an explicit gap."""
+
+    attachment_type = attachment.get("type")
+    if attachment_type == "goal_status":
+        condition = attachment.get("condition")
+        return [condition] if isinstance(condition, str) and condition.strip() else None
+    if attachment_type not in {"hook_additional_context", "queued_command"}:
+        return []
+    field = "content" if attachment_type == "hook_additional_context" else "prompt"
+    value = attachment.get(field)
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if not isinstance(value, list):
+        return None
+    if attachment_type == "hook_additional_context":
+        return (
+            [item for item in value if isinstance(item, str) and item.strip()]
+            if all(isinstance(item, str) for item in value)
+            else None
+        )
+    texts: list[str] = []
+    for block in value:
+        if (
+            not isinstance(block, dict)
+            or set(block) != {"text", "type"}
+            or block.get("type") != "text"
+            or not isinstance(block.get("text"), str)
+        ):
+            return None
+        if block["text"].strip():
+            texts.append(str(block["text"]))
+    return texts
+
+
 def claude_assistant_prompt_texts(obj: dict[str, Any]) -> list[str]:
     message = obj.get("message")
     content = message.get("content") if isinstance(message, dict) else None
@@ -1271,6 +1578,10 @@ def claude_assistant_prompt_texts(obj: dict[str, Any]) -> list[str]:
             value = tool_input.get(field)
             if isinstance(value, str) and value.strip():
                 texts.append(value)
+        if name == "ExitPlanMode":
+            nested = claude_exit_plan_allowed_prompts(tool_input)
+            if nested is not None:
+                texts.extend(nested)
     return texts
 
 
@@ -1317,12 +1628,8 @@ def prompt_texts_for(lifecycle: Any, source: str, obj: dict[str, Any]) -> list[s
     if source == "claude-projects" and obj.get("type") == "attachment":
         attachment = obj.get("attachment")
         if isinstance(attachment, dict):
-            if attachment.get("type") == "queued_command":
-                return lifecycle.text_from_content(attachment.get("prompt"))
-            if attachment.get("type") == "goal_status":
-                return lifecycle.text_from_content(attachment.get("condition"))
-            if attachment.get("type") == "hook_additional_context":
-                return lifecycle.text_from_content(attachment.get("content"))
+            texts = claude_attachment_prompt_texts(attachment)
+            return texts or []
         return []
     if source == "claude-projects" and obj.get("type") == "assistant":
         return claude_assistant_prompt_texts(obj)
@@ -1365,16 +1672,22 @@ def prompt_texts_for(lifecycle: Any, source: str, obj: dict[str, Any]) -> list[s
             if not isinstance(message, dict) or message.get("role") not in (None, "user"):
                 return []
             content = message.get("content")
+            texts: list[str] = []
             if isinstance(content, str):
-                return [content] if content.strip() else []
-            if isinstance(content, list):
-                texts: list[str] = []
+                if content.strip():
+                    texts.append(content)
+            elif isinstance(content, list):
                 for block in content:
                     if not isinstance(block, dict) or block.get("type") != "text":
                         continue
                     texts.extend(lifecycle.text_from_content(block.get("text")))
-                return texts
-            return []
+            derived_prompt = claude_derived_tool_result_prompt(obj)
+            if derived_prompt is not None:
+                texts.append(derived_prompt)
+            derived_job_prompts = claude_derived_tool_result_job_prompts(obj)
+            if derived_job_prompts is not None:
+                texts.extend(derived_job_prompts)
+            return texts
     parser_source = "gemini-tmp-agy" if source == "gemini-tmp" else source
     return lifecycle.prompt_texts(parser_source, obj)
 
@@ -1383,6 +1696,8 @@ def strict_json_records(
     path: Path,
     *,
     limits: ResourceLimits | None = None,
+    max_source_bytes: int | None = None,
+    max_records: int | None = None,
 ) -> tuple[list[dict[str, Any]], str | None, bool]:
     """Read one supported JSON source atomically or return a closed error.
 
@@ -1392,15 +1707,17 @@ def strict_json_records(
     """
 
     active_limits = limits or runtime_limits({})
+    byte_ceiling = max_source_bytes or active_limits.max_source_bytes_per_unit
+    record_ceiling = max_records or active_limits.max_events_per_unit
     is_jsonl = path.suffix == ".jsonl" or path.name == "history.jsonl"
     if not is_jsonl and path.suffix != ".json":
         return [], None, False
     try:
         size = path.stat().st_size
-        if size > active_limits.max_source_bytes_per_unit:
+        if size > byte_ceiling:
             return (
                 [],
-                f"{path}: source is {size} bytes; bounded ceiling is {active_limits.max_source_bytes_per_unit}",
+                f"{path}: source is {size} bytes; bounded ceiling is {byte_ceiling}",
                 True,
             )
         if is_jsonl:
@@ -1409,10 +1726,10 @@ def strict_json_records(
                 for line_number, line in enumerate(handle, start=1):
                     if not line.strip():
                         continue
-                    if len(rows) >= active_limits.max_events_per_unit:
+                    if len(rows) >= record_ceiling:
                         return (
                             [],
-                            f"{path}: record count exceeds bounded ceiling {active_limits.max_events_per_unit}",
+                            f"{path}: record count exceeds bounded ceiling {record_ceiling}",
                             True,
                         )
                     try:
@@ -1429,14 +1746,81 @@ def strict_json_records(
     if isinstance(value, dict):
         return [value], None, True
     if isinstance(value, list) and all(isinstance(row, dict) for row in value):
-        if len(value) > active_limits.max_events_per_unit:
+        if len(value) > record_ceiling:
             return (
                 [],
-                f"{path}: record count exceeds bounded ceiling {active_limits.max_events_per_unit}",
+                f"{path}: record count exceeds bounded ceiling {record_ceiling}",
                 True,
             )
         return list(value), None, True
     return [], f"{path}: JSON source is not an object or object array", True
+
+
+def strict_codex_session_records(
+    lifecycle: Any,
+    path: Path,
+    signature: dict[str, Any],
+) -> tuple[list[dict[str, Any]], str | None, bool]:
+    """Stream one canonical Codex rollout under its provider-specific ceilings.
+
+    Non-prompt rows become empty positional sentinels after validation. This
+    preserves exact event indexes without retaining large assistant/tool bodies
+    in memory, while every user-bearing row is schema-checked before custody can
+    advance.
+    """
+
+    rule = SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]
+    max_probe_bytes = int(rule["max_probe_bytes"])
+    max_record_bytes = int(rule["max_record_bytes"])
+    max_records = int(rule["max_records"])
+    expected_size = int(signature.get("size") or 0)
+    if expected_size > max_probe_bytes:
+        return [], f"{path}: Codex session exceeds bounded byte ceiling {max_probe_bytes}", True
+
+    records: list[dict[str, Any]] = []
+    bytes_read = 0
+    try:
+        with path.open("rb") as handle:
+            while True:
+                raw = handle.readline(max_record_bytes + 1)
+                if not raw:
+                    break
+                bytes_read += len(raw)
+                if len(raw) > max_record_bytes:
+                    return [], f"{path}: Codex record exceeds bounded byte ceiling {max_record_bytes}", True
+                if not raw.strip():
+                    continue
+                if len(records) >= max_records:
+                    return [], f"{path}: Codex record count exceeds bounded ceiling {max_records}", True
+                record_number = len(records) + 1
+                try:
+                    obj = json.loads(raw.decode("utf-8", errors="strict"))
+                except (UnicodeError, ValueError, RecursionError) as exc:
+                    return [], f"{path}:{record_number}: malformed JSON: {exc}", True
+                if not isinstance(obj, dict):
+                    return [], f"{path}:{record_number}: JSONL row is not an object", True
+                schema_error = native_record_schema_error(
+                    lifecycle,
+                    "codex-sessions",
+                    path,
+                    [obj],
+                    adapter_id="codex-session-jsonl-v2",
+                    file_complete=False,
+                )
+                if schema_error:
+                    detail = schema_error.split(":1: ", 1)[-1]
+                    return [], f"{path}:{record_number}: {detail}", True
+                keep = bool(obj.get("type") in {"compacted", "session_meta"} or contains_codex_user_marker(obj))
+                records.append(obj if keep else {})
+    except OSError as exc:
+        return [], f"{path}: unreadable Codex session: {exc}", True
+
+    if bytes_read != expected_size or file_signature(path) != signature:
+        return [], f"{path}: Codex session changed during bounded read", True
+    identity_error = codex_session_identity_error(path, records)
+    if identity_error:
+        return [], f"{path}: {identity_error}", True
+    return records, None, True
 
 
 def strict_native_records(
@@ -1449,8 +1833,16 @@ def strict_native_records(
 ) -> tuple[list[dict[str, Any]], str | None, bool]:
     """Read one native source through its exact, bounded adapter contract."""
 
+    # Detached attachment bytes have no authority without a canonical parent
+    # event.  Do not let a JSON-looking filename fall through to the generic
+    # record parser and accidentally become prompt truth.
+    if source == "codex-attachments":
+        return [], None, False
+
     active_limits = limits or runtime_limits({})
     adapter_id = native_source_adapter_candidate_id(lifecycle, source, path)
+    if adapter_id == "codex-session-jsonl-v2":
+        return strict_codex_session_records(lifecycle, path, signature)
     if adapter_id == "claude-remote-task-command-v1":
         adapter_limit = int(SOURCE_ADAPTER_RULES[adapter_id]["max_probe_bytes"])
         try:
@@ -1459,7 +1851,14 @@ def strict_native_records(
             return [], f"{path}: unreadable JSON source: {exc}", True
         if size > adapter_limit:
             return [], f"{path}: remote task metadata exceeds adapter ceiling {adapter_limit}", True
-    records, error, supported = strict_json_records(path, limits=active_limits)
+    source_schema = SOURCE_RECORD_SCHEMAS.get("claude-project-jsonl-v1", {})
+    source_specific_limits = bool(source == "claude-projects" and path.suffix.lower() == ".jsonl")
+    records, error, supported = strict_json_records(
+        path,
+        limits=active_limits,
+        max_source_bytes=(int(source_schema["max_probe_bytes"]) if source_specific_limits else None),
+        max_records=(int(source_schema["max_records"]) if source_specific_limits else None),
+    )
     if error or not supported:
         return records, error, supported
     if adapter_id != "claude-remote-task-command-v1":
@@ -1534,6 +1933,219 @@ def unhandled_prompt_field(
     return None
 
 
+def _codex_turn_metadata_valid(value: Any) -> bool:
+    return bool(
+        isinstance(value, dict)
+        and set(value) == {"turn_id"}
+        and isinstance(value.get("turn_id"), str)
+        and value.get("turn_id")
+    )
+
+
+def codex_image_block_schema_error(block: dict[str, Any]) -> str | None:
+    if tuple(sorted(block)) != CODEX_USER_CONTENT_BLOCK_KEYSETS["input_image"]:
+        return "unknown Codex input-image schema"
+    if block.get("detail") != "high":
+        return "unknown Codex input-image detail schema"
+    image_url = block.get("image_url")
+    prefix = "data:image/png;base64,"
+    if not isinstance(image_url, str) or not image_url.startswith(prefix) or len(image_url) == len(prefix):
+        return "unknown Codex input-image data schema"
+    max_media_bytes = int(SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]["max_media_bytes"])
+    max_encoded_bytes = ((max_media_bytes + 2) // 3) * 4
+    if len(image_url) - len(prefix) > max_encoded_bytes:
+        return f"Codex input image exceeds bounded byte ceiling {max_media_bytes}"
+    return None
+
+
+def codex_event_text_elements_error(payload: dict[str, Any]) -> str | None:
+    message = payload.get("message")
+    elements = payload.get("text_elements")
+    if not isinstance(message, str) or not isinstance(elements, list):
+        return "unknown Codex event text-element schema"
+    message_bytes = message.encode("utf-8")
+    previous_end = 0
+    for element in elements:
+        byte_range = element.get("byte_range") if isinstance(element, dict) else None
+        if (
+            not isinstance(element, dict)
+            or tuple(sorted(element)) != CODEX_TEXT_ELEMENT_KEYS
+            or not isinstance(element.get("placeholder"), str)
+            or not isinstance(byte_range, dict)
+            or tuple(sorted(byte_range)) != CODEX_BYTE_RANGE_KEYS
+            or any(
+                isinstance(byte_range.get(field), bool) or not isinstance(byte_range.get(field), int)
+                for field in CODEX_BYTE_RANGE_KEYS
+            )
+        ):
+            return "unknown Codex event text-element schema"
+        start = int(byte_range["start"])
+        end = int(byte_range["end"])
+        if start < previous_end or end < start or end > len(message_bytes):
+            return "invalid Codex event text-element range"
+        try:
+            exact_placeholder = message_bytes[start:end].decode("utf-8", errors="strict")
+        except UnicodeError:
+            return "invalid Codex event text-element range"
+        if exact_placeholder != element["placeholder"]:
+            return "Codex event text-element does not match message bytes"
+        previous_end = end
+    return None
+
+
+def codex_compacted_schema_error(record: dict[str, Any]) -> str | None:
+    payload = record.get("payload")
+    if not isinstance(payload, dict) or tuple(sorted(payload)) not in CODEX_COMPACTED_PAYLOAD_KEYSETS:
+        return "unknown Codex compacted payload schema"
+    if payload.get("message") != "":
+        return "Codex compacted message must be the exact empty transport field"
+
+    payload_keys = tuple(sorted(payload))
+    if len(payload_keys) == 6:
+        uuid_pattern = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+        if any(
+            not isinstance(payload.get(field), str) or re.fullmatch(uuid_pattern, str(payload[field])) is None
+            for field in ("first_window_id", "previous_window_id", "window_id")
+        ):
+            return "unknown Codex compacted window identity schema"
+        window_number = payload.get("window_number")
+        if isinstance(window_number, bool) or not isinstance(window_number, int) or window_number < 0:
+            return "unknown Codex compacted window number schema"
+    elif "window_id" in payload:
+        window_id = payload.get("window_id")
+        if isinstance(window_id, bool) or not isinstance(window_id, int) or window_id < 0:
+            return "unknown Codex compacted legacy window schema"
+
+    history = payload.get("replacement_history")
+    maximum = int(SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]["max_compacted_history_items"])
+    if not isinstance(history, list) or not history or len(history) > maximum:
+        return f"Codex compacted history exceeds bounded item ceiling {maximum}"
+    compaction_items = 0
+    allowed_messages = set(CODEX_COMPACTED_MESSAGE_KEYSETS)
+    allowed_compactions = set(CODEX_COMPACTION_ITEM_KEYSETS)
+    for item in history:
+        if not isinstance(item, dict):
+            return "unknown Codex compacted history item schema"
+        item_type = item.get("type")
+        if item_type == "message":
+            if tuple(sorted(item)) not in allowed_messages or item.get("role") not in {"user", "developer"}:
+                return "unknown Codex compacted message schema"
+            metadata = item.get("internal_chat_message_metadata_passthrough")
+            if metadata is not None and not _codex_turn_metadata_valid(metadata):
+                return "unknown Codex compacted message metadata schema"
+            content = item.get("content")
+            if not isinstance(content, list):
+                return "unknown Codex compacted message content schema"
+            for block in content:
+                if not isinstance(block, dict):
+                    return "unknown Codex compacted content block schema"
+                block_type = block.get("type")
+                expected_keys = CODEX_USER_CONTENT_BLOCK_KEYSETS.get(str(block_type))
+                if expected_keys is None or tuple(sorted(block)) != expected_keys:
+                    return "Codex compacted content requires an explicit adapter"
+                if block_type == "input_text":
+                    if not isinstance(block.get("text"), str):
+                        return "unknown Codex compacted input-text schema"
+                    continue
+                if item.get("role") != "user":
+                    return "Codex compacted developer media requires an explicit adapter"
+                image_error = codex_image_block_schema_error(block)
+                if image_error:
+                    return image_error
+            continue
+        if item_type == "compaction":
+            compaction_items += 1
+            if tuple(sorted(item)) not in allowed_compactions:
+                return "unknown Codex compaction item schema"
+            if not isinstance(item.get("encrypted_content"), str) or not item.get("encrypted_content"):
+                return "unknown Codex encrypted compaction schema"
+            if "id" in item and (not isinstance(item.get("id"), str) or not item.get("id")):
+                return "unknown Codex compaction identity schema"
+            for field in ("metadata", "internal_chat_message_metadata_passthrough"):
+                if field in item and not _codex_turn_metadata_valid(item.get(field)):
+                    return "unknown Codex compaction metadata schema"
+            continue
+        return "unknown Codex compacted history item type"
+    if compaction_items != 1:
+        return "Codex compacted history must contain exactly one compaction item"
+    return None
+
+
+def codex_media_pairing_error(records: list[dict[str, Any]]) -> str | None:
+    """Bind local-image transport references to one nearby canonical data image turn."""
+
+    primaries: list[tuple[int, tuple[str, ...], int]] = []
+    for index, record in enumerate(records):
+        payload = record.get("payload")
+        if not (
+            record.get("type") == "response_item"
+            and isinstance(payload, dict)
+            and payload.get("type") == "message"
+            and payload.get("role") == "user"
+        ):
+            continue
+        content = payload.get("content")
+        if not isinstance(content, list):
+            continue
+        texts = tuple(
+            str(block["text"])
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "input_text" and isinstance(block.get("text"), str)
+        )
+        media_count = sum(1 for block in content if isinstance(block, dict) and block.get("type") == "input_image")
+        if media_count:
+            primaries.append((index, texts, media_count))
+
+    paired: Counter[int] = Counter()
+    for index, record in enumerate(records):
+        payload = record.get("payload")
+        if not (
+            record.get("type") == "event_msg" and isinstance(payload, dict) and payload.get("type") == "user_message"
+        ):
+            continue
+        local_images = payload.get("local_images")
+        if not isinstance(local_images, list) or not local_images:
+            continue
+        for locator in local_images:
+            if not isinstance(locator, str) or not locator or "\x00" in locator:
+                return "Codex user-media transport locator is malformed"
+            candidate = Path(locator)
+            if (
+                not candidate.is_absolute()
+                or ".." in candidate.parts
+                or str(candidate.expanduser().absolute()) != locator
+            ):
+                return "Codex user-media transport locator is not canonical"
+        elements = payload.get("text_elements")
+        if not isinstance(elements, list):
+            return "Codex user-media transport has malformed text elements"
+        image_placeholders = [
+            element
+            for element in elements
+            if isinstance(element, dict)
+            and re.fullmatch(r"\[Image #[1-9][0-9]*\]", str(element.get("placeholder") or ""))
+        ]
+        if len(image_placeholders) != len(local_images):
+            return "Codex user-media transport cardinality does not match image placeholders"
+        message = payload.get("message")
+        candidates = [
+            primary
+            for primary in primaries
+            if primary[0] < index
+            and index - primary[0] <= 2
+            and isinstance(message, str)
+            and message in primary[1]
+            and primary[2] == len(local_images)
+        ]
+        if not candidates:
+            return "Codex user media has no exact canonical primary binding"
+        primary = max(candidates, key=lambda item: item[0])
+        paired[primary[0]] += 1
+    if any(paired[index] != 1 for index, _texts, _count in primaries):
+        return "Codex primary user media does not have exactly one transport binding"
+    return None
+
+
 def native_record_schema_error(
     lifecycle: Any,
     source: str,
@@ -1541,6 +2153,7 @@ def native_record_schema_error(
     records: list[dict[str, Any]],
     *,
     adapter_id: str | None,
+    file_complete: bool = True,
 ) -> str | None:
     """Reject structurally unknown Claude containers before advancing a cursor."""
 
@@ -1561,8 +2174,16 @@ def native_record_schema_error(
                 and isinstance(payload, dict)
                 and payload.get("type") == "user_message"
             )
-            if contains_codex_user_marker(record) and not (is_response_user or is_event_user):
+            is_compacted = record.get("type") == "compacted"
+            if contains_codex_user_marker(record) and not (is_response_user or is_event_user or is_compacted):
                 return f"{path}:{index + 1}: unknown Codex user-bearing record schema"
+            if is_compacted:
+                if tuple(sorted(record)) != CODEX_USER_RECORD_KEYS or not isinstance(record.get("timestamp"), str):
+                    return f"{path}:{index + 1}: unknown Codex compacted record envelope"
+                compacted_error = codex_compacted_schema_error(record)
+                if compacted_error:
+                    return f"{path}:{index + 1}: {compacted_error}"
+                continue
             if not isinstance(payload, dict):
                 continue
             has_user_role = payload.get("role") == "user"
@@ -1597,8 +2218,11 @@ def native_record_schema_error(
                     expected_keys = CODEX_USER_CONTENT_BLOCK_KEYSETS.get(str(block_type))
                     if expected_keys is None or tuple(sorted(block)) != expected_keys:
                         return f"{path}:{index + 1}: Codex user content requires an explicit content adapter"
-                    if block_type != "input_text":
-                        return f"{path}:{index + 1}: Codex user media requires an explicit content adapter"
+                    if block_type == "input_image":
+                        image_error = codex_image_block_schema_error(block)
+                        if image_error:
+                            return f"{path}:{index + 1}: {image_error}"
+                        continue
                     if not isinstance(block.get("text"), str):
                         return f"{path}:{index + 1}: unknown Codex input-text schema"
                 continue
@@ -1611,26 +2235,19 @@ def native_record_schema_error(
                     media = payload.get(media_field, [])
                     if media is not None and not isinstance(media, list):
                         return f"{path}:{index + 1}: unknown Codex event user-media schema"
-                    if media:
+                    if media_field == "images" and media:
                         return f"{path}:{index + 1}: Codex user media requires an explicit content adapter"
-                elements = payload.get("text_elements")
-                if not isinstance(elements, list):
-                    return f"{path}:{index + 1}: unknown Codex event text-element schema"
-                for element in elements:
-                    byte_range = element.get("byte_range") if isinstance(element, dict) else None
                     if (
-                        not isinstance(element, dict)
-                        or tuple(sorted(element)) != CODEX_TEXT_ELEMENT_KEYS
-                        or not isinstance(element.get("placeholder"), str)
-                        or not isinstance(byte_range, dict)
-                        or tuple(sorted(byte_range)) != CODEX_BYTE_RANGE_KEYS
-                        or any(
-                            isinstance(byte_range.get(field), bool) or not isinstance(byte_range.get(field), int)
-                            for field in CODEX_BYTE_RANGE_KEYS
-                        )
+                        media_field == "local_images"
+                        and media
+                        and not all(isinstance(value, str) and value for value in media)
                     ):
-                        return f"{path}:{index + 1}: unknown Codex event text-element schema"
-        return None
+                        return f"{path}:{index + 1}: unknown Codex event local-image schema"
+                elements_error = codex_event_text_elements_error(payload)
+                if elements_error:
+                    return f"{path}:{index + 1}: {elements_error}"
+        pairing_error = codex_media_pairing_error(records) if file_complete else None
+        return f"{path}: {pairing_error}" if pairing_error else None
     if source == "codex-history":
         allowed = set(CODEX_HISTORY_KEYSETS)
         for index, record in enumerate(records):
@@ -1725,6 +2342,12 @@ def native_record_schema_error(
                     return f"{path}:{index + 1}: unknown Claude project JSONL record schema"
                 if record_type == "user":
                     message = record.get("message")
+                    message_content = message.get("content") if isinstance(message, dict) else None
+                    if isinstance(message_content, list) and any(
+                        isinstance(block, dict) and block.get("type") in {"document", "image"}
+                        for block in message_content
+                    ):
+                        return f"{path}:{index + 1}: Claude user media requires an explicit content adapter"
                     if (
                         not isinstance(message, dict)
                         or set(message) != {"content", "role"}
@@ -1737,6 +2360,19 @@ def native_record_schema_error(
                         for block in content:
                             if isinstance(block, dict) and block.get("type") == "tool_result":
                                 opaque_prompt_subtrees.add(id(block.get("content")))
+                    tool_result = record.get("toolUseResult")
+                    if isinstance(tool_result, dict) and "prompt" in tool_result:
+                        if claude_derived_tool_result_prompt(record) is None:
+                            return f"{path}:{index + 1}: unknown Claude derived tool-result prompt schema"
+                        handled_prompt_fields.add((id(tool_result), "prompt"))
+                        for field in ("content", "toolStats", "usage"):
+                            if field in tool_result:
+                                opaque_prompt_subtrees.add(id(tool_result.get(field)))
+                    if isinstance(tool_result, dict) and "jobs" in tool_result:
+                        if claude_derived_tool_result_job_prompts(record) is None:
+                            return f"{path}:{index + 1}: unknown Claude derived tool-result jobs schema"
+                        for job in tool_result["jobs"]:
+                            handled_prompt_fields.add((id(job), "prompt"))
                 if record_type == "assistant":
                     message = record.get("message")
                     content = message.get("content") if isinstance(message, dict) else None
@@ -1759,6 +2395,12 @@ def native_record_schema_error(
                         if any(field in tool_input and not isinstance(tool_input.get(field), str) for field in fields):
                             return f"{path}:{index + 1}: unknown Claude assistant prompt-field schema"
                         handled_prompt_fields.update((id(tool_input), field) for field in fields if field in tool_input)
+                        if "allowedPrompts" in tool_input:
+                            allowed_prompts = claude_exit_plan_allowed_prompts(tool_input)
+                            if name != "ExitPlanMode" or allowed_prompts is None:
+                                return f"{path}:{index + 1}: unknown Claude allowed-prompts schema"
+                            for item in tool_input["allowedPrompts"]:
+                                handled_prompt_fields.add((id(item), "prompt"))
                 if record_type == "attachment":
                     attachment = record.get("attachment")
                     if not isinstance(attachment, dict) or attachment.get("type") not in CLAUDE_ATTACHMENT_TYPES:
@@ -1772,12 +2414,12 @@ def native_record_schema_error(
                         field in attachment and field not in prompt_fields for field in CLAUDE_UNEXPECTED_PROMPT_FIELDS
                     ):
                         return f"{path}:{index + 1}: unknown Claude attachment prompt-carrier schema"
-                    if any(
-                        field in attachment and not isinstance(attachment.get(field), str) for field in prompt_fields
-                    ):
+                    if prompt_fields and claude_attachment_prompt_texts(attachment) is None:
+                        if attachment_type == "queued_command" and isinstance(attachment.get("prompt"), list):
+                            return (
+                                f"{path}:{index + 1}: Claude queued-command media requires an explicit content adapter"
+                            )
                         return f"{path}:{index + 1}: unknown Claude attachment prompt-field schema"
-                    if attachment.get("type") == "queued_command" and not content_valid(attachment.get("prompt")):
-                        return f"{path}:{index + 1}: unknown Claude queued-command schema"
                     if attachment.get("type") == "goal_status" and (
                         set(attachment) - set(CLAUDE_GOAL_STATUS_KEYS)
                         or not isinstance(attachment.get("condition"), str)
@@ -1862,36 +2504,21 @@ def native_record_schema_error(
     return None
 
 
-def source_path_error(path: Path, *, containment_root: Path | None = None) -> str | None:
-    """Contain one source below its declared root and reject symlinks beneath that root."""
+def source_path_error(
+    path: Path,
+    *,
+    containment_root: Path | None = None,
+    source: str = "",
+) -> str | None:
+    """Contain one source and admit only its explicitly typed alias contract."""
 
-    try:
-        lexical_path = path.expanduser().absolute()
-        lexical_root = containment_root.expanduser().absolute() if containment_root is not None else lexical_path.parent
-        lexical_path.relative_to(lexical_root) if lexical_path != lexical_root else None
-        current = lexical_path
-        while current != lexical_root:
-            if current.is_symlink():
-                return "source path contains a symlink hop"
-            parent = current.parent
-            if parent == current:
-                return "source path is outside its containment root"
-            current = parent
-        candidate = lexical_path.resolve(strict=True)
-        resolved_root = lexical_root.resolve(strict=True)
-        candidate.relative_to(resolved_root) if candidate != resolved_root else None
-    except ValueError:
-        return "source path escapes its declared source root"
-    except OSError as exc:
-        return f"source path cannot be resolved: {exc}"
-    if SOURCE_HOME_OVERRIDE is not None:
-        try:
-            root = SOURCE_HOME_OVERRIDE.resolve(strict=True)
-            resolved_root.relative_to(root) if resolved_root != root else None
-            candidate.relative_to(root)
-        except (OSError, ValueError):
-            return "source path escapes isolated source home"
-    return None
+    lexical_root = containment_root or path.parent
+    return inspect_source_path_custody(
+        source,
+        path,
+        lexical_root,
+        isolated_home=SOURCE_HOME_OVERRIDE,
+    ).error
 
 
 def _discover_candidate(
@@ -1906,27 +2533,40 @@ def _discover_candidate(
 ) -> bool:
     """Add one eligible source or return False when discovery reached its cap."""
 
+    custody = inspect_source_path_custody(
+        source,
+        path,
+        containment_root,
+        isolated_home=SOURCE_HOME_OVERRIDE,
+    )
+    if custody.error is not None:
+        rows.discovery_errors.append((source, f"{source}:{path}: {custody.error}"))
+        if source == "claude-projects" and custody.blocker_reason in SOURCE_ALIAS_BLOCKER_REASONS:
+            rows.source_alias_blocker_counts[str(custody.blocker_reason)] += 1
+        return True
     try:
-        if not path.is_file():
+        if custody.alias_contract_id == CLAUDE_SUBAGENT_SESSION_ALIAS_ID and path.is_dir():
             return True
-        stat = path.stat()
+        if custody.alias_contract_id is None and not path.is_file():
+            return True
+        source_mtime = (
+            int((custody.related_signatures or {}).get("memory_target", {}).get("mtime_ns") or 0) / 1_000_000_000
+            if custody.alias_contract_id == CLAUDE_PROJECT_MEMORY_ALIAS_ID
+            else path.stat().st_mtime
+        )
     except OSError:
         return True
     if rows.discovered_count >= limit:
         rows.truncated_source = source
         return False
     rows.discovered_count += 1
-    if cutoff is not None and stat.st_mtime < cutoff:
+    if cutoff is not None and source_mtime < cutoff:
         return True
     path_key = str(path)
     if path_key in known_paths:
         return True
-    escape = source_path_error(path, containment_root=containment_root)
-    if escape:
-        rows.discovery_errors.append((source, f"{source}:{path}: {escape}"))
-        return True
     known_paths.add(path_key)
-    rows.append({"source": source, "path": path, "mtime": stat.st_mtime})
+    rows.append({"source": source, "path": path, "mtime": source_mtime})
     return True
 
 
@@ -2000,6 +2640,7 @@ def regular_source_rows(
         generic = generic_gemini_rows(lifecycle, days, limits=active_limits)
         for source, error in generic.discovery_errors:
             rows.discovery_errors.append((source, error))
+        rows.source_alias_blocker_counts.update(generic.source_alias_blocker_counts)
         for row in generic:
             if not _discover_candidate(
                 rows,
@@ -2144,9 +2785,12 @@ def normalize_codex_file_events(
         digest(str(event.get("text") or "")) for event in events if event.get("provenance") == "transport_echo"
     }
     for event in events:
+        media_primary = bool(event.pop("_codex_media_primary", False))
         if event.get("provenance") != "operator_typed":
             continue
-        unmatched_effective_input = bool(echo_hashes) and digest(str(event.get("text") or "")) not in echo_hashes
+        unmatched_effective_input = bool(
+            not media_primary and echo_hashes and digest(str(event.get("text") or "")) not in echo_hashes
+        )
         if forked:
             event["body_kind"] = "session_context"
             event["task_body"] = ""
@@ -2159,6 +2803,709 @@ def normalize_codex_file_events(
             event["provenance"] = "unknown_user_input"
             event["authority"] = "unknown"
     return primary_before_echo(events)
+
+
+def _codex_canonical_parent_record(obj: dict[str, Any]) -> bool:
+    payload = obj.get("payload")
+    return bool(
+        obj.get("type") == "response_item"
+        and isinstance(payload, dict)
+        and payload.get("type") == "message"
+        and payload.get("role") == "user"
+    )
+
+
+def codex_attachment_reference_line(path: Path) -> str:
+    return f"pasted text file: {path.expanduser().absolute()}. Read this file before continuing."
+
+
+def codex_attachment_reference_paths(lifecycle: Any, text: str) -> list[str]:
+    """Resolve exact provider attachment envelopes without guessing at prompt text."""
+
+    prefix = "pasted text file: "
+    suffix = ". Read this file before continuing."
+    targets: list[str] = []
+    for line in text.splitlines():
+        if not line.startswith(prefix) or not line.endswith(suffix):
+            continue
+        raw_path = line[len(prefix) : -len(suffix)]
+        if not raw_path or "\x00" in raw_path:
+            continue
+        candidate = Path(raw_path)
+        if not candidate.is_absolute() or ".." in candidate.parts:
+            continue
+        lexical = candidate.expanduser().absolute()
+        if str(lexical) != raw_path:
+            continue
+        if source_relative_path(lifecycle, "codex-attachments", lexical) is None:
+            continue
+        if native_source_adapter_candidate_id(lifecycle, "codex-attachments", lexical) != (
+            "codex-pasted-text-attachment-v1"
+        ):
+            continue
+        targets.append(str(lexical))
+    return targets
+
+
+def codex_png_descriptor(block: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Validate one bounded inline PNG and return a private digest-only occurrence."""
+
+    schema_error = codex_image_block_schema_error(block)
+    if schema_error:
+        return None, schema_error
+    prefix = "data:image/png;base64,"
+    encoded = str(block["image_url"])[len(prefix) :]
+    try:
+        payload = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        return None, "Codex input image is not strict base64"
+    maximum = int(SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]["max_media_bytes"])
+    if not payload or len(payload) > maximum:
+        return None, f"Codex input image exceeds bounded byte ceiling {maximum}"
+    if not payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None, "Codex input image is not a canonical PNG"
+
+    offset = 8
+    width: int | None = None
+    height: int | None = None
+    saw_iend = False
+    chunk_index = 0
+    while offset < len(payload):
+        if offset + 12 > len(payload):
+            return None, "Codex input PNG is truncated"
+        length = struct.unpack(">I", payload[offset : offset + 4])[0]
+        chunk_type = payload[offset + 4 : offset + 8]
+        chunk_end = offset + 12 + length
+        if chunk_end > len(payload) or re.fullmatch(rb"[A-Za-z]{4}", chunk_type) is None:
+            return None, "Codex input PNG has a malformed chunk"
+        chunk_data = payload[offset + 8 : offset + 8 + length]
+        expected_crc = struct.unpack(">I", payload[offset + 8 + length : chunk_end])[0]
+        actual_crc = zlib.crc32(chunk_data, zlib.crc32(chunk_type)) & 0xFFFFFFFF
+        if actual_crc != expected_crc:
+            return None, "Codex input PNG has a corrupt chunk"
+        if chunk_index == 0:
+            if chunk_type != b"IHDR" or length != 13:
+                return None, "Codex input PNG has no canonical IHDR"
+            width, height = struct.unpack(">II", chunk_data[:8])
+            if width <= 0 or height <= 0:
+                return None, "Codex input PNG dimensions are malformed"
+        elif chunk_type == b"IHDR":
+            return None, "Codex input PNG repeats IHDR"
+        if chunk_type == b"IEND":
+            if length != 0 or chunk_end != len(payload):
+                return None, "Codex input PNG has a malformed IEND"
+            saw_iend = True
+            offset = chunk_end
+            break
+        offset = chunk_end
+        chunk_index += 1
+    if not saw_iend or width is None or height is None or offset != len(payload):
+        return None, "Codex input PNG is incomplete"
+    media_hash = hashlib.sha256(payload).hexdigest()
+    return (
+        f"codex-input-image-v1:sha256={media_hash};bytes={len(payload)};width={width};height={height};detail=high",
+        None,
+    )
+
+
+def codex_prompt_items_for(
+    lifecycle: Any,
+    obj: dict[str, Any],
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Extract exact text and digest-only media occurrences from one Codex row."""
+
+    payload = obj.get("payload")
+    if (
+        obj.get("type") == "response_item"
+        and isinstance(payload, dict)
+        and payload.get("type") == "message"
+        and payload.get("role") == "user"
+    ):
+        items: list[dict[str, Any]] = []
+        for block_index, block in enumerate(payload.get("content") or []):
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "input_text":
+                text = block.get("text")
+                if isinstance(text, str) and text.strip():
+                    items.append({"text_index": block_index, "text": text})
+                continue
+            if block.get("type") == "input_image":
+                descriptor, error = codex_png_descriptor(block)
+                if error:
+                    return [], error
+                items.append(
+                    {
+                        "text_index": block_index,
+                        "text": descriptor,
+                        "body_kind": "nontext_input",
+                        "media_primary": True,
+                    }
+                )
+        return items, None
+    if obj.get("type") == "event_msg" and isinstance(payload, dict) and payload.get("type") == "user_message":
+        message = payload.get("message")
+        return ([{"text_index": 0, "text": message}] if isinstance(message, str) and message.strip() else []), None
+    if obj.get("type") == "compacted" and isinstance(payload, dict):
+        items = []
+        item_index = 0
+        for history_item in payload.get("replacement_history") or []:
+            if not isinstance(history_item, dict) or history_item.get("type") != "message":
+                continue
+            if history_item.get("role") != "user":
+                continue
+            for block in history_item.get("content") or []:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "input_text":
+                    text = block.get("text")
+                    if isinstance(text, str) and text.strip():
+                        items.append(
+                            {
+                                "text_index": item_index,
+                                "text": text,
+                                "body_kind": "session_context",
+                                "provenance": "continuation_summary",
+                                "authority": "derived",
+                            }
+                        )
+                elif block.get("type") == "input_image":
+                    descriptor, error = codex_png_descriptor(block)
+                    if error:
+                        return [], error
+                    items.append(
+                        {
+                            "text_index": item_index,
+                            "text": descriptor,
+                            "body_kind": "nontext_context",
+                            "provenance": "continuation_summary",
+                            "authority": "derived",
+                        }
+                    )
+                item_index += 1
+        return items, None
+    return [
+        {"text_index": index, "text": text}
+        for index, text in enumerate(prompt_texts_for(lifecycle, "codex-sessions", obj))
+    ], None
+
+
+def regular_file_events(
+    lifecycle: Any,
+    source: str,
+    path: Path,
+    records: list[dict[str, Any]],
+    *,
+    adapter_id: str | None,
+    limits: ResourceLimits,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Normalize one schema-validated regular file into bounded prompt events."""
+
+    file_session_id = canonical_file_session_id(source, path, records)
+    file_is_forked = codex_file_is_forked(source, records)
+    path_authority = claude_project_path_authority(lifecycle, source, path)
+    file_events: list[dict[str, Any]] = []
+    for event_index, obj in enumerate(records):
+        if source == "codex-sessions":
+            prompt_items, prompt_error = codex_prompt_items_for(lifecycle, obj)
+            if prompt_error:
+                return [], f"{path}:{event_index + 1}: {prompt_error}"
+        else:
+            prompt_items = [
+                {"text_index": text_index, "text": text}
+                for text_index, text in enumerate(prompt_texts_for(lifecycle, source, obj))
+            ]
+        for item in prompt_items:
+            text_index = int(item["text_index"])
+            text = str(item["text"])
+            if "body_kind" in item:
+                task_body, body_kind = "", str(item["body_kind"])
+            elif adapter_id == "claude-remote-task-command-v1":
+                task_body, body_kind = "", "direct"
+            else:
+                task_body, body_kind = lifecycle.normalize_task_body(text)
+            provenance, authority = (
+                (str(item["provenance"]), str(item["authority"]))
+                if "provenance" in item and "authority" in item
+                else provenance_for(source, obj, body_kind)
+            )
+            if path_authority == "derived" or (adapter_id and adapter_id != "codex-session-jsonl-v2"):
+                provenance, authority = "delegated_task_frame", "derived"
+            elif path_authority == "unknown" and provenance == "operator_typed":
+                provenance, authority = "unknown_user_input", "unknown"
+            payload = obj.get("payload")
+            event_ref = (
+                obj.get("uuid")
+                or obj.get("id")
+                or (payload.get("id") if isinstance(payload, dict) else None)
+                or event_index
+            )
+            file_events.append(
+                {
+                    "source": source,
+                    "session_ref": session_reference(
+                        source,
+                        path,
+                        obj,
+                        file_session_id=file_session_id,
+                    ),
+                    "event_ref": event_ref,
+                    "event_index": event_index,
+                    "text_index": text_index,
+                    "source_locator": f"{path}#{event_index}:{text_index}",
+                    "timestamp": event_timestamp(obj),
+                    "text": text,
+                    "task_body": task_body if body_kind == "flame_with_task_body" else "",
+                    "body_kind": body_kind,
+                    "provenance": provenance,
+                    "authority": authority,
+                    **({"claude_transport_candidate": True} if claude_transport_candidate(obj) else {}),
+                    **(
+                        {"_codex_attachment_parent": True}
+                        if source == "codex-sessions" and _codex_canonical_parent_record(obj)
+                        else {}
+                    ),
+                    **({"_codex_media_primary": True} if item.get("media_primary") else {}),
+                }
+            )
+            if len(file_events) > limits.max_events_per_unit:
+                break
+        if len(file_events) > limits.max_events_per_unit:
+            break
+    if len(file_events) > limits.max_events_per_unit:
+        return (
+            [],
+            f"prompt occurrence count exceeds bounded ceiling {limits.max_events_per_unit}",
+        )
+    file_events = normalize_claude_file_events(source, file_events)
+    return normalize_codex_file_events(source, file_events, forked=file_is_forked), None
+
+
+def targeted_codex_attachment_parent_events(
+    lifecycle: Any,
+    path: Path,
+    _records: list[dict[str, Any]],
+    *,
+    limits: ResourceLimits,
+) -> tuple[list[dict[str, Any]], str | None, bool]:
+    """Use the same byte-exact adapter for regular and oversized parent files."""
+
+    signature = file_signature(path)
+    if signature is None:
+        return [], "attachment parent cannot be stat'ed", True
+    return bounded_codex_attachment_parent_events_from_path(
+        lifecycle,
+        path,
+        signature,
+        limits=limits,
+    )
+
+
+def bounded_codex_attachment_parent_events_from_path(
+    lifecycle: Any,
+    path: Path,
+    signature: dict[str, Any],
+    *,
+    limits: ResourceLimits,
+) -> tuple[list[dict[str, Any]], str | None, bool]:
+    """Stream oversized JSONL parents under explicit byte, row, and candidate ceilings."""
+
+    rule = SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]
+    max_probe_bytes = int(rule["max_parent_probe_bytes"])
+    max_record_bytes = int(rule["max_parent_record_bytes"])
+    max_candidate_bytes = int(rule["max_parent_candidate_bytes"])
+    max_parent_records = int(rule["max_parent_records"])
+    max_session_ids = int(rule["max_parent_session_ids"])
+    if int(signature.get("size") or 0) > max_probe_bytes:
+        return [], f"attachment parent exceeds bounded byte ceiling {max_probe_bytes}", True
+
+    session_ids: list[str] = []
+    session_identity_error: str | None = None
+    forked = False
+    echo_hashes: set[str] = set()
+    parent_completeness_unknown = False
+    candidates: list[dict[str, Any]] = []
+    candidate_bytes = 0
+    record_index = 0
+    bytes_read = 0
+    try:
+        with path.open("rb") as handle:
+            while True:
+                parts: list[bytes] = []
+                oversized = False
+                saw_data = False
+                record_bytes = 0
+                while True:
+                    chunk = handle.readline(65536)
+                    if not chunk:
+                        break
+                    saw_data = True
+                    bytes_read += len(chunk)
+                    if bytes_read > max_probe_bytes:
+                        return [], f"attachment parent exceeds bounded byte ceiling {max_probe_bytes}", True
+                    record_bytes += len(chunk)
+                    if not oversized and record_bytes <= max_record_bytes:
+                        parts.append(chunk)
+                    else:
+                        oversized = True
+                        parts = []
+                    if chunk.endswith(b"\n"):
+                        break
+                if not saw_data:
+                    break
+                if not oversized and not b"".join(parts).strip():
+                    continue
+                if record_index >= max_parent_records:
+                    return (
+                        [],
+                        f"attachment parent record count exceeds bounded ceiling {max_parent_records}",
+                        True,
+                    )
+                current_index = record_index
+                record_index += 1
+                if oversized:
+                    # Raw marker probes are not evidence of absence: JSON may
+                    # encode the same canonical text with escapes, and a late
+                    # field may carry a second session identity. Any row we do
+                    # not parse makes the complete parent provenance unknown.
+                    parent_completeness_unknown = True
+                    continue
+                raw = b"".join(parts)
+                try:
+                    obj = json.loads(raw.decode("utf-8", errors="strict"))
+                except (UnicodeError, ValueError):
+                    parent_completeness_unknown = True
+                    continue
+                if not isinstance(obj, dict):
+                    parent_completeness_unknown = True
+                    continue
+                payload = obj.get("payload")
+                if obj.get("type") == "session_meta" and not isinstance(payload, dict):
+                    session_identity_error = "attachment parent session metadata is malformed"
+                    parent_completeness_unknown = True
+                    continue
+                if obj.get("type") == "session_meta" and isinstance(payload, dict):
+                    identity_count = 0
+                    for field in ("id", "session_id"):
+                        value = payload.get(field)
+                        if value is None:
+                            continue
+                        if not isinstance(value, str) or not value:
+                            session_identity_error = "attachment parent session identity is malformed"
+                            parent_completeness_unknown = True
+                            continue
+                        identity_count += 1
+                        if value not in session_ids:
+                            session_ids.append(value)
+                    if identity_count == 0:
+                        session_identity_error = "attachment parent session identity is malformed"
+                        parent_completeness_unknown = True
+                    if len(session_ids) > max_session_ids:
+                        session_identity_error = "attachment parent has too many session identities"
+                    forked = bool(
+                        forked
+                        or payload.get("forked_from_id")
+                        or payload.get("parent_thread_id")
+                        or payload.get("thread_source") == "subagent"
+                    )
+                    continue
+                schema_error = native_record_schema_error(
+                    lifecycle,
+                    "codex-sessions",
+                    path,
+                    [obj],
+                    adapter_id=None,
+                    file_complete=False,
+                )
+                if schema_error:
+                    parent_completeness_unknown = True
+                    continue
+                if (
+                    obj.get("type") == "event_msg"
+                    and isinstance(payload, dict)
+                    and payload.get("type") == "user_message"
+                ):
+                    echo_hashes.update(digest(text) for text in prompt_texts_for(lifecycle, "codex-sessions", obj))
+                    continue
+                if not _codex_canonical_parent_record(obj):
+                    continue
+                event_ref = (
+                    obj.get("uuid")
+                    or obj.get("id")
+                    or (payload.get("id") if isinstance(payload, dict) else None)
+                    or current_index
+                )
+                for text_index, text in enumerate(prompt_texts_for(lifecycle, "codex-sessions", obj)):
+                    references = codex_attachment_reference_paths(lifecycle, text)
+                    if not references:
+                        continue
+                    candidate_bytes += len(text.encode("utf-8", errors="replace"))
+                    if candidate_bytes > max_candidate_bytes:
+                        return [], f"attachment parent candidates exceed bounded ceiling {max_candidate_bytes}", True
+                    candidates.append(
+                        {
+                            "event_ref": event_ref,
+                            "event_index": current_index,
+                            "text_index": text_index,
+                            "timestamp": event_timestamp(obj),
+                            "text": text,
+                        }
+                    )
+                    if len(candidates) > limits.max_events_per_unit:
+                        return (
+                            [],
+                            f"attachment parent candidate count exceeds bounded ceiling {limits.max_events_per_unit}",
+                            True,
+                        )
+    except OSError:
+        return [], "attachment parent cannot be read", True
+
+    if bytes_read != int(signature.get("size") or 0) or file_signature(path) != signature:
+        return [], "attachment parent changed during bounded read", True
+    if parent_completeness_unknown and candidates:
+        return (
+            [],
+            "attachment parent completeness is unknown while attachment candidates exist; binding is fail-closed",
+            True,
+        )
+    if not candidates:
+        return [], None, parent_completeness_unknown
+    if session_identity_error:
+        return [], session_identity_error, parent_completeness_unknown
+    path_matches = [value for value in session_ids if value in path.name]
+    if len(session_ids) == 1:
+        file_session_id = session_ids[0]
+    elif len(path_matches) == 1:
+        file_session_id = path_matches[0]
+    elif not session_ids:
+        return [], "attachment parent has no canonical session identity", False
+    else:
+        return [], "attachment parent session identity is ambiguous", False
+    parent_events: list[dict[str, Any]] = []
+    for candidate in candidates:
+        text = str(candidate["text"])
+        task_body, body_kind = lifecycle.normalize_task_body(text)
+        provenance, authority = "operator_typed", "operator"
+        if forked:
+            task_body, body_kind = "", "session_context"
+            provenance, authority = "continuation_summary", "derived"
+        elif echo_hashes and digest(text) not in echo_hashes:
+            provenance, authority = "unknown_user_input", "unknown"
+        parent_events.append(
+            {
+                "source": "codex-sessions",
+                "session_ref": f"codex:{file_session_id}",
+                "event_ref": candidate["event_ref"],
+                "event_index": candidate["event_index"],
+                "text_index": candidate["text_index"],
+                "source_locator": f"{path}#{candidate['event_index']}:{candidate['text_index']}",
+                "timestamp": candidate["timestamp"],
+                "text": text,
+                "task_body": task_body if body_kind == "flame_with_task_body" else "",
+                "body_kind": body_kind,
+                "provenance": provenance,
+                "authority": authority,
+                "_codex_attachment_parent": True,
+            }
+        )
+    return parent_events, None, False
+
+
+def collect_codex_attachment_parents(
+    lifecycle: Any,
+    *,
+    parent_path: Path,
+    parent_signature: dict[str, Any],
+    file_events: list[dict[str, Any]],
+    parents: dict[str, list[dict[str, Any]]],
+) -> None:
+    """Index every exact reference occurrence; duplicates intentionally remain ambiguous."""
+
+    for event in file_events:
+        if not event.get("_codex_attachment_parent"):
+            continue
+        for reference_ordinal, target in enumerate(
+            codex_attachment_reference_paths(lifecycle, str(event.get("text") or ""))
+        ):
+            parents.setdefault(target, []).append(
+                {
+                    "parent_locator": str(parent_path),
+                    "parent_signature": parent_signature,
+                    "event_ref": str(event.get("event_ref") or event.get("event_index") or "0"),
+                    "event_index": int(event.get("event_index") or 0),
+                    "text_index": int(event.get("text_index") or 0),
+                    "session_ref": str(event.get("session_ref") or "unknown"),
+                    "timestamp": event.get("timestamp"),
+                    "provenance": str(event.get("provenance") or "unknown_user_input"),
+                    "authority": str(event.get("authority") or "unknown"),
+                    "reference_ordinal": reference_ordinal,
+                }
+            )
+
+
+def _codex_attachment_parent_identity(parent: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        parent.get("parent_locator"),
+        parent.get("event_ref"),
+        parent.get("event_index"),
+        parent.get("text_index"),
+        parent.get("session_ref"),
+        parent.get("reference_ordinal"),
+    )
+
+
+def merge_codex_attachment_parents(*groups: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+    for group in groups:
+        for parent in group:
+            identity = _codex_attachment_parent_identity(parent)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            merged.append(parent)
+    return merged
+
+
+def codex_attachment_parent_material(
+    attachment: Path,
+    parent: dict[str, Any],
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    parent_locator = str(parent["parent_locator"])
+    reference = codex_attachment_reference_line(attachment)
+
+    def hash_text(value: str) -> str:
+        return hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()
+
+    return (
+        {"parent_session": dict(parent["parent_signature"])},
+        {
+            "parent_event": {
+                "authority": str(parent["authority"]),
+                "parent_event_index": int(parent["event_index"]),
+                "parent_event_ref_sha256": hash_text(str(parent["event_ref"])),
+                "parent_locator": parent_locator,
+                "parent_locator_sha256": hash_text(parent_locator),
+                "parent_session_ref_sha256": hash_text(str(parent["session_ref"])),
+                "parent_text_index": int(parent["text_index"]),
+                "provenance": str(parent["provenance"]),
+                "reference_sha256": hash_text(reference),
+                "timestamp": parent.get("timestamp"),
+            }
+        },
+    )
+
+
+def codex_attachment_receipt_parents(
+    lifecycle: Any,
+    attachment: Path,
+    receipt: Any,
+    *,
+    limits: ResourceLimits,
+) -> list[dict[str, Any]]:
+    """Revalidate only the receipt-bound parent file on a cached second pass."""
+
+    if not isinstance(receipt, dict):
+        return []
+    evidence = receipt.get("related_evidence")
+    detail = evidence.get("parent_event") if isinstance(evidence, dict) else None
+    related = receipt.get("related_signatures")
+    expected_signature = related.get("parent_session") if isinstance(related, dict) else None
+    if not isinstance(detail, dict) or not isinstance(expected_signature, dict):
+        return []
+    parent_locator = detail.get("parent_locator")
+    if not isinstance(parent_locator, str):
+        return []
+    parent_path = Path(parent_locator)
+    if source_relative_path(lifecycle, "codex-sessions", parent_path) is None:
+        return []
+    signature = file_signature(parent_path)
+    if signature != expected_signature:
+        return []
+    records, error, supported = strict_native_records(
+        lifecycle,
+        "codex-sessions",
+        parent_path,
+        signature,
+        limits=limits,
+    )
+    if error or not supported:
+        file_events, event_error, parent_completeness_unknown = bounded_codex_attachment_parent_events_from_path(
+            lifecycle,
+            parent_path,
+            signature,
+            limits=limits,
+        )
+    else:
+        file_events, event_error, parent_completeness_unknown = targeted_codex_attachment_parent_events(
+            lifecycle,
+            parent_path,
+            records,
+            limits=limits,
+        )
+    if parent_completeness_unknown or event_error or file_signature(parent_path) != signature:
+        return []
+    parents: dict[str, list[dict[str, Any]]] = {}
+    collect_codex_attachment_parents(
+        lifecycle,
+        parent_path=parent_path,
+        parent_signature=signature,
+        file_events=file_events,
+        parents=parents,
+    )
+    return parents.get(str(attachment.expanduser().absolute()), [])
+
+
+def adapt_codex_attachment(
+    lifecycle: Any,
+    path: Path,
+    signature: dict[str, Any],
+    parents: Sequence[dict[str, Any]],
+    *,
+    limits: ResourceLimits,
+) -> tuple[
+    list[dict[str, Any]],
+    dict[str, dict[str, Any]],
+    dict[str, dict[str, Any]],
+    str | None,
+    bool,
+]:
+    """Bind a bounded pasted-text body to exactly one canonical parent event."""
+
+    if len(parents) != 1:
+        return [], {}, {}, None, False
+    adapter_limit = int(SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]["max_probe_bytes"])
+    maximum = min(adapter_limit, limits.max_source_bytes_per_unit)
+    payload = _bounded_file_bytes(path, signature, maximum=maximum)
+    if payload is None:
+        return [], {}, {}, f"attachment exceeds bounded byte ceiling {maximum}", True
+    try:
+        text = payload.decode("utf-8", errors="strict")
+    except UnicodeError:
+        return [], {}, {}, "attachment is not strict UTF-8 text", True
+    if not text.strip():
+        return [], {}, {}, "attachment body is empty", True
+    parent = parents[0]
+    if file_signature(Path(str(parent["parent_locator"]))) != parent.get("parent_signature"):
+        return [], {}, {}, "attachment parent changed during binding", True
+    related_signatures, related_evidence = codex_attachment_parent_material(path, parent)
+    task_body, body_kind = lifecycle.normalize_task_body(text)
+    attachment_ref = digest(str(path.expanduser().absolute()))[:24]
+    event = {
+        "source": "codex-attachments",
+        "session_ref": str(parent["session_ref"]),
+        "event_ref": f"{parent['event_ref']}:attachment:{attachment_ref}",
+        "event_index": int(parent["event_index"]),
+        "text_index": int(parent["text_index"]),
+        "source_locator": f"{path}#0:0",
+        "timestamp": parent.get("timestamp"),
+        "text": text,
+        "task_body": task_body if body_kind == "flame_with_task_body" else "",
+        "body_kind": body_kind,
+        "provenance": str(parent["provenance"]),
+        "authority": str(parent["authority"]),
+    }
+    return [event], related_signatures, related_evidence, None, True
 
 
 def scan_regular_sources(
@@ -2186,6 +3533,8 @@ def scan_regular_sources(
         coverage_row(coverage, source)
     errors: list[str] = []
     unsupported: list[str] = []
+    codex_attachment_parents: dict[str, list[dict[str, Any]]] = {}
+    parent_completeness_unknown: set[str] = set()
     processed = 0
     pending = 0
     attempted = 0
@@ -2197,6 +3546,16 @@ def scan_regular_sources(
             days,
             limits=active_limits,
         )
+    )
+    source_alias_blocker_counts: Counter[str] = Counter(getattr(active_rows, "source_alias_blocker_counts", {}))
+    has_codex_attachment_rows = any(str(row["source"]) == "codex-attachments" for row in active_rows)
+    codex_session_proves_parent_completeness = bool(
+        int(SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]["max_probe_bytes"])
+        <= int(SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]["max_parent_probe_bytes"])
+        and int(SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]["max_record_bytes"])
+        <= int(SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]["max_parent_record_bytes"])
+        and int(SOURCE_ADAPTER_RULES["codex-session-jsonl-v2"]["max_records"])
+        <= int(SOURCE_ADAPTER_RULES["codex-pasted-text-attachment-v1"]["max_parent_records"])
     )
     for source, error in getattr(active_rows, "discovery_errors", []):
         coverage_row(coverage, source)["errors"] += 1
@@ -2215,7 +3574,14 @@ def scan_regular_sources(
         lane_budget = source_scan_budget(budget, source)
         counts = coverage_row(coverage, source)
         path = Path(row["path"])
-        signature = file_signature(path)
+        custody = source_path_custody(lifecycle, source, path)
+        if custody.error is not None:
+            counts["errors"] += 1
+            errors.append(f"{source}:{path}: {custody.error}")
+            if source == "claude-projects" and custody.blocker_reason in SOURCE_ALIAS_BLOCKER_REASONS:
+                source_alias_blocker_counts[str(custody.blocker_reason)] += 1
+            continue
+        signature = source_unit_signature(lifecycle, source, path)
         if signature is None:
             counts["discovered"] += 1
             counts["errors"] += 1
@@ -2226,9 +3592,19 @@ def scan_regular_sources(
         counts["discovered"] += 1
         exclusion_id = source_exclusion_candidate_id(lifecycle, source, path, signature)
         adapter_id = native_source_adapter_candidate_id(lifecycle, source, path)
+        adapter_related_signatures: dict[str, dict[str, Any]] = {}
+        adapter_related_evidence: dict[str, dict[str, Any]] = {}
+        attachment_candidates: list[dict[str, Any]] = []
+        targeted_parent_events: list[dict[str, Any]] = []
         claimed = False
         if exclusion_id:
             related_signatures = current_exclusion_related_signatures(
+                lifecycle,
+                source,
+                path,
+                exclusion_id,
+            )
+            expected_related_evidence = current_exclusion_related_evidence(
                 lifecycle,
                 source,
                 path,
@@ -2243,9 +3619,10 @@ def scan_regular_sources(
                 locator=str(path),
                 signature=signature,
                 related_signatures=related_signatures,
+                expected_related_evidence=expected_related_evidence,
             ):
                 if (
-                    file_signature(path) != signature
+                    source_unit_signature(lifecycle, source, path) != signature
                     or current_exclusion_related_signatures(
                         lifecycle,
                         source,
@@ -2253,10 +3630,25 @@ def scan_regular_sources(
                         exclusion_id,
                     )
                     != related_signatures
+                    or (
+                        expected_related_evidence is not None
+                        and current_exclusion_related_evidence(
+                            lifecycle,
+                            source,
+                            path,
+                            exclusion_id,
+                        )
+                        != expected_related_evidence
+                    )
                 ):
                     excluded_unit_receipts.pop(key, None)
                     counts["errors"] += 1
                     errors.append(f"{source}:{path}: source changed during cached exclusion validation")
+                    if exclusion_id in {
+                        CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+                        CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+                    }:
+                        source_alias_blocker_counts["alias_changed"] += 1
                     continue
                 exclusion_counts[exclusion_id] += 1
                 counts["excluded"] += 1
@@ -2271,13 +3663,18 @@ def scan_regular_sources(
                 continue
             attempted += 1
             claimed = True
-            escape = source_path_error(
+            refreshed_custody = source_path_custody(
+                lifecycle,
+                source,
                 path,
-                containment_root=canonical_source_root(lifecycle, source) or path.parent,
+                containment_root=containing_source_root(lifecycle, source, path) or path.parent,
             )
+            escape = refreshed_custody.error
             if escape:
                 counts["errors"] += 1
                 errors.append(f"{source}:{path}: {escape}")
+                if source == "claude-projects" and refreshed_custody.blocker_reason in SOURCE_ALIAS_BLOCKER_REASONS:
+                    source_alias_blocker_counts[str(refreshed_custody.blocker_reason)] += 1
                 continue
             confirmed = confirm_source_exclusion(
                 lifecycle,
@@ -2289,14 +3686,38 @@ def scan_regular_sources(
             if confirmed is None:
                 excluded_unit_receipts.pop(key, None)
                 adapted_unit_receipts.pop(key, None)
+                if exclusion_id in {
+                    CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+                    CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+                }:
+                    counts["errors"] += 1
+                    errors.append(f"{source}:{path}: approved alias changed during exclusion classification")
+                    source_alias_blocker_counts["alias_changed"] += 1
+                    continue
                 counts["unsupported"] += 1
                 unsupported.append(key)
                 unsupported_units[key] = signature
                 continue
             confirmed_id, related_signatures, related_evidence = confirmed
-            if file_signature(path) != signature:
+            related_changed = bool(
+                exclusion_id
+                in {
+                    CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+                    CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+                }
+                and (
+                    current_exclusion_related_signatures(lifecycle, source, path, exclusion_id) != related_signatures
+                    or current_exclusion_related_evidence(lifecycle, source, path, exclusion_id) != related_evidence
+                )
+            )
+            if source_unit_signature(lifecycle, source, path) != signature or related_changed:
                 counts["errors"] += 1
                 errors.append(f"{source}:{path}: source changed during exclusion classification")
+                if exclusion_id in {
+                    CLAUDE_PROJECT_MEMORY_ALIAS_ID,
+                    CLAUDE_SUBAGENT_SESSION_ALIAS_ID,
+                }:
+                    source_alias_blocker_counts["alias_changed"] += 1
                 continue
             excluded_unit_receipts[key] = {
                 "version": SOURCE_ADAPTER_CONTRACT_VERSION,
@@ -2315,9 +3736,36 @@ def scan_regular_sources(
             excluded_file_keys.add(key)
             continue
         excluded_unit_receipts.pop(key, None)
-        if (
-            adapter_id
-            and source_unit_receipt_matches(
+        cached_adapter_matches = False
+        if adapter_id == "codex-pasted-text-attachment-v1":
+            receipt_parents = codex_attachment_receipt_parents(
+                lifecycle,
+                path,
+                adapted_unit_receipts.get(key),
+                limits=active_limits,
+            )
+            attachment_candidates = merge_codex_attachment_parents(
+                codex_attachment_parents.get(str(path.expanduser().absolute()), []),
+                receipt_parents,
+            )
+            if len(attachment_candidates) == 1:
+                adapter_related_signatures, adapter_related_evidence = codex_attachment_parent_material(
+                    path,
+                    attachment_candidates[0],
+                )
+                cached_adapter_matches = source_unit_receipt_matches(
+                    adapted_unit_receipts.get(key),
+                    disposition="adapted",
+                    contract_id=adapter_id,
+                    contract_digest=adapter_contract["digest"],
+                    source=source,
+                    locator=str(path),
+                    signature=signature,
+                    related_signatures=adapter_related_signatures,
+                    expected_related_evidence=adapter_related_evidence,
+                )
+        elif adapter_id:
+            cached_adapter_matches = source_unit_receipt_matches(
                 adapted_unit_receipts.get(key),
                 disposition="adapted",
                 contract_id=adapter_id,
@@ -2326,14 +3774,47 @@ def scan_regular_sources(
                 locator=str(path),
                 signature=signature,
             )
-            and files.get(key) == signature
-        ):
-            if file_signature(path) != signature:
+        if cached_adapter_matches and adapter_id is not None and files.get(key) == signature:
+            parent_changed = bool(
+                adapter_id == "codex-pasted-text-attachment-v1"
+                and (
+                    len(attachment_candidates) != 1
+                    or file_signature(Path(attachment_candidates[0]["parent_locator"]))
+                    != adapter_related_signatures.get("parent_session")
+                )
+            )
+            if source_unit_signature(lifecycle, source, path) != signature or parent_changed:
                 files.pop(key, None)
                 adapted_unit_receipts.pop(key, None)
                 counts["errors"] += 1
                 errors.append(f"{source}:{path}: source changed during cached adapter validation")
                 continue
+            if adapter_id == "codex-session-jsonl-v2" and has_codex_attachment_rows:
+                (
+                    targeted_parent_events,
+                    targeted_error,
+                    targeted_completeness_unknown,
+                ) = bounded_codex_attachment_parent_events_from_path(
+                    lifecycle,
+                    path,
+                    signature,
+                    limits=active_limits,
+                )
+                if targeted_completeness_unknown:
+                    parent_completeness_unknown.add(key)
+                if targeted_error:
+                    files.pop(key, None)
+                    adapted_unit_receipts.pop(key, None)
+                    counts["errors"] += 1
+                    errors.append(f"{source}:{targeted_error}")
+                    continue
+                collect_codex_attachment_parents(
+                    lifecycle,
+                    parent_path=path,
+                    parent_signature=signature,
+                    file_events=targeted_parent_events,
+                    parents=codex_attachment_parents,
+                )
             adapter_counts[adapter_id] += 1
             counts["adapted"] += 1
             counts["converged"] += 1
@@ -2343,7 +3824,7 @@ def scan_regular_sources(
         if adapter_id:
             files.pop(key, None)
         if unsupported_units.get(key) == signature and not adapter_id:
-            if file_signature(path) != signature:
+            if source_unit_signature(lifecycle, source, path) != signature:
                 unsupported_units.pop(key, None)
                 counts["errors"] += 1
                 errors.append(f"{source}:{path}: source changed during cached unsupported validation")
@@ -2352,11 +3833,36 @@ def scan_regular_sources(
             unsupported.append(key)
             continue
         if files.get(key) == signature and not adapter_id:
-            if file_signature(path) != signature:
+            if source_unit_signature(lifecycle, source, path) != signature:
                 files.pop(key, None)
                 counts["errors"] += 1
                 errors.append(f"{source}:{path}: source changed during cached parser validation")
                 continue
+            if source == "codex-sessions" and has_codex_attachment_rows:
+                (
+                    targeted_parent_events,
+                    targeted_error,
+                    targeted_completeness_unknown,
+                ) = bounded_codex_attachment_parent_events_from_path(
+                    lifecycle,
+                    path,
+                    signature,
+                    limits=active_limits,
+                )
+                if targeted_completeness_unknown:
+                    parent_completeness_unknown.add(key)
+                if targeted_error:
+                    files.pop(key, None)
+                    counts["errors"] += 1
+                    errors.append(f"{source}:{targeted_error}")
+                    continue
+                collect_codex_attachment_parents(
+                    lifecycle,
+                    parent_path=path,
+                    parent_signature=signature,
+                    file_events=targeted_parent_events,
+                    parents=codex_attachment_parents,
+                )
             counts["converged"] += 1
             continue
         if not claimed and not lane_budget.claim():
@@ -2365,21 +3871,122 @@ def scan_regular_sources(
             continue
         if not claimed:
             attempted += 1
-        escape = source_path_error(
-            path,
-            containment_root=canonical_source_root(lifecycle, source) or path.parent,
-        )
-        if escape:
-            counts["errors"] += 1
-            errors.append(f"{source}:{path}: {escape}")
-            continue
-        records, error, supported = strict_native_records(
+        refreshed_custody = source_path_custody(
             lifecycle,
             source,
             path,
-            signature,
-            limits=active_limits,
+            containment_root=containing_source_root(lifecycle, source, path) or path.parent,
         )
+        escape = refreshed_custody.error
+        if escape:
+            counts["errors"] += 1
+            errors.append(f"{source}:{path}: {escape}")
+            if source == "claude-projects" and refreshed_custody.blocker_reason in SOURCE_ALIAS_BLOCKER_REASONS:
+                source_alias_blocker_counts[str(refreshed_custody.blocker_reason)] += 1
+            continue
+        if adapter_id == "codex-pasted-text-attachment-v1":
+            file_events, adapter_related_signatures, adapter_related_evidence, error, supported = (
+                adapt_codex_attachment(
+                    lifecycle,
+                    path,
+                    signature,
+                    attachment_candidates,
+                    limits=active_limits,
+                )
+            )
+        else:
+            records, error, supported = strict_native_records(
+                lifecycle,
+                source,
+                path,
+                signature,
+                limits=active_limits,
+            )
+            if source == "codex-sessions" and has_codex_attachment_rows:
+                if (
+                    adapter_id == "codex-session-jsonl-v2"
+                    and codex_session_proves_parent_completeness
+                    and not error
+                    and supported
+                ):
+                    targeted_parent_events = []
+                    targeted_error = None
+                    targeted_completeness_unknown = False
+                elif error or not supported:
+                    (
+                        targeted_parent_events,
+                        targeted_error,
+                        targeted_completeness_unknown,
+                    ) = bounded_codex_attachment_parent_events_from_path(
+                        lifecycle,
+                        path,
+                        signature,
+                        limits=active_limits,
+                    )
+                else:
+                    (
+                        targeted_parent_events,
+                        targeted_error,
+                        targeted_completeness_unknown,
+                    ) = targeted_codex_attachment_parent_events(
+                        lifecycle,
+                        path,
+                        records,
+                        limits=active_limits,
+                    )
+                if targeted_completeness_unknown:
+                    parent_completeness_unknown.add(key)
+                if targeted_error and not error:
+                    error = targeted_error
+                if targeted_parent_events and source_unit_signature(lifecycle, source, path) == signature:
+                    collect_codex_attachment_parents(
+                        lifecycle,
+                        parent_path=path,
+                        parent_signature=signature,
+                        file_events=targeted_parent_events,
+                        parents=codex_attachment_parents,
+                    )
+            if error or not supported:
+                file_events = []
+            else:
+                if not error:
+                    schema_error = native_record_schema_error(
+                        lifecycle,
+                        source,
+                        path,
+                        records,
+                        adapter_id=adapter_id,
+                    )
+                    if schema_error:
+                        files.pop(key, None)
+                        adapted_unit_receipts.pop(key, None)
+                        counts["unsupported"] += 1
+                        unsupported.append(key)
+                        unsupported_units[key] = signature
+                        continue
+                    file_events, error = regular_file_events(
+                        lifecycle,
+                        source,
+                        path,
+                        records,
+                        adapter_id=adapter_id,
+                        limits=active_limits,
+                    )
+                    if (
+                        source == "codex-sessions"
+                        and adapter_id == "codex-session-jsonl-v2"
+                        and codex_session_proves_parent_completeness
+                        and has_codex_attachment_rows
+                        and not error
+                    ):
+                        collect_codex_attachment_parents(
+                            lifecycle,
+                            parent_path=path,
+                            parent_signature=signature,
+                            file_events=file_events,
+                            parents=codex_attachment_parents,
+                        )
+                    supported = True
         if not supported:
             counts["unsupported"] += 1
             unsupported.append(key)
@@ -2389,87 +3996,13 @@ def scan_regular_sources(
             counts["errors"] += 1
             errors.append(f"{source}:{error}")
             continue
-        schema_error = native_record_schema_error(
-            lifecycle,
-            source,
-            path,
-            records,
-            adapter_id=adapter_id,
-        )
-        if schema_error:
-            files.pop(key, None)
-            adapted_unit_receipts.pop(key, None)
-            counts["unsupported"] += 1
-            unsupported.append(key)
-            unsupported_units[key] = signature
-            continue
-        file_session_id = canonical_file_session_id(source, path, records)
-        file_is_forked = codex_file_is_forked(source, records)
-        path_authority = claude_project_path_authority(lifecycle, source, path)
-        file_events: list[dict[str, Any]] = []
-        for event_index, obj in enumerate(records):
-            texts = prompt_texts_for(lifecycle, source, obj)
-            for text_index, text in enumerate(texts):
-                if adapter_id == "claude-remote-task-command-v1":
-                    task_body, body_kind = "", "direct"
-                else:
-                    task_body, body_kind = lifecycle.normalize_task_body(text)
-                provenance, authority = provenance_for(source, obj, body_kind)
-                if path_authority == "derived" or adapter_id:
-                    provenance, authority = "delegated_task_frame", "derived"
-                elif path_authority == "unknown" and provenance == "operator_typed":
-                    provenance, authority = "unknown_user_input", "unknown"
-                payload = obj.get("payload")
-                event_ref = (
-                    obj.get("uuid")
-                    or obj.get("id")
-                    or (payload.get("id") if isinstance(payload, dict) else None)
-                    or event_index
-                )
-                file_events.append(
-                    {
-                        "source": source,
-                        "session_ref": session_reference(
-                            source,
-                            path,
-                            obj,
-                            file_session_id=file_session_id,
-                        ),
-                        "event_ref": event_ref,
-                        "event_index": event_index,
-                        "text_index": text_index,
-                        "source_locator": f"{path}#{event_index}:{text_index}",
-                        "timestamp": event_timestamp(obj),
-                        "text": text,
-                        "task_body": task_body if body_kind == "flame_with_task_body" else "",
-                        "body_kind": body_kind,
-                        "provenance": provenance,
-                        "authority": authority,
-                        **({"claude_transport_candidate": True} if claude_transport_candidate(obj) else {}),
-                    }
-                )
-                if len(file_events) > active_limits.max_events_per_unit:
-                    break
-            if len(file_events) > active_limits.max_events_per_unit:
-                break
-        if len(file_events) > active_limits.max_events_per_unit:
-            counts["errors"] += 1
-            errors.append(
-                f"{source}:{path}: prompt occurrence count exceeds bounded ceiling {active_limits.max_events_per_unit}"
-            )
-            continue
-        if file_signature(path) != signature:
+        if source_unit_signature(lifecycle, source, path) != signature:
             counts["errors"] += 1
             errors.append(f"{source}:{path}: source changed during scan; cursor not advanced")
             continue
-        file_events = normalize_claude_file_events(source, file_events)
-        events.extend(
-            normalize_codex_file_events(
-                source,
-                file_events,
-                forked=file_is_forked,
-            )
-        )
+        for event in file_events:
+            event.pop("_codex_attachment_parent", None)
+        events.extend(file_events)
         files[key] = signature
         unsupported_units.pop(key, None)
         if adapter_id:
@@ -2479,7 +4012,8 @@ def scan_regular_sources(
                 "contract_id": adapter_id,
                 "contract_digest": adapter_contract["digest"],
                 "signature": signature,
-                "related_signatures": {},
+                "related_signatures": adapter_related_signatures,
+                "related_evidence": adapter_related_evidence,
             }
             adapter_counts[adapter_id] += 1
             counts["adapted"] += 1
@@ -2499,12 +4033,14 @@ def scan_regular_sources(
         "pending_files": pending,
         "errors": errors,
         "unsupported": unsupported,
+        "parent_completeness_unknown": sorted(parent_completeness_unknown),
         "unsupported_units": unsupported_units,
         "excluded_unit_receipts": excluded_unit_receipts,
         "excluded_file_keys": sorted(excluded_file_keys),
         "source_exclusion_counts": dict(sorted(exclusion_counts.items())),
         "adapted_unit_receipts": adapted_unit_receipts,
         "source_adapter_counts": dict(sorted(adapter_counts.items())),
+        "source_alias_blocker_counts": dict(sorted(source_alias_blocker_counts.items())),
         "coverage": coverage,
     }
 
@@ -2634,6 +4170,236 @@ def opencode_integrity_error(connection: sqlite3.Connection, *, step_ceiling: in
     return None
 
 
+def opencode_user_summary_schema_error(
+    connection: sqlite3.Connection,
+    *,
+    session_id: str,
+    step_ceiling: int,
+) -> str | None:
+    """Validate the exact provider-generated patch-summary envelope in SQLite.
+
+    The summary can be much larger than the user prompt.  Keep it outside the
+    prompt projection only after proving its canonical shape without returning
+    patch bodies to Python.
+    """
+
+    progress = {"steps": 0}
+
+    def bounded_progress() -> int:
+        progress["steps"] += 1_000
+        return int(progress["steps"] > step_ceiling)
+
+    connection.set_progress_handler(bounded_progress, 1_000)
+    try:
+        summary_rows = connection.execute(
+            "SELECT id, json_extract(data, '$.role') AS role, "
+            "json_type(data, '$.summary') AS summary_type, "
+            "length(CAST(json_extract(data, '$.summary') AS BLOB)) AS summary_bytes "
+            "FROM message WHERE session_id=? AND json_valid(data) "
+            "AND json_extract(data, '$.role')='user' "
+            "AND json_type(data, '$.summary') IS NOT NULL",
+            (session_id,),
+        ).fetchall()
+        expected_diff_types = {
+            "additions": "integer",
+            "deletions": "integer",
+            "file": "text",
+            "patch": "text",
+            "status": "text",
+        }
+        if set(expected_diff_types) != set(OPENCODE_USER_SUMMARY_DIFF_KEYS):
+            raise RuntimeError("OpenCode summary field-type contract drift")
+        allowed_placeholders = ", ".join("?" for _ in OPENCODE_USER_SUMMARY_DIFF_KEYS)
+        exact_key_checks = " OR ".join(
+            "(SELECT COUNT(*) FROM json_each(d.value) AS field WHERE field.key=?) != 1"
+            for _ in OPENCODE_USER_SUMMARY_DIFF_KEYS
+        )
+        type_checks = " OR ".join(
+            f"COALESCE(json_type(d.value, '$.{field}'), 'missing') != ?" for field in OPENCODE_USER_SUMMARY_DIFF_KEYS
+        )
+        invalid_diff_query = (
+            "SELECT 1 FROM message AS m, json_each(m.data, '$.summary.diffs') AS d "
+            "WHERE m.id=? AND (d.type != 'object' "
+            "OR (SELECT COUNT(*) FROM json_each(d.value)) != ? "
+            f"OR EXISTS (SELECT 1 FROM json_each(d.value) AS field WHERE field.key NOT IN ({allowed_placeholders})) "
+            f"OR {exact_key_checks} OR {type_checks}) LIMIT 1"
+        )
+        for row in summary_rows:
+            if row["role"] != "user" or row["summary_type"] != "object":
+                return "OpenCode summary is not canonical user patch context"
+            if int(row["summary_bytes"] or 0) > OPENCODE_USER_SUMMARY_MAX_BYTES:
+                return f"OpenCode summary exceeds hard byte ceiling {OPENCODE_USER_SUMMARY_MAX_BYTES}"
+            summary_keys = connection.execute(
+                "SELECT COUNT(*) AS total, "
+                "SUM(CASE WHEN key=? THEN 1 ELSE 0 END) AS expected, "
+                "SUM(CASE WHEN key!=? THEN 1 ELSE 0 END) AS unexpected "
+                "FROM message AS m, json_each(m.data, '$.summary') WHERE m.id=?",
+                (OPENCODE_USER_SUMMARY_KEYS[0], OPENCODE_USER_SUMMARY_KEYS[0], row["id"]),
+            ).fetchone()
+            if (
+                int(summary_keys["total"] or 0) != len(OPENCODE_USER_SUMMARY_KEYS)
+                or int(summary_keys["expected"] or 0) != 1
+                or int(summary_keys["unexpected"] or 0) != 0
+            ):
+                return "OpenCode summary has an unknown provider patch-context schema"
+            summary_data = connection.execute(
+                "SELECT json_type(data, '$.summary.diffs') AS diffs_type FROM message WHERE id=?",
+                (row["id"],),
+            ).fetchone()
+            if summary_data is None or summary_data["diffs_type"] != "array":
+                return "OpenCode summary diffs is not a canonical array"
+            invalid_diff = connection.execute(
+                invalid_diff_query,
+                (
+                    row["id"],
+                    len(OPENCODE_USER_SUMMARY_DIFF_KEYS),
+                    *OPENCODE_USER_SUMMARY_DIFF_KEYS,
+                    *OPENCODE_USER_SUMMARY_DIFF_KEYS,
+                    *(expected_diff_types[field] for field in OPENCODE_USER_SUMMARY_DIFF_KEYS),
+                ),
+            ).fetchone()
+            if invalid_diff is not None:
+                return "OpenCode summary contains an unknown provider diff schema"
+    except sqlite3.OperationalError as exc:
+        if "interrupted" in str(exc).lower():
+            return "OpenCode summary validation exceeds bounded step ceiling"
+        raise
+    finally:
+        connection.set_progress_handler(None, 0)
+    return None
+
+
+def opencode_assistant_task_event(
+    lifecycle: Any,
+    connection: sqlite3.Connection,
+    *,
+    path: Path,
+    session_id: str,
+    message: sqlite3.Row,
+    message_data: dict[str, Any],
+    part: sqlite3.Row,
+    part_data: dict[str, Any],
+    event_index: int,
+    text_index: int,
+    seen_call_ids: set[str],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Adapt one exact OpenCode task-tool call into a derived prompt event."""
+
+    if set(message_data) not in [set(keyset) for keyset in OPENCODE_ASSISTANT_MESSAGE_KEYSETS]:
+        return None, "OpenCode task-tool parent requires an explicit assistant-message adapter"
+    if message_data.get("role") != "assistant":
+        return None, "OpenCode task-tool parent is not a canonical assistant message"
+    if set(part_data) != set(OPENCODE_TASK_TOOL_PART_KEYS):
+        return None, "OpenCode task-tool part has an unknown envelope"
+    call_id = part_data.get("callID")
+    if not isinstance(call_id, str) or not call_id.strip():
+        return None, "OpenCode task-tool callID must be a non-empty string"
+    if call_id in seen_call_ids:
+        return None, "OpenCode task-tool callID is duplicated within its session"
+    seen_call_ids.add(call_id)
+    state = part_data.get("state")
+    if not isinstance(state, dict):
+        return None, "OpenCode task-tool state is not an object"
+    status = state.get("status")
+    expected_state_keys = OPENCODE_TASK_TOOL_STATE_KEYSETS.get(status)
+    if expected_state_keys is None or set(state) != set(expected_state_keys):
+        return None, "OpenCode task-tool state requires an explicit status adapter"
+    input_data = state.get("input")
+    if not isinstance(input_data, dict) or set(input_data) not in [
+        set(keyset) for keyset in OPENCODE_TASK_TOOL_INPUT_KEYSETS
+    ]:
+        return None, "OpenCode task-tool input has an unknown schema"
+    for field in ("description", "prompt", "subagent_type"):
+        if not isinstance(input_data.get(field), str) or not str(input_data[field]).strip():
+            return None, f"OpenCode task-tool {field} must be a non-empty string"
+    if "command" in input_data and (
+        not isinstance(input_data.get("command"), str) or not str(input_data["command"]).strip()
+    ):
+        return None, "OpenCode task-tool command must be a non-empty string"
+    metadata = state.get("metadata")
+    if not isinstance(metadata, dict) or set(metadata) not in [
+        set(keyset) for keyset in OPENCODE_TASK_TOOL_METADATA_KEYSETS
+    ]:
+        return None, "OpenCode task-tool metadata has an unknown schema"
+    for field in ("parentSessionId", "sessionId"):
+        if not isinstance(metadata.get(field), str) or not str(metadata[field]).strip():
+            return None, f"OpenCode task-tool metadata {field} must be a non-empty string"
+    if metadata["parentSessionId"] != session_id:
+        return None, "OpenCode task-tool metadata does not name its canonical parent session"
+    if "truncated" in metadata and not isinstance(metadata.get("truncated"), bool):
+        return None, "OpenCode task-tool truncated metadata must be boolean"
+    if "outputPath" in metadata and (
+        not isinstance(metadata.get("outputPath"), str) or not str(metadata["outputPath"]).strip()
+    ):
+        return None, "OpenCode task-tool outputPath metadata must be a non-empty string"
+    metadata_model = metadata.get("model")
+    if not isinstance(metadata_model, dict) or set(metadata_model) != {"modelID", "providerID"}:
+        return None, "OpenCode task-tool metadata model has an unknown schema"
+    if any(
+        not isinstance(metadata_model.get(field), str) or not str(metadata_model[field]).strip()
+        for field in ("modelID", "providerID")
+    ):
+        return None, "OpenCode task-tool metadata model fields must be non-empty strings"
+    time_data = state.get("time")
+    expected_time_keys = OPENCODE_TASK_TOOL_TIME_KEYSETS[status]
+    if not isinstance(time_data, dict) or set(time_data) != set(expected_time_keys):
+        return None, "OpenCode task-tool time has an unknown schema"
+    for field in expected_time_keys:
+        if isinstance(time_data.get(field), bool) or not isinstance(time_data.get(field), int):
+            return None, "OpenCode task-tool time fields must be exact integers"
+    if status == "completed" and time_data["end"] < time_data["start"]:
+        return None, "OpenCode task-tool completion precedes its start"
+    if not isinstance(state.get("title"), str):
+        return None, "OpenCode task-tool title must be a string"
+    if status == "completed" and not isinstance(state.get("output"), str):
+        return None, "OpenCode completed task-tool output must be a string"
+    required_session_columns = {"id", "parent_id", "agent", "model"}
+    session_columns = {str(row["name"]) for row in connection.execute("PRAGMA main.table_xinfo('session')").fetchall()}
+    if not required_session_columns.issubset(session_columns):
+        return None, "OpenCode task-tool child relationship fields are unavailable"
+    child = connection.execute(
+        "SELECT id, parent_id, agent, model FROM session WHERE id=?",
+        (metadata["sessionId"],),
+    ).fetchone()
+    if child is None or child["parent_id"] != session_id:
+        return None, "OpenCode task-tool child session is not canonically parented"
+    if child["agent"] != input_data["subagent_type"]:
+        return None, "OpenCode task-tool child session agent does not match its input"
+    try:
+        child_model = json.loads(child["model"]) if child["model"] else None
+    except (TypeError, ValueError):
+        child_model = None
+    if not isinstance(child_model, dict) or set(child_model) != {"id", "providerID", "variant"}:
+        return None, "OpenCode task-tool child session model has an unknown schema"
+    if any(
+        not isinstance(child_model.get(field), str) or not str(child_model[field]).strip()
+        for field in ("id", "providerID", "variant")
+    ):
+        return None, "OpenCode task-tool child session model fields must be non-empty strings"
+    if child_model["id"] != metadata_model["modelID"] or child_model["providerID"] != metadata_model["providerID"]:
+        return None, "OpenCode task-tool child session model does not match its metadata"
+    text = str(input_data["prompt"]).strip()
+    task_body, normalized_kind = lifecycle.normalize_task_body(text)
+    return (
+        {
+            "source": "opencode-db",
+            "session_ref": f"opencode-db:{child['id']}:{path}",
+            "event_ref": str(part["id"]),
+            "event_index": event_index,
+            "text_index": text_index,
+            "source_locator": f"{path}#{part['id']}",
+            "source_segment": "state.input.prompt",
+            "timestamp": lifecycle.iso_from_epoch_ms(part["time_created"]),
+            "text": text,
+            "task_body": task_body if normalized_kind == "flame_with_task_body" else "",
+            "body_kind": "delegated_task_frame",
+            "provenance": "delegated_task_frame",
+            "authority": "derived",
+        },
+        None,
+    )
+
+
 def scan_opencode(
     lifecycle: Any,
     cursor: dict[str, Any],
@@ -2646,10 +4412,14 @@ def scan_opencode(
     path = Path(lifecycle.OPENCODE_DB)
     coverage = {"opencode-db": empty_coverage()}
     counts = coverage["opencode-db"]
+    adapter_contract = source_adapter_contract()
+    adapter_contract_digest = str(adapter_contract["digest"])
+    prior_adapted_receipts = cursor.get("adapted_unit_receipts") or {}
     if not path.exists():
         return [], {
             "discovered": {},
             "processed": {},
+            "adapted_unit_receipts": {},
             "errors": [],
             "unsupported": [],
             "pending_files": 0,
@@ -2663,6 +4433,7 @@ def scan_opencode(
         return [], {
             "discovered": {},
             "processed": {},
+            "adapted_unit_receipts": {},
             "errors": [f"opencode-db:{path}: {escape}"],
             "unsupported": [],
             "pending_files": 0,
@@ -2676,6 +4447,7 @@ def scan_opencode(
         return [], {
             "discovered": {},
             "processed": {},
+            "adapted_unit_receipts": {},
             "errors": [f"opencode-db:{path}: source cannot be stat'ed"],
             "unsupported": [],
             "pending_files": 0,
@@ -2693,6 +4465,7 @@ def scan_opencode(
         return [], {
             "discovered": {},
             "processed": {},
+            "adapted_unit_receipts": {},
             "errors": [f"opencode-db:{path}: {exc}"],
             "unsupported": [],
             "pending_files": 0,
@@ -2703,6 +4476,7 @@ def scan_opencode(
     events: list[dict[str, Any]] = []
     discovered: dict[str, Any] = {}
     processed: dict[str, Any] = {}
+    adapted_unit_receipts: dict[str, Any] = {}
     errors: list[str] = []
     pending = 0
     attempted = 0
@@ -2729,9 +4503,10 @@ def scan_opencode(
             errors.append(f"opencode-db: session discovery exceeds bounded ceiling {active_limits.max_discovery_units}")
         for session in sessions:
             session_id = str(session["id"])
+            unit_locator = f"{path}#session:{digest(session_id)[:24]}"
             unit_key = cursor_unit_key(
                 "opencode-db",
-                f"{path}#session:{digest(session_id)[:24]}",
+                unit_locator,
             )
             base_unit_signature = {
                 **database_signature,
@@ -2750,12 +4525,30 @@ def scan_opencode(
             counts["discovered"] += 1
             if cache_generation_matches:
                 processed[unit_key] = unit_signature
+                cached_receipt = prior_adapted_receipts.get(unit_key)
+                if source_unit_receipt_matches(
+                    cached_receipt,
+                    disposition="adapted",
+                    contract_id="opencode-assistant-task-v1",
+                    contract_digest=adapter_contract_digest,
+                    source="opencode-db",
+                    locator=unit_locator,
+                    signature=unit_signature,
+                ):
+                    adapted_unit_receipts[unit_key] = cached_receipt
+                    counts["adapted"] += 1
                 counts["converged"] += 1
                 continue
             max_rows = active_limits.max_events_per_unit * 10
+            projected_message_data = (
+                "CASE WHEN json_valid(data) AND json_extract(data, '$.role')='user' "
+                "AND json_type(data, '$.summary') IS NOT NULL "
+                "THEN json_remove(data, '$.summary') ELSE data END"
+            )
             message_count, message_bytes, message_limit = bounded_sqlite_lengths(
                 connection,
-                "SELECT COALESCE(length(CAST(data AS BLOB)), 0) FROM message WHERE session_id=? LIMIT ?",
+                "SELECT COALESCE(length(CAST((" + projected_message_data + ") AS BLOB)), 0) "
+                "FROM message WHERE session_id=? LIMIT ?",
                 (session_id,),
                 max_rows=max_rows,
                 max_bytes=active_limits.max_source_bytes_per_unit,
@@ -2789,8 +4582,18 @@ def scan_opencode(
                     f"{active_limits.max_source_bytes_per_unit}"
                 )
                 continue
+            summary_schema_error = opencode_user_summary_schema_error(
+                connection,
+                session_id=session_id,
+                step_ceiling=max(100_000, active_limits.max_events_per_unit * 10_000),
+            )
+            if summary_schema_error:
+                counts["errors"] += 1
+                errors.append(f"{unit_key}: {summary_schema_error}")
+                continue
             messages = connection.execute(
-                "SELECT id, time_created, data FROM message WHERE session_id=? ORDER BY time_created, id",
+                "SELECT id, time_created, " + projected_message_data + " AS data "
+                "FROM message WHERE session_id=? ORDER BY time_created, id",
                 (session_id,),
             ).fetchall()
             part_rows = connection.execute(
@@ -2825,6 +4628,21 @@ def scan_opencode(
                 # per-session content comparison; unrelated sessions retain
                 # custody without consuming bounded parse work units.
                 processed[unit_key] = unit_signature
+                cached_receipt = prior_adapted_receipts.get(unit_key)
+                if source_unit_receipt_matches(
+                    cached_receipt,
+                    disposition="adapted",
+                    contract_id="opencode-assistant-task-v1",
+                    contract_digest=adapter_contract_digest,
+                    source="opencode-db",
+                    locator=unit_locator,
+                    signature=cached_signature,
+                ):
+                    adapted_unit_receipts[unit_key] = {
+                        **cached_receipt,
+                        "signature": unit_signature,
+                    }
+                    counts["adapted"] += 1
                 counts["converged"] += 1
                 continue
             if not budget.claim():
@@ -2834,6 +4652,8 @@ def scan_opencode(
             attempted += 1
             session_events: list[dict[str, Any]] = []
             session_error: str | None = None
+            session_adapted = False
+            seen_call_ids: set[str] = set()
             for event_index, message in enumerate(messages):
                 try:
                     data = json.loads(message["data"]) if message["data"] else {}
@@ -2860,10 +4680,41 @@ def scan_opencode(
                 if session_error:
                     break
                 if data.get("role") != "user":
-                    if opencode_message_is_unknown_user_carrier(data) or any(
-                        structured_user_prompt_marker(part) for part in part_objects
-                    ):
+                    for text_index, (part, part_data) in enumerate(zip(parts, part_objects, strict=True)):
+                        if part_data.get("type") == "tool" and part_data.get("tool") == "task":
+                            task_event, task_error = opencode_assistant_task_event(
+                                lifecycle,
+                                connection,
+                                path=path,
+                                session_id=session_id,
+                                message=message,
+                                message_data=data,
+                                part=part,
+                                part_data=part_data,
+                                event_index=event_index,
+                                text_index=text_index,
+                                seen_call_ids=seen_call_ids,
+                            )
+                            if task_error:
+                                session_error = f"{unit_key}: {task_error}"
+                                break
+                            if task_event is not None:
+                                session_events.append(task_event)
+                                session_adapted = True
+                            continue
+                        if structured_user_prompt_marker(part_data):
+                            session_error = f"{unit_key}: unknown OpenCode user-bearing message or part schema"
+                            break
+                    if session_error:
+                        break
+                    if opencode_message_is_unknown_user_carrier(data):
                         session_error = f"{unit_key}: unknown OpenCode user-bearing message or part schema"
+                        break
+                    if len(session_events) > active_limits.max_events_per_unit:
+                        session_error = (
+                            f"{unit_key}: prompt occurrence count exceeds bounded ceiling "
+                            f"{active_limits.max_events_per_unit}"
+                        )
                         break
                     continue
                 schema_error = opencode_user_schema_error(data, part_objects)
@@ -2904,6 +4755,17 @@ def scan_opencode(
                 continue
             events.extend(session_events)
             processed[unit_key] = unit_signature
+            if session_adapted:
+                adapted_unit_receipts[unit_key] = {
+                    "version": SOURCE_ADAPTER_CONTRACT_VERSION,
+                    "disposition": "adapted",
+                    "contract_id": "opencode-assistant-task-v1",
+                    "contract_digest": adapter_contract_digest,
+                    "signature": unit_signature,
+                    "related_signatures": {},
+                    "related_evidence": {},
+                }
+                counts["adapted"] += 1
             counts["converged"] += 1
             counts["scanned"] += 1
     except (sqlite3.Error, ValueError) as exc:
@@ -2915,13 +4777,16 @@ def scan_opencode(
     if final_database_signature != database_signature:
         events = []
         processed = {}
+        adapted_unit_receipts = {}
         counts["converged"] = 0
         counts["scanned"] = 0
+        counts["adapted"] = 0
         counts["errors"] += 1
         errors.append("opencode-db: database or WAL changed during scan; cursor not advanced")
     return events, {
         "discovered": discovered,
         "processed": processed,
+        "adapted_unit_receipts": adapted_unit_receipts,
         "container_signature": database_signature if final_database_signature == database_signature else None,
         "errors": errors,
         "unsupported": [],
@@ -2952,6 +4817,249 @@ def sqlite_cell_fingerprint(value: Any) -> Any:
     return {"kind": type(value).__name__, "sha256": digest(str(value))}
 
 
+def agy_steps_schema_error(connection: sqlite3.Connection) -> str | None:
+    """Validate the repository-owned Agy steps envelope without reading prompt bodies."""
+
+    schema = SOURCE_RECORD_SCHEMAS["agy-conversation-v1"]
+    try:
+        object_rows = connection.execute("SELECT type, sql FROM main.sqlite_schema WHERE name = 'steps'").fetchall()
+        if not object_rows:
+            return "missing required steps table"
+        if len(object_rows) != 1 or object_rows[0]["type"] != "table":
+            return "required steps object must be a concrete table"
+        create_sql = object_rows[0]["sql"]
+        if not isinstance(create_sql, str) or not re.match(r"^\s*CREATE\s+TABLE\b", create_sql, re.IGNORECASE):
+            return "required steps object must not be a virtual table"
+        table_rows = connection.execute("PRAGMA main.table_xinfo('steps')").fetchall()
+    except sqlite3.Error as exc:
+        return f"cannot inspect steps schema: {exc}"
+    if any(int(row["hidden"]) != 0 for row in table_rows):
+        return "steps schema contains hidden or generated columns"
+    names = [str(row["name"]) for row in table_rows]
+    if len(names) != len(set(names)):
+        return "steps schema has duplicate column names"
+    required = [str(name) for name in schema["required_columns"]]
+    missing = [name for name in required if name not in names]
+    if missing:
+        return "steps schema is missing required columns: " + ", ".join(missing)
+    unknown = sorted(set(names) - set(required))
+    if unknown:
+        return "steps schema has unsupported columns: " + ", ".join(unknown)
+    return None
+
+
+def _agy_json_prompt_candidate(value: Any) -> tuple[str | None, str | None]:
+    """Unwrap only exact, provider-neutral JSON prompt envelopes."""
+
+    if isinstance(value, str):
+        text = value.strip()
+        return (text or None), None
+    if not isinstance(value, dict):
+        return None, "unsupported structured prompt envelope"
+    fields = set(value)
+    if fields == {"prompt"} and isinstance(value.get("prompt"), str):
+        text = str(value["prompt"]).strip()
+        return (text or None), None
+    if fields == {"content", "role"} and value.get("role") in {"human", "operator", "user"}:
+        if not isinstance(value.get("content"), str):
+            return None, "structured prompt content must be a string"
+        text = str(value["content"]).strip()
+        return (text or None), None
+    return None, "unsupported structured prompt envelope"
+
+
+class AgyDuplicateJsonKeyError(ValueError):
+    """A structured Agy carrier repeated a key and is therefore ambiguous."""
+
+
+def _agy_unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise AgyDuplicateJsonKeyError("duplicate JSON object key")
+        value[key] = item
+    return value
+
+
+def agy_json_nesting_error(text: str, *, maximum: int) -> str | None:
+    """Bound JSON container depth without counting brackets inside strings."""
+
+    stripped = text.lstrip()
+    if not stripped or stripped[0] not in "[{":
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for character in stripped:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+        elif character in "[{":
+            depth += 1
+            if depth > maximum:
+                return f"JSON nesting exceeds the bounded parser limit {maximum}"
+        elif character in "]}":
+            depth -= 1
+            if depth < 0:
+                return None
+    return None
+
+
+def agy_parse_json(text: str) -> tuple[Any, bool, str | None]:
+    """Parse one possible envelope without collapsing duplicate object keys."""
+
+    stripped = text.lstrip()
+    json_looking = bool(stripped) and stripped[0] in '[{"'
+    maximum_depth = int(SOURCE_RECORD_SCHEMAS["agy-conversation-v1"]["max_json_nesting_depth"])
+    nesting_error = agy_json_nesting_error(text, maximum=maximum_depth)
+    if nesting_error:
+        return None, True, nesting_error
+    try:
+        return json.loads(text, object_pairs_hook=_agy_unique_json_object), True, None
+    except AgyDuplicateJsonKeyError:
+        return None, True, "duplicate JSON object keys are ambiguous"
+    except RecursionError:
+        return None, True, "JSON nesting exceeds the bounded parser limit"
+    except json.JSONDecodeError:
+        if json_looking:
+            return None, True, "malformed or truncated JSON-looking carrier"
+        return None, False, None
+    except (TypeError, ValueError):
+        if json_looking:
+            return None, True, "malformed or truncated JSON-looking carrier"
+        return None, False, None
+
+
+def agy_binary_text_segments(value: bytes, *, maximum: int) -> tuple[list[str], str | None]:
+    """Extract bounded printable source segments without a minimum-length blind spot."""
+
+    decoded = value.decode("utf-8", errors="replace")
+    characters = [
+        character if character != "\ufffd" and (character in "\n\r\t" or character.isprintable()) else "\0"
+        for character in decoded
+    ]
+    segments: list[str] = []
+    for raw_segment in "".join(characters).split("\0"):
+        segment = raw_segment.strip()
+        if not segment:
+            continue
+        segments.append(segment)
+        if len(segments) > maximum:
+            return [], f"binary carrier exceeds bounded segment ceiling {maximum}"
+    return segments, None
+
+
+def agy_prompt_cell_candidates(
+    value: Any,
+    *,
+    column: str,
+    maximum: int,
+) -> tuple[list[tuple[str, int, str]], str | None]:
+    """Return bounded prompt candidates tied to exact source segments.
+
+    Text cells are one exact segment. Binary cells may contribute independently
+    grounded printable segments through the legacy bounded binary splitter; the
+    record adapter, not this helper, enforces exact-one cardinality.
+    """
+
+    if value is None:
+        return [], None
+    if isinstance(value, str):
+        segments = [value]
+    elif isinstance(value, bytes):
+        segments, segment_error = agy_binary_text_segments(value, maximum=maximum)
+        if segment_error:
+            return [], f"{column} {segment_error}"
+    else:
+        return [], f"{column} has unsupported SQLite value type"
+    if len(segments) > maximum:
+        return [], f"{column} exceeds bounded prompt-candidate ceiling {maximum}"
+
+    candidates: list[tuple[str, int, str]] = []
+    for ordinal, segment in enumerate(segments):
+        text = segment.strip()
+        if not text:
+            continue
+        structured, parsed, parse_error = agy_parse_json(text)
+        if parse_error:
+            return [], f"{column} contains an {parse_error}"
+        if parsed:
+            candidate, error = _agy_json_prompt_candidate(structured)
+        else:
+            candidate = text
+            error = None
+        if error:
+            return [], f"{column} contains an {error}"
+        if candidate:
+            candidates.append((column, ordinal, candidate))
+        if len(candidates) > maximum:
+            return [], f"{column} exceeds bounded prompt-candidate ceiling {maximum}"
+    return candidates, None
+
+
+def agy_nonprompt_cell_error(
+    value: Any,
+    *,
+    column: str,
+    maximum: int,
+) -> str | None:
+    """Reject a purported non-prompt row when any prompt carrier is visible."""
+
+    if value is None:
+        return None
+    if isinstance(value, str):
+        spans = [value]
+    elif isinstance(value, bytes):
+        spans, segment_error = agy_binary_text_segments(value, maximum=maximum)
+        if segment_error:
+            return f"{column} {segment_error}"
+    else:
+        return f"{column} has unsupported SQLite value type"
+    prompt_markers = ("# FLAME", "## FLAME", "Complete task ", "/goal")
+    structural_marker = re.compile(
+        r"(?:^|[\s,{])(?:prompt|instructions)\s*[:=]|"
+        r"(?:^|[\s,{])role\s*[:=]\s*(?:user|human|operator)|"
+        r"(?:^|[\s,{])type\s*[:=]\s*(?:user|human|operator|prompt)",
+        re.IGNORECASE,
+    )
+    for span in spans:
+        if any(marker in span for marker in prompt_markers) or structural_marker.search(span):
+            return "non-prompt step contains a prompt-bearing marker"
+        structured, parsed, parse_error = agy_parse_json(span)
+        if parse_error:
+            return parse_error
+        if not parsed:
+            continue
+        if structured_user_prompt_marker(structured):
+            return "non-prompt step contains a structured prompt-bearing marker"
+    return None
+
+
+def agy_unit_receipt(
+    *,
+    disposition: str,
+    contract_id: str,
+    contract_digest: str,
+    signature: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "version": SOURCE_ADAPTER_CONTRACT_VERSION,
+        "disposition": disposition,
+        "contract_id": contract_id,
+        "contract_digest": contract_digest,
+        "signature": signature,
+        "related_signatures": {},
+        "related_evidence": {},
+    }
+
+
 def scan_agy_conversations(
     lifecycle: Any,
     cursor: dict[str, Any],
@@ -2964,32 +5072,62 @@ def scan_agy_conversations(
     root = Path(lifecycle.AGY_CLI_CONVERSATIONS)
     coverage = {"agy-cli-conversations": empty_coverage()}
     counts = coverage["agy-cli-conversations"]
-    if not root.exists():
+    empty_result = {
+        "discovered": {},
+        "processed": {},
+        "adapted_unit_receipts": {},
+        "excluded_unit_receipts": {},
+        "errors": [],
+        "unsupported": [],
+        "pending_files": 0,
+        "attempted_files": 0,
+        "coverage": coverage,
+    }
+    if os.path.lexists(root) and root.is_symlink():
+        counts["errors"] += 1
         return [], {
-            "discovered": {},
-            "processed": {},
-            "errors": [],
-            "unsupported": [],
-            "pending_files": 0,
-            "attempted_files": 0,
-            "coverage": coverage,
+            **empty_result,
+            "errors": ["agy-cli-conversations: configured conversation root is a symlink"],
+        }
+    home = getattr(lifecycle, "HOME", None)
+    if home is None:
+        counts["errors"] += 1
+        return [], {
+            **empty_result,
+            "errors": ["agy-cli-conversations: configured HOME is unavailable for root custody"],
+        }
+    root_contract_error = agy_conversation_root_error(Path(home), root)
+    if root_contract_error:
+        counts["errors"] += 1
+        return [], {
+            **empty_result,
+            "errors": [f"agy-cli-conversations: {root_contract_error}"],
+        }
+    if not root.exists():
+        return [], empty_result
+    if not root.is_dir():
+        counts["errors"] += 1
+        return [], {
+            **empty_result,
+            "errors": ["agy-cli-conversations: configured conversation root is not a directory"],
         }
     root_escape = source_path_error(root, containment_root=root)
     if root_escape:
         counts["errors"] += 1
         return [], {
-            "discovered": {},
-            "processed": {},
+            **empty_result,
             "errors": [f"agy-cli-conversations:{root}: {root_escape}"],
-            "unsupported": [],
-            "pending_files": 0,
-            "attempted_files": 0,
-            "coverage": coverage,
         }
     cutoff = None if days is None else dt.datetime.now(dt.timezone.utc).timestamp() - days * 86400
     events: list[dict[str, Any]] = []
     discovered: dict[str, Any] = {}
     processed: dict[str, Any] = {}
+    adapted_unit_receipts: dict[str, Any] = {}
+    excluded_unit_receipts: dict[str, Any] = {}
+    prior_adapted_receipts = cursor.get("adapted_unit_receipts") or {}
+    prior_excluded_receipts = cursor.get("excluded_unit_receipts") or {}
+    adapter_contract = source_adapter_contract()
+    contract_digest = str(adapter_contract["digest"])
     errors: list[str] = []
     pending = 0
     attempted = 0
@@ -3013,9 +5151,21 @@ def scan_agy_conversations(
             counts["errors"] += 1
             errors.append(f"agy-cli-conversations:{path}: {escape}")
             continue
+        relative = path.relative_to(root)
+        if len(relative.parts) != 1:
+            counts["errors"] += 1
+            errors.append(
+                f"agy-cli-conversations:{path}: unsupported database path role; "
+                "conversation databases must be direct children of the configured root"
+            )
+            continue
+        storage_error = agy_conversation_storage_error(path)
+        if storage_error:
+            counts["errors"] += 1
+            errors.append(f"agy-cli-conversations:{path}: {storage_error}")
+            continue
         storage_signature = agy_storage_signature(path)
         if storage_signature is None:
-            counts["discovered"] += 1
             counts["errors"] += 1
             errors.append(f"agy-cli-conversations:{path}: source cannot be stat'ed")
             continue
@@ -3023,7 +5173,17 @@ def scan_agy_conversations(
         if cutoff is not None and source_mtime < cutoff:
             continue
         key = cursor_unit_key("agy-cli-conversations", path)
-        cached_signature = (cursor.get("files") or {}).get(key)
+        cached_file_signature = (cursor.get("files") or {}).get(key)
+        cached_adapted_receipt = prior_adapted_receipts.get(key) if isinstance(prior_adapted_receipts, dict) else None
+        cached_excluded_receipt = (
+            prior_excluded_receipts.get(key) if isinstance(prior_excluded_receipts, dict) else None
+        )
+        cached_receipt = cached_adapted_receipt or cached_excluded_receipt
+        cached_signature = (
+            cached_file_signature
+            if isinstance(cached_file_signature, dict)
+            else (cached_receipt.get("signature") if isinstance(cached_receipt, dict) else None)
+        )
         cache_generation_matches = bool(
             isinstance(cached_signature, dict)
             and all(cached_signature.get(field) == value for field, value in storage_signature.items())
@@ -3031,13 +5191,49 @@ def scan_agy_conversations(
         signature = dict(cached_signature) if cache_generation_matches else {**storage_signature, "content_sha256": ""}
         discovered[key] = signature
         counts["discovered"] += 1
-        if cache_generation_matches:
+        cached_adapted = bool(
+            cache_generation_matches
+            and cached_file_signature == cached_signature
+            and source_unit_receipt_matches(
+                cached_adapted_receipt,
+                disposition="adapted",
+                contract_id="agy-conversation-v1",
+                contract_digest=contract_digest,
+                source="agy-cli-conversations",
+                locator=str(path),
+                signature=signature,
+            )
+        )
+        cached_excluded = bool(
+            cache_generation_matches
+            and cached_file_signature is None
+            and source_unit_receipt_matches(
+                cached_excluded_receipt,
+                disposition="excluded",
+                contract_id="agy-conversation-nonprompt-v1",
+                contract_digest=contract_digest,
+                source="agy-cli-conversations",
+                locator=str(path),
+                signature=signature,
+            )
+        )
+        if cached_adapted or cached_excluded:
             if agy_storage_signature(path) != storage_signature:
                 counts["errors"] += 1
                 errors.append(f"{key}: database or WAL changed during cache validation; cursor not advanced")
                 continue
-            processed[key] = signature
-            counts["converged"] += 1
+            if agy_conversation_storage_error(path):
+                counts["errors"] += 1
+                errors.append(f"{key}: SQLite sidecar custody changed during cache validation; cursor not advanced")
+                continue
+            if cached_adapted:
+                processed[key] = signature
+                adapted_unit_receipts[key] = cached_adapted_receipt
+                counts["adapted"] += 1
+                counts["converged"] += 1
+            else:
+                excluded_unit_receipts[key] = cached_excluded_receipt
+                counts["excluded"] += 1
             continue
         if not budget.claim():
             pending += 1
@@ -3045,14 +5241,17 @@ def scan_agy_conversations(
             continue
         attempted += 1
         try:
-            connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-        except sqlite3.Error as exc:
+            connection = sqlite3.connect(f"{path.resolve(strict=True).as_uri()}?mode=ro", uri=True)
+        except (OSError, sqlite3.Error) as exc:
             counts["errors"] += 1
             errors.append(f"{key}: {exc}")
             continue
         connection.row_factory = sqlite3.Row
         try:
             connection.execute("BEGIN")
+            schema_error = agy_steps_schema_error(connection)
+            if schema_error:
+                raise ValueError(schema_error)
             max_rows = active_limits.max_events_per_unit * 10
             record_count, source_bytes, limit_kind = bounded_sqlite_lengths(
                 connection,
@@ -3073,7 +5272,7 @@ def scan_agy_conversations(
                     f"{active_limits.max_source_bytes_per_unit}"
                 )
             rows = connection.execute(
-                "SELECT idx, step_type, step_payload, metadata, task_details, error_details, "
+                "SELECT idx, step_type, status, step_payload, metadata, task_details, error_details, "
                 "render_info FROM steps ORDER BY idx LIMIT ?",
                 (max_rows,),
             ).fetchall()
@@ -3084,6 +5283,7 @@ def scan_agy_conversations(
                         for column in (
                             "idx",
                             "step_type",
+                            "status",
                             "step_payload",
                             "metadata",
                             "task_details",
@@ -3103,9 +5303,13 @@ def scan_agy_conversations(
             continue
         db_events: list[dict[str, Any]] = []
         db_error: str | None = None
+        seen_indexes: set[int] = set()
+        prompt_columns = tuple(str(column) for column in SOURCE_RECORD_SCHEMAS["agy-conversation-v1"]["prompt_columns"])
+        max_candidates = int(SOURCE_RECORD_SCHEMAS["agy-conversation-v1"]["max_prompt_candidates_per_record"])
         for row in rows:
             step_type = row["step_type"]
             row_index = row["idx"]
+            status = row["status"]
             if (
                 isinstance(step_type, bool)
                 or not isinstance(step_type, int)
@@ -3113,37 +5317,54 @@ def scan_agy_conversations(
                 or isinstance(row_index, bool)
                 or not isinstance(row_index, int)
                 or row_index < 0
+                or isinstance(status, bool)
+                or not isinstance(status, int)
+                or status < 0
             ):
                 db_error = f"{key}: malformed step identity: exact non-negative integers required"
                 break
-            spans: list[str] = []
-            structured_values: list[Any] = []
-            for column in ("step_payload", "metadata", "task_details", "error_details", "render_info"):
-                value = row[column]
-                if isinstance(value, str):
-                    value_spans = [value]
-                else:
-                    value_spans = lifecycle.blob_text_spans(value)
-                spans.extend(value_spans)
-                for span in value_spans:
-                    try:
-                        structured_values.append(json.loads(span))
-                    except (TypeError, ValueError):
-                        pass
+            if row_index in seen_indexes:
+                db_error = f"{key}: malformed step identity: duplicate idx values are not allowed"
+                break
+            seen_indexes.add(row_index)
             if step_type != 14:
-                prompt_markers = ("# FLAME", "## FLAME", "Complete task ", "/goal")
-                hidden_prompt = any(any(marker in span for marker in prompt_markers) for span in spans)
-                hidden_prompt = hidden_prompt or any(
-                    structured_user_prompt_marker(value) for value in structured_values
-                )
-                if hidden_prompt:
-                    db_error = f"{key}: Agy step type {step_type} requires an explicit prompt adapter"
+                for column in prompt_columns:
+                    marker_error = agy_nonprompt_cell_error(
+                        row[column],
+                        column=column,
+                        maximum=max_candidates,
+                    )
+                    if marker_error:
+                        db_error = (
+                            f"{key}: Agy step type {step_type} requires an explicit prompt adapter; "
+                            "typed non-prompt exclusion rejected: "
+                            f"{marker_error}"
+                        )
+                        break
+                if db_error:
                     break
                 continue
-            text = lifecycle.agy_prompt_from_spans(spans)
-            if not text:
-                db_error = f"{key}: Agy prompt step could not be grounded in an exact source segment"
+            candidates: list[tuple[str, int, str]] = []
+            for column in prompt_columns:
+                cell_candidates, candidate_error = agy_prompt_cell_candidates(
+                    row[column],
+                    column=column,
+                    maximum=max_candidates,
+                )
+                if candidate_error:
+                    db_error = f"{key}: Agy prompt step has malformed carrier metadata: {candidate_error}"
+                    break
+                candidates.extend(cell_candidates)
+                if len(candidates) > max_candidates:
+                    db_error = f"{key}: Agy prompt step exceeds bounded prompt-candidate ceiling {max_candidates}"
+                    break
+            if db_error:
                 break
+            if len(candidates) != 1:
+                cardinality = "none" if not candidates else "multiple"
+                db_error = f"{key}: Agy prompt step has {cardinality} grounded source segments; exactly one is required"
+                break
+            carrier_column, carrier_ordinal, text = candidates[0]
             task_body, body_kind = lifecycle.normalize_task_body(text)
             provenance, authority = (
                 ("delegated_task_frame", "derived")
@@ -3156,8 +5377,9 @@ def scan_agy_conversations(
                     "session_ref": f"agy-cli-conversations:{path.stem}:{path}",
                     "event_ref": row_index,
                     "event_index": row_index,
-                    "text_index": 0,
+                    "text_index": carrier_ordinal,
                     "source_locator": f"{path}#step:{row['idx']}",
+                    "source_segment": carrier_column,
                     "timestamp": lifecycle.iso_from_ts(source_mtime),
                     "text": text,
                     "task_body": task_body if body_kind == "flame_with_task_body" else "",
@@ -3178,13 +5400,47 @@ def scan_agy_conversations(
             counts["errors"] += 1
             errors.append(f"{key}: database or WAL changed during scan; cursor not advanced")
             continue
+        if agy_conversation_storage_error(path):
+            counts["errors"] += 1
+            errors.append(f"{key}: SQLite sidecar custody changed during scan; cursor not advanced")
+            continue
         events.extend(db_events)
-        processed[key] = signature
-        counts["converged"] += 1
-        counts["scanned"] += 1
+        if db_events:
+            processed[key] = signature
+            adapted_unit_receipts[key] = agy_unit_receipt(
+                disposition="adapted",
+                contract_id="agy-conversation-v1",
+                contract_digest=contract_digest,
+                signature=signature,
+            )
+            counts["adapted"] += 1
+            counts["converged"] += 1
+            counts["scanned"] += 1
+        else:
+            excluded_unit_receipts[key] = agy_unit_receipt(
+                disposition="excluded",
+                contract_id="agy-conversation-nonprompt-v1",
+                contract_digest=contract_digest,
+                signature=signature,
+            )
+            counts["excluded"] += 1
+    final_root_error = agy_conversation_root_error(Path(home), root)
+    if final_root_error or not root.is_dir():
+        counts["errors"] += 1
+        counts["adapted"] = 0
+        counts["excluded"] = 0
+        counts["converged"] = 0
+        counts["scanned"] = 0
+        errors.append("agy-cli-conversations: conversation root custody changed during scan; cursor not advanced")
+        events = []
+        processed = {}
+        adapted_unit_receipts = {}
+        excluded_unit_receipts = {}
     return events, {
         "discovered": discovered,
         "processed": processed,
+        "adapted_unit_receipts": adapted_unit_receipts,
+        "excluded_unit_receipts": excluded_unit_receipts,
         "errors": errors,
         "unsupported": [],
         "pending_files": pending,
@@ -3292,11 +5548,14 @@ def scan_native_sources(
     events.extend(agy_events)
     files = dict(regular["files"])
     files.update(opencode_scan["processed"])
+    for key in agy_scan["discovered"]:
+        files.pop(key, None)
     files.update(agy_scan["processed"])
     discovered = dict(regular["discovered"])
     discovered.update(opencode_scan["discovered"])
     discovered.update(agy_scan["discovered"])
     source_errors = [*regular["errors"], *opencode_scan["errors"], *agy_scan["errors"]]
+    source_alias_blocker_counts = dict(regular.get("source_alias_blocker_counts") or {})
     unsupported = [*regular["unsupported"], *opencode_scan["unsupported"], *agy_scan["unsupported"]]
     pending_files = sum(int(result.get("pending_files") or 0) for result in (regular, opencode_scan, agy_scan))
     source_coverage = merge_coverage(
@@ -3304,17 +5563,58 @@ def scan_native_sources(
         opencode_scan["coverage"],
         agy_scan["coverage"],
     )
-    raw_prior_unresolved_units = loaded_cursor.get("unresolved_units")
+    raw_prior_unresolved_units = [] if source_cache_reset else loaded_cursor.get("unresolved_units")
     prior_unresolved_set = set(raw_prior_unresolved_units) if isinstance(raw_prior_unresolved_units, list) else set()
+    # For receipt emission purposes, always read the full prior unresolved set from the
+    # loaded cursor — even on a cache reset — so we can emit exclusion receipts for
+    # keys that are cleared by a scanner-version bump (version-superseded) or by path
+    # reclamation (source-missing). Without receipts, merge_cursor rejects every proposal
+    # for any cleared key that cannot be proven resolved.
+    _raw_all_prior = loaded_cursor.get("unresolved_units")
+    _all_prior_unresolved_set = set(_raw_all_prior) if isinstance(_raw_all_prior, list) else set()
+    # Build a (source, path) lookup from the current discovered keys so we can detect
+    # which prior unresolved keys are covered by a newly-keyed (version-superseded)
+    # entry in the proposed manifest. Those do not need source-missing receipts —
+    # merge_cursor handles them via its own version-superseded exception.
+    _discovered_by_source_path: set[tuple[str, str]] = set()
+    for _dk in discovered:
+        if isinstance(_dk, str):
+            _dp = _dk.split(":", 2)
+            if len(_dp) == 3:
+                _discovered_by_source_path.add((_dp[1], _dp[2]))
+    # Partition prior unresolved OLD-scanner-version keys. After a version bump a key
+    # can never be rediscovered under its recorded form, so each old key is either
+    # version-superseded (its (source, path) reappears under the current key format —
+    # merge_cursor's own exception resolves it, no receipt needed) or source-missing
+    # (the pair is gone entirely: reclaimed path, or a deleted virtual key such as
+    # opencode-db#session:... — resolved below with an exclusion receipt). Same-version
+    # units that vanish keep the fail-closed "previously tracked source obligations are
+    # unavailable" error instead — a missing volume must surface as an error, never as
+    # a silent exclusion.
+    _current_scan_prefix = f"scan-v{SCANNER_VERSION}"
+    _missing_source_keys_early: set[str] = set()
+    _version_superseded_keys_early: set[str] = set()
+    for _key in _all_prior_unresolved_set - set(discovered):
+        if not isinstance(_key, str):
+            continue
+        _parts = _key.split(":", 2)
+        if len(_parts) != 3 or not _parts[0].startswith("scan-v") or _parts[0] == _current_scan_prefix:
+            continue
+        if (_parts[1], _parts[2]) in _discovered_by_source_path:
+            _version_superseded_keys_early.add(_key)
+        else:
+            _missing_source_keys_early.add(_key)
     missing_prior_unresolved: set[str] = set()
     if effective_days is None:
         missing_obligation_sources: set[str] = set()
         missing_prior_unresolved = prior_unresolved_set - set(discovered)
-        for key in sorted(missing_prior_unresolved):
+        # Keys already resolved by the missing-source path or by a version-superseded
+        # newer-key do not represent genuine "source unavailable" obligations — exclude them.
+        for key in sorted(missing_prior_unresolved - _missing_source_keys_early - _version_superseded_keys_early):
             parts = key.split(":", 2) if isinstance(key, str) else []
             source = parts[1] if len(parts) == 3 and parts[0].startswith("scan-v") else "unknown"
             missing_obligation_sources.add(source)
-        prior_families = loaded_cursor.get("source_families")
+        prior_families = {} if source_cache_reset else loaded_cursor.get("source_families")
         prior_families = prior_families if isinstance(prior_families, dict) else {}
         for source, prior_counts in prior_families.items():
             if not isinstance(source, str) or not isinstance(prior_counts, dict):
@@ -3358,18 +5658,16 @@ def scan_native_sources(
     )
     adapter_gap_routes = build_adapter_gap_routes(adapter_gaps, policy)
     excluded_unit_receipts = dict(regular["excluded_unit_receipts"])
-    excluded_unit_receipts_digest = digest(excluded_unit_receipts)
-    source_exclusion_counts = dict(
-        sorted(
-            Counter(
-                str(receipt.get("contract_id") or "unknown")
-                for receipt in excluded_unit_receipts.values()
-                if isinstance(receipt, dict)
-            ).items()
-        )
-    )
-    excluded_source_count = len(excluded_unit_receipts)
+    for key in agy_scan["discovered"]:
+        excluded_unit_receipts.pop(key, None)
+    excluded_unit_receipts.update(agy_scan.get("excluded_unit_receipts") or {})
     adapted_unit_receipts = dict(regular["adapted_unit_receipts"])
+    for key in opencode_scan["discovered"]:
+        adapted_unit_receipts.pop(key, None)
+    adapted_unit_receipts.update(opencode_scan.get("adapted_unit_receipts") or {})
+    for key in agy_scan["discovered"]:
+        adapted_unit_receipts.pop(key, None)
+    adapted_unit_receipts.update(agy_scan.get("adapted_unit_receipts") or {})
     adapted_unit_receipts_digest = digest(adapted_unit_receipts)
     source_adapter_counts = dict(
         sorted(
@@ -3381,6 +5679,44 @@ def scan_native_sources(
         )
     )
     adapted_source_count = len(adapted_unit_receipts)
+    # Emit source-missing exclusion receipts for the pre-computed missing keys.
+    # These paths have been reclaimed from disk and will never re-enter discovery;
+    # without receipts, merge_cursor's invariant rejects every future proposal.
+    _now_utc = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    _missing_source_keys = _missing_source_keys_early
+    for _key in sorted(_missing_source_keys):
+        if _key not in excluded_unit_receipts:
+            excluded_unit_receipts[_key] = {
+                "version": SOURCE_ADAPTER_CONTRACT_VERSION,
+                "disposition": "excluded",
+                "contract_id": SOURCE_MISSING_EXCLUSION_ID,
+                "contract_digest": adapter_contract["digest"],
+                "related_signatures": {},
+                "related_evidence": {"observed_missing_at": _now_utc},
+            }
+    # Remove resolved missing-source keys and version-superseded keys from the
+    # "unresolved" pool so they do not re-appear in unresolved_units on future scans.
+    # Version-superseded keys are covered by the newer-version key in discovered;
+    # they need not be tracked separately.
+    missing_prior_unresolved -= _missing_source_keys
+    missing_prior_unresolved -= _version_superseded_keys_early
+    # Count missing-source units as "discovered" in source_coverage so the
+    # family totals stay consistent with source_unit_count (validator invariant).
+    for _key in sorted(_missing_source_keys):
+        _parts = _key.split(":", 2)
+        _src = _parts[1] if len(_parts) == 3 and _parts[0].startswith("scan-v") else "unknown"
+        coverage_row(source_coverage, _src)["discovered"] += 1
+    excluded_unit_receipts_digest = digest(excluded_unit_receipts)
+    source_exclusion_counts = dict(
+        sorted(
+            Counter(
+                str(receipt.get("contract_id") or "unknown")
+                for receipt in excluded_unit_receipts.values()
+                if isinstance(receipt, dict)
+            ).items()
+        )
+    )
+    excluded_source_count = len(excluded_unit_receipts)
     for counts in source_coverage.values():
         counts["excluded"] = 0
         counts["adapted"] = 0
@@ -3392,7 +5728,9 @@ def scan_native_sources(
         parts = key.split(":", 2)
         source = parts[1] if len(parts) == 3 and parts[0].startswith("scan-v") else "unknown"
         coverage_row(source_coverage, source)["adapted"] += 1
-    source_units = sorted(discovered)
+    # Include missing-source keys in source_units so merge_cursor's invariant
+    # sees them as resolved (they are now in excluded_unit_receipts too).
+    source_units = sorted(set(discovered) | _missing_source_keys)
     source_unit_count = len(source_units)
     source_units_digest = digest(source_units)
     unsupported_source_count = len(unsupported_units)
@@ -3412,6 +5750,8 @@ def scan_native_sources(
     else:
         preserved_unresolved = set(prior_unresolved_set)
         preserved_unresolved -= set(discovered)
+        preserved_unresolved -= _missing_source_keys
+        preserved_unresolved -= _version_superseded_keys_early
         unresolved_units = sorted(preserved_unresolved | current_unresolved_units)
     unresolved_unit_count = len(unresolved_units)
     unresolved_units_digest = digest(unresolved_units)
@@ -3447,6 +5787,7 @@ def scan_native_sources(
         "adapted_source_count": adapted_source_count,
         "source_adapter_counts": source_adapter_counts,
         "adapted_unit_receipts_digest": adapted_unit_receipts_digest,
+        "source_alias_blocker_counts": source_alias_blocker_counts,
         "resource_limits": {key: value for key, value in vars(limits).items()},
         "work_units_unbounded": unbounded,
         "prior_all_manifest": (
@@ -3497,6 +5838,7 @@ def scan_native_sources(
         "source_adapter_counts": source_adapter_counts,
         "adapted_unit_receipts": adapted_unit_receipts,
         "adapted_unit_receipts_digest": adapted_unit_receipts_digest,
+        "source_alias_blocker_counts": source_alias_blocker_counts,
         "excluded_file_keys": regular.get("excluded_file_keys") or [],
         "adapter_gaps": adapter_gaps,
         "adapter_gap_routes": adapter_gap_routes,
@@ -3519,6 +5861,52 @@ def scan_native_sources(
     if cursor_errors:
         raise ValueError("scanner produced invalid source cursor: " + "; ".join(cursor_errors))
     return events, updated
+
+
+def check_cursor_state(paths: LedgerPaths) -> list[str]:
+    """Cheap read-only source-cursor coherence probe (seconds, no journal replay).
+
+    Proves the ask-lineage control plane can converge: the cursor parses and is
+    shape-valid, it is bound to the current private checkpoint, its scanner
+    version is current, and no unresolved obligation is orphaned on a stale
+    scan-version key (the merge-deadlock class fixed by the version-superseded
+    exception — a fresh drain pass clears them, and this probe fails until it has).
+    """
+
+    errors: list[str] = []
+    loaded_cursor, cursor_read_errors = load_json_strict(paths.cursor)
+    if cursor_read_errors:
+        return ["stored source cursor unreadable: " + "; ".join(cursor_read_errors)]
+    if not loaded_cursor:
+        return ["stored source cursor is empty; run a scan first"]
+    shape_errors = validate_cursor_shape(loaded_cursor, role="stored")
+    if shape_errors:
+        return ["invalid stored source cursor: " + "; ".join(shape_errors)]
+    marker, marker_errors = load_json_strict(paths.private_snapshot)
+    if (
+        marker_errors
+        or not marker
+        or marker.get("source_cursor_digest") != cursor_digest(loaded_cursor)
+        or ((marker.get("journal_signatures") or {}).get("cursor")) != _path_signature(paths.cursor)
+    ):
+        errors.append("stored source cursor is not bound to the current private checkpoint")
+    if loaded_cursor.get("scanner_version") != SCANNER_VERSION:
+        errors.append(
+            f"cursor scanner_version {loaded_cursor.get('scanner_version')} != current {SCANNER_VERSION};"
+            " next scan will reset the source cache"
+        )
+    current_prefix = f"scan-v{SCANNER_VERSION}:"
+    orphaned = [
+        key
+        for key in (loaded_cursor.get("unresolved_units") or [])
+        if isinstance(key, str) and not key.startswith(current_prefix)
+    ]
+    if orphaned:
+        errors.append(
+            f"{len(orphaned)} unresolved obligations are orphaned on stale scan-version keys"
+            " (run an unbounded drain pass to resolve them)"
+        )
+    return errors
 
 
 def parse_args() -> argparse.Namespace:
@@ -3546,11 +5934,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--write", action="store_true", help="append journals and refresh projections")
     parser.add_argument("--check", action="store_true", help="verify journal/projection convergence")
+    parser.add_argument(
+        "--check-cursor",
+        action="store_true",
+        help="cheap read-only cursor coherence probe (checkpoint binding, scanner version, no orphaned obligations)",
+    )
     parser.add_argument("--require-scope", choices=("all",), help="fail unless source scope matches")
     parser.add_argument("--root", type=Path, default=Path(os.environ.get("LIMEN_ROOT", REPO)))
     parser.add_argument("--private-root", type=Path)
     parser.add_argument("--public-markdown", type=Path)
     parser.add_argument("--public-snapshot", type=Path)
+    parser.add_argument("--public-seal", type=Path)
     parser.add_argument("--policy", type=Path)
     parser.add_argument(
         "--source-home",
@@ -3569,8 +5963,18 @@ def main() -> int:
         private_root=args.private_root.resolve() if args.private_root else None,
         public_markdown=args.public_markdown.resolve() if args.public_markdown else None,
         public_snapshot=args.public_snapshot.resolve() if args.public_snapshot else None,
+        public_seal=args.public_seal.resolve() if args.public_seal else None,
         policy=args.policy.resolve() if args.policy else None,
     )
+    if args.check_cursor:
+        errors = check_cursor_state(paths)
+        if errors:
+            for error in errors:
+                print(f"FAIL: {error}")
+            return 1
+        print("prompt-atom-cursor: PASS")
+        return 0
+
     if args.check:
         errors = check_ledger(paths, require_scope=args.require_scope)
         if errors:

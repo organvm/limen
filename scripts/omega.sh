@@ -112,7 +112,13 @@ for raw in sensor_path.read_text(encoding="utf-8").splitlines():
     parts = raw.split("\t", 5)
     if len(parts) != 6:
         raise SystemExit(f"invalid omega sensor row: {raw!r}")
-    sensor_id, check_index, tier, label, command, timeout = parts
+    sensor_id, check_index, tier, label, command, timeout_token = parts
+    try:
+        timeout = json.loads(timeout_token)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"invalid omega sensor timeout {timeout_token!r}: {exc}") from exc
+    if timeout is not None and (type(timeout) is not int or timeout <= 0):
+        raise SystemExit(f"invalid omega sensor timeout: {timeout!r}")
     rows.append(
         {
             "check_index": int(check_index),
@@ -120,7 +126,7 @@ for raw in sensor_path.read_text(encoding="utf-8").splitlines():
             "label": label,
             "tier": tier,
             "command": command,
-            "timeout": int(timeout),
+            "timeout": timeout,
         }
     )
 normalized = json.dumps(
@@ -168,10 +174,15 @@ rung "armed-valve (no silent-off)" det python3 "$ROOT/scripts/armed-valve-audit.
 # 4. ask-gate — every intake-window ask is predicate-shaped/bounded/owned (no SPLIT verdicts).
 rung "ask-gate (intake predicate-shaped)" det python3 "$ROOT/scripts/ask-gate.py" --audit --since 7 --check --top 0
 
-# 5. ask-lineage convergence has a manual predicate, but its heartbeat sensor remains DARK until a
-#    measured first-pass + idempotent-no-op canary proves the host-safe activation gate. It is not
-#    Omega-eligible before then; report the missing proof explicitly instead of running it here.
-skip_rung "ask-lineage convergence" det "prompt-corpus sensor is dark pending a measured bounded canary"
+# 5. ask-lineage convergence — the prompt-corpus control plane is coherent and can advance:
+#    cursor checkpoint-bound, scanner version current, no unresolved obligation orphaned on a
+#    stale scan-version key (the merge-deadlock class, fixed 2026-07-14). The rung goes live
+#    automatically when the sensor arms; until then it reports the one remaining atom.
+if [[ "${LIMEN_PROMPT_ATOM_CONTROL:-0}" == "1" ]]; then
+  rung "ask-lineage convergence" det python3 "$ROOT/scripts/prompt-atom-ledger.py" --check-cursor
+else
+  skip_rung "ask-lineage convergence" det "prompt-corpus sensor dark: agy steps-schema adapter gap keeps the beat command exit-1 (see sensors.yaml prompt-corpus-control)"
+fi
 
 # 6. ship-gate — every product-facing done-claim resolves to a reachable external artifact.
 rung "ship-gate (products reachable)" live python3 "$ROOT/scripts/ship-gate.py" --check
@@ -179,16 +190,12 @@ rung "ship-gate (products reachable)" live python3 "$ROOT/scripts/ship-gate.py" 
 # 7. heal-convergence — the healer converges (no chronic cluster re-spending on the same wall).
 rung "heal-convergence (no chronic wall)" live python3 "$ROOT/scripts/heal-convergence.py" --check
 
-# 8. overnight-trial — the most recent unattended overnight run met its thresholds. Written by the
-#    trial harness to logs/overnight-trial.json ({pass:true,...}); SKIP until a trial has run.
+# 8. overnight-trial — the most recent unattended overnight run met its content-addressed contract.
+#    The producer verifies eight-hour coverage, every 90-minute value/blocker window, a warm handoff,
+#    at least one structured session seam, zero operator interventions, zero alerts, and
+#    evaluator/input hashes reconstructed from the exact bounded source receipts.
 if [[ -f "$ROOT/logs/overnight-trial.json" ]]; then
-  rung "overnight-trial (last run passed)" live python3 -c '
-import json,sys
-d=json.load(open("logs/overnight-trial.json"))
-ok=bool(d.get("pass"))
-print(f"  overnight-trial: pass={ok} "
-      f"hours={d.get(\"hours\")} seams={d.get(\"vendor_seams\")} merged={d.get(\"merged_prs\")} prompts={d.get(\"operator_prompts\")}")
-sys.exit(0 if ok else 1)'
+  rung "overnight-trial (last run passed)" live env LIMEN_ROOT="$ROOT" python3 "$ROOT/scripts/overnight-watch.py" --check-trial
 else
   skip_rung "overnight-trial (last run passed)" live "no logs/overnight-trial.json yet — run one trial"
 fi
@@ -207,7 +214,13 @@ else
   rung "credential-wall (secrets homed)" live python3 "$ROOT/scripts/credential-wall.py" --check
 fi
 
-# 12+. Registry-declared fixed-point checks. Sensor ids and commands remain inside sensors.yaml;
+# 12. lifecycle closure — preserved worktree debt is a diagnostic during ordinary dispatch, but
+#     Omega is the exact-zero fixed point: no debt roots and no accepted-reaper residue. The scan is
+#     intentionally live/explicit (not a dispatch hot-path check), so offline CI reports SKIP.
+rung "worktree lifecycle (exact zero)" live python3 "$ROOT/scripts/worktree-debt.py" \
+  --strict --fail-on-debt --fail-reapable-over-cap
+
+# 13+. Registry-declared fixed-point checks. Sensor ids and commands remain inside sensors.yaml;
 #      omega consumes only generic {id,index,tier,label} metadata and therefore needs no edit when a
 #      sensor is added or renamed. ``rung`` owns offline handling, so every live check remains an
 #      explicit SKIP rather than a fake pass.

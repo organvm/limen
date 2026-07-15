@@ -37,6 +37,48 @@ def _cursor(module, *, scope: str = "fixture") -> dict:
     }
 
 
+def _exact_authority_snapshot(module, *, policy_digest: str = "b" * 64) -> dict:
+    contract = module.current_source_adapter_contract()
+    return {
+        "semantic_digest": "a" * 64,
+        "policy_digest": policy_digest,
+        "source_cursor_digest": "c" * 64,
+        "source_scope": {
+            "scope": "all",
+            "target_scope": "all",
+            "all_baseline_complete": True,
+            "scanner_version": contract["scanner_version"],
+            "horizon_days": None,
+            "pending_files": 0,
+            "source_unit_count": 0,
+            "unsupported_source_count": 0,
+            "unresolved_unit_count": 0,
+            "excluded_source_count": 0,
+            "adapted_source_count": 0,
+            "source_manifest_digest": "d" * 64,
+            "all_source_manifest_digest": "d" * 64,
+            "source_units_digest": "e" * 64,
+            "unsupported_units_digest": "f" * 64,
+            "unresolved_units_digest": "1" * 64,
+            "excluded_unit_receipts_digest": "2" * 64,
+            "adapted_unit_receipts_digest": "3" * 64,
+            "source_adapter_contract": contract,
+            "source_scan_receipt": {
+                "sha256": "5" * 64,
+                "scanner_code_digest": "6" * 64,
+                "scan_payload_digest": "7" * 64,
+            },
+            "source_errors": [],
+            "source_families": {},
+            "source_alias_blocker_counts": {},
+            "adapter_gaps": [],
+        },
+        "coverage": {},
+        "counts": {},
+        "validation": {"ok": True, "errors": []},
+    }
+
+
 def _attest_exact_cursor(module, cursor: dict) -> dict:
     cursor.setdefault("base_revision", 0)
     cursor.setdefault("base_cursor_digest", module.cursor_digest({}))
@@ -92,6 +134,7 @@ def test_private_session_corpus_env_owns_default_journal_root(tmp_path: Path, mo
 
     assert paths.private_dir == durable / "prompt-atoms"
     assert paths.public_snapshot == tmp_path / "checkout" / "docs" / "prompt-atom-ledger.json"
+    assert paths.public_seal == tmp_path / "checkout" / "docs" / "prompt-authority-seal.json"
 
 
 def test_compound_prompt_yields_distinct_asks_and_correction(tmp_path: Path):
@@ -618,6 +661,416 @@ def test_public_projection_is_redacted_and_has_complete_opaque_queue(tmp_path: P
     assert public["coverage"]["current_unresolved_atoms"] == 1
     assert "lineage_id" not in public["unresolved_atoms"][0]
     assert "private but unresolved" not in paths.public_snapshot.read_text(encoding="utf-8")
+    assert corpus.check_ledger(paths) == []
+
+
+def test_prompt_authority_seal_is_counts_hash_only_private_safe_and_schema_bound():
+    corpus = _load()
+    private_prompt = "PRIVATE_RAW_PROMPT_DO_NOT_PUBLISH"
+    private_home = "/Users/example/.claude/projects/private/session.jsonl"
+    private_volume = "/Volumes/Private/opencode.db"
+    snapshot = {
+        "semantic_digest": "a" * 64,
+        "policy_digest": "b" * 64,
+        "source_cursor_digest": "c" * 64,
+        "source_scope": {
+            "scope": "partial:all",
+            "target_scope": "all",
+            "all_baseline_complete": False,
+            "horizon_days": None,
+            "pending_files": 0,
+            "source_unit_count": 17,
+            "unsupported_source_count": 3,
+            "unresolved_unit_count": 7,
+            "excluded_source_count": 4,
+            "adapted_source_count": 5,
+            "source_manifest_digest": "d" * 64,
+            "all_source_manifest_digest": None,
+            "source_units_digest": "e" * 64,
+            "unsupported_units_digest": "f" * 64,
+            "unresolved_units_digest": "1" * 64,
+            "excluded_unit_receipts_digest": "2" * 64,
+            "adapted_unit_receipts_digest": "3" * 64,
+            "source_adapter_contract": {"digest": "4" * 64},
+            "source_scan_receipt": {
+                "sha256": "5" * 64,
+                "scanner_code_digest": "6" * 64,
+                "scan_payload_digest": "7" * 64,
+            },
+            "source_errors": [
+                f"claude-projects:{private_home}: source path contains a symlink hop",
+                f"scan-v2:opencode-db:{private_volume}: SQLite row count 900 exceeds bounded ceiling 100",
+                "agy-cli-conversations:/private/agy.db: Agy prompt step could not be grounded in an exact source segment",
+                f"codex-sessions:/private/codex.jsonl: novel parser failure {private_prompt}",
+            ],
+            "source_families": {
+                "claude-projects": {
+                    "discovered": 7,
+                    "converged": 2,
+                    "adapted": 2,
+                    "excluded": 2,
+                    "errors": 1,
+                },
+                "opencode-db": {
+                    "discovered": 4,
+                    "converged": 1,
+                    "adapted": 1,
+                    "excluded": 1,
+                    "errors": 1,
+                    "unsupported": 1,
+                },
+                "agy-cli-conversations": {
+                    "discovered": 3,
+                    "converged": 1,
+                    "adapted": 1,
+                    "excluded": 1,
+                    "errors": 1,
+                },
+                "codex-sessions": {
+                    "discovered": 2,
+                    "converged": 1,
+                    "adapted": 1,
+                    "errors": 1,
+                    "unsupported": 1,
+                },
+                private_home: {"discovered": 1, "unsupported": 1},
+                private_prompt: {"discovered": 0},
+            },
+            "source_alias_blocker_counts": {"alias_changed": 1, private_home: 2},
+            "adapter_gaps": ["claude-projects", private_home],
+        },
+        "coverage": {
+            "occurrences": 100_000,
+            "operator_occurrences": 75_000,
+            "derived_occurrences": 25_000,
+            "excluded_occurrences": 1_000,
+            "atoms": 900_000,
+            "current_intents": 80_000,
+            "current_unresolved_atoms": 79_000,
+            "lineages": 70_000,
+            "assessed_atoms": 10_000,
+        },
+        "validation": {"ok": False, "errors": [f"atom-secret: {private_prompt}"]},
+        "atoms": [{"intent": private_prompt, "source_locator": private_home}],
+        "occurrences": [{"source_locator": private_volume}],
+    }
+
+    seal = corpus.prompt_authority_seal(snapshot)
+    payload = corpus.prompt_authority_seal_bytes(snapshot)
+    serialized = payload.decode("utf-8")
+
+    assert seal["schema"] == "limen.prompt-authority-seal.v1"
+    assert seal["schema_version"] == 1
+    assert seal["authority_ready"] is False
+    assert seal["validation_ok"] is False
+    assert seal["totals"] == {
+        "adapted": 5,
+        "adapter_gaps": 2,
+        "converged": 5,
+        "errors": 4,
+        "excluded": 4,
+        "pending": 0,
+        "source_units": 17,
+        "unsupported": 3,
+        "unresolved": 7,
+        "validation_errors": 1,
+    }
+    assert seal["source_families"]["claude-projects"]["discovered"] == 7
+    assert seal["source_alias_blocker_counts"]["alias_changed"] == 1
+    assert seal["source_alias_blocker_counts"]["other"] == 2
+    assert f"source-{corpus.digest(private_prompt)[:16]}" in seal["source_families"]
+    assert seal["source_error_reason_counts"] == {
+        "adapter_missing": 0,
+        "bounded_ceiling_exceeded": 1,
+        "containment_violation": 1,
+        "malformed_source": 0,
+        "other": 1,
+        "prompt_grounding_failed": 1,
+        "source_changed": 0,
+        "source_unavailable": 0,
+    }
+    assert corpus._prompt_authority_seal_digest_valid(seal)
+    assert len(payload) <= corpus.PROMPT_AUTHORITY_SEAL_MAX_BYTES
+    assert "atoms" not in seal
+    assert "occurrences" not in seal
+    assert "unresolved_atoms" not in seal
+    assert private_prompt not in serialized
+    assert private_home not in serialized
+    assert private_volume not in serialized
+    assert "/Users/" not in serialized
+    assert "/Volumes/" not in serialized
+    assert "/private/" not in serialized
+
+
+def test_prompt_authority_seal_ready_verdict_requires_complete_bound_evidence_and_is_derived():
+    corpus = _load()
+    exact_snapshot = _exact_authority_snapshot(corpus)
+
+    seal = corpus.prompt_authority_seal(exact_snapshot)
+
+    assert seal["validation_ok"] is True
+    assert seal["authority_ready"] is True
+    assert corpus._prompt_authority_seal_digest_valid(seal)
+
+    tampered = json.loads(json.dumps(seal))
+    tampered["authority_ready"] = False
+    tampered["content_hash"] = corpus.digest({key: value for key, value in tampered.items() if key != "content_hash"})
+    assert corpus._prompt_authority_seal_digest_valid(tampered) is False
+    assert "seal authority verdict does not match its evidence" in corpus._prompt_authority_seal_schema_errors(tampered)
+
+    missing_hash = json.loads(json.dumps(exact_snapshot))
+    del missing_hash["source_scope"]["source_scan_receipt"]["scan_payload_digest"]
+    incomplete = corpus.prompt_authority_seal(missing_hash)
+    assert incomplete["authority_ready"] is False
+    assert corpus._prompt_authority_seal_digest_valid(incomplete)
+
+
+def test_prompt_authority_seal_binds_projection_alias_blockers_and_current_contract():
+    corpus = _load()
+    snapshot = _exact_authority_snapshot(corpus)
+    public = corpus.public_projection(snapshot)
+    seal = corpus.prompt_authority_seal(snapshot, public=public)
+
+    assert seal["public_projection_digest"] == public["projection_digest"]
+    assert not any(seal["source_alias_blocker_counts"].values())
+    assert corpus._prompt_authority_seal_matches_public(seal, public)
+
+    blocker_public = json.loads(json.dumps(public))
+    blocker_public["source_scope"]["source_alias_blocker_counts"] = {"alias_changed": 1}
+    blocker_public["projection_digest"] = corpus.digest(
+        {key: value for key, value in blocker_public.items() if key != "projection_digest"}
+    )
+    assert corpus._prompt_authority_seal_matches_public(seal, blocker_public) is False
+
+    leaky_alias_public = json.loads(json.dumps(public))
+    leaky_alias_public["source_scope"]["source_alias_blocker_counts"] = {"/Users/private/source": 0}
+    leaky_alias_public["projection_digest"] = corpus.digest(
+        {key: value for key, value in leaky_alias_public.items() if key != "projection_digest"}
+    )
+    leaky_alias_seal = corpus.prompt_authority_seal(snapshot, public=leaky_alias_public)
+    assert corpus._prompt_authority_seal_matches_public(leaky_alias_seal, leaky_alias_public) is False
+
+    forged_ready = json.loads(json.dumps(seal))
+    forged_ready["public_projection_digest"] = blocker_public["projection_digest"]
+    forged_ready["source_alias_blocker_counts"]["alias_changed"] = 1
+    forged_ready["content_hash"] = corpus.digest(
+        {key: value for key, value in forged_ready.items() if key != "content_hash"}
+    )
+    assert corpus._prompt_authority_seal_digest_valid(forged_ready) is False
+    assert "seal authority verdict does not match its evidence" in corpus._prompt_authority_seal_schema_errors(
+        forged_ready
+    )
+
+    stale_contract_public = json.loads(json.dumps(public))
+    stale_contract_public["source_scope"]["source_adapter_contract"]["adapter_ids"].append("forged-adapter")
+    stale_contract_public["projection_digest"] = corpus.digest(
+        {key: value for key, value in stale_contract_public.items() if key != "projection_digest"}
+    )
+    stale_contract_seal = corpus.prompt_authority_seal(snapshot, public=stale_contract_public)
+    assert corpus._prompt_authority_seal_digest_valid(stale_contract_seal)
+    assert corpus._prompt_authority_seal_matches_public(stale_contract_seal, stale_contract_public) is False
+
+
+def test_prompt_authority_seal_rejects_rehashed_converged_aggregate_tamper():
+    corpus = _load()
+    snapshot = _exact_authority_snapshot(corpus)
+    snapshot["source_scope"]["source_unit_count"] = 1
+    snapshot["source_scope"]["source_families"] = {
+        "codex-sessions": {
+            "discovered": 1,
+            "converged": 1,
+            "adapted": 0,
+            "excluded": 0,
+            "pending": 0,
+            "errors": 0,
+            "unsupported": 0,
+        }
+    }
+    seal = corpus.prompt_authority_seal(snapshot)
+    assert seal["authority_ready"] is True
+    assert corpus._prompt_authority_seal_digest_valid(seal)
+
+    family_only = json.loads(json.dumps(seal))
+    family_only["source_families"]["codex-sessions"]["converged"] = 999
+    family_only["hashes"]["source_families"] = corpus.digest(
+        {
+            "families": family_only["source_families"],
+            "overflow": family_only["source_family_overflow"],
+        }
+    )
+    family_only["content_hash"] = corpus.digest(
+        {key: value for key, value in family_only.items() if key != "content_hash"}
+    )
+    assert corpus._prompt_authority_seal_digest_valid(family_only) is False
+    assert "seal source family converged counts do not match converged" in (
+        corpus._prompt_authority_seal_schema_errors(family_only)
+    )
+
+    coherent_aggregate = json.loads(json.dumps(family_only))
+    coherent_aggregate["totals"]["converged"] = 999
+    coherent_aggregate["content_hash"] = corpus.digest(
+        {key: value for key, value in coherent_aggregate.items() if key != "content_hash"}
+    )
+    assert corpus._prompt_authority_seal_digest_valid(coherent_aggregate) is False
+    assert "seal exact-all source family coverage is incomplete" in (
+        corpus._prompt_authority_seal_schema_errors(coherent_aggregate)
+    )
+
+
+@pytest.mark.parametrize("schema_version", [True, 1.0])
+def test_prompt_authority_seal_schema_version_requires_exact_integer(schema_version):
+    corpus = _load()
+    seal = corpus.prompt_authority_seal(_exact_authority_snapshot(corpus))
+    seal["schema_version"] = schema_version
+    seal["content_hash"] = corpus.digest({key: value for key, value in seal.items() if key != "content_hash"})
+
+    assert corpus._prompt_authority_seal_digest_valid(seal) is False
+    assert "seal schema version is stale" in corpus._prompt_authority_seal_schema_errors(seal)
+
+
+def test_require_all_rejects_exact_scope_without_authority_ready_seal(tmp_path: Path):
+    corpus = _load()
+    paths = _paths(corpus, tmp_path)
+    policy = corpus.load_policy(paths.policy)
+    snapshot = _exact_authority_snapshot(corpus, policy_digest=corpus.digest(policy))
+    del snapshot["source_scope"]["source_scan_receipt"]["scan_payload_digest"]
+    public = corpus.public_projection(snapshot)
+    seal = corpus.prompt_authority_seal(snapshot, public=public)
+    paths.public_snapshot.parent.mkdir(parents=True, exist_ok=True)
+    paths.public_snapshot.write_bytes(corpus._json_bytes(public))
+    paths.public_seal.write_bytes(corpus._json_bytes(seal))
+    paths.public_markdown.write_text(corpus.render_markdown(public, policy), encoding="utf-8")
+
+    assert seal["authority_ready"] is False
+    assert corpus.check_ledger(paths) == []
+    assert "public prompt authority seal is not authority-ready for required all scope" in corpus.check_ledger(
+        paths,
+        require_scope="all",
+    )
+
+
+def test_prompt_authority_seal_family_cardinality_is_hard_bounded():
+    corpus = _load()
+    family_count = 5_000
+    snapshot = {
+        "semantic_digest": "a" * 64,
+        "policy_digest": "b" * 64,
+        "source_cursor_digest": "c" * 64,
+        "source_scope": {
+            "scope": "partial:all",
+            "target_scope": "all",
+            "source_unit_count": family_count,
+            "unsupported_source_count": family_count,
+            "source_families": {
+                f"family-{index:05d}": {"discovered": 1, "unsupported": 1} for index in range(family_count)
+            },
+        },
+        "coverage": {},
+        "validation": {"ok": False, "errors": []},
+    }
+
+    seal = corpus.prompt_authority_seal(snapshot)
+    payload = corpus.prompt_authority_seal_bytes(snapshot)
+
+    assert len(seal["source_families"]) == corpus.PROMPT_AUTHORITY_SEAL_MAX_SOURCE_FAMILIES
+    assert sum(row["discovered"] for row in seal["source_families"].values()) == family_count
+    assert seal["source_family_overflow"]["count"] == (
+        family_count - corpus.PROMPT_AUTHORITY_SEAL_MAX_SOURCE_FAMILIES + 1
+    )
+    assert len(seal["source_family_overflow"]["labels_digest"]) == 64
+    assert len(payload) <= corpus.PROMPT_AUTHORITY_SEAL_MAX_BYTES
+
+
+def test_prompt_authority_seal_rejects_rehashed_locator_and_private_string_leakage():
+    corpus = _load()
+    snapshot = {
+        "semantic_digest": "a" * 64,
+        "policy_digest": "b" * 64,
+        "source_cursor_digest": "c" * 64,
+        "source_scope": {"scope": "partial:all", "target_scope": "all", "source_families": {}},
+        "coverage": {},
+        "validation": {"ok": False, "errors": []},
+    }
+    locator_leak = corpus.prompt_authority_seal(snapshot)
+    locator_leak["source_locator"] = "/Users/example/private.jsonl"
+    locator_leak["content_hash"] = corpus.digest(
+        {key: value for key, value in locator_leak.items() if key != "content_hash"}
+    )
+    private_string_leak = corpus.prompt_authority_seal(snapshot)
+    private_string_leak["source_families"] = {
+        "PRIVATE_RAW_PROMPT_DO_NOT_PUBLISH": {field: 0 for field in corpus._PROMPT_AUTHORITY_FAMILY_FIELDS}
+    }
+    private_string_leak["content_hash"] = corpus.digest(
+        {key: value for key, value in private_string_leak.items() if key != "content_hash"}
+    )
+    scope_leak = corpus.prompt_authority_seal(snapshot)
+    scope_leak["scope"]["scope"] = "PRIVATE_RAW_PROMPT_DO_NOT_PUBLISH"
+    scope_leak["content_hash"] = corpus.digest(
+        {key: value for key, value in scope_leak.items() if key != "content_hash"}
+    )
+
+    assert corpus._prompt_authority_seal_digest_valid(locator_leak) is False
+    assert corpus._prompt_authority_seal_digest_valid(private_string_leak) is False
+    assert corpus._prompt_authority_seal_digest_valid(scope_leak) is False
+
+
+def test_prompt_authority_seal_is_byte_identical_on_zero_change_rerun(tmp_path: Path):
+    corpus = _load()
+    paths = _paths(corpus, tmp_path)
+    first = corpus.update_ledger(
+        paths,
+        events=[_event("Keep the public authority seal bounded.", event_ref="authority-seal")],
+        cursor=_cursor(corpus),
+    )
+    before = paths.public_seal.read_bytes()
+    before_mtime = paths.public_seal.stat().st_mtime_ns
+
+    second = corpus.update_ledger(paths)
+
+    assert first["write_changed"] is True
+    assert second["write_changed"] is False
+    assert paths.public_seal.read_bytes() == before
+    assert paths.public_seal.stat().st_mtime_ns == before_mtime
+    assert corpus.check_ledger(paths) == []
+
+
+def test_update_ledger_repairs_coherently_rehashed_public_seal_and_marker(tmp_path: Path):
+    corpus = _load()
+    paths = _paths(corpus, tmp_path)
+    corpus.update_ledger(
+        paths,
+        events=[_event("Keep canonical journals authoritative.", event_ref="coherent-rehash")],
+        cursor=_cursor(corpus),
+    )
+    public = corpus.load_json(paths.public_snapshot)
+    seal = corpus.load_json(paths.public_seal)
+    marker = corpus.load_json(paths.private_snapshot)
+    original_atoms = public["coverage"]["atoms"]
+
+    public["coverage"]["atoms"] = original_atoms + 999
+    public["projection_digest"] = corpus.digest(
+        {key: value for key, value in public.items() if key != "projection_digest"}
+    )
+    seal["coverage"]["atoms"] = public["coverage"]["atoms"]
+    seal["public_projection_digest"] = public["projection_digest"]
+    seal["content_hash"] = corpus.digest({key: value for key, value in seal.items() if key != "content_hash"})
+    marker["public_projection_digest"] = public["projection_digest"]
+    marker["public_authority_seal_hash"] = seal["content_hash"]
+    paths.public_snapshot.write_bytes(corpus._json_bytes(public))
+    paths.public_seal.write_bytes(corpus._json_bytes(seal))
+    paths.private_snapshot.write_bytes(corpus._json_bytes(marker))
+    paths.public_markdown.write_text(
+        corpus.render_markdown(public, corpus.load_policy(paths.policy)),
+        encoding="utf-8",
+    )
+
+    assert corpus._prompt_authority_seal_digest_valid(seal)
+    assert corpus._prompt_authority_seal_matches_public(seal, public)
+    repaired = corpus.update_ledger(paths)
+
+    repaired_public = corpus.load_json(paths.public_snapshot)
+    assert repaired["write_changed"] is True
+    assert repaired_public["coverage"]["atoms"] == original_atoms
     assert corpus.check_ledger(paths) == []
 
 
@@ -2383,3 +2836,439 @@ def test_outcome_history_is_revision_linked_monotonic_and_terminal(tmp_path: Pat
     else:
         raise AssertionError("terminal outcome was rolled back")
     assert paths.outcome_journal.read_bytes() == terminal_bytes
+
+
+# --- source-missing exclusion receipt tests ---
+
+
+def _source_missing_receipt(corpus) -> dict:
+    """Build a minimal valid source-missing exclusion receipt."""
+    contract = corpus.current_source_adapter_contract()
+    return {
+        "version": contract["version"],
+        "disposition": "excluded",
+        "contract_id": "source-missing-v1",
+        "contract_digest": contract["digest"],
+        "related_signatures": {},
+        "related_evidence": {"observed_missing_at": "2026-07-14T12:00:00+00:00"},
+    }
+
+
+def _source_missing_cursor_proposal(corpus, key: str, *, base_revision: int = 0, current: dict) -> dict:
+    """Build a minimal scan proposal that resolves one missing-source key."""
+    contract = corpus.current_source_adapter_contract()
+    receipt = _source_missing_receipt(corpus)
+    receipts = {key: receipt}
+    source_units = sorted([key])
+    unresolved = []
+    return {
+        "base_revision": base_revision,
+        "base_cursor_digest": corpus.cursor_digest(current),
+        "scanner_version": contract["scanner_version"],
+        "scope": "partial:all",
+        "target_scope": "all",
+        "all_baseline_complete": False,
+        "source_manifest_digest": corpus.digest({"test": 1}),
+        "all_source_manifest_digest": None,
+        "source_unit_count": len(source_units),
+        "source_units": source_units,
+        "source_units_digest": corpus.digest(source_units),
+        "source_adapter_contract": contract,
+        "excluded_source_count": len(receipts),
+        "source_exclusion_counts": {"source-missing-v1": 1},
+        "excluded_unit_receipts": receipts,
+        "excluded_unit_receipts_digest": corpus.digest(receipts),
+        "adapted_source_count": 0,
+        "source_adapter_counts": {},
+        "adapted_unit_receipts": {},
+        "adapted_unit_receipts_digest": corpus.digest({}),
+        "unsupported_source_count": 0,
+        "unsupported_units": {},
+        "unsupported_units_digest": corpus.digest({}),
+        "unresolved_unit_count": 0,
+        "unresolved_units": unresolved,
+        "unresolved_units_digest": corpus.digest(unresolved),
+        "source_errors": [],
+        "pending_files": 0,
+        "files": {},
+    }
+
+
+def test_source_missing_receipt_passes_validate_source_adapter_cursor():
+    """validate_source_adapter_cursor accepts source-missing-v1 receipts without a file signature."""
+    corpus = _load()
+    contract = corpus.current_source_adapter_contract()
+    key = "scan-v2:agy-cli-conversations:/home/.gemini/antigravity-cli/conversations/gone.db"
+    receipt = _source_missing_receipt(corpus)
+    receipts = {key: receipt}
+    source_units = sorted([key])
+    cursor = {
+        "scanner_version": contract["scanner_version"],
+        "scope": "partial:all",
+        "target_scope": "all",
+        "all_baseline_complete": False,
+        "source_manifest_digest": corpus.digest({"test": 1}),
+        "all_source_manifest_digest": None,
+        "source_unit_count": len(source_units),
+        "source_units": source_units,
+        "source_units_digest": corpus.digest(source_units),
+        "source_adapter_contract": contract,
+        "excluded_source_count": 1,
+        "source_exclusion_counts": {"source-missing-v1": 1},
+        "excluded_unit_receipts": receipts,
+        "excluded_unit_receipts_digest": corpus.digest(receipts),
+        "adapted_source_count": 0,
+        "source_adapter_counts": {},
+        "adapted_unit_receipts": {},
+        "adapted_unit_receipts_digest": corpus.digest({}),
+        "unsupported_source_count": 0,
+        "unsupported_units": {},
+        "unsupported_units_digest": corpus.digest({}),
+        "unresolved_unit_count": 0,
+        "unresolved_units": [],
+        "unresolved_units_digest": corpus.digest([]),
+        "source_errors": [],
+        "pending_files": 0,
+        "files": {},
+        "source_families": {
+            "agy-cli-conversations": {
+                "discovered": 1,
+                "converged": 0,
+                "adapted": 0,
+                "excluded": 1,
+                "pending": 0,
+                "errors": 0,
+                "unsupported": 0,
+            }
+        },
+    }
+
+    errors = corpus.validate_source_adapter_cursor(cursor)
+    assert errors == [], f"Unexpected validation errors: {errors}"
+
+
+def test_merge_cursor_accepts_source_missing_exclusion_for_vanished_paths():
+    """merge_cursor accepts a proposal that resolves unresolved units via source-missing receipts."""
+    corpus = _load()
+    contract = corpus.current_source_adapter_contract()
+    gone_key = "scan-v2:agy-cli-conversations:/home/.gemini/antigravity-cli/conversations/gone.db"
+
+    unresolved_list = [gone_key]
+    current = {
+        "revision": 3,
+        "scanner_version": contract["scanner_version"],
+        "scope": "partial:all",
+        "target_scope": "all",
+        "pending_files": 0,
+        "source_errors": [],
+        "source_adapter_contract": contract,
+        "excluded_source_count": 0,
+        "source_exclusion_counts": {},
+        "excluded_unit_receipts": {},
+        "excluded_unit_receipts_digest": corpus.digest({}),
+        "adapted_source_count": 0,
+        "source_adapter_counts": {},
+        "adapted_unit_receipts": {},
+        "adapted_unit_receipts_digest": corpus.digest({}),
+        "unsupported_source_count": 0,
+        "unsupported_units": {},
+        "unsupported_units_digest": corpus.digest({}),
+        "unresolved_unit_count": 1,
+        "unresolved_units": unresolved_list,
+        "unresolved_units_digest": corpus.digest(unresolved_list),
+        "files": {},
+    }
+
+    proposed = _source_missing_cursor_proposal(corpus, gone_key, base_revision=3, current=current)
+
+    merged = corpus.merge_cursor(current, proposed)
+
+    assert merged["unresolved_unit_count"] == 0
+    assert merged["unresolved_units"] == []
+    assert gone_key in merged["excluded_unit_receipts"]
+    assert merged["excluded_unit_receipts"][gone_key]["contract_id"] == "source-missing-v1"
+    assert gone_key in merged["source_units"]
+
+
+def test_merge_cursor_source_missing_is_idempotent():
+    """A second proposal for already-resolved source-missing keys is a no-op (no errors)."""
+    corpus = _load()
+    contract = corpus.current_source_adapter_contract()
+    gone_key = "scan-v2:agy-cli-conversations:/home/.gemini/antigravity-cli/conversations/gone2.db"
+
+    unresolved_list = [gone_key]
+    current = {
+        "revision": 1,
+        "scanner_version": contract["scanner_version"],
+        "scope": "partial:all",
+        "target_scope": "all",
+        "pending_files": 0,
+        "source_errors": [],
+        "source_adapter_contract": contract,
+        "excluded_source_count": 0,
+        "source_exclusion_counts": {},
+        "excluded_unit_receipts": {},
+        "excluded_unit_receipts_digest": corpus.digest({}),
+        "adapted_source_count": 0,
+        "source_adapter_counts": {},
+        "adapted_unit_receipts": {},
+        "adapted_unit_receipts_digest": corpus.digest({}),
+        "unsupported_source_count": 0,
+        "unsupported_units": {},
+        "unsupported_units_digest": corpus.digest({}),
+        "unresolved_unit_count": 1,
+        "unresolved_units": unresolved_list,
+        "unresolved_units_digest": corpus.digest(unresolved_list),
+        "files": {},
+    }
+    proposed = _source_missing_cursor_proposal(corpus, gone_key, base_revision=1, current=current)
+    merged1 = corpus.merge_cursor(current, proposed)
+    assert merged1["unresolved_unit_count"] == 0
+
+    # Second proposal: gone_key already gone from unresolved, already in excluded.
+    # Build a fresh proposal against the merged state.
+    proposed2 = _source_missing_cursor_proposal(corpus, gone_key, base_revision=merged1["revision"], current=merged1)
+    # gone_key is no longer in merged1["unresolved_units"], so cleared_unresolved is empty.
+    merged2 = corpus.merge_cursor(merged1, proposed2)
+    assert merged2["unresolved_unit_count"] == 0
+    assert gone_key in merged2["excluded_unit_receipts"]
+
+
+def test_existing_path_is_not_excluded_as_source_missing(tmp_path: Path):
+    """A unit key whose path EXISTS is not resolved by the source-missing path."""
+    corpus = _load()
+    contract = corpus.current_source_adapter_contract()
+
+    existing_file = tmp_path / "real_file.db"
+    existing_file.write_bytes(b"data")
+    existing_key = f"scan-v2:agy-cli-conversations:{existing_file}"
+
+    gone_key = "scan-v2:agy-cli-conversations:/definitely/does/not/exist/nowhere.db"
+    unresolved_list = sorted([existing_key, gone_key])
+    current = {
+        "revision": 0,
+        "scanner_version": contract["scanner_version"],
+        "scope": "partial:all",
+        "target_scope": "all",
+        "pending_files": 0,
+        "source_errors": [],
+        "source_adapter_contract": contract,
+        "excluded_source_count": 0,
+        "source_exclusion_counts": {},
+        "excluded_unit_receipts": {},
+        "excluded_unit_receipts_digest": corpus.digest({}),
+        "adapted_source_count": 0,
+        "source_adapter_counts": {},
+        "adapted_unit_receipts": {},
+        "adapted_unit_receipts_digest": corpus.digest({}),
+        "unsupported_source_count": 0,
+        "unsupported_units": {},
+        "unsupported_units_digest": corpus.digest({}),
+        "unresolved_unit_count": 2,
+        "unresolved_units": unresolved_list,
+        "unresolved_units_digest": corpus.digest(unresolved_list),
+        "files": {},
+    }
+
+    # Build a proposal that resolves only the gone key (not the existing one).
+    receipt = _source_missing_receipt(corpus)
+    receipts = {gone_key: receipt}
+    source_units = sorted([gone_key])
+    proposed = {
+        "base_revision": 0,
+        "base_cursor_digest": corpus.cursor_digest(current),
+        "scanner_version": contract["scanner_version"],
+        "scope": "partial:all",
+        "target_scope": "all",
+        "all_baseline_complete": False,
+        "source_manifest_digest": corpus.digest({"test": 2}),
+        "all_source_manifest_digest": None,
+        "source_unit_count": len(source_units),
+        "source_units": source_units,
+        "source_units_digest": corpus.digest(source_units),
+        "source_adapter_contract": contract,
+        "excluded_source_count": len(receipts),
+        "source_exclusion_counts": {"source-missing-v1": 1},
+        "excluded_unit_receipts": receipts,
+        "excluded_unit_receipts_digest": corpus.digest(receipts),
+        "adapted_source_count": 0,
+        "source_adapter_counts": {},
+        "adapted_unit_receipts": {},
+        "adapted_unit_receipts_digest": corpus.digest({}),
+        "unsupported_source_count": 0,
+        "unsupported_units": {},
+        "unsupported_units_digest": corpus.digest({}),
+        "unresolved_unit_count": 1,
+        "unresolved_units": [existing_key],
+        "unresolved_units_digest": corpus.digest([existing_key]),
+        "source_errors": [],
+        "pending_files": 0,
+        "files": {},
+    }
+
+    merged = corpus.merge_cursor(current, proposed)
+
+    # The existing-path key stays unresolved; only gone_key is resolved.
+    assert existing_key in merged["unresolved_units"]
+    assert gone_key not in merged["unresolved_units"]
+    assert gone_key in merged["excluded_unit_receipts"]
+    assert existing_key not in merged["excluded_unit_receipts"]
+
+
+def test_merge_cursor_accepts_version_superseded_cleared_keys(tmp_path: Path):
+    """A cleared old-version key whose (source, path) is tracked under a newer
+    scan-version key in the proposal is version-superseded — accepted without
+    an explicit receipt."""
+    corpus = _load()
+    contract = corpus.current_source_adapter_contract()
+    scanner_version = contract["scanner_version"]
+
+    path = tmp_path / "conv.db"
+    path.write_bytes(b"data")
+    old_key = f"scan-v{scanner_version - 1}:agy-cli-conversations:{path}"
+    new_key = f"scan-v{scanner_version}:agy-cli-conversations:{path}"
+    current = {
+        "revision": 0,
+        "scanner_version": scanner_version,
+        "scope": "partial:all",
+        "target_scope": "all",
+        "pending_files": 0,
+        "source_errors": [],
+        "source_adapter_contract": contract,
+        "excluded_source_count": 0,
+        "source_exclusion_counts": {},
+        "excluded_unit_receipts": {},
+        "excluded_unit_receipts_digest": corpus.digest({}),
+        "adapted_source_count": 0,
+        "source_adapter_counts": {},
+        "adapted_unit_receipts": {},
+        "adapted_unit_receipts_digest": corpus.digest({}),
+        "unsupported_source_count": 0,
+        "unsupported_units": {},
+        "unsupported_units_digest": corpus.digest({}),
+        "unresolved_unit_count": 1,
+        "unresolved_units": [old_key],
+        "unresolved_units_digest": corpus.digest([old_key]),
+        "files": {},
+    }
+    source_units = [new_key]
+    proposed = {
+        "base_revision": 0,
+        "base_cursor_digest": corpus.cursor_digest(current),
+        "scanner_version": scanner_version,
+        "scope": "partial:all",
+        "target_scope": "all",
+        "all_baseline_complete": False,
+        "source_manifest_digest": corpus.digest({"test": 3}),
+        "all_source_manifest_digest": None,
+        "source_unit_count": len(source_units),
+        "source_units": source_units,
+        "source_units_digest": corpus.digest(source_units),
+        "source_adapter_contract": contract,
+        "excluded_source_count": 0,
+        "source_exclusion_counts": {},
+        "excluded_unit_receipts": {},
+        "excluded_unit_receipts_digest": corpus.digest({}),
+        "adapted_source_count": 0,
+        "source_adapter_counts": {},
+        "adapted_unit_receipts": {},
+        "adapted_unit_receipts_digest": corpus.digest({}),
+        "unsupported_source_count": 0,
+        "unsupported_units": {},
+        "unsupported_units_digest": corpus.digest({}),
+        "unresolved_unit_count": 1,
+        "unresolved_units": [new_key],
+        "unresolved_units_digest": corpus.digest([new_key]),
+        "source_errors": [],
+        "pending_files": 0,
+        "files": {},
+    }
+
+    merged = corpus.merge_cursor(current, proposed)
+
+    # The old-version key is superseded by the new-version key; no receipt required.
+    assert old_key not in merged["unresolved_units"]
+    assert new_key in merged["unresolved_units"]
+
+    # A CURRENT-version key gets no supersession excuse: clearing it without
+    # parsed or excluded proof must still be rejected.
+    current_same = dict(current)
+    current_same["unresolved_units"] = [new_key]
+    current_same["unresolved_units_digest"] = corpus.digest([new_key])
+    proposed_same = dict(proposed)
+    proposed_same["base_cursor_digest"] = corpus.cursor_digest(current_same)
+    proposed_same["unresolved_unit_count"] = 0
+    proposed_same["unresolved_units"] = []
+    proposed_same["unresolved_units_digest"] = corpus.digest([])
+    with pytest.raises(ValueError, match="lack parsed or excluded resolution proof"):
+        corpus.merge_cursor(current_same, proposed_same)
+
+
+def _load_ledger_script():
+    spec = importlib.util.spec_from_file_location("prompt_atom_ledger_script", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _write_checkpointed_cursor(corpus, paths, cursor: dict) -> None:
+    paths.private_dir.mkdir(parents=True, exist_ok=True)
+    paths.cursor.write_text(json.dumps(cursor), encoding="utf-8")
+    marker = {
+        "source_cursor_digest": corpus.cursor_digest(cursor),
+        "journal_signatures": {"cursor": corpus._path_signature(paths.cursor)},
+    }
+    paths.private_snapshot.write_text(json.dumps(marker), encoding="utf-8")
+
+
+def test_check_cursor_state_passes_on_coherent_cursor(tmp_path: Path):
+    corpus = _load()
+    ledger = _load_ledger_script()
+    paths = _paths(corpus, tmp_path)
+    key = f"scan-v{ledger.SCANNER_VERSION}:agy-cli-conversations:/tmp/live.db"
+    cursor = {
+        "revision": 1,
+        "scanner_version": ledger.SCANNER_VERSION,
+        "unresolved_units": [key],
+        "files": {},
+    }
+    _write_checkpointed_cursor(corpus, paths, cursor)
+
+    assert ledger.check_cursor_state(paths) == []
+
+
+def test_check_cursor_state_flags_orphaned_scan_version_keys(tmp_path: Path):
+    corpus = _load()
+    ledger = _load_ledger_script()
+    paths = _paths(corpus, tmp_path)
+    orphan = f"scan-v{ledger.SCANNER_VERSION - 1}:agy-cli-conversations:/tmp/gone.db"
+    cursor = {
+        "revision": 1,
+        "scanner_version": ledger.SCANNER_VERSION,
+        "unresolved_units": [orphan],
+        "files": {},
+    }
+    _write_checkpointed_cursor(corpus, paths, cursor)
+
+    errors = ledger.check_cursor_state(paths)
+    assert any("orphaned" in error for error in errors)
+
+
+def test_check_cursor_state_flags_unbound_checkpoint(tmp_path: Path):
+    corpus = _load()
+    ledger = _load_ledger_script()
+    paths = _paths(corpus, tmp_path)
+    cursor = {
+        "revision": 1,
+        "scanner_version": ledger.SCANNER_VERSION,
+        "unresolved_units": [],
+        "files": {},
+    }
+    _write_checkpointed_cursor(corpus, paths, cursor)
+    # Mutate the cursor after the checkpoint marker was sealed.
+    cursor["revision"] = 2
+    paths.cursor.write_text(json.dumps(cursor), encoding="utf-8")
+
+    errors = ledger.check_cursor_state(paths)
+    assert any("not bound" in error for error in errors)

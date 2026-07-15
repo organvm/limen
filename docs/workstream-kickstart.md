@@ -3,6 +3,17 @@
 Use this when a prompt has several real lanes and the right move is to split the work into a bounded,
 resumable surface instead of holding everything in the chat.
 
+For a closeout successor or a new autonomous initiative, use autonomous capsule mode:
+
+```bash
+workstream --autonomous --prompt-file /path/to/next-session.md limen next-epoch
+```
+
+Autonomous mode refuses a missing prompt. Its thin README index is passed to Codex as the initial
+prompt and requires four cohesive local modules: manifest, intent, runtime decision contract, and
+closeout. Runtime evidence derives `continue`, `switch`, `wait_relay`, `settled`, or `invalid`; the
+capsule never pins a future model, task count, duration, or ending.
+
 ```bash
 /Users/4jp/Workspace/limen/scripts/start-worktree-session.sh --shell --prompt "short objective and constraints" limen my-workstream
 ```
@@ -14,10 +25,14 @@ workstream --prompt "short objective and constraints" limen my-workstream
 ```
 
 The command works from Terminal, Kitty, Ghostty, Warp, or any normal shell. It creates or reuses
-`<repo>/.worktrees/<slug>` on `work/<slug>`, then writes a private kickoff README at:
+`<repo>/.worktrees/<slug>` on `work/<slug>`, then writes a private modular capsule at:
 
 ```text
 <repo>/.worktrees/<slug>/.limen-workstream/README.md
+<repo>/.worktrees/<slug>/.limen-workstream/manifest.md
+<repo>/.worktrees/<slug>/.limen-workstream/intent.md
+<repo>/.worktrees/<slug>/.limen-workstream/runtime.md
+<repo>/.worktrees/<slug>/.limen-workstream/closeout.md
 ```
 
 It also writes:
@@ -32,9 +47,9 @@ Run it from any terminal with:
 bash <repo>/.worktrees/<slug>/.limen-workstream/kickstart.sh
 ```
 
-The README contains the repo path, branch, base ref, origin URL, status at kickoff, prompt packet,
-first-five-minute checklist, and closeout rules. The `.limen-workstream/` directory is locally
-excluded so creating the workstream does not itself make the repo dirty.
+The README only defines module order and the launch command. Each module has one reason to change.
+Identical reruns preserve `created_at`, rewrite no bytes, and report `unchanged`. The
+`.limen-workstream/` directory is locally excluded so capsule creation does not dirty the repo.
 
 ## Current Leads
 
@@ -76,7 +91,7 @@ bash /Users/4jp/Workspace/limen/.worktrees/workstream-kickstart-20260629/.limen-
 ## Pattern
 
 1. Create a worktree per logical lane.
-2. Put the prompt/context in `.limen-workstream/README.md`.
+2. Put intent in `intent.md`; keep README as the ordered module index.
 3. Do the source work in the worktree.
 4. Verify.
 5. Commit and push.
