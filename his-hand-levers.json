@@ -197,7 +197,8 @@
       "unlocks": "Stripe/subscription path + Anthropic & GitHub autopay; likely clears the gemini project suspension behind L-FLEET-CAPACITY; NEW blast radius observed 2026-07-09: (a) organvm PRIVATE-repo Actions CI is billing-blocked (\"recent account payments have failed\") — the heal lane cannot reach green CI on mirror-mirror / session-meta / the-invisible-ledger (4 heals parked failed_blocked on this); (b) the Anthropic monthly spend limit is hit and cannot re-arm on a frozen card — subagent fan-out died mid-cycle. Each new symptom raises what this one phone call unlocks.",
       "source_task": "billing-lock root (life-os-mandate: card-0186 fraud-hold)",
       "gate": "a phone call only you can place to your bank — never automatable",
-      "issue": 182
+      "issue": 182,
+      "note": " NEW DOWNSTREAM INSTANCE observed 2026-07-15: GitHub Actions on PRIVATE repos is billing-blocked -- every domus-genoma CI job dies at startup with 'The job was not started because recent account payments have failed or your spending limit needs to be increased' (public repos like limen unaffected: free minutes). Same billing-lock class as the Stripe/subscription locks this root lever already owns; clearing the hold should restore private-repo CI. Until then domus-genoma merges ride local gates (template validation + pytest run locally, e.g. PR #302)."
     },
     {
       "id": "L-AGENT-BASH-PROMPT",
