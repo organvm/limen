@@ -12,6 +12,8 @@ import datetime as dt
 import os
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "overnight-watch.py"
 
@@ -47,6 +49,199 @@ def _minimal_ok_snapshot():
         "stale_tick_count": 0,
         "log_age_sec": 0,
     }
+
+
+def test_deployed_one_shot_arms_and_disarms_wall_and_rss_bounds(tmp_path, monkeypatch):
+    module = _fresh_module(tmp_path, monkeypatch)
+    events = []
+    launchd_source = (SCRIPT.parents[1] / "container" / "launchd" / "com.limen.overnight-watch.plist").read_text()
+    assert "scripts/overnight-watch.py" in launchd_source
+    assert "--watch" not in launchd_source
+    monkeypatch.setattr(module, "_arm_tick_bounds", lambda: events.append("arm") or (240, 512.0))
+    monkeypatch.setattr(module, "_disarm_tick_bounds", lambda: events.append("disarm"))
+    monkeypatch.setattr(module, "run_once", lambda **_kwargs: events.append("run") or 0)
+
+    assert module.main([]) == 0
+    assert events == ["arm", "run", "disarm"]
+
+
+def test_tick_bound_terminates_all_owned_child_groups_before_exit(tmp_path, monkeypatch):
+    module = _fresh_module(tmp_path, monkeypatch)
+    killed = []
+
+    class FailOpenExit(Exception):
+        pass
+
+    module._ACTIVE_PROCESS_GROUPS.update({4101, 4102})
+    module._BOUND_STARTED = 10.0
+    module._BOUND_WALL_S = 240
+    module._BOUND_RSS_MB = 512.0
+    monkeypatch.setattr(module.time, "monotonic", lambda: 11.0)
+    monkeypatch.setattr(module, "_rss_mb", lambda: 700.0)
+    monkeypatch.setattr(module.os, "killpg", lambda pid, sig: killed.append((pid, sig)))
+    monkeypatch.setattr(module.os, "_exit", lambda code: (_ for _ in ()).throw(FailOpenExit(code)))
+
+    with pytest.raises(FailOpenExit):
+        module._tick_bound_alarm(None, None)
+
+    assert {pid for pid, _sig in killed} == {4101, 4102}
+    assert module._ACTIVE_PROCESS_GROUPS == set()
+
+
+def test_wall_bound_terminates_owned_child_groups_before_exit(tmp_path, monkeypatch):
+    module = _fresh_module(tmp_path, monkeypatch)
+    killed = []
+
+    class FailOpenExit(Exception):
+        pass
+
+    module._ACTIVE_PROCESS_GROUPS.add(4201)
+    module._BOUND_STARTED = 10.0
+    module._BOUND_WALL_S = 240
+    module._BOUND_RSS_MB = 512.0
+    monkeypatch.setattr(module.time, "monotonic", lambda: 250.0)
+    monkeypatch.setattr(module, "_rss_mb", lambda: 100.0)
+    monkeypatch.setattr(module.os, "killpg", lambda pid, sig: killed.append((pid, sig)))
+    monkeypatch.setattr(module.os, "_exit", lambda code: (_ for _ in ()).throw(FailOpenExit(code)))
+
+    with pytest.raises(FailOpenExit):
+        module._tick_bound_alarm(None, None)
+
+    assert killed == [(4201, module.signal.SIGKILL)]
+    assert module._ACTIVE_PROCESS_GROUPS == set()
+
+
+def test_command_timeout_kills_the_full_owned_process_group(tmp_path, monkeypatch):
+    module = _fresh_module(tmp_path, monkeypatch)
+    calls = {"communicate": 0}
+    killed = []
+
+    class Process:
+        pid = 4901
+        returncode = -9
+
+        def communicate(self, timeout=None):
+            calls["communicate"] += 1
+            if calls["communicate"] == 1:
+                raise module.subprocess.TimeoutExpired(["fixture"], timeout)
+            return "", ""
+
+    def fake_popen(argv, **kwargs):
+        assert kwargs["start_new_session"] is True
+        return Process()
+
+    monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(module.os, "killpg", lambda pid, sig: killed.append((pid, sig)))
+
+    result = module.run(["fixture"], timeout=1)
+
+    assert result.returncode == 1
+    assert killed == [(4901, module.signal.SIGKILL)]
+    assert module._ACTIVE_PROCESS_GROUPS == set()
+
+
+def test_fixed_argv_timeout_kills_the_full_owned_process_group(tmp_path, monkeypatch):
+    module = _fresh_module(tmp_path, monkeypatch)
+    calls = {"communicate": 0}
+    killed = []
+
+    class Process:
+        pid = 4902
+        returncode = -9
+
+        def communicate(self, timeout=None):
+            calls["communicate"] += 1
+            if calls["communicate"] == 1:
+                raise module.subprocess.TimeoutExpired(["fixture"], timeout)
+            return "", ""
+
+    def fake_popen(argv, **kwargs):
+        assert kwargs["start_new_session"] is True
+        return Process()
+
+    monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(module.os, "killpg", lambda pid, sig: killed.append((pid, sig)))
+
+    result = module._execute_fixed_argv(["fixture"], environment={}, timeout=1)
+
+    assert result is None
+    assert killed == [(4902, module.signal.SIGKILL)]
+    assert module._ACTIVE_PROCESS_GROUPS == set()
+
+
+@pytest.mark.parametrize("entrypoint", ["run", "fixed_argv"])
+def test_successful_leader_exit_reaps_surviving_owned_process_group(tmp_path, monkeypatch, entrypoint):
+    module = _fresh_module(tmp_path, monkeypatch)
+    killed = []
+
+    class Process:
+        pid = 4904
+        returncode = 0
+
+        def communicate(self, timeout=None):
+            return "ok", ""
+
+    def fake_popen(argv, **kwargs):
+        assert kwargs["start_new_session"] is True
+        return Process()
+
+    monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(module.os, "killpg", lambda pid, sig: killed.append((pid, sig)))
+
+    if entrypoint == "run":
+        result = module.run(["fixture"], timeout=1)
+        assert result.returncode == 0
+    else:
+        result = module._execute_fixed_argv(["fixture"], environment={}, timeout=1)
+        assert result == (0, "ok", "")
+
+    assert killed == [(4904, module.signal.SIGKILL)]
+    assert module._ACTIVE_PROCESS_GROUPS == set()
+
+
+def test_bound_during_spawn_waits_for_registration_then_kills_group(tmp_path, monkeypatch):
+    module = _fresh_module(tmp_path, monkeypatch)
+    killed = []
+    exits = []
+
+    class FailOpenExit(BaseException):
+        pass
+
+    class Process:
+        pid = 4903
+        returncode = -9
+
+        def communicate(self, timeout=None):
+            raise AssertionError("bound must exit before communicating with the child")
+
+    module._BOUND_STARTED = 10.0
+    module._BOUND_WALL_S = 240
+    module._BOUND_RSS_MB = 512.0
+    monkeypatch.setattr(module.time, "monotonic", lambda: 11.0)
+    monkeypatch.setattr(module, "_rss_mb", lambda: 700.0)
+    monkeypatch.setattr(module.signal, "alarm", lambda _seconds: None)
+    monkeypatch.setattr(module.os, "killpg", lambda pid, sig: killed.append((pid, sig)))
+    monkeypatch.setattr(
+        module.os,
+        "_exit",
+        lambda code: (exits.append(code), (_ for _ in ()).throw(FailOpenExit()))[-1],
+    )
+
+    def fake_popen(argv, **kwargs):
+        assert kwargs["start_new_session"] is True
+        module._tick_bound_alarm(None, None)
+        assert module._PENDING_BOUND_REASON is not None
+        return Process()
+
+    monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
+
+    with pytest.raises(FailOpenExit):
+        module.run(["fixture"], timeout=1)
+
+    assert exits == [0]
+    assert killed == [(4903, module.signal.SIGKILL)]
+    assert module._ACTIVE_PROCESS_GROUPS == set()
+    assert module._ACTIVE_OWNED_SPAWNS == 0
 
 
 def _launchd_output(*, state="active", async_env="1", lanes="auto"):
@@ -389,6 +584,47 @@ def test_heartbeat_child_suppresses_repeated_tick_alert(tmp_path, monkeypatch):
     snapshot = module.build_snapshot()
     assert snapshot["status"] == "ok"
     assert snapshot["heartbeat_child_count"] == 1
+
+
+def test_heartbeat_child_receipt_excludes_raw_argv_and_private_path(tmp_path, monkeypatch):
+    module = _fresh_module(tmp_path, monkeypatch)
+    calls = []
+
+    def fake_run(args, timeout=10):
+        calls.append(args)
+        if args[0] == "pgrep":
+            return module.subprocess.CompletedProcess(args, 0, "4243\n", "")
+        assert args == [
+            "ps",
+            "-o",
+            "pid=,ppid=,stat=,etime=,comm=",
+            "-p",
+            "4243",
+        ]
+        return module.subprocess.CompletedProcess(
+            args,
+            0,
+            "4243 4242 S 00:01 /private/owner/bin/worker\n",
+            "",
+        )
+
+    monkeypatch.setattr(module, "run", fake_run)
+
+    children = module.heartbeat_child_processes("4242")
+
+    assert children == [
+        {
+            "pid": "4243",
+            "ppid": "4242",
+            "stat": "S",
+            "etime": "00:01",
+            "executable": "worker",
+        }
+    ]
+    serialized = json.dumps(children)
+    assert "/private/owner" not in serialized
+    assert "--token" not in serialized
+    assert all("command=" not in part for call in calls for part in call)
 
 
 def test_expected_env_mismatch_alerts(tmp_path, monkeypatch):

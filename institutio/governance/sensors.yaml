@@ -586,8 +586,14 @@ sensors:
     title: "host-pressure gauge is alive — the VITALS throttle/shed valve is not flying blind"
     gate: LIMEN_HOST_PRESSURE_STALE
     default: "1"
-    source: [metabolize]
+    source: [heartbeat, metabolize]
     owner: vitals
+    cadence:
+      env: LIMEN_BEAT_HOST_PRESSURE_STALE
+      default: 1
+    timeout:
+      env: LIMEN_HOST_PRESSURE_STALE_TIMEOUT
+      default: 15
     steps:
       - command: "python3 scripts/host-pressure-stale.py"
         severity: advisory
@@ -607,6 +613,24 @@ sensors:
       - command: "python3 scripts/backblaze-exclusions.py --check"
         severity: advisory
         escalation: "Backblaze is still crawling regenerable fleet trees — pull L-BACKBLAZE-EXCLUDE (System Settings → Backblaze → Exclusions; the missing folders are listed above); this rung self-clears the beat after Save (2026-07-15 host-thrash incident, IF-HOST-PRESSURE form 3)"
+
+  host-relief:
+    section: "0q"
+    title: "host-relief — read-only pressure census routes bloated peer and root processes to their owners (IF-HOST-PRESSURE form 4)"
+    gate: LIMEN_HOST_RELIEF
+    default: "1"
+    source: [heartbeat, metabolize]
+    owner: substrate
+    cadence:
+      env: LIMEN_BEAT_HOST_RELIEF
+      default: 1
+    timeout:
+      env: LIMEN_HOST_RELIEF_TIMEOUT
+      default: 60
+    steps:
+      - command: "python3 scripts/host-relief.py --check"
+        severity: advisory
+        escalation: "host pressure census failed — inspect the bounded report and route each over-ceiling process to its actual owner; this sensor has no peer-process or host-mutation authority"
 
   cloud-storage-doctor:
     section: "heartbeat"

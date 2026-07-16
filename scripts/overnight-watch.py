@@ -172,11 +172,104 @@ def parse_iso(value: str | None) -> dt.datetime | None:
     return parsed.astimezone(dt.timezone.utc)
 
 
-def run(args: list[str], timeout: int = 10) -> subprocess.CompletedProcess[str]:
+_ACTIVE_PROCESS_GROUPS: set[int] = set()
+_ACTIVE_OWNED_SPAWNS = 0
+_BOUND_STARTED = 0.0
+_BOUND_WALL_S = 0
+_BOUND_RSS_MB = 0.0
+_PENDING_BOUND_REASON: str | None = None
+
+
+def _process_group_pid(proc: object) -> int | None:
+    pid = getattr(proc, "pid", None)
+    return pid if isinstance(pid, int) and pid > 1 else None
+
+
+def _terminate_process_group(pid: int) -> None:
     try:
-        return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+        os.killpg(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
+    finally:
+        _ACTIVE_PROCESS_GROUPS.discard(pid)
+
+
+def _terminate_active_process_groups() -> None:
+    """Bounded best-effort teardown for commands started by this watcher only."""
+
+    for pid in tuple(_ACTIVE_PROCESS_GROUPS):
+        _terminate_process_group(pid)
+
+
+def _begin_owned_spawn() -> None:
+    """Mark the Popen-to-registration window so a bound cannot orphan that child."""
+
+    global _ACTIVE_OWNED_SPAWNS
+    _ACTIVE_OWNED_SPAWNS += 1
+
+
+def _exit_for_tick_bound(reason: str) -> None:
+    _terminate_active_process_groups()
+    print(
+        f"overnight-watch: {reason} — owned child groups terminated; exiting fail-open so "
+        "launchd StartInterval can start a fresh one-shot",
+        file=sys.stderr,
+    )
+    os._exit(0)
+
+
+def _finish_owned_spawn() -> None:
+    """Close registration atomically with respect to the Python alarm handler."""
+
+    global _ACTIVE_OWNED_SPAWNS, _PENDING_BOUND_REASON
+    _ACTIVE_OWNED_SPAWNS = max(0, _ACTIVE_OWNED_SPAWNS - 1)
+    if _ACTIVE_OWNED_SPAWNS == 0 and _PENDING_BOUND_REASON is not None:
+        reason, _PENDING_BOUND_REASON = _PENDING_BOUND_REASON, None
+        _exit_for_tick_bound(reason)
+
+
+def run(args: list[str], timeout: int = 10) -> subprocess.CompletedProcess[str]:
+    proc: subprocess.Popen[str] | None = None
+    pid: int | None = None
+    try:
+        _begin_owned_spawn()
+        try:
+            proc = subprocess.Popen(
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                start_new_session=True,
+            )
+            pid = _process_group_pid(proc)
+            if pid is not None:
+                _ACTIVE_PROCESS_GROUPS.add(pid)
+        finally:
+            _finish_owned_spawn()
+        stdout, stderr = proc.communicate(timeout=timeout)
+        return subprocess.CompletedProcess(args, proc.returncode, stdout or "", stderr or "")
+    except subprocess.TimeoutExpired as exc:
+        if pid is not None:
+            _terminate_process_group(pid)
+        if proc is not None:
+            try:
+                stdout, stderr = proc.communicate(timeout=5)
+            except Exception:
+                stdout, stderr = "", ""
+        else:
+            stdout, stderr = "", ""
+        return subprocess.CompletedProcess(args, 1, stdout or "", stderr or str(exc))
     except Exception as exc:
+        if pid is not None:
+            _terminate_process_group(pid)
         return subprocess.CompletedProcess(args, 1, "", str(exc))
+    finally:
+        if pid is not None and pid in _ACTIVE_PROCESS_GROUPS:
+            # ``communicate`` proves only that the group leader and inherited
+            # pipes are finished.  A descendant can close those pipes and
+            # outlive the leader, so always reap the owned session before
+            # releasing its registration.
+            _terminate_process_group(pid)
 
 
 def autonomy_pause_active() -> bool:
@@ -324,7 +417,7 @@ def heartbeat_child_processes(pid: str | None) -> list[dict[str, Any]]:
         return []
     children: list[dict[str, Any]] = []
     for child_pid in [line.strip() for line in pgrep.stdout.splitlines() if line.strip()]:
-        ps = run(["ps", "-o", "pid=,ppid=,stat=,etime=,command=", "-p", child_pid], timeout=5)
+        ps = run(["ps", "-o", "pid=,ppid=,stat=,etime=,comm=", "-p", child_pid], timeout=5)
         line = (ps.stdout or "").strip()
         if ps.returncode != 0 or not line:
             children.append({"pid": child_pid})
@@ -336,7 +429,9 @@ def heartbeat_child_processes(pid: str | None) -> list[dict[str, Any]]:
                 "ppid": parts[1] if len(parts) > 1 else None,
                 "stat": parts[2] if len(parts) > 2 else None,
                 "etime": parts[3] if len(parts) > 3 else None,
-                "command": parts[4] if len(parts) > 4 else "",
+                # ``comm`` excludes argv.  Keep only the basename so receipts
+                # cannot expose private executable paths either.
+                "executable": Path(parts[4]).name if len(parts) > 4 else "",
             }
         )
     return children
@@ -2714,23 +2809,45 @@ def _execute_fixed_argv(
     environment: dict[str, str],
     timeout: int = TRIAL_PREDICATE_TIMEOUT_SEC,
 ) -> tuple[int, str, str] | None:
+    proc: subprocess.Popen[str] | None = None
+    pid: int | None = None
     try:
-        proc = subprocess.Popen(
-            execution_argv,
-            cwd=ROOT,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            start_new_session=True,
-            env=environment,
-        )
+        _begin_owned_spawn()
+        try:
+            proc = subprocess.Popen(
+                execution_argv,
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                start_new_session=True,
+                env=environment,
+            )
+            pid = _process_group_pid(proc)
+            if pid is not None:
+                _ACTIVE_PROCESS_GROUPS.add(pid)
+        finally:
+            _finish_owned_spawn()
         stdout, stderr = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
-        os.killpg(proc.pid, signal.SIGKILL)
-        proc.communicate()
+        if pid is not None:
+            _terminate_process_group(pid)
+        if proc is not None:
+            try:
+                proc.communicate(timeout=5)
+            except Exception:
+                pass
         return None
     except (OSError, subprocess.SubprocessError, UnboundLocalError):
+        if pid is not None:
+            _terminate_process_group(pid)
         return None
+    finally:
+        if pid is not None and pid in _ACTIVE_PROCESS_GROUPS:
+            # A successful predicate leader is not proof that every child in
+            # its dedicated process group exited with it.
+            _terminate_process_group(pid)
+    assert proc is not None
     return proc.returncode, stdout or "", stderr or ""
 
 
@@ -5262,6 +5379,54 @@ def run_once(*, dry_run: bool, json_output: bool) -> int:
     return 0
 
 
+def _rss_mb() -> float:
+    """This process's peak RSS in MB (fail-open 0.0). macOS reports bytes, Linux KiB."""
+    try:
+        import resource
+
+        divisor = 1024 * 1024 if sys.platform == "darwin" else 1024
+        return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / divisor
+    except Exception:
+        return 0.0
+
+
+def _tick_bound_alarm(signum, frame) -> None:  # noqa: ARG001 — signal handler signature
+    """Enforce this process's own per-tick bounds and reap its active command trees."""
+
+    elapsed = time.monotonic() - _BOUND_STARTED
+    rss_mb = _rss_mb()
+    reason = None
+    if _BOUND_RSS_MB > 0 and rss_mb > _BOUND_RSS_MB:
+        reason = f"RSS {rss_mb:.0f} MB > cap {_BOUND_RSS_MB:.0f} MB"
+    elif _BOUND_WALL_S > 0 and elapsed >= _BOUND_WALL_S:
+        reason = f"wall-clock bound {_BOUND_WALL_S}s hit"
+    if reason is not None:
+        if _ACTIVE_OWNED_SPAWNS:
+            global _PENDING_BOUND_REASON
+            _PENDING_BOUND_REASON = reason
+            signal.alarm(1)
+            return
+        _exit_for_tick_bound(reason)
+    signal.alarm(1)
+
+
+def _arm_tick_bounds() -> tuple[int, float]:
+    """Arm wall and RSS bounds for both deployed one-shot and attached modes."""
+
+    global _BOUND_RSS_MB, _BOUND_STARTED, _BOUND_WALL_S
+    _BOUND_WALL_S = max(0, int(os.environ.get("LIMEN_WATCH_WALL_S", "240") or 0))
+    _BOUND_RSS_MB = max(0.0, float(os.environ.get("LIMEN_WATCH_RSS_MB", "512") or 0))
+    _BOUND_STARTED = time.monotonic()
+    if _BOUND_WALL_S > 0 or _BOUND_RSS_MB > 0:
+        signal.signal(signal.SIGALRM, _tick_bound_alarm)
+        signal.alarm(1)
+    return _BOUND_WALL_S, _BOUND_RSS_MB
+
+
+def _disarm_tick_bounds() -> None:
+    signal.alarm(0)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="inspect without writing receipts")
@@ -5357,17 +5522,34 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if not args.watch:
-        return run_once(dry_run=args.dry_run, json_output=args.json)
+        _arm_tick_bounds()
+        try:
+            return run_once(dry_run=args.dry_run, json_output=args.json)
+        finally:
+            _disarm_tick_bounds()
 
     samples = 0
     while True:
         paused_rc = stop_for_autonomy_pause(dry_run=args.dry_run, json_output=args.json)
         if paused_rc is not None:
             return paused_rc
-        rc = run_once(dry_run=args.dry_run, json_output=args.json)
+        _wall_s, rss_cap_mb = _arm_tick_bounds()
+        try:
+            rc = run_once(dry_run=args.dry_run, json_output=args.json)
+        finally:
+            _disarm_tick_bounds()
         if rc:
             return rc
         samples += 1
+        rss_mb = _rss_mb()
+        if rss_cap_mb and rss_mb > rss_cap_mb:
+            # Self-bound (issue #1148): a low-cost receipt writer holding this much
+            # heap is accumulation — exit clean; the next invocation starts at ~100 MB.
+            print(
+                f"overnight-watch: RSS {rss_mb:.0f} MB > cap {rss_cap_mb:.0f} MB — "
+                "exiting after receipts; launchd/StartInterval respawns fresh"
+            )
+            return 0
         if args.max_samples and samples >= args.max_samples:
             return 0
         time.sleep(max(1, args.interval))

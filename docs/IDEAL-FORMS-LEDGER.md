@@ -137,16 +137,24 @@ measures the **distance from ideal** at a moment in time, and carries a **status
   `bztransmit` re-crawling ~748 worktree roots / 61 GiB of regenerable state at 95 % CPU,
   (b) one session running FULL `pytest tests/` twice concurrently — the scoped-verification law
   was prose-only, and (c) ~10 claude bg-spare processes tipping RAM into the swap spiral.
-  Three forms close it: **(1)** `scripts/hooks/pytest-scope-guard.sh` + the `pytest-scope` audit
+  Four forms close it: **(1)** `scripts/hooks/pytest-scope-guard.sh` + the `pytest-scope` audit
   in `claude-workflow-guard.py` (this branch) make the scoped-verification law mechanical;
   **(2)** a VITALS load-average axis + `host-pressure-stale` sensor rung (branch
   `feat/vitals-load-axis`) gives the throttle/shed valve a CPU gauge and watches the gauge;
-  **(3)** the Backblaze exclusion estate — lever `L-BACKBLAZE-EXCLUDE` + verify sensor
-  `backblaze-exclusions` (branch `feat/backblaze-exclusion-estate`) — retires the crawl storm;
-  the pane click is the one his-hand atom, and the sensor is its completion predicate.
-- **Status:** PARTIAL — form 1 shipped here; forms 2–3 land in their own branches.
-- **Owner:** Claude (forms 1–2, sensor of 3) + Anthony (the Backblaze pane click, filed as
-  `L-BACKBLAZE-EXCLUDE`).
+  **(3)** the Backblaze exclusion estate — sensor `backblaze-exclusions` + the `--apply`
+  effector (PR #1147: bzinfo.xml proved USER-owned, retiring lever `L-BACKBLAZE-EXCLUDE`;
+  exclusions are organ-tended) — retires the crawl storm; **(4)** the closed pressure loop
+  (2026-07-16 recurrence: swap 17.3/18 GiB and 94 MB free RAM while jetsam reported only
+  'warn' for hours, every relief step manual) — a VITALS swap/starvation axis with
+  sustained-warn escalation, a heartbeat-safe read-only `host-relief` census that routes
+  over-ceiling processes to their actual owners without granting one keeper control over
+  another, and per-tick RSS/wall-clock self-bounds in `overnight-watch.py` (issue #1148:
+  one tick wedged 51 min at 3.1 GiB). Automatic broad `com.limen.*` kickstarts and
+  check-path notifications were rejected during reacceptance: they violated co-equal peer
+  authority and the zero-write check contract.
+- **Status:** PARTIAL — gauges and self-bounds are mechanical; any future host mutation needs
+  an owner-native, explicit, receipt-bound effector rather than provider-wide control.
+- **Owner:** VITALS (gauge/census) + each process owner (its own lifecycle effector).
 
 ### IF-LEDGER-OF-IDEALS — this ledger (self)
 - **Ideal form:** every Claude-originated ideal is a tracked named param here; the ledger is
