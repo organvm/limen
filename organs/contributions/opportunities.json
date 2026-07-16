@@ -12,7 +12,7 @@
     },
     {
       "dependency": "vitest",
-      "used_in_repos": 23
+      "used_in_repos": 24
     },
     {
       "dependency": "ruff",
@@ -20,11 +20,11 @@
     },
     {
       "dependency": "eslint",
-      "used_in_repos": 20
+      "used_in_repos": 21
     },
     {
       "dependency": "pyyaml",
-      "used_in_repos": 20
+      "used_in_repos": 21
     },
     {
       "dependency": "react",

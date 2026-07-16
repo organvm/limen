@@ -9,14 +9,13 @@ They are *unfulfilled intentions* (memory: empty-branch-is-a-todo), so they are 
 auto-deleted** — this is their git-tracked location instead of hanging invisibly.
 Resolve each: open a PR and land it, or delete the branch by hand if the intention is abandoned.
 
-## Merged-but-advanced (7) — has commits ADDED after the PR merged
+## Merged-but-advanced (6) — has commits ADDED after the PR merged
 
 These heads had a MERGED PR but the local branch has newer commits not on `main`.
 Push them as a follow-up PR, or delete if the extra commits are throwaway.
 
 - `chore/mail-keyed-path` — 132602a5 fix(mail): make the required Gmail credential fail LOUD + wire the Gmail IMAP archiver into the beat
 - `chore/pii-containment-limen-scrub` — 59a109c8 chore(security): correct PII-containment doctrine — surgical-by-default, no unique work deleted
-- `docs/cred-durability-lever` — b37c9ec2 docs(levers): L-FLEET-CAPACITY owns the live-checkout-drift heal inline — no phantom 'tracked separately'
 - `docs/pii-doctrine-correction` — 24efc964 chore(security): record PII-containment as EXECUTED (process-and-redact)
 - `feat/vigilia-nohardcode-gate` — b94e1242 feat(vigilia): wire organ-health VIGILIA rung + heartbeat stamp (build #4)
 - `worktree-fix-macos-fork-oslog-crash` — 414ded13 heal(tests): fix 3 non-hermetic/mismatched cli tests breaking main pr-gate
