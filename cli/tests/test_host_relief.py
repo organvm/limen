@@ -1,8 +1,7 @@
-"""Tests for scripts/host-relief.py — the SHED effector (IF-HOST-PRESSURE form 4).
+"""Tests for the read-only host-pressure census (IF-HOST-PRESSURE form 4).
 
-Hermetic: ps/launchctl fixtures + --gate-action override; fixtures force plan-only
-behavior so no test can ever kickstart a real agent, and LIMEN_NOTIFY=0 keeps the
-dedup bookkeeping without popping notifications.
+Hermetic ps/launchctl fixtures prove that provider-wide peer control is unavailable
+and the check path leaves no state behind.
 """
 
 from __future__ import annotations
@@ -13,6 +12,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "host-relief.py"
 
@@ -21,7 +22,7 @@ SCRIPT = ROOT / "scripts" / "host-relief.py"
 #   heartbeat healthy, a big non-root browser that must NOT be flagged.
 PS_FIXTURE = """\
 28017 4jp 3267776 /opt/homebrew/bin/python3 /Users/4jp/Workspace/limen/scripts/overnight-watch.py
-10899 root 9000000 /Library/Backblaze.bzpkg/bztransmit -updatebackupstats
+10899 root 9000000 /Library/Backblaze.bzpkg/bztransmit -updatebackupstats --token=fixture-secret-argv
 32082 4jp 20480 /bin/bash /Users/4jp/Workspace/limen/scripts/heartbeat-loop.sh
 40001 4jp 5300000 /Applications/Chrome.app/Contents/MacOS/Chrome
 1 root 13824 /sbin/launchd
@@ -43,7 +44,6 @@ def run_relief(tmp_path: Path, *extra: str):
         lc.write_text(LAUNCHCTL_FIXTURE)
     env = os.environ.copy()
     env["LIMEN_ROOT"] = str(tmp_path)
-    env["LIMEN_NOTIFY"] = "0"
     return subprocess.run(
         [
             sys.executable,
@@ -61,59 +61,65 @@ def run_relief(tmp_path: Path, *extra: str):
     )
 
 
-def test_shed_plans_kickstart_for_over_ceiling_agent(tmp_path):
+def test_shed_reports_over_ceiling_peer_without_action(tmp_path):
     proc = run_relief(tmp_path, "--gate-action", "shed", "--check")
     report = json.loads(proc.stdout)
     assert proc.returncode == 0, proc.stdout
-    assert report["relieve"] is True
+    assert report["pressure_active"] is True
     labels = [item["label"] for item in report["over_ceiling"]]
     assert labels == ["com.limen.overnight-watch"]  # 3.1 GiB > 1024 MB; heartbeat at 20 MB untouched
-    assert report["kickstarts"][0]["planned"] is True
-    assert "com.limen.overnight-watch" in report["kickstarts"][0]["target"]
+    assert report["actions"] == []
+    assert report["peer_control"] == "prohibited"
 
 
-def test_root_hog_escalated_with_preformed_one_liner(tmp_path):
+def test_root_hog_is_reported_without_manufacturing_kill_authorization(tmp_path):
     proc = run_relief(tmp_path, "--gate-action", "shed", "--check")
     report = json.loads(proc.stdout)
     hogs = report["root_hogs"]
     assert [h["pid"] for h in hogs] == [10899]  # bztransmit; launchd (pid 1) and non-root Chrome excluded
-    assert hogs[0]["one_liner"] == "sudo kill 10899"
-    assert "root-hog-10899" in report["notified"]
+    assert hogs[0]["executable"] == "bztransmit"
+    assert "one_liner" not in hogs[0]
+    assert "-updatebackupstats" not in proc.stdout
+    assert "fixture-secret-argv" not in proc.stdout
+    assert report["actions"] == []
 
 
-def test_apply_with_fixtures_stays_plan_only(tmp_path):
+def test_apply_fails_closed_instead_of_controlling_peer_processes(tmp_path):
     proc = run_relief(tmp_path, "--gate-action", "shed", "--apply")
-    report = json.loads(proc.stdout)
-    assert proc.returncode == 0
-    assert all(k.get("planned") for k in report["kickstarts"])  # fixtures never cause side effects
+    assert proc.returncode == 2
+    assert "peer-process mutation is prohibited" in proc.stderr
 
 
-def test_ok_gate_stands_by_and_clears_conditions(tmp_path):
-    # onset under shed...
-    first = json.loads(run_relief(tmp_path, "--gate-action", "shed", "--check").stdout)
-    assert "shed-onset" in first["notified"]
-    # ...dedup on repeat...
-    second = json.loads(run_relief(tmp_path, "--gate-action", "shed", "--check").stdout)
-    assert second["notified"] == []
-    # ...ok clears shed-onset (root hog keys clear when the hog is gone), so a future onset re-fires
+def test_ok_gate_stands_by_without_state(tmp_path):
     ok = json.loads(run_relief(tmp_path, "--gate-action", "ok", "--check").stdout)
-    assert ok["relieve"] is False
+    assert ok["pressure_active"] is False
     assert ok["root_hogs"] == []  # gate ok — hogs are not escalated outside pressure
-    third = json.loads(run_relief(tmp_path, "--gate-action", "shed", "--check").stdout)
-    assert "shed-onset" in third["notified"]
+    assert ok["actions"] == []
+    assert not (tmp_path / "logs").exists()
 
 
 def test_throttle_reports_but_does_not_relieve(tmp_path):
     report = json.loads(run_relief(tmp_path, "--gate-action", "throttle", "--check").stdout)
-    assert report["relieve"] is False
-    assert report["kickstarts"] == []
+    assert report["pressure_active"] is True
+    assert report["actions"] == []
     # visibility is preserved: the over-ceiling census still names the bloated agent
     assert [i["label"] for i in report["over_ceiling"]] == ["com.limen.overnight-watch"]
-    # and a root hog under pressure (gate != ok) is still escalated
+    # and a root hog under pressure (gate != ok) is still visible for owner routing
     assert [h["pid"] for h in report["root_hogs"]] == [10899]
 
 
-def test_notify_state_written_under_limen_root(tmp_path):
+def test_check_path_is_zero_write(tmp_path):
     run_relief(tmp_path, "--gate-action", "shed", "--check")
-    state = json.loads((tmp_path / "logs" / "vigilia" / "relief-state.json").read_text())
-    assert "shed-onset" in state and "root-hog-10899" in state
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["launchctl.txt", "ps.txt"]
+
+
+def test_deployed_heartbeat_source_is_check_only():
+    registry = yaml.safe_load((ROOT / "institutio" / "governance" / "sensors.yaml").read_text())
+    sensor = registry["sensors"]["host-relief"]
+
+    assert "heartbeat" in sensor["source"]
+    assert len(sensor["steps"]) == 1
+    step = sensor["steps"][0]
+    assert step["command"] == "python3 scripts/host-relief.py --check"
+    assert step["severity"] == "advisory"
+    assert "args_when" not in step

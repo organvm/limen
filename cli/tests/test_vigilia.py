@@ -204,6 +204,9 @@ def test_vitals_warn_streak_counts_resets_and_escalates(tmp_path, monkeypatch):
     assert vitals._update_warn_streak(vitals.THROTTLE, update=True) == 2
     # read-only path never increments
     assert vitals._update_warn_streak(vitals.THROTTLE, update=False) == 2
+    # a missed maximum heartbeat window breaks consecutiveness instead of inheriting stale debt
+    clock["now"] += 3601
+    assert vitals._update_warn_streak(vitals.THROTTLE, update=True) == 1
     # ok resets
     clock["now"] += 61
     assert vitals._update_warn_streak(vitals.OK, update=True) == 0

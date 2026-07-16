@@ -12,6 +12,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "host-pressure-stale.py"
 
@@ -19,7 +21,6 @@ SCRIPT = ROOT / "scripts" / "host-pressure-stale.py"
 def run_stale(tmp_path: Path, env: dict | None = None):
     child_env = os.environ.copy()
     child_env["LIMEN_ROOT"] = str(tmp_path)
-    child_env["LIMEN_NOTIFY"] = "0"  # dedup bookkeeping only — hermetic runs never pop notifications
     child_env.pop("LIMEN_VIGILIA", None)
     child_env.pop("LIMEN_VITALS_STALE_BEATS", None)
     child_env.pop("LIMEN_LOOP_MAX", None)
@@ -52,6 +53,16 @@ def test_absent_seat_fails_while_vigilia_on(tmp_path):
     proc = run_stale(tmp_path)
     assert proc.returncode == 1
     assert "absent" in proc.stdout
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_watcher_is_on_the_persistent_heartbeat_source():
+    registry = yaml.safe_load((ROOT / "institutio" / "governance" / "sensors.yaml").read_text())
+    sensor = registry["sensors"]["host-pressure-stale"]
+
+    assert "heartbeat" in sensor["source"]
+    assert sensor["cadence"]["default"] == 1
+    assert sensor["steps"][0]["command"] == "python3 scripts/host-pressure-stale.py"
 
 
 def test_vigilia_off_is_ok(tmp_path):

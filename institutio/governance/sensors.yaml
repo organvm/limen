@@ -586,8 +586,14 @@ sensors:
     title: "host-pressure gauge is alive — the VITALS throttle/shed valve is not flying blind"
     gate: LIMEN_HOST_PRESSURE_STALE
     default: "1"
-    source: [metabolize]
+    source: [heartbeat, metabolize]
     owner: vitals
+    cadence:
+      env: LIMEN_BEAT_HOST_PRESSURE_STALE
+      default: 1
+    timeout:
+      env: LIMEN_HOST_PRESSURE_STALE_TIMEOUT
+      default: 15
     steps:
       - command: "python3 scripts/host-pressure-stale.py"
         severity: advisory
@@ -610,10 +616,10 @@ sensors:
 
   host-relief:
     section: "0q"
-    title: "host-relief — SHED has hands: bloated com.limen agents restarted, root hogs escalated with the exact command (IF-HOST-PRESSURE form 4)"
+    title: "host-relief — read-only pressure census routes bloated peer and root processes to their owners (IF-HOST-PRESSURE form 4)"
     gate: LIMEN_HOST_RELIEF
     default: "1"
-    source: [metabolize]
+    source: [heartbeat, metabolize]
     owner: substrate
     cadence:
       env: LIMEN_BEAT_HOST_RELIEF
@@ -623,14 +629,8 @@ sensors:
       default: 60
     steps:
       - command: "python3 scripts/host-relief.py --check"
-        args_when:
-          - env: LIMEN_HOST_RELIEF_APPLY
-            default: "1"
-            equals: "1"
-            args: ["--apply"]
-            armed_valve_type: safety
         severity: advisory
-        escalation: "host-relief could not land a kickstart — read the report above and logs/vigilia/relief-state.json; if a root-owned hog is named, run the printed sudo one-liner (2026-07-16 thrash: bztransmit held 8.6 GiB; IF-HOST-PRESSURE form 4)"
+        escalation: "host pressure census failed — inspect the bounded report and route each over-ceiling process to its actual owner; this sensor has no peer-process or host-mutation authority"
 
   cloud-storage-doctor:
     section: "heartbeat"

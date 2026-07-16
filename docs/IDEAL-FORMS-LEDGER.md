@@ -146,15 +146,15 @@ measures the **distance from ideal** at a moment in time, and carries a **status
   exclusions are organ-tended) — retires the crawl storm; **(4)** the closed pressure loop
   (2026-07-16 recurrence: swap 17.3/18 GiB and 94 MB free RAM while jetsam reported only
   'warn' for hours, every relief step manual) — a VITALS swap/starvation axis with
-  sustained-warn escalation, the `host-relief` effector rung (restarts over-ceiling
-  `com.limen` agents via kickstart; escalates untouchable root hogs with the pre-formed
-  `sudo kill` one-liner), onset-deduped macOS notifications (`scripts/_notify.py`, also
-  wired into `host-pressure-stale`), and RSS/wall-clock self-bounds in `overnight-watch.py`
-  (issue #1148: one tick wedged 51 min at 3.1 GiB).
-- **Status:** SHIPPED — all four forms mechanical; the operator is no longer the sensor of
-  last resort. The only human residue is the pre-formed root-kill one-liner, pushed by
-  notification when it exists.
-- **Owner:** Claude (all four forms).
+  sustained-warn escalation, a heartbeat-safe read-only `host-relief` census that routes
+  over-ceiling processes to their actual owners without granting one keeper control over
+  another, and per-tick RSS/wall-clock self-bounds in `overnight-watch.py` (issue #1148:
+  one tick wedged 51 min at 3.1 GiB). Automatic broad `com.limen.*` kickstarts and
+  check-path notifications were rejected during reacceptance: they violated co-equal peer
+  authority and the zero-write check contract.
+- **Status:** PARTIAL — gauges and self-bounds are mechanical; any future host mutation needs
+  an owner-native, explicit, receipt-bound effector rather than provider-wide control.
+- **Owner:** VITALS (gauge/census) + each process owner (its own lifecycle effector).
 
 ### IF-LEDGER-OF-IDEALS — this ledger (self)
 - **Ideal form:** every Claude-originated ideal is a tracked named param here; the ledger is

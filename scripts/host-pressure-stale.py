@@ -11,10 +11,9 @@ VIGILIA is on (LIMEN_VIGILIA unset counts as on — the heartbeat's own default)
 
 The alarm is the staleness, not the pressure: the effector for pressure itself remains
 the existing THROTTLE/SHED path in heartbeat-loop.sh. Exit 0 = gauge alive (or VIGILIA
-deliberately off). Exit 1 = gauge silent — and since 2026-07-16 (IF-HOST-PRESSURE
-form 4) a silent gauge also fires ONE onset-deduped macOS notification via
-scripts/_notify.py: a blind valve was exactly the 7/15 gap, and an advisory line in a
-log no one is reading is not an alarm. Read-only otherwise; advisory in the registry.
+deliberately off). Exit 1 = gauge silent. The check is strictly read-only: the
+heartbeat owns durable logging, and this sensor neither sends notifications nor writes
+deduplication state.
 """
 
 from __future__ import annotations
@@ -24,12 +23,6 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-import _notify  # noqa: E402
-
-STALE_KEY = "vitals-stale"
 
 
 def _root() -> Path:
@@ -41,7 +34,6 @@ def _root() -> Path:
 
 def _stale(message: str) -> int:
     print(message)
-    _notify.notify_once(_root(), STALE_KEY, message)
     return 1
 
 
@@ -74,7 +66,6 @@ def main() -> int:
             "the throttle/shed valve is flying blind"
         )
 
-    _notify.clear_condition(_root(), STALE_KEY)
     print(f"host-pressure-stale: ok — vitals record {age_s / 60:.1f} min old (budget {budget_s / 60:.0f} min)")
     return 0
 

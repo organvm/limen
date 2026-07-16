@@ -149,7 +149,8 @@ def _update_warn_streak(action: str, update: bool) -> int:
 
     Increments only on the gate path (``update=True``) and at most once per 60 s, so
     the executive's read-only record and rapid re-invocations never inflate it.
-    Resets on ok. Fail-open: unreadable state reads as streak 0."""
+    Resets on ok or after the maximum expected heartbeat gap; warnings separated by
+    an outage are not consecutive. Fail-open: unreadable state reads as streak 0."""
     path = _streak_path()
     streak, last = 0, 0.0
     try:
@@ -160,6 +161,9 @@ def _update_warn_streak(action: str, update: bool) -> int:
     if not update:
         return 0 if action == OK else streak
     now = time.time()
+    max_gap_s = params.get("VITALS_WARN_STREAK_MAX_GAP_SEC", 3600, cast=float)
+    if last and max_gap_s > 0 and now - last > max_gap_s:
+        streak = 0
     if action == OK:
         streak, last = 0, now
     elif now - last >= 60.0:
