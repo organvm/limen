@@ -19,6 +19,19 @@ standing rules, a verifiable sequence of offices, and a paper trail anyone can a
 delivers that institutional weight — the **cursus honorum standard** — as a coordinated set of AI
 roles holding the infrastructure between human decisions.
 
+## Constitutional authority and operational projection
+
+The ratified CORPVS governance testament owns directives, axioms, instruments, ideal forms,
+amendments, supersession, and their source lineage. Limen does not mirror that authority. This organ
+consumes the configured `governance-testament.v1` owner receipt plus matching graph and coverage
+receipts, schedules finite reversible work, and publishes a redacted operational projection. Its
+legacy local canon remains a compatibility pointer to that owner record.
+
+The projection fails visibly: missing, malformed, inaccessible, quarantined, or snapshot-mismatched
+inputs remain named debt. An empty local path or dashboard count can never prove that a source does
+not exist. Operator-intent and artifact timelines remain separate, and assistant prose has no
+operator authority without an explicit adoption event.
+
 ## The 5-primitive kernel, mapped to the governance domain
 
 | Primitive | Governance meaning | Concretely |
@@ -68,6 +81,8 @@ cannot hold an authority without the prerequisite standing. The machine checks; 
   not chat memory. What is not written down does not count.
 - Do not skip stages, even under pressure. A skipped stage in the cursus honorum is a governance
   failure. Surface it; do not paper over it.
+- Do not self-ratify or fall back to local doctrine when the configured constitutional owner receipt
+  is missing. Preserve the blocker and continue every unrelated reversible lane.
 
 ## Validation
 

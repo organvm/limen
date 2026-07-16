@@ -76,10 +76,16 @@ BASE_STEPS: tuple[CadenceStep, ...] = (
         reason="turn ranked paths into priority bands and review batches",
     ),
     CadenceStep(
+        id="governance-memory-readiness",
+        phase="validate",
+        command=("python3", "scripts/governance-memory-readiness.py", "--write"),
+        reason="verify coherent owner receipts, exact source classification, bounded stage cursors, and fixed-point identity",
+    ),
+    CadenceStep(
         id="command-center",
-        phase="distill",
+        phase="render",
         command=("python3", "scripts/corpus-command-center.py", "--write"),
-        reason="distill prompts, artifacts, tasks, products, and inbound positioning",
+        reason="render prompts, artifacts, tasks, products, positioning, and the verified Iceberg Atlas read model",
     ),
     CadenceStep(
         id="substrate-ledger",
@@ -252,6 +258,7 @@ def render_markdown(receipt: dict[str, Any]) -> str:
         "",
         "- Local AI app chats, projects, plans, tasks, histories, and app-store movement are continual corpus input.",
         "- The cadence absorbs movement as private/redacted evidence first; brainstorms do not become current authority by default.",
+        "- Governance memory follows the bounded owner contract `discover → snapshot → parse → classify → reconcile → distill → validate → render → receipt`; Limen verifies its receipts and renders the redacted read model.",
         "- `--materialize-private` is explicit because it copies raw local material into the ignored private object store.",
         "- This runner does not edit `tasks.yaml`, delete repos, clean branches, push remotes, or handle credentials.",
         "",

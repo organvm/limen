@@ -601,10 +601,14 @@ while true; do
   due_voice life "$C_LIFE"    && { python3 "$LIMEN_ROOT/scripts/life-organ.py" 2>&1 | tail -1 || true; stamp life; }
   # GOVERNANCE — run the cursus honorum seed validator + governance standing report every C_GOVERNANCE
   # beats. Operationalizes the governance rules (cvrsvs-honorvm) as an autonomous beat: validates
-  # every seed.yaml in the estate, stamps the governance voice for proprioception. Read-only,
-  # lockless, idempotent, fail-open — never gates the beat. Gate off with LIMEN_GOVERNANCE=0.
+  # every seed.yaml in the estate, verifies the configured cross-owner governance-memory receipts,
+  # and stamps the governance voice for proprioception. The readiness verifier is deterministic,
+  # byte-bounded, and writes only redacted/private receipts; absent owners remain visible debt.
+  # Fail-open — never gates the beat. Gate off with LIMEN_GOVERNANCE=0.
   due_voice governance "$C_GOVERNANCE" && [ "${LIMEN_GOVERNANCE:-1}" = "1" ] && \
-    { python3 "$LIMEN_ROOT/scripts/governance-organ.py" 2>&1 | tail -1 || true; stamp governance; }
+    { python3 "$LIMEN_ROOT/scripts/governance-organ.py" 2>&1 | tail -1 || true
+      python3 "$LIMEN_ROOT/scripts/governance-memory-readiness.py" --write 2>&1 | tail -1 || true
+      stamp governance; }
   # FINANCE — run the financial-office consolidator (regenerate balance-sheet, cash-flow, STATUS from
   # entity data) + assess maturity + advance organ-ladder.json as slices land. Lockless, idempotent,
   # fail-open — never gates the beat. Gate off with LIMEN_FINANCIAL=0.

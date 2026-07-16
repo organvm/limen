@@ -48,24 +48,24 @@ truths:
       memory: mpo-resolved-quaestor-owns
 
   - id: EVO-002
-    claim: "Governance organ = aerarium / Cvrsvs Honorvm — operationalized as an autonomic beat"
+    claim: "Governance testament authority is ratified upstream; Limen runs the bounded operational read model"
     line: >-
-      The governance organ (rank 5, aerarium--res-publica) runs the cursus honorum seed validator
-      (validate-seed.py) every beat on the C_GOVERNANCE cadence. Rules are operationalized as
-      validatable checks; the organ stamps "governance" for proprioception. Self-feed is via the
-      generate-organ-backlog.py generator (building-stage levers). Maturity 50%→60% as of 2026-07-01.
+      The ratified CORPVS governance testament owns constitutional directives, ideal forms,
+      supersession, and source lineage. Limen's governance organ remains the reversible operations
+      office: it validates local standing, schedules bounded cadence work, verifies owner receipts,
+      and renders redacted readiness without self-ratifying or duplicating raw custody and graph authority.
     summons: >-
-      The governance organ (Aerarium / Cvrsvs Honorvm) is the VLTIMA body's constitutional office.
-      It holds the cursus honorum (INCUBATOR → ALPHA → BETA → STABLE → MATURE) as executable
-      validation (validate-seed.py), tracks repo standing via seed.yaml declarations, and runs
-      autonomously every C_GOVERNANCE beat. The organ was self-feed wired on 2026-07-01: generator
-      hook confirmed, EVOCATOR canon registered, voice stamp active, seed.yaml first assertion created.
-      Rules are operationalized as validatable checks — the "conceptual, not operationalized"
-      constraint is resolved. The aerarium--res-publica infrastructure remains partial (infra note).
-    source_of_record: "limen/organs/governance/"
+      The Governance Organ has two non-competing layers. The ratified CORPVS testament is the
+      constitutional source of truth for directives, axioms, instruments, ideal forms, amendments,
+      and supersession. Limen's Aerarium / Cvrsvs Honorvm is the operational read model and bounded
+      scheduler: it enforces the cursus honorum locally, consumes typed owner receipts, keeps missing
+      or inaccessible sources visible as coverage debt, and never promotes assistant prose into
+      operator authority. The configured governance-testament owner receipt decides current doctrine;
+      absence or mismatch degrades readiness instead of falling back to Limen-local prose.
+    source_of_record: "parameter-contract:LIMEN_GOV_TESTAMENT"
     confidence: high
-    resolved: "2026-07-01"
-    reversible_via: "edit organs/governance/KERNEL.md or validate-seed.py; revert organ-ladder.json maturity"
+    resolved: "2026-07-16"
+    reversible_via: "supersede the ratified governance testament and update LIMEN_GOV_TESTAMENT; keep local validator rollback separate"
     channels:
       flame: true
       corpus: true

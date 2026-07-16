@@ -32,6 +32,7 @@ def test_default_cadence_dry_run_plans_safe_chain() -> None:
     assert receipt["materialize_private"] is False
     assert "capture" in step_ids
     assert "materialize-private" not in step_ids
+    assert step_ids.index("governance-memory-readiness") < step_ids.index("command-center")
     assert step_ids[-2:] == ["prior-excavations", "result-digest"]
 
 
@@ -65,6 +66,8 @@ def test_render_markdown_records_contract_and_commands() -> None:
     assert "# VLTIMA Absorption Cadence" in markdown
     assert "brainstorms do not become current authority" in markdown
     assert "scripts/session-corpus-ledger.py --write --all" in markdown
+    assert "discover → snapshot → parse → classify → reconcile → distill → validate → render → receipt" in markdown
+    assert "scripts/governance-memory-readiness.py --write" in markdown
     assert "--materialize-private" in markdown
 
 

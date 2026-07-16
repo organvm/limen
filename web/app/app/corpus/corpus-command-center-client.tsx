@@ -136,6 +136,41 @@ export default function CorpusCommandCenterClient({ data }: { data: CorpusStatus
       <section className="corpusPanel">
         <div className="corpusPanelHeader">
           <div>
+            <p className="caption">Verified graph read model</p>
+            <h2>Iceberg Atlas</h2>
+          </div>
+          <span className="caption">
+            {data.iceberg_atlas.status}
+          </span>
+        </div>
+        <div className="corpusSignalGrid">
+          <span>Operator intent <strong>{formatNumber(data.iceberg_atlas.timeline_counts.operator_intent)}</strong></span>
+          <span>Artifacts <strong>{formatNumber(data.iceberg_atlas.timeline_counts.artifact)}</strong></span>
+          <span>Self-images <strong>{formatNumber(data.iceberg_atlas.self_image_count)}</strong></span>
+          <span>Residuals <strong>{formatNumber(data.iceberg_atlas.residual_count)}</strong></span>
+          <span>Owner blockers <strong>{formatNumber(data.iceberg_atlas.blocker_count)}</strong></span>
+        </div>
+        <div className="corpusZoomList">
+          {data.iceberg_atlas.zoom_levels.map((level) => (
+            <div key={level.id}>
+              <strong>{level.id}</strong>
+              <span>{formatNumber(level.node_count)} nodes</span>
+            </div>
+          ))}
+        </div>
+        {data.iceberg_atlas.ideal_forms.slice(0, 6).map((ideal) => (
+          <p className="corpusNote" key={ideal.id}>
+            {ideal.id}: {ideal.implementation_state}; distance {ideal.distance_to_ideal ?? "unknown"}; citation debt {ideal.citation_debt}
+          </p>
+        ))}
+        {!data.iceberg_atlas.zoom_levels.length && (
+          <p className="corpusNote">No verified Atlas receipt is configured. This is visible coverage debt, not an empty corpus.</p>
+        )}
+      </section>
+
+      <section className="corpusPanel">
+        <div className="corpusPanelHeader">
+          <div>
             <p className="caption">Side-by-side</p>
             <h2>Evolution Pairs</h2>
           </div>

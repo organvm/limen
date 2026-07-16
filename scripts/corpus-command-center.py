@@ -37,6 +37,9 @@ PUBLIC_INDEX = PRIVATE_ROOT / "lifecycle" / "corpus-command-center.public.json"
 PRIVATE_HTML = PRIVATE_ROOT / "lifecycle" / "corpus-command-center.private.html"
 BODY_OBJECT_ROOT = PRIVATE_ROOT / "corpus-command-center" / "objects"
 DOC_PATH = ROOT / "docs" / "corpus-command-center.md"
+GOVERNANCE_READINESS_PATH = Path(
+    os.environ.get("LIMEN_GOV_READINESS_OUT", ROOT / "logs" / "governance-memory-readiness.json")
+).expanduser()
 TASKS_PATH = ROOT / "tasks.yaml"
 AUG1_VIEW_PATH = ROOT / "logs" / "aug1-view.json"
 VALUE_REPOS_PATH = ROOT / "value-repos.json"
@@ -107,6 +110,84 @@ def load_json(path: Path, default: Any) -> Any:
         return json.loads(path.read_text(encoding="utf-8", errors="replace"))
     except (OSError, ValueError):
         return default
+
+
+def governance_atlas_panel() -> dict[str, Any]:
+    """Read only the verifier's redacted Atlas projection.
+
+    The Command Center never opens the upstream graph or private source paths.
+    Missing, degraded, and blocked verifier receipts stay visible instead of
+    falling back to an empty-success view.
+    """
+    receipt = load_json(GOVERNANCE_READINESS_PATH, {})
+    if not isinstance(receipt, dict) or receipt.get("surface") != "redacted-read-model":
+        return {
+            "status": "missing",
+            "snapshot_id": None,
+            "exact_all": False,
+            "residual_count": 0,
+            "blocker_count": 1,
+            "zoom_levels": [],
+            "timeline_counts": {"operator_intent": 0, "artifact": 0},
+            "ideal_forms": [],
+            "self_image_count": 0,
+        }
+    def count(value: Any) -> int:
+        if isinstance(value, bool):
+            return 0
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return 0
+
+    def identifier(value: Any, fallback: str) -> str:
+        text = str(value or "").strip()
+        if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}", text):
+            return text
+        return f"sha256:{stable_hash(text or fallback, 20)}"
+
+    atlas = receipt.get("atlas") if isinstance(receipt.get("atlas"), dict) else {}
+    coverage = receipt.get("coverage") if isinstance(receipt.get("coverage"), dict) else {}
+    blockers = receipt.get("blockers") if isinstance(receipt.get("blockers"), list) else []
+    timeline_counts = atlas.get("timeline_counts") if isinstance(atlas.get("timeline_counts"), dict) else {}
+    raw_zoom_levels = atlas.get("zoom_levels") if isinstance(atlas.get("zoom_levels"), list) else []
+    zoom_levels = [
+        {"id": identifier(item.get("id"), f"level-{index}"), "node_count": count(item.get("node_count"))}
+        for index, item in enumerate(raw_zoom_levels[:12])
+        if isinstance(item, dict)
+    ]
+    raw_ideal_forms = atlas.get("ideal_forms") if isinstance(atlas.get("ideal_forms"), list) else []
+    ideal_forms = []
+    for index, item in enumerate(raw_ideal_forms[:100]):
+        if not isinstance(item, dict):
+            continue
+        distance = item.get("distance_to_ideal")
+        if isinstance(distance, str):
+            distance = identifier(distance, "unknown")
+        elif not isinstance(distance, (int, float)) or isinstance(distance, bool):
+            distance = None
+        ideal_forms.append(
+            {
+                "id": identifier(item.get("id"), f"ideal-{index}"),
+                "implementation_state": identifier(item.get("implementation_state"), "unknown"),
+                "distance_to_ideal": distance,
+                "citation_debt": count(item.get("citation_debt")),
+            }
+        )
+    return {
+        "status": str(receipt.get("status") or "degraded"),
+        "snapshot_id": receipt.get("snapshot_id"),
+        "exact_all": bool(coverage.get("exact_all")),
+        "residual_count": count(coverage.get("residual_count")),
+        "blocker_count": len(blockers),
+        "zoom_levels": zoom_levels,
+        "timeline_counts": {
+            "operator_intent": count(timeline_counts.get("operator_intent")),
+            "artifact": count(timeline_counts.get("artifact")),
+        },
+        "ideal_forms": ideal_forms,
+        "self_image_count": count(atlas.get("self_image_count")),
+    }
 
 
 def rel_to_private(path: Path) -> str:
@@ -732,6 +813,7 @@ def build_snapshots(
         "comparison_previews": comparison_previews,
         "aug1": aug1_panel(),
         "inbound": inbound_panel(),
+        "iceberg_atlas": governance_atlas_panel(),
         "attack_paths": attack.get("ranked_paths", []) if isinstance(attack, dict) else [],
     }
     allusions_by_unit = {row["unit_id"]: row for row in allusions}
@@ -768,6 +850,7 @@ def build_snapshots(
         ],
         "aug1": private["aug1"],
         "inbound": private["inbound"],
+        "iceberg_atlas": private["iceberg_atlas"],
     }
     validate_public_redaction(public)
     markdown = render_markdown(public)
@@ -778,6 +861,7 @@ def render_markdown(public: dict[str, Any]) -> str:
     coverage = public["coverage"]
     aug1 = public["aug1"]
     inbound = public["inbound"]
+    atlas = public["iceberg_atlas"]
     lines = [
         "# Corpus Command Center",
         "",
@@ -788,6 +872,7 @@ def render_markdown(public: dict[str, Any]) -> str:
         "- Prompts, replies, artifacts, tasks, Aug-1 state, and inbound positioning are one corpus surface.",
         "- Raw bodies stay in `.limen-private/session-corpus/corpus-command-center/objects`; tracked output is redacted.",
         "- The dashboard surfaces work candidates and pressure; it does not claim tasks or mutate `tasks.yaml`.",
+        "- Constitutional and lineage authority stay with their owner receipts; this surface renders the verified redacted Atlas projection only.",
         "",
         "## Coverage",
         "",
@@ -811,6 +896,7 @@ def render_markdown(public: dict[str, Any]) -> str:
             "",
             f"- Aug-1 gate: `{'pass' if aug1.get('gate_pass') else 'false'}`; legs `{aug1.get('legs_met')}` / `{aug1.get('legs_total')}`; deadline `{aug1.get('deadline')}`.",
             f"- Inbound magnet: value repos `{inbound.get('value_repo_count')}`, seeded repos `{inbound.get('seeded_repo_count')}`, scraper model present `{inbound.get('scraper_model_present')}`.",
+            f"- Iceberg Atlas: status `{atlas.get('status')}`, exact classification `{atlas.get('exact_all')}`, operator-intent events `{atlas.get('timeline_counts', {}).get('operator_intent', 0)}`, artifact events `{atlas.get('timeline_counts', {}).get('artifact', 0)}`, residuals `{atlas.get('residual_count', 0)}`.",
             "",
             "## Private Outputs",
             "",

@@ -880,6 +880,66 @@ parameters:
     self_update: none
     owner: continuity
     note: "Heartbeat timeout in seconds for the corpus-feed outer process so prompt ingestion cannot wedge the beat."
+  LIMEN_GOV_SOURCE_CENSUS:
+    default: ""
+    env: LIMEN_GOV_SOURCE_CENSUS
+    self_update: none
+    owner: continuity
+    note: "Optional path to the source-custody owner's acquisition-specific source-census.v1 for one frozen snapshot. Blank remains explicit coverage debt; Limen never substitutes a local provider scan."
+  LIMEN_GOV_SOURCE_ENVELOPES:
+    default: ""
+    env: LIMEN_GOV_SOURCE_ENVELOPES
+    self_update: none
+    owner: continuity
+    note: "Optional path to the normalization owner's deterministic source-envelope.v1 bundle for the same frozen snapshot; separate from acquisition census and raw custody."
+  LIMEN_GOV_LINEAGE_GRAPH:
+    default: ""
+    env: LIMEN_GOV_LINEAGE_GRAPH
+    self_update: none
+    owner: continuity
+    note: "Optional path to the graph owner's lineage-graph.v1 receipt. The receipt must keep operator-intent and artifact authority lanes distinct."
+  LIMEN_GOV_TESTAMENT:
+    default: ""
+    env: LIMEN_GOV_TESTAMENT
+    self_update: none
+    owner: continuity
+    note: "Optional path to the constitutional owner's governance-testament.v1 ratification receipt; Limen consumes it and never self-ratifies doctrine."
+  LIMEN_GOV_ASSERTION_EVIDENCE:
+    default: ""
+    env: LIMEN_GOV_ASSERTION_EVIDENCE
+    self_update: none
+    owner: continuity
+    note: "Optional path to the assertion-evidence.v1 receipt used to enforce independent evidence groups without exposing source bodies."
+  LIMEN_GOV_COVERAGE_RECEIPT:
+    default: ""
+    env: LIMEN_GOV_COVERAGE_RECEIPT
+    self_update: none
+    owner: continuity
+    note: "Optional path to the coverage-receipt.v1 denominator and exactly-once classification counts for the same frozen snapshot."
+  LIMEN_GOV_ICEBERG_ATLAS:
+    default: ""
+    env: LIMEN_GOV_ICEBERG_ATLAS
+    self_update: none
+    owner: continuity
+    note: "Optional path to the engine-owned deterministic Iceberg Atlas projection. The readiness verifier sanitizes it before the Command Center reads it."
+  LIMEN_GOV_SELF_IMAGES:
+    default: ""
+    env: LIMEN_GOV_SELF_IMAGES
+    self_update: none
+    owner: continuity
+    note: "Optional path to the node-self-image.v1 bundle for registered nodes in the frozen snapshot."
+  LIMEN_GOV_READINESS_OUT:
+    default: "$LIMEN_ROOT/logs/governance-memory-readiness.json"
+    env: LIMEN_GOV_READINESS_OUT
+    self_update: none
+    owner: continuity
+    note: "Redacted deterministic readiness receipt consumed by the Corpus Command Center; contains no raw bodies or configured source paths."
+  LIMEN_GOV_INPUT_MAX_BYTES:
+    default: 8388608
+    env: LIMEN_GOV_INPUT_MAX_BYTES
+    self_update: none
+    owner: continuity
+    note: "Finite per-owner-receipt byte cap for governance-memory validation. Oversized inputs are quarantined independently so unrelated receipts continue."
   LIMEN_CAPABILITY_ROOTS:
     default: ""
     env: LIMEN_CAPABILITY_ROOTS
