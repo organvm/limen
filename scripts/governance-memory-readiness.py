@@ -547,7 +547,23 @@ def atlas_projection(document: Any) -> dict[str, Any]:
         }
     raw_zoom = document.get("zoom_levels", nested_get(document, ("atlas", "zoom_levels")))
     zoom_levels: list[dict[str, Any]] = []
-    if isinstance(raw_zoom, list):
+    if isinstance(raw_zoom, Mapping):
+        canonical_order = ("system", "organ", "repository", "document", "session", "atom")
+        level_ids = [level for level in canonical_order if level in raw_zoom]
+        level_ids.extend(sorted(str(level) for level in raw_zoom if str(level) not in level_ids))
+        for level_id in level_ids[:12]:
+            item = raw_zoom.get(level_id)
+            if isinstance(item, list):
+                count = len(item)
+            elif isinstance(item, Mapping):
+                count = as_nonnegative_int(item.get("node_count", item.get("count")))
+                if count is None and isinstance(item.get("nodes"), list):
+                    count = len(item["nodes"])
+                count = count or 0
+            else:
+                count = as_nonnegative_int(item) or 0
+            zoom_levels.append({"id": safe_token(level_id), "node_count": count})
+    elif isinstance(raw_zoom, list):
         for index, item in enumerate(raw_zoom[:12]):
             if isinstance(item, Mapping):
                 level_id = item.get("id", item.get("level", index))
@@ -579,14 +595,19 @@ def atlas_projection(document: Any) -> dict[str, Any]:
     for index, item in enumerate(iter_records(document, ("ideal_forms", "ideals"))[:100]):
         if not isinstance(item, Mapping):
             continue
-        distance = item.get("distance_to_ideal", item.get("distance"))
+        distance = item.get(
+            "distance_fraction",
+            item.get("distance_to_ideal", item.get("distance")),
+        )
+        if isinstance(distance, Mapping):
+            distance = distance.get("fraction", distance.get("value"))
         if isinstance(distance, str):
             distance = safe_token(distance, "unknown")
         elif not isinstance(distance, (int, float)) or isinstance(distance, bool):
             distance = None
         ideal_forms.append(
             {
-                "id": safe_token(item.get("id"), f"ideal-{index}"),
+                "id": safe_token(item.get("id", item.get("ideal_form_id")), f"ideal-{index}"),
                 "implementation_state": safe_token(item.get("implementation_state", item.get("state")), "unknown"),
                 "distance_to_ideal": distance,
                 "citation_debt": as_nonnegative_int(item.get("citation_debt")) or 0,

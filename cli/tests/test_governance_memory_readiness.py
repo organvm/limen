@@ -136,6 +136,53 @@ def test_complete_owner_receipts_produce_ready_deterministic_projection(tmp_path
     assert "generated_at" not in first
 
 
+def test_engine_atlas_mapping_projects_all_zoom_levels_and_ideal_distance(tmp_path: Path) -> None:
+    module = _load("governance_memory_engine_atlas")
+    paths = _complete_paths(module, tmp_path)
+    atlas = json.loads(paths["iceberg_atlas"].read_text(encoding="utf-8"))
+    atlas["zoom_levels"] = {
+        "atom": [{"node_id": "atom-1"}, {"node_id": "atom-2"}],
+        "document": [{"node_id": "document-1"}],
+        "organ": [{"node_id": "organ-1"}],
+        "repository": [{"node_id": "repository-1"}],
+        "session": [{"node_id": "session-1"}],
+        "system": [{"node_id": "system-1"}],
+    }
+    atlas["ideal_forms"] = [
+        {
+            "ideal_form_id": "ideal-form:iceberg-atlas",
+            "implementation_state": "partial",
+            "distance_fraction": 0.4,
+            "distance_to_ideal": {
+                "classification": "authority_gap",
+                "total_predicates": 5,
+                "verified_predicates": 3,
+            },
+            "citation_debt": 0,
+        }
+    ]
+    _write(paths["iceberg_atlas"], atlas)
+
+    public, _ = module.build_readiness(paths, max_input_bytes=100_000)
+
+    assert public["atlas"]["zoom_levels"] == [
+        {"id": "system", "node_count": 1},
+        {"id": "organ", "node_count": 1},
+        {"id": "repository", "node_count": 1},
+        {"id": "document", "node_count": 1},
+        {"id": "session", "node_count": 1},
+        {"id": "atom", "node_count": 2},
+    ]
+    assert public["atlas"]["ideal_forms"] == [
+        {
+            "id": "ideal-form:iceberg-atlas",
+            "implementation_state": "partial",
+            "distance_to_ideal": 0.4,
+            "citation_debt": 0,
+        }
+    ]
+
+
 def test_write_outputs_reaches_byte_fixed_point(tmp_path: Path, monkeypatch) -> None:
     module = _load("governance_memory_fixed_point")
     paths = _complete_paths(module, tmp_path)

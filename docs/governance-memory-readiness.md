@@ -3,11 +3,11 @@
 > Limen is the bounded scheduler and redacted read model. Constitutional, custody, lineage, and compiler owners remain authoritative for their own receipts.
 
 - Status: `degraded`
-- Snapshot: `not-coherent`
-- Receipt: `sha256:438e483bcd31f327a32df5f71e143c9879b6deba12b353677347d8bbb41e22e9`
-- Exact classification: `False` (0 / None)
+- Snapshot: `snapshot-governance-organ-20260716-001`
+- Receipt: `sha256:b7424bed20438fe867dad4c9541a5c79b49942042adae930f895473b7e808420`
+- Exact classification: `True` (9 / 9)
 - Operationally ready: `False`
-- Visible residuals: `8`
+- Visible residuals: `2`
 
 ## Owner Inputs
 
@@ -15,19 +15,19 @@
 |---|---|---|---|
 | `source_census` | `source-census.v1` | `missing-configuration` | `—` |
 | `source_envelopes` | `source-envelope.v1` | `missing-configuration` | `—` |
-| `lineage_graph` | `lineage-graph.v1` | `missing-configuration` | `—` |
-| `governance_testament` | `governance-testament.v1` | `missing-configuration` | `—` |
+| `lineage_graph` | `lineage-graph.v1` | `available` | `snapshot-governance-organ-20260716-001` |
+| `governance_testament` | `governance-testament.v1` | `available` | `—` |
 | `assertion_evidence` | `assertion-evidence.v1` | `missing-configuration` | `—` |
-| `coverage_receipt` | `coverage-receipt.v1` | `missing-configuration` | `—` |
-| `iceberg_atlas` | `iceberg-atlas.v1` | `missing-configuration` | `—` |
-| `self_images` | `node-self-image.v1` | `missing-configuration` | `—` |
+| `coverage_receipt` | `coverage-receipt.v1` | `available` | `snapshot-governance-organ-20260716-001` |
+| `iceberg_atlas` | `iceberg-atlas.v1` | `available` | `snapshot-governance-organ-20260716-001` |
+| `self_images` | `node-self-image.v1` | `available` | `—` |
 
 ## Iceberg Atlas Projection
 
-- Operator-intent events: `0`
-- Artifact events: `0`
-- Ideal forms: `0`
-- Node self-images: `0`
+- Operator-intent events: `4`
+- Artifact events: `7`
+- Ideal forms: `3`
+- Node self-images: `1`
 
 ## Bounded Cadence
 
@@ -36,11 +36,6 @@
 ## Owner Blockers
 
 - `owner-receipt:assertion_evidence:missing-configuration` — owner `parameter-contract:LIMEN_GOV_ASSERTION_EVIDENCE`; predicate `assertion-evidence.v1 input state is missing-configuration`; next: `LIMEN_GOV_ASSERTION_EVIDENCE="$OWNER_RECEIPT_PATH" python3 scripts/governance-memory-readiness.py --strict`.
-- `owner-receipt:coverage_receipt:missing-configuration` — owner `parameter-contract:LIMEN_GOV_COVERAGE_RECEIPT`; predicate `coverage-receipt.v1 input state is missing-configuration`; next: `LIMEN_GOV_COVERAGE_RECEIPT="$OWNER_RECEIPT_PATH" python3 scripts/governance-memory-readiness.py --strict`.
-- `owner-receipt:governance_testament:missing-configuration` — owner `parameter-contract:LIMEN_GOV_TESTAMENT`; predicate `governance-testament.v1 input state is missing-configuration`; next: `LIMEN_GOV_TESTAMENT="$OWNER_RECEIPT_PATH" python3 scripts/governance-memory-readiness.py --strict`.
-- `owner-receipt:iceberg_atlas:missing-configuration` — owner `parameter-contract:LIMEN_GOV_ICEBERG_ATLAS`; predicate `iceberg-atlas.v1 input state is missing-configuration`; next: `LIMEN_GOV_ICEBERG_ATLAS="$OWNER_RECEIPT_PATH" python3 scripts/governance-memory-readiness.py --strict`.
-- `owner-receipt:lineage_graph:missing-configuration` — owner `parameter-contract:LIMEN_GOV_LINEAGE_GRAPH`; predicate `lineage-graph.v1 input state is missing-configuration`; next: `LIMEN_GOV_LINEAGE_GRAPH="$OWNER_RECEIPT_PATH" python3 scripts/governance-memory-readiness.py --strict`.
-- `owner-receipt:self_images:missing-configuration` — owner `parameter-contract:LIMEN_GOV_SELF_IMAGES`; predicate `node-self-image.v1 input state is missing-configuration`; next: `LIMEN_GOV_SELF_IMAGES="$OWNER_RECEIPT_PATH" python3 scripts/governance-memory-readiness.py --strict`.
 - `owner-receipt:source_census:missing-configuration` — owner `parameter-contract:LIMEN_GOV_SOURCE_CENSUS`; predicate `source-census.v1 input state is missing-configuration`; next: `LIMEN_GOV_SOURCE_CENSUS="$OWNER_RECEIPT_PATH" python3 scripts/governance-memory-readiness.py --strict`.
 - `owner-receipt:source_envelopes:missing-configuration` — owner `parameter-contract:LIMEN_GOV_SOURCE_ENVELOPES`; predicate `source-envelope.v1 input state is missing-configuration`; next: `LIMEN_GOV_SOURCE_ENVELOPES="$OWNER_RECEIPT_PATH" python3 scripts/governance-memory-readiness.py --strict`.
 
