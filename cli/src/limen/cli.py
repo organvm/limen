@@ -425,8 +425,8 @@ def harvest(agent):
 @click.option(
     "--prompt-file",
     default=None,
-    type=click.Path(exists=True),
-    help="Prompt packet file to copy into intent.md.",
+    type=click.Path(dir_okay=False),
+    help="Local prompt packet, or repo-relative file on the --from ref, to copy into intent.md.",
 )
 @click.option(
     "--no-readme",

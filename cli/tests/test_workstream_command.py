@@ -56,6 +56,61 @@ def test_workstream_command_writes_private_kickstart_packet(tmp_path: Path, monk
     assert ".limen-workstream" not in _git("status", "--short", cwd=wt).stdout
 
 
+def test_workstream_prompt_file_can_resolve_from_selected_ref(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "demo-repo"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("config", "user.email", "test@example.invalid", cwd=repo)
+    _git("config", "user.name", "Test User", cwd=repo)
+    (repo / "README.md").write_text("demo\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo)
+    _git("commit", "-qm", "init", cwd=repo)
+
+    _git("checkout", "-qb", "capsule-source", cwd=repo)
+    docs = repo / "docs" / "continuations"
+    docs.mkdir(parents=True)
+    prompt_path = docs / "next.md"
+    prompt_path.write_text("Resume from the selected ref.\n", encoding="utf-8")
+    _git("add", "docs/continuations/next.md", cwd=repo)
+    _git("commit", "-qm", "add continuation", cwd=repo)
+    _git("checkout", "-q", "main", cwd=repo)
+
+    monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(
+        main,
+        [
+            "workstream",
+            "--from",
+            "capsule-source",
+            "--prompt-file",
+            "docs/continuations/next.md",
+            str(repo),
+            "Next From Ref",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    intent = repo / ".worktrees" / "next-from-ref" / ".limen-workstream" / "intent.md"
+    assert "Resume from the selected ref." in intent.read_text(encoding="utf-8")
+
+    missing = CliRunner().invoke(
+        main,
+        [
+            "workstream",
+            "--from",
+            "capsule-source",
+            "--prompt-file",
+            "docs/continuations/missing.md",
+            str(repo),
+            "Missing From Ref",
+        ],
+    )
+    assert missing.exit_code == 1
+    assert "prompt file not found locally or at capsule-source" in missing.output
+    assert not (repo / ".worktrees" / "missing-from-ref").exists()
+
+
 def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(tmp_path: Path, monkeypatch) -> None:
     repo = tmp_path / "demo-repo"
     repo.mkdir()
