@@ -169,3 +169,27 @@ above it is autonomous.
 
 See also: `board-is-event-log-projection` (memory), `cli/src/limen/materialize.py`,
 `scripts/heal-board.py`, `io.py` (`queue_lock`, `save_limen_file`, the collapse-guard).
+
+## The testament class: memory as the second ticket family
+
+`tasks.yaml` is the first testament TABVLARIVS keeps: the single-writer board. The per-project
+**memory dir** (`~/.claude/projects/.../memory/MEMORY.md` and its atom files) is the second
+testament: the durable session-knowledge ledger that cross-session siblings read.
+
+Like the board, the memory dir has the same failure mode when written ad hoc — any session that
+directly edits `MEMORY.md` races with every concurrent session and with the beat's own captures,
+producing the same torn-bytes / lost-update hazard the ticket lane was built to solve.
+
+The **Record-Keeper Covenant** extends TABVLARIVS's single-writer principle to this second
+testament. Sessions submit a **memory ticket** (`memory-ticket.py`) — one atomic create, no read,
+no board touch — and the keeper folds it into the memory dir on the beat, in order, with the same
+collapse-guard and quarantine discipline it applies to board tickets.
+
+The covenant registry and the parity gate are declared in `docs/record-keeper-covenant.md` and
+`institutio/governance/covenant.yaml` (sibling PRs; these are plain references — the files land
+when those PRs merge). The arming sequence is two ordered operator flips:
+
+1. `LIMEN_MEMORIA=1` — enables the lane (keeper starts accepting memory tickets).
+2. Settings arming — hooks that prevent direct memory writes become active.
+
+Nothing arms by merge; both flips are deliberate human-gated levers.

@@ -589,6 +589,10 @@ checks.
   contract does not change the operator's settings or any interactive/user-started Claude session.
 - **Tier subagent fan-out by job.** Task/Workflow subagents inherit the session model; pick each agent's tier by its job (`.claude/agents/` types, or an explicit `model`/`effort`) so trivial workers never ride Opus. Authority: `cli/src/limen/model_selection.py`; details in CLAUDE.md → Parallel Exploration & Fan-Out.
 - **Fable plans, cheaper tiers build.** Fable's role is PLAN-ONLY: it does the deep analysis, emits a build packet into a worktree, and hands off to a cheaper tier (Opus/Sonnet/Haiku) that builds; building on Fable is prohibited. It is acceptance-gated (`scripts/fable-allotment.py accept ...`, `LIMEN_FABLE_ACCEPTANCE=<receipt>`) AND live runtime-capped against actual weekly tokens burned (40% deliberate / 50% hard, `scripts/fable-allotment.py balance` → `logs/fable-allotment.json`, enforced in `cli/src/limen/model_selection.py`). Full doctrine + caps: `docs/fable-allotment.md`.
+- **TABVLARIVS is the sole writer of the testament class** (tasks.yaml + the per-project memory
+  dir). Sessions never write memory directly; capture goes through a memory ticket
+  (memory-ticket.py) and the keeper folds it on the beat. **Memory is keeper-owned — never Write
+  MEMORY.md or memory atoms; submit a memory ticket (memory-ticket.py).**
 
 ### Gemini
 - You are Gemini CLI (v0.44.1+). Read `$LIMEN_ROOT/tasks.yaml` at session start.
