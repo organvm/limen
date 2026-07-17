@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Turn the whole current Codex session into planner and executor packets.
+"""Turn one current session into provider-neutral planner and executor packets.
 
 This does not launch paid agents. It writes receipts/packet specs when asked,
 and defaults to dry-run so banked resets or credits cannot be consumed.
@@ -20,7 +20,6 @@ from typing import Any
 
 CODE_ROOT = Path(__file__).resolve().parents[1]
 ROOT = Path(os.environ.get("LIMEN_ROOT", CODE_ROOT))
-HOME = Path.home()
 PRIVATE_ROOT = Path(os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus"))
 PRIVATE_INDEX = PRIVATE_ROOT / "lifecycle" / "current-session-fanout.json"
 DOC_PATH = ROOT / "docs" / "current-session-fanout.md"
@@ -58,8 +57,8 @@ THEMES = [
     ("current-session-intake", ("this session", "beginning of this session", "hold everything")),
     ("domus-preflight-noise", ("domus", "homebrew", "preflight", "atuin", "cursor position")),
     ("private-sauce-boundary", ("private", "secret", "sauce", "hide")),
-    ("codex-planner-worktrees", ("10 worktrees", "codex only", "planner", "worktree")),
-    ("autopoietic-conductor", ("autopoetic", "autopoietic", "forever", "tokens")),
+    ("peer-planner-worktrees", ("10 worktrees", "codex only", "planner", "worktree")),
+    ("autopoietic-orchestration", ("autopoetic", "autopoietic", "forever", "tokens")),
 ]
 
 FALLBACK_LANE_ALIASES = {
@@ -293,28 +292,25 @@ def unique_plan_sources(plan_events: list[dict[str, Any]]) -> list[dict[str, Any
     return [event for event in plan_events if not event["duplicate"]]
 
 
-def latest_codex_session() -> Path | None:
+def configured_current_session() -> Path | None:
+    """Resolve only a caller-bound session artifact; never discover peer session estates."""
+
     explicit = os.environ.get("LIMEN_CURRENT_SESSION_JSONL")
-    if explicit:
-        path = Path(explicit).expanduser()
-        return path if path.exists() else None
-    root = HOME / ".codex" / "sessions"
-    if not root.exists():
+    if not explicit:
         return None
-    try:
-        files = [path for path in root.rglob("*.jsonl") if path.is_file()]
-    except OSError:
-        return None
-    return max(files, key=lambda path: path.stat().st_mtime) if files else None
+    path = Path(explicit).expanduser()
+    return path if path.is_file() else None
 
 
 def find_session(path_arg: str | None) -> Path:
     if path_arg:
         path = Path(path_arg).expanduser()
     else:
-        path = latest_codex_session()
-    if path is None or not path.exists():
-        raise FileNotFoundError("no Codex session JSONL found; set LIMEN_CURRENT_SESSION_JSONL or pass --session")
+        path = configured_current_session()
+    if path is None or not path.is_file():
+        raise FileNotFoundError(
+            "an explicit current-session JSONL is required; set LIMEN_CURRENT_SESSION_JSONL or pass --session"
+        )
     return path
 
 
@@ -359,8 +355,8 @@ def _normalize_lane_rows(rows: list[Any]) -> list[dict[str, Any]]:
     if not normalized:
         normalized.append(
             {
-                "agent": "codex",
-                "kind": "local-cli",
+                "agent": "any",
+                "kind": "routing-sentinel",
                 "status": "active",
                 "reachable": True,
                 "remaining": None,
@@ -406,16 +402,16 @@ def lane_selection(selector: str, rows: list[dict[str, Any]] | None = None) -> l
         if selector == "all":
             return [str(agent) for agent in PAID_AGENT_ORDER]
         active = [str(agent) for agent in PAID_AGENT_ORDER if by_agent.get(str(agent), {}).get("status") == "active"]
-        return active or ["codex"]
+        return active or ["any"]
     if resolve_lane_selector is None or load_limen_file is None or _down_lanes is None:
         if selector == "all":
             return list(FALLBACK_ALL_LANES)
-        return ["codex"]
+        return ["any"]
     try:
         board = load_limen_file(ROOT / "tasks.yaml")
         return list(resolve_lane_selector(selector, board=board, down_lanes=_down_lanes()))
     except Exception:
-        return ["codex"]
+        return ["any"]
 
 
 def packet_slug(value: str) -> str:
@@ -458,7 +454,7 @@ def owner_packet_for_theme(theme: str) -> dict[str, Any]:
                 "blocked local gates are recorded as local blockers while global product selection remains active",
             ],
             "verification_predicates": [
-                "LIMEN_ROOT=$PWD LIMEN_TASKS=$PWD/tasks.yaml python3 scripts/current-session-fanout.py --session <session.jsonl> --min-codex-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --dry-run",
+                "LIMEN_ROOT=$PWD LIMEN_TASKS=$PWD/tasks.yaml python3 scripts/current-session-fanout.py --session <session.jsonl> --min-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --dry-run",
                 "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q",
                 "PYTHONPATH=cli/src python3 -c \"from limen.capacity import PAID_AGENT_ORDER; required={'codex','claude','opencode','agy','gemini','ollama','jules','copilot','warp','oz','github_actions'}; assert required <= set(PAID_AGENT_ORDER)\"",
                 "LIMEN_ROOT=$PWD LIMEN_TASKS=$PWD/tasks.yaml PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes auto --dry-run",
@@ -503,13 +499,13 @@ def owner_packet_for_theme(theme: str) -> dict[str, Any]:
 def planner_packets(
     themes: list[str],
     messages: list[dict[str, Any]],
-    min_codex: int,
+    min_planners: int,
     no_reset_spend: bool,
     source_plan_hashes: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     seed_themes = list(themes)
     idx = 1
-    while len(seed_themes) < min_codex:
+    while len(seed_themes) < min_planners:
         seed_themes.append(f"product-factory-{idx:02d}")
         idx += 1
     prompt_hashes = [msg["hash"] for msg in messages]
@@ -521,7 +517,8 @@ def planner_packets(
             {
                 "id": f"PLAN-{idx:02d}-{stable_hash(theme, 8)}",
                 "packet_type": "planner_packet",
-                "target_agent": "codex",
+                # Planning is a packet role, not a provider rank. Runtime capacity selects a peer.
+                "target_agent": "any",
                 "theme": theme,
                 "worktree_slug": packet_slug(f"planner-{idx:02d}-{theme}")[:80],
                 "spend_guard": "no-reset-spend" if no_reset_spend else "operator-allowed-reset-spend",
@@ -539,7 +536,7 @@ def planner_packets(
                     "split local blockers into owner-recorded work while keeping other unblocked product rows eligible",
                 ],
                 "verification_predicates": [
-                    "python3 scripts/current-session-fanout.py --session <source-session-jsonl> --min-codex-planners 12 --executor-lanes auto --include-contrib --no-reset-spend --dry-run",
+                    "python3 scripts/current-session-fanout.py --session <source-session-jsonl> --min-planners 12 --executor-lanes auto --include-contrib --no-reset-spend --dry-run",
                     "python3 scripts/product-ledger.py --refresh --redacted-summary",
                     "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_substrate_repo_product_fanout.py -q",
                 ],
@@ -561,13 +558,9 @@ def executor_packets(
     if include_contrib and "contrib-mirror" not in work_themes:
         work_themes.append("contrib-mirror")
     reserved_themes = {
-        theme
-        for lane, theme in PREFERRED_EXECUTOR_THEMES.items()
-        if lane in lanes and theme in work_themes
+        theme for lane, theme in PREFERRED_EXECUTOR_THEMES.items() if lane in lanes and theme in work_themes
     }
     for lane in lanes:
-        if lane == "codex":
-            continue
         preferred_theme = PREFERRED_EXECUTOR_THEMES.get(lane)
         if preferred_theme in work_themes:
             theme = preferred_theme
@@ -581,7 +574,7 @@ def executor_packets(
                 "packet_type": "executor_packet",
                 "target_agent": lane,
                 "theme": theme,
-                "spend_guard": "no-reset-spend" if no_reset_spend and lane == "codex" else "lane-policy",
+                "spend_guard": "no-reset-spend" if no_reset_spend else "lane-policy",
                 "source_plan_hashes": list(plan_hashes),
                 "acceptance": [
                     "bounded reversible work only",
@@ -624,7 +617,7 @@ def task_seed_context(
         f"Current-session fanout {phase} packet.\n"
         f"Packet id: {packet['id']}\n"
         f"Theme: {packet.get('theme', 'current-session-intake')}\n"
-        f"Source session: {snapshot['session_path']}\n"
+        f"Source session digest: sha256:{snapshot['session_hash']}\n"
         f"Source plan hashes: {plan_hashes or 'none'}\n"
         f"Source prompt hashes: {prompt_hashes or 'none'}\n"
         "Do not paste raw private prompt or plan bodies into public files, commits, PRs, "
@@ -835,18 +828,21 @@ def packet_plan_hash_intersection(packets: list[dict[str, Any]]) -> set[str]:
 def fanout_verification_command(
     *,
     session: Path,
-    min_codex_planners: int,
+    min_planners: int,
     executor_lanes: str,
     include_contrib: bool,
     no_reset_spend: bool,
 ) -> str:
+    # Verification receipts and task packets are tracked/public surfaces. The caller-bound
+    # private transcript path stays only in the private snapshot; commands use an explicit
+    # placeholder so no home path or peer session identifier is published.
     args = [
         "python3",
         "scripts/current-session-fanout.py",
         "--session",
-        str(session),
-        "--min-codex-planners",
-        str(min_codex_planners),
+        "<explicit-current-session.jsonl>",
+        "--min-planners",
+        str(min_planners),
         "--executor-lanes",
         executor_lanes,
     ]
@@ -866,7 +862,7 @@ def set_run_verification_predicate(
 ) -> None:
     command = fanout_verification_command(
         session=session,
-        min_codex_planners=args.min_codex_planners,
+        min_planners=args.min_planners,
         executor_lanes=args.executor_lanes,
         include_contrib=args.include_contrib,
         no_reset_spend=no_reset_spend,
@@ -896,7 +892,7 @@ def build_snapshot(args: argparse.Namespace) -> dict[str, Any]:
     planners = planner_packets(
         themes,
         messages,
-        args.min_codex_planners,
+        args.min_planners,
         no_reset_spend,
         source_plan_hashes,
     )
@@ -1091,9 +1087,9 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         "",
         "## Contract",
         "",
-        "- Planner packets are Codex conductor work; executor packets go to active fleet lanes.",
+        "- Planning and execution are peer roles, not provider rank: select a co-equal keeper from live capability, availability, spend, and acceptance evidence.",
         "- Task seeding submits only `open` queue items through Tabularius; `dispatch-async.py` or `limen dispatch` launches them after the keeper folds the tickets.",
-        "- This command never applies Codex resets, credits, top-ups, or paid overages.",
+        "- This command never applies provider resets, credits, top-ups, or paid overages.",
         "- Outbound identity-bearing actions remain human-gated.",
     ]
     return "\n".join(lines) + "\n"
@@ -1108,8 +1104,11 @@ def write_outputs(snapshot: dict[str, Any], markdown: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Create current-session planner and executor fanout packets.")
-    parser.add_argument("--session", help="Codex session JSONL path; defaults to latest session")
-    parser.add_argument("--min-codex-planners", type=int, default=int(os.environ.get("LIMEN_MIN_CODEX_PLANNERS", "10")))
+    parser.add_argument(
+        "--session",
+        help="explicit current-invocation JSONL path; no peer-session discovery is performed",
+    )
+    parser.add_argument("--min-planners", type=int, default=int(os.environ.get("LIMEN_MIN_PLANNERS", "10")))
     parser.add_argument("--executor-lanes", default=os.environ.get("LIMEN_LANES", "auto"))
     parser.add_argument("--include-contrib", action="store_true")
     parser.add_argument("--no-reset-spend", dest="allow_reset_spend", action="store_false", default=False)

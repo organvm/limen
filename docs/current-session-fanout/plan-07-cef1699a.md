@@ -2,7 +2,7 @@
 
 Generated: `2026-06-30T13:07:26+00:00`
 Theme: `quota-reset-guard`
-Source session: `rollout-2026-06-30T06-17-55-019f1809-13b4-7780-9b1f-d4584f872333.jsonl`
+Source session: `<private-session-artifact>`
 Source session SHA-256: `e47e35a66124f3bfde645235d17b527dbf0a0ee9262ac0aa4f72670b286c67d3`
 
 ## Privacy Contract

@@ -219,7 +219,7 @@ def governance_context(
             "source": "scripts/session-attack-paths.py",
         },
         "agent_policy": {
-            "candidate_packet_lane": "codex-conductor",
+            "candidate_packet_lane": "peer-coordination",
             "destructive_cleanup_lane": "standing-grant-or-human-acceptance-then-reclaim-worktrees",
             "canonical_vendor_order": list(PAID_AGENT_ORDER),
             "single_writer_boundary": "do not write tasks.yaml or acceptance ledgers as a shortcut from this script",

@@ -13,7 +13,7 @@ systems.
 
 ## Source proof
 
-- Source session: `~/.codex/sessions/2026/06/30/rollout-2026-06-30T06-17-55-019f1809-13b4-7780-9b1f-d4584f872333.jsonl`
+- Source session: `<private-session-jsonl>`
 - Session hash: `caeb31d884ab514a4cb1d2a2`
 - Session events read: `1452`
 - User messages read: `44`
@@ -47,7 +47,7 @@ must be staged for approval.
 ### PLAN06-OWNER-01 contrib hub ledger
 
 - Owner repo/worktree: `organvm/contrib` at
-  `/Users/4jp/Workspace/organvm/contrib`
+  `<user-home>/Workspace/organvm/contrib`
 - Current local state: clean checkout, `main...origin/main [behind 3]`
 - Executor fit: `codex` to reconcile, then `opencode` only for narrow
   doc/script edits
@@ -72,7 +72,7 @@ must be staged for approval.
 ### PLAN06-OWNER-02 engine-A ledger backend
 
 - Owner repo/worktree: `a-organvm/organvm-engine` at
-  `/Users/4jp/Workspace/a-organvm/organvm-engine`
+  `<user-home>/Workspace/a-organvm/organvm-engine`
 - Current local state: branch `limen/limen-060-4a78`; contrib package and
   `tests/test_contrib.py` present
 - Executor fit: `codex` for interface design; `opencode` or `jules` for a
@@ -97,7 +97,7 @@ must be staged for approval.
 ### PLAN06-OWNER-03 engine-B parity map
 
 - Owner repo/worktree: `a-organvm/orchestration-start-here` at
-  `/Users/4jp/Workspace/a-organvm/orchestration-start-here`
+  `<user-home>/Workspace/a-organvm/orchestration-start-here`
 - Current local state: clean tracked files, `main...origin/main [behind 9]`,
   untracked `open_issues.json`
 - Executor fit: `codex` for the parity map; `opencode` for narrow code changes
@@ -152,7 +152,7 @@ must be staged for approval.
   this planner could not use those runtime health/runway receipts.
 - `organvm/contrib` ledger verification currently blocks locally:
   `python3 scripts/refresh-ledger.py --offline --check` reports missing seed
-  root `/Users/4jp/Code/upstream/community` and stale derived ledger output.
+  root `<user-home>/Code/upstream/community` and stale derived ledger output.
 - `a-organvm/orchestration-start-here` has untracked `open_issues.json`; do not
   classify it as source until owner packet 03 inspects it.
 - These are owner-packet blockers, not global product-selection blockers.

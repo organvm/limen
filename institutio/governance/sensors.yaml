@@ -420,10 +420,10 @@ sensors:
 
   disk-capacity:
     section: "0g8"
-    title: "disk capacity — /System/Volumes/Data must stay below threshold; heal-probe artifacts + heartbeat err log reaped when armed"
+    title: "disk capacity — live heartbeat observes /System/Volumes/Data without mutating the host"
     gate: LIMEN_DISK_CAPACITY
     default: "1"
-    source: [metabolize]
+    source: [metabolize, heartbeat]
     owner: tabularius
     cadence:
       env: LIMEN_BEAT_DISK_CAPACITY
@@ -433,14 +433,8 @@ sensors:
       default: 30
     steps:
       - command: "python3 scripts/disk-capacity.py --check"
-        args_when:
-          - env: LIMEN_DISK_CAPACITY_APPLY
-            default: "1"
-            equals: "1"
-            args: ["--apply"]
-            armed_valve_type: safety
         severity: advisory
-        escalation: "disk capacity BREACHED — arm LIMEN_DISK_CAPACITY_APPLY=1 so the beat removes gitignored probes and truncates the heartbeat error log"
+        escalation: "disk capacity BREACHED — inspect scripts/disk-capacity-reclaim.py --check; any mutation is a separate explicit --apply with an exact receipt"
     omega_eligible:
       - label: "disk capacity below threshold"
         tier: det
@@ -460,15 +454,15 @@ sensors:
 
   lane-fitness-refresh:
     section: "0h2"
-    title: "lane-fitness refresh — recompute per-(agent, task_class) conversion fitness from dispatch_log into logs/lane-fitness.json"
+    title: "lane-fitness shadow refresh — fold verified execution trajectories into observable route/class telemetry"
     gate: LIMEN_LANE_FITNESS
     default: "1"
     source: [metabolize]
     owner: dispatch
-    # dispatch._lane_fitness consults logs/lane-fitness.json at reservation time (fail-open). Without
-    # a beat-wired refresh the file goes stale and the fitness signal either never seeds (cold start)
-    # or anchors on history from a previous run. Reading tasks.yaml dispatch_log only; PII-clean;
-    # runs in seconds. Cadence 4 keeps the table current without paying per-beat I/O on every cycle.
+    # This report is deliberately shadow-only: dispatch may record what it would recommend but may
+    # not reorder, suppress, or reroute work from it. The source is immutable
+    # limen.execution_trajectory.v1 JSONL, never task-board done events. Missing source remains
+    # visible coverage debt instead of a false zero-work signal.
     cadence:
       env: LIMEN_BEAT_LANE_FITNESS
       default: 4
@@ -557,18 +551,6 @@ sensors:
         severity: silent
         escalation: "routine freshness skipped"
 
-  session-walk:
-    section: "0j"
-    title: "session walk — full-horizon census of BOTH vendor session estates"
-    gate: LIMEN_SESSION_WALK
-    default: "1"
-    source: [metabolize]
-    owner: tabularius
-    steps:
-      - command: 'python3 scripts/session-walk-census.py --walk "${LIMEN_SESSION_WALK_CAP:-2}"'
-        severity: silent
-        escalation: "session walk skipped"
-
   mail-answered:
     section: "0m2"
     title: "mail answered — the obligations ledger is fresh AND every reply-owed obligation has a draft (the C_MAIL effector is alive)"
@@ -638,16 +620,16 @@ sensors:
 
   horrevm-custody:
     section: "heartbeat"
-    title: "HORREVM custody — arca-sealed ciphertext shipped to Drive/Dropbox and proven restorable (dark until L-CLOUD-EGRESS-CONSENT)"
+    title: "HORREVM custody — zero-write receipt-ready plan plus freshness evidence"
     gate: LIMEN_HORREVM
     default: "1"
     source: [heartbeat]
     owner: horrevm
-    # Seal-then-ship rides the heartbeat (arca seals every metabolize beat; custody self-throttles
-    # to >=20h between pushes, so <=1-beat vault staleness is accepted by design). Dry-run until the
-    # operator arms LIMEN_HORREVM_APPLY=1 via the lever — the ONLY egress consent switch. A 240s
-    # bound may truncate the FIRST bulk push; rclone copy is incremental per file, so successive
-    # beats converge — fail-open, never wedged.
+    # The heartbeat is observation-only. It computes exact per-rail payload hashes and checks
+    # freshness without staging, rclone mutation, or state writes. A real probe/push is a separate
+    # explicit --apply invocation with LIMEN_HORREVM_APPLY=1 plus a Domus-trusted OpenSSH-signed
+    # limen.horrevm.apply_receipt.v1 receipt. The valve or self-asserted JSON alone can never
+    # authorize it.
     cadence:
       env: LIMEN_BEAT_HORREVM
       default: 4
@@ -656,17 +638,11 @@ sensors:
       default: 240
     steps:
       - command: "python3 scripts/horrevm-custody.py --push"
-        args_when:
-          - env: LIMEN_HORREVM_APPLY
-            default: "0"
-            equals: "1"
-            args: ["--apply"]
-            armed_valve_type: safety
         severity: silent
-        escalation: "HORREVM custody push skipped or exceeded its bound"
+        escalation: "HORREVM custody plan could not be derived within its bound"
       - command: "python3 scripts/horrevm-custody.py --status"
         severity: advisory
-        escalation: "custody rail unproven or stale (logs/horrevm.json) — pull L-CLOUD-EGRESS-CONSENT (issue #1109) to consent + arm, or re-consent a dead token via the same lever; NEVER install a File Provider desktop app"
+        escalation: "custody rail unproven or stale (logs/horrevm.json) — issue one exact receipt-bound probe/push or re-consent a dead token; NEVER install a File Provider desktop app"
     omega_eligible:
       - label: "custody config parity"
         tier: det
@@ -677,7 +653,7 @@ sensors:
 
   relationship-review-delta:
     section: heartbeat
-    title: "relationship review-due detector — surface (PII-clean count) when a person's new inbound volume since their last review warrants a delta dice-up"
+    title: "relationship review-due detector — consume a fresh owner-custodied immutable handoff and emit only a PII-clean count"
     gate: LIMEN_RELATIONSHIP_REVIEW
     default: "1"
     source: [heartbeat]
@@ -690,11 +666,5 @@ sensors:
       default: 300
     steps:
       - command: "python3 scripts/relationship-review-delta.py"
-        args_when:
-          - env: LIMEN_RELATIONSHIP_REVIEW_NOTIFY
-            default: "1"
-            equals: "1"
-            args: ["--notify"]
-            armed_valve_type: safety
         severity: silent
-        escalation: "relationship review-due detector skipped or exceeded its bound (read-only chat.db count; fails open)"
+        escalation: "relationship review-due coverage unavailable or exceeded its bound; refresh the owner-produced custody handoff (the sensor has no hydration or storage effector)"

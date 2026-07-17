@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+echo "BLOCKED: this historical CI-only protection packet was superseded by the exact-head review gate; use scripts/setup-rulesets.py dry-run." >&2
+exit 2
+
 # PRE-STAGED for LIMEN-072 / a-organvm/organvm-engine#61 by Claude (read-only generation).
 # Generated from organvm_engine.ci.protect.plan_branch_protection(registry-v2.json).
 # These are OUTWARD, DESTRUCTIVE (gh api -X PUT) ops Claude is barred from running.
@@ -747,4 +750,3 @@ gh api -X PUT "repos/meta-organvm/organvm-corpvs-testamentvm/branches/main/prote
   "allow_deletions": false
 }
 EOF
-

@@ -22,7 +22,7 @@ Status: `ready`
 - User prompt occurrences: `56`.
 - Unique user prompt hashes: `19`.
 - Plan hashes: `10`.
-- Derived themes: `current-session-intake`, `alpha-omega-product-ledger`, `money-inbound-seo`, `repo-salvage-consolidation`, `contrib-mirror`, `full-fleet-overnight`, `dynamic-substrate`, `quota-reset-guard`, `domus-preflight-noise`, `private-sauce-boundary`, `codex-planner-worktrees`, `autopoietic-conductor`.
+- Derived themes: `current-session-intake`, `alpha-omega-product-ledger`, `money-inbound-seo`, `repo-salvage-consolidation`, `contrib-mirror`, `full-fleet-overnight`, `dynamic-substrate`, `quota-reset-guard`, `domus-preflight-noise`, `private-sauce-boundary`, `peer-planner-worktrees`, `autopoietic-orchestration`.
 - Item mix: `response_item` 1012, `event_msg` 417, `response_item:function_call` 301, `response_item:function_call_output` 301, `response_item:message` 161, `response_item:reasoning` 157, `response_item:custom_tool_call` 45, `response_item:custom_tool_call_output` 45, `turn_context` 18, `compacted` 4, `response_item:web_search_call` 2, `session_meta` 1.
 - Tool mix: `exec_command` 278, `apply_patch` 45, `write_stdin` 21, `update_plan` 2.
 
@@ -35,18 +35,18 @@ Status: `ready`
 
 | Packet | Owner | Gate | Agent Fit | Source | Primary Predicate |
 |---|---|---|---|---|---|
-| `OWNER-current-session-intake-a2c2ca1e` | organvm/limen session intake | `ready` | codex | turns 1-18; prompts 19 | `python3 scripts/current-session-fanout.py --session <session.jsonl> --theme current-session-intake --write` |
-| `OWNER-alpha-omega-product-ledger-ff680cea` | global product ledger | `ready-after-predicate` | codex -> opencode/jules after owner repo is explicit | turns 6-12; prompts 3 | `python3 scripts/generate-positioning.py --frontdoor --discoverability` |
-| `OWNER-money-inbound-seo-37b731f8` | revenue and inbound discovery | `ready-after-predicate` | codex -> opencode/jules after repo and audience are explicit | turns 4-8; prompts 4 | `python3 scripts/generate-positioning.py --discoverability` |
-| `OWNER-repo-salvage-consolidation-1c17c8a3` | repo surface consolidation | `ready-after-owner-route` | codex first; cheaper lanes after repo/path narrowing | turns 1-18; prompts 7 | `python3 scripts/session-attack-paths.py --write` |
-| `OWNER-contrib-mirror-0bd58d68` | external contribution mirror | `ready-after-owner-route` | codex planning; opencode/jules only for named repo predicates | turns 4-10; prompts 3 | `python3 scripts/session-attack-paths.py --write` |
-| `OWNER-full-fleet-overnight-ea38d4d8` | fleet dispatch substrate | `ready-after-usage-census` | codex conductor; active lanes only after usage gates | turns 1-8; prompts 3 | `python3 scripts/usage-telemetry.py --write` |
-| `OWNER-dynamic-substrate-f0b8bc86` | storage and capability substrate | `ready` | codex | turns 1-5; prompts 5 | `python3 scripts/capability-substrate-ledger.py --write` |
-| `BLOCKED-quota-reset-guard-cef1699a` | usage and reset governance | `blocked-local-recorded` | codex/human-prep | turns 3-11; prompts 3 | `python3 scripts/usage-telemetry.py --write` |
-| `BLOCKED-domus-preflight-noise-5aa10d25` | domus local preflight | `blocked-local-recorded` | codex/human-prep | turns 1-3; prompts 2 | `domus-packages review --json` |
-| `OWNER-private-sauce-boundary-b131e64c` | private/public boundary | `ready` | codex | turns 1-4; prompts 3 | `python3 scripts/censor.py --help` |
-| `OWNER-codex-planner-worktrees-f3f5e6a4` | codex planner worktree fanout | `ready-after-clean-worktree` | codex | turns 1-8; prompts 3 | `git status --short --branch` |
-| `OWNER-autopoietic-conductor-5bdbeb44` | conductor governance | `ready-after-governor` | codex | turns 10-11; prompts 3 | `python3 scripts/autonomy-governor.py explain` |
+| `OWNER-current-session-intake-a2c2ca1e` | organvm/limen session intake | `ready` | any compatible peer selected live | turns 1-18; prompts 19 | `python3 scripts/current-session-fanout.py --session <session.jsonl> --theme current-session-intake --write` |
+| `OWNER-alpha-omega-product-ledger-ff680cea` | global product ledger | `ready-after-predicate` | any compatible peer selected live | turns 6-12; prompts 3 | `python3 scripts/generate-positioning.py --frontdoor --discoverability` |
+| `OWNER-money-inbound-seo-37b731f8` | revenue and inbound discovery | `ready-after-predicate` | any compatible peer selected live | turns 4-8; prompts 4 | `python3 scripts/generate-positioning.py --discoverability` |
+| `OWNER-repo-salvage-consolidation-1c17c8a3` | repo surface consolidation | `ready-after-owner-route` | any compatible peer selected live | turns 1-18; prompts 7 | `python3 scripts/session-attack-paths.py --write` |
+| `OWNER-contrib-mirror-0bd58d68` | external contribution mirror | `ready-after-owner-route` | any compatible peer selected live | turns 4-10; prompts 3 | `python3 scripts/session-attack-paths.py --write` |
+| `OWNER-full-fleet-overnight-ea38d4d8` | fleet dispatch substrate | `ready-after-usage-census` | any compatible peer selected live | turns 1-8; prompts 3 | `python3 scripts/usage-telemetry.py --write` |
+| `OWNER-dynamic-substrate-f0b8bc86` | storage and capability substrate | `ready` | any compatible peer selected live | turns 1-5; prompts 5 | `python3 scripts/capability-substrate-ledger.py --write` |
+| `BLOCKED-quota-reset-guard-cef1699a` | usage and reset governance | `blocked-local-recorded` | any peer may prepare the owner gate | turns 3-11; prompts 3 | `python3 scripts/usage-telemetry.py --write` |
+| `BLOCKED-domus-preflight-noise-5aa10d25` | domus local preflight | `blocked-local-recorded` | any peer may prepare the owner gate | turns 1-3; prompts 2 | `domus-packages review --json` |
+| `OWNER-private-sauce-boundary-b131e64c` | private/public boundary | `ready` | any compatible peer selected live | turns 1-4; prompts 3 | `python3 scripts/censor.py --help` |
+| `OWNER-peer-planner-worktrees-f3f5e6a4` | peer planner worktree fanout | `ready-after-clean-worktree` | any compatible peer selected live | turns 1-8; prompts 3 | `git status --short --branch` |
+| `OWNER-autopoietic-orchestration-5bdbeb44` | coordination governance | `ready-after-governor` | any compatible peer selected live | turns 10-11; prompts 3 | `python3 scripts/autonomy-governor.py explain` |
 
 ## Executor Criteria
 
@@ -163,7 +163,7 @@ Status: `ready`
   - `python3 scripts/censor.py --help`
   - `git diff --check`
 
-### `OWNER-codex-planner-worktrees-f3f5e6a4`
+### `OWNER-peer-planner-worktrees-f3f5e6a4`
 
 - Route: Keep planner worktrees as planning lanes until executor packets meet owner/predicate gates.
 - Criteria:
@@ -174,7 +174,7 @@ Status: `ready`
   - `git status --short --branch`
   - `python3 scripts/current-session-fanout.py --session <session.jsonl> --theme current-session-intake`
 
-### `OWNER-autopoietic-conductor-5bdbeb44`
+### `OWNER-autopoietic-orchestration-5bdbeb44`
 
 - Route: Keep the system breathing through bounded local work, not unbounded spend or broad fanout.
 - Criteria:

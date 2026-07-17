@@ -115,12 +115,12 @@ if [ "${LIMEN_ARCA:-1}" = "1" ]; then
   bash "$LIMEN_ROOT/scripts/arca.sh" backup || echo "  (arca skipped — keychain locked, offline, or vault unconfigured)"
 fi
 
-# ── 6. self-improve (LOW cadence) — the last rung of the self-* ladder ──
+# ── 6. self-improve shadow telemetry (LOW cadence) ──
 # Reads the loop's own dispatch_log track record and emits a re-plan PROPOSAL to
 # logs/self-improve-proposal.json (down-weight 0%-lanes, retire chronic-fail
 # patterns, boost what ships). Proposal-only + read-only — never writes tasks.yaml.
 # It's a slow-moving signal, so run it only every Nth beat, not per-beat.
-# Wired live: low-cadence voice (every LIMEN_SI_CADENCE hours) — the last rung that closes the ladder.
+# Wired live as observation only (every LIMEN_SI_CADENCE hours); no route/task actuator consumes it.
 N="${LIMEN_SI_CADENCE:-10}"
 if [ "$(( $(date +%s) / 3600 % N ))" = "0" ]; then
   python3 "$LIMEN_ROOT/scripts/self-improve.py" || echo "  (self-improve skipped)"

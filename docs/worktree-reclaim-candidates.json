@@ -18,7 +18,7 @@
   "generated_at": "2026-07-09T22:10:25Z",
   "governance": {
     "agent_policy": {
-      "candidate_packet_lane": "codex-conductor",
+      "candidate_packet_lane": "peer-coordination",
       "canonical_vendor_order": [
         "codex",
         "claude",

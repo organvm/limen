@@ -27,6 +27,7 @@ machine-readable counts-only receipt for that decision.
 """
 
 import argparse
+import contextlib
 import datetime
 import hashlib
 import json
@@ -55,6 +56,8 @@ from limen.remote_execution import (  # noqa: E402
 from limen.remote_predicate import canonical_json, digest_bytes, digest_text  # noqa: E402
 from limen.dispatch import (  # noqa: E402
     _apply_result,
+    _freeze_attempt_metadata,
+    _publish_terminal_trajectories,
     _REMOTE_SUBMISSION_RECEIPTS,
     _deps_met,
     _dispatchable,
@@ -657,6 +660,7 @@ def harvest() -> int:
             rf.unlink(missing_ok=True)
         if applied:
             save_limen_file(TASKS, lf)
+            _publish_terminal_trajectories(TASKS, lf.tasks)
     return applied
 
 
@@ -1178,6 +1182,34 @@ def _targeted_recovery_blocker(blocker_id: str, task_id: str, reason: str) -> di
     return {"id": blocker_id, "task_id": task_id, "reason": reason[:500]}
 
 
+def _inspect_task_admission_leases(task_id: str) -> list[dict[str, object]]:
+    """Read live machine-admission leases without locking, reaping, or creating runtime paths.
+
+    Exact recovery dry-runs need the same fail-closed custody signal as apply, but the canonical
+    lease reader reaps dead files and its lock creates ``logs/dispatch-admission/.lock``.  This
+    observation-only fold ignores proven-dead leases and treats malformed state as potentially
+    owned by the requested task; apply retains the canonical locked/reaping path.
+    """
+
+    runtime = ROOT / "logs" / "dispatch-admission"
+    leases: list[dict[str, object]] = []
+    for path in runtime.glob("*.json"):
+        try:
+            lease = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(lease, dict):
+                raise ValueError("lease root is not an object")
+            lease_task_id = str(lease["task_id"])
+            pid = int(lease["pid"])
+            if not lease_task_id or pid <= 0:
+                raise ValueError("lease identity is invalid")
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+            leases.append({"task_id": task_id, "pid": None, "path": str(path), "malformed": True})
+            continue
+        if lease_task_id == task_id and _pid_alive(pid):
+            leases.append({**lease, "task_id": lease_task_id, "pid": pid, "path": str(path)})
+    return leases
+
+
 def recover_exact_task(
     task_id: str,
     expected_contract_hash: str,
@@ -1187,10 +1219,12 @@ def recover_exact_task(
 ) -> dict[str, object]:
     """Safely reopen one proven orphaned async reservation, never a broad claim set."""
 
-    RUNS.mkdir(parents=True, exist_ok=True)
+    if not dry_run:
+        RUNS.mkdir(parents=True, exist_ok=True)
     now = _now()
     markers_to_remove: list[Path] = []
-    with _queue_lock(TASKS) as got:
+    lock = contextlib.nullcontext(True) if dry_run else _queue_lock(TASKS)
+    with lock as got:
         if not got:
             return {
                 "status": "blocked",
@@ -1354,8 +1388,11 @@ def recover_exact_task(
             }
         markers_to_remove = [marker]
 
-        with _machine_admission_lock():
-            live_leases = [lease for lease in _active_admission_leases() if lease.get("task_id") == task_id]
+        if dry_run:
+            live_leases = _inspect_task_admission_leases(task_id)
+        else:
+            with _machine_admission_lock():
+                live_leases = [lease for lease in _active_admission_leases() if lease.get("task_id") == task_id]
         if live_leases:
             return {
                 "status": "blocked",
@@ -1545,15 +1582,15 @@ def _pick_reservations(
                 track.per_agent[agent] = track.per_agent.get(agent, 0) + t.budget_cost
                 t.status = "dispatched"
                 t.updated = now
-                t.dispatch_log.append(
-                    DispatchLogEntry(
-                        timestamp=now,
-                        agent=agent,
-                        session_id=_new_async_reservation_id(),
-                        status="dispatched",
-                        output="dispatch-async: reserved before detached worker launch",
-                    )
+                reservation = DispatchLogEntry(
+                    timestamp=now,
+                    agent=agent,
+                    session_id=_new_async_reservation_id(),
+                    status="dispatched",
+                    output="dispatch-async: reserved before detached worker launch",
                 )
+                _freeze_attempt_metadata(t, reservation)
+                t.dispatch_log.append(reservation)
             if not state["is_async"]:
                 slots -= 1  # only local runs consume a local concurrency slot
             state["taken"] += 1

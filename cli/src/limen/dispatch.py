@@ -32,6 +32,7 @@ from limen.capacity import (
     select_lanes,
 )
 from limen.dispatch_ownership import ACTIVE_OWNER_STATUSES
+from limen.execution_trajectory import TrajectoryStore, new_attempt_id, publish_terminal_attempts
 from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
 from limen.intake import IntakeContractError, normalize_selected_legacy_task, validate_intake_contract
 from limen.jules_remote import (
@@ -46,12 +47,16 @@ from limen.runtime_requirements import task_execution_ready
 from limen.doctor import stale_tasks
 from limen.provider_selection import (
     catalog_hash,
+    discover_codex_models,
+    discover_gemini_models,
     discover_opencode_models,
     discover_warp_override,
     effective_profile,
     execution_profile_for,
+    model_id_catalog_hash,
     paid_service_block_reason,
     select_opencode_model,
+    validate_model_override,
 )
 from limen.remote_execution import (
     GitHubWorkflowAdapter,
@@ -67,7 +72,9 @@ from limen.model_selection import (  # the shared model vocabulary — also used
     _CLAUDE_TIER_ORDER,
     _claude_fable_acceptance_present,
     _claude_fable_classes,
+    _claude_model_is_fable,
     _claude_opus_classes,
+    _fable_balance_status,
     _fable_capped_tier,
     _fable_fallback_tier,
     _fable_reserve_receipt_present,
@@ -316,6 +323,83 @@ def _run_capture(
             out, err = "", ""
         raise subprocess.TimeoutExpired(cmd, timeout, output=out, stderr=err)
     return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
+
+
+def _terminate_own_process_group(proc: subprocess.Popen[str]) -> tuple[str, str]:
+    """Terminate only the process group created for this launch; never inspect or signal peers."""
+
+    import signal
+
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        proc.terminate()
+    try:
+        return proc.communicate(timeout=10)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            proc.kill()
+        try:
+            return proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            return "", ""
+
+
+def _run_fable_capture(
+    cmd: list[str],
+    *,
+    cwd: str,
+    timeout: int,
+    env: dict[str, str],
+) -> tuple[subprocess.CompletedProcess[str], str | None]:
+    """Run one accepted Fable planner with periodic own-launch contract checks.
+
+    The monitor sees only the process group it created and the aggregate balance receipt. It never
+    enumerates, retunes, pauses, resumes, or signals another session. A red periodic cap/meter check
+    or 90 minutes without a durable receipt stops this planner; the caller packetizes the residual.
+    """
+
+    proc = subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    started = time.monotonic()
+    try:
+        interval = max(1, int(os.environ.get("LIMEN_FABLE_AUDIT_INTERVAL_SECONDS", _FABLE_AUDIT_INTERVAL_SECONDS)))
+    except ValueError:
+        interval = _FABLE_AUDIT_INTERVAL_SECONDS
+    while True:
+        elapsed = time.monotonic() - started
+        remaining = timeout - elapsed
+        if remaining <= 0:
+            out, err = _terminate_own_process_group(proc)
+            raise subprocess.TimeoutExpired(cmd, timeout, output=out, stderr=err)
+        try:
+            out, err = proc.communicate(timeout=min(float(interval), remaining))
+            return subprocess.CompletedProcess(cmd, proc.returncode, out, err), None
+        except subprocess.TimeoutExpired:
+            pass
+        elapsed = time.monotonic() - started
+        balance, reason = _fable_balance_status()
+        capped = _fable_capped_tier(_fable_reserve_receipt_present()) if balance is not None else "opus"
+        stop_reason = ""
+        if balance is None:
+            stop_reason = f"periodic-{reason}"
+        elif capped is not None:
+            stop_reason = "periodic-fable-cap-closed"
+        elif elapsed >= _FABLE_MOTION_DEADLINE_SECONDS:
+            stop_reason = "motion-without-durable-receipt-5400s"
+        if stop_reason:
+            out, err = _terminate_own_process_group(proc)
+            return subprocess.CompletedProcess(cmd, proc.returncode, out, err), stop_reason
 
 
 def run_always_working_before_dispatch(tasks_path: Path, *, dry_run: bool = False) -> bool:
@@ -1484,6 +1568,26 @@ _GIT_PLUMBING_LOCK = threading.Lock()
 _MODEL_SELECTION_RECEIPTS: dict[str, dict[str, Any]] = {}
 _REMOTE_SUBMISSION_RECEIPTS: dict[str, dict[str, Any]] = {}
 _LANE_ROUTING_RECEIPTS: dict[str, dict[str, Any]] = {}
+_ATTEMPT_LAUNCH_RECEIPTS: dict[str, dict[str, Any]] = {}
+
+
+def _clear_transient_dispatch_receipts(task_id: str) -> None:
+    """Forget process-local launch evidence only after its fresh-board commit boundary."""
+
+    _ATTEMPT_LAUNCH_RECEIPTS.pop(task_id, None)
+    _MODEL_SELECTION_RECEIPTS.pop(task_id, None)
+    _REMOTE_SUBMISSION_RECEIPTS.pop(task_id, None)
+
+
+@contextmanager
+def _retain_transient_receipts_through_commit(results: list[tuple[str, str, bool | str]]) -> Iterator[None]:
+    """Keep launch facts across the stale in-memory apply and the authoritative fresh apply."""
+
+    try:
+        yield
+    finally:
+        for task_id in {task_id for _agent, task_id, _result in results}:
+            _clear_transient_dispatch_receipts(task_id)
 
 
 def _record_model_selection(
@@ -2121,10 +2225,19 @@ _LOCAL_AGENTS: dict[str, list[str]] = {
 
 _CLAUDE_NO_MODAL_MODE = "dontAsk"
 _CLAUDE_REQUIRED_BUILD_TOOLS = frozenset({"Edit", "Write"})
+_CLAUDE_FABLE_ALLOWED_TOOLS = "Read,Glob,Grep,Write,Edit"
+_CLAUDE_FABLE_DISALLOWED_TOOLS = "AskUserQuestion,Bash,NotebookEdit,Agent,Workflow"
+_FABLE_PACKET_SCHEMA = "limen.fable_build_packet.v1"
+_FABLE_MOTION_DEADLINE_SECONDS = 90 * 60
+_FABLE_AUDIT_INTERVAL_SECONDS = 60
 
 
 class ClaudeLaunchContractError(RuntimeError):
     """The internal Claude argv could wait for unavailable operator input."""
+
+
+class ProviderModelOverrideBlocked(RuntimeError):
+    """An explicit model pin could not be proven against live provider state."""
 
 
 def _option_values(argv: list[str], *names: str) -> list[str]:
@@ -2181,7 +2294,7 @@ def _is_blanket_claude_authority(rule: str) -> bool:
     return False
 
 
-def _assert_claude_no_modal_contract(argv: list[str]) -> None:
+def _assert_claude_no_modal_contract(argv: list[str], *, planning_only: bool = False) -> None:
     """Refuse to launch a fleet Claude process that can open an input modal.
 
     ``dontAsk`` is the only host-safe Claude CLI mode whose documented contract
@@ -2204,7 +2317,8 @@ def _assert_claude_no_modal_contract(argv: list[str]) -> None:
         raise ClaudeLaunchContractError("Claude fleet launch must not enable bypassPermissions")
 
     allowed = _claude_tool_rules(_option_values(argv, "--allowedTools", "--allowed-tools"))
-    missing = sorted(_CLAUDE_REQUIRED_BUILD_TOOLS - allowed)
+    required_tools = frozenset({"Write"}) if planning_only else _CLAUDE_REQUIRED_BUILD_TOOLS
+    missing = sorted(required_tools - allowed)
     if missing:
         raise ClaudeLaunchContractError(
             f"Claude fleet launch is missing required pre-approved build tools: {', '.join(missing)}"
@@ -2221,6 +2335,31 @@ def _assert_claude_no_modal_contract(argv: list[str]) -> None:
         raise ClaudeLaunchContractError(
             "Claude fleet launch must remove AskUserQuestion from its unattended tool surface"
         )
+    if planning_only:
+        missing_plan_denials = sorted({"Bash", "NotebookEdit", "Agent", "Workflow"} - disallowed)
+        if missing_plan_denials:
+            raise ClaudeLaunchContractError(
+                "Fable planning launch must deny implementation/fanout tools: " + ", ".join(missing_plan_denials)
+            )
+
+
+def _task_is_fable_plan(task: Task | None) -> bool:
+    labels = {str(label).strip().lower() for label in (getattr(task, "labels", None) or [])}
+    return "mode:plan-only" in labels
+
+
+def _claude_args_are_fable(argv: list[str]) -> bool:
+    values = _option_values(argv, "--model")
+    return len(values) == 1 and _claude_model_is_fable(values[0])
+
+
+def _fable_plan_flags(base: list[str]) -> list[str]:
+    flags = list(base)
+    allowed_index = flags.index("--allowedTools") + 1
+    disallowed_index = flags.index("--disallowedTools") + 1
+    flags[allowed_index] = _CLAUDE_FABLE_ALLOWED_TOOLS
+    flags[disallowed_index] = _CLAUDE_FABLE_DISALLOWED_TOOLS
+    return flags
 
 
 _LOCAL_BIN: dict[str, str] = {
@@ -2249,9 +2388,9 @@ def _call_configured_paid_service(agent: str, task: Task, dry_run: bool) -> bool
 
 def _agent_argv(agent: str, task: Task | None = None) -> list[str]:
     """Static lane flags + any LAZILY-derived per-run flags, so nothing is pinned or
-    resolved at import time. OpenCode selects from its live catalog; Codex uses provider Auto unless
-    the operator supplied an explicit override; Claude's tier is derived per task (the earned-tier
-    ladder). `task` is optional for legacy callers; OpenCode and Claude use its current evidence."""
+    resolved at import time. OpenCode selects from its live catalog; Codex and Gemini use provider
+    Auto unless the operator supplied a live-validated override; Claude's tier is derived per task
+    (the earned-tier ladder). `task` is optional for legacy callers; selectors use current evidence."""
     model: str | None = None
     flags = list(_LOCAL_AGENTS[agent])
     if agent == "opencode":
@@ -2264,11 +2403,14 @@ def _agent_argv(agent: str, task: Task | None = None) -> list[str]:
             flags += ["-m", model]
     elif agent == "claude":
         model = _claude_model(task)
+        planning_only = _task_is_fable_plan(task)
+        if planning_only:
+            flags = _fable_plan_flags(flags)
         if model:
             # the claude CLI uses --model (it has NO -m short flag, unlike codex/opencode);
             # `claude -m …` → "error: unknown option '-m'" and the whole dispatch fails.
             flags += ["--model", model]
-        _assert_claude_no_modal_contract(flags)
+        _assert_claude_no_modal_contract(flags, planning_only=planning_only)
     elif agent == "ollama":
         # `ollama run <model> <prompt>` — model is a POSITIONAL right after `run`, derived at
         # call-time. No model pulled → no model arg (the run will error and the lane stays the
@@ -3608,12 +3750,160 @@ def _same_repo_pr_head_for_task(task: Task) -> dict[str, str] | None:
 
 def _pr_body(task: Task) -> str:
     lines = [f"Autonomous **limen** dispatch of task `{task.id}`.", ""]
+    if _task_is_fable_plan(task):
+        lines += [
+            "This is a Fable **plan-only continuation capsule**. It contains no implementation; ",
+            "the build packet hands execution to provider Auto constrained to a non-Fable tier.",
+            "",
+        ]
     if task.context:
         lines += [task.context, ""]
     if task.urls:
         lines += ["Refs: " + ", ".join(task.urls), ""]
     lines.append("_Produced in an isolated worktree off origin — review before merge._")
     return "\n".join(lines)
+
+
+def _fable_packet_relative_path(task: Task) -> Path:
+    slug = re.sub(r"[^a-z0-9._-]+", "-", task.id.lower()).strip("-") or "task"
+    return Path("docs") / "continuations" / "fable" / f"{slug}.md"
+
+
+def _fable_packet_template(task: Task, *, status: str = "planning") -> str:
+    rel = _fable_packet_relative_path(task).as_posix()
+    predicate = str(task.predicate or "owner-defined scoped predicate must be made executable")
+    receipt = str(task.receipt_target or "owner PR or exact-commit receipt")
+    repo = str(task.repo or "current-repository")
+    slug = rel.rsplit("/", 1)[-1].removesuffix(".md") + "-build"
+    return f"""# Fable continuation capsule: {task.id}
+
+schema: {_FABLE_PACKET_SCHEMA}
+status: {status}
+task_id: {task.id}
+mode: plan-only
+implementation_by_fable: prohibited
+builder_provider: auto
+builder_tier_max: opus
+packet_path: {rel}
+receipt_target: {receipt}
+
+## Objective
+
+Produce a bounded implementation plan for the tracked task `{task.id}` (`{task.title}`). Fable may
+analyze and plan only; it must not implement the plan.
+
+## Evidence and authorities
+
+- Repository owner: `{repo}`.
+- Source evidence must be cited by repository-relative path or durable URL; do not copy secrets or
+  private prompt bodies into this tracked capsule.
+
+## Bounded build packet
+
+- Replace this placeholder with independently testable implementation units.
+- For each unit name its allowed files, owner, dependencies, finite retry policy, and stop condition.
+- Keep all implementation work outside this Fable run.
+
+## Executable predicates
+
+- `{predicate}`
+- Exact-head CI and the repository review gate must pass after the builder's final commit.
+
+## Receipt and closeout
+
+- Durable receipt target: `{receipt}`.
+- Unverified completion earns no value and must not be called accepted.
+
+## Non-Fable builder handoff
+
+Builder execution profile: `provider=auto; mode=implementation; fable=false; max_tier=opus`.
+
+Copy/paste continuation command after this capsule is merged or otherwise durably homed:
+
+```bash
+limen workstream --shell --prompt-file "$PWD/{rel}" "$(git rev-parse --show-toplevel)" "{slug}"
+```
+"""
+
+
+def _build_fable_plan_prompt(task: Task) -> str:
+    rel = _fable_packet_relative_path(task).as_posix()
+    private_context = "\n".join(
+        part
+        for part in (
+            f"Description: {task.description}" if task.description else "",
+            f"Context: {task.context}" if task.context else "",
+            f"References: {', '.join(task.urls)}" if task.urls else "",
+        )
+        if part
+    )
+    return f"""You are the accepted Fable planning lane for task {task.id}.
+
+This launch is PLAN-ONLY. Do not implement, patch source, run build/test/deploy commands, create
+subagents/workflows, or mutate any file except `{rel}`. Read repository evidence, improve that one
+tracked continuation capsule, and hand every implementation unit to provider Auto constrained to a
+non-Fable tier no higher than Opus. Do not name a future model ID.
+
+The capsule must retain these exact contract fields:
+- `schema: {_FABLE_PACKET_SCHEMA}`
+- `mode: plan-only`
+- `implementation_by_fable: prohibited`
+- `builder_provider: auto`
+- `builder_tier_max: opus`
+
+It must contain the sections `Evidence and authorities`, `Bounded build packet`, `Executable
+predicates`, `Receipt and closeout`, and `Non-Fable builder handoff`, including one copy/paste
+continuation command. Keep it below 64 KiB and redacted for a tracked repository.
+
+Task title: {task.title}
+Task predicate: {task.predicate or "not supplied; derive one from owner evidence"}
+Receipt target: {task.receipt_target or "not supplied; name the owner receipt in the capsule"}
+{private_context}
+"""
+
+
+def _write_fable_packet(task: Task, wt: Path, *, status: str) -> Path:
+    path = wt / _fable_packet_relative_path(task)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_fable_packet_template(task, status=status))
+    return path
+
+
+def _validate_fable_plan_output(task: Task, wt: Path) -> tuple[bool, str]:
+    rel = _fable_packet_relative_path(task).as_posix()
+    status = _git(["status", "--porcelain", "--untracked-files=all", "-z"], wt)
+    if status.returncode != 0:
+        return False, "working-tree-status-unreadable"
+    changed = _porcelain_paths(status.stdout)
+    if changed != [rel]:
+        return False, f"Fable changed paths outside its capsule boundary: {changed!r}"
+    path = wt / rel
+    if path.is_symlink() or not path.is_file():
+        return False, "Fable capsule is missing or is not a regular file"
+    try:
+        size = path.stat().st_size
+        text = path.read_text()
+    except OSError:
+        return False, "Fable capsule is unreadable"
+    if not 512 <= size <= 65536:
+        return False, f"Fable capsule size {size} is outside 512..65536 bytes"
+    required = (
+        f"schema: {_FABLE_PACKET_SCHEMA}",
+        "mode: plan-only",
+        "implementation_by_fable: prohibited",
+        "builder_provider: auto",
+        "builder_tier_max: opus",
+        "## Evidence and authorities",
+        "## Bounded build packet",
+        "## Executable predicates",
+        "## Receipt and closeout",
+        "## Non-Fable builder handoff",
+        "limen workstream --shell --prompt-file",
+    )
+    missing = [marker for marker in required if marker not in text]
+    if missing:
+        return False, "Fable capsule missing contract markers: " + ", ".join(missing)
+    return True, "ok"
 
 
 def _porcelain_paths(z: str) -> list[str]:
@@ -3772,17 +4062,49 @@ def _run_isolated_agent(
     lane_timeout: int,
 ) -> bool | str:
     run_env = _lane_run_env(agent, wt)
+    fable_plan = agent == "claude" and _claude_args_are_fable(agent_cmd)
     if agent == "opencode":
         run_env["LIMEN_OPENCODE_CLOCK"] = "1"
         run_env["LIMEN_TASK_ID"] = task.id
     try:
-        run = _run_capture(agent_cmd, cwd=str(wt), timeout=lane_timeout, env=run_env)
+        if fable_plan:
+            balance, balance_reason = _fable_balance_status()
+            if not _claude_fable_acceptance_present() or balance is None:
+                reason = "acceptance-missing" if not _claude_fable_acceptance_present() else balance_reason
+                _write_fable_packet(task, wt, status=f"packetized:prelaunch-{reason}")
+                print(f"  FABLE NOT LAUNCHED {task.id}: {reason}; emitted bounded continuation capsule")
+                return True
+            if _fable_capped_tier(_fable_reserve_receipt_present()) is not None:
+                _write_fable_packet(task, wt, status="packetized:prelaunch-cap-closed")
+                print(f"  FABLE NOT LAUNCHED {task.id}: cap closed; emitted bounded continuation capsule")
+                return True
+            run, contract_stop = _run_fable_capture(
+                agent_cmd,
+                cwd=str(wt),
+                timeout=lane_timeout,
+                env=run_env,
+            )
+            if contract_stop:
+                _write_fable_packet(task, wt, status=f"packetized:{contract_stop}")
+                print(f"  FABLE STOP {task.id}: {contract_stop}; emitted bounded continuation capsule")
+                return True
+        else:
+            run = _run_capture(agent_cmd, cwd=str(wt), timeout=lane_timeout, env=run_env)
         # SELF-HEAL the credential-refresh race (#48786): if claude lost the token rotation,
         # a fresh process re-reads the now-rotated token. ONE retry only.
-        if agent == "claude" and run.returncode != 0 and _is_auth_blip((run.stderr or "") + (run.stdout or "")):
+        if (
+            agent == "claude"
+            and not fable_plan
+            and run.returncode != 0
+            and _is_auth_blip((run.stderr or "") + (run.stdout or ""))
+        ):
             print(f"  AUTH-BLIP {task.id}: claude credential-refresh race — re-reading token, one retry")
             run = _run_capture(agent_cmd, cwd=str(wt), timeout=lane_timeout, env=run_env)
     except subprocess.TimeoutExpired:
+        if fable_plan:
+            _write_fable_packet(task, wt, status="packetized:own-lane-timeout")
+            print(f"  FABLE STOP {task.id}: own lane timeout; emitted bounded continuation capsule")
+            return True
         print(f"  TIMEOUT {task.id} after {lane_timeout}s — too big for sync local → routing to jules (async)")
         return _TIMEOUT
 
@@ -4036,24 +4358,7 @@ def _create_isolated_pr(task: Task, wt: Path, base: str, branch: str) -> str:
         return branch  # branch is live; record it (manual PR possible)
     url = pr.stdout.strip().splitlines()[-1] if pr.stdout.strip() else branch
     print(f"  dispatched: {task.id} → PR {url}")
-    _arm_auto_merge(task, wt, url)
     return url
-
-
-def _arm_auto_merge(task: Task, wt: Path, url: str) -> None:
-    # Best-effort: repos without branch protection / auto-merge disabled reject this harmlessly.
-    am = subprocess.run(
-        ["gh", "pr", "merge", url, "--auto", "--squash"],
-        cwd=str(wt),
-        capture_output=True,
-        text=True,
-        timeout=60,
-        stdin=subprocess.DEVNULL,
-    )
-    print(
-        f"    auto-merge {'armed' if am.returncode == 0 else 'n/a'}: {task.id}"
-        + ("" if am.returncode == 0 else f" ({am.stderr.strip()[:100]})")
-    )
 
 
 def _resolve_agent_binary(agent: str) -> str:
@@ -4069,7 +4374,12 @@ def _resolve_agent_binary(agent: str) -> str:
     return binary
 
 
-def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
+def _isolated_local_run(
+    agent: str,
+    task: Task,
+    dry_run: bool,
+    agent_args: list[str] | None = None,
+) -> bool | str:
     binary = _resolve_agent_binary(agent)
     repo_dir = _resolve_repo_dir(task)
     if repo_dir is None and not dry_run:
@@ -4103,8 +4413,12 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
     branch = f"limen/{slug}-{suffix}"
     isolation_root = _isolation_root()
     wt = isolation_root / (re.sub(r"[^a-zA-Z0-9._-]+", "-", task.id.lower()) + "-" + suffix)
-    agent_args = _agent_argv(agent, task)
-    prompt = _build_prompt(task)
+    agent_args = _agent_argv(agent, task) if agent_args is None else agent_args
+    plan_only = agent == "claude" and _task_is_fable_plan(task)
+    if plan_only and pr_head:
+        print(f"  BLOCKED {task.id}: a plan-only lane may not patch an existing implementation PR head")
+        return False
+    prompt = _build_fable_plan_prompt(task) if plan_only else _build_prompt(task)
     if os.environ.get("LIMEN_ISOLATION_PROMPT_GUARD", "1") == "1":
         prompt = (
             f"{prompt}\n\n--- ISOLATION CONTRACT ---\n"
@@ -4160,6 +4474,8 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
         return False
     _record_worktree_birth(task, wt, branch, checkout_ref, pr_base, existing_pr=bool(pr_head))
     _mark_machine_admission_born(task.id)
+    if plan_only:
+        _write_fable_packet(task, wt, status="planning")
 
     pushed = False
     try:
@@ -4168,6 +4484,12 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
         run_result = _run_isolated_agent(agent, task, wt, agent_cmd, lane_timeout)
         if run_result is not True:
             return run_result
+
+        if plan_only:
+            valid, reason = _validate_fable_plan_output(task, wt)
+            if not valid:
+                print(f"  BLOCKED {task.id}: {reason}; refusing to publish implementation-shaped Fable output")
+                return False
 
         commit_result = _commit_isolated_changes(task, wt)
         if pr_head:
@@ -4183,7 +4505,6 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
             pushed = True
             url = _existing_pr_url(pr_head)
             print(f"  dispatched: {task.id} → existing PR {url}")
-            _arm_auto_merge(task, wt, url)
             return url
 
         if commit_result is not True:
@@ -4211,7 +4532,13 @@ def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str:
         except ClaudeLaunchContractError as exc:
             print(f"  BLOCKED {task.id}: {exc}; refusing provider launch so the lane can cascade")
             return False
-    if agent == "opencode" and "-m" not in _agent_argv(agent, task):
+    try:
+        agent_args = _agent_argv(agent, task)
+    except ProviderModelOverrideBlocked as exc:
+        reason = str(exc)
+        print(f"  {'would BLOCK' if dry_run else 'BLOCKED'} {task.id}: {reason}")
+        return _blocked_result(reason)
+    if agent == "opencode" and "-m" not in agent_args:
         reason = "no code-capable model is exposed by the live OpenCode catalog"
         if dry_run:
             print(f"  would BLOCK {task.id}: {reason}")
@@ -4219,15 +4546,15 @@ def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str:
         print(f"  BLOCKED {task.id}: {reason}")
         return _blocked_result(reason)
     if _worktree_isolation_enabled():
-        return _isolated_local_run(agent, task, dry_run)
+        return _isolated_local_run(agent, task, dry_run, agent_args)
     # ── legacy in-place path (escape hatch; edits the live checkout directly)
     binary = _resolve_agent_binary(agent)
-    cmd = [binary, *_agent_argv(agent, task), _build_prompt(task)]
+    cmd = [binary, *agent_args, _build_prompt(task)]
     cwd = _resolve_repo_dir(task)
     if cwd is None:
         msg = f"no local checkout of {task.repo or '(no repo)'}"
         if dry_run:
-            print(f"  would [{msg}; clone first]: {binary} {' '.join(_agent_argv(agent, task))} …")
+            print(f"  would [{msg}; clone first]: {binary} {' '.join(agent_args)} …")
             return True
         print(f"  SKIP {task.id}: {msg} — clone it under $LIMEN_WORKDIR first")
         return False
@@ -4307,7 +4634,7 @@ def _commit_dispatch_results(
     route stamps, status transitions): the lost-update board wipe. A task completed elsewhere in
     the interim keeps its terminal status (_apply_result's lifecycle guards); a task removed from
     the fresh board is skipped."""
-    with _queue_lock(tasks_path) as got:
+    with _retain_transient_receipts_through_commit(results), _queue_lock(tasks_path) as got:
         if not got:
             print(
                 f"── dispatch: queue busy — {len(results)} result(s) NOT committed this round; "
@@ -4334,6 +4661,7 @@ def _commit_dispatch_results(
                 _apply_result(ft, agent, res, now, ftrack)
                 _REMOTE_SUBMISSION_RECEIPTS.pop(tid, None)
         save_limen_file(tasks_path, fresh)
+        _publish_terminal_trajectories(tasks_path, fresh.tasks)
 
 
 def dispatch_tasks(
@@ -4464,7 +4792,13 @@ def dispatch_tasks(
             continue
 
         try:
+            if not dry_run:
+                _capture_attempt_launch(task, agent_filter)
             result = call_agent_dispatch(agent_filter, task, dry_run)
+        except Exception:
+            if not dry_run:
+                _clear_transient_dispatch_receipts(task.id)
+            raise
         finally:
             if not dry_run:
                 _release_machine_admission(task.id)
@@ -4529,6 +4863,7 @@ def _apply_result(
         entry.status = "open"
         entry.route_to = nxt
         entry.output = f"rate limited on {agent}; reopened to live fleet route"
+        entry.trajectory_outcome = "blocked"
         task.target_agent = nxt
         task.status = "open"
     elif result == _TIMEOUT:
@@ -4536,6 +4871,7 @@ def _apply_result(
         entry.status = "open"
         entry.route_to = "jules"
         entry.output = f"timeout on {agent}; reopened to asynchronous lane"
+        entry.trajectory_outcome = "failed"
         task.target_agent = "jules"
         task.status = "open"
         if "slow" not in task.labels:
@@ -4562,18 +4898,20 @@ def _apply_result(
             entry.status = "open"
             entry.route_to = fallback
             entry.output = "remote/service lane failed; reopened to healthy fleet cascade"
+            entry.trajectory_outcome = "failed"
             task.target_agent = fallback
             task.status = "open"
         elif next_lane := _next_lane(agent):
             entry.status = "open"
             entry.route_to = next_lane
             entry.output = f"{agent} lane failed; reopened to healthy fleet cascade"
+            entry.trajectory_outcome = "failed"
             task.target_agent = next_lane
             task.status = "open"
         else:
             entry.status = "failed"
             task.status = "failed"
-    if selection := _MODEL_SELECTION_RECEIPTS.pop(task.id, None):
+    if selection := _MODEL_SELECTION_RECEIPTS.get(task.id):
         entry.execution_profile = selection.get("execution_profile")
         entry.selected_model = selection.get("selected_model")
         entry.selection_source = selection.get("selection_source")
@@ -4593,8 +4931,99 @@ def _apply_result(
         entry.remote_state = remote.get("remote_state")
         entry.remote_request_id = remote.get("remote_request_id")
         entry.remote_receipt = remote.get("remote_receipt")
+    _freeze_attempt_metadata(task, entry)
     task.updated = now
     task.dispatch_log.append(entry)
+
+
+def _inherit_active_attempt_metadata(task: Task, entry: DispatchLogEntry) -> bool:
+    """Copy the newest still-active launch identity onto an observation/terminal row."""
+
+    prior = None
+    for candidate in reversed(task.dispatch_log):
+        if candidate.attempt_id and (
+            candidate.status in {"done", "failed", "failed_blocked", "needs_human"}
+            or candidate.trajectory_outcome in {"succeeded", "failed", "blocked", "superseded"}
+        ):
+            break
+        if (
+            candidate.agent == entry.agent
+            and candidate.status == "dispatched"
+            and candidate.attempt_id
+            and isinstance(candidate.attempt_classification, dict)
+            and isinstance(candidate.execution_profile, dict)
+        ):
+            prior = candidate
+            break
+    if prior is not None:
+        entry.attempt_id = prior.attempt_id
+        entry.attempt_classification = dict(prior.attempt_classification or {})
+        entry.attempt_repository = prior.attempt_repository
+        entry.execution_profile = dict(prior.execution_profile or {})
+        return True
+    return False
+
+
+def _freeze_attempt_metadata(task: Task, entry: DispatchLogEntry) -> None:
+    """Bind one launch to immutable classification/profile before board publication."""
+
+    if _inherit_active_attempt_metadata(task, entry):
+        return
+
+    captured = _ATTEMPT_LAUNCH_RECEIPTS.get(task.id)
+    if captured is not None:
+        entry.attempt_id = str(captured["attempt_id"])
+        entry.attempt_classification = dict(captured["attempt_classification"])
+        entry.attempt_repository = captured.get("attempt_repository")
+        if not isinstance(entry.execution_profile, dict):
+            entry.execution_profile = dict(captured["execution_profile"])
+        return
+
+    entry.attempt_id = new_attempt_id()
+    entry.attempt_classification = {
+        "task_type": str(task.type or "unknown"),
+        "labels": sorted({str(label) for label in task.labels if str(label)}),
+        "workstream": str(task.workstream) if task.workstream else None,
+    }
+    repository = str(task.repo or "")
+    entry.attempt_repository = repository if re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) else None
+    if not isinstance(entry.execution_profile, dict):
+        entry.execution_profile = execution_profile_for(task).as_dict()
+
+
+def _capture_attempt_launch(task: Task, agent: str) -> None:
+    """Freeze serial launch facts before the provider can mutate time or task state."""
+
+    _ATTEMPT_LAUNCH_RECEIPTS[task.id] = {
+        "attempt_id": new_attempt_id(),
+        "attempt_classification": {
+            "task_type": str(task.type or "unknown"),
+            "labels": sorted({str(label) for label in task.labels if str(label)}),
+            "workstream": str(task.workstream) if task.workstream else None,
+        },
+        "attempt_repository": (
+            str(task.repo) if task.repo and re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", str(task.repo)) else None
+        ),
+        "execution_profile": execution_profile_for(task).as_dict(),
+        "provider_route": agent,
+    }
+
+
+def _publish_terminal_trajectories(tasks_path: Path, tasks: list[Task]) -> None:
+    """Best-effort transport into fail-closed value custody after the board commit."""
+
+    root = Path(
+        os.environ.get(
+            "LIMEN_EXECUTION_TRAJECTORY_ROOT",
+            str(tasks_path.parent / "logs" / "execution-trajectories" / "attempts"),
+        )
+    ).expanduser()
+    publications, errors = publish_terminal_attempts(tasks, TrajectoryStore(root))
+    published = sum(receipt.published for receipt in publications)
+    if published:
+        print(f"  execution-trajectory: published {published} terminal attempt(s)")
+    for error in errors:
+        print(f"  execution-trajectory BLOCKED: {error}", file=sys.stderr)
 
 
 # ── RESET-WINDOW FRONT-LOAD ACCELERATOR ──────────────────────────────────────────────────────
@@ -4602,25 +5031,16 @@ def _apply_result(
 # unspent at every reset (verified live). This converts the budget about to EXPIRE into shipped value
 # before the cliff: as a lane under-spends vs. the time left in its window, raise its per-beat pick
 # count so it lands near-full at reset instead of idle. Two brakes keep "use the capacity" from
-# becoming "burn money": (1) only LEDGER-WON work-classes ride the acceleration tail (a pure-pit lane
-# never accelerates; a clean earner accelerates freely) — same ledger the routing bias reads; (2) it
-# is lane-AWARE — async/remote lanes (jules) absorb big bursts without blocking the beat, while local
+# becoming "burn money": (1) the bounded value gate still orders the candidate window, while no
+# board-event score may suppress or promote a provider route; (2) it is lane-AWARE — async/remote
+# lanes (jules) absorb big bursts without blocking the beat, while local
 # SYNC lanes (codex/claude/agy) are wall-clock bound (the thread pool blocks the beat) so they stay at
 # base unless explicitly allowed. Env-gated LIMEN_ACCEL (default on); fail-open to base everywhere.
 # Locality is the census authority (LOCAL_CHECKOUT_AGENTS); a non-local lane is off-box / non-blocking.
 
 
-def _ledger_lanes() -> dict[str, dict[str, list[str]]]:
-    """logs/ledger.json lanes map (waste_classes/win_classes per lane) — fail-open to {}."""
-    try:
-        root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
-        return json.loads((root / "logs" / "ledger.json").read_text()).get("lanes", {}) or {}
-    except Exception:
-        return {}
-
-
 def _lane_fitness() -> dict[str, dict[str, dict]]:
-    """logs/lane-fitness.json per-(agent, task_class) fitness map — fail-open to {}."""
+    """Read the observable shadow route/class fitness map — never dispatch authority."""
     try:
         root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
         return json.loads((root / "logs" / "lane-fitness.json").read_text()).get("pairs", {}) or {}
@@ -4629,11 +5049,11 @@ def _lane_fitness() -> dict[str, dict[str, dict]]:
 
 
 def _fitness_unfit(agent: str, task: Task, fitness: dict[str, dict[str, dict]]) -> bool:
-    """True when the fitness table marks this (agent, task_class) pair as unfit.
+    """Shadow recommendation for a provider route/task-class pair.
 
-    Conservative: only fires when ALL of the task's classes that have fitness evidence are
-    individually marked unfit (fit=False). A mix of unfit + fit/unknown classes → not deprioritized.
-    Fail-open: returns False when fitness is empty or agent absent."""
+    This signal is observable but cannot reorder or suppress candidates. Conservative: it is true
+    only when ALL evidenced classes are marked unfit. A mix of unfit + fit/unknown classes stays
+    unknown; missing evidence returns False."""
     if not fitness:
         return False
     agent_data = fitness.get(agent)
@@ -4646,24 +5066,57 @@ def _fitness_unfit(agent: str, task: Task, fitness: dict[str, dict[str, dict]]) 
     return all(d.get("fit") is False for d in evidenced)
 
 
+def _observe_lane_fitness_shadow(
+    provider_route: str,
+    candidates: list[Task],
+    fitness: dict[str, dict[str, dict]],
+) -> list[Task]:
+    """Record would-deprioritize observations while preserving candidate order exactly.
+
+    Lane fitness remains shadow-only until trajectory attribution fixtures establish authority.
+    Returning a fresh list makes the no-steering contract explicit and easy to assert without
+    granting the signal an accidental filtering or sorting seam.
+    """
+
+    preserved = list(candidates)
+    if not fitness:
+        _LANE_ROUTING_RECEIPTS.setdefault(
+            f"__absent_{provider_route}",
+            {
+                "provider_route": provider_route,
+                "source": "lane_fitness_shadow_absent",
+                "mode": "shadow",
+                "steering_enabled": False,
+            },
+        )
+        return preserved
+
+    route_data = fitness.get(provider_route, {})
+    for task in preserved:
+        if not _fitness_unfit(provider_route, task, fitness):
+            continue
+        classes = _task_classes(task)
+        evidenced = [route_data.get(task_class) for task_class in classes if task_class in route_data]
+        reason_parts = [
+            f"rate={row.get('rate', 0):.2f},n={row.get('attempted')}"
+            for row in evidenced
+            if row and row.get("fit") is False
+        ]
+        _LANE_ROUTING_RECEIPTS[task.id] = {
+            "provider_route": provider_route,
+            "task_classes": sorted(classes),
+            "source": "lane_fitness_shadow",
+            "mode": "shadow",
+            "steering_enabled": False,
+            "would_deprioritize": True,
+            "reason": f"unfit ({'; '.join(reason_parts)})" if reason_parts else "unfit",
+        }
+    return preserved
+
+
 def _task_classes(task: Task) -> set[str]:
     """A task's work-classes — its type plus every label — the key the ledger grades a lane on."""
     return {c for c in ([getattr(task, "type", None)] + list(getattr(task, "labels", []) or [])) if c}
-
-
-def _accel_allows(agent: str, task: Task, lanes: dict[str, dict[str, list[str]]]) -> bool:
-    """May this task ride the acceleration TAIL for this lane? Acceleration needs POSITIVE ledger
-    evidence so we never pour expiring budget into junk: a CLEAN earner (no waste_classes) accelerates
-    on anything; a MIXED lane accelerates only its win_classes; a lane with NO record / a pure pit does
-    not accelerate (tail stays empty → base only). Fail-open is toward base, never toward over-spend."""
-    d = lanes.get(agent)
-    if not isinstance(d, dict):
-        return False  # no ledger evidence for this lane → don't accelerate (base only)
-    waste = set(d.get("waste_classes") or [])
-    win = set(d.get("win_classes") or [])
-    if not waste:
-        return True  # clean earner — earns across the board, accelerate freely
-    return bool(_task_classes(task) & win)  # mixed lane — only its proven winners ride the tail
 
 
 def _accel_window(limen: LimenFile, agent: str, now: datetime) -> tuple[float, float]:
@@ -4718,101 +5171,74 @@ def _accel_limit(limen: LimenFile, agent: str, base_limit: int, now: datetime) -
         return base_limit
 
 
-_CODEX_TIER_MODELS_DEFAULT: dict[str, str] = {
-    "haiku": "o4-mini",
-    "sonnet": "o4-mini",
-    "opus": "o3",
-    "fable": "o3",
+_PROVIDER_MODEL_OVERRIDE_ENV = {
+    "codex": "LIMEN_CODEX_MODEL",
+    "gemini": "LIMEN_GEMINI_MODEL",
 }
 
-_GEMINI_TIER_MODELS_DEFAULT: dict[str, str] = {
-    "haiku": "gemini-2.5-flash",
-    "sonnet": "gemini-2.5-flash",
-    "opus": "gemini-2.5-pro",
-    "fable": "gemini-2.5-pro",
-}
+
+def _provider_model_override(agent: str, task: "Task | None" = None) -> str | None:
+    """Delegate to provider Auto unless an exact live model override is proven."""
+
+    try:
+        override_env = _PROVIDER_MODEL_OVERRIDE_ENV[agent]
+    except KeyError as exc:
+        raise ValueError(f"unsupported provider model override: {agent}") from exc
+    override = os.environ.get(override_env, "").strip()
+    profile = execution_profile_for(task).as_dict()
+    if not override:
+        _record_model_selection(
+            task,
+            profile=profile,
+            selected_model=None,
+            source=f"{agent}_auto",
+        )
+        return None
+
+    if agent == "codex":
+        catalog = discover_codex_models(
+            _resolve_agent_binary(agent),
+            timeout=_env_int("LIMEN_CODEX_CATALOG_TIMEOUT", 30),
+        )
+    elif agent == "gemini":
+        catalog = discover_gemini_models(
+            timeout=_env_int("LIMEN_GEMINI_CATALOG_TIMEOUT", 30),
+        )
+    else:  # pragma: no cover - the env registry above makes this unreachable
+        raise ValueError(f"unsupported provider model override: {agent}")
+
+    selected = validate_model_override(catalog, override)
+    _record_model_selection(
+        task,
+        profile=profile,
+        selected_model=selected,
+        source=f"{agent}_override_live_catalog" if selected else f"{agent}_override_unvalidated",
+        fingerprint=model_id_catalog_hash(catalog) if catalog else None,
+    )
+    if selected:
+        return selected
+    if catalog:
+        raise ProviderModelOverrideBlocked(f"{agent} model override is absent from the live provider catalog")
+    raise ProviderModelOverrideBlocked(
+        f"{agent} model override cannot be validated because the live provider catalog is unavailable"
+    )
 
 
 def _codex_model(task: "Task | None" = None) -> str | None:
-    """Derive the Codex model for THIS task. Order:
-      1. LIMEN_CODEX_MODEL --- blanket operator pin, always wins;
-      2. LIMEN_CODEX_TIER_SELECT != "1" -> None (provider Auto, old behaviour);
-      3. derive tier via _claude_tier_for(task) (same class->tier semantics);
-      4. LIMEN_CODEX_MODEL_<TIER> per-tier env override -> _CODEX_TIER_MODELS_DEFAULT[tier];
-      5. Record selection; return model.
-    Fail-open to None on any exception --- never block the lane."""
-    env = os.environ.get("LIMEN_CODEX_MODEL")
-    if env:
-        _record_model_selection(
-            task, profile={"tier": "override", "source": "codex_override"}, selected_model=env, source="codex_override"
-        )
-        return env
-    if os.environ.get("LIMEN_CODEX_TIER_SELECT", "1") != "1":
-        _record_model_selection(
-            task,
-            profile={"tier": None, "source": "codex_tier_disabled"},
-            selected_model=None,
-            source="codex_tier_disabled",
-        )
-        return None
-    try:
-        tier = _claude_tier_for(task)
-        per_tier_env = f"LIMEN_CODEX_MODEL_{tier.upper()}"
-        model = os.environ.get(per_tier_env) or _CODEX_TIER_MODELS_DEFAULT.get(tier)
-        _record_model_selection(
-            task,
-            profile={"tier": tier, "source": "codex_tier_derived"},
-            selected_model=model,
-            source="codex_tier_derived",
-        )
-        return model
-    except Exception:
-        return None
+    """Use Codex provider Auto, or an exact override proven by its live CLI catalog."""
+
+    return _provider_model_override("codex", task)
 
 
 def _gemini_model(task: "Task | None" = None) -> str | None:
-    """Derive the Gemini model for THIS task. Order:
-      1. LIMEN_GEMINI_MODEL --- blanket operator pin, always wins;
-      2. LIMEN_GEMINI_TIER_SELECT != "1" -> None (bare invocation, old behaviour);
-      3. derive tier via _claude_tier_for(task) (same class->tier semantics);
-      4. LIMEN_GEMINI_MODEL_<TIER> per-tier env override -> _GEMINI_TIER_MODELS_DEFAULT[tier];
-      5. Record selection; return model.
-    Fail-open to None on any exception --- never block the lane."""
-    env = os.environ.get("LIMEN_GEMINI_MODEL")
-    if env:
-        _record_model_selection(
-            task,
-            profile={"tier": "override", "source": "gemini_override"},
-            selected_model=env,
-            source="gemini_override",
-        )
-        return env
-    if os.environ.get("LIMEN_GEMINI_TIER_SELECT", "1") != "1":
-        _record_model_selection(
-            task,
-            profile={"tier": None, "source": "gemini_tier_disabled"},
-            selected_model=None,
-            source="gemini_tier_disabled",
-        )
-        return None
-    try:
-        tier = _claude_tier_for(task)
-        per_tier_env = f"LIMEN_GEMINI_MODEL_{tier.upper()}"
-        model = os.environ.get(per_tier_env) or _GEMINI_TIER_MODELS_DEFAULT.get(tier)
-        _record_model_selection(
-            task,
-            profile={"tier": tier, "source": "gemini_tier_derived"},
-            selected_model=model,
-            source="gemini_tier_derived",
-        )
-        return model
-    except Exception:
-        return None
+    """Use Gemini provider Auto, or an exact override proven by its live API catalog."""
+
+    return _provider_model_override("gemini", task)
 
 
 # ─── Claude-lane earned-tier ladder (haiku-first-with-cheap-verify) ──────────
 # The claude lane invoked `claude -p` with NO -m, so the account picked the tier. Now the
-# tier is DERIVED per task: a coding task's failure is cheaply detectable (CI/PR/auto-merge/
+# tier is DERIVED per task: a coding task's failure is cheaply detectable (CI/PR/review-gate/
 # reconcile), so verifiable classes start at HAIKU and rely on the EXISTING _LANE_CASCADE +
 # chronic escalation as the escalate rung — only UNDETECTABLE-failure classes get a higher
 # tier up front. No new escalation machinery. Mirrors _codex_model/_opencode_model: env pin
@@ -4827,8 +5253,8 @@ def _gemini_model(task: "Task | None" = None) -> str | None:
 
 def _claude_tier_overrides() -> dict[str, list[str]]:
     """Optional operator OVERRIDE map logs/model-tiers.json → the claude lane's {tier: [classes]}.
-    Fail-open to {} (→ the ledger-DISCOVERED default). Demoted to an override: the default
-    pre-assign set is discovered from the ledger, not pinned. Same read pattern as _ledger_lanes()."""
+    Fail-open to {}. This is an explicit configuration escape hatch; board-event scoring and the
+    trajectory shadow report are never implicit tier authority."""
     try:
         root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
         return json.loads((root / "logs" / "model-tiers.json").read_text()).get("claude") or {}
@@ -4850,8 +5276,8 @@ def _claude_tier_for(task: Task | None) -> str:
     cascade). Pre-assign a higher tier ONLY where failure is undetectable:
       • fable — the narrow reserved top tier plus a written acceptance receipt/command;
       • opus  — the reserved principled set (_claude_opus_classes) or an explicit override;
-      • sonnet— classes the ledger has DISCOVERED this lane wastes on (waste_classes): work that
-                shipped low-value yet passed whatever gate exists ⇒ failure not caught cheaply here.
+      • sonnet— classes named by an explicit operator override while trajectory fitness remains
+                shadow-only and board-event outcomes have no routing or tier authority.
     A per-task `claude_tier` pin and an optional logs/model-tiers.json override layer on top.
     Fable is additionally gated by the LIVE weekly cap (`_earned_fable_tier`): a valid receipt is
     necessary-not-sufficient once the week's Fable spend is at/over cap. Fail-open → haiku."""
@@ -4859,7 +5285,7 @@ def _claude_tier_for(task: Task | None) -> str:
         return "haiku"
     pin = task.claude_tier
     if pin in _CLAUDE_TIER_ORDER:
-        if pin == "fable" and not _claude_fable_acceptance_present():
+        if pin == "fable" and (not _task_is_fable_plan(task) or not _claude_fable_acceptance_present()):
             return _fable_fallback_tier()
         if pin == "fable":
             return _earned_fable_tier()
@@ -4867,12 +5293,14 @@ def _claude_tier_for(task: Task | None) -> str:
     classes = _task_classes(task)
     override = _claude_tier_overrides()
     if classes & (_claude_fable_classes() | set(override.get("fable") or [])):
-        return _earned_fable_tier() if _claude_fable_acceptance_present() else _fable_fallback_tier()
+        return (
+            _earned_fable_tier()
+            if _task_is_fable_plan(task) and _claude_fable_acceptance_present()
+            else _fable_fallback_tier()
+        )
     if classes & (_claude_opus_classes() | set(override.get("opus") or [])):
         return "opus"
-    lane_data = _ledger_lanes().get("claude") or {}
-    waste = set(lane_data.get("waste_classes") or [])
-    if classes & (waste | set(override.get("sonnet") or [])):
+    if classes & set(override.get("sonnet") or []):
         return "sonnet"
     return "haiku"
 
@@ -4890,7 +5318,9 @@ def _bump_tier(tier: str, task: Task | None) -> str:
     i = _CLAUDE_TIER_ORDER.index(tier)
     bumped = _CLAUDE_TIER_ORDER[min(i + 1, len(_CLAUDE_TIER_ORDER) - 1)]
     if bumped == "fable" and not (
-        os.environ.get("LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE") == "1" and _claude_fable_acceptance_present()
+        os.environ.get("LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE") == "1"
+        and _task_is_fable_plan(task)
+        and _claude_fable_acceptance_present()
     ):
         return "opus"
     return bumped
@@ -4902,7 +5332,7 @@ def _claude_model(task: Task | None = None) -> str | None:
       1. explicit LIMEN_CLAUDE_MODEL — a manual pin always wins;
       2. feature flag LIMEN_CLAUDE_TIER_SELECT (default on; off → None = today's bare invocation);
       3. derive the tier (class-based), bump it if the task already failed here, resolve to a model.
-    Fail-open to None everywhere → bare `claude -p` (account default), never a blocked lane."""
+    Selection faults fall back to the non-Fable tier rather than a bare account default."""
     env = os.environ.get("LIMEN_CLAUDE_MODEL")
     if env:
         return _guard_fable_model_pin(env)
@@ -4911,7 +5341,7 @@ def _claude_model(task: Task | None = None) -> str | None:
     try:
         return _resolve_claude_model(_bump_tier(_claude_tier_for(task), task))
     except Exception:
-        return None  # never block the lane on a tier-selection hiccup
+        return _resolve_claude_model(_fable_fallback_tier())
 
 
 def _select_parallel_reservations(
@@ -4931,7 +5361,6 @@ def _select_parallel_reservations(
     picked: list[tuple[str, str]] = []
     spent_daily = track.spent
     id2 = {t.id: t for t in limen.tasks}
-    ledger_lanes = _ledger_lanes()
     lane_fitness = _lane_fitness()
     value_repos = _value_tier_repos()
     for agent in agents:
@@ -4961,47 +5390,16 @@ def _select_parallel_reservations(
             if not _routine_generated_buildout_allowed(t):
                 continue
             raw_cands.append(t)
-        # FITNESS REROUTE: deprioritize tasks where every evidenced class is unfit for this agent.
-        # Fail-open: missing/empty ledger → keep all candidates at equal priority (today's behavior).
-        if lane_fitness:
-            fit_cands = [t for t in raw_cands if not _fitness_unfit(agent, t, lane_fitness)]
-            deferred = [t for t in raw_cands if _fitness_unfit(agent, t, lane_fitness)]
-            for t in deferred:
-                classes = _task_classes(t)
-                evidenced = [lane_fitness.get(agent, {}).get(c) for c in classes if c in lane_fitness.get(agent, {})]
-                reason_parts = [
-                    f"rate={d.get('rate', 0):.2f},n={d.get('attempted')}"
-                    for d in evidenced
-                    if d and d.get("fit") is False
-                ]
-                _LANE_ROUTING_RECEIPTS[t.id] = {
-                    "agent": agent,
-                    "task_classes": sorted(classes),
-                    "source": "lane_fitness_reroute",
-                    "reason": f"unfit ({'; '.join(reason_parts)})" if reason_parts else "unfit",
-                }
-        else:
-            fit_cands = raw_cands
-            deferred = []
-            _LANE_ROUTING_RECEIPTS.setdefault(
-                f"__absent_{agent}",
-                {
-                    "agent": agent,
-                    "source": "lane_fitness_absent",
-                },
-            )
-        # Deferred (unfit) tasks sorted last — still dispatched if no fit candidates fill budget.
-        ordered_raw = sort_value_gate_candidates(fit_cands, value_repos) + sort_value_gate_candidates(
-            deferred, value_repos
-        )
+        # FITNESS SHADOW: preserve the route/class recommendation as telemetry, but never reorder,
+        # filter, suppress, or reroute work until trajectory-attribution fixtures establish authority.
+        raw_cands = _observe_lane_fitness_shadow(agent, raw_cands, lane_fitness)
+        ordered_raw = sort_value_gate_candidates(raw_cands, value_repos)
         cands = ordered_raw
-        # FRONT-LOAD: base picks by priority, then an ACCELERATION TAIL (only when the lane is
-        # under-spending toward its reset cliff) drawn ONLY from work-classes the ledger says this
-        # lane lands — so expiring budget converts to shipped value, never to junk.
+        # FRONT-LOAD: a resource-derived acceleration may widen the bounded pick window near a
+        # provider reset. Board-event win/waste classes are not allowed to filter that window; the
+        # only route/class performance signal is trajectory fitness, and it remains shadow-only.
         eff = _accel_limit(limen, agent, per_agent_limit, now)
-        ordered = list(cands[:per_agent_limit])
-        if eff > per_agent_limit:
-            ordered += [t for t in cands[per_agent_limit:] if _accel_allows(agent, t, ledger_lanes)]
+        ordered = list(cands[:eff])
         chosen: list[Task] = []
         spent_here = 0
         for t in ordered[:eff]:
@@ -5037,15 +5435,15 @@ def _select_parallel_reservations(
                 continue
             t.status = "dispatched"  # reserve so nothing else grabs it
             t.updated = now
-            t.dispatch_log.append(
-                DispatchLogEntry(
-                    timestamp=now,
-                    agent=agent,
-                    session_id="reserve",
-                    status="dispatched",
-                    output="dispatch-parallel: reserved before agent execution",
-                )
+            reservation = DispatchLogEntry(
+                timestamp=now,
+                agent=agent,
+                session_id="reserve",
+                status="dispatched",
+                output="dispatch-parallel: reserved before agent execution",
             )
+            _freeze_attempt_metadata(t, reservation)
+            t.dispatch_log.append(reservation)
             picked.append((agent, t.id))
     return picked
 
@@ -5151,7 +5549,7 @@ def dispatch_parallel(
     # during the unlocked run aren't clobbered; re-apply each result to the fresh task by id.
     # This is the #11 keystone — without the reload, this save would silently overwrite seeds.
     n_pr = n_noop = n_fail = n_rl = n_to = n_blocked = 0
-    with _queue_lock(tasks_path) as got:
+    with _retain_transient_receipts_through_commit(results), _queue_lock(tasks_path) as got:
         if not got:
             # Lock timed out — do NOT write unprotected (that is the #111 clobber this reload guards
             # against). The agents already ran; their PRs exist, so harvest/reconcile recovers the
@@ -5182,6 +5580,7 @@ def dispatch_parallel(
             else:
                 n_fail += 1
         save_limen_file(tasks_path, fresh)
+        _publish_terminal_trajectories(tasks_path, fresh.tasks)
     print(
         f"── PARALLEL done: {len(results)} ran · {n_pr} dispatched/PR · {n_noop} no-op · "
         f"{n_fail} failed→cascade · {n_blocked} blocked · {n_rl} rate-limited · {n_to} timeout→jules"

@@ -4,13 +4,18 @@
 `score-dispatch.py` grades every resolved task (worth_it / marginal / wasted) into `logs/ledger.jsonl`.
 This aggregates that into `logs/ledger.json` — the answer to "is the fleet earning its keep, or wasting
 my money?":
-  - per-lane scorecard : tasks, worth_it rate, sunk cost, cost-per-shipped → which vendor earns its keep
+  - per-route scorecard: tasks, worth_it rate, sunk cost, cost-per-shipped as historical telemetry
   - per-repo ROI       : spend vs. shipped value → which repos only ever burn money
   - revenue attribution: spend mapped onto revenue-ladder.json products → the dollar path
   - daily net verdict  : spent N, shipped M, wasted W → net WORTH IT / net WASTE + the worst offender
 
+This board-event rollup is explicitly non-authoritative: it cannot route, tier, suppress, or
+accelerate a peer keeper. ``limen.execution_trajectory.v1`` is the replacement attribution
+interface and remains shadow-only until accepted fixtures establish authority.
+
 READ-ONLY on the fleet's data; writes only logs/ledger.json. Fail-open: prints what it can, never crashes.
 """
+
 from __future__ import annotations
 
 import json
@@ -68,12 +73,13 @@ def _revenue_repos() -> dict[str, str]:
 
 
 def _scorecard(records: list[dict]) -> dict:
-    lanes: dict[str, dict] = defaultdict(lambda: {"tasks": 0, "worth_it": 0, "marginal": 0,
-                                                   "wasted": 0, "spent": 0, "sunk": 0})
+    lanes: dict[str, dict] = defaultdict(
+        lambda: {"tasks": 0, "worth_it": 0, "marginal": 0, "wasted": 0, "spent": 0, "sunk": 0}
+    )
     repos: dict[str, dict] = defaultdict(lambda: {"spent": 0, "worth_it": 0, "wasted": 0, "sunk": 0})
     tot = {"tasks": 0, "worth_it": 0, "marginal": 0, "wasted": 0, "spent": 0, "sunk": 0}
-    # per-(lane, class) tallies — class = task.type ∪ labels — so routing can steer a lane away from the
-    # exact work-classes it wastes on, toward what it lands. [worth_it, total]
+    # Historical per-(route, class) tallies remain visible for audit only. They are never a routing,
+    # tier, suppression, or acceleration input. [worth_it, total]
     klass: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(lambda: [0, 0]))
 
     for r in records:
@@ -110,9 +116,8 @@ def _scorecard(records: list[dict]) -> dict:
         return d
 
     lane_board = {k: _enrich(dict(v)) for k, v in lanes.items()}
-    # waste/win classes: a lane WASTES a class if its worth-it rate there is below WASTE_RATE over a
-    # meaningful volume (>= WASTE_MIN); it WINS a class above WIN_RATE. Routing reads these to shed the
-    # waste-classes off the lane while keeping its winners. Thresholds env-tunable; data-driven, no pins.
+    # Historical waste/win labels are retained as telemetry for backward-compatible readers. Their
+    # thresholds are observational only and no executor consumes them as steering authority.
     waste_rate = _float_or_default(os.environ.get("LIMEN_WASTE_RATE"), 0.34)
     win_rate = _float_or_default(os.environ.get("LIMEN_WIN_RATE"), 0.6)
     min_vol = _int_or_default(os.environ.get("LIMEN_WASTE_MIN"), 5) or 5
@@ -130,11 +135,11 @@ def _scorecard(records: list[dict]) -> dict:
         board["win_classes"] = [c for c, _ in sorted(win, key=lambda x: -x[1])]
 
     # rank lanes by earns-its-keep: high success rate, low cost-per-shipped, low sunk.
-    ranked = sorted(lane_board.items(),
-                    key=lambda kv: (-kv[1]["success_rate"], kv[1]["cost_per_shipped"] or 1e9, kv[1]["sunk"]))
+    ranked = sorted(
+        lane_board.items(), key=lambda kv: (-kv[1]["success_rate"], kv[1]["cost_per_shipped"] or 1e9, kv[1]["sunk"])
+    )
     _enrich(tot)
-    return {"lanes": lane_board, "lane_rank": [k for k, _ in ranked],
-            "repos": dict(repos), "totals": tot}
+    return {"lanes": lane_board, "lane_rank": [k for k, _ in ranked], "repos": dict(repos), "totals": tot}
 
 
 def build() -> dict:
@@ -148,8 +153,9 @@ def build() -> dict:
     for repo, name in rev.items():
         r = sc["repos"].get(repo)
         if r:
-            attribution.append({"repo": repo, "product": name, "spent": r["spent"],
-                                "shipped": r["worth_it"], "wasted": r["wasted"]})
+            attribution.append(
+                {"repo": repo, "product": name, "spent": r["spent"], "shipped": r["worth_it"], "wasted": r["wasted"]}
+            )
     attribution.sort(key=lambda a: -a["spent"])
 
     # worst offender = repo with the most SUNK cost (money that bought nothing)
@@ -159,11 +165,16 @@ def build() -> dict:
     shipped, wasted, spent, sunk = tot["worth_it"], tot["wasted"], tot["spent"], tot["sunk"]
     productive = spent - sunk
     net = "WORTH IT" if productive > sunk else ("WASTE" if sunk > productive else "EVEN")
-    verdict = (f"net {net} — {shipped} shipped, {wasted} wasted; "
-               f"{productive} of {spent} debits productive, {sunk} sunk"
-               + (f"; worst sink = {worst_repo}" if worst_repo else ""))
+    verdict = (
+        f"net {net} — {shipped} shipped, {wasted} wasted; "
+        f"{productive} of {spent} debits productive, {sunk} sunk"
+        + (f"; worst sink = {worst_repo}" if worst_repo else "")
+    )
 
     return {
+        "schema": "limen.board_value_ledger.v1",
+        "authoritative": False,
+        "steering_enabled": False,
         "generated": datetime.now(timezone.utc).isoformat(),
         "verdict": verdict,
         "net": net,
@@ -190,9 +201,11 @@ def main() -> int:
     for lane in rep["lane_rank"]:
         v = rep["lanes"][lane]
         cps = v["cost_per_shipped"]
-        print(f"  {lane:9} {v['tasks']:4} tasks  "
-              f"{int(v['success_rate']*100):3}% worth-it  "
-              f"sunk {v['sunk']:4}  cost/ship {cps if cps is not None else '—'}")
+        print(
+            f"  {lane:9} {v['tasks']:4} tasks  "
+            f"{int(v['success_rate'] * 100):3}% worth-it  "
+            f"sunk {v['sunk']:4}  cost/ship {cps if cps is not None else '—'}"
+        )
     if rep["revenue_attribution"]:
         print("\nrevenue products (spend → ships):")
         for a in rep["revenue_attribution"]:

@@ -6,12 +6,14 @@ next pass (self-migration via the log-evidence predicate — this is how the his
 drains without a one-shot script). The exact `needs-human` label is the his-hand opt-out.
 Reversible status flips; non-chronic tasks are left untouched."""
 
+import importlib.util
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "heal-dispatch.py"
@@ -66,6 +68,53 @@ def _run(root, tasks, *, chronic_ids=(), detail=None):
     return {t["id"]: t for t in yaml.safe_load((root / "tasks.yaml").read_text())["tasks"]}
 
 
+def _filesystem_snapshot(root: Path) -> tuple[tuple[str, ...], dict[str, tuple[bytes, int, int]]]:
+    paths = tuple(sorted(path.relative_to(root).as_posix() for path in root.rglob("*")))
+    files = {
+        path.relative_to(root).as_posix(): (path.read_bytes(), path.stat().st_mtime_ns, path.stat().st_mode)
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+    return paths, files
+
+
+def test_dry_run_never_takes_or_creates_queue_lock_and_writes_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    tasks_path = tmp_path / "tasks.yaml"
+    tasks_path.write_text(yaml.safe_dump({"tasks": [_task("DRY1", "dispatched", log=[_entry("dispatched")])]}))
+    (logs / "dispatch-verify.json").write_text(
+        json.dumps({"detail": {"DISPATCHED_NO_PR": [{"id": "DRY1"}]}, "chronic": []})
+    )
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setenv("LIMEN_TASKS", str(tasks_path))
+    spec = importlib.util.spec_from_file_location("heal_dispatch_zero_write", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    monkeypatch.setattr(
+        module,
+        "acquire_lock",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("dry-run must not acquire queue lock")),
+    )
+    monkeypatch.setattr(
+        module,
+        "save_limen_file",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("dry-run must not save board")),
+    )
+    monkeypatch.setattr(sys, "argv", ["heal-dispatch.py"])
+    before = _filesystem_snapshot(tmp_path)
+
+    assert module.main() == 0
+
+    assert _filesystem_snapshot(tmp_path) == before
+    assert not (logs / ".queue.lock.d").exists()
+
+
 def test_chronic_open_task_parks_in_failed_blocked(tmp_path):
     out = _run(
         tmp_path,
@@ -86,6 +135,20 @@ def test_chronic_dispatched_no_pr_parks(tmp_path):
     )
     assert out["CHRONIC2"]["status"] == "failed_blocked", out["CHRONIC2"]
     assert "chronic-fleet-debt" in out["CHRONIC2"]["labels"]
+
+
+def test_nonchronic_retry_reopens_for_provider_neutral_routing(tmp_path):
+    task = _task("RETRY1", "dispatched", log=[_entry("dispatched")])
+    task["target_agent"] = "codex"
+
+    out = _run(
+        tmp_path,
+        [task],
+        detail={"DISPATCHED_NO_PR": [{"id": "RETRY1"}]},
+    )
+
+    assert out["RETRY1"]["status"] == "open"
+    assert out["RETRY1"]["target_agent"] == "any"
 
 
 def test_needs_human_with_chronic_evidence_is_rehomed(tmp_path):

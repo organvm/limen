@@ -28,6 +28,32 @@ Any new instruction surface must declare which file it defers to and which behav
 owns. If it repeats task states, precedence, agent names, or safety rules, add a drift check or link
 back to `AGENTS.md` instead.
 
+## Co-equal Peer-Keepers
+
+Every canonical agent identity is a **co-equal peer keeper**. Tool-specific charters and execution
+profiles describe how a peer can act; they do not establish a hierarchy among Claude, Codex,
+Gemini, Jules, Agy, OpenCode, Copilot, GitHub Actions, Oz, Warp, or any future canonical peer.
+
+- The `target_agent` field and provider/model selection are **routing metadata only**. Provider,
+  tier, model, fallback order, and target express capability, availability, cost, or execution fit;
+  they never grant ownership, rank, dignity, or protocol authority.
+- **Executor attribution records who performed an attempt; it does not confer ownership** of the
+  task, result, receipt, branch, or follow-up. Shared acceptance evidence remains available to every
+  peer keeper for review, continuation, and repair.
+- TABVLARIVS is the **single-writer serialization boundary** for mutable shared projections. The
+  writer prevents races and seals deterministic folds of peer-submitted events.
+  It is **not a superior authority**; the writer is neither a privileged agent nor the owner of
+  the underlying work.
+- Shared stewardship requires **least-disruptive continuity**: preserve concurrent peer sessions,
+  processes, worktrees, branches, and receipts, and isolate edits. A peer never inspects another
+  peer's private runtime and never pauses, stops, closes, signals, retunes, restarts, or reroutes a
+  live peer. A safety gate may deny one's own launch or a shared effector; it cannot authorize control
+  of another peer session.
+
+In this standard, a file or registry that “owns” a fact means that durable surface is authoritative
+for the fact. It never means the agent currently writing or executing against that surface outranks
+another keeper.
+
 ## Change procedure
 
 1. Update the owning source file, not every surface by hand.

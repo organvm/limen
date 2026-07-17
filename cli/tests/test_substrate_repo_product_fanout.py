@@ -180,7 +180,9 @@ def test_product_ledger_keeps_global_work_active_when_one_product_blocks(tmp_pat
     assert all(not row["blocked"] for row in snap["next_unblocked"])
 
 
-def test_current_session_fanout_creates_ten_codex_planners_and_executor_packets(tmp_path: Path, monkeypatch) -> None:
+def test_current_session_fanout_creates_provider_neutral_planners_and_executor_packets(
+    tmp_path: Path, monkeypatch
+) -> None:
     session = tmp_path / "session.jsonl"
     user_plan = "# Prior Product Plan\n\n## Summary\n- Build 1000 alpha omega products from every prompt.\n"
     assistant_plan = (
@@ -255,7 +257,7 @@ def test_current_session_fanout_creates_ten_codex_planners_and_executor_packets(
     snap = mod.build_snapshot(
         Namespace(
             session=str(session),
-            min_codex_planners=10,
+            min_planners=10,
             executor_lanes="auto",
             include_contrib=True,
             allow_reset_spend=False,
@@ -276,8 +278,12 @@ def test_current_session_fanout_creates_ten_codex_planners_and_executor_packets(
     assert snap["plan_events"][2]["duplicate"] is True
     expected_plan_hashes = [event["hash"] for event in snap["unique_plan_sources"]]
     assert len(snap["planner_packets"]) == 10
-    assert {packet["target_agent"] for packet in snap["planner_packets"]} == {"codex"}
-    assert {packet["target_agent"] for packet in snap["executor_packets"]} == {"opencode", "github_actions"}
+    assert {packet["target_agent"] for packet in snap["planner_packets"]} == {"any"}
+    assert {packet["target_agent"] for packet in snap["executor_packets"]} == {
+        "codex",
+        "opencode",
+        "github_actions",
+    }
     assert snap["no_reset_spend"] is True
     assert all(packet["spend_guard"] == "no-reset-spend" for packet in snap["planner_packets"])
     assert all(
@@ -286,7 +292,10 @@ def test_current_session_fanout_creates_ten_codex_planners_and_executor_packets(
     )
     assert all(packet["executor_criteria"] for packet in snap["planner_packets"] + snap["executor_packets"])
     assert all(packet["verification_predicates"] for packet in snap["planner_packets"] + snap["executor_packets"])
-    assert all(str(session) in packet["verification_predicates"][0] for packet in snap["planner_packets"])
+    assert all(
+        "<explicit-current-session.jsonl>" in packet["verification_predicates"][0] for packet in snap["planner_packets"]
+    )
+    assert all(str(session) not in packet["verification_predicates"][0] for packet in snap["planner_packets"])
     assert any(
         "product-ledger.py" in predicate
         for packet in snap["planner_packets"] + snap["executor_packets"]
@@ -351,7 +360,7 @@ def test_current_session_fanout_task_seed_waterfalls_into_queue(tmp_path: Path, 
     snap = mod.build_snapshot(
         Namespace(
             session=str(session),
-            min_codex_planners=3,
+            min_planners=3,
             executor_lanes="auto",
             include_contrib=False,
             allow_reset_spend=False,
@@ -361,13 +370,13 @@ def test_current_session_fanout_task_seed_waterfalls_into_queue(tmp_path: Path, 
         )
     )
 
-    assert snap["task_seed_count"] == 5
+    assert snap["task_seed_count"] == 6
     assert snap["task_seed_repo"] == "owner/fanout"
     planners = [task for task in snap["task_seed"] if task["packet_type"] == "planner_packet"]
     executors = [task for task in snap["task_seed"] if task["packet_type"] == "executor_packet"]
     assert len(planners) == 3
-    assert len(executors) == 2
-    assert all(task["target_agent"] == "codex" for task in planners)
+    assert len(executors) == 3
+    assert all(task["target_agent"] == "any" for task in planners)
     assert all(task["depends_on"] == [] for task in planners)
     assert all(task["depends_on"] for task in executors)
     assert all("no-reset-spend" in task["labels"] for task in planners)
@@ -376,25 +385,27 @@ def test_current_session_fanout_task_seed_waterfalls_into_queue(tmp_path: Path, 
     assert all(task["verification_predicates"] for task in snap["task_seed"])
     assert all("Executor criteria:" in task["context"] for task in snap["task_seed"])
     assert all("Verification predicates:" in task["context"] for task in snap["task_seed"])
+    assert all(str(session) not in task["context"] for task in snap["task_seed"])
+    assert all("Source session digest: sha256:" in task["context"] for task in snap["task_seed"])
 
     apply_result = mod.apply_task_seed(snap, tasks_path)
     assert apply_result["status"] == "ready", apply_result
-    assert apply_result["appended"] == 5
+    assert apply_result["appended"] == 6
     assert apply_result["skipped"] == 0
     assert apply_result["mode"] == "tabularius-ticket"
     second_apply = mod.apply_task_seed(snap, tasks_path)
     assert second_apply["appended"] == 0
-    assert second_apply["skipped"] == 5
+    assert second_apply["skipped"] == 6
 
     board = yaml.safe_load(tasks_path.read_text(encoding="utf-8"))
     assert len(board["tasks"]) == 0
     drain_once(tasks_path)
     board = yaml.safe_load(tasks_path.read_text(encoding="utf-8"))
-    assert len(board["tasks"]) == 5
+    assert len(board["tasks"]) == 6
     assert {task["status"] for task in board["tasks"]} == {"open"}
     assert all(task["dispatch_log"] == [] for task in board["tasks"])
 
     markdown = mod.render_markdown(snap)
     assert "## Task Seed" in markdown
-    assert "Seed tasks: 5" in markdown
+    assert "Seed tasks: 6" in markdown
     assert "Task seeding submits only `open` queue items through Tabularius" in markdown

@@ -107,12 +107,12 @@ def test_class_set_env_override(monkeypatch):
     assert route._local_floor_lane(_scan_task(type="triage"), HEALTH) == "ollama"
 
 
-def test_ledger_waste_class_rolls_back(monkeypatch, tmp_path):
+def test_board_event_waste_class_cannot_override_floor_capability_gate(monkeypatch, tmp_path):
     _arm(monkeypatch)
     (tmp_path / "logs").mkdir()
     (tmp_path / "logs" / "ledger.json").write_text(json.dumps({"lanes": {"ollama": {"waste_classes": ["scan"]}}}))
     monkeypatch.setattr(route, "ROOT", tmp_path)
-    assert route._local_floor_lane(_scan_task(), HEALTH) is None
+    assert route._local_floor_lane(_scan_task(), HEALTH) == "ollama"
     assert route._local_floor_lane(_scan_task(type="verify"), HEALTH) == "ollama"
 
 

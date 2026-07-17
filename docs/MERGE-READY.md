@@ -2,7 +2,7 @@
 
 Scanned **80** open PRs (authored by you, across `organvm` + `4444J99`). **2 are CLEAN** (mergeable + CI-green + non-trivial) and ranked revenue-first below.
 
-> This is the **single go/no-go**: say *"open the merge gate"* and `merge-drain.py` squash-merges exactly this READY set (revenue-first), preserves the source branches for later accepted cleanup, and never force-merges. Nothing here is merged by generating this list — the gate is yours.
+> This is a **candidate view**, not merge authorization. Each merge attempt requires explicit `merge-drain.py --apply` plus a short-lived signed `limen.merge_authorization.v1` receipt bound to the exact repository, PR, and head. The signature is verified against the explicit Domus-owned allowed-signers path; the executor then re-runs the live review gate and merge policy before a head-pinned squash merge.
 
 ## ✅ READY — clean, ranked revenue-first
 
@@ -17,4 +17,4 @@ Scanned **80** open PRs (authored by you, across `organvm` + `4444J99`). **2 are
 - **CI failing** (58): `organvm/universal-mail--automation#135`, `organvm/universal-mail--automation#138`, `organvm/mirror-mirror#100`, `organvm/mirror-mirror#102`, `organvm/mirror-mirror#103`, `organvm/mirror-mirror#104`, `organvm/domus-genoma#162`, `organvm/domus-genoma#163`, `organvm/domus-genoma#172`, `organvm/domus-genoma#173`, `organvm/domus-genoma#174`, `organvm/domus-genoma#175` … (+46 more)
 
 ---
-*Generated read-only by `scripts/merge-ready.py` — reuses `merge-drain.py`'s classifier. Re-run any time. Nothing merged without your word.*
+*Generated read-only by `scripts/merge-ready.py` — reuses `merge-drain.py`'s classifier. Re-run any time. Nothing merges without explicit apply plus an exact-target receipt.*

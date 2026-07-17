@@ -2,8 +2,8 @@
 """recover.py — the HEAL function (funnel-middle recovery).
 
 Two failure modes leak capacity:
-  1. status==failed tasks just sit there. Re-open them at the TOP of the lane cascade
-     (codex) so the dispatcher's per-task failover gives them a fresh run across lanes.
+  1. status==failed tasks just sit there. Re-open them to the provider-neutral fleet
+     route so live capacity—not a keeper hierarchy—selects the next attempt.
   2. status==dispatched jules tasks whose recorded session failed, stalled for
      user feedback / plan approval, or is positively confirmed absent are orphaned — re-open so
      they re-dispatch fresh. A miss in a non-exhaustive remote catalog is held, never reopened.
@@ -34,7 +34,7 @@ from limen.models import DispatchLogEntry  # noqa: E402
 from limen.dispatch import _has_done_transition, _restore_done_status  # noqa: E402
 from limen.chronic import CHRONIC_FLEET_DEBT_LABEL  # noqa: E402
 
-CASCADE_TOP = "codex"
+DEFAULT_RETRY_ROUTE = "any"
 NOOP_RECOVERY_ESCALATION_THRESHOLD = 2
 NOOP_FAILURE_RE = re.compile(
     r"\b(?:no[- ]?op|noop|made no changes|no changes|no pr opened|clean-noop)\b",
@@ -132,7 +132,7 @@ def main() -> int:
                 escalated_noop.append(t.id)
                 continue
             t.status = "open"
-            t.target_agent = CASCADE_TOP
+            t.target_agent = DEFAULT_RETRY_ROUTE
             t.labels = [x for x in t.labels if not x.startswith("tried:")]
             t.updated = now
             t.dispatch_log.append(
@@ -154,7 +154,7 @@ def main() -> int:
             action, remote_status = classify_jules_claim(live, sid)
             if action == "recover":
                 t.status = "open"
-                t.target_agent = CASCADE_TOP
+                t.target_agent = DEFAULT_RETRY_ROUTE
                 t.updated = now
                 t.dispatch_log.append(
                     DispatchLogEntry(
@@ -168,6 +168,7 @@ def main() -> int:
                 reopened_remote_failed.append(t.id)
             elif action == "release":
                 t.status = "open"
+                t.target_agent = DEFAULT_RETRY_ROUTE
                 t.updated = now
                 t.dispatch_log.append(
                     DispatchLogEntry(

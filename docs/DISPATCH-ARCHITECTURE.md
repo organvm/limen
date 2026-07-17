@@ -38,14 +38,12 @@ immediately**.
 
 ## Cross-cutting keystones (apply to both engines)
 
-- **Conductor-first packetization:** a broad human prompt is not itself a dispatchable task. The
-  conductor first preserves the prompt/session in the private corpus, derives bounded work packets,
-  and records each packet's owner, repo/worktree scope, receipt target, and verification command.
-  Only then should a lane receive work. Jules is appropriate for independent remote GitHub tasks
-  with branch/PR/check receipts; local lanes such as OpenCode and Agy are appropriate for a
-  specific checkout plus predicate; Gemini is review/synthesis or narrow code work only when auth
-  is configured. A near-exhausted lane such as Claude should be treated as a data source or last
-  resort, not as the default absorber for macro cleanup.
+- **Packetization before dispatch:** a broad human prompt is not itself a dispatchable task. A
+  keeper preserves the prompt/session in the private corpus, derives bounded work packets, and
+  records each packet's owner surface, repo/worktree scope, receipt target, and verification
+  command. Only then should a lane receive work. Provider labels select compatible execution
+  surfaces from live capability and usage evidence; they confer no supervisory role, ownership,
+  rank, or authority over another keeper or its session.
 - **Auth/secret gates are parked, never solved inline:** login failures, missing keys, expired
   tokens, password prompts, and credential hydration issues are recorded as redacted
   `failed_blocked` / `needs_human` work in the owning board or credential ledger, then excluded from
@@ -75,9 +73,15 @@ immediately**.
   receipt-backed reclaim/reap organs once merged/archive/redaction proof exists.
 
 ## Shipping the output
-`scripts/merge-ready.sh` (dry-run default, `--apply` gated) merges CLEAN non-junk PRs revenue-first.
-Merge-readiness of all open PRs is mapped in `memory/merge-readiness-map.md`. Mass merge/close is
-auto-mode-classifier-gated — grant `Bash(gh pr merge:*)` / `Bash(gh pr close:*)` to let the fleet ship.
+`scripts/merge-ready.sh` is a zero-write preview by default. Its `--apply` compatibility path delegates
+to `merge-drain.py` and requires one short-lived, OpenSSH-signed `limen.merge_authorization.v1`
+receipt per exact PR head. Trust comes only from `--allowed-signers` or the Domus-owned
+`LIMEN_REVIEW_ALLOWED_SIGNERS`; live review and merge-policy predicates are re-run immediately before
+mutation.
+Merge-readiness of all open PRs is mapped in `memory/merge-readiness-map.md`. Candidate status is
+not merge authority: every mutation requires the exact-target signed authorization accepted by
+`merge-drain.py --apply`. Closing PRs is a separate outward mutation and is never implied by merge
+readiness.
 
 ## Operational gotchas
 - dispatch.py changes take effect the NEXT beat (fresh subprocess) — NO restart needed.

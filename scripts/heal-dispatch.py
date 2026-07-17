@@ -30,90 +30,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling scripts/ for
 from limen.chronic import CHRONIC_FLEET_DEBT_LABEL, chronic_escalated_to_needs_human  # noqa: E402
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.dispatch_ownership import active_typed_pr_owner_id  # noqa: E402
-from limen.models import DispatchLogEntry, Task  # noqa: E402
+from limen.models import DispatchLogEntry  # noqa: E402
 
 from _human_signals import is_human_gated, lever_ids  # noqa: E402
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 LOCKD = ROOT / "logs" / ".queue.lock.d"
 PR_RE = re.compile(r"github\.com/[^/]+/[^/]+/pull/\d+")
-CASCADE_TOP = "codex"
-# Active states where a HEAL singleton is already being worked — do not duplicate.
-_ACTIVE_STATES = frozenset({"open", "dispatched", "in_progress", "needs_human", "failed_blocked"})
-
-
-def heal_task_key(repo: str, symptom: str) -> str:
-    """Canonical HEAL-<repo>-<symptom> singleton id (mirrors check-main-green._emit_heal_task).
-
-    The id is scoped to the SYMPTOM, not the individual task, so every invocation
-    for the same repo+symptom converges on ONE entry rather than spawning duplicates
-    (PREC-2026-07-10-same-repair-raced-by-two-sessions).
-    """
-    slug = re.sub(r"[^a-z0-9]+", "-", repo.lower()).strip("-")
-    sym = re.sub(r"[^a-z0-9]+", "-", symptom.lower()).strip("-")
-    return f"HEAL-{slug}-{sym}"
-
-
-def ensure_heal_singleton(
-    lf,
-    repo: str,
-    symptom: str,
-    title: str,
-    context: str,
-    now: datetime.datetime,
-) -> str | None:
-    """Upsert a keyed HEAL-<repo>-<symptom> singleton in the loaded LimenFile (in-memory only).
-
-    Mirrors the pattern from check-main-green._emit_heal_task:
-      - If the singleton is ACTIVE (already being worked), return None (converge silently).
-      - If the singleton exists but is done/archived/failed, RE-OPEN it so recurrences are visible.
-      - If absent, CREATE it.
-
-    The caller holds the queue-lock and owns the save_limen_file call; this function
-    is pure in-memory so it is directly testable without touching tasks.yaml.
-    Returns the task id when it (re)opened, else None.
-    """
-    tid = heal_task_key(repo, symptom)
-    stamp = now.date().isoformat()
-    existing = next((t for t in lf.tasks if t.id == tid), None)
-    if existing is not None:
-        if existing.status in _ACTIVE_STATES:
-            return None  # already being worked — converge, idempotent
-        # prior episode closed; reopen the canonical singleton
-        existing.status = "open"
-        existing.title = title
-        existing.context = context
-        existing.updated = now
-        existing.dispatch_log.append(
-            DispatchLogEntry(
-                timestamp=now,
-                agent="limen",
-                session_id="heal",
-                status="open",
-                output=f"heal-dispatch: symptom recurred → reopened singleton {tid} [{stamp}]",
-            )
-        )
-        return tid
-    # New singleton — create it
-    lf.tasks.append(
-        Task(
-            id=tid,
-            title=title,
-            repo=repo,
-            type="code",
-            target_agent=CASCADE_TOP,
-            priority="high",
-            budget_cost=1,
-            status="open",
-            labels=["lifecycle", "heal-dispatch"],
-            urls=[],
-            context=context,
-            depends_on=[],
-            created=stamp,
-            dispatch_log=[],
-        )
-    )
-    return tid
+# Routing default only; it grants no keeper authority or hierarchy.
+DEFAULT_RETRY_ROUTE = "any"
 
 
 def acquire_lock(timeout=15):
@@ -157,9 +82,14 @@ def main():
     chronic_ids = {x["id"] for x in verify.get("chronic", [])}
     levers = lever_ids(ROOT)
 
-    if not acquire_lock():
-        print("queue lock held by daemon — skipping this pass (will retry next tick)")
-        return 0
+    # Observation is strictly zero-write: do not even transiently create/remove the mkdir mutex.
+    # An apply re-loads and re-checks under the lock as before; a dry-run is an advisory snapshot.
+    lock_acquired = False
+    if args.apply:
+        if not acquire_lock():
+            print("queue lock held by daemon — skipping this pass (will retry next tick)")
+            return 0
+        lock_acquired = True
     try:
         path = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
         lf = load_limen_file(path)
@@ -259,12 +189,13 @@ def main():
                     park_chronic(t, "dispatched with no PR and chronic (reopened ≥3×)")
                     continue
                 # Reopening the SAME task id is already convergent — two sessions flipping
-                # t.status to "open" land on one canonical entry. The keyed-singleton helpers
-                # above (heal_task_key / ensure_heal_singleton) are the shared primitive for
-                # lanes that EMIT a new repair task for a symptom (gap-route, check-main-green)
-                # (PREC-2026-07-10-same-repair-raced-by-two-sessions).
+                # t.status to "open" land on one canonical entry. A recurrence never reopens a
+                # terminal synthetic singleton with inherited history; emit a fresh attempt in
+                # the owning task-writer lane when a distinct repair task is genuinely required.
                 t.status = "open"
-                t.target_agent = t.target_agent or CASCADE_TOP
+                # A failed attempt's provider route is not ownership. Re-open for live routing so
+                # every reachable co-equal peer remains eligible for the next attempt.
+                t.target_agent = DEFAULT_RETRY_ROUTE
                 t.labels = [x for x in t.labels if not x.startswith("tried:")]
                 t.updated = now
                 why = "PR closed unmerged" if t.id in closed_ids else "dispatched but no PR (silent no-op)"
@@ -300,10 +231,11 @@ def main():
         else:
             print("  dry-run (pass --apply)")
     finally:
-        try:
-            LOCKD.rmdir()
-        except OSError:
-            pass
+        if lock_acquired:
+            try:
+                LOCKD.rmdir()
+            except OSError:
+                pass
     return 0
 
 

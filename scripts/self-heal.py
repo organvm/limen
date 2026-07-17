@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """self-heal.py — the SELF-HEAL rung of the self-* ladder.
 
-merge-drain.py merges the PRs that are genuinely READY and correctly REFUSES the ones that
-are CI-RED or CONFLICTING. But nothing fixes those refused PRs, so the open-PR floor never
+merge-drain.py classifies PRs that are genuinely READY and correctly REFUSES the ones that
+are CI-RED or CONFLICTING. Its default and scheduled modes are preview-only; a separate signed
+exact-target authorization is required for a merge effect. But nothing fixes refused PRs, so the open-PR floor never
 falls — the stuck pile just sits. This organ closes that gap: every heal beat it assesses the
 open PRs (exactly as merge-drain does), and for each CI-RED or CONFLICT PR it EMITS a targeted
 heal task into the queue so the existing router+dispatcher picks it up and an agent fixes the
-PR in a worktree → the PR turns mergeable → merge-drain lands it next beat → the floor drops.
+PR in a worktree → the PR becomes an accepted candidate → the signed merge owner can act.
 
 This is alchemical progress toward ideal form (the fleet repairing its OWN work), NOT reduction.
 
@@ -72,7 +73,7 @@ KINDS = {
             "goes green. If the branch ALSO rolls back base content its title/body never declared "
             "(a poisoned/stale generated tree), restore base's side of those paths rather than "
             "repairing on top of a rollback. Do not open a new PR — repair the existing one so "
-            "merge-drain lands it. PR: {url}"
+            "the exact-head acceptance and authorization path can evaluate it. PR: {url}"
         ),
     },
     "CONFLICT": {
@@ -316,7 +317,7 @@ def main():
 
     # FULL-FLEET coverage: one cheap enumeration of EVERY open PR (not just the first 30), then
     # assess a rotating window of --scan PRs this beat. Over a full rotation every red/conflict PR
-    # gets seen → a heal task → merge-drain lands it. The cursor is per-organ so HEAL and MERGE
+    # gets seen → a heal task → an accepted candidate. The cursor is per-organ so HEAL and MERGE
     # rotate independently. ([[self-star-ladder-shipped-live]])
     allprs = list(a.pr) if a.pr else enumerate_open_prs(OWNERS, gh, max_total=a.scan_max, want_url=True)
     if not allprs:

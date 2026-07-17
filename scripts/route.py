@@ -213,103 +213,28 @@ _REMOTE_BATCH_LANES = ("jules",)
 
 
 def _learned_weights() -> dict[str, float]:
-    """Conservative lane weights LEARNED by the self-improve organ — the feedback that closes the
-    self-IMPROVE rung (route consumes what improve learned). Read from the proposal the organ already
-    writes (logs/self-improve-proposal.json: lane_adjustments[].target_weight). Applied to the local
-    split by default now that the ladder is closed — set LIMEN_SI_APPLY=0 to disable (clean rollback).
-    Still a no-op until a proposal exists (fail-open below), so the flip is safe before the first run.
+    """Compatibility seam for the former board-event steering consumer.
 
-    A down-weighted lane gets a proportionally higher effective load (picked less), while a
-    boost-underused lane gets a lower effective load (picked more). We clamp to a floor
-    (LIMEN_SI_WEIGHT_FLOOR, default 0.25) and ceiling (LIMEN_SI_WEIGHT_CEILING, default 2.0) so no lane
-    is ever fully STARVED or allowed to swamp the fleet. Missing lane -> 1.0 (no effect). Derive-not-pin."""
-    if os.environ.get("LIMEN_SI_APPLY", "1") != "1":
-        return {}
-    floor = max(0.001, _env_float("LIMEN_SI_WEIGHT_FLOOR", 0.25))
-    ceiling = max(floor, _env_float("LIMEN_SI_WEIGHT_CEILING", 2.0))
-    try:
-        data = json.loads((ROOT / "logs" / "self-improve-proposal.json").read_text())
-    except Exception:
-        return {}  # no proposal yet / unreadable -> no effect (fail-open to budget+runway split)
-    weights: dict[str, float] = {}
-    for adj in data.get("lane_adjustments", []):
-        lane, w = adj.get("lane"), adj.get("target_weight")
-        if lane and isinstance(w, (int, float)):
-            weights[lane] = max(floor, min(ceiling, float(w)))
-    return weights
+    ``self-improve-proposal.json`` remains observable evidence, but its board-derived weights are
+    not routing authority. Trajectory fitness is also shadow-only, so the only honest weight map is
+    empty until a separately accepted authority transition is implemented.
+    """
+    return {}
 
 
 def _refresh_self_improve_proposal() -> None:
-    """Run the self-IMPROVE *producer* at low cadence so its proposal stays fresh for the *consumer*
-    (_learned_weights, above) to apply — the other half of the self-improve rung.
-
-    Why it lives here: the live heartbeat loop (scripts/heartbeat-loop.sh) calls route.py every beat
-    but has NO separate self-improve step, and the only other caller of scripts/self-improve.py is
-    metabolize.sh — which the live loop never invokes (only saturate.sh does). So without this, the
-    proposal was never generated in the running system and _learned_weights always fell through to {}
-    (the rung was wired into a script the daemon doesn't run). Co-locating the producer in route — the
-    organ that already consumes it — keeps the WHOLE rung in the spawned-subprocess layer: route.py is
-    re-exec'd fresh each beat, so this deploys on the next sync-release ff with NO loop-body edit and
-    NO daemon kickstart (the original design intent for this rung).
-
-    Proposal-only + read-only (self-improve.py never writes tasks.yaml). LIMEN_SI_APPLY=0 disables the
-    whole rung (producer + consumer) for a clean rollback; cadence-gated by LIMEN_SI_CADENCE hours so
-    most beats are a cheap mtime check; timeout-bounded and FAIL-OPEN — any error just leaves the last
-    proposal in place (or none → _learned_weights → {}, today's split) and never blocks routing."""
-    if os.environ.get("LIMEN_SI_APPLY", "1") != "1":
-        return
-    try:
-        cadence_h = _env_float("LIMEN_SI_CADENCE", 10.0)
-        proposal = ROOT / "logs" / "self-improve-proposal.json"
-        if proposal.exists() and (time.time() - proposal.stat().st_mtime) / 3600.0 < cadence_h:
-            return  # fresh enough — skip the producer this beat
-        script = ROOT / "scripts" / "self-improve.py"
-        if not script.exists():
-            return
-        subprocess.run(
-            ["python3", str(script)],
-            cwd=str(ROOT),
-            timeout=_env_float("LIMEN_SI_TIMEOUT", 120.0),
-            capture_output=True,
-        )
-    except Exception:
-        return  # fail-open: a stale/absent proposal just means _learned_weights -> {} (no effect)
+    """Compatibility no-op; route inspection must not write or refresh board-derived proposals."""
+    return
 
 
 def _task_classes(task: dict) -> set[str]:
-    """The work-classes of one task — its type plus every label. The ledger grades a lane per class,
-    so this is the key we look the lane's waste/win record up against."""
+    """The work-classes of one task, used only by explicit capability/safety predicates."""
     return {c for c in ([task.get("type")] + list(task.get("labels") or [])) if c}
 
 
 def _ledger_bias(task: dict) -> dict[str, float]:
-    """Steer each lane AWAY from the work-classes the value ledger shows it wastes on — derived from
-    logs/ledger.json (lanes[lane].waste_classes / .win_classes), so no lane name is pinned and it self-
-    corrects as performance changes ([[value-is-discovered-never-assumed]] is the input side; this acts
-    on the output side). Returns {lane: floor} for lanes that waste THIS task's class, applied as a low
-    weight so the lane is picked far less for that work — but never 0 (floored → never starved), and a
-    lane that WINS any of the task's classes is exempt (we don't shed jules's revenue work just because
-    it also wastes generic 'code'). Gated by LIMEN_LEDGER_BIAS (default on); fail-open to {} (= today's
-    routing) on any missing/torn ledger."""
-    if os.environ.get("LIMEN_LEDGER_BIAS", "1") != "1":
-        return {}
-    floor = max(0.001, _env_float("LIMEN_LEDGER_BIAS_FLOOR", 0.2))
-    try:
-        lanes = json.loads((ROOT / "logs" / "ledger.json").read_text()).get("lanes", {})
-    except Exception:
-        return {}
-    classes = _task_classes(task)
-    if not classes:
-        return {}
-    bias: dict[str, float] = {}
-    for lane, d in lanes.items():
-        if not isinstance(d, dict):
-            continue
-        if classes & set(d.get("win_classes") or []):
-            continue  # this lane LANDS this kind of work — never shed it
-        if classes & set(d.get("waste_classes") or []):
-            bias[lane] = floor
-    return bias
+    """Compatibility seam: historical board-event grades never alter provider routing."""
+    return {}
 
 
 def _pick_local(
@@ -342,9 +267,9 @@ def _pick_local(
     if not candidates:
         return None
 
-    # learned (self-improve) weights, then ledger bias on top — the ledger sheds a lane from the
-    # work-classes it wastes on (opencode off code/build-out here; it still won deploy above). Bias wins.
-    weights = {**_learned_weights(), **_ledger_bias(task)}
+    # Board-event self-improve/ledger projections remain observable but non-authoritative, and
+    # trajectory fitness remains shadow-only. No performance-derived route weights are applied.
+    weights: dict[str, float] = {}
 
     # Derive floors once per call (not per comparison): each lane's daily floor from its budget cap.
     # LIMEN_LANE_FLOORS=1 (default on) enables the under-floor boost; =0 restores prior ordering.
@@ -358,8 +283,8 @@ def _pick_local(
         b = budget.get(v, 0) or 1
         # round so near-equal loads tie and let the refresh-runway signal break the tie.
         base = assigned.get(v, 0) / b
-        # self-improve nudge: a down-weighted (historically less-shipping) lane carries a higher
-        # effective load so it's picked less; floored weight means never fully starved.
+        # This seam remains for a future accepted trajectory-authority transition. It is 1.0 for
+        # every route today, so only live load/capability/resource evidence affects selection.
         effective = round(base / weights.get(v, 1.0), 3)
         # under-floor boost: a lane below its daily floor gets half the effective load so it sorts
         # before above-floor lanes — pulling starved healthy lanes into rotation proactively.
@@ -407,12 +332,7 @@ def _pick_repo_worker(
     if not candidates:
         return None
 
-    weights = {**_learned_weights(), **_ledger_bias(task)}
-    if os.environ.get("LIMEN_REMOTE_BATCH_BIAS", "0") != "1":
-        # Batch-fill lanes have an explicit daily utilization target. A historical ledger penalty can
-        # still be inspected and re-enabled, but it must not quietly suppress a healthy 100/day lane.
-        for lane in _REMOTE_BATCH_LANES:
-            weights.pop(lane, None)
+    weights: dict[str, float] = {}
 
     def load(v: str) -> float:
         b = budget.get(v, 0) or 1
@@ -520,9 +440,8 @@ def _local_floor_lane(task: dict, health: dict[str, bool]) -> str | None:
     Only fires when LIMEN_LOCAL_FLOOR=1 (the arm is the parity gate's decision — see
     organvm/manumissio; operator rule 2026-07-09: nothing switches over until the math maths)
     AND the floor is actually lit (ollama healthy + a model pulled). Reserved opus/fable classes
-    never route local. A class the value ledger has graded wasted on the ollama lane falls back
-    automatically (self-correcting rollback, same source as _ledger_bias). Fail-soft: any error
-    -> None, i.e. today's routing byte-identical."""
+    never route local. Board-event outcome scores are not a rollback signal; only explicit
+    capability and safety gates can select or reject the floor. Fail-soft: any error -> None."""
     try:
         if not local_floor_enabled():
             return None
@@ -533,12 +452,6 @@ def _local_floor_lane(task: dict, health: dict[str, bool]) -> str | None:
             return None
         if classes & (set(_claude_opus_classes()) | set(_claude_fable_classes())):
             return None  # reserved tiers never drop to the floor
-        try:
-            lanes = json.loads((ROOT / "logs" / "ledger.json").read_text()).get("lanes", {})
-            if classes & set((lanes.get("ollama") or {}).get("waste_classes") or []):
-                return None
-        except Exception:
-            pass  # no ledger yet -> no rollback signal
         if ollama_model() is None:
             return None
         return "ollama"
@@ -594,14 +507,9 @@ def route_task(
     agents, reasons = _capable_agents(task, health, planned_remaining, workdir)
     extended = [a for a in agents if a not in LOCAL_CHECKOUT_AGENTS]
     if extended:
-        # ledger bias here steers jules off the busywork classes it wastes (coverage/docs/...) while
-        # KEEPING it for its winners (revenue/product/ship-now) and for any repo where it's the only
-        # capable lane (the penalty only reorders — min() still picks it when it's the sole option, so
-        # a no-local-checkout repo is never stranded). [[no-never-happens-again]]
-        bias = _ledger_bias(task)
-        pick = min(
-            extended, key=lambda a: (1 if bias.get(a, 1.0) < 1.0 else 0, assigned.get(a, 0), PAID_AGENT_ORDER.index(a))
-        )
+        # Board-event productivity grades never reorder this set. Use only current capability and
+        # assigned load while trajectory fitness remains shadow-only.
+        pick = min(extended, key=lambda a: (assigned.get(a, 0), PAID_AGENT_ORDER.index(a)))
         return pick, reasons[pick]
     return "unroutable", "no reachable capable paid lane"
 
@@ -614,10 +522,6 @@ def main() -> int:
         "--apply", action="store_true", help="rewrite target_agent in tasks.yaml (reversible); never dispatches"
     )
     args = ap.parse_args()
-
-    # PRODUCE the self-improve proposal (low cadence) before we CONSUME it in routing below — this is
-    # the live home of the improve producer (the heartbeat loop has no separate self-improve step).
-    _refresh_self_improve_proposal()
 
     tasks_path = Path(args.tasks)
     workdir = Path(args.workdir).expanduser()
@@ -734,5 +638,8 @@ def _stamp_health() -> None:
 
 if __name__ == "__main__":
     rc = main()
-    _stamp_health()
+    # The default plan path is a literal zero-write inspection. The heartbeat invokes --apply, so
+    # only an actual routing-effector run publishes the health receipt.
+    if "--apply" in sys.argv:
+        _stamp_health()
     sys.exit(rc)

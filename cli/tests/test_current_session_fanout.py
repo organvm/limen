@@ -5,6 +5,8 @@ import json
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "current-session-fanout.py"
@@ -17,14 +19,34 @@ def _load():
     return mod
 
 
-def _args(session: Path, min_codex_planners: int = 10) -> Namespace:
+def _args(session: Path, min_planners: int = 10) -> Namespace:
     return Namespace(
         session=str(session),
-        min_codex_planners=min_codex_planners,
+        min_planners=min_planners,
         executor_lanes="auto",
         include_contrib=True,
         allow_reset_spend=False,
     )
+
+
+def test_current_session_source_is_explicit_and_never_discovered_from_peer_estates(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    mod = _load()
+    monkeypatch.delenv("LIMEN_CURRENT_SESSION_JSONL", raising=False)
+
+    with pytest.raises(FileNotFoundError, match="explicit current-session JSONL"):
+        mod.find_session(None)
+
+    source = SCRIPT.read_text(encoding="utf-8")
+    assert '".codex" / "sessions"' not in source
+    assert '".claude" / "projects"' not in source
+
+    current = tmp_path / "current.jsonl"
+    current.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setenv("LIMEN_CURRENT_SESSION_JSONL", str(current))
+    assert mod.find_session(None) == current
 
 
 def test_current_session_fanout_extracts_full_plan_set_and_marks_duplicates(
@@ -149,14 +171,17 @@ def test_current_session_fanout_extracts_full_plan_set_and_marks_duplicates(
     assert "full-fleet-overnight" in snap["themes"]
     expected_plan_hashes = [event["hash"] for event in snap["unique_plan_sources"]]
     assert len(snap["planner_packets"]) >= 10
-    assert {packet["target_agent"] for packet in snap["planner_packets"]} == {"codex"}
-    assert {packet["target_agent"] for packet in snap["executor_packets"]} == {"opencode"}
+    assert {packet["target_agent"] for packet in snap["planner_packets"]} == {"any"}
+    assert {packet["target_agent"] for packet in snap["executor_packets"]} == {"codex", "opencode"}
     assert all(
         packet["source_plan_hashes"] == expected_plan_hashes
         for packet in snap["planner_packets"] + snap["executor_packets"]
     )
     assert snap["global_product_selection"]["status"] == "active"
     assert any(blocker["item"] == "warp lane human-gated" for blocker in snap["blocked_local_work"])
+    public_markdown = mod.render_markdown(snap)
+    assert str(session) not in public_markdown
+    assert "<explicit-current-session.jsonl>" in public_markdown
 
 
 def test_current_session_fanout_emits_plan_02_executor_criteria_and_safe_markdown(
@@ -223,7 +248,7 @@ def test_current_session_fanout_emits_plan_02_executor_criteria_and_safe_markdow
     )
     monkeypatch.setattr(mod, "digest_blockers", lambda: [])
 
-    snap = mod.build_snapshot(_args(session, min_codex_planners=2))
+    snap = mod.build_snapshot(_args(session, min_planners=2))
     plan_02 = next(packet for packet in snap["planner_packets"] if packet["theme"] == "full-fleet-overnight")
 
     assert plan_02["id"] == "PLAN-02-ea38d4d8"
@@ -233,8 +258,8 @@ def test_current_session_fanout_emits_plan_02_executor_criteria_and_safe_markdow
         "dispatch-async.py --lanes auto --dry-run" in item
         for item in plan_02["owner_packet"]["verification_predicates"]
     )
-    assert snap["executor_packets"][0]["target_agent"] == "agy"
-    assert snap["executor_packets"][0]["verification_predicates"]
+    assert {packet["target_agent"] for packet in snap["executor_packets"]} == {"codex", "agy"}
+    assert all(packet["verification_predicates"] for packet in snap["executor_packets"])
 
     markdown = mod.render_markdown(snap)
     assert "## Plan Source Proof" in markdown

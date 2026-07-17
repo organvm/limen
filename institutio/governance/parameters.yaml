@@ -34,13 +34,6 @@ parameters:
     self_update: none
     owner: vigilia
     note: "Throttle window for the marker auto-clear gh check — at most one `gh pr list` per this many seconds while a pause marker is present, so rapid current_mode() callers (dispatch admission) don't hammer GitHub."
-  LIMEN_AUTONOMY_MARKER_AUTOMERGE:
-    default: "1"
-    env: LIMEN_AUTONOMY_MARKER_AUTOMERGE
-    self_update: none
-    owner: vigilia
-    note: "When 1 (default), the governor COMPLETES a PR-owned pause release instead of merely checking it: a marker whose owner:/pr: names one identifiable PR, whose release_predicate declares the merge, and whose prohibitions do NOT mention merge gets merge-policy.sh run on that PR and, on CLEARED (exit 0), a head-pinned squash merge — so a pause can never deadly-embrace the paused beat that would have merged its own release (the 2026-07-15 endless-watcher incident: sessions babysat the pause-owner PR by hand because merge-drain lives inside the paused heartbeat). Operator pauses (merge in prohibitions, or owner_surface:-only identity) are structurally ineligible and never touched. 0 = check-only (pre-2026-07-15 behavior). Follows the LIMEN_AUTONOMY_MARKER_AUTOCLEAR / LIMEN_MERGE_DRAIN default-on precedent; the five-clause discriminator is the safety, and its worst failure mode is staying paused."
-
   # --- the institution names ITSELF as the first parameter ---------------------
   INSTITVTIO_NOMEN:
     default: "VIGILIA"          # provisional codename — NOT ratified
@@ -86,6 +79,12 @@ parameters:
     self_update: none
     owner: dispatch
     note: "Local content-addressed observation store for public GitHub Actions run IDs, URLs, exact SHAs, predicate digests, and durable receipt identities. Raw provider output and credentials are excluded."
+  LIMEN_EXECUTION_TRAJECTORY_ROOT:
+    default: "$LIMEN_ROOT/logs/execution-trajectories/attempts"
+    env: LIMEN_EXECUTION_TRAJECTORY_ROOT
+    self_update: none
+    owner: dispatch
+    note: "Private atomic custody for terminal limen.execution_trajectory.v1 attempt records. This source is shadow-only: board-carried receipt claims earn zero value until an owner-native acceptance adapter independently verifies them."
   LIMEN_FACTS_APPLY:
     default: 0
     env: LIMEN_FACTS_APPLY
@@ -502,12 +501,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "Optional retained sandbox root for done-insight-cadence.sh verification. Blank means create a private temporary proof root and retain it for inspection instead of deleting it."
-  LIMEN_MIN_CODEX_PLANNERS:
+  LIMEN_MIN_PLANNERS:
     default: 10
-    env: LIMEN_MIN_CODEX_PLANNERS
+    env: LIMEN_MIN_PLANNERS
     self_update: none
     owner: continuity
-    note: "Minimum Codex planner packets emitted by current-session fanout before executor waterfalling."
+    note: "Minimum provider-neutral planner packets emitted by current-session fanout before executor waterfalling. Planner target any preserves co-equal peer routing."
   LIMEN_CURRENT_SESSION_FANOUT_REPO:
     default: "organvm/limen"
     env: LIMEN_CURRENT_SESSION_FANOUT_REPO
@@ -605,11 +604,11 @@ parameters:
     owner: continuity
     note: "DATA_ONLY push guard (issue #872 / PREC-2026-07-10-direct-push-lane-rots-main). When on (default), the autonomic direct-push lanes (scripts/capture.sh, scripts/continuation-beat.py) refuse to stage SOURCE (code/config that belongs behind pr-gate) onto a repo's `main` when that repo has .github/workflows/pr-gate.yml — so no uncommitted .py in the live checkout ever reaches protected main un-CI'd. Refused source is left on disk (reversible) and surfaced; route it via PR. `off` disables the guard. Non-main branches and ungated repos are unaffected either way."
   LIMEN_RECLAIM:
-    default: "1"
+    default: "0"
     env: LIMEN_RECLAIM
     self_update: none
     owner: continuity
-    note: "Master live-enable switch for the heartbeat worktree reaper. Worktree admission requires the registered live value 1; disabling reclaim blocks new local worktree creation while remote lanes continue."
+    note: "Master live-enable switch for the heartbeat worktree reaper. Defaults 0 during reacceptance containment. Worktree admission requires the registered live value 1; disabling reclaim blocks new local worktree creation while remote lanes continue."
   LIMEN_RECLAIM_MAX:
     default: 50
     env: LIMEN_RECLAIM_MAX
@@ -813,31 +812,37 @@ parameters:
     env: LIMEN_HORREVM
     self_update: none
     owner: horrevm
-    note: "Master on/off for the HORREVM custody sensor (horrevm-custody in sensors.yaml) — the strategic-use half: arca-sealed ciphertext to Drive/Dropbox via headless rclone. Ships LIVE (1) but DARK: with no rclone.conf it prints PARKED on L-CLOUD-EGRESS-CONSENT and exits 0; real egress additionally requires LIMEN_HORREVM_APPLY=1."
+    note: "Master on/off for the HORREVM custody sensor. The heartbeat publishes a zero-write receipt-ready plan and freshness status only. Real egress is a separate explicit --apply command requiring LIMEN_HORREVM_APPLY=1 plus one Domus-trusted OpenSSH-signed limen.horrevm.apply_receipt.v1 bound to exact action, source manifest, content hashes, remote objects, expiry, and attempt ID."
   LIMEN_BEAT_HORREVM:
     default: 4
     env: LIMEN_BEAT_HORREVM
     self_update: none
     owner: horrevm
-    note: "Cadence (every N beats) of the HORREVM custody sensor. Probes are cheap every run; actual pushes self-throttle to >=20h inside the script, so a 4-beat cadence costs probes only."
+    note: "Cadence of the zero-write HORREVM plan and freshness sensor. The scheduled path never probes or pushes a remote rail."
   LIMEN_HORREVM_TIMEOUT:
     default: 240
     env: LIMEN_HORREVM_TIMEOUT
     self_update: none
     owner: horrevm
-    note: "Per-run timeout (seconds) for the HORREVM custody sensor. May truncate the FIRST bulk push; rclone copy is incremental per file, so successive beats converge fail-open."
+    note: "Per-run timeout for the scheduled zero-write payload-plan and freshness checks. Receipt-bound applies are separate bounded invocations."
   LIMEN_HORREVM_APPLY:
     default: 0
     env: LIMEN_HORREVM_APPLY
     self_update: none
     owner: horrevm
-    note: "The egress safety valve (armed_valve_type: safety in sensors.yaml): 0 = dry-run (prints the exact copy plan, writes nothing remote), 1 = real rclone copy of the approved ciphertext payload set. Armed ONLY by the operator via L-CLOUD-EGRESS-CONSENT (issue #1109) — persistence-arming env writes are classifier-gated, so the lever hands him the one-liner."
+    note: "Safety valve rechecked at the apply entrypoint and every mutation boundary; 1 also makes --status require current verified custody evidence. It is necessary but never sufficient for egress and never causes the heartbeat to append --apply. Every effect still requires explicit --apply plus an exact, unexpired, non-replayable Domus-trusted signed receipt."
+  LIMEN_HORREVM_ALLOWED_SIGNERS:
+    default: ""
+    env: LIMEN_HORREVM_ALLOWED_SIGNERS
+    self_update: none
+    owner: domus
+    note: "Optional path to the Domus-owned OpenSSH allowed-signers file used to verify limen.horrevm.apply_receipt.v1 under its dedicated signature namespace. The same path may be supplied explicitly with --allowed-signers. Limen never tracks or synthesizes this trust root; missing, linked, writable, empty, forged, or mismatched trust inputs fail closed."
   LIMEN_HORREVM_MAX_AGE_DAYS:
     default: 7
     env: LIMEN_HORREVM_MAX_AGE_DAYS
     self_update: none
     owner: horrevm
-    note: "Freshness bound for `horrevm-custody.py --status`: once armed, a rail whose last verified push is older than this many days exits 1 (advisory escalation in the beat). PARKED/dry-run states always exit 0."
+    note: "Freshness bound for horrevm-custody.py --status when LIMEN_HORREVM_APPLY requests current custody proof. The env signal changes only the advisory verdict; it cannot authorize an effect."
   LIMEN_HORREVM_DRIVE_BUDGET_GB:
     default: 5
     env: LIMEN_HORREVM_DRIVE_BUDGET_GB
@@ -904,12 +909,6 @@ parameters:
     self_update: none
     owner: continuity
     note: "Idle minutes before codex-quicken treats a Codex session as no longer alive. Classifier-only; it never resumes or mutates sessions."
-  LIMEN_QUICKEN_ESCALATE_AFTER:
-    default: 2
-    env: LIMEN_QUICKEN_ESCALATE_AFTER
-    self_update: none
-    owner: continuity
-    note: "Breathe attempts before a re-stalled session escalates to its own ASK-quicken-escalate-<sid8> needs_human atom instead of receiving the identical continuation again (`all` mode only; an explicitly named SID is always honored)."
   LIMEN_BEAT_CONTINUATION:
     default: 6
     env: LIMEN_BEAT_CONTINUATION
@@ -1585,43 +1584,43 @@ parameters:
     self_update: none
     owner: heal
     note: "How many PRs the factory classifies per beat (a rotating window over the full fleet), so each beat does a bounded slice rather than the whole backlog at once."
-  # --- LANE FITNESS (dispatch proactive reroute): per-(agent, class) conversion evidence ---
+  # --- LANE FITNESS SHADOW: observed provider-route conversion, never steering authority ---
   LIMEN_FITNESS_MIN_N:
-    default: 5                  # minimum dispatch_log attempts before a pair is judged fit/unfit
+    default: 5                  # minimum unique trajectories before a shadow pair is classified
     env: LIMEN_FITNESS_MIN_N
     self_update: none
     owner: dispatch
-    note: "Minimum attempted entries in dispatch_log (within the rolling window) before a (agent, task_class) pair is classified as fit or unfit by lane-fitness.py. Below this threshold the pair is unknown (null). Env-overridable; derive-not-pin."
+    note: "Minimum unique limen.execution_trajectory.v1 attempts in the rolling window before a (provider_route, frozen_task_class) pair receives a shadow fit/unfit observation. Below this threshold the pair is unknown (null). The observation is not dispatch authority."
   LIMEN_FITNESS_UNFIT_RATE:
-    default: 0.25               # conversion rate below which a (agent, class) pair is marked unfit
+    default: 0.25               # shadow verified-value rate threshold
     env: LIMEN_FITNESS_UNFIT_RATE
     self_update: none
     owner: dispatch
-    note: "Fraction of dispatch_log 'done' outcomes required before a (agent, task_class) pair is NOT marked unfit. Below this rate (with >= LIMEN_FITNESS_MIN_N attempts) the pair is deprioritized at pick time via lane-fitness.py. Fail-open: missing ledger keeps today's behavior exactly. Derive-not-pin."
+    note: "Fraction of exact-commit, predicate-passed, receipt-verified trajectories required before a (provider_route, frozen_task_class) pair is not shadow-unfit. Dispatch records the observation but never reorders, suppresses, or reroutes from it."
   LIMEN_FITNESS_WINDOW_DAYS:
-    default: 30                 # rolling window in days for dispatch_log entries
+    default: 30                 # rolling window in days for terminal trajectories
     env: LIMEN_FITNESS_WINDOW_DAYS
     self_update: none
     owner: dispatch
-    note: "Rolling window (in days) lane-fitness.py uses when counting dispatch_log attempts. Entries older than this are excluded, so the fitness table stays current with recent fleet behavior rather than anchoring on stale history. Derive-not-pin."
+    note: "Rolling window in days for immutable terminal execution trajectories. Historical task-board done events are not inputs, so recurrence or board reconciliation cannot poison attribution."
   LIMEN_LANE_FITNESS:
     default: "1"
     env: LIMEN_LANE_FITNESS
     self_update: none
     owner: dispatch
-    note: "Beat-wire the lane-fitness table refresh (sensor 0h2). When 1, `python3 scripts/lane-fitness.py --write` runs on cadence (LIMEN_BEAT_LANE_FITNESS) so logs/lane-fitness.json stays current and dispatch._lane_fitness always has a fresh signal. Fail-open: a missing/stale ledger leaves dispatch behavior unchanged. Set 0 to silence the refresh rung."
+    note: "Beat-wire the shadow lane-fitness refresh. It reads atomic logs/execution-trajectories/attempts records and emits observable would-deprioritize evidence only; steering_enabled remains false and missing source is visible coverage debt."
   LIMEN_BEAT_LANE_FITNESS:
     default: 4                  # beats between refreshes; cheap I/O, no external calls
     env: LIMEN_BEAT_LANE_FITNESS
     self_update: none
     owner: dispatch
-    note: "Beat cadence for the lane-fitness-refresh sensor. Every N metabolize beats, lane-fitness.py --write recomputes the per-(agent, task_class) conversion table from dispatch_log. 4 beats keeps the signal fresh without per-beat tasks.yaml reads."
+    note: "Beat cadence for recomputing the shadow (provider_route, frozen_task_class) table from immutable execution trajectories. No tasks.yaml lifecycle events are read."
   LIMEN_LANE_FITNESS_TIMEOUT:
-    default: 60                 # seconds; tasks.yaml read + json write in-process is well under 10s
+    default: 60                 # seconds; bounded JSONL read + JSON report write
     env: LIMEN_LANE_FITNESS_TIMEOUT
     self_update: none
     owner: dispatch
-    note: "Hard timeout (s) for the beat-wired lane-fitness.py --write run. The computation reads tasks.yaml and writes logs/lane-fitness.json; 60s is a generous ceiling for any reasonable fleet size."
+    note: "Hard timeout for the shadow trajectory fold and logs/lane-fitness.json publication. This report is telemetry, not a steering input."
     # --- LANE FLOORS (route proactive fill): ensure every healthy lane gets a daily minimum ---
   LIMEN_LANE_FLOORS:
     default: "1"                 # 1=enabled (under-floor lanes get a 0.5× load boost in _pick_local); 0=disabled
@@ -1635,19 +1634,6 @@ parameters:
     self_update: none
     owner: route
     note: "Fraction of a lane's per-agent daily budget cap that becomes its daily task floor for the under-floor boost in route.py and capacity_fill reporting. E.g. codex budget=100 → floor=25. Parsed defensively; clamped to (0,1]; result floored at 1 when the lane has any budget. LIMEN_<AGENT>_DAILY_TASKS overrides per-agent. Derive-not-pin."
-  # --- SELF-IMPROVE (route SI-weighting): clamp per-lane weight so no lane starves or swamps the fleet ---
-  LIMEN_SI_WEIGHT_FLOOR:
-    default: 0.25               # lower clamp: a down-weighted lane is still picked sometimes (never starved)
-    env: LIMEN_SI_WEIGHT_FLOOR
-    self_update: none
-    owner: route
-    note: "Floor on the self-improvement lane-weight multiplier in route.py. A down-weighted lane gets a proportionally higher effective load (picked less) but is clamped here so it is never fully starved. Derive-not-pin."
-  LIMEN_SI_WEIGHT_CEILING:
-    default: 2.0                # upper clamp: a boosted lane can be favored, but never swamps the fleet
-    env: LIMEN_SI_WEIGHT_CEILING
-    self_update: none
-    owner: route
-    note: "Ceiling on the self-improvement lane-weight multiplier in route.py (clamped to >= floor). Keeps a boost-underused lane from swamping the fleet. Was referenced in code but undeclared — folded into the panel to clear the NO-HARDCODE gate."
   # --- WALLS: keep the published walls (credential #320, his-hand #330) from drifting ---
   LIMEN_BEAT_WALLS:
     default: 12                 # cadence: regenerate the walls every 12 beats
@@ -1762,12 +1748,6 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "When 1, route.py treats healthy Jules as a normal repo-capable remote batch lane so its daily run budget is actively filled instead of waiting only for slow/fallback work."
-  LIMEN_REMOTE_BATCH_BIAS:
-    default: "0"
-    env: LIMEN_REMOTE_BATCH_BIAS
-    self_update: none
-    owner: arms-agents
-    note: "When 1, historical route ledger bias may down-weight remote batch-fill lanes. Default 0 preserves explicit daily utilization targets for lanes such as Jules."
   LIMEN_ASYNC_DEFUNCT_GRACE:
     default: 120
     env: LIMEN_ASYNC_DEFUNCT_GRACE
@@ -1894,7 +1874,19 @@ parameters:
     env: LIMEN_FABLE_BALANCE_PATH
     self_update: none
     owner: arms-agents
-    note: "Override path to the live weekly Fable balance file (default $LIMEN_ROOT/logs/fable-allotment.json). Read by the model_selection cap gate, the session guard, and the vendor advisor; used by tests to seed a mock balance. Empty means the default location."
+    note: "Override path to the live weekly Fable balance file (default $LIMEN_ROOT/logs/fable-allotment.json). Read by the model_selection cap gate, the session guard, and the vendor advisor; used by tests to seed a mock balance. Empty means the default location. The receipt must satisfy limen.fable_balance.v1, including observed_at and meter_ready."
+  LIMEN_FABLE_BALANCE_MAX_AGE_SECONDS:
+    default: "900"
+    env: LIMEN_FABLE_BALANCE_MAX_AGE_SECONDS
+    self_update: none
+    owner: arms-agents
+    note: "Maximum age of a limen.fable_balance.v1 observation that may authorize the Fable rung. Missing, malformed, future-dated, source-dark, or older observations fail closed to a non-Fable tier."
+  LIMEN_FABLE_AUDIT_INTERVAL_SECONDS:
+    default: "60"
+    env: LIMEN_FABLE_AUDIT_INTERVAL_SECONDS
+    self_update: none
+    owner: arms-agents
+    note: "Periodic audit cadence for one fleet-launched Fable planner's own balance/cap contract. The monitor sees and may terminate only the process group it created; it never enumerates or controls peer sessions."
   LIMEN_CLAUDE_FABLE_CAP_TIER:
     default: "opus"
     env: LIMEN_CLAUDE_FABLE_CAP_TIER
@@ -2338,11 +2330,11 @@ parameters:
     owner: limen-daemon
     note: "ON — before deleting a reap candidate, git ls-remote confirms origin STILL holds HEAD (guards the deleted/renamed-origin case where the local clone is the only copy). Fail-safe: unreachable/offline → skip, never reap. Set 0 to trust local remote-tracking refs without the network round-trip."
   LIMEN_RECLAIM_APPLY:
-    default: "1"               # ON — default beat removes only clean+content-preserved+idle roots
+    default: "0"               # OFF — explicit authorization is required for physical removal
     env: LIMEN_RECLAIM_APPLY
     self_update: none
     owner: limen-daemon
-    note: "When 1, scripts/drain.sh passes --apply to reclaim-worktrees.py. The reaper still refuses dirty, unique-unpushed, unmerged, active, or live/self roots. Set 0 for preview-only operation."
+    note: "When explicitly set to 1, scripts/drain.sh passes --apply to reclaim-worktrees.py. Defaults 0 for preview-only containment; the reaper also refuses dirty, unique-unpushed, unmerged, active, or live/self roots."
   LIMEN_WORKTREE_DEBT_GATE:
     default: "1"               # ON — per-candidate worktree custody admission active
     env: LIMEN_WORKTREE_DEBT_GATE
@@ -2885,24 +2877,30 @@ parameters:
     self_update: none
     owner: dispatch
     note: "Optional operator override. It is usable only when the exact value is present and code-capable in the current `opencode models --verbose` catalog; blank derives from live capabilities."
-  LIMEN_CODEX_TIER_SELECT:
-    default: "1"
-    env: LIMEN_CODEX_TIER_SELECT
+  LIMEN_CODEX_MODEL:
+    default: ""
+    env: LIMEN_CODEX_MODEL
     self_update: none
     owner: dispatch
-    note: "Enable per-task tier derivation for the Codex lane. 1 (default) derives haiku->o4-mini, opus/fable->o3 via _claude_tier_for; 0 disables derivation (provider Auto, prior behaviour). Per-tier overrides via LIMEN_CODEX_MODEL_<TIER>."
+    note: "Optional operator escape-hatch override. Blank delegates to Codex provider Auto. A nonblank value must match an exact identifier returned by the reachable live Codex catalog or dispatch fails blocked before provider launch."
+  LIMEN_CODEX_CATALOG_TIMEOUT:
+    default: 30
+    env: LIMEN_CODEX_CATALOG_TIMEOUT
+    self_update: none
+    owner: dispatch
+    note: "Bound in seconds for live Codex catalog discovery when an explicit override needs validation. Provider-Auto dispatch does not enumerate the catalog."
   LIMEN_GEMINI_MODEL:
     default: ""
     env: LIMEN_GEMINI_MODEL
     self_update: none
     owner: dispatch
-    note: "Blanket operator override for the Gemini agent model. Nonblank wins over all per-task tier derivation. Blank enables tier derivation (see LIMEN_GEMINI_TIER_SELECT)."
-  LIMEN_GEMINI_TIER_SELECT:
-    default: "1"
-    env: LIMEN_GEMINI_TIER_SELECT
+    note: "Optional operator escape-hatch override. Blank delegates to Gemini provider Auto. A nonblank value must match an exact identifier returned by the reachable live Gemini catalog or dispatch fails blocked before provider launch."
+  LIMEN_GEMINI_CATALOG_TIMEOUT:
+    default: 30
+    env: LIMEN_GEMINI_CATALOG_TIMEOUT
     self_update: none
     owner: dispatch
-    note: "Enable per-task tier derivation for the Gemini lane. 1 (default) derives haiku/sonnet->gemini-2.5-flash, opus/fable->gemini-2.5-pro via _claude_tier_for; 0 disables derivation (bare invocation, prior behaviour). Per-tier overrides via LIMEN_GEMINI_MODEL_<TIER>."
+    note: "Bound in seconds for live Gemini catalog discovery when an explicit override needs validation. Provider-Auto dispatch does not enumerate the catalog."
   LIMEN_OPENCODE_CATALOG_TIMEOUT:
     default: 30
     env: LIMEN_OPENCODE_CATALOG_TIMEOUT
@@ -2993,6 +2991,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "session-value-review.py: commit count at/above which motion WITHOUT receipts is flagged high-motion-no-receipts (churn that produces no durable value). The knob for how much receiptless motion is tolerated before the review flags it."
+  LIMEN_CURRENT_SESSION_ARTIFACT:
+    default: ""
+    env: LIMEN_CURRENT_SESSION_ARTIFACT
+    self_update: none
+    owner: continuity
+    note: "Exact-path capability binding for one exported current-invocation artifact outside ~/.claude and ~/.codex. Empty fails closed. It never authorizes broad peer-session census, inspection, resumption, signaling, or control."
   LIMEN_OVERNIGHT_VALUE_GATE_HOURS:
     default: "1.5"
     env: LIMEN_OVERNIGHT_VALUE_GATE_HOURS
@@ -3006,37 +3010,6 @@ parameters:
     owner: feed
     note: "Tracked ranked/archival terminal decisions consumed by discover-value.py so board compaction cannot rediscover an already-assessed repository."
 
-  # --- session-walk organ (full-horizon walk census, both vendors) --------------
-  LIMEN_SESSION_WALK:
-    default: "1"               # ON — census + bounded residue walk each beat
-    env: LIMEN_SESSION_WALK
-    self_update: none
-    owner: continuity
-    note: "Beat gate for the session-walk organ (scripts/session-walk-census.py, metabolize step 0j): full-horizon census of BOTH vendor session estates (~/.claude/projects and ~/.codex/sessions), classifying every session walked/needs_input/mid_flight/dispatch/empty and self-draining the unwalked user residue a bounded few per beat via headless resume with the QUICKEN guardrail prompt. QUICKEN owns the recent stalled tail (3-day horizon); this organ owns the whole-estate completeness question. 1=census+walk each beat; 0=off."
-  LIMEN_SESSION_WALK_CAP:
-    default: 2
-    env: LIMEN_SESSION_WALK_CAP
-    self_update: none
-    owner: continuity
-    note: "How many residue sessions the beat resumes per cycle (--walk N). Small by design: each walk is a full headless agent run; 2/beat drains a 100-session backlog in under a day without starving the beat."
-  LIMEN_SESSION_WALK_GIVE_UP:
-    default: 2
-    env: LIMEN_SESSION_WALK_GIVE_UP
-    self_update: none
-    owner: continuity
-    note: "Walk attempts per session before the organ stops resuming it (the QUICKEN escalate-after-2 precedent: an identical re-walk of a session parked on a gated lever is waste). A given-up session stays visible in logs/session-walk-residue.md."
-  LIMEN_SESSION_WALK_TIMEOUT:
-    default: 900
-    env: LIMEN_SESSION_WALK_TIMEOUT
-    self_update: none
-    owner: continuity
-    note: "Seconds each headless walk (claude --resume / codex exec resume) may run before the organ moves on. Mirrors LIMEN_QUICKEN_BREATHE_TIMEOUT."
-  LIMEN_WALK_RESIDUE_CAP:
-    default: 500
-    env: LIMEN_WALK_RESIDUE_CAP
-    self_update: none
-    owner: continuity
-    note: "Maximum residue rows retained in the census artifact and ledger (newest first). A cap, not a filter — raise it if the estate ever carries more unwalked sessions than this."
 
   # --- await-pr: the one sanctioned synchronous PR-gate waiter -------------------
   LIMEN_AWAIT_PR_TIMEOUT:
@@ -3056,7 +3029,25 @@ parameters:
     env: LIMEN_MERGE_POLICY_BIN
     self_update: none
     owner: merge-policy
-    note: "Test seam: overrides the merge-policy predicate binary consumed by scripts/await-pr.sh (and the governor's pause-release completion). Empty (the default) resolves to scripts/merge-policy.sh; tests point it at a scripted-verdict stub so the verdict matrix is hermetic. Never set on the live host."
+    note: "Test seam: overrides the merge-policy predicate binary consumed by scripts/await-pr.sh. Empty (the default) resolves to scripts/merge-policy.sh; tests point it at a scripted-verdict stub so the verdict matrix is hermetic. Never set on the live host."
+  LIMEN_PR_REVIEW_GATE:
+    default: ""                # empty = scripts/pr-review-gate.py; set only in tests
+    env: LIMEN_PR_REVIEW_GATE
+    self_update: none
+    owner: merge-policy
+    note: "Test seam: overrides the single exact-head review predicate consumed by merge-policy.sh, await-pr.sh, and merge-drain.py. Empty (the default) resolves to scripts/pr-review-gate.py; hermetic tests point it at a fail-closed stub. Never set on the live host."
+  LIMEN_REVIEW_ALLOWED_SIGNERS:
+    default: ""
+    env: LIMEN_REVIEW_ALLOWED_SIGNERS
+    self_update: none
+    owner: domus
+    note: "Optional path to the Domus-owned OpenSSH allowed-signers file used by exact-head peer-review receipts and signed limen.merge_authorization.v1 receipts. The same path may be supplied explicitly with --allowed-signers. Limen never tracks or synthesizes this trust registry; missing trust fails signed receipt paths closed."
+  LIMEN_REVIEW_GATE_APP_SLUG:
+    default: ""
+    env: LIMEN_REVIEW_GATE_APP_SLUG
+    self_update: none
+    owner: github
+    note: "Required dedicated GitHub App slug for the limen.pr_review_gate.v1 required check. Generic github-actions is rejected because a required-check app binding alone does not identify one workflow. Empty or unresolved live App identity fails ruleset apply closed."
 
   # --- disk-capacity sensor (sensors.yaml 0g7) ------------------------------------
   LIMEN_DISK_CAPACITY:
@@ -3064,7 +3055,7 @@ parameters:
     env: LIMEN_DISK_CAPACITY
     self_update: none
     owner: tabularius
-    note: "Beat gate for the disk-capacity sensor (scripts/disk-capacity.py --check, sensor 0g7 in sensors.yaml). Closes the disk-full silent-failure root cause: the fleet stalled with no beat-visible signal when the host ran out of space. Green ⟺ /System/Volumes/Data percent-used < LIMEN_DISK_CAPACITY_THRESHOLD (default 80%). Fail-open when the volume is absent (CI / non-macOS). The armed effector is LIMEN_DISK_CAPACITY_APPLY. Set 0 to silence."
+    note: "Beat gate for the zero-write disk-capacity sensor (scripts/disk-capacity.py --check, sensor 0g8 in sensors.yaml). The deployed heartbeat observes the host on cadence and never removes files, truncates logs, or appends --apply. Green ⟺ /System/Volumes/Data percent-used < LIMEN_DISK_CAPACITY_THRESHOLD (default 80%). Fail-open when the volume is absent (CI / non-macOS). Set 0 to silence observation."
 
   LIMEN_DISK_CAPACITY_THRESHOLD:
     default: 80
@@ -3078,7 +3069,7 @@ parameters:
     env: LIMEN_BEAT_DISK_CAPACITY
     self_update: none
     owner: tabularius
-    note: "Cadence (every N beats) of the disk-capacity sensor (sensors.yaml 0g7) in the scheduled metabolize derive lane. 4 follows the launch-agent-liveness precedent for a cheap check guarding a critical infrastructure invariant. The generic scheduled runner resolves this override."
+    note: "Cadence (every N beats) of the disk-capacity observation in the deployed heartbeat's scheduled derive lane. The same registry check remains available to metabolize, but neither source invokes the separate reclaim effector."
 
   LIMEN_DISK_CAPACITY_TIMEOUT:
     default: 30
@@ -3087,26 +3078,31 @@ parameters:
     owner: tabularius
     note: "Per-run timeout (seconds) for the disk-capacity sensor. The check is a single df(1) call; 30s is generous headroom for a slow volume or a busy CI runner."
 
-  LIMEN_DISK_CAPACITY_APPLY:
-    default: "1"               # ARMED — the effector. Arms removal of gitignored heal-probe artifacts + heartbeat error-log truncation.
-    env: LIMEN_DISK_CAPACITY_APPLY
-    self_update: none
-    owner: tabularius
-    note: "Arms the disk-capacity effector (scripts/disk-capacity.py --apply, sensor 0g7 args_when). When 1 (default), the beat removes every git-check-ignored .heal-probe-*.yaml artifact under LIMEN_ROOT (gitignored transient probes; always safe to delete) and truncates logs/heartbeat.err.log when it exceeds LIMEN_DISK_LOG_CAP_MB (default 50 MiB), writing a receipt to logs/disk-capacity-apply.json. Shipped dark; armed 2026-07-16 — /System/Volumes/Data at 87% vs 80% threshold. Set 0 to disarm."
-
   LIMEN_DISK_LOG_CAP_MB:
     default: 50
     env: LIMEN_DISK_LOG_CAP_MB
     self_update: none
     owner: tabularius
-    note: "Size cap in MiB for logs/heartbeat.err.log checked by disk-capacity.py --apply. When the log exceeds this, the effector truncates it to zero. Default 50 MiB; raise if the heartbeat emits legitimate high-volume stderr that should be preserved longer, lower for tighter disk hygiene."
+    note: "Size cap in MiB used by the zero-write scripts/disk-capacity-reclaim.py plan. A log above the cap appears as an exact hash-bound truncate target; mutation still requires a separate explicit --apply plus a fresh limen.disk_capacity.apply_receipt.v1 receipt."
 
   LIMEN_RELATIONSHIP_REVIEW:
     default: "1"
     env: LIMEN_RELATIONSHIP_REVIEW
     self_update: none
     owner: tabularius
-    note: "Gate for the relationship-review-delta beat sensor (weekly review-due detector for the relationship-pipeline slugs). ON by default: it is read-only (a bounded, immutable sqlite count of chat.db) and fails open, so it cannot red the beat or leak. Its only public output is a PII-clean count; per-person detail lands only in the sealed _people-private estate."
+    note: "Gate for the relationship-review-delta observation. It consumes only an exact, fresh, owner-custodied immutable snapshot handoff, emits a PII-clean count, and has no raw-path fallback, hydration path, or storage effector."
+  LIMEN_RELATIONSHIP_REVIEW_HANDOFF:
+    default: ""
+    env: LIMEN_RELATIONSHIP_REVIEW_HANDOFF
+    self_update: none
+    owner: tabularius
+    note: "Path injected by the private relationship owner to one atomically published limen.relationship_review_handoff.v1 receipt. Blank yields explicit unavailable coverage. Limen never creates, refreshes, or guesses this private path."
+  LIMEN_RELATIONSHIP_REVIEW_MAX_SNAPSHOT_AGE_SECONDS:
+    default: 691200
+    env: LIMEN_RELATIONSHIP_REVIEW_MAX_SNAPSHOT_AGE_SECONDS
+    self_update: none
+    owner: tabularius
+    note: "Consumer-side freshness ceiling for the owner-produced relationship snapshot and hydration handoff (eight days by default). The owner receipt must also be unexpired; its expiry can shorten but never weaken this ceiling."
   LIMEN_BEAT_RELATIONSHIP_REVIEW:
     default: 168
     env: LIMEN_BEAT_RELATIONSHIP_REVIEW
@@ -3118,13 +3114,7 @@ parameters:
     env: LIMEN_RELATIONSHIP_REVIEW_TIMEOUT
     self_update: none
     owner: tabularius
-    note: "Per-run timeout (seconds) for the relationship-review-delta sensor. The work is a handful of read-only sqlite COUNT queries; 300s is generous headroom if chat.db is large or the volume is slow."
-  LIMEN_RELATIONSHIP_REVIEW_NOTIFY:
-    default: "1"
-    env: LIMEN_RELATIONSHIP_REVIEW_NOTIFY
-    self_update: none
-    owner: tabularius
-    note: "Safety-valve arg for the relationship-review-delta effector (--notify). When 1, review-due detections append to the sealed private log ~/Workspace/_people-private/review-due.jsonl (ARCA-sealed, never public). ON by default because the write target is private-only; set 0 to run detection without recording."
+    note: "Per-run timeout (seconds) for the relationship-review-delta sensor. It verifies exact owner receipt and artifact hashes, then runs bounded immutable SQLite COUNT queries without writing or hydrating."
   LIMEN_RELATIONSHIP_REVIEW_THRESHOLD:
     default: 20
     env: LIMEN_RELATIONSHIP_REVIEW_THRESHOLD

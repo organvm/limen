@@ -50,7 +50,7 @@ def test_merge_ready_uses_current_merge_drain_enumerator(monkeypatch, tmp_path: 
     monkeypatch.setattr(mod, "_ladder_ranks", lambda: {"organvm/a-i-chat--exporter": 1})
     monkeypatch.setattr(mod, "_value_repos", lambda: {"organvm/a-i-chat--exporter"})
 
-    assert mod.main(["--scan", "3"]) == 0
+    assert mod.main(["--scan", "3", "--write"]) == 0
 
     doc = (tmp_path / "docs" / "MERGE-READY.md").read_text(encoding="utf-8")
     assert "2 are CLEAN" in doc
@@ -67,3 +67,35 @@ def test_value_repos_reads_repo_list(monkeypatch, tmp_path: Path):
     )
 
     assert mod._value_repos() == {"organvm/a-i-chat--exporter", "organvm/limen"}
+
+
+def test_default_preview_is_zero_write(monkeypatch, tmp_path: Path):
+    mod = _load()
+    monkeypatch.setattr(mod, "ROOT", tmp_path)
+    monkeypatch.setattr(mod, "LOGS", tmp_path / "logs")
+    monkeypatch.setattr(mod, "DOCS", tmp_path / "docs")
+    monkeypatch.setattr(mod, "_load_merge_drain", lambda: _FakeMergeDrain)
+    monkeypatch.setattr(mod, "_ladder_ranks", lambda: {})
+    monkeypatch.setattr(mod, "_value_repos", lambda: set())
+
+    assert mod.main(["--scan", "3"]) == 0
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_write_refuses_under_pause_without_touching_outputs(monkeypatch, tmp_path: Path):
+    mod = _load()
+    marker = tmp_path / "logs" / "AUTONOMY_PAUSED"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("reason: containment\n", encoding="utf-8")
+    monkeypatch.setattr(mod, "ROOT", tmp_path)
+    monkeypatch.setattr(mod, "LOGS", tmp_path / "logs")
+    monkeypatch.setattr(mod, "DOCS", tmp_path / "docs")
+    monkeypatch.setattr(
+        mod,
+        "_load_merge_drain",
+        lambda: (_ for _ in ()).throw(AssertionError("scan should not run")),
+    )
+
+    assert mod.main(["--write"]) == 3
+    assert not (tmp_path / "docs").exists()
+    assert list((tmp_path / "logs").iterdir()) == [marker]

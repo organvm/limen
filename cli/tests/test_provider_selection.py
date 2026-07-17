@@ -1,20 +1,27 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import date
 from pathlib import Path
 
+import limen.provider_selection as provider_selection
 from limen.models import DispatchLogEntry, Task
 from limen.provider_selection import (
     ExecutionProfile,
     ModelCapability,
     catalog_hash,
+    discover_codex_models,
+    discover_gemini_models,
     effective_profile,
     execution_profile_for,
+    model_id_catalog_hash,
     paid_service_block_reason,
+    parse_model_id_catalog,
     parse_opencode_catalog,
     parse_warp_catalog,
     select_opencode_model,
+    validate_model_override,
     validate_warp_override,
 )
 
@@ -180,6 +187,110 @@ def test_catalog_hash_is_order_independent_and_changes_with_capability() -> None
     second = model("p/b")
     assert catalog_hash([first, second]) == catalog_hash([second, first])
     assert catalog_hash([first]) != catalog_hash([model("p/a", reasoning=True)])
+
+
+def test_plain_model_catalog_tracks_exact_renamed_ids_across_add_remove_and_reorder() -> None:
+    first = parse_model_id_catalog(json.dumps({"models": [{"slug": "renamed-zeta"}, {"slug": "renamed-alpha"}]}))
+    reordered = parse_model_id_catalog(json.dumps({"models": [{"slug": "renamed-alpha"}, {"slug": "renamed-zeta"}]}))
+    expanded = parse_model_id_catalog(
+        json.dumps(
+            {
+                "models": [
+                    {"slug": "renamed-middle"},
+                    {"slug": "renamed-zeta"},
+                    {"slug": "renamed-alpha"},
+                ]
+            }
+        )
+    )
+
+    assert first == reordered == ["renamed-alpha", "renamed-zeta"]
+    assert model_id_catalog_hash(first) == model_id_catalog_hash(reordered)
+    assert model_id_catalog_hash(expanded) != model_id_catalog_hash(first)
+    assert validate_model_override(expanded, "renamed-middle") == "renamed-middle"
+    assert validate_model_override(first, "renamed-middle") is None
+
+
+def test_codex_catalog_discovery_uses_provider_json_without_substitution(monkeypatch) -> None:
+    observed: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        observed.append(command)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            json.dumps({"models": [{"slug": "shape-q"}, {"slug": "shape-r"}]}),
+            "",
+        )
+
+    monkeypatch.setattr(provider_selection.subprocess, "run", fake_run)
+
+    assert discover_codex_models("codex-fixture") == ["shape-q", "shape-r"]
+    assert observed == [["codex-fixture", "debug", "models"]]
+
+
+def test_gemini_catalog_discovery_keeps_credential_out_of_url(monkeypatch) -> None:
+    observed: dict[str, object] = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps({"models": [{"name": "models/shape-s", "baseModelId": "shape-s"}]}).encode()
+
+    def fake_urlopen(request, *, timeout):
+        observed["url"] = request.full_url
+        observed["headers"] = dict(request.header_items())
+        observed["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr(provider_selection.urlrequest, "urlopen", fake_urlopen)
+
+    assert discover_gemini_models(api_key="fixture-secret", timeout=9) == ["models/shape-s", "shape-s"]
+    assert "fixture-secret" not in str(observed["url"])
+    assert observed["headers"] == {"X-goog-api-key": "fixture-secret"}
+    assert observed["timeout"] == 9
+
+
+def test_gemini_catalog_discovery_follows_provider_pagination_without_code_changes(monkeypatch) -> None:
+    observed_urls: list[str] = []
+    pages = [
+        {"models": [{"name": "models/renamed-zeta"}], "nextPageToken": "provider page 2"},
+        {"models": [{"name": "models/renamed-alpha"}]},
+    ]
+
+    class Response:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps(self.payload).encode()
+
+    def fake_urlopen(request, *, timeout):
+        assert timeout == 7
+        observed_urls.append(request.full_url)
+        return Response(pages[len(observed_urls) - 1])
+
+    monkeypatch.setattr(provider_selection.urlrequest, "urlopen", fake_urlopen)
+
+    assert discover_gemini_models(api_key="fixture-secret", timeout=7) == [
+        "models/renamed-alpha",
+        "models/renamed-zeta",
+    ]
+    assert observed_urls == [
+        "https://generativelanguage.googleapis.com/v1beta/models",
+        "https://generativelanguage.googleapis.com/v1beta/models?pageToken=provider+page+2",
+    ]
 
 
 def test_warp_defaults_to_provider_auto_and_only_validates_explicit_override() -> None:

@@ -8,6 +8,7 @@ packets, and emits:
 * tracked docs/prompt-packet-ledger.md: public-safe packet queue;
 * ignored .limen-private/.../prompt-packet-ledger.json: full hash/session packet evidence.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,9 +21,7 @@ from typing import Any
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 HOME = Path.home()
-PRIVATE_ROOT = Path(
-    os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus")
-)
+PRIVATE_ROOT = Path(os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus"))
 BATCH_REVIEW_INDEX = PRIVATE_ROOT / "lifecycle" / "prompt-batch-review-ledger.json"
 PRIORITY_INDEX = PRIVATE_ROOT / "lifecycle" / "prompt-priority-map.json"
 ATTACK_INDEX = PRIVATE_ROOT / "lifecycle" / "session-attack-paths.json"
@@ -41,42 +40,42 @@ PACKET_ROUTES = {
     "worktree_lifecycle": {
         "packet_kind": "worktree-preservation",
         "owner": "worktree lifecycle",
-        "agent_fit": "codex conducts; opencode/agy for bounded read-only root sweeps; jules only after repo+predicate narrowing",
+        "agent_fit": "co-equal keeper selected from live capability and resource evidence; bounded read-only sweeps may fan out after repo+predicate narrowing",
         "route": "Resolve each listed worktree to preservation proof, owner blocker, remote/default proof, or documented non-source residue.",
         "verification": "python3 scripts/worktree-debt.py && python3 scripts/session-attack-paths.py --write && python3 scripts/prompt-batch-review-ledger.py --write",
     },
     "session_lifecycle": {
         "packet_kind": "session-owner-receipt",
         "owner": "session lifecycle",
-        "agent_fit": "codex conducts; cheaper explorer lanes gather bounded evidence; codex records the owner receipt",
+        "agent_fit": "co-equal keeper selected from live capability and resource evidence; bounded peers gather evidence and the durable surface records the receipt",
         "route": "Collapse stalled session receipts into owner records, supersession notes, or blocker receipts before delegation.",
         "verification": "python3 scripts/prompt-priority-map.py --write && python3 scripts/prompt-batch-review-ledger.py --write && python3 scripts/prompt-packet-ledger.py --write",
     },
     "github_review": {
         "packet_kind": "github-review-routing",
         "owner": "github review",
-        "agent_fit": "codex conducts; opencode/gemini inspect bounded PR evidence; jules only after repo and PR are explicit",
+        "agent_fit": "co-equal keeper selected from the live provider catalog; inspect bounded PR evidence only after repo and PR are explicit",
         "route": "Map each stalled GitHub-review receipt to an owner repo, PR/issue receipt, predicate, and merge/supersession gate.",
         "verification": "python3 scripts/session-attack-paths.py --write && python3 scripts/prompt-packet-ledger.py --write",
     },
     "agent_coordination": {
         "packet_kind": "agent-coordination",
         "owner": "agent coordination",
-        "agent_fit": "codex conducts and shards read-only sweeps to cheaper lanes; do not let codex absorb the whole corpus pass",
+        "agent_fit": "co-equal keeper selected from live capability and spend evidence; shard bounded read-only sweeps without provider hierarchy",
         "route": "Convert broad coordination residue into bounded packets; do not dispatch broad sprawl prompts.",
         "verification": "python3 scripts/prompt-batch-review-ledger.py --write && python3 scripts/prompt-packet-ledger.py --write",
     },
     "technical_debt_ci": {
         "packet_kind": "technical-debt-ci",
         "owner": "technical debt / CI",
-        "agent_fit": "codex conducts; opencode/jules execute only after repo and predicate are explicit",
+        "agent_fit": "co-equal keeper selected at dispatch; execute only after repo and predicate are explicit",
         "route": "Route CI/debt receipts to an owner repo and narrow predicate before any dispatch.",
         "verification": "python3 scripts/prompt-packet-ledger.py --write",
     },
     "uncategorized": {
         "packet_kind": "uncategorized-private-review",
         "owner": "unassigned corpus review",
-        "agent_fit": "codex conducts; cheaper explorer lanes may classify bounded redacted slices, never raw prompt dumps",
+        "agent_fit": "co-equal keeper selected at dispatch may classify bounded redacted slices, never raw prompt dumps",
         "route": "Privately classify the receipt, then re-run priority and batch ledgers with an owner route.",
         "verification": "python3 scripts/prompt-priority-map.py --write && python3 scripts/prompt-batch-review-ledger.py --write && python3 scripts/prompt-packet-ledger.py --write",
     },
@@ -112,9 +111,7 @@ def session_lookup(priority: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def attack_lookup(attack: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {
-        str(item["id"]): item
-        for item in attack.get("ranked_paths") or []
-        if isinstance(item, dict) and item.get("id")
+        str(item["id"]): item for item in attack.get("ranked_paths") or [] if isinstance(item, dict) and item.get("id")
     }
 
 
@@ -139,7 +136,7 @@ def dispatchability_for_packet(packet: dict[str, Any]) -> str:
     family = str(packet.get("family") or "")
     owner_repos = packet.get("owner_repos") or []
     if family in {"worktree_lifecycle", "session_lifecycle", "agent_coordination"}:
-        return "codex-owner-packet"
+        return "keeper-packet"
     if owner_repos:
         return "ready-after-predicate"
     return "needs-owner-repo"
@@ -201,7 +198,10 @@ def build_packets(
             candidate_batches[str(batch["id"])] = batch
     for batch in candidate_batches.values():
         if not isinstance(batch, dict) or batch.get("status") != "needs-packetization":
-            if str(batch.get("lane") or "") != "stalled-review" or str(batch.get("id") or "") not in resolved_source_batches:
+            if (
+                str(batch.get("lane") or "") != "stalled-review"
+                or str(batch.get("id") or "") not in resolved_source_batches
+            ):
                 continue
         for session_key in batch.get("session_keys") or []:
             session = sessions_by_key.get(str(session_key))
@@ -295,12 +295,8 @@ def build_snapshot(limit: int) -> dict[str, Any]:
     resolution_receipts = load_json(RESOLUTION_RECEIPTS)
     resolutions = resolution_lookup(resolution_receipts)
     packets = build_packets(review, priority, attack, resolutions)
-    recorded_packets = [
-        packet for packet in packets if str(packet.get("status") or "") in RECORDED_PACKET_STATUSES
-    ]
-    open_packets = [
-        packet for packet in packets if str(packet.get("status") or "") not in RECORDED_PACKET_STATUSES
-    ]
+    recorded_packets = [packet for packet in packets if str(packet.get("status") or "") in RECORDED_PACKET_STATUSES]
+    open_packets = [packet for packet in packets if str(packet.get("status") or "") not in RECORDED_PACKET_STATUSES]
     status_counts = Counter(str(packet["dispatchability"]) for packet in packets)
     packet_status_counts = Counter(str(packet["status"]) for packet in packets)
     family_counts = Counter(str(packet["family"]) for packet in packets)
@@ -319,7 +315,9 @@ def build_snapshot(limit: int) -> dict[str, Any]:
         },
         "coverage": {
             "source_review_batches": len(review.get("batches") or []),
-            "needs_packetization_batches": int((review.get("counts") or {}).get("statuses", {}).get("needs-packetization", 0)),
+            "needs_packetization_batches": int(
+                (review.get("counts") or {}).get("statuses", {}).get("needs-packetization", 0)
+            ),
             "packets": len(packets),
             "recorded_packets": len(recorded_packets),
             "open_packets": len(open_packets),
@@ -358,7 +356,7 @@ def render_markdown(snapshot: dict[str, Any], *, limit: int) -> str:
         "",
         "- Packets are bounded owner/task units derived from redacted batch/session hashes.",
         "- Packetization is not dispatch by itself; a packet needs an owner repo or owner ledger, a narrow predicate, no secret dependency, and an expected receipt before external delegation.",
-        "- Stalled-review packets default to a Codex conductor: Codex owns judgment and integration, while broad redacted sweeps should be delegated to cheaper explorer lanes whenever scope is bounded.",
+        "- Stalled-review packets have no provider owner or superior conductor. A co-equal keeper is selected from live capability, availability, spend, and predicate evidence; executor attribution never confers ownership.",
         "- This ledger contains no raw prompt or session text.",
         "",
         "## Coverage",

@@ -1,9 +1,4 @@
-"""The ledger→routing loop: steer a lane away from the work-classes it WASTES, keep it for its winners.
-
-opencode noops on code/build-out → shed it there (keep its deploy specialty). jules wastes coverage/docs
-busywork but LANDS revenue/product async → shed only the busywork, never the winners, never stranded.
-Derived from logs/ledger.json (waste_classes/win_classes) — no lane names pinned. Fails open + floored.
-"""
+"""Historical board-event projections are telemetry, never provider-routing authority."""
 
 from __future__ import annotations
 
@@ -27,7 +22,7 @@ def _self_improve(tmp: Path, lane_adjustments: list[dict]):
     (tmp / "logs" / "self-improve-proposal.json").write_text(json.dumps({"lane_adjustments": lane_adjustments}))
 
 
-def test_ledger_bias_sheds_waste_class_but_exempts_winners(tmp_path, monkeypatch):
+def test_board_event_ledger_cannot_create_route_bias(tmp_path, monkeypatch):
     monkeypatch.setattr(route, "ROOT", tmp_path)
     _ledger(
         tmp_path,
@@ -36,28 +31,16 @@ def test_ledger_bias_sheds_waste_class_but_exempts_winners(tmp_path, monkeypatch
             "jules": {"waste_classes": ["coverage", "code"], "win_classes": ["revenue", "product"]},
         },
     )
-    # a pure coverage task → jules is shed (it wastes coverage and wins nothing here)
-    b = route._ledger_bias({"type": "code", "labels": ["coverage"]})
-    assert b.get("jules") == 0.2 and "opencode" in b
-    # a revenue task that is ALSO type=code → jules EXEMPT (it lands revenue), opencode still shed
-    b2 = route._ledger_bias({"type": "code", "labels": ["revenue", "build-out"]})
-    assert "jules" not in b2, "win class must override waste — don't shed jules's revenue work"
-    assert b2.get("opencode") == 0.2
+    assert route._ledger_bias({"type": "code", "labels": ["coverage"]}) == {}
+    assert route._ledger_bias({"type": "code", "labels": ["revenue", "build-out"]}) == {}
 
 
-def test_missing_ledger_no_bias(tmp_path, monkeypatch):
+def test_missing_ledger_has_the_same_non_authoritative_result(tmp_path, monkeypatch):
     monkeypatch.setattr(route, "ROOT", tmp_path)  # no logs/ledger.json written
     assert route._ledger_bias({"type": "code", "labels": ["build-out"]}) == {}
 
 
-def test_bias_off_when_disabled(tmp_path, monkeypatch):
-    monkeypatch.setattr(route, "ROOT", tmp_path)
-    _ledger(tmp_path, {"opencode": {"waste_classes": ["code"], "win_classes": []}})
-    monkeypatch.setenv("LIMEN_LEDGER_BIAS", "0")
-    assert route._ledger_bias({"type": "code"}) == {}
-
-
-def test_opencode_shed_from_its_waste_class(tmp_path, monkeypatch):
+def test_historical_board_files_cannot_change_pick_distribution(tmp_path, monkeypatch):
     monkeypatch.setattr(route, "ROOT", tmp_path)
     _ledger(
         tmp_path,
@@ -68,6 +51,13 @@ def test_opencode_shed_from_its_waste_class(tmp_path, monkeypatch):
             "agy": {"waste_classes": [], "win_classes": ["code", "build-out"]},
         },
     )
+    _self_improve(
+        tmp_path,
+        [
+            {"lane": "codex", "target_weight": 0.1},
+            {"lane": "opencode", "target_weight": 2.0},
+        ],
+    )
     health = {"codex": True, "claude": True, "agy": True, "opencode": True}
     budget = {"codex": 100, "claude": 100, "agy": 100, "opencode": 100}
     assigned: dict[str, int] = {}
@@ -77,14 +67,13 @@ def test_opencode_shed_from_its_waste_class(tmp_path, monkeypatch):
         picks.append(v)
         assigned[v] = assigned.get(v, 0) + 1
     c = Counter(picks)
-    # opencode is floored (0.2) for this class → far fewer than every earner, but NOT zero (never starved)
-    assert c["opencode"] < min(c["codex"], c["claude"], c["agy"]), c
-    assert c["opencode"] >= 1, "floored, not starved"
+    assert max(c.values()) - min(c.values()) <= 1, c
+    assert set(c) == set(health)
 
 
-def test_self_improve_boost_weight_is_honored(tmp_path, monkeypatch):
+def test_self_improve_lane_weights_are_not_consumed(tmp_path, monkeypatch):
     monkeypatch.setattr(route, "ROOT", tmp_path)
-    monkeypatch.setenv("LIMEN_LEDGER_BIAS", "0")
+    monkeypatch.setattr(route, "_vendor_cliff_urgency", lambda: {})
     _self_improve(
         tmp_path,
         [
@@ -93,27 +82,27 @@ def test_self_improve_boost_weight_is_honored(tmp_path, monkeypatch):
         ],
     )
 
-    assert route._learned_weights()["opencode"] == 1.25
+    assert route._learned_weights() == {}
 
     health = {"codex": True, "opencode": True}
     budget = {"codex": 100, "opencode": 100}
     assigned = {"codex": 1, "opencode": 1}
     pick = route._pick_local({"title": "ordinary code task", "type": "code"}, health, assigned, budget)
 
-    assert pick == "opencode"
+    assert pick == "codex"
 
 
-def test_route_float_knobs_fail_open_when_malformed(tmp_path, monkeypatch):
+def test_retired_board_weight_knobs_cannot_restore_authority(tmp_path, monkeypatch):
     monkeypatch.setattr(route, "ROOT", tmp_path)
     _self_improve(tmp_path, [{"lane": "opencode", "target_weight": 0.1}])
 
     monkeypatch.setenv("LIMEN_SI_WEIGHT_FLOOR", "not-a-float")
     monkeypatch.setenv("LIMEN_SI_WEIGHT_CEILING", "also-not-a-float")
-    assert route._learned_weights()["opencode"] == 0.25
+    assert route._learned_weights() == {}
 
     _ledger(tmp_path, {"opencode": {"waste_classes": ["code"], "win_classes": []}})
     monkeypatch.setenv("LIMEN_LEDGER_BIAS_FLOOR", "not-a-float")
-    assert route._ledger_bias({"type": "code"})["opencode"] == 0.2
+    assert route._ledger_bias({"type": "code"}) == {}
 
 
 def test_malformed_usage_runway_fails_open(tmp_path, monkeypatch):

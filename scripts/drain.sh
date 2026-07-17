@@ -78,6 +78,15 @@ PY
   exit 0
 fi
 
+# Direct containment guard. The heartbeat checks the governor only at the start of a beat; a
+# marker can appear while that beat is already running. Re-check here before any harvest, remote
+# PR mutation, board mutation, or worktree reclaim so an in-flight beat cannot cross the pause.
+# The refusal path is deliberately zero-write.
+if [ -e "$LIMEN_ROOT/logs/AUTONOMY_PAUSED" ] || [ -L "$LIMEN_ROOT/logs/AUTONOMY_PAUSED" ]; then
+  echo "[drain] REFUSED-PAUSED: logs/AUTONOMY_PAUSED is present; no drain side effects ran"
+  exit 0
+fi
+
 echo "[drain] pulling completed Jules sessions…"
 python3 "$LIMEN_ROOT/scripts/harvest-pull-completed.py" 2>&1 | tail -4 || true
 
@@ -94,20 +103,22 @@ fi
 echo "[drain] harvesting…"
 PYTHONPATH="$PY" python3 -m limen harvest --agent jules 2>&1 | tail -4 || true
 
-# MERGE the landed/dispatched PRs — the missing autonomic organ. Bounded per beat so it never
-# dominates the cycle; merges ONLY mergeable+CI-green, never force-merges; idempotent vs other
-# agents (already-merged is counted, not an error). Touches only GitHub, not tasks.yaml/worktrees.
-# On by default for the live daemon (already authorized to open PRs); LIMEN_MERGE_DRAIN=0 disables.
+# PREVIEW the landed/dispatched PR merge queue. A scheduled drain is not merge authorization:
+# mutation requires a direct ``merge-drain.py --apply`` invocation carrying one short-lived
+# ``limen.merge_authorization.v1`` receipt per exact PR head. The executor then re-runs the live
+# review gate and merge policy immediately before the head-pinned merge. LIMEN_MERGE_DRAIN=0
+# disables even this read-only census.
 if [ "${LIMEN_MERGE_DRAIN:-1}" = "1" ]; then
-  echo "[drain] merging READY PRs (scan ${LIMEN_MERGE_SCAN:-30}, limit ${LIMEN_MERGE_LIMIT:-10})…"
+  echo "[drain] previewing READY PRs (scan ${LIMEN_MERGE_SCAN:-30}, zero merge effects)…"
   PYTHONPATH="$PY" python3 "$LIMEN_ROOT/scripts/merge-drain.py" \
-      --scan "${LIMEN_MERGE_SCAN:-30}" --limit "${LIMEN_MERGE_LIMIT:-10}" 2>&1 | tail -3 || true
+      --dry-run --scan "${LIMEN_MERGE_SCAN:-30}" --limit "${LIMEN_MERGE_LIMIT:-10}" 2>&1 | tail -3 || true
   stamp_voice merge
 fi
 
 # SELF-HEAL — emit targeted heal tasks for the PRs merge-drain just REFUSED (CI-RED / CONFLICT)
-# so the dispatcher repairs them in a worktree → they turn mergeable → merge-drain lands them next
-# beat → the open-PR floor finally falls. Emits via the same atomic queue-lock path the daemon uses
+# so the dispatcher repairs them in a worktree and they become accepted merge candidates. Scheduled
+# beats never merge them; an exact-target signed authorization must separately reach the guarded
+# executor. Emits via the same atomic queue-lock path the daemon uses
 # (cannot race tasks.yaml); bounded (limit 10) + idempotent (same id = no dup). ON by default — this
 # is what closes the HEAL rung (the dispatcher is already authorized to open PRs); set
 # LIMEN_SELF_HEAL=0 to disable, or run self-heal.py --dry-run to preview without writing.
@@ -133,14 +144,15 @@ fi
 
 # RECLAIM — remove provably-dead fleet worktrees (clean + content-preserved-on-default + idle)
 # from every known worktree root, so session clones cannot silently accumulate.
-# Visibility is ON by default. Safe removal is ON by default; set LIMEN_RECLAIM_APPLY=0 for
-# preview-only operation. ([[known-owned-pervasive-then-idgaf]], [[storage-autonomic-solve]])
-if [ "${LIMEN_RECLAIM:-1}" = "1" ]; then
+# Containment posture is OFF by default. Enabling visibility still previews unless a separate
+# explicit LIMEN_RECLAIM_APPLY=1 authorization is present. ([[known-owned-pervasive-then-idgaf]],
+# [[storage-autonomic-solve]])
+if [ "${LIMEN_RECLAIM:-0}" = "1" ]; then
   if [ "${LIMEN_QUEUE_LOCK_HELD:-0}" = "1" ]; then
     echo "[drain] reclaim skipped under queue lock; heartbeat runs it after release"
   else
     reclaim_args=()
-    [ "${LIMEN_RECLAIM_APPLY:-1}" = "1" ] && reclaim_args+=(--apply)
+    [ "${LIMEN_RECLAIM_APPLY:-0}" = "1" ] && reclaim_args+=(--apply)
     PYTHONPATH="$PY" python3 "$LIMEN_ROOT/scripts/reclaim-worktrees.py" --generated-only "${reclaim_args[@]}" 2>&1 | tail -4 || true
     PYTHONPATH="$PY" python3 "$LIMEN_ROOT/scripts/reclaim-worktrees.py" "${reclaim_args[@]}" 2>&1 | tail -4 || true
   fi

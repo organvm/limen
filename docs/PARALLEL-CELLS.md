@@ -36,7 +36,7 @@ cell ls                      # list cells: branch · ahead/behind · dirty · co
 cell cd    <slug>            # print the cell path:  cd "$(cell cd foo)"
 cell conduct <slug> [--loop] # start this cell's scoped conductor (bg). --loop = continuous
 cell stop  <slug>            # stop this cell's conductor
-cell merge <slug>            # push + hand off to the standing merge grant (merge-policy.sh)
+cell merge <slug>            # publish + hand off to exact-head acceptance (no merge effect)
 cell reap  <slug>            # stop + hand off to receipt-backed reclaim/reap organs
 cell reap-dead               # preview every provably-dead cell (clean+content-preserved+idle)
 cell help
@@ -93,12 +93,13 @@ skip the conductor — just work in the cell and `cell merge` it. The conductor 
 ```sh
 cell merge spiral-bvh       # commits must be in; pushes cell/spiral-bvh, hands to merge-policy
 gh pr create               # if no PR yet
-scripts/merge-policy.sh <PR#>   # the standing grant decides: 0=merge, 2=HOLD, 3=BLOCKED
+scripts/merge-policy.sh <PR#>   # 0=candidate CLEARED, 2=HOLD, 3=BLOCKED
 ```
 
 `cell merge` never merges for you — it pushes and points you at `merge-policy.sh`, which
-enforces the website guardrail (deploy-trigger paths need green CI; everything else merges
-freely once CLEAN). See [[merge-authority-standing-grant]].
+enforces exact-head CI, peer review, conversation, branch, and deployment predicates. A CLEARED
+head is only a candidate. The separate `merge-drain.py --apply` effect requires a short-lived
+signed authorization bound to that repository, PR, and head.
 
 ### 4 — Tear down (loss-free)
 
@@ -145,7 +146,7 @@ cell reap-dead --apply      # actually reclaim after operator acceptance
 | `LIMEN_RECLAIM_CLAUDE_AGE_H` | `24` | min idle hours before a cell is reclaim-eligible |
 | `LIMEN_RECLAIM_REPO_LOCAL_WT` | auto | also sweep repo-local `.worktrees/` roots under `LIMEN_RECLAIM_WORKSPACE_ROOTS` |
 | `LIMEN_RECLAIM_REGISTERED_WT` | auto | also sweep registered sibling worktrees from `LIMEN_RECLAIM_MAIN_REPOS` |
-| `LIMEN_RECLAIM_APPLY` | `1` | automated drain removes eligible roots by default; set `0` for preview-only |
+| `LIMEN_RECLAIM_APPLY` | `0` | preview-only containment by default; set `1` only with explicit accepted reclaim authority |
 | `LIMEN_BRANCH_PREFIX` | (derived) | scoped conductor's branch namespace (`cell-<slug>-`) |
 
 ## TL;DR

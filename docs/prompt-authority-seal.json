@@ -1,44 +1,44 @@
 {
-  "adapter_gaps_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "adapter_gaps_digest": "e281fdeba5c656ddbdf2afae02608b3f923a8fde77fee7faac089d4d46962795",
   "authority_ready": false,
-  "content_hash": "a938f2f994dcd14c2d6e2219e4a2ff6e44b968f286959499ee0c81ba76687043",
+  "content_hash": "d43eafe2bab50e649435f45e53b0f21ea68e93ee1109939640f48f20b3b4a2bd",
   "coverage": {
     "assessed_atoms": 0,
-    "atoms": 738547,
-    "current_intents": 738547,
-    "current_unresolved_atoms": 738547,
-    "derived_occurrences": 61703,
-    "excluded_occurrences": 47731,
-    "lineages": 163978,
-    "occurrences": 81491,
-    "operator_occurrences": 7125
+    "atoms": 3062,
+    "current_intents": 3062,
+    "current_unresolved_atoms": 3062,
+    "derived_occurrences": 158,
+    "excluded_occurrences": 104,
+    "lineages": 1090,
+    "occurrences": 191,
+    "operator_occurrences": 20
   },
   "hashes": {
-    "adapted_unit_receipts": "608f4f694e7842085cfb1e213bae5d7c581cbb153cdaa788fd5aef08bd6a55d0",
+    "adapted_unit_receipts": "3c89403bab8e883d00021efe7e146330501824c195fad0c3a8d1daa77d246484",
     "all_source_manifest": null,
-    "excluded_unit_receipts": "6573717b7818bd7e2e7d44d714a33c314f6e36c83cab9a0b88f8bba29ef477e1",
+    "excluded_unit_receipts": "949ffa83a26655f958e9f7ffac21fab977819765e880e3cbf1908c060fb5114e",
     "policy": "085f51203feb1e70a82bc8e7d55c134b33c7f03399f71444a500878a62a7719a",
-    "semantic": "6c88ce0abdc7149aaba5e598815639da5d286de5e15b023da7e533beb44ad802",
+    "semantic": "749a6efb8d9b9864c37b3d80664d4dc5b41032c6c8ac3c211f3547a5778e5586",
     "source_adapter_contract": "c8888c39d346dc862d75419d1645d235230c8575139abd675ffd037f52c964f9",
-    "source_cursor": "d2b341d9e8fb862658d067e7e477630c82d601979c4479ec4acdd1da714fa557",
-    "source_families": "100bbb03d8545deaf40cec8a73adee63934e73c7103bbf5331ac50511bdfcd66",
-    "source_manifest": "37986906a756790a54c51d529df1dd5b973dcea4149ccf125507a094aa28bdf1",
+    "source_cursor": "66fc5cc2ed876f21237110494a0d16a28142ac0c681438372dc54c63c5487e08",
+    "source_families": "a1e9af867fba05e3682347a233f95cf9ad4ddb039789b063b054d535344c7dbf",
+    "source_manifest": "49c4ddb8b773179caa8c5df4ed3ff5770fad9744b97d1e6990aa1823ac27fae3",
     "source_scan_payload": null,
     "source_scan_receipt": null,
     "source_scanner_code": null,
-    "source_units": "711b8787c55d0165ea45a708b6cd70566948b808a0bdfd2c82697a8d0f4b54af",
-    "unresolved_units": "70cf8ebc755e428fe4910371b23de439a52af932ba61faf92468f2d83ee7ff77",
+    "source_units": "ff7ac21bdf18f8250a93b86b1e7e6053b4f56594bf4ecc92ec41e570aa9d78b6",
+    "unresolved_units": "c4905dd0645ab9d42dccfcac2bb2bb6754cbe004e9c553bd28579ccbc289f934",
     "unsupported_units": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
   },
-  "public_projection_digest": "d93135a6030b3893f7b76e82d85dac2e6904782756012d3e1f6cf3d4d4167002",
-  "schema": "limen.prompt-authority-seal.v1",
-  "schema_version": 1,
+  "public_projection_digest": "b7813e780f5cc9c313d7bfa48d806b89304ab52969daba20d94ceb0cfcd0a0c4",
+  "schema": "limen.prompt-authority-seal.v2",
+  "schema_version": 2,
   "scope": {
     "all_baseline_complete": false,
-    "horizon_days": null,
+    "horizon_days": 2,
     "scanner_version": 4,
-    "scope": "partial:all",
-    "target_scope": "all"
+    "scope": "partial:recent:2",
+    "target_scope": "recent:2"
   },
   "source_alias_blocker_counts": {
     "alias_ancestor_symlink": 0,
@@ -52,6 +52,16 @@
     "alias_wrong_role": 0,
     "other": 0
   },
+  "source_custody_freshness": {
+    "evaluated_at": "2026-07-16T22:08:42Z",
+    "expires_at": null,
+    "fresh": false,
+    "last_scan_at": null,
+    "max_age_seconds": 86400,
+    "reason": "not_exact_all",
+    "required": false,
+    "schema": "limen.prompt-source-custody-freshness.v1"
+  },
   "source_error_reason_counts": {
     "adapter_missing": 0,
     "bounded_ceiling_exceeded": 0,
@@ -59,23 +69,23 @@
     "malformed_source": 0,
     "other": 0,
     "prompt_grounding_failed": 0,
-    "source_changed": 0,
+    "source_changed": 1,
     "source_unavailable": 0
   },
   "source_families": {
     "agy-cli-conversations": {
-      "adapted": 104,
-      "converged": 104,
-      "discovered": 501,
-      "errors": 0,
+      "adapted": 11,
+      "converged": 11,
+      "discovered": 12,
+      "errors": 1,
       "excluded": 0,
-      "pending": 397,
+      "pending": 0,
       "unsupported": 0
     },
     "agy-cli-history": {
       "adapted": 0,
-      "converged": 1,
-      "discovered": 1,
+      "converged": 0,
+      "discovered": 0,
       "errors": 0,
       "excluded": 0,
       "pending": 0,
@@ -84,46 +94,46 @@
     "claude-file-history": {
       "adapted": 0,
       "converged": 0,
-      "discovered": 6600,
+      "discovered": 499,
       "errors": 0,
       "excluded": 0,
-      "pending": 6600,
+      "pending": 499,
       "unsupported": 0
     },
     "claude-plans": {
       "adapted": 0,
       "converged": 0,
-      "discovered": 86,
+      "discovered": 21,
       "errors": 0,
       "excluded": 0,
-      "pending": 86,
+      "pending": 21,
       "unsupported": 0
     },
     "claude-projects": {
-      "adapted": 59,
-      "converged": 110,
-      "discovered": 8454,
+      "adapted": 9,
+      "converged": 15,
+      "discovered": 425,
       "errors": 0,
-      "excluded": 10,
-      "pending": 8334,
+      "excluded": 1,
+      "pending": 409,
       "unsupported": 0
     },
     "claude-tasks": {
       "adapted": 0,
       "converged": 0,
-      "discovered": 251,
+      "discovered": 27,
       "errors": 0,
       "excluded": 0,
-      "pending": 251,
+      "pending": 27,
       "unsupported": 0
     },
     "codex-attachments": {
       "adapted": 0,
       "converged": 0,
-      "discovered": 4,
+      "discovered": 0,
       "errors": 0,
       "excluded": 0,
-      "pending": 4,
+      "pending": 0,
       "unsupported": 0
     },
     "codex-history": {
@@ -136,39 +146,39 @@
       "unsupported": 0
     },
     "codex-sessions": {
-      "adapted": 120,
-      "converged": 120,
-      "discovered": 2032,
+      "adapted": 16,
+      "converged": 16,
+      "discovered": 87,
       "errors": 0,
       "excluded": 0,
-      "pending": 1912,
+      "pending": 71,
       "unsupported": 0
     },
     "gemini-tmp": {
       "adapted": 0,
-      "converged": 120,
-      "discovered": 402,
+      "converged": 1,
+      "discovered": 1,
       "errors": 0,
       "excluded": 0,
-      "pending": 282,
+      "pending": 0,
       "unsupported": 0
     },
     "gemini-tmp-agy": {
       "adapted": 0,
-      "converged": 15,
-      "discovered": 15,
+      "converged": 0,
+      "discovered": 0,
       "errors": 0,
       "excluded": 0,
       "pending": 0,
       "unsupported": 0
     },
     "opencode-db": {
-      "adapted": 7,
-      "converged": 120,
-      "discovered": 1764,
+      "adapted": 1,
+      "converged": 3,
+      "discovered": 3,
       "errors": 0,
       "excluded": 0,
-      "pending": 1644,
+      "pending": 0,
       "unsupported": 0
     }
   },
@@ -177,16 +187,16 @@
     "labels_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
   },
   "totals": {
-    "adapted": 290,
-    "adapter_gaps": 0,
-    "converged": 590,
-    "errors": 0,
-    "excluded": 10,
-    "pending": 19511,
-    "source_units": 20111,
-    "unresolved": 19511,
+    "adapted": 37,
+    "adapter_gaps": 1,
+    "converged": 46,
+    "errors": 1,
+    "excluded": 1,
+    "pending": 1028,
+    "source_units": 1076,
+    "unresolved": 1029,
     "unsupported": 0,
-    "validation_errors": 2220
+    "validation_errors": 0
   },
-  "validation_ok": false
+  "validation_ok": true
 }

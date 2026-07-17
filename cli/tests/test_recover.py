@@ -97,7 +97,7 @@ def test_recover_reopens_only_confirmed_absent_session(tmp_path, monkeypatch):
     task = _run_recover_with_snapshot(tasks_path, monkeypatch, snapshot)
 
     assert task.status == "open"
-    assert task.target_agent == "jules"
+    assert task.target_agent == "any"
     assert "orphaned" in task.dispatch_log[-1].output
 
 
@@ -125,6 +125,7 @@ def test_recover_populates_session_specific_absence_for_catalog_miss(tmp_path, m
     assert module.main() == 0
     task = load_limen_file(tasks_path).tasks[0]
     assert task.status == "open"
+    assert task.target_agent == "any"
     assert "orphaned" in task.dispatch_log[-1].output
 
 
@@ -189,7 +190,7 @@ def test_recover_reopens_failed_jules_remote_session(tmp_path, monkeypatch):
     assert module.main() == 0
     task = load_limen_file(tasks_path).tasks[0]
     assert task.status == "open"
-    assert task.target_agent == "codex"
+    assert task.target_agent == "any"
     assert "is failed" in task.dispatch_log[-1].output
 
 
@@ -232,7 +233,7 @@ def test_recover_reopens_jules_session_awaiting_feedback(tmp_path, monkeypatch):
     assert module.main() == 0
     task = load_limen_file(tasks_path).tasks[0]
     assert task.status == "open"
-    assert task.target_agent == "codex"
+    assert task.target_agent == "any"
     assert "awaiting_user_feedback" in task.dispatch_log[-1].output
 
 
@@ -275,7 +276,7 @@ def test_recover_reopens_jules_session_awaiting_plan_approval(tmp_path, monkeypa
     assert module.main() == 0
     task = load_limen_file(tasks_path).tasks[0]
     assert task.status == "open"
-    assert task.target_agent == "codex"
+    assert task.target_agent == "any"
     assert "awaiting_plan_approval" in task.dispatch_log[-1].output
 
 
@@ -341,7 +342,7 @@ def test_recover_task_id_limits_remote_reopen(tmp_path, monkeypatch):
     assert module.main() == 0
     mirror, peer = load_limen_file(tasks_path).tasks
     assert mirror.status == "open"
-    assert mirror.target_agent == "codex"
+    assert mirror.target_agent == "any"
     assert peer.status == "dispatched"
     assert peer.target_agent == "jules"
 
@@ -373,7 +374,7 @@ def test_recover_defaults_to_local_tasks_yaml(tmp_path, monkeypatch):
     assert module.main() == 0
     task = load_limen_file(tmp_path / "tasks.yaml").tasks[0]
     assert task.status == "open"
-    assert task.target_agent == "codex"
+    assert task.target_agent == "any"
 
 
 def test_recover_reopens_first_noop_failure(tmp_path, monkeypatch):
@@ -412,7 +413,7 @@ def test_recover_reopens_first_noop_failure(tmp_path, monkeypatch):
     assert module.main() == 0
     task = load_limen_file(tasks_path).tasks[0]
     assert task.status == "open"
-    assert task.target_agent == "codex"
+    assert task.target_agent == "any"
     assert task.labels == ["noop"]
     assert task.dispatch_log[-1].status == "open"
 

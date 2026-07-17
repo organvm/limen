@@ -117,7 +117,7 @@ def test_prompt_packet_ledger_groups_stalled_batches_without_raw_text(tmp_path: 
     assert set(by_family) == {"worktree_lifecycle", "session_lifecycle"}
     assert by_family["worktree_lifecycle"]["prompt_events"] == 6
     assert by_family["worktree_lifecycle"]["unique_prompt_hashes"] == 3
-    assert by_family["session_lifecycle"]["dispatchability"] == "codex-owner-packet"
+    assert by_family["session_lifecycle"]["dispatchability"] == "keeper-packet"
     assert snapshot["coverage"]["packets"] == 2
     assert snapshot["coverage"]["recorded_packets"] == 0
     assert snapshot["coverage"]["open_packets"] == 2

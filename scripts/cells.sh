@@ -20,7 +20,7 @@
 #                                # --loop = continuous. --workstream pins the cell to ONE channel:
 #                                # the conductor sees only that channel's board (one-worker-one-lane).
 #   cell stop  <slug>            # stop this cell's conductor
-#   cell merge <slug>            # push + open/merge its PR via merge-policy (the standing grant)
+#   cell merge <slug>            # publish the branch and print the PR/acceptance handoff
 #   cell reap  <slug>            # stop + hand off removal to receipt-backed reclaim/reap organs
 #   cell reap-dead               # reclaim every provably-dead cell (clean+content-preserved+idle)
 #   cell help
@@ -159,7 +159,8 @@ cmd_merge() {
   require_cell "$slug"
   [ -n "$(git -C "$p" status --porcelain)" ] && die "cell '$slug' has uncommitted changes — commit first"
   git -C "$p" push -u origin "$b" 2>&1 | tail -2
-  echo "cell: run the standing merge grant →  scripts/merge-policy.sh <PR#>  (open the PR if none yet: gh pr create)"
+  echo "cell: open the PR if none exists (gh pr create), then run scripts/merge-policy.sh <PR#>"
+  echo "cell: CLEARED is candidate evidence only; mutation requires receipt-bound scripts/merge-drain.py --apply"
 }
 
 cmd_reap() {

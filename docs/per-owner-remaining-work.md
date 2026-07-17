@@ -27,14 +27,15 @@ the **real** remaining work is the **merge backlog** below — **837 open PRs ac
 
 ## The 5 ownerless tasks — correctly ownerless (not orphans)
 `ASK-2-one-container-cutover`, `ASK-5-open-merge-gate`, `ASK-7-dispatch-drain-open`,
-`ASK-20-container-relocate-state`, `ASK-60-needs-human-digest` are **conductor-level governance
+`ASK-20-container-relocate-state`, `ASK-60-needs-human-digest` are **shared-control-plane governance
 asks**, not repo PRs. They have no `repo` by nature (they act ON the fleet / are gated human
 decisions). They belong to `organvm/limen` + the human gate — no fix needed, just classified.
 
 ## The actual bottleneck (not a gap to code around)
 837 open PRs is a **merge** problem, gated on two things, both intentional:
-1. **The merge gate** (`Bash(gh pr merge:*)` / explicit "merge them") — release-gate HOLD. The
-   229 merge-ready PRs (`ASK-5`) sit here by design until the human opens the gate.
+1. **The merge gate** — every candidate requires exact-head acceptance plus a short-lived signed
+   `limen.merge_authorization.v1` receipt. A blanket shell permission or generic "merge them" is
+   neither peer review nor exact-target authorization.
 2. **The GitHub App identity** (`scripts/gh-app-token.sh`) — once `limen[bot]` is installed on
    `organvm` (the 829-PR owner, top of the install list), the merge pass runs under a machine
    identity that a personal-account lock can't kill. That is the durable enabler for draining

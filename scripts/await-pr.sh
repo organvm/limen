@@ -14,17 +14,17 @@
 #   - refuses to start while logs/AUTONOMY_PAUSED prohibits merges (no --force: a paused estate
 #     waits for the operator, and so does every session in it)
 #   - single instance per PR (mkdir lock under logs/); a second waiter exits ALREADY-WATCHED
-#   - --merge completes the standing grant on CLEARED: gh pr merge --squash --match-head-commit
+#   - it never merges; receipt-bound effects belong only to scripts/merge-drain.py
 #
 # Anything longer than the deadline belongs to the beat's merge rung (scripts/merge-drain.py via
 # scripts/drain.sh): hand off and end the session — never re-arm the waiter in a loop.
 #
-# Usage:  scripts/await-pr.sh <PR#> [--repo OWNER/NAME] [--timeout SECS] [--interval SECS] [--merge]
+# Usage:  scripts/await-pr.sh <PR#> [--repo OWNER/NAME] [--timeout SECS] [--interval SECS]
 #
 # Exit codes:
-#   0  CLEARED (and MERGED when --merge)      2  TIMEOUT — deadline elapsed, still HOLD
+#   0  CLEARED                                2  TIMEOUT — deadline elapsed, still HOLD
 #   1  FAILED — BLOCKED verdict, CI checks    3  REFUSED-PAUSED — pause marker prohibits merges
-#      failing, or gh pr merge itself failed  4  ALREADY-WATCHED — live lock held for this PR
+#      failing                               4  ALREADY-WATCHED — live lock held for this PR
 #                                            64  usage error
 set -uo pipefail
 
@@ -51,9 +51,33 @@ done
 case "$PR" in (*[!0-9]*|"") usage ;; esac
 case "$TIMEOUT" in (*[!0-9]*|"") usage ;; esac
 case "$INTERVAL" in (*[!0-9]*|"") usage ;; esac
+if [ "$MERGE" = 1 ]; then
+  echo "AWAIT-PR: --merge was removed; use receipt-bound scripts/merge-drain.py --apply" >&2
+  exit 64
+fi
 repo_args=(); [ -n "$REPO" ] && repo_args=(--repo "$REPO")
 # bash 3.2 (macOS /bin/bash): "${repo_args[@]+"${repo_args[@]}"}" at each call site — an empty
 # array expands to nothing under set -u, a populated one to its elements.
+
+MARKER="$ROOT/logs/AUTONOMY_PAUSED"
+merge_paused() {
+  if [ -e "$MARKER" ] || [ -L "$MARKER" ]; then
+    # An unreadable/malformed marker cannot prove that merges remain permitted.
+    [ -f "$MARKER" ] && [ -r "$MARKER" ] || return 0
+    grep -qi '^prohibitions:.*merge' "$MARKER" 2>/dev/null
+    return $?
+  fi
+  return 1
+}
+
+# Refuse before creating the logs directory or lock: containment checks are zero-write.
+if merge_paused; then
+  reason="$(grep -i '^reason:' "$MARKER" 2>/dev/null | head -1)"
+  echo "AWAIT-PR $PR: REFUSED — autonomy paused: ${reason#*: }"
+  grep -i '^prohibitions:' "$MARKER" 2>/dev/null | head -1 | sed 's/^/  /'
+  echo "  no waiter runs under a merge-prohibiting pause; resume autonomy first (logs/AUTONOMY_PAUSED)."
+  exit 3
+fi
 
 mkdir -p "$ROOT/logs" 2>/dev/null || true
 finish() { # exit_code — the single exit path after the lock is held: log one summary line, exit.
@@ -62,19 +86,6 @@ finish() { # exit_code — the single exit path after the lock is held: log one 
     >> "$ROOT/logs/await-pr.log" 2>/dev/null || true
   exit "$1"
 }
-
-# ── pause refusal — before the lock, before the first poll ─────────────────────────────────────
-# A pause marker whose prohibitions mention merge binds every session, not just the beat: no
-# watcher, no merge, until the operator releases it. (The governor completes PR-owned releases
-# itself; an operator pause has no compliant wait to offer, so refuse instead of spinning.)
-MARKER="$ROOT/logs/AUTONOMY_PAUSED"
-if [ -f "$MARKER" ] && grep -qi '^prohibitions:.*merge' "$MARKER" 2>/dev/null; then
-  reason="$(grep -i '^reason:' "$MARKER" 2>/dev/null | head -1)"
-  echo "AWAIT-PR $PR: REFUSED — autonomy paused: ${reason#*: }"
-  grep -i '^prohibitions:' "$MARKER" 2>/dev/null | head -1 | sed 's/^/  /'
-  echo "  no waiter runs under a merge-prohibiting pause; resume autonomy first (logs/AUTONOMY_PAUSED)."
-  last="REFUSED-PAUSED"; finish 3
-fi
 
 # ── single instance per PR — mkdir lock (atomic; flock is absent on stock macOS) ───────────────
 LOCK="$ROOT/logs/.await-pr-$PR.lock"
@@ -101,19 +112,10 @@ while :; do
     0)
       echo "AWAIT-PR $PR: CLEARED — $last"
       sha="$(printf '%s\n' "$out" | sed -n 's/^MERGE-HEAD: \([0-9a-f][0-9a-f]*\).*/\1/p' | head -1)"
-      if [ "$MERGE" = 1 ]; then
-        if [ -z "$sha" ]; then
-          echo "AWAIT-PR $PR: MERGE-CMD-FAILED — CLEARED but merge-policy printed no MERGE-HEAD line"
-          finish 1
-        fi
-        if gh pr merge "$PR" "${repo_args[@]+"${repo_args[@]}"}" --squash --match-head-commit "$sha"; then
-          echo "AWAIT-PR $PR: MERGED (squash, head $sha)"
-          finish 0
-        fi
-        echo "AWAIT-PR $PR: MERGE-CMD-FAILED — gh pr merge exited non-zero"
-        finish 1
+      merge_repo="${REPO:-$(printf '%s\n' "$out" | sed -n 's/^MERGE-REPO: //p' | head -1)}"
+      if [ -n "$sha" ] && [ -n "$merge_repo" ]; then
+        echo "  exact head $sha is eligible; merge only through receipt-bound scripts/merge-drain.py --apply"
       fi
-      [ -n "$sha" ] && echo "  merge with: gh pr merge $PR${REPO:+ --repo $REPO} --squash --match-head-commit $sha"
       finish 0 ;;
     3)
       echo "AWAIT-PR $PR: FAILED — $last"

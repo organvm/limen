@@ -124,25 +124,44 @@ def test_default_writes_proposal_json(tmp_path: Path, monkeypatch: pytest.Monkey
     assert out_path.exists()
 
     data = json.loads(out_path.read_text())
+    assert data["schema"] == "limen.board_self_improve_shadow.v1"
+    assert data["authoritative"] is False
+    assert data["steering_enabled"] is False
     assert data["organ"] == "self-improve"
     assert data["board_summary"]["total_tasks"] == 12
-    assert data["apply"]["wired"] is True
+    assert data["apply"]["wired"] is False
     # idempotent: a second run produces a valid proposal again (timestamps differ)
     assert si.main() == 0
     assert json.loads(out_path.read_text())["board_summary"]["total_tasks"] == 12
 
 
-def test_apply_writes_proposal_and_applies(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_apply_refuses_without_writing_proposal_or_board(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     si = load_self_improve()
     tasks_path = tmp_path / "tasks.yaml"
     out_path = tmp_path / "proposal.json"
     write_board(tasks_path, _fixture_tasks())
 
     monkeypatch.setattr("sys.argv", ["self-improve.py", "--tasks", str(tasks_path), "--out", str(out_path), "--apply"])
-    # --apply now writes the proposal AND runs the re-plan writer; it is fail-open (never crashes
-    # the heartbeat) so a board the strict loader can't parse just skips apply — both return 0.
+    before = tasks_path.read_bytes()
+    assert si.main() == 2
+    assert not out_path.exists()
+    assert tasks_path.read_bytes() == before
+
+
+def test_dry_run_is_literal_zero_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    si = load_self_improve()
+    tasks_path = tmp_path / "tasks.yaml"
+    out_path = tmp_path / "proposal.json"
+    write_board(tasks_path, _fixture_tasks())
+    before = tasks_path.read_bytes()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["self-improve.py", "--tasks", str(tasks_path), "--out", str(out_path), "--dry-run"],
+    )
     assert si.main() == 0
-    assert out_path.exists()  # proposal is written before the apply step
+    assert not out_path.exists()
+    assert tasks_path.read_bytes() == before
 
 
 def test_missing_tasks_file_does_not_crash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

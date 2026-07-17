@@ -11,3 +11,11 @@ def test_merge_automation_does_not_delete_source_branches() -> None:
         text = (ROOT / rel).read_text(encoding="utf-8")
         assert "--delete-branch" not in text
         assert "accepted reap" in text
+
+
+def test_scheduled_drain_can_only_preview_merge_candidates() -> None:
+    text = (ROOT / "scripts" / "drain.sh").read_text(encoding="utf-8")
+    invocation = text.split('python3 "$LIMEN_ROOT/scripts/merge-drain.py"', 1)[1].split("|| true", 1)[0]
+
+    assert "--dry-run" in invocation
+    assert "--apply" not in invocation

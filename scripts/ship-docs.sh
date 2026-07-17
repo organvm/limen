@@ -5,8 +5,8 @@
 # commits to main (35 of 40 recent main commits bypassed PRs) because no tool made
 # the charter's branch cadence a single command. This does: it stages ONLY the named
 # files onto a fresh branch cut from origin/main inside an isolated worktree — your
-# current checkout (branch, dirt, daemon contention) is never touched — opens the PR,
-# and self-merges the moment scripts/merge-policy.sh clears it (the standing grant).
+# current checkout (branch, dirt, daemon contention) is never touched and opens the PR.
+# It never merges; receipt-bound merge-drain owns that separate effect.
 #
 #   scripts/ship-docs.sh <slug> "<commit msg>" <file> [file…]
 #   e.g. scripts/ship-docs.sh agent-review "docs: review codex exporter run" docs/agent-code-diff-review.md
@@ -16,7 +16,7 @@
 #   • refuses website-sensitive deploy-trigger paths (those need the full worktree
 #     flow + green CI — keep this list in lockstep with merge-policy.sh + deploy*.yml);
 #   • refuses tasks.yaml — the board is single-writer via the keeper (#594);
-#   • exit 0 = merged · 2 = PR open awaiting policy (HOLD/BLOCKED) · 1 = refused/failed.
+#   • exit 0 = PR opened and durably homed · 1 = refused/failed.
 set -euo pipefail
 
 die() { echo "ship-docs: $*" >&2; exit 1; }
@@ -72,18 +72,5 @@ pr_url="$(cd "$tmp" && gh pr create --title "$msg" \
 pr_num="${pr_url##*/}"
 echo "ship-docs: opened PR #$pr_num ($pr_url)"
 
-pr_head="$(gh pr view "$pr_num" --json headRefOid -q .headRefOid)"
-if "$root/scripts/merge-policy.sh" "$pr_num" --expected-head "$pr_head"; then
-  # Record the adjudication as a review (self-authored → --comment; GitHub forbids self-approve).
-  # The merge-policy verdict IS the review; recording it makes the code-review work visible.
-  gh pr review "$pr_num" --comment --body \
-    "Adjudicated by merge-policy.sh: CLEARED (non-deploy or green-CI website path). Squash-merge per the standing grant (CLAUDE.md § Merge & Branch Protocol)." \
-    >/dev/null 2>&1 || true
-  gh pr merge "$pr_num" --squash --match-head-commit "$pr_head"
-  echo "ship-docs: merged #$pr_num (merge-policy CLEARED; branch retained)"
-  exit 0
-else
-  rc=$?
-  echo "ship-docs: PR #$pr_num left open — merge-policy exit $rc (HOLD=wait for green, BLOCKED=rebase)"
-  exit 2
-fi
+echo "ship-docs: PR #$pr_num left open for exact-head peer review and receipt-bound merge-drain"
+exit 0

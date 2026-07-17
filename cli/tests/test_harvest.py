@@ -11,6 +11,7 @@ from datetime import date, datetime, timezone
 import pytest
 
 from limen.harvest import _diff_is_real, check_jules_harvest
+from limen.execution_trajectory import TrajectoryStore, publish_terminal_attempts
 from limen.models import DispatchLogEntry, LimenFile, Task
 
 REAL_DIFF = """diff --git a/atlas.json b/atlas.json
@@ -35,6 +36,7 @@ def _task(tid: str, session_id: str) -> Task:
     return Task(
         id=tid,
         title=tid,
+        repo="someorg/dispatch-lab",
         target_agent="jules",
         status="dispatched",
         created=date(2026, 6, 25),
@@ -44,6 +46,10 @@ def _task(tid: str, session_id: str) -> Task:
                 agent="jules",
                 session_id=session_id,
                 status="dispatched",
+                attempt_id=f"attempt-{tid.lower()}",
+                attempt_classification={"task_type": "code", "labels": ["jules-harvest"]},
+                attempt_repository="someorg/dispatch-lab",
+                execution_profile={"mode": "bounded"},
             )
         ],
     )
@@ -98,8 +104,14 @@ def test_harvest_rejects_empty_diff_instead_of_false_done(tmp_path):
 
     updated = check_jules_harvest(limen, harvest_dir)
 
-    assert updated == []  # NOT counted as a completion
+    # ``updated`` means durable board mutation, not success. The failed attempt must be
+    # saved and made available to terminal trajectory publication instead of vanishing.
+    assert updated == ["LIMEN-2"]
     assert task.status == "failed"  # preserved for recovery, not false-done or cancelled
     assert "noop" in task.labels
     assert "cancelled" not in task.labels
     assert task.dispatch_log[-1].status == "failed"
+    publications, errors = publish_terminal_attempts([task], TrajectoryStore(tmp_path / "attempts"))
+    assert errors == []
+    assert len(publications) == 1
+    assert TrajectoryStore(tmp_path / "attempts").load().records[0].outcome == "failed"

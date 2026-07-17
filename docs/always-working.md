@@ -70,7 +70,7 @@ Done from receipt: `5`
 
 ### PUBLIC-FACE-PROFILE
 
-- Lane fit: `codex-integrator`
+- Lane fit: `peer-integration`
 - Repo/root: `4444J99/4444J99`
 - Task: Project the existing positioning/frontdoor and current metrics onto the profile README; fix stale counts and dead links.
 - Predicate: `python3 scripts/test_sync_readme.py && python3 scripts/sync-readme.py --check`
@@ -85,7 +85,7 @@ Done from receipt: `5`
 
 ### PUBLIC-FACE-CONTRIBUTION-BALANCE
 
-- Lane fit: `codex-conductor`
+- Lane fit: `peer-coordination`
 - Repo/root: `organvm/limen`
 - Task: Use the live contribution balance as a value gate: route the next public work to substantive PR review first, then real issue criteria and PR packaging, before more commit-heavy implementation churn.
 - Predicate: `python3 scripts/github-contribution-balance.py --login 4444J99 --json`
@@ -140,4 +140,3 @@ Done from receipt: `5`
   - `~/Workspace/limen/value-repos.json`
   - `~/Workspace/limen/docs/product-ledger.md`
   - `~/Workspace/limen/docs/positioning/_frontdoor.md`
-

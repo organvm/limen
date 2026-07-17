@@ -113,6 +113,16 @@ def _validate_receipt(
     receipts_dir: Path | None = None,
     include_existing: bool = True,
 ) -> None:
+    if receipt.get("schema") != "limen.fable_acceptance.v1":
+        raise PolicyError("receipt schema must be limen.fable_acceptance.v1")
+    if receipt.get("mode") != "plan-only":
+        raise PolicyError("Fable acceptance must bind mode=plan-only")
+    if receipt.get("deliverable") != "continuation-capsule":
+        raise PolicyError("Fable acceptance must bind a continuation-capsule deliverable")
+    if receipt.get("builder_tier_max") not in {"haiku", "sonnet", "opus"}:
+        raise PolicyError("Fable acceptance must hand implementation to a non-Fable builder tier")
+    if receipt.get("motion_receipt_deadline_seconds") != 5400:
+        raise PolicyError("Fable acceptance must bind the 5400-second receipt deadline")
     category = str(receipt.get("category", ""))
     if category not in PLAN:
         raise PolicyError(f"unknown category {category!r}; choose one of {', '.join(sorted(PLAN))}")
@@ -176,6 +186,10 @@ def _receipt_from_args(args: argparse.Namespace) -> dict[str, Any]:
         "redacted_packets": args.redacted_packet or [],
         "verification": args.verification or [],
         "reserve_unlocked": bool(getattr(args, "reserve_unlock", False)),
+        "mode": "plan-only",
+        "deliverable": "continuation-capsule",
+        "builder_tier_max": "opus",
+        "motion_receipt_deadline_seconds": 5400,
         "acceptance_command": " ".join(sys.argv),
     }
     return receipt
@@ -218,6 +232,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 _FABLE_WEEKLY_BUDGET_TOKENS_DEFAULT = 1_000_000_000  # ≈ the observed weekly Fable allotment ceiling
 _WEEKLY_WIN_S = 7 * 86400
+_BALANCE_REFRESH_SECONDS = 60
 
 
 def _finite_int(value: object, default: int) -> int:
@@ -310,10 +325,13 @@ def _fable_weekly_tokens() -> int:
 def compute_balance() -> dict[str, Any]:
     """The live weekly Fable balance: prefer a captured ratelimit % header, else token-sum vs a
     derived weekly budget. Timestamps derive from data (week key), never wall-clock in the body."""
-    week = _week_key(_now())
+    observed = _now()
+    week = _week_key(observed)
     pct = _fable_ratelimit_pct()
     spent_tokens = _fable_weekly_tokens()
+    transcripts_ready = _transcripts_dir().is_dir()
     source = "ratelimit-header"
+    meter_ready = pct is not None
     if pct is None:
         budget = _finite_int(
             os.environ.get("LIMEN_FABLE_WEEKLY_TOKENS"),
@@ -321,7 +339,10 @@ def compute_balance() -> dict[str, Any]:
         )
         pct = round(100.0 * spent_tokens / budget, 2) if budget > 0 else 0.0
         source = "transcript-token-sum"
+        meter_ready = transcripts_ready
     return {
+        "schema": "limen.fable_balance.v1",
+        "observed_at": observed.isoformat().replace("+00:00", "Z"),
         "week": week,
         "spent_tokens": spent_tokens,
         "spent_pct": float(pct),
@@ -329,12 +350,23 @@ def compute_balance() -> dict[str, Any]:
         "hard_cap": HARD_CAP,
         "over_cap": float(pct) >= HARD_CAP,
         "source": source,
+        "meter_ready": meter_ready,
     }
 
 
 def cmd_balance(args: argparse.Namespace) -> int:
     balance = compute_balance()
     out = Path(args.out) if args.out else ROOT / "logs" / "fable-allotment.json"
+    try:
+        prior = json.loads(out.read_text())
+        prior_observed = _iso_ts(str(prior.get("observed_at") or ""))
+        same = {key: value for key, value in prior.items() if key != "observed_at"} == {
+            key: value for key, value in balance.items() if key != "observed_at"
+        }
+        if same and prior_observed is not None and _now().timestamp() - prior_observed < _BALANCE_REFRESH_SECONDS:
+            balance["observed_at"] = prior["observed_at"]
+    except Exception:
+        pass
     if not args.no_write:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(balance, indent=2, sort_keys=True) + "\n")

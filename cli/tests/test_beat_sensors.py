@@ -138,6 +138,31 @@ def test_real_registry_derives_nonempty_metabolize_loop(capsys):
     assert "scripts/creds-hydrate.py --apply" in out
 
 
+def test_real_registry_heartbeat_observes_disk_without_applying(tmp_path, capsys, monkeypatch):
+    """The deployed scheduled source must reach the disk sensor, but only as a zero-write check.
+
+    This is the production-path regression for #1092/#1138: metabolize-only made the sensor
+    unreachable, while conditional argv built an inert and unsafe ``--check --apply`` command.
+    """
+
+    m = _mod()
+    monkeypatch.delenv("LIMEN_DISK_CAPACITY", raising=False)
+    rc = m.run(
+        "heartbeat",
+        dry_run=True,
+        registry=REAL_REGISTRY,
+        scheduled_only=True,
+        beat=0,
+        loop_max=60,
+        voice_dir=tmp_path / "voices",
+    )
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "$ python3 scripts/disk-capacity.py --check" in out
+    assert "disk-capacity.py --check --apply" not in out
+    assert "disk-capacity-reclaim.py" not in out
+
+
 def test_scheduled_sensor_is_identity_agnostic_and_stamps_only_when_due(tmp_path, monkeypatch):
     m = _mod()
     registry = tmp_path / "scheduled.yaml"
