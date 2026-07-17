@@ -1,0 +1,39 @@
+{
+  "actions_top_repos_minutes": {
+    "a-i-chat--exporter": 485,
+    "domus-genoma": 877,
+    "dot-github--theoria": 5353,
+    "limen": 37215,
+    "organvm-corpvs-testamentvm": 396,
+    "organvm-engine": 457,
+    "peer-audited--behavioral-blockchain": 1431,
+    "portfolio": 346,
+    "public-record-data-scrapper": 283,
+    "universal-mail--automation": 628
+  },
+  "as_of_day": 17,
+  "billing_canary": {
+    "detail": "run 29584906357: account-billing block annotation present",
+    "green": false,
+    "repo": "organvm/limen"
+  },
+  "budget_net_usd": 25.0,
+  "by_product": {
+    "actions": {
+      "gross_usd": 334.8,
+      "net_usd": 0.0,
+      "quantity": 53419.93
+    },
+    "git_lfs": {
+      "gross_usd": 0.7,
+      "net_usd": 0.0,
+      "quantity": 7417.69
+    }
+  },
+  "gross_usd_total": 335.5,
+  "month": "2026-07",
+  "net_usd_projected_month_end": 0.0,
+  "net_usd_total": 0.0,
+  "org": "organvm",
+  "schema": "limen.github_actions_usage.v1"
+}
