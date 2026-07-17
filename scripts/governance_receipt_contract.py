@@ -140,35 +140,45 @@ def load_object(path: Path, *, label: str) -> dict[str, Any]:
     return value
 
 
-def load_rows(path: Path, *, label: str, wrapper_fields: Sequence[str] = ()) -> list[dict[str, Any]]:
-    """Load JSONL, a JSON array, one object, or one explicitly named wrapper."""
+def load_jsonl_rows(path: Path, *, label: str) -> list[dict[str, Any]]:
+    """Load a nonempty JSONL file containing exactly one object per physical line."""
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise ReceiptContractError(f"{label} is unreadable") from exc
     if not text.strip():
         raise ReceiptContractError(f"{label} must be nonempty")
-    stripped = text.lstrip()
-    if stripped.startswith("[") or stripped.startswith("{"):
-        value = _decode_json(text, label=label)
-        if isinstance(value, dict):
-            wrapped = next(
-                (value[field] for field in wrapper_fields if field in value and isinstance(value[field], list)),
-                None,
-            )
-            value = wrapped if wrapped is not None else [value]
-        if not isinstance(value, list):
-            raise ReceiptContractError(f"{label} must contain an object or list")
-        rows = value
-    else:
-        rows = []
-        for line_number, line in enumerate(text.splitlines(), 1):
-            if not line.strip():
-                continue
-            rows.append(_decode_json(line, label=f"{label} line {line_number}"))
-    if not rows or not all(isinstance(row, dict) for row in rows):
+    rows: list[dict[str, Any]] = []
+    for line_number, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            continue
+        row = _decode_json(line, label=f"{label} line {line_number}")
+        if not isinstance(row, dict):
+            raise ReceiptContractError(f"{label} line {line_number} must contain one JSON object")
+        rows.append(row)
+    if not rows:
         raise ReceiptContractError(f"{label} must contain one or more JSON objects")
-    return [dict(row) for row in rows]
+    return rows
+
+
+def load_rows(path: Path, *, label: str, wrapper_fields: Sequence[str] = ()) -> list[dict[str, Any]]:
+    """Load a JSON array, one object, or one explicitly named object wrapper."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ReceiptContractError(f"{label} is unreadable") from exc
+    if not text.strip():
+        raise ReceiptContractError(f"{label} must be nonempty")
+    value = _decode_json(text, label=label)
+    if isinstance(value, dict):
+        wrapped = next(
+            (value[field] for field in wrapper_fields if field in value and isinstance(value[field], list)),
+            None,
+        )
+        value = wrapped if wrapped is not None else [value]
+    if not isinstance(value, list) or not value or not all(isinstance(row, dict) for row in value):
+        raise ReceiptContractError(f"{label} must contain one or more JSON objects")
+    return [dict(row) for row in value]
 
 
 def _positive_integer(value: str | None, label: str) -> int:
@@ -658,12 +668,12 @@ def build_receipt_plan(
         raise ReceiptContractError("source census raw unit IDs must be unique")
 
     events = _sorted_unique_rows(
-        load_rows(paths.normalized_events, label="normalized events"),
+        load_jsonl_rows(paths.normalized_events, label="normalized events"),
         id_field="event_id",
         label="normalized events",
     )
     sources = _sorted_unique_rows(
-        load_rows(paths.source_envelopes, label="source envelopes"),
+        load_jsonl_rows(paths.source_envelopes, label="source envelopes"),
         id_field="source_id",
         label="source envelopes",
     )

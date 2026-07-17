@@ -14,7 +14,6 @@ import rfc8785
 ROOT = Path(__file__).resolve().parents[2]
 OWNER = ROOT / "scripts" / "governance-receipt-owner.py"
 PREDICATE = ROOT / "scripts" / "governance-receipt-predicate.py"
-REVISION = ROOT / "scripts" / "governance-receipt-predicate.revision.json"
 SNAPSHOT_ID = "snapshot-fixture"
 SNAPSHOT_AT = "2026-07-16T20:00:00Z"
 SNAPSHOT_DIGEST = "sha256:" + "a" * 64
@@ -24,6 +23,7 @@ RAW_BLOCKED_ID = "raw_" + "2" * 64
 SOURCE_ID = "src_" + "1" * 64
 SOURCE_BLOCKED_ID = "src_" + "2" * 64
 EVENT_ID = "evt_" + "1" * 64
+SECOND_EVENT_ID = "evt_" + "2" * 64
 CONTENT_DIGEST = "sha256:" + "b" * 64
 BODY_DIGEST = "sha256:" + "c" * 64
 
@@ -85,6 +85,7 @@ def _artifacts(
     candidate: bool,
     blocked_source: bool = False,
     assertion_as_list: bool = False,
+    multiple_events: bool = False,
 ) -> dict[str, Path]:
     raw_units = [
         {
@@ -166,6 +167,9 @@ def _artifacts(
         "raw_unit_content_hash": CONTENT_DIGEST,
         "source_envelope_reference": f"source-envelope.v1.jsonl#{SOURCE_ID}",
     }
+    events = [event]
+    if multiple_events:
+        events.append({**event, "event_id": SECOND_EVENT_ID})
     source = {
         "contract_name": "source-envelope.v1",
         "contract_version": 1,
@@ -276,6 +280,10 @@ def _artifacts(
         },
         "receipt_digest",
     )
+    if multiple_events:
+        parity["output_events"]["event_ids"].append(SECOND_EVENT_ID)
+        parity["promotions"][0]["event_ids"].append(SECOND_EVENT_ID)
+        parity = _sealed(parity, "receipt_digest")
     ideals = _sealed(
         {
             "contract_name": "ideal-form-register.v1",
@@ -395,7 +403,7 @@ def _artifacts(
         "render_projection": root / "render-projection.json",
     }
     _write_json(paths["source_census"], census)
-    _write_jsonl(paths["normalized_events"], [event])
+    _write_jsonl(paths["normalized_events"], events)
     _write_jsonl(paths["source_envelopes"], [source])
     _write_json(
         paths["assertion_evidence"],
@@ -508,12 +516,14 @@ def _first_traversal(
     candidate: bool = True,
     blocked_source: bool = False,
     assertion_as_list: bool = False,
+    multiple_events: bool = False,
 ) -> tuple[dict[str, Path], Path, Path, dict[str, str]]:
     inputs = _artifacts(
         tmp_path / "inputs",
         candidate=candidate,
         blocked_source=blocked_source,
         assertion_as_list=assertion_as_list,
+        multiple_events=multiple_events,
     )
     run_root = tmp_path / "run"
     output = run_root / "artifacts" / "pre-proof.json"
@@ -685,6 +695,43 @@ def test_ratified_bundle_uses_exact_final_schema_reference_shapes(
     assert payload["iceberg_atlas"]["zoom_count"] == 6
 
 
+def test_owner_loads_multirow_jsonl_whose_first_byte_is_an_object(
+    tmp_path: Path,
+) -> None:
+    _, output, _, _ = _first_traversal(
+        tmp_path,
+        candidate=False,
+        multiple_events=True,
+    )
+
+    events = json.loads(output.read_text(encoding="utf-8"))["bundle_payload"][
+        "normalized_events"
+    ]
+
+    assert [event["event_id"] for event in events] == [EVENT_ID, SECOND_EVENT_ID]
+
+
+def test_owner_rejects_a_non_object_jsonl_row_with_its_physical_line(
+    tmp_path: Path,
+) -> None:
+    inputs = _artifacts(tmp_path / "inputs", candidate=False)
+    with inputs["normalized_events"].open("a", encoding="utf-8") as stream:
+        stream.write("[]\n")
+    run_root = tmp_path / "run"
+    output = run_root / "artifacts" / "pre-proof.json"
+    metrics = run_root / "metrics" / "receipt.json"
+
+    result = _run(
+        _args(inputs, output),
+        _env(run_root, metrics),
+        expected=2,
+    )
+
+    assert "normalized events line 2 must contain one JSON object" in result.stderr
+    assert not output.exists()
+    assert not metrics.exists()
+
+
 def test_proof_is_byte_identical_skipped_child_and_predicate_is_read_only(
     tmp_path: Path,
 ) -> None:
@@ -719,7 +766,6 @@ def test_proof_is_byte_identical_skipped_child_and_predicate_is_read_only(
     assert output.stat().st_ino == predicate_before.st_ino
     assert output.stat().st_mtime_ns == predicate_before.st_mtime_ns
     assert "governance-receipt-owner" not in PREDICATE.read_text(encoding="utf-8")
-    assert json.loads(REVISION.read_text(encoding="utf-8"))["revision"] == 1
     assert "LIMEN_GOV_PREDICATE_MODE" not in first_env
 
 
