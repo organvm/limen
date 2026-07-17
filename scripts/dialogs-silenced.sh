@@ -56,10 +56,10 @@ for hf in allow-trusted-cd-git.sh insights-capture.sh; do
   [ -f "$canon" ] || continue
   if [ ! -f "$live" ]; then
     red "Hook drift: $live is MISSING (repo canonical exists)"
-    cure "install -m 755 $canon $live"
+    cure "LIMEN_HOOK_DRIFT_HEAL=1 bash scripts/heal-hook-drift.sh   # effector; or by hand: install -m 755 $canon $live"
   elif [ "$(shasum -a 256 < "$canon" | cut -d' ' -f1)" != "$(shasum -a 256 < "$live" | cut -d' ' -f1)" ]; then
     red "Hook drift: $live differs from repo canonical scripts/hooks/$hf"
-    cure "install -m 755 $canon $live"
+    cure "LIMEN_HOOK_DRIFT_HEAL=1 bash scripts/heal-hook-drift.sh   # effector; or by hand: install -m 755 $canon $live"
     note "Run from the MAIN checkout — comparing against a stale worktree copy will false-red."
   else
     green "Hook parity: $hf live == repo canonical"
@@ -169,7 +169,7 @@ echo
 # The sanctioned install is the native ~/.local/bin/claude (deliberate updates). Agent-curable.
 if command -v brew >/dev/null 2>&1 && brew list --cask 2>/dev/null | grep -qx 'claude-code'; then
   red "Gatekeeper: duplicate Homebrew cask 'claude-code' installed → quarantined per upgrade, prompts on first exec"
-  cure "brew uninstall --cask claude-code   # native ~/.local/bin/claude is the one sanctioned install"
+  cure "LIMEN_CASK_DUPLICATE_HEAL=1 bash scripts/heal-claude-cask.sh   # effector; or by hand: brew uninstall --cask claude-code (native ~/.local/bin/claude is the sanctioned install)"
   note "Never click Open/Allow on the dialog — futile vs version churn; never brew-install claude in provisioning."
 else
   quarantined=""
