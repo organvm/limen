@@ -2,7 +2,7 @@ name: PR Review Fanout
 
 # The REQUESTER half of the multi-agent review engine (estate.yaml integrations.review-fanout):
 # on PR open, post ONE idempotent marker comment that pings every installed mention-driven review
-# agent (Codex, Gemini). CodeRabbit and Claude auto-trigger without a mention. The RESPONDER halves
+# agent (Codex). CodeRabbit and Claude auto-trigger without a mention. The RESPONDER halves
 # are the babysit loop (GEMINI.md) and self-heal's REVIEW-FEEDBACK heal tasks — this workflow only
 # requests. ~10s on the hosted runner, cheap enough to run unconditionally, private repos included.
 
@@ -38,6 +38,5 @@ jobs:
           gh pr comment "$PR" -R "$REPO" --body "$marker
           **Multi-agent review roll call**
           @codex review
-          /gemini review
 
           (CodeRabbit and Claude review automatically. Reviewers: post substantive findings only. Authors/agents: address every thread, push fixes to this branch, reply and resolve, then re-request review.)"

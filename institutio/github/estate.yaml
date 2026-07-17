@@ -491,18 +491,10 @@ integrations:
     status: active                         # config lives at the repo root; sync-marketplace-config.py exists → wiring-integrity holds
     owner: gitvs
     note: "AI PR review, free for public repos. Config .coderabbit.yaml is present at the conductor root (its live config + the fan-out template). Already OAuth-installed on organvm-i-theoria (an EMPTY org — it reviews nothing there); extending the install to organvm is L-INTEGRATION-CODERABBIT (#933, the one human atom)."
-  gemini-code-assist:
-    category: review
-    app_slug: "gemini-code-assist[bot]"
-    config_file: ".gemini/config.yaml"
-    free_scope: all                        # free tier reviews private repos too (quota-bounded)
-    install_scope: ["conductor", "governed_public"]
-    effector:
-      - {kind: delegate, argv: [python3, scripts/sync-marketplace-config.py]}
-      - {kind: file-atom, target: L-INTEGRATION-GEMINI-CODE-ASSIST}
-    status: active                         # config .gemini/config.yaml at the conductor root → wiring-integrity holds
-    owner: gitvs
-    note: "Gemini Code Assist auto-review on PR open + /gemini review mention lane. Installed on organvm-i-theoria (empty org); extending to organvm is L-INTEGRATION-GEMINI-CODE-ASSIST. One of the four private-repo-capable reviewers (Claude/Gemini/Codex/Copilot)."
+  # gemini-code-assist: REMOVED 2026-07-17 — Google sunset "Gemini Code Assist on GitHub" (consumer);
+  # the install flow dead-ends at codeassist.google "is being retired and is no longer available".
+  # Do not re-propose this row unless Google ships a successor product. The review engine's
+  # private-repo reviewers are Claude/Codex/Copilot (+CodeRabbit).
   claude-review:
     category: review
     app_slug: "claude"                     # the claude GitHub App is ALREADY installed on organvm
@@ -524,7 +516,7 @@ integrations:
       - {kind: delegate, argv: [python3, scripts/sync-marketplace-config.py]}
     status: active
     owner: gitvs
-    note: "The REQUESTER: one idempotent marker comment per PR pinging the mention-driven agents (@codex review, /gemini review). CodeRabbit/Claude auto-trigger. Responders are the babysit loop + self-heal REVIEW-FEEDBACK — this row only requests. Canary-validate that bot-authored mentions actually trigger Codex before fleet fan-out."
+    note: "The REQUESTER: one idempotent marker comment per PR pinging the mention-driven agents (@codex review). CodeRabbit/Claude auto-trigger. Responders are the babysit loop + self-heal REVIEW-FEEDBACK — this row only requests. Canary-validate that bot-authored mentions actually trigger Codex before fleet fan-out. (Gemini lane removed 2026-07-17 — product sunset.)"
   trunk:
     category: quality
     app_slug: "trunk-io[bot]"
