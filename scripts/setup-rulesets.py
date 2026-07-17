@@ -93,8 +93,9 @@ _COPILOT_AVAILABLE = {}
 def copilot_available(org):
     """One cached probe per org: does it hold ANY Copilot seat? (/orgs/{org}/copilot/billing
     .seat_breakdown.total > 0 — a 200 alone is NOT enough; the endpoint answers 200 with 0 seats
-    while Copilot is unconfigured.) Gate for the copilot-review ruleset: no seat → clean no-op;
-    the seat itself is the L-COPILOT-RESTORE lever, never a nag here."""
+    while Copilot is unconfigured.) Gate for the copilot-review ruleset: no seat → clean no-op.
+    Individual Copilot Pro (restored free 2026-07-17, #1186) is NOT an org Business seat — this
+    stays a no-op unless org seats ever exist (docs/github-estate-runbook.md)."""
     if org not in _COPILOT_AVAILABLE:
         data = gh_json(["api", f"/orgs/{org}/copilot/billing"], t=20, default=None)
         total = ((data or {}).get("seat_breakdown") or {}).get("total") or 0
@@ -109,7 +110,7 @@ def ensure_copilot_review(repo):
     Arms itself on the next --apply after the Copilot seat lands; until then a one-line skip."""
     org = repo.split("/", 1)[0]
     if not copilot_available(org):
-        print("      · copilot-review ruleset skipped — no Copilot seat on the org (L-COPILOT-RESTORE)")
+        print("      · copilot-review ruleset skipped — no org Copilot Business seat (individual Pro doesn't count; see runbook)")
         return
     existing = gh_json(["api", f"/repos/{repo}/rulesets"], default=[]) or []
     rid = next((r.get("id") for r in existing if r.get("name") == "copilot-review"), None)
