@@ -24,7 +24,12 @@ permissions:
   id-token: write
 
 concurrency:
-  group: claude-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  # Scope by event lane: a bot's review comment (issue_comment / pull_request_review_comment) must
+  # NOT cancel the in-progress pull_request review run. Cross-lane cancellation left the `review`
+  # check stuck at "cancelled" on every PR (a bot always comments mid-review), jamming merge-policy
+  # estate-wide. Separate groups per event keep the PR-review and @claude-mention lanes independent;
+  # within each lane a newer event still supersedes the older.
+  group: claude-review-${{ github.event.pull_request.number || github.event.issue.number }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
