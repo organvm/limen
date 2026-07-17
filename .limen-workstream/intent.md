@@ -20,3 +20,14 @@ Implemented on this branch:
 Governance cadence retry/output/scratch changes live in owner PR #1161 and must not be duplicated
 here. Global host deployment and the non-backed Scratch authority belong to the Domus cartridge.
 GitHub is operational; zero-step hosted jobs are verifier debt, not an external campaign gate.
+
+Added from the operator correction in this continuation:
+
+- workstreams now carry one configurable finite runway (`15m..30d`, default `1d`) whose admitted
+  deadline survives session and provider boundaries;
+- Codex, Agy, and OpenCode packet launches are no-modal and fail closed before spawn on contract
+  drift; Jules, Copilot, and every other routed lane share the same expiry gate;
+- fleet fanout now uses the live capacity registry, including Jules and Copilot when healthy, rather
+  than the broken static fallback;
+- local checkpoint `4288ec9a` contains the verified implementation. Its cached remote branch and PR
+  still point to the preceding commit, so the next session must re-probe custody before any push.
