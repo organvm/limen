@@ -1,12 +1,14 @@
 import subprocess
 import re
 import os
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
 from limen.io import save_limen_file
 from limen.models import DispatchLogEntry, LimenFile, Task
 from limen.provider_selection import execution_profile_for
+from limen.dispatch import _freeze_attempt_metadata, _inherit_active_attempt_metadata, _publish_terminal_trajectories
 from limen.remote_execution import (
     ReceiptStore,
     RemoteExecutionError,
@@ -117,28 +119,29 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
                     if "noop" not in task.labels:
                         task.labels.append("noop")
                     task.updated = now
-                    task.dispatch_log.append(
-                        DispatchLogEntry(
-                            timestamp=now,
-                            agent="jules",
-                            session_id=session_id,
-                            status="failed",
-                            output=result[:500],
-                        )
+                    terminal = DispatchLogEntry(
+                        timestamp=now,
+                        agent="jules",
+                        session_id=session_id,
+                        status="failed",
+                        output=result[:500],
                     )
+                    _inherit_active_attempt_metadata(task, terminal)
+                    task.dispatch_log.append(terminal)
+                    updated.append(task.id)
                     print(f"  rejected {task.id}: jules diff empty/garbage — not 'done'")
                     continue
                 task.status = "done"
                 task.updated = now
-                task.dispatch_log.append(
-                    DispatchLogEntry(
-                        timestamp=now,
-                        agent="jules",
-                        session_id=session_id,
-                        status="done",
-                        output=result[:500],
-                    )
+                terminal = DispatchLogEntry(
+                    timestamp=now,
+                    agent="jules",
+                    session_id=session_id,
+                    status="done",
+                    output=result[:500],
                 )
+                _inherit_active_attempt_metadata(task, terminal)
+                task.dispatch_log.append(terminal)
                 updated.append(task.id)
                 continue
 
@@ -151,17 +154,17 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
                 continue
             task.status = "done"
             task.updated = now
-            task.dispatch_log.append(
-                DispatchLogEntry(
-                    timestamp=now,
-                    agent="jules",
-                    session_id=task.dispatch_log[-1].session_id if task.dispatch_log else "harvest",
-                    status="done",
-                    output=result[:500],
-                )
+            terminal = DispatchLogEntry(
+                timestamp=now,
+                agent="jules",
+                session_id=task.dispatch_log[-1].session_id if task.dispatch_log else "harvest",
+                status="done",
+                output=result[:500],
             )
+            _inherit_active_attempt_metadata(task, terminal)
+            task.dispatch_log.append(terminal)
             updated.append(task.id)
-    return updated
+    return list(dict.fromkeys(updated))
 
 
 def _remote_submission_entry(task: object) -> DispatchLogEntry | None:
@@ -313,6 +316,11 @@ def _record_remote_observation(
     remote_state: str,
     receipt_path: str | None,
     output: str,
+    exact_commit: str | None = None,
+    pull_request: str | None = None,
+    predicate: dict[str, object] | None = None,
+    trajectory_receipt: dict[str, object] | None = None,
+    launch_entry: DispatchLogEntry | None = None,
 ) -> bool:
     latest = (getattr(task, "dispatch_log", None) or [None])[-1]
     if (
@@ -339,29 +347,35 @@ def _record_remote_observation(
     now = datetime.now(timezone.utc)
     task.status = status
     task.updated = now
-    task.dispatch_log.append(
-        DispatchLogEntry(
-            timestamp=now,
-            agent=provider,
-            session_id=run.provider_run_id,
-            status=status,
-            provider_run_id=run.provider_run_id,
-            provider_url=run.url,
-            base_sha=run.base_sha,
-            control_repo=run.control_repo,
-            control_ref=run.control_ref,
-            control_ref_kind=run.control_ref_kind,
-            control_sha=run.control_sha,
-            workflow_id=run.workflow_id,
-            workflow_path=run.workflow_path,
-            workflow_event=run.workflow_event,
-            verification_context_digest=run.verification_context_digest,
-            remote_state=remote_state,
-            remote_request_id=run.request_id,
-            remote_receipt=receipt_path,
-            output=output,
-        )
+    observation = DispatchLogEntry(
+        timestamp=now,
+        agent=provider,
+        session_id=run.provider_run_id,
+        status=status,
+        provider_run_id=run.provider_run_id,
+        provider_url=run.url,
+        base_sha=run.base_sha,
+        control_repo=run.control_repo,
+        control_ref=run.control_ref,
+        control_ref_kind=run.control_ref_kind,
+        control_sha=run.control_sha,
+        workflow_id=run.workflow_id,
+        workflow_path=run.workflow_path,
+        workflow_event=run.workflow_event,
+        verification_context_digest=run.verification_context_digest,
+        remote_state=remote_state,
+        remote_request_id=run.request_id,
+        remote_receipt=receipt_path,
+        trajectory_exact_commit=exact_commit,
+        trajectory_pull_request=pull_request,
+        trajectory_predicate=predicate,
+        trajectory_receipt=trajectory_receipt,
+        output=output,
     )
+    if launch_entry is not None and launch_entry not in task.dispatch_log:
+        task.dispatch_log.append(launch_entry)
+    _inherit_active_attempt_metadata(task, observation)
+    task.dispatch_log.append(observation)
     return True
 
 
@@ -384,6 +398,7 @@ def check_remote_harvest(
         if task.status not in {"dispatched", "in_progress"}:
             continue
         entry = _remote_submission_entry(task)
+        adopted = False
         if entry is None:
             if any(item.remote_request_id for item in task.dispatch_log):
                 # A newer head supersedes every historical remote attempt. Never search backward
@@ -408,9 +423,12 @@ def check_remote_harvest(
                 continue
             if entry is None:
                 continue
+            adopted = True
         provider = entry.agent
         if agent and provider != agent:
             continue
+        if adopted:
+            _freeze_attempt_metadata(task, entry)
         adapter = adapters.get(provider)
         if adapter is None:
             run = RemoteRun(
@@ -439,6 +457,7 @@ def check_remote_harvest(
                 remote_state=RemoteState.BLOCKED.value,
                 receipt_path=entry.remote_receipt,
                 output="remote lifecycle blocked: live authenticated adapter/workflow unavailable",
+                launch_entry=entry if adopted else None,
             ):
                 updated.append(task.id)
             continue
@@ -575,6 +594,7 @@ def check_remote_harvest(
                 remote_state=RemoteState.BLOCKED.value,
                 receipt_path=entry.remote_receipt,
                 output=detail,
+                launch_entry=entry if adopted else None,
             ):
                 updated.append(task.id)
             print(f"  remote harvest blocked {task.id}: {str(exc)[:240]}")
@@ -599,6 +619,30 @@ def check_remote_harvest(
             f"{'pass' if receipt.predicate and receipt.predicate.passed else 'not-proven'}; "
             f"outputs={len(receipt.outputs)}; done={str(receipt.done).lower()}"
         )
+        trajectory_predicate = None
+        if receipt.predicate is not None:
+            trajectory_predicate = {
+                "command": receipt.predicate.command_digest,
+                "passed": receipt.predicate.passed and receipt.predicate.exit_code == 0,
+                "checked_at": receipt.observed_at,
+                "head_sha": receipt.observed_sha,
+            }
+        trajectory_receipt = None
+        try:
+            receipt_digest = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+        except OSError:
+            receipt_digest = ""
+        if receipt_digest:
+            trajectory_receipt = {
+                "reference": board_receipt,
+                "digest": f"sha256:{receipt_digest}",
+                "verified": receipt.done,
+                "head_sha": receipt.observed_sha,
+            }
+        pull_request = next(
+            (item.uri for item in receipt.outputs if item.kind == "pull_request"),
+            None,
+        )
         if _record_remote_observation(
             task,
             provider=provider,
@@ -607,9 +651,14 @@ def check_remote_harvest(
             remote_state=receipt.state.value,
             receipt_path=board_receipt,
             output=output,
+            exact_commit=receipt.observed_sha,
+            pull_request=pull_request,
+            predicate=trajectory_predicate,
+            trajectory_receipt=trajectory_receipt,
+            launch_entry=entry if adopted else None,
         ):
             updated.append(task.id)
-    return updated
+    return list(dict.fromkeys(updated))
 
 
 def harvest_results(
@@ -628,6 +677,7 @@ def harvest_results(
 
     if updated:
         save_limen_file(tasks_path, limen)
+        _publish_terminal_trajectories(tasks_path, limen.tasks)
         print(f"Harvested {len(updated)} task(s): {', '.join(updated)}")
     else:
         print("No completed tasks to harvest")

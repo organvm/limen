@@ -42,3 +42,36 @@ tasks:
     assert census["reclaim_apply_enabled"] is True
     assert "private task title" not in encoded
     assert "PRIVATE-OPEN" not in encoded
+
+
+def test_drain_pause_guard_runs_before_every_effector(tmp_path):
+    limen = tmp_path / "limen"
+    home = tmp_path / "home"
+    stub = tmp_path / "bin"
+    marker = limen / "logs" / "AUTONOMY_PAUSED"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("reason: containment\n", encoding="utf-8")
+    home.mkdir()
+    stub.mkdir()
+    called = tmp_path / "effector-called"
+    python = stub / "python3"
+    python.write_text(f"#!/bin/sh\ntouch '{called}'\nexit 99\n", encoding="utf-8")
+    python.chmod(0o755)
+
+    proc = subprocess.run(
+        ["bash", str(ROOT / "scripts" / "drain.sh")],
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "PATH": f"{stub}:{os.environ['PATH']}",
+            "LIMEN_ROOT": str(limen),
+            "LIMEN_TASKS": str(limen / "tasks.yaml"),
+            "HOME": str(home),
+        },
+        check=True,
+    )
+
+    assert "REFUSED-PAUSED" in proc.stdout
+    assert not called.exists()
+    assert marker.read_text(encoding="utf-8") == "reason: containment\n"

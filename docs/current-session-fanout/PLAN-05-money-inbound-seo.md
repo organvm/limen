@@ -5,7 +5,7 @@ Status: `ready`
 Packet: `PLAN-05-37b731f8`
 Task: `CSF-CAEB31D8-PLAN-05-37B731F8`
 Theme: `money-inbound-seo`
-Source session: `/Users/4jp/.codex/sessions/2026/06/30/rollout-2026-06-30T06-17-55-019f1809-13b4-7780-9b1f-d4584f872333.jsonl`
+Source session: `<private-session-jsonl>`
 
 This receipt plans the money-inbound SEO stream only. It does not paste raw
 prompt or plan text. Provenance is by hashes and repo-local ledgers.

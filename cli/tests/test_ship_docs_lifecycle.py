@@ -16,3 +16,5 @@ def test_ship_docs_retains_roots_and_branches_for_accepted_reclaim() -> None:
     assert "worktree remove" not in text
     assert "branch -D" not in text
     assert "--delete-branch" not in text
+    assert "gh pr merge" not in text
+    assert "receipt-bound merge-drain" in text

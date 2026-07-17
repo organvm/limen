@@ -4,7 +4,7 @@
 # The waiter must stay bounded and loud: CLEARED/FAILED/TIMEOUT/REFUSED-PAUSED verdicts map to
 # distinct exit codes, CI-red and BLOCKED are terminal (never waited out), a merge-prohibiting
 # pause marker refuses BEFORE the first poll, the per-PR lock admits exactly one live waiter, and
-# --merge invokes gh with --squash --match-head-commit bound to merge-policy's MERGE-HEAD sha.
+# the retired --merge surface fails before any policy, review, or GitHub call.
 # Deterministic + idempotent: exit 0 ⟺ all cases pass. (2026-07-15 endless-watcher incident.)
 set -euo pipefail
 
@@ -15,6 +15,7 @@ waiter="$here/../await-pr.sh"
 stubdir="$(mktemp -d)"
 trap 'rm -rf "$stubdir"' EXIT
 SEQ="$stubdir/seq"; COUNT="$stubdir/count"; GHLOG="$stubdir/gh.log"
+REVIEWLOG="$stubdir/review.log"; REVIEW_GATE="$stubdir/review-gate.py"
 
 # --- stub merge-policy: replay one scripted verdict token per call; the last token repeats ---
 cat > "$stubdir/policy" <<STUB
@@ -23,6 +24,13 @@ n=\$(cat "$COUNT" 2>/dev/null || echo 0); n=\$((n+1)); printf '%s' "\$n" > "$COU
 tok=\$(sed -n "\${n}p" "$SEQ"); [ -z "\$tok" ] && tok=\$(tail -1 "$SEQ")
 case "\$tok" in
   CLEARED) echo "VERDICT: CLEARED — non-deploy PR, mergeable, no failing checks."
+           echo "MERGE-REPO: o/r"
+           echo "MERGE-HEAD: deadbeefcafe (use gh pr merge --match-head-commit deadbeefcafe)"; exit 0 ;;
+  CLEAREDPAUSE)
+           mkdir -p "\$LIMEN_ROOT/logs"
+           printf 'reason: containment\nprohibitions: no merge\n' > "\$LIMEN_ROOT/logs/AUTONOMY_PAUSED"
+           echo "VERDICT: CLEARED — non-deploy PR, mergeable, no failing checks."
+           echo "MERGE-REPO: o/r"
            echo "MERGE-HEAD: deadbeefcafe (use gh pr merge --match-head-commit deadbeefcafe)"; exit 0 ;;
   HOLD)    echo "VERDICT: HOLD — 1 non-deploy check(s) still running. Merge once green."; exit 2 ;;
   CIRED)   echo "VERDICT: HOLD — 2 CI check(s) failing. Fix before merge."; exit 2 ;;
@@ -31,6 +39,15 @@ case "\$tok" in
 esac
 STUB
 chmod +x "$stubdir/policy"
+
+cat > "$REVIEW_GATE" <<'PY'
+import os
+import sys
+
+with open(os.environ["REVIEW_LOG"], "a", encoding="utf-8") as handle:
+    handle.write(" ".join(sys.argv[1:]) + "\n")
+raise SystemExit(int(os.environ.get("REVIEW_GATE_RC", "0")))
+PY
 
 # --- stub gh: record argv; fail when GH_FAIL=1 ---
 cat > "$stubdir/gh" <<STUB
@@ -46,9 +63,11 @@ check() { # name want_exit seq_tokens [waiter args...]; captured output in $out
   local name="$1" want="$2" seq="$3" got
   shift 3
   workroot="$(mktemp -d)"                      # fresh hermetic LIMEN_ROOT per case
-  printf '%s\n' $seq > "$SEQ"; rm -f "$COUNT" "$GHLOG"
+  printf '%s\n' $seq > "$SEQ"; rm -f "$COUNT" "$GHLOG" "$REVIEWLOG"
   set +e
   out="$(PATH="$stubdir:$PATH" LIMEN_ROOT="$workroot" LIMEN_MERGE_POLICY_BIN="$stubdir/policy" \
+    LIMEN_PR_REVIEW_GATE="$REVIEW_GATE" REVIEW_LOG="$REVIEWLOG" \
+    REVIEW_GATE_RC="${REVIEW_GATE_RC:-0}" \
     bash "$waiter" 7 --interval 1 "$@" 2>&1)"
   got=$?
   set -e
@@ -71,14 +90,10 @@ check "perpetual HOLD times out"     2 "HOLD" --timeout 2
 case "$out" in (*TIMEOUT*) : ;; (*) echo "  FAIL timeout output lacks TIMEOUT line"; fail=$((fail+1)) ;; esac
 check "usage: bad PR"               64 "CLEARED" --timeout x
 
-# --merge: gh invoked with --squash --match-head-commit bound to the MERGE-HEAD sha
-check "--merge on CLEARED"           0 "CLEARED" --merge
-if ! grep -q -- "pr merge 7 --squash --match-head-commit deadbeefcafe" "$GHLOG" 2>/dev/null; then
-  echo "  FAIL --merge did not invoke gh pr merge --squash --match-head-commit deadbeefcafe"; fail=$((fail+1))
-fi
-export GH_FAIL=1
-check "--merge with failing gh"      1 "CLEARED" --merge
-unset GH_FAIL
+# --merge is retired: all effects converge on the signed merge-drain executor.
+check "retired --merge is refused"   64 "CLEARED" --merge
+[ ! -s "$GHLOG" ] || { echo "  FAIL retired --merge still invoked gh"; fail=$((fail+1)); }
+[ ! -s "$REVIEWLOG" ] || { echo "  FAIL retired --merge still invoked review gate"; fail=$((fail+1)); }
 
 # pause marker: prohibitions mentioning merge refuse BEFORE the first poll
 workroot="$(mktemp -d)"; mkdir -p "$workroot/logs"
@@ -87,6 +102,7 @@ printf 'reason: operator study interval\nprohibitions: no dispatch, merge, rebas
 printf 'CLEARED\n' > "$SEQ"; rm -f "$COUNT"
 set +e
 out="$(PATH="$stubdir:$PATH" LIMEN_ROOT="$workroot" LIMEN_MERGE_POLICY_BIN="$stubdir/policy" \
+  LIMEN_PR_REVIEW_GATE="$REVIEW_GATE" REVIEW_LOG="$REVIEWLOG" \
   bash "$waiter" 7 --interval 1 2>&1)"; got=$?
 set -e
 if [ "$got" = "3" ] && [ ! -f "$COUNT" ] && printf '%s' "$out" | grep -q "REFUSED"; then
@@ -95,11 +111,13 @@ else
   printf '  FAIL %-36s want=3+zero-polls got=%s polls=%s\n' "merge-prohibiting pause refuses" \
     "$got" "$(cat "$COUNT" 2>/dev/null || echo 0)"; fail=$((fail+1))
 fi
+[ ! -e "$workroot/logs/await-pr.log" ] || { echo "  FAIL paused refusal wrote await-pr.log"; fail=$((fail+1)); }
 # a pause whose prohibitions do NOT mention merge lets the waiter proceed
 printf 'reason: study\nprohibitions: no dispatch\n' > "$workroot/logs/AUTONOMY_PAUSED"
 rm -f "$COUNT"
 set +e
 out="$(PATH="$stubdir:$PATH" LIMEN_ROOT="$workroot" LIMEN_MERGE_POLICY_BIN="$stubdir/policy" \
+  LIMEN_PR_REVIEW_GATE="$REVIEW_GATE" REVIEW_LOG="$REVIEWLOG" \
   bash "$waiter" 7 --interval 1 2>&1)"; got=$?
 set -e
 if [ "$got" = "0" ]; then
@@ -116,6 +134,7 @@ printf '%s\n' "$lockpid" > "$workroot/logs/.await-pr-7.lock/pid"
 printf 'CLEARED\n' > "$SEQ"; rm -f "$COUNT"
 set +e
 out="$(PATH="$stubdir:$PATH" LIMEN_ROOT="$workroot" LIMEN_MERGE_POLICY_BIN="$stubdir/policy" \
+  LIMEN_PR_REVIEW_GATE="$REVIEW_GATE" REVIEW_LOG="$REVIEWLOG" \
   bash "$waiter" 7 --interval 1 2>&1)"; got=$?
 set -e
 if [ "$got" = "4" ] && printf '%s' "$out" | grep -q "ALREADY-WATCHED"; then
@@ -128,6 +147,7 @@ printf '%s\n' "$lockpid" > "$workroot/logs/.await-pr-7.lock/pid"   # now a dead 
 rm -f "$COUNT"
 set +e
 out="$(PATH="$stubdir:$PATH" LIMEN_ROOT="$workroot" LIMEN_MERGE_POLICY_BIN="$stubdir/policy" \
+  LIMEN_PR_REVIEW_GATE="$REVIEW_GATE" REVIEW_LOG="$REVIEWLOG" \
   bash "$waiter" 7 --interval 1 2>&1)"; got=$?
 set -e
 if [ "$got" = "0" ]; then

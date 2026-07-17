@@ -31,49 +31,49 @@ BOARD_SOURCE_HINTS = {"LIMEN_TASKS", "tasks.yaml"}
 OWNER_PACKETS = {
     "TAB-STATUS-DISPATCH-RESULTS": {
         "tier": "status-result",
-        "owner": "codex-integrator",
+        "owner": "peer-integration",
         "predicate": "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_tabularius.py -q",
         "disposition": "convert dispatch claim/result application to task.status tickets or keeper-drained status batches",
     },
     "TAB-STATUS-HARVEST-RESULTS": {
         "tier": "status-result",
-        "owner": "codex-integrator",
+        "owner": "peer-integration",
         "predicate": "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_tabularius.py -q",
         "disposition": "convert harvest/Jules landing result application to task.status tickets",
     },
     "TAB-HUMAN-ATOM-STATUS-WRITERS": {
         "tier": "human-atom-status",
-        "owner": "codex-integrator",
+        "owner": "peer-integration",
         "predicate": "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_tabularius.py -q",
         "disposition": "convert continuity/routine needs_human atom upserts to keeper-owned status/upsert tickets",
     },
     "TAB-STATUS-ASYNC-HEAL": {
         "tier": "status-result",
-        "owner": "codex-integrator",
+        "owner": "peer-integration",
         "predicate": "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_tabularius.py cli/tests/test_async_dispatch.py -q",
         "disposition": "convert async reserve/reap/heal transitions to task.status tickets with no double-dispatch window",
     },
     "TAB-ROUTE-RESIDUE-MUTATORS": {
         "tier": "routing-metadata",
-        "owner": "codex-integrator",
+        "owner": "peer-integration",
         "predicate": "PYTHONPATH=cli/src python3 -m pytest cli/tests/test_tabularius.py -q",
         "disposition": "convert routing, residue, and self-improve board patches to keeper-owned tickets",
     },
     "TAB-CREATION-FALLBACKS": {
         "tier": "creation-fallback",
-        "owner": "codex-integrator",
+        "owner": "peer-integration",
         "predicate": "python3 scripts/task-writer-audit.py",
         "disposition": "remove or gate legacy direct fallback branches after producer parity is proven live",
     },
     "TAB-MAINTENANCE-BOARD-FALLBACKS": {
         "tier": "board-maintenance",
-        "owner": "codex-integrator",
+        "owner": "peer-integration",
         "predicate": "python3 scripts/task-writer-audit.py",
         "disposition": "decide whether each maintenance writer belongs to Tabularius/io allowlist or becomes a ticket producer",
     },
     "TAB-UNCLASSIFIED-WRITER": {
         "tier": "unclassified",
-        "owner": "codex-integrator",
+        "owner": "peer-integration",
         "predicate": "python3 scripts/task-writer-audit.py",
         "disposition": "classify this writer before Step 2.2 can be owner-recorded",
     },
@@ -176,7 +176,7 @@ def owner_packet(path: str) -> str:
         return "TAB-HUMAN-ATOM-STATUS-WRITERS"
     if path in {"scripts/dispatch-async.py", "scripts/heal-dispatch.py"}:
         return "TAB-STATUS-ASYNC-HEAL"
-    if path in {"scripts/quicken.py", "scripts/rewrite-owners.py", "scripts/route.py", "scripts/self-improve.py"}:
+    if path in {"scripts/quicken.py", "scripts/rewrite-owners.py", "scripts/route.py"}:
         return "TAB-ROUTE-RESIDUE-MUTATORS"
     if path in {"scripts/mine-backlog.py", "scripts/self-heal.py"}:
         return "TAB-CREATION-FALLBACKS"

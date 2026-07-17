@@ -6,7 +6,7 @@
   "target_agent": "codex",
   "primary_executor_packet": "EXEC-GITHUB-ACTIONS-1C17C8A3",
   "status": "ready-for-executor-packets",
-  "source_session": "~/.codex/sessions/2026/06/30/rollout-2026-06-30T06-17-55-019f1809-13b4-7780-9b1f-d4584f872333.jsonl",
+  "source_session": "<private-session-jsonl>",
   "privacy": {
     "raw_prompt_bodies_included": false,
     "raw_plan_bodies_included": false,

@@ -10,7 +10,7 @@ Status: `ready-for-executor-packets`
 
 ## Public-Safe Provenance
 
-- Source session: `~/.codex/sessions/2026/06/30/rollout-2026-06-30T06-17-55-019f1809-13b4-7780-9b1f-d4584f872333.jsonl`
+- Source session: `<private-session-jsonl>`
 - Derivation scope: full session, not only the latest turn.
 - Plan events read: `11`
 - Unique plan sources: `10`
@@ -104,7 +104,7 @@ Executor acceptance requires all applicable predicates to pass:
 ```bash
 python3 -m py_compile scripts/repo-surface-ledger.py scripts/salvage-yard-map.py scripts/product-ledger.py scripts/current-session-fanout.py
 PYTHONPATH=cli/src python3 -m pytest cli/tests/test_substrate_repo_product_fanout.py -q
-python3 scripts/current-session-fanout.py --min-codex-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --dry-run
+python3 scripts/current-session-fanout.py --min-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --dry-run
 python3 scripts/repo-surface-ledger.py --refresh --dry-run
 python3 scripts/salvage-yard-map.py --dry-run
 PYTHONPATH=cli/src python3 scripts/consolidation-gates.py --write

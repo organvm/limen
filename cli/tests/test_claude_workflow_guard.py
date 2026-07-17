@@ -38,10 +38,37 @@ def write_fable_receipt(tmp_path: Path) -> Path:
                 "percent": 5,
                 "sources": ["docs/fable-allotment.md"],
                 "verification": ["python3 scripts/fable-allotment.py audit"],
+                "mode": "plan-only",
+                "deliverable": "continuation-capsule",
+                "builder_tier_max": "opus",
+                "motion_receipt_deadline_seconds": 5400,
             }
         )
     )
     return receipt
+
+
+def write_fable_balance(tmp_path: Path, spent_pct: float = 5.0) -> Path:
+    balance = tmp_path / "fable-allotment.json"
+    balance.write_text(
+        json.dumps(
+            {
+                "schema": "limen.fable_balance.v1",
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "week": (datetime.now(timezone.utc) - timedelta(days=datetime.now(timezone.utc).weekday()))
+                .date()
+                .isoformat(),
+                "spent_tokens": 0,
+                "spent_pct": spent_pct,
+                "deliberate_cap": 40,
+                "hard_cap": 50,
+                "over_cap": spent_pct >= 50,
+                "source": "transcript-token-sum",
+                "meter_ready": True,
+            }
+        )
+    )
+    return balance
 
 
 def test_normalize_candidates_accepts_nested_json_string():
@@ -100,20 +127,28 @@ def test_audit_workflow_blocks_unaccepted_fable(tmp_path):
 
 
 def test_audit_workflow_allows_accepted_single_fable(tmp_path):
-    receipt = tmp_path / "logs" / "fable-acceptance" / "accepted.json"
-    receipt.parent.mkdir(parents=True)
-    receipt.write_text("{}")
+    receipt = write_fable_receipt(tmp_path)
+    balance = write_fable_balance(tmp_path)
     wf = {
         "workflowName": "canonical-fable-synthesis",
         "status": "completed",
         "agentCount": 1,
         "fableAcceptance": str(receipt),
+        "executionProfile": {"planning_only": True, "build_allowed": False},
+        "fablePacket": {
+            "schema": "limen.fable_build_packet.v1",
+            "mode": "plan-only",
+            "implementation_by_fable": "prohibited",
+            "builder_provider": "auto",
+            "builder_tier_max": "opus",
+            "path": "docs/continuations/fable/t1.md",
+        },
         "workflowProgress": [{"model": "claude-fable-5", "state": "done"}],
         "result": {"summary": "done"},
     }
     p = tmp_path / "wf.json"
     p.write_text(json.dumps(wf))
-    proc = run_guard("audit-workflow", str(p))
+    proc = run_guard("audit-workflow", str(p), env={"LIMEN_FABLE_BALANCE_PATH": str(balance)})
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert json.loads(proc.stdout)["ok"] is True
 
@@ -371,7 +406,13 @@ def test_audit_transcript_allows_current_receipt_env(tmp_path):
                 "type": "assistant",
                 "message": {
                     "model": "claude-fable-5",
-                    "content": [{"type": "text", "text": "accepted"}],
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "name": "Write",
+                            "input": {"file_path": "docs/continuations/fable/t1.md"},
+                        }
+                    ],
                     "usage": {"input_tokens": 5, "output_tokens": 5},
                 },
             }
@@ -379,12 +420,16 @@ def test_audit_transcript_allows_current_receipt_env(tmp_path):
         + "\n"
     )
     receipt = write_fable_receipt(tmp_path)
+    balance = write_fable_balance(tmp_path)
     proc = run_guard(
         "audit-transcript",
         str(transcript),
         "--max-billable-tokens",
         "1000000",
-        env={"LIMEN_FABLE_ACCEPTANCE": str(receipt)},
+        env={
+            "LIMEN_FABLE_ACCEPTANCE": str(receipt),
+            "LIMEN_FABLE_BALANCE_PATH": str(balance),
+        },
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert json.loads(proc.stdout)["fableAcceptanceSeen"] is True

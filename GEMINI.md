@@ -1,15 +1,20 @@
 # Limen Project Context and Integration Patterns
 
-This file is the Gemini/conductor adapter guide. It does not redefine task states, budget rules,
+This file is the Gemini/peer-coordination adapter guide. It does not redefine task states, budget rules,
 or dispatch ownership; those live in `AGENTS.md` and `mcp/src/limen_mcp/server.py`.
+Gemini is one co-equal peer keeper: conductor is a bounded coordination role, never provider rank,
+ownership of another agent, or superior protocol authority.
 
 ## Conductor Swarm MCP Integration
 
-The primary agent swarm (`conductor`) is configured to use the Limen MCP server for real-time task intake and management. The MCP server is implemented in Python using FastMCP and located in the `mcp/` directory.
+Any co-equal keeper performing the bounded `conductor` role can use the Limen MCP server for
+real-time task intake and management. The role coordinates shared records; it is neither a primary
+agent nor authority over another peer. The MCP server is implemented in Python using FastMCP and
+located in the `mcp/` directory.
 
 ### Available Tools
 
-The MCP server exposes the following tools for the conductor swarm:
+The MCP server exposes the following tools to every compatible peer:
 - `list_tasks`: Retrieves the current list of tasks from the pipeline.
 - `get_task`: Fetches details of a specific task by its ID (e.g., LIMEN-001).
 - `add_task`: Adds a new task to the pipeline.
@@ -18,7 +23,7 @@ The MCP server exposes the following tools for the conductor swarm:
 
 ### Workflow & Best Practices
 
-1. **Task Intake**: Agents should poll `list_tasks` or accept a `get_task` assignment. Normal agents claim only `open` tasks. A `dispatched` task is already reserved; the conductor or scheduler may create a `dispatched` assignment for a named downstream agent, and that agent should move it to `in_progress` when execution begins.
+1. **Task Intake**: Keepers should poll `list_tasks` or accept a `get_task` assignment. A peer claims only `open` tasks. A `dispatched` task is already reserved; the scheduler may route it to a named peer, which moves it to `in_progress` when its own execution begins. Routing never creates rank or ownership over that peer.
 2. **Budget Enforcement**: Before picking up or executing large tasks, agents MUST call `get_budget_status` to ensure there is sufficient budget remaining for the day. Do not proceed if the daily budget is exhausted.
 3. **Status Updates**: As work progresses, use `update_task_status` to keep the pipeline state accurate. This directly reflects in the dashboard via the sync pipeline. Append evidence for every transition; do not overwrite prior history.
 4. **Task Consistency**: Ensure any new tasks added via `add_task` maintain the `LIMEN-XXX` ID format and include the relevant GitHub URL (`urls` array) to prevent duplicates.
@@ -26,7 +31,7 @@ The MCP server exposes the following tools for the conductor swarm:
 ## Execution Protocols
 
 ### 1. Worktree Isolation
-Instead of cloning or checking out branches in the main repository checkout, the Conductor Swarm MUST spawn tasks in isolated git worktrees.
+Instead of cloning or checking out branches in the main repository checkout, a coordinating keeper MUST prepare each routed task in an isolated git worktree.
 - **Command Pattern:** `git fetch origin && git worktree add ../<task-id> -b <task-id> origin/main`
 - **Rationale:** Ensures parallel tasks managed by the swarm do not conflict in the shared working directory.
 - **Path Safety:** If `../<task-id>` already exists, do not reuse it blindly. Reuse only when it is the same task and clean; otherwise create a uniquely suffixed worktree path from the task ID and short timestamp/commit.
@@ -35,7 +40,16 @@ Instead of cloning or checking out branches in the main repository checkout, the
 ### 2. PR Babysitting Loop (End-to-End Lifecycle)
 The agent responsible for a task will NOT just push its code and exit. It is explicitly required to babysit the pull request through the entire review lifecycle:
 1. **Open PR:** Use the GitHub tool to `create_pull_request`. Open as draft if known gates are still failing; mark ready only when local predicates pass or the task explicitly asks for an exploratory PR.
-2. **Watch Status:** Poll `pull_request_read` (methods: `get_status` and `get_check_runs`) with bounded backoff to monitor CI checks until they resolve. Use the task budget or CI timeout as the stop condition; if checks do not resolve, update the task to `failed_blocked` or `needs_human` with the last observed status.
+2. **Watch Status:** Use the bounded `scripts/await-pr.sh` waiter; do not hand-roll polling. It
+   monitors the shared exact-head CI and peer-review predicate. If the bound expires, record the
+   last observed status and hand off the candidate receipt; scheduled drains are preview-only.
 3. **Address Comments:** Poll `pull_request_read` (method: `get_review_comments`). If comments appear, apply the requested fixes to the isolated worktree, commit, and push again.
-4. **Merge:** Once CI passes and all review comments are resolved, invoke `merge_pull_request`.
-5. **Report & Sync:** Document the successful merge, update `tasks.yaml` via MCP (`update_task_status` to `done`), and notify the necessary stakeholders. Include PR URL, merge commit, checks observed, and any follow-up task IDs.
+4. **Accept:** Run `scripts/merge-policy.sh` against the exact head. Strict CI must be green, a
+   distinct peer must approve the final commit through the native or separately signed receipt
+   path, all current review conversations must be resolved, and branch/deploy gates must pass.
+   `CLEARED` is candidate evidence, not authority over another peer or permission to mutate.
+5. **Merge effect:** Only `scripts/merge-drain.py --apply` may perform it, and only with a separate
+   short-lived signed authorization bound to the exact repository, PR, and head. The executor
+   revalidates the acceptance predicates immediately before mutation.
+6. **Report & Sync:** Document the durable PR state and evidence. Update `tasks.yaml` through its
+   sanctioned writer only when the task's own terminal predicate is actually satisfied.

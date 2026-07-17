@@ -41,7 +41,13 @@ def _hermetic_dispatch_env(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path / "hermetic-root"))
     monkeypatch.setenv("LIMEN_DISPATCH_ADMISSION", "0")
     monkeypatch.setenv("LIMEN_WORKTREE_DEBT_GATE", "0")
-    for var in ("LIMEN_VALUE_REPOS", "LIMEN_VALUE_REPOS_FILE", "LIMEN_VALUE_GATE_STRICT"):
+    for var in (
+        "LIMEN_VALUE_REPOS",
+        "LIMEN_VALUE_REPOS_FILE",
+        "LIMEN_VALUE_GATE_STRICT",
+        "LIMEN_CODEX_MODEL",
+        "LIMEN_GEMINI_MODEL",
+    ):
         monkeypatch.delenv(var, raising=False)
 
 
@@ -452,10 +458,8 @@ def test_route_distributes_local_work_and_reaches_extended_fleet(tmp_path: Path)
     assert "clone" in reason
 
 
-def test_self_improve_weight_nudge_steers_local_split(monkeypatch) -> None:
-    """The self-IMPROVE rung closing the loop: a learned down-weight makes _pick_local prefer the
-    other lane even when budget+load+runway are otherwise tied. Default (no weights) keeps the
-    stable name-order pick — so the nudge only bites when armed."""
+def test_self_improve_weight_nudge_cannot_steer_local_split(monkeypatch) -> None:
+    """Historical board-derived weights remain telemetry while trajectory fitness is shadow."""
     route = load_route_module()
     task = {"type": "code", "title": "neutral work", "context": ""}
     health = {"codex": True, "claude": True, "agy": False, "opencode": False}
@@ -467,9 +471,9 @@ def test_self_improve_weight_nudge_steers_local_split(monkeypatch) -> None:
     monkeypatch.setattr(route, "_learned_weights", lambda: {})
     assert route._pick_local(task, health, assigned, budget) == "codex"
 
-    # codex down-weighted (0.25) -> effective load 0.05/0.25=0.20 > claude 0.10 -> claude wins.
+    # Even a hostile monkeypatched legacy reader is not consulted by the routing path.
     monkeypatch.setattr(route, "_learned_weights", lambda: {"codex": 0.25})
-    assert route._pick_local(task, health, assigned, budget) == "claude"
+    assert route._pick_local(task, health, assigned, budget) == "codex"
 
 
 def test_dispatch_dry_run_prints_capacity_census_and_copilot_command(tmp_path: Path, capsys) -> None:
@@ -971,6 +975,47 @@ def test_dispatch_parallel_reloads_under_queue_lock_before_reserve_write(
     assert calls == ["DISPATCH-ME"]
 
 
+def test_dispatch_parallel_publishes_terminal_reroute_trajectory_at_runtime(tmp_path: Path, monkeypatch) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    trajectory_root = tmp_path / "trajectory-attempts"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "REROUTE-TERMINAL",
+                "title": "Record a rate-limited attempt",
+                "repo": "someorg/dispatch-lab",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-07-16",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    monkeypatch.setenv("LIMEN_EXECUTION_TRAJECTORY_ROOT", str(trajectory_root))
+    monkeypatch.setenv("CLAUDE_SESSION_ID", "dispatcher-session-celadon")
+    monkeypatch.setattr(D, "call_agent_dispatch", lambda *_args, **_kwargs: D._RATELIMIT)
+    monkeypatch.setattr(D, "_cascade_or_requeue", lambda _agent: "opencode")
+
+    dispatch_parallel(
+        load_limen_file(tasks_path),
+        tasks_path,
+        agents=["codex"],
+        per_agent_limit=1,
+        max_workers=1,
+        dry_run=False,
+    )
+
+    records = D.TrajectoryStore(trajectory_root).load().records
+    assert len(records) == 1
+    assert records[0].outcome == "blocked"
+    assert records[0].executing_session == "dispatcher-session-celadon"
+    assert records[0].spend.amount is None
+    assert "REROUTE-TERMINAL" not in D._ATTEMPT_LAUNCH_RECEIPTS
+
+
 def test_dispatch_parallel_does_not_dispatch_stale_open_task(
     tmp_path: Path,
     monkeypatch,
@@ -1048,6 +1093,7 @@ def test_dispatch_serial_commit_survives_concurrent_board_write(
                 "priority": "critical",
                 "budget_cost": 1,
                 "status": "open",
+                "labels": ["launch-label"],
                 "created": "2026-06-20",
                 "dispatch_log": [],
             }
@@ -1059,6 +1105,8 @@ def test_dispatch_serial_commit_survives_concurrent_board_write(
         _concurrent_fold(tasks_path)
         concurrent = read_board(tasks_path)
         dispatched = next(row for row in concurrent["tasks"] if row["id"] == "DISPATCH-ME")
+        dispatched["labels"].append("concurrent-after-launch")
+        dispatched["type"] = "research"
         dispatched["predicate"] = "pytest -q concurrent-owner-check"
         dispatched["receipt_target"] = "git:someorg/dispatch-lab:receipts/concurrent-owner.json"
         tasks_path.write_text(yaml.safe_dump(concurrent, sort_keys=False))
@@ -1075,6 +1123,15 @@ def test_dispatch_serial_commit_survives_concurrent_board_write(
     assert tasks["DISPATCH-ME"]["status"] == "dispatched"
     assert tasks["DISPATCH-ME"]["predicate"] == "pytest -q concurrent-owner-check"
     assert tasks["DISPATCH-ME"]["receipt_target"].endswith("concurrent-owner.json")
+    assert tasks["DISPATCH-ME"]["labels"] == ["launch-label", "concurrent-after-launch"]
+    attempt = tasks["DISPATCH-ME"]["dispatch_log"][-1]
+    assert attempt["attempt_id"].startswith("attempt-")
+    assert attempt["attempt_classification"] == {
+        "task_type": "code",
+        "labels": ["launch-label"],
+        "workstream": None,
+    }
+    assert "DISPATCH-ME" not in D._ATTEMPT_LAUNCH_RECEIPTS
     assert tasks["CONCURRENT-FOLD"]["status"] == "open"
 
 
@@ -1367,7 +1424,6 @@ def test_pr_repair_prompt_forbids_assumed_limen_workflow() -> None:
 def test_isolated_local_run_updates_same_repo_pr_head(tmp_path: Path, monkeypatch) -> None:
     git_calls: list[list[str]] = []
     pushed_pr_heads: list[tuple[str, Path]] = []
-    auto_merge_urls: list[str] = []
     cleanups: list[tuple[str, bool]] = []
 
     def fake_git_plumbing(args, cwd, timeout=120):
@@ -1403,11 +1459,6 @@ def test_isolated_local_run_updates_same_repo_pr_head(tmp_path: Path, monkeypatc
     )
     monkeypatch.setattr(
         D,
-        "_arm_auto_merge",
-        lambda task, wt, url: auto_merge_urls.append(url),
-    )
-    monkeypatch.setattr(
-        D,
         "_cleanup_isolated_worktree",
         lambda repo_dir, wt, branch, base_ref, pushed, task=None: cleanups.append((base_ref, pushed)),
     )
@@ -1440,8 +1491,14 @@ def test_isolated_local_run_updates_same_repo_pr_head(tmp_path: Path, monkeypatc
     assert pushed_pr_heads == [
         ("limen/fix-ci-175", tmp_path / "worktrees" / "heal-cifix-organvm-domus-genoma-175-abcd")
     ]
-    assert auto_merge_urls == ["https://github.com/organvm/domus-genoma/pull/175"]
     assert cleanups == [("origin/limen/fix-ci-175", True)]
+
+
+def test_dispatch_never_arms_or_executes_pr_merges() -> None:
+    source = Path(D.__file__).read_text(encoding="utf-8")
+
+    assert "_arm_auto_merge" not in source
+    assert '["gh", "pr", "merge"' not in source
 
 
 def test_isolated_local_run_treats_agent_committed_pr_head_as_work(tmp_path: Path, monkeypatch) -> None:
@@ -1475,7 +1532,6 @@ def test_isolated_local_run_treats_agent_committed_pr_head_as_work(tmp_path: Pat
         "_push_existing_pr_head",
         lambda task, wt, pr_head: pushed_pr_heads.append(pr_head["head_ref"]) or True,
     )
-    monkeypatch.setattr(D, "_arm_auto_merge", lambda *args: None)
     monkeypatch.setattr(D, "_cleanup_isolated_worktree", lambda *args, **kwargs: None)
     monkeypatch.setattr(D.secrets, "token_hex", lambda _n: "abcd")
     monkeypatch.setattr(D, "_isolation_root", lambda: tmp_path / "worktrees")
@@ -1614,9 +1670,37 @@ def test_noop_result_stays_recoverable_not_cancelled() -> None:
     assert "noop" in task.labels
     assert "cancelled" not in task.labels
     assert task.dispatch_log[-1].status == "failed"
+    assert task.dispatch_log[-1].attempt_id
+    assert task.dispatch_log[-1].attempt_classification == {
+        "task_type": "code",
+        "labels": ["noop"],
+        "workstream": None,
+    }
+    assert isinstance(task.dispatch_log[-1].execution_profile, dict)
 
 
-def test_rate_limit_and_timeout_events_are_canonical_routes(monkeypatch) -> None:
+def test_serial_attempt_classification_is_frozen_before_provider_result() -> None:
+    import datetime
+
+    task = Task(
+        id="FROZEN-ATTEMPT",
+        title="freeze launch facts",
+        target_agent="codex",
+        status="open",
+        created=date(2026, 7, 16),
+        labels=["launch-label"],
+    )
+    D._capture_attempt_launch(task, "codex")
+    task.labels.append("mutated-after-launch")
+
+    D._apply_result(
+        task, "codex", D._NOOP, datetime.datetime.now(datetime.timezone.utc), BudgetTrack(date="2026-07-16")
+    )
+
+    assert task.dispatch_log[-1].attempt_classification["labels"] == ["launch-label"]
+
+
+def test_rate_limit_and_timeout_events_are_canonical_routes(tmp_path: Path, monkeypatch) -> None:
     import datetime
 
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -1628,10 +1712,13 @@ def test_rate_limit_and_timeout_events_are_canonical_routes(monkeypatch) -> None
         status="open",
         created=date(2026, 7, 10),
     )
+    D._capture_attempt_launch(rate_limited, "codex")
     D._apply_result(rate_limited, "codex", D._RATELIMIT, now, BudgetTrack(date="2026-07-10"))
     assert rate_limited.status == "open"
     assert rate_limited.dispatch_log[-1].status == "open"
     assert rate_limited.dispatch_log[-1].route_to == "opencode"
+    assert rate_limited.dispatch_log[-1].trajectory_outcome == "blocked"
+    assert rate_limited.dispatch_log[-1].attempt_id
 
     timed_out = Task(
         id="TIME",
@@ -1640,11 +1727,19 @@ def test_rate_limit_and_timeout_events_are_canonical_routes(monkeypatch) -> None
         status="open",
         created=date(2026, 7, 10),
     )
+    D._capture_attempt_launch(timed_out, "codex")
     D._apply_result(timed_out, "codex", D._TIMEOUT, now, BudgetTrack(date="2026-07-10"))
     assert timed_out.status == "open"
     assert timed_out.dispatch_log[-1].status == "open"
     assert timed_out.dispatch_log[-1].route_to == "jules"
+    assert timed_out.dispatch_log[-1].trajectory_outcome == "failed"
     assert D.agent_can_run_task("codex", timed_out) is False
+
+    store = D.TrajectoryStore(tmp_path / "attempts")
+    publications, errors = D.publish_terminal_attempts([rate_limited, timed_out], store)
+    assert errors == []
+    assert len(publications) == 2
+    assert {record.outcome for record in store.load().records} == {"blocked", "failed"}
 
 
 def test_warp_auto_dispatch_sends_dynamic_profile_without_model_override(monkeypatch) -> None:
@@ -1696,134 +1791,94 @@ def test_agent_argv_threads_task_into_dynamic_opencode_selector(monkeypatch) -> 
     assert argv == ["run", "-m", "fixture/runtime-output"]
 
 
-def test_codex_tier_derived_from_task_classes(monkeypatch) -> None:
-    """opus-class task -> o3; haiku (plain) task -> o4-mini."""
-    monkeypatch.delenv("LIMEN_CODEX_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "1")
-    monkeypatch.delenv("LIMEN_CODEX_MODEL_OPUS", raising=False)
-    monkeypatch.delenv("LIMEN_CODEX_MODEL_HAIKU", raising=False)
-    # Patch fable acceptance so opus class -> "opus" not "fable fallback"
-    monkeypatch.setattr(D, "_claude_fable_acceptance_present", lambda: False)
+def test_codex_and_gemini_default_to_provider_auto_without_catalog_lookup(monkeypatch) -> None:
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("provider Auto must not require a catalog lookup")
 
-    opus_task = Task(
-        id="CODEX-OPUS",
-        title="synthesis task",
-        labels=["synthesis"],
-        target_agent="codex",
-        created=date(2026, 7, 15),
-    )
-    haiku_task = Task(
-        id="CODEX-HAIKU",
-        title="simple coding task",
-        target_agent="codex",
-        created=date(2026, 7, 15),
-    )
-
-    assert D._codex_model(opus_task) == "o3"
-    assert D._codex_model(haiku_task) == "o4-mini"
-
-
-def test_codex_model_env_override_wins(monkeypatch) -> None:
-    monkeypatch.setenv("LIMEN_CODEX_MODEL", "custom-override")
-    task = Task(id="CODEX-OVERRIDE", title="any task", target_agent="codex", created=date(2026, 7, 15))
-    assert D._codex_model(task) == "custom-override"
-
-
-def test_codex_model_per_tier_env_override(monkeypatch) -> None:
-    monkeypatch.delenv("LIMEN_CODEX_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "1")
-    monkeypatch.setenv("LIMEN_CODEX_MODEL_OPUS", "my-opus-model")
-    monkeypatch.setattr(D, "_claude_fable_acceptance_present", lambda: False)
-
-    opus_task = Task(
-        id="CODEX-PER-TIER",
-        title="synthesis override",
-        labels=["synthesis"],
-        target_agent="codex",
-        created=date(2026, 7, 15),
-    )
-    assert D._codex_model(opus_task) == "my-opus-model"
-
-
-def test_codex_tier_disabled_returns_none(monkeypatch) -> None:
-    monkeypatch.delenv("LIMEN_CODEX_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "0")
-    task = Task(id="CODEX-DISABLED", title="any task", target_agent="codex", created=date(2026, 7, 15))
-    assert D._codex_model(task) is None
-
-
-def test_codex_tier_fail_open_on_exception(monkeypatch) -> None:
-    monkeypatch.delenv("LIMEN_CODEX_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "1")
-
-    def boom(task):
-        raise RuntimeError("simulated failure")
-
-    monkeypatch.setattr(D, "_claude_tier_for", boom)
-    task = Task(id="CODEX-FAIL", title="any task", target_agent="codex", created=date(2026, 7, 15))
-    assert D._codex_model(task) is None
-
-
-def test_gemini_tier_derived_from_task_classes(monkeypatch) -> None:
-    monkeypatch.delenv("LIMEN_GEMINI_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_GEMINI_TIER_SELECT", "1")
-    monkeypatch.delenv("LIMEN_GEMINI_MODEL_OPUS", raising=False)
-    monkeypatch.delenv("LIMEN_GEMINI_MODEL_HAIKU", raising=False)
-    monkeypatch.setattr(D, "_claude_fable_acceptance_present", lambda: False)
-
-    opus_task = Task(
-        id="GEMINI-OPUS",
-        title="synthesis task",
-        labels=["synthesis"],
-        target_agent="gemini",
-        created=date(2026, 7, 15),
-    )
-    haiku_task = Task(
-        id="GEMINI-HAIKU",
-        title="simple coding task",
-        target_agent="gemini",
-        created=date(2026, 7, 15),
-    )
-
-    assert D._gemini_model(opus_task) == "gemini-2.5-pro"
-    assert D._gemini_model(haiku_task) == "gemini-2.5-flash"
-
-
-def test_gemini_model_env_override_wins(monkeypatch) -> None:
-    monkeypatch.setenv("LIMEN_GEMINI_MODEL", "custom-gemini")
-    task = Task(id="GEMINI-OVERRIDE", title="any task", target_agent="gemini", created=date(2026, 7, 15))
-    assert D._gemini_model(task) == "custom-gemini"
-
-
-def test_gemini_tier_disabled_returns_none(monkeypatch) -> None:
-    monkeypatch.delenv("LIMEN_GEMINI_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_GEMINI_TIER_SELECT", "0")
-    task = Task(id="GEMINI-DISABLED", title="any task", target_agent="gemini", created=date(2026, 7, 15))
-    assert D._gemini_model(task) is None
-
-
-def test_agent_argv_codex_threads_task_into_tier_selector(monkeypatch) -> None:
-    observed: list[Task | None] = []
+    monkeypatch.setattr(D, "discover_codex_models", unexpected)
+    monkeypatch.setattr(D, "discover_gemini_models", unexpected)
     task = Task(
-        id="CODEX-ARGV",
-        title="task evidence reaches codex selector",
+        id="PROVIDER-AUTO",
+        title="provider owns the default",
         target_agent="codex",
         created=date(2026, 7, 15),
     )
 
-    def select(current: Task | None = None) -> str:
-        observed.append(current)
-        return "o3"
+    assert D._codex_model(task) is None
+    assert "-m" not in D._agent_argv("codex", task)
+    codex_receipt = D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+    assert codex_receipt["selection_source"] == "codex_auto"
+    assert codex_receipt["selected_model"] is None
 
-    monkeypatch.setattr(D, "_codex_model", select)
-    argv = D._agent_argv("codex", task)
+    task.target_agent = "gemini"
+    assert D._gemini_model(task) is None
+    assert "-m" not in D._agent_argv("gemini", task)
+    gemini_receipt = D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+    assert gemini_receipt["selection_source"] == "gemini_auto"
+    assert gemini_receipt["selected_model"] is None
 
-    assert observed == [task]
-    assert "-m" in argv
-    assert argv[argv.index("-m") + 1] == "o3"
+
+def test_codex_override_tracks_live_catalog_add_remove_and_reorder(monkeypatch) -> None:
+    live = ["renamed-zeta", "renamed-alpha"]
+    monkeypatch.setenv("LIMEN_CODEX_MODEL", "renamed-zeta")
+    monkeypatch.setattr(D, "discover_codex_models", lambda *_args, **_kwargs: list(live))
+    task = Task(
+        id="CODEX-LIVE-OVERRIDE",
+        title="validate exact live output",
+        target_agent="codex",
+        created=date(2026, 7, 15),
+    )
+
+    assert D._codex_model(task) == "renamed-zeta"
+    first_hash = D._MODEL_SELECTION_RECEIPTS[task.id]["catalog_hash"]
+    live.reverse()
+    assert D._codex_model(task) == "renamed-zeta"
+    assert D._MODEL_SELECTION_RECEIPTS[task.id]["catalog_hash"] == first_hash
+
+    live.append("renamed-middle")
+    assert D._codex_model(task) == "renamed-zeta"
+    assert D._MODEL_SELECTION_RECEIPTS[task.id]["catalog_hash"] != first_hash
+
+    live.remove("renamed-zeta")
+    with pytest.raises(D.ProviderModelOverrideBlocked, match="absent from the live provider catalog"):
+        D._codex_model(task)
+    receipt = D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+    assert receipt["selection_source"] == "codex_override_unvalidated"
+    assert receipt["selected_model"] is None
 
 
-def test_agent_argv_gemini_injects_model_before_prompt(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    ("agent", "override_env", "discovery_name"),
+    [
+        ("codex", "LIMEN_CODEX_MODEL", "discover_codex_models"),
+        ("gemini", "LIMEN_GEMINI_MODEL", "discover_gemini_models"),
+    ],
+)
+def test_provider_override_unavailable_returns_typed_block_before_local_side_effect(
+    monkeypatch,
+    agent: str,
+    override_env: str,
+    discovery_name: str,
+) -> None:
+    monkeypatch.setenv(override_env, "renamed-unreachable")
+    monkeypatch.setattr(D, discovery_name, lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(D, "agent_can_run_task", lambda *_args: True)
+    monkeypatch.setattr(D, "_isolated_local_run", lambda *_args: pytest.fail("must block before isolation"))
+    task = Task(
+        id=f"{agent.upper()}-BLOCKED-OVERRIDE",
+        title="unverifiable override",
+        repo="example/repository",
+        target_agent=agent,
+        created=date(2026, 7, 15),
+    )
+
+    result = D._call_local_agent(agent, task, dry_run=False)
+
+    assert D._is_blocked_result(result)
+    assert "live provider catalog is unavailable" in D._blocked_reason(result)
+
+
+def test_agent_argv_gemini_injects_live_validated_override_before_prompt(monkeypatch) -> None:
     task = Task(
         id="GEMINI-ARGV",
         title="model injected before -p",
@@ -1831,7 +1886,8 @@ def test_agent_argv_gemini_injects_model_before_prompt(monkeypatch) -> None:
         created=date(2026, 7, 15),
     )
 
-    monkeypatch.setattr(D, "_gemini_model", lambda t=None: "gemini-2.5-pro")
+    monkeypatch.setenv("LIMEN_GEMINI_MODEL", "renamed-gamma")
+    monkeypatch.setattr(D, "discover_gemini_models", lambda **_kwargs: ["renamed-delta", "renamed-gamma"])
     argv = D._agent_argv("gemini", task)
 
     assert "-m" in argv
@@ -1839,20 +1895,9 @@ def test_agent_argv_gemini_injects_model_before_prompt(monkeypatch) -> None:
     m_idx = argv.index("-m")
     p_idx = argv.index("-p")
     assert m_idx < p_idx, f"-m ({m_idx}) must appear before -p ({p_idx}) in {argv}"
-    assert argv[m_idx + 1] == "gemini-2.5-pro"
-
-
-def test_agent_argv_gemini_no_model_when_tier_select_off(monkeypatch) -> None:
-    monkeypatch.delenv("LIMEN_GEMINI_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_GEMINI_TIER_SELECT", "0")
-    task = Task(
-        id="GEMINI-ARGV-OFF",
-        title="no model injected when tier off",
-        target_agent="gemini",
-        created=date(2026, 7, 15),
-    )
-    argv = D._agent_argv("gemini", task)
-    assert "-m" not in argv
+    assert argv[m_idx + 1] == "renamed-gamma"
+    receipt = D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+    assert receipt["selection_source"] == "gemini_override_live_catalog"
 
 
 def test_dispatch_event_records_dynamic_selection_receipt() -> None:
@@ -1885,6 +1930,9 @@ def test_dispatch_event_records_dynamic_selection_receipt() -> None:
     assert event.selected_model == "fixture/runtime-output"
     assert event.selection_source == "opencode_live_catalog"
     assert event.catalog_hash == "abc123"
+    assert event.attempt_id
+    assert event.attempt_classification["task_type"] == "code"
+    assert event.execution_profile == {"reasoning_depth": 0.7}
 
 
 def test_pr_open_receipt_blocks_duplicate_dispatch_and_noop_demotion() -> None:

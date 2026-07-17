@@ -6,7 +6,7 @@ Generated: `2026-07-10T07:01:51+00:00`
 
 - Packets are bounded owner/task units derived from redacted batch/session hashes.
 - Packetization is not dispatch by itself; a packet needs an owner repo or owner ledger, a narrow predicate, no secret dependency, and an expected receipt before external delegation.
-- Stalled-review packets default to a Codex conductor: Codex owns judgment and integration, while broad redacted sweeps should be delegated to cheaper explorer lanes whenever scope is bounded.
+- Stalled-review packets have no provider owner or superior conductor. A co-equal keeper is selected from live capability, availability, spend, and acceptance evidence; executor attribution never confers ownership.
 - This ledger contains no raw prompt or session text.
 
 ## Coverage
@@ -51,7 +51,7 @@ Generated: `2026-07-10T07:01:51+00:00`
 
 ## Private Output
 
-- Prompt packet private index: `~/Workspace/limen/.limen-private/session-corpus/lifecycle/prompt-packet-ledger.json`.
+- Prompt packet private index: private prompt-corpus owner receipt (tracked path intentionally redacted).
 - The private index keeps packet membership, prompt hashes, session keys, worktree slugs, and attack-path evidence; it contains no prompt text.
 - Public packet resolution receipts: `docs/prompt-packet-resolution-receipts.json`.
 

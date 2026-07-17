@@ -4,7 +4,7 @@ Generated: `2026-06-30`
 Packet: `PLAN-09-5aa10d25`
 Task: `CSF-CAEB31D8-PLAN-09-5AA10D25`
 Theme: `domus-preflight-noise`
-Source session: `/Users/4jp/.codex/sessions/2026/06/30/rollout-2026-06-30T06-17-55-019f1809-13b4-7780-9b1f-d4584f872333.jsonl`
+Source session: `<private-session-artifact>` (lineage: session hash prefix `caeb31d8`)
 
 This receipt is public-safe. It records hashes, owners, predicates, and local
 work status only. It does not copy private prompt or plan bodies.

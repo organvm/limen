@@ -19,8 +19,8 @@ Global product selection: `active`
 - `current-session-intake`
 - `domus-preflight-noise`
 - `private-sauce-boundary`
-- `codex-planner-worktrees`
-- `autopoietic-conductor`
+- `peer-planner-worktrees`
+- `autopoietic-orchestration`
 
 ## Plan Source Proof
 
@@ -47,25 +47,25 @@ Unconsolidated plan events: 0
 
 | Packet | Agent | Worktree | Theme | Criteria |
 |---|---|---|---|---|
-| `PLAN-01-ff680cea` | `codex` | `planner-01-alpha-omega-product-ledger` | `alpha-omega-product-ledger` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
-| `PLAN-02-ea38d4d8` | `codex` | `planner-02-full-fleet-overnight` | `full-fleet-overnight` | derive lane inventory from PAID_AGENT_ORDER, not hand-written local lists; `auto` selects active reachable lanes while down/depleted/human-gated lanes stay visible in receipts |
-| `PLAN-03-f0b8bc86` | `codex` | `planner-03-dynamic-substrate` | `dynamic-substrate` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
-| `PLAN-04-1c17c8a3` | `codex` | `planner-04-repo-salvage-consolidation` | `repo-salvage-consolidation` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
-| `PLAN-05-37b731f8` | `codex` | `planner-05-money-inbound-seo` | `money-inbound-seo` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
-| `PLAN-06-0bd58d68` | `codex` | `planner-06-contrib-mirror` | `contrib-mirror` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
-| `PLAN-07-cef1699a` | `codex` | `planner-07-quota-reset-guard` | `quota-reset-guard` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
-| `PLAN-08-a2c2ca1e` | `codex` | `planner-08-current-session-intake` | `current-session-intake` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
-| `PLAN-09-5aa10d25` | `codex` | `planner-09-domus-preflight-noise` | `domus-preflight-noise` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
-| `PLAN-10-b131e64c` | `codex` | `planner-10-private-sauce-boundary` | `private-sauce-boundary` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
-| `PLAN-11-f3f5e6a4` | `codex` | `planner-11-codex-planner-worktrees` | `codex-planner-worktrees` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
-| `PLAN-12-5bdbeb44` | `codex` | `planner-12-autopoietic-conductor` | `autopoietic-conductor` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
+| `PLAN-01-ff680cea` | `any` | `planner-01-alpha-omega-product-ledger` | `alpha-omega-product-ledger` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
+| `PLAN-02-ea38d4d8` | `any` | `planner-02-full-fleet-overnight` | `full-fleet-overnight` | derive lane inventory from PAID_AGENT_ORDER, not hand-written local lists; `auto` selects active reachable lanes while down/depleted/human-gated lanes stay visible in receipts |
+| `PLAN-03-f0b8bc86` | `any` | `planner-03-dynamic-substrate` | `dynamic-substrate` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
+| `PLAN-04-1c17c8a3` | `any` | `planner-04-repo-salvage-consolidation` | `repo-salvage-consolidation` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
+| `PLAN-05-37b731f8` | `any` | `planner-05-money-inbound-seo` | `money-inbound-seo` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
+| `PLAN-06-0bd58d68` | `any` | `planner-06-contrib-mirror` | `contrib-mirror` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
+| `PLAN-07-cef1699a` | `any` | `planner-07-quota-reset-guard` | `quota-reset-guard` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
+| `PLAN-08-a2c2ca1e` | `any` | `planner-08-current-session-intake` | `current-session-intake` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
+| `PLAN-09-5aa10d25` | `any` | `planner-09-domus-preflight-noise` | `domus-preflight-noise` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
+| `PLAN-10-b131e64c` | `any` | `planner-10-private-sauce-boundary` | `private-sauce-boundary` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
+| `PLAN-11-f3f5e6a4` | `any` | `planner-11-peer-planner-worktrees` | `peer-planner-worktrees` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
+| `PLAN-12-5bdbeb44` | `any` | `planner-12-autopoietic-orchestration` | `autopoietic-orchestration` | derive this owner packet from all user turns and all detected plan sources; include executor acceptance, blocker behavior, and at least one verification predicate |
 
 ## Executor Packets
 
 | Packet | Agent | Theme | Criteria | Predicate |
 |---|---|---|---|---|
 | `EXEC-claude-ff680cea` | `claude` | `alpha-omega-product-ledger` | bounded reversible work only; return changed paths, predicate result, PR/deploy/receipt, and blocker if any | `PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q` |
-| `EXEC-opencode-ea38d4d8` | `opencode` | `full-fleet-overnight` | bounded reversible work only; return changed paths, predicate result, PR/deploy/receipt, and blocker if any | `LIMEN_ROOT=$PWD LIMEN_TASKS=$PWD/tasks.yaml python3 scripts/current-session-fanout.py --session <session.jsonl> --min-codex-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --dry-run` |
+| `EXEC-opencode-ea38d4d8` | `opencode` | `full-fleet-overnight` | bounded reversible work only; return changed paths, predicate result, PR/deploy/receipt, and blocker if any | `LIMEN_ROOT=$PWD LIMEN_TASKS=$PWD/tasks.yaml python3 scripts/current-session-fanout.py --session <session.jsonl> --min-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --dry-run` |
 | `EXEC-agy-f0b8bc86` | `agy` | `dynamic-substrate` | bounded reversible work only; return changed paths, predicate result, PR/deploy/receipt, and blocker if any | `PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q` |
 | `EXEC-gemini-1c17c8a3` | `gemini` | `repo-salvage-consolidation` | bounded reversible work only; return changed paths, predicate result, PR/deploy/receipt, and blocker if any | `PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q` |
 | `EXEC-jules-37b731f8` | `jules` | `money-inbound-seo` | bounded reversible work only; return changed paths, predicate result, PR/deploy/receipt, and blocker if any | `PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q` |
@@ -87,7 +87,7 @@ Executor criteria:
 
 Verification predicates:
 
-- `LIMEN_ROOT=$PWD LIMEN_TASKS=$PWD/tasks.yaml python3 scripts/current-session-fanout.py --session <session.jsonl> --min-codex-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --dry-run`
+- `LIMEN_ROOT=$PWD LIMEN_TASKS=$PWD/tasks.yaml python3 scripts/current-session-fanout.py --session <session.jsonl> --min-planners 10 --executor-lanes auto --include-contrib --no-reset-spend --dry-run`
 - `PYTHONPATH=cli/src python3 -m pytest cli/tests/test_current_session_fanout.py -q`
 - `PYTHONPATH=cli/src python3 -c "from limen.capacity import PAID_AGENT_ORDER; required={'codex','claude','opencode','agy','gemini','ollama','jules','copilot','warp','oz','github_actions'}; assert required <= set(PAID_AGENT_ORDER)"`
 - `LIMEN_ROOT=$PWD LIMEN_TASKS=$PWD/tasks.yaml PYTHONPATH=cli/src python3 scripts/dispatch-async.py --lanes auto --dry-run`
@@ -98,7 +98,7 @@ Verification predicates:
 | Agent | Kind | Status | Detail |
 |---|---|---|---|
 | `codex` | `local-cli` | `active` | /opt/homebrew/bin/codex |
-| `claude` | `local-cli` | `active` | /Users/4jp/.local/bin/claude |
+| `claude` | `local-cli` | `active` | <user-home>/.local/bin/claude |
 | `opencode` | `local-cli` | `active` | /opt/homebrew/bin/opencode |
 | `agy` | `local-cli` | `active` | /opt/homebrew/bin/agy |
 | `gemini` | `local-cli` | `active` | /opt/homebrew/bin/gemini |
@@ -130,7 +130,8 @@ Global product selection remains `active`.
 
 ## Contract
 
-- Planner packets are Codex conductor work; executor packets go to active fleet lanes.
+- Planning and execution are peer roles, not provider rank: select a co-equal keeper from live
+  capability, availability, spend, and acceptance evidence.
 - Down, depleted, or human-gated lanes are receipts, not a global stop condition.
 - This command never applies Codex resets, credits, top-ups, or paid overages.
 - Outbound identity-bearing actions remain human-gated.

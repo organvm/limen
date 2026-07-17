@@ -179,7 +179,11 @@ rung "ask-gate (intake predicate-shaped)" det python3 "$ROOT/scripts/ask-gate.py
 #    stale scan-version key (the merge-deadlock class, fixed 2026-07-14). The sensor default is 1
 #    (armed since PR fix/agy-steps-schema-v2); the rung runs unless LIMEN_PROMPT_ATOM_CONTROL=0.
 if [[ "${LIMEN_PROMPT_ATOM_CONTROL:-1}" == "1" ]]; then
-  rung "ask-lineage convergence" det python3 "$ROOT/scripts/prompt-atom-ledger.py" --check-cursor
+  rung "ask-lineage cursor coherence" det python3 "$ROOT/scripts/prompt-atom-ledger.py" --check-cursor
+  # Cursor binding is mechanical custody, not semantic authority. Omega requires the full replay,
+  # exact all/all source scope, current live custody, zero semantic debt, and an authority-ready
+  # public seal; a freshly rebound cursor alone can never satisfy this rung.
+  rung "ask-lineage semantic authority" det python3 "$ROOT/scripts/prompt-atom-ledger.py" --check --require-scope all
 else
   skip_rung "ask-lineage convergence" det "prompt-corpus sensor dark: source cursor not bound to private checkpoint — reseal via prompt-atom-ledger.py --scan"
 fi

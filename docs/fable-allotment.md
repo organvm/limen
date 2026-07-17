@@ -16,6 +16,19 @@ The cap is enforced live at model-selection time against actual weekly tokens bu
 `cli/src/limen/model_selection.py` / `dispatch._claude_tier_for`), and surfaced to interactive
 sessions by `scripts/fable-session-guard.py` (a SessionStart hook).
 
+The contract is mechanical for fleet launches:
+
+- the task must carry `mode:plan-only`;
+- the acceptance receipt binds `mode=plan-only`, `deliverable=continuation-capsule`, and a builder
+  tier no higher than Opus;
+- the balance receipt must be current-week, fresh, source-ready, finite, and internally coherent;
+  absent, stale, malformed, or dark state closes the Fable rung;
+- Fable receives a planning prompt and a read/plan/capsule-only tool surface, never the ordinary
+  implementation prompt or build/fan-out tools;
+- only `docs/continuations/fable/<task>.md` may change, and dispatch validates that boundary before
+  it can commit or publish the plan; and
+- implementation is handed to provider Auto with `fable=false` and `builder_tier_max=opus`.
+
 Fable is a reserved Claude tier above Opus. It is for the small set of jobs where the cost and
 retention tradeoff is justified by long-horizon reasoning, huge-context synthesis, ambiguous
 root-cause work, or final canonical decisions. It is not a Claude/Opus replacement, an async
@@ -62,7 +75,9 @@ export LIMEN_FABLE_ACCEPTANCE=<receipt>
 ```
 
 Run the Fable job only after exporting that variable into the same process environment. The model
-router uses it to allow `claude_tier=fable`; without it, Fable selections fall back to Opus.
+router uses it to allow `claude_tier=fable` only for a `mode:plan-only` task with a fresh balance;
+without all three facts, the Fable rung stays closed. Receipts issued before the plan-only contract
+fields existed must be re-issued.
 
 Audit current receipts:
 
@@ -87,6 +102,17 @@ python3 scripts/fable-allotment.py plan
   itself is the accepted Fable objective.
 - Treat Fable refusals/fallbacks as normal integration behavior. A refused request is not a failed
   run by itself; record the fallback path and verification result.
+- Dispatch audits the launched Fable planner's own balance/cap contract periodically. It never
+  enumerates, signals, pauses, resumes, closes, or retunes a co-equal peer session.
+- Ninety minutes of Fable motion without a durable receipt stops only that launched process group
+  and packetizes the residual. A smaller lane timeout packetizes sooner. Durable publication then
+  uses the normal isolated-worktree receipt path only if the exact capsule-only diff passes. If a
+  denied/out-of-bound source mutation somehow exists, dispatch publishes nothing and preserves that
+  isolated worktree; automatic extraction is intentionally not implemented because it would either
+  delete unaccepted work or risk laundering implementation into the plan receipt.
+- The staged interactive hook is read-only and cannot block SessionStart. It reports only the
+  invocation whose hook payload it received and contains no model-switch or peer-control action;
+  fleet dispatch is the enforcement surface.
 
 ## Verification Gates
 

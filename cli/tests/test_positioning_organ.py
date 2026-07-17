@@ -64,7 +64,8 @@ def test_organ_health_feels_every_heartbeat_beat(monkeypatch):
     missing = beat_keys - covered
     assert not missing, f"organ-health silently omits heartbeat beats: {sorted(missing)}"
     # beats organ-health used to ignore are now first-class doors …
-    assert {"drain", "web", "censor", "quicken", "avtopoiesis"} <= door_keys
+    assert {"drain", "web", "censor", "avtopoiesis"} <= door_keys
+    assert "quicken" not in door_keys, "peer-session runtime is not a heartbeat organ"
     # … and the conceptual rungs with no C_ beat (synthetic) still survive
     assert {"sustain", "merge", "improve"} <= door_keys
 

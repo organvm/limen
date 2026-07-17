@@ -304,7 +304,7 @@ That is not enough for a fully automatic lifecycle.
   19 roots / 16 debt to 14 roots / 11 debt without deleting unique work.
 - The automated beat reclaimed two content-preserved roots immediately after classification.
   That did not lose unique source. On 2026-06-29 the operator policy was tightened in the
-  other direction: `scripts/drain.sh` now defaults `LIMEN_RECLAIM_APPLY=1`, but the reaper
+  other direction: `scripts/drain.sh` once defaulted `LIMEN_RECLAIM_APPLY=1`, but the reaper
   still refuses dirty, unique-unpushed, unmerged, active, or live/self roots.
 - Dirty roots at default HEAD carry invisible work as uncommitted filesystem
   deltas. They need receipts before the system can reclaim or dispatch around them.

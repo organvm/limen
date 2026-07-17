@@ -71,25 +71,25 @@ protocols:
 
   - id: PROTO-LANE-REWEIGHT
     when: {signal: lane_adjustment, verdict_in: [down-weight, up-weight, keep]}
-    action: apply learned lane weights so routing follows real productivity
-    reversible: reversible
-    branch: executive
+    action: observe the board-derived lane-weight hypothesis without steering
+    reversible: gated
+    branch: judicial
     cadence: daily
-    mechanism: "self-improve.py --apply (LIMEN_SI_APPLY=1 → route.py _learned_weights)"
+    mechanism: "self-improve.py shadow report; --apply refuses until trajectory authority is accepted"
 
   - id: PROTO-RERANK
     when: {signal: rerank, move_in: [boost, deprioritise]}
-    action: re-prioritise OPEN tasks by demonstrated ship-rate (idempotent)
-    reversible: reversible
-    branch: executive
+    action: observe the board-derived rerank hypothesis without changing task priority
+    reversible: gated
+    branch: judicial
     cadence: daily
-    mechanism: "self-improve.py --apply (idempotent priority set on OPEN tasks)"
+    mechanism: "self-improve.py shadow report; historical done events cannot mutate recurrence"
 
   - id: PROTO-RETIRE-PATTERN
     when: {signal: retire_pattern}
-    action: supersede / re-route a chronically-failing task pattern
+    action: observe a chronically-failing task-pattern hypothesis without superseding or rerouting
     reversible: irreversible   # destructive — marks tasks superseded
-    branch: judicial           # gated behind LIMEN_SI_RETIRE=1; never auto in v1
+    branch: judicial           # no actuator while board-event attribution is non-authoritative
     cadence: daily
 
   - id: PROTO-BEHAVIOURAL-CORRECTION

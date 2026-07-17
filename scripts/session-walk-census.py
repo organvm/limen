@@ -1,44 +1,22 @@
 #!/usr/bin/env python3
-"""SESSION-WALK census — has every session been walked from first prompt to implementation?
+"""Classify one explicitly authorized current-session artifact.
 
-Sweeps BOTH vendor session estates on this host:
-  * Claude Code:  ~/.claude/projects/<proj>/<sid>.jsonl   (Claude Desktop's Code tab lists these)
-  * Codex:        ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl  (Codex Desktop lists these)
-
-Every session gets a terminal-state verdict:
-  walked       — ends with a delivered closeout (terminal markers in the final assistant text)
-  needs_input  — ends waiting on the human (a question / permission / "Want me to…")
-  mid_flight   — ends on user or tool activity (the session died mid-work)
-  dispatch     — a fleet dispatch/daemon run (board-owned lifecycle, not a user walk)
-  empty        — no user prompt ever landed (noise)
-
-The QUICKEN organ breathes the *recent* stalled tail (3-day horizon); this census is the
-full-horizon completeness predicate behind "have ALL sessions been walked?" — the whole
-estate, both vendors, all projects. Residue (needs_input + mid_flight user sessions) is
-written to logs/session-walk-residue.md with a resume pointer per session so the walk is
-executable, not prose.
-
-Artifacts: logs/session-walk-census.json (+ voice stamp logs/.voice/session-walk).
---check exits 1 when user-session residue exists. Fail-open per file: an unreadable or
-garbled transcript classifies as `unknown`, never crashes the sweep.
-
---walk N drains the residue: resumes the N newest unwalked sessions headlessly with the
-QUICKEN guardrail prompt (reversible only — no push/send/delete/settings; edits confined
-to an isolated worktree, never the live checkout). Each attempt is journaled in
-logs/session-walk.jsonl; a session attempted LIMEN_SESSION_WALK_GIVE_UP (default 2) times
-without leaving residue is skipped thereafter (it stays visible in the residue ledger for
-the human). Codex resumes are current-local-day only unless this run carries an explicit
-old-Codex override. Wired into the beat via metabolize.sh (LIMEN_SESSION_WALK gate), the
-whole estate self-drains a few sessions per beat.
+This tool does not enumerate ``~/.claude`` or ``~/.codex`` and never resumes a session.
+The old whole-estate ``--walk`` interface is retained only as a fail-closed compatibility
+error.  A caller must export the current invocation to a file outside both vendor runtime
+roots, pass that file with ``--session-artifact``, and bind the same resolved path through
+``LIMEN_CURRENT_SESSION_ARTIFACT``.  That two-part capability makes an accidental scan of a
+concurrent peer's private runtime impossible through this entrypoint.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
-import time
+import sys
 from pathlib import Path
 
 HOME = Path.home()
@@ -139,7 +117,6 @@ def classify_claude(path: Path) -> dict:
         "purpose": first_prompt,
         "verdict": verdict,
         "mtime": int(path.stat().st_mtime),
-        "resume": f"claude --resume {sid}",
     }
 
 
@@ -189,194 +166,93 @@ def classify_codex(path: Path) -> dict:
         "purpose": first_prompt,
         "verdict": verdict,
         "mtime": int(path.stat().st_mtime),
-        "resume": f"codex exec resume {sid}",
     }
 
 
-def sweep() -> list[dict]:
-    rows: list[dict] = []
-    claude_dir = HOME / ".claude" / "projects"
-    for proj in sorted(claude_dir.iterdir()) if claude_dir.is_dir() else []:
-        if not proj.is_dir() or proj.name == "memory":
-            continue
-        for f in proj.glob("*.jsonl"):
-            try:
-                rows.append(classify_claude(f))
-            except Exception:
-                rows.append(
-                    {
-                        "vendor": "claude",
-                        "sid": f.stem,
-                        "verdict": "unknown",
-                        "cwd": "",
-                        "purpose": "",
-                        "mtime": 0,
-                        "resume": "",
-                    }
-                )
-    codex_dir = HOME / ".codex" / "sessions"
-    if codex_dir.is_dir():
-        for f in codex_dir.rglob("rollout-*.jsonl"):
-            try:
-                rows.append(classify_codex(f))
-            except Exception:
-                rows.append(
-                    {
-                        "vendor": "codex",
-                        "sid": f.stem,
-                        "verdict": "unknown",
-                        "cwd": "",
-                        "purpose": "",
-                        "mtime": 0,
-                        "resume": "",
-                    }
-                )
-    return rows
+class SessionAccessError(RuntimeError):
+    """The caller did not prove a current, isolated artifact capability."""
 
 
-WALK_PROMPT = (
-    "Resume and FINISH your original purpose — you stalled and have been sitting. "
-    "Decide every open step via the cascade: protocol dictates; else precedent; else explore to "
-    "ideal-form certainty. Drive every REVERSIBLE step to completion now. PROTOCOL (hard): do NOT "
-    "push/deploy (gate-hold), do NOT delete (archive reversibly), do NOT edit settings.json, do NOT "
-    "send/email — stage or draft those instead. If your purpose is already complete, say so and "
-    "close out. Surface only the single genuinely-irreducible human atom, one sentence, then stop. "
-    "ADDITIONAL (hard): if your cwd is a shared/live checkout, never edit files there — create an "
-    "isolated git worktree under .claude/worktrees/ and confine every edit to it. "
-    "git add named files only; never git add -A."
-)
-
-WALK_JOURNAL = LOGS / "session-walk.jsonl"
+class SessionControlUnsupported(RuntimeError):
+    """Cross-session census and resumption are intentionally unavailable."""
 
 
-def _walk_counts() -> dict[str, int]:
-    counts: dict[str, int] = {}
+def _inside(path: Path, root: Path) -> bool:
     try:
-        for ln in WALK_JOURNAL.read_text(errors="ignore").splitlines():
-            try:
-                e = json.loads(ln)
-            except Exception:
-                continue
-            sid = e.get("walked")
-            if sid:
-                counts[sid] = counts.get(sid, 0) + 1
-    except OSError:
-        pass
-    return counts
-
-
-def local_day_start_ts(now: float | None = None) -> int:
-    local = time.localtime(time.time() if now is None else now)
-    return int(time.mktime((local.tm_year, local.tm_mon, local.tm_mday, 0, 0, 0, local.tm_wday, local.tm_yday, local.tm_isdst)))
-
-
-def stale_codex_resume_blocked(row: dict, *, allow_old_codex_resume: bool = False, now: float | None = None) -> bool:
-    if allow_old_codex_resume:
+        path.relative_to(root)
+        return True
+    except ValueError:
         return False
-    if row.get("vendor") != "codex":
-        return False
-    return int(row.get("mtime") or 0) < local_day_start_ts(now)
 
 
-def resume_display(row: dict, *, allow_old_codex_resume: bool = False, now: float | None = None) -> str:
-    if stale_codex_resume_blocked(row, allow_old_codex_resume=allow_old_codex_resume, now=now):
-        return "BLOCKED: stale Codex session; create a fresh bounded packet instead of resuming this session."
-    return str(row.get("resume") or "")
+def authorized_artifact(path_arg: str | None) -> Path:
+    if not path_arg:
+        raise SessionAccessError(
+            "an explicit --session-artifact is required; broad vendor-session census is unsupported"
+        )
+    path = Path(path_arg).expanduser().resolve(strict=True)
+    if not path.is_file():
+        raise SessionAccessError("the authorized current-session artifact must be a regular file")
+    for vendor_root in (HOME / ".claude", HOME / ".codex"):
+        if _inside(path, vendor_root.resolve()):
+            raise SessionAccessError(
+                "raw ~/.claude and ~/.codex runtime artifacts are private peer state; export the current invocation first"
+            )
+    bound = os.environ.get("LIMEN_CURRENT_SESSION_ARTIFACT")
+    if not bound:
+        raise SessionAccessError("LIMEN_CURRENT_SESSION_ARTIFACT authorization binding is required")
+    try:
+        bound_path = Path(bound).expanduser().resolve(strict=True)
+    except OSError as exc:
+        raise SessionAccessError("the authorized current-session artifact binding is unavailable") from exc
+    if path != bound_path:
+        raise SessionAccessError("the explicit artifact does not match LIMEN_CURRENT_SESSION_ARTIFACT")
+    return path
 
 
-def walk(residue: list[dict], cap: int, dry: bool, *, allow_old_codex_resume: bool = False) -> None:
-    import subprocess
+def sweep(*_args, **_kwargs) -> list[dict]:
+    raise SessionControlUnsupported("broad cross-session census is unsupported")
 
-    give_up = int(os.environ.get("LIMEN_SESSION_WALK_GIVE_UP", "2"))
-    timeout_s = int(os.environ.get("LIMEN_SESSION_WALK_TIMEOUT", "900"))
-    counts = _walk_counts()
-    eligible = []
-    blocked = []
-    for row in residue:
-        if counts.get(row["sid"], 0) >= give_up:
-            continue
-        if stale_codex_resume_blocked(row, allow_old_codex_resume=allow_old_codex_resume):
-            blocked.append(row)
-            continue
-        eligible.append(row)
-    targets = eligible[:cap]
-    print(f"[walk] {len(targets)} session(s) within cap={cap} (give_up={give_up})")
-    for row in blocked:
-        print(f"  SKIP stale codex {row['sid'][:8]}: fresh bounded packet required")
-    for r in targets:
-        cwd = r["cwd"] if r["cwd"] and Path(r["cwd"]).is_dir() else str(HOME)
-        if r["vendor"] == "claude":
-            cmd = ["claude", "--resume", r["sid"], "-p", WALK_PROMPT]
-        else:
-            cmd = ["codex", "exec", "resume", r["sid"], WALK_PROMPT]
-        if dry:
-            print(f"  DRY would walk {r['vendor']} {r['sid'][:8]} ({(r['purpose'] or '')[:48]})")
-            continue
-        print(f"  walking {r['vendor']} {r['sid'][:8]} ({(r['purpose'] or '')[:48]}) …")
-        ok = False
-        try:
-            cp = subprocess.run(cmd, cwd=cwd, timeout=timeout_s, capture_output=True, text=True)
-            ok = cp.returncode == 0
-        except Exception as e:
-            print(f"    walk failed: {e}")
-        with WALK_JOURNAL.open("a") as fh:
-            fh.write(json.dumps({"ts": int(time.time()), "walked": r["sid"], "vendor": r["vendor"], "ok": ok}) + "\n")
-        print(f"    -> {'finished' if ok else 'errored'} (journaled)")
+
+def walk(*_args, **_kwargs) -> None:
+    raise SessionControlUnsupported("cross-session resumption is unsupported")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--check", action="store_true", help="exit 1 if user-session residue exists")
-    ap.add_argument("--residue-cap", type=int, default=int(os.environ.get("LIMEN_WALK_RESIDUE_CAP", "500")))
-    ap.add_argument("--walk", type=int, default=0, metavar="N", help="resume the N newest residue sessions")
-    ap.add_argument("--dry-walk", action="store_true", help="preview the walk without resuming")
-    ap.add_argument(
-        "--allow-old-codex-resume",
-        action="store_true",
-        help="explicit bounded-packet override for resuming Codex sessions older than the current local day",
-    )
+    ap.add_argument("--session-artifact", help="exported current-invocation JSONL outside vendor runtime roots")
+    ap.add_argument("--vendor", choices=("claude", "codex"), help="format of the authorized artifact")
+    ap.add_argument("--check", action="store_true", help="exit 1 if this artifact ends with unresolved input")
+    ap.add_argument("--write", action="store_true", help="write a redacted single-artifact receipt")
+    ap.add_argument("--walk", nargs="?", const="1", help=argparse.SUPPRESS)
+    ap.add_argument("--dry-walk", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--allow-old-codex-resume", action="store_true", help=argparse.SUPPRESS)
     args = ap.parse_args()
 
-    rows = sweep()
-    counts: dict[str, dict[str, int]] = {}
-    for r in rows:
-        counts.setdefault(r["vendor"], {}).setdefault(r["verdict"], 0)
-        counts[r["vendor"]][r["verdict"]] += 1
-
-    seen: set[str] = set()
-    residue = []
-    for r in sorted(
-        (r for r in rows if r["verdict"] in ("needs_input", "mid_flight")),
-        key=lambda r: -r["mtime"],
-    ):
-        if r["sid"] in seen:
-            continue
-        seen.add(r["sid"])
-        residue.append(r)
-    residue = residue[: args.residue_cap]
-
-    LOGS.mkdir(parents=True, exist_ok=True)
-    (LOGS / "session-walk-census.json").write_text(
-        json.dumps({"generated": int(time.time()), "counts": counts, "residue": residue}, indent=1)
-    )
-    voice = LOGS / ".voice"
-    voice.mkdir(parents=True, exist_ok=True)
-    (voice / "session-walk").write_text(
-        f"session-walk: {sum(v for c in counts.values() for v in c.values())} sessions, {len(residue)} residue\n"
-    )
-    md = ["# SESSION-WALK residue — unwalked user sessions (newest first)", ""]
-    for r in residue:
-        ts = time.strftime("%Y-%m-%d", time.localtime(r["mtime"]))
-        md.append(f"- **{r['vendor']}** {ts} `{r['verdict']}` — {r['purpose'] or '(no title)'}")
-        resume = resume_display(r, allow_old_codex_resume=args.allow_old_codex_resume)
-        md.append(f"    `{resume}`   (cwd {r['cwd'] or '?'})")
-    (LOGS / "session-walk-residue.md").write_text("\n".join(md) + "\n")
-
-    print(json.dumps(counts, indent=1))
-    print(f"residue: {len(residue)} unwalked user sessions -> logs/session-walk-residue.md")
-    if args.walk:
-        walk(residue, args.walk, dry=args.dry_walk, allow_old_codex_resume=args.allow_old_codex_resume)
-    if args.check and residue:
+    if args.walk is not None or args.dry_walk or args.allow_old_codex_resume:
+        print("UNSUPPORTED: cross-session census/resumption is disabled", file=sys.stderr)
+        return 64
+    if not args.vendor:
+        print("BLOCKED: --vendor is required for the authorized artifact", file=sys.stderr)
+        return 64
+    try:
+        artifact = authorized_artifact(args.session_artifact)
+        row = classify_claude(artifact) if args.vendor == "claude" else classify_codex(artifact)
+    except (OSError, SessionAccessError) as exc:
+        print(f"BLOCKED: {exc}", file=sys.stderr)
+        return 64
+    receipt = {
+        "schema": "limen.current_session_artifact_check.v1",
+        "vendor": row["vendor"],
+        "session_ref_sha256": hashlib.sha256(str(row["sid"]).encode("utf-8")).hexdigest(),
+        "verdict": row["verdict"],
+        "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+    }
+    print(json.dumps(receipt, sort_keys=True))
+    if args.write:
+        LOGS.mkdir(parents=True, exist_ok=True)
+        (LOGS / "current-session-artifact-check.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    if args.check and row["verdict"] in {"needs_input", "mid_flight"}:
         return 1
     return 0
 

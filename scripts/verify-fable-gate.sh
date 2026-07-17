@@ -36,21 +36,26 @@ now = dt.datetime.now(dt.timezone.utc)
 print((now - dt.timedelta(days=now.weekday())).date().isoformat())
 PYEOF
 )"
+OBSERVED="$("${PY[@]}" - <<'PYEOF'
+import datetime as dt
+print(dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"))
+PYEOF
+)"
 
 echo "── 1. over-cap gate downgrades an accepted Fable selection to Opus ──"
 # Seed a mock OVER-CAP balance + a valid (non-reserve) acceptance receipt, then assert the shared
 # resolver returns opus for a Fable tier, and reserve-band behavior (40–50%) passes only reserve.
 cat > "$TMP/fable-allotment-over.json" <<JSON
-{"week":"$MONDAY","spent_pct":100.0,"deliberate_cap":40,"hard_cap":50,"over_cap":true}
+{"schema":"limen.fable_balance.v1","observed_at":"$OBSERVED","week":"$MONDAY","spent_tokens":100,"spent_pct":100.0,"deliberate_cap":40,"hard_cap":50,"over_cap":true,"source":"transcript-token-sum","meter_ready":true}
 JSON
 cat > "$TMP/fable-allotment-band.json" <<JSON
-{"week":"$MONDAY","spent_pct":45.0,"deliberate_cap":40,"hard_cap":50,"over_cap":false}
+{"schema":"limen.fable_balance.v1","observed_at":"$OBSERVED","week":"$MONDAY","spent_tokens":45,"spent_pct":45.0,"deliberate_cap":40,"hard_cap":50,"over_cap":false,"source":"transcript-token-sum","meter_ready":true}
 JSON
 cat > "$TMP/accept.json" <<JSON
-{"schema":"limen.fable_acceptance.v1","week":"$MONDAY","category":"governance","percent":10}
+{"schema":"limen.fable_acceptance.v1","week":"$MONDAY","category":"governance","percent":10,"sources":["docs/fable-allotment.md"],"verification":["scripts/verify-fable-gate.sh"],"mode":"plan-only","deliverable":"continuation-capsule","builder_tier_max":"opus","motion_receipt_deadline_seconds":5400}
 JSON
 cat > "$TMP/reserve.json" <<JSON
-{"schema":"limen.fable_acceptance.v1","week":"$MONDAY","category":"reserve","percent":5}
+{"schema":"limen.fable_acceptance.v1","week":"$MONDAY","category":"reserve","percent":5,"sources":["docs/fable-allotment.md"],"verification":["scripts/verify-fable-gate.sh"],"mode":"plan-only","deliverable":"continuation-capsule","builder_tier_max":"opus","motion_receipt_deadline_seconds":5400,"reserve_unlocked":true}
 JSON
 
 LIMEN_FABLE_BALANCE_PATH="$TMP/fable-allotment-over.json" \

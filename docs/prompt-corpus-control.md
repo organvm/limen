@@ -106,7 +106,7 @@ unresolved units remain durable tombstones and owner-routed gaps across unchange
 reappear with parsed or excluded resolution proof. Cursor proposals require an exact revision and
 digest pair; stale proposals are rejected without changing private cursor bytes.
 An exact `all` result is not self-certifying: the scanner issues an in-process attestation which the
-writer seals as a private, read-only, SHA-bound `limen.prompt-source-scan.v1` receipt. That receipt
+writer seals as a private, read-only, SHA-bound `limen.prompt-source-scan.v2` receipt. That receipt
 binds the running scanner code, adapter contract, CAS base, discovery specification, source manifest,
 container generation, and parsed/excluded/adapted custody. The checker re-discovers those roots and
 re-stats strong file and SQLite/WAL identities; a new, deleted, replaced, or racing unit makes exact
@@ -162,7 +162,7 @@ tracked JSON and Markdown projections contain only opaque IDs, aggregate counts,
 dispositions, owner routes, and canonical receipt references.
 
 `docs/prompt-authority-seal.json` is the bounded publication receipt for source-corpus authority. Its
-schema is `limen.prompt-authority-seal.v1`; it contains only fixed numeric aggregates, safe family and
+schema is `limen.prompt-authority-seal.v2`; it contains only fixed numeric aggregates, safe family and
 reason labels, and SHA-256 bindings to the semantic projection, cursor, manifests, adapter contract,
 sealed scan, bounded family aggregates, and exact public-projection digest. Alias blocker counts use
 the contract-owned fixed reason taxonomy and any nonzero blocker makes the derived authority verdict
@@ -172,6 +172,13 @@ contains prompt bodies, source locators, private paths, session identifiers, or 
 writer refuses any receipt over 64 KiB. `--require-scope all` requires the seal's derived
 `authority_ready` verdict, not only the textual scope labels. A zero-change rerun must leave its bytes
 and modification time unchanged.
+
+The v2 source-scan receipt binds `last_scan_at` into the attested payload. The v2 authority seal and
+public projection bind a fixed-schema freshness receipt containing only evaluation time, scan time,
+expiry, the 24-hour bound, and a controlled reason. The writer supplies the evaluation time at its
+update/rebind boundary; pure seal validation never reads the wall clock. A stale exact-all cursor may
+still be mechanically re-bound, but its bound freshness verdict is false and therefore
+`authority_ready=false`.
 
 An exclusive writer lock serializes updates; journal appends are flushed before atomic projection
 replacement, and the compact checkpoint is written last. Stable occurrence and atom IDs plus a

@@ -19,7 +19,7 @@ This is a candidate packet, not acceptance. It does not write
 - Decision: `allowed-candidate-packet-only`
 - Repo in value tier: `true`
 - Prompt family: `worktree_lifecycle` score `32`
-- Candidate lane: `codex-conductor`
+- Candidate lane: `peer-coordination`
 - Delete gate: `standing-grant-or-human-acceptance-then-reclaim-worktrees`
 
 Authority sources: `value-repos.json`, `cli/src/limen/census.py`, `cli/src/limen/capacity.py`, `cli/src/limen/model_selection.py`, `scripts/score-dispatch.py`, `scripts/session-attack-paths.py`, `scripts/reclaim-worktrees.py`, `docs/worktree-reclaim-acceptance.md`

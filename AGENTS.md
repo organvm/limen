@@ -83,6 +83,28 @@ human gates: irreversible deletion of personal data, credential or account actio
 public identity claims, legal/medical/financial commitments, or product/values decisions that cannot
 be derived from existing doctrine.
 
+## Co-equal Peer-Keepers
+
+Every canonical agent identity is a **co-equal peer keeper**; `any` is only a routing sentinel.
+No provider, model, tool, agent name, or dispatch target is inherently senior, subordinate, or the
+exclusive owner of a lane. File, registry, organ, and repository ownership names responsibility for
+a durable surface; it does not make an executing agent the work's owner.
+
+- The `target_agent` field and provider/model selection are **routing metadata only**. They express
+  reachability, capability, availability, cost, or execution fit — never ownership, rank, dignity,
+  or protocol authority.
+- **Executor attribution records who performed an attempt; it does not confer ownership**, rank, or
+  superior authority over the task, result, receipt, or later repair. Every peer may inspect and
+  continue shared work within the same protocol and acceptance gates.
+- TABVLARIVS is the **single-writer serialization boundary** for mutable board projections. It
+  prevents write races by folding peer-submitted packets/events through one sanctioned writer; it
+  is **not a superior authority**, privileged agent class, or claim that one keeper owns the work.
+- Concurrent peers owe one another **least-disruptive continuity**. Preserve live sessions,
+  processes, worktrees, branches, and receipts, and work in isolation. A peer must never inspect
+  another peer's private runtime, nor pause, stop, close, signal, retune, restart, or reroute another
+  live peer. A safety gate may deny the current peer's own launch or a shared effector; it never grants
+  control over somebody else's session.
+
 ## Session Discipline
 
 Four cross-agent disciplines enforced by `scripts/check-agent-docs.py` (check M). Each is stated
@@ -544,7 +566,8 @@ checks.
 ### Claude
 - You are Claude. Read this file as part of your startup instructions.
 - You have access to the full filesystem — `$LIMEN_ROOT/tasks.yaml` is a regular file.
-- Support `limen` as a subagent: when asked, run the limen CLI or read/write tasks.yaml directly.
+- When routed a Limen packet, use the Limen CLI or the sanctioned board-writer interface. Claude is
+  a co-equal peer, never another keeper's subagent or owner.
 - **Fleet launches never wait on permissions.** Limen-owned non-interactive Claude dispatch uses
   `--permission-mode dontAsk` with an explicit file-mutation allowlist. Bash/network policy remains
   owned by effective user/project/managed rules; Limen does not inject a blanket shell grant. A tool
@@ -553,7 +576,7 @@ checks.
   `acceptEdits` or `auto` (both can prompt), or `bypassPermissions` (unsafe on the host). This fleet
   contract does not change the operator's settings or any interactive/user-started Claude session.
 - **Tier subagent fan-out by job.** Task/Workflow subagents inherit the session model; pick each agent's tier by its job (`.claude/agents/` types, or an explicit `model`/`effort`) so trivial workers never ride Opus. Authority: `cli/src/limen/model_selection.py`; details in CLAUDE.md → Parallel Exploration & Fan-Out.
-- **Fable plans, cheaper tiers build.** Fable's role is PLAN-ONLY: it does the deep analysis, emits a build packet into a worktree, and hands off to a cheaper tier (Opus/Sonnet/Haiku) that builds; building on Fable is prohibited. It is acceptance-gated (`scripts/fable-allotment.py accept ...`, `LIMEN_FABLE_ACCEPTANCE=<receipt>`) AND live runtime-capped against actual weekly tokens burned (40% deliberate / 50% hard, `scripts/fable-allotment.py balance` → `logs/fable-allotment.json`, enforced in `cli/src/limen/model_selection.py`). Full doctrine + caps: `docs/fable-allotment.md`.
+- **Fable plans, cheaper tiers build.** Fable's role is PLAN-ONLY: it does the deep analysis, emits one tracked continuation capsule, and hands implementation to provider Auto constrained to a non-Fable tier no higher than Opus; building on Fable is prohibited. A Fable task must carry `mode:plan-only`, a current plan-bound acceptance (`scripts/fable-allotment.py accept ...`, `LIMEN_FABLE_ACCEPTANCE=<receipt>`), and a fresh/source-ready `limen.fable_balance.v1` receipt. Missing, stale, malformed, or dark cap state closes the Fable rung. Dispatch enforces the capsule-only prompt/tool/diff boundary at launch, periodically for its own process group, and before closeout; it never controls another live peer session. Ninety minutes without a durable receipt stops only that launch and packetizes its residual. Full doctrine + caps: `docs/fable-allotment.md`.
 
 ### Gemini
 - You are Gemini CLI (v0.44.1+). Read `$LIMEN_ROOT/tasks.yaml` at session start.
@@ -565,7 +588,8 @@ checks.
 - You are Jules (Google async coding agent). You do not have interactive sessions.
 - Your dispatch is managed by `limen dispatch --agent jules` or the scheduler.
 - Read `tasks.yaml` to understand the task queue; your harvest cycle checks results.
-- You are the workhorse: 100 runs/day budget is primarily allocated to you.
+- You are an asynchronous remote peer. Capacity and routing derive from current live usage evidence;
+  a larger quota does not make Jules subordinate, primary, or the owner of another keeper's work.
 
 ### OpenCode
 - You are OpenCode. Read `$LIMEN_ROOT/tasks.yaml` at session start.

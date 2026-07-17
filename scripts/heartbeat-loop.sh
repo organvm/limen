@@ -55,7 +55,7 @@ else
 fi
 # NON-BYPASSABLE Claude model chokepoint. Capture the REAL `claude` (resolved via the PATH set
 # above) BEFORE prepending the shim dir, then put the shim FIRST so every fleet-spawned `claude`
-# — dispatch lanes, quicken, converge, subagent fan-out — routes through it. The shim injects the
+# — dispatch lanes, converge, subagent fan-out — routes through it. The shim injects the
 # earned floor when a spawn carries no --model, so nothing silently inherits the account-default
 # Opus 4.8 (+auto-1M) that drove the 6/25 usage bleed; spawns that earned more pass --model and
 # ride through untouched. Interactive shells never run this script, so the human's Opus is
@@ -187,7 +187,6 @@ C_MAIL="${LIMEN_BEAT_MAIL:-6}"         # COMMS (sweep inbound mail + rebuild the
 C_CONTINUATION="${LIMEN_BEAT_CONTINUATION:-6}" # KEEP GOING (reduction -> photos proof -> creative proxy -> reduction)
 C_REPORT="${LIMEN_BEAT_REPORT:-12}"    # RELAY (conducting report; self-limits to once per usage-day)
 C_INSIGHT_CADENCE="${LIMEN_BEAT_INSIGHT_CADENCE:-4}" # INSIGHT-CADENCE (auto-reports on four tiers)
-C_QUICKEN="${LIMEN_BEAT_QUICKEN:-4}"   # QUICKEN (give stalled FleetView sessions life to finish)
 C_POSITIONING="${LIMEN_BEAT_POSITIONING:-12}"  # POSITIONING (refresh inbound-magnet surfaces; gated OFF)
 C_AVTOPOIESIS="${LIMEN_BEAT_AVTOPOIESIS:-12}"  # AVTOPOIESIS (is each door alive? past/present/future — distance-from-ideal; gated OFF)
 C_EVOCATOR="${LIMEN_BEAT_EVOCATOR:-6}"   # EVOCATOR (the summoner — keep canonical truths present in every channel: FLAME/beat, corpus, memory)
@@ -430,9 +429,9 @@ while true; do
 
       # RECLAIM is intentionally outside the queue lock. It can spend minutes scanning
       # worktrees with git status/cherry; holding the board mutex there starves harvest/refill.
-      if [ "${DRAIN_VOICE_DUE:-0}" = "1" ] && [ "${LIMEN_RECLAIM:-1}" = "1" ]; then
+      if [ "${DRAIN_VOICE_DUE:-0}" = "1" ] && [ "${LIMEN_RECLAIM:-0}" = "1" ]; then
         reclaim_args=()
-        [ "${LIMEN_RECLAIM_APPLY:-1}" = "1" ] && reclaim_args+=(--apply)
+        [ "${LIMEN_RECLAIM_APPLY:-0}" = "1" ] && reclaim_args+=(--apply)
         PYTHONPATH="$PYTHONPATH" timeout "${LIMEN_RECLAIM_GENERATED_TIMEOUT:-120}" python3 "$LIMEN_ROOT/scripts/reclaim-worktrees.py" --generated-only "${reclaim_args[@]}" 2>&1 | tail -4 || true
         PYTHONPATH="$PYTHONPATH" timeout "${LIMEN_RECLAIM_TIMEOUT:-300}" python3 "$LIMEN_ROOT/scripts/reclaim-worktrees.py" "${reclaim_args[@]}" 2>&1 | tail -4 || true
       fi
@@ -493,14 +492,15 @@ while true; do
   # then flip phantom → done/open so the funnel self-clears and the open pool refills each cycle.
   due_voice heal "$C_HEAL" && { python3 "$LIMEN_ROOT/scripts/verify-dispatch.py" 2>&1 | tail -1 || true
                       python3 "$LIMEN_ROOT/scripts/heal-dispatch.py" --apply 2>&1 | tail -1 || true
-                      # LEDGER — weigh the RETURN on every newly-resolved task (the credit side), then
-                      # roll up the value verdict (which lane earns its keep / what was sunk money).
-                      python3 "$LIMEN_ROOT/scripts/score-dispatch.py" 2>&1 | tail -1 || true
-                      python3 "$LIMEN_ROOT/scripts/ledger.py" 2>&1 | tail -1 || true
+                      # VALUE — legacy board-event scoring is not execution attribution and has no
+                      # actuator. The registry-wired lane-fitness sensor separately folds immutable
+                      # limen.execution_trajectory.v1 attempts in shadow mode; do not create new
+                      # score-dispatch/ledger credit claims here.
                       # SELF-HEAL — the repair FACTORY (complements heal-dispatch's phantom-reconcile): classify the
                       # fleet's REFUSED PRs (CI-red / conflicting) and emit HEAL-cifix / HEAL-rebase tasks so the
-                      # router+dispatcher fix them and merge-drain then LANDS them. merge-drain is the bouncer; THIS is
-                      # the factory. Silent since 2026-06-30 — the machine worked, but no beat ever turned the crank, so
+                      # router+dispatcher fix them and merge-drain previews their candidacy. A separate exact-target
+                      # signed authorization is required for any merge effect; THIS is only the repair factory.
+                      # Silent since 2026-06-30 — the machine worked, but no beat ever turned the crank, so
                       # DIRTY/BLOCKED PRs piled up read as "blockers" instead of becoming work. Bounded rotating --scan
                       # window + already-queued dedup = idempotent; self-acquires the queue-lock (safe outside the daemon
                       # lock, like heal-dispatch) and skips cleanly when the daemon holds it; network → timeout-wrapped,
@@ -545,7 +545,7 @@ while true; do
   python3 "$LIMEN_ROOT/scripts/emit-tick.py" 2>&1 | tail -1 || true   # tick voice — every beat
   stamp tick
   # PROPRIOCEPTION for the DISCOVERED organs that fire every beat but never stamped, so the health
-  # face read "unknown" for them (sync/web/censor/insight_cadence/report/quicken/corpus_feed). `play`
+  # face read "unknown" for them (sync/web/censor/insight_cadence/report/corpus_feed). `play`
   # is a pure due-check (the green organs already call it a 2nd time to stamp, e.g. `play "$C_FEED" &&
   # stamp feed`), so this records real liveness on each organ's own cadence. Placed BEFORE the render
   # below so the tick greens them the SAME beat. Fail-open like every other stamp. ([[no-never-happens-again]])
@@ -554,7 +554,6 @@ while true; do
   play "$C_CENSOR"           && stamp censor
   play "$C_INSIGHT_CADENCE"  && stamp insight_cadence
   play "$C_REPORT"           && stamp report
-  play "$C_QUICKEN"          && stamp quicken
   play "$C_CORPUS_FEED"      && stamp corpus_feed
   python3 "$LIMEN_ROOT/scripts/organ-health.py" 2>&1 | tail -1 || true   # PROPRIOCEPTION — EVERY beat: the health face must never lag the organs it watches. route stamps on C_BALANCE=2, feed on C_FEED=3, but C_WEB=4, so on the old web cadence the face showed stale "unknown" for rungs that were already green (and a restart-to-beat-2 froze it until beat 4). Cheapest renderer: read-only, no network, can't time out — belongs with the tick.
   [ "${LIMEN_VIGILIA:-1}" = "1" ] && { python3 -m limen.vigilia beat 2>&1 | tail -1 || true; stamp vigilia; }   # VIGILIA autonomic executive — record vitals/continuity/integrity to the seat (read-only, fail-open)
@@ -646,16 +645,9 @@ while true; do
                         stamp walls; }
   play "$C_REPORT"  && python3 "$LIMEN_ROOT/scripts/conducting-report.py" 2>&1 | tail -1 || true   # RELAY: did the fleet burn its full force? (once/day push — so you never have to ask)
   play "$C_WEB"     && bash "$LIMEN_ROOT/scripts/refresh-web.sh" >>"$LIMEN_ROOT/logs/refresh-web.log" 2>&1 || true  # NO pipe: refresh-web backgrounds the http.server, which can inherit a pipe's write-end and block `tail` on EOF forever → wedged the whole daemon before the first beat (2026-06-23). Redirect to a log instead.   # web auto-refresh (best-effort; money.html is primary)
-  # QUICKEN — a session has a lifecycle that ends in COMPLETION; a sitting (no-movement) FleetView
-  # session is stalled work, not a thing to file away. --apply records the lifecycle + deduped
-  # residue every beat (read-only on sessions, no spend). Breathing — headless `claude --resume` to
-  # finish a stalled purpose — is a token spend, so it is gated OFF behind LIMEN_QUICKEN_BREATHE=1
-  # (his knob); deploy alone never auto-fires resumes. Bounded + fail-open — never gates the beat.
-  if play "$C_QUICKEN"; then
-    python3 "$LIMEN_ROOT/scripts/quicken.py" --apply 2>&1 | tail -2 || true
-    [ "${LIMEN_QUICKEN_BREATHE:-0}" = "1" ] && \
-      python3 "$LIMEN_ROOT/scripts/quicken.py" --breathe all 2>&1 | tail -3 || true
-  fi
+  # Peer-session runtime is not a heartbeat input. The beat never enumerates or resumes Claude,
+  # Codex, or another provider's sessions. A current invocation may explicitly export and inspect
+  # only its own artifact through scripts/quicken.py's capability-bound interface.
   # POSITIONING — keep the inbound-magnet surfaces fresh as seeds/repos drift: the form/operation
   # buyer pages + the two-door front door + the discoverability recommendations. No --fetch (no
   # network, can't time out on a stuck API); writes ONLY the public docs/positioning artifacts, and

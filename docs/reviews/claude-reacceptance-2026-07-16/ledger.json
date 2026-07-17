@@ -1,0 +1,5293 @@
+{
+  "schema": "limen.reacceptance_ledger.v1",
+  "refreshed_at": "2026-07-16T21:32:51Z",
+  "scope": {
+    "starts_at": "2026-07-12T15:37:35Z",
+    "sessions": 29,
+    "workflows": 11,
+    "pull_requests": 65,
+    "rows": 105
+  },
+  "summary": {
+    "accepted": 0,
+    "repair_required": 105,
+    "reverted": 0,
+    "superseded": 0,
+    "current_p1": 28,
+    "current_p2": 180,
+    "current_unclassified": 0,
+    "release_ready": false
+  },
+  "completion_gates": {
+    "continuation_fixed_point": {
+      "status": "not_verified",
+      "predicate": null,
+      "receipt": null
+    },
+    "no_stale_inflight_custody": {
+      "status": "not_verified",
+      "predicate": null,
+      "receipt": null
+    },
+    "open_prs_closed_or_reaccepted": {
+      "status": "not_verified",
+      "predicate": null,
+      "receipt": null
+    },
+    "privacy_containment_terminal": {
+      "status": "not_verified",
+      "predicate": null,
+      "receipt": null
+    },
+    "session_value_verified": {
+      "status": "not_verified",
+      "predicate": null,
+      "receipt": null
+    }
+  },
+  "rows": [
+    {
+      "id": "pull_request:organvm/_agent#20",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/_agent#20:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "2f98a188cf8c88349fbb4426b5ed46a128654cba",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 3,
+        "unclassified": 0,
+        "unresolved_current": 3,
+        "urls": [
+          "https://github.com/organvm/_agent/pull/20#discussion_r3588573655",
+          "https://github.com/organvm/_agent/pull/20#discussion_r3588573660",
+          "https://github.com/organvm/_agent/pull/20#discussion_r3588573672"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/_agent/pull/20",
+        "merge_commit": "58b3315fa302c70895d69d4b20a0c14048486799",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T15:26:49Z",
+        "closed_at": "2026-07-15T15:26:49Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/_agent"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/application-pipeline#77",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/application-pipeline#77:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "7c8f11fa84a460f89d6e32b90cc1713d0e011e44",
+      "side_effects": {
+        "status": "observed",
+        "observed": [
+          "private_material_committed_to_public_history"
+        ],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 3,
+        "unclassified": 0,
+        "unresolved_current": 3,
+        "urls": [
+          "https://github.com/organvm/application-pipeline/pull/77#discussion_r3588283336",
+          "https://github.com/organvm/application-pipeline/pull/77#discussion_r3588283345",
+          "https://github.com/organvm/application-pipeline/pull/77#discussion_r3588283352"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/application-pipeline/pull/77",
+        "merge_commit": "23fb55ab688d8586512ce03ebd4ca68ce0f23ad7",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T14:40:08Z",
+        "closed_at": "2026-07-15T14:40:08Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/application-pipeline"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/application-pipeline#78",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/application-pipeline#78:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "3928e537a0a134c952431ad9edd0c59424b30b91",
+      "side_effects": {
+        "status": "observed",
+        "observed": [
+          "current_tree_cleanup_did_not_remove_public_history"
+        ],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 1,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 3,
+        "urls": [
+          "https://github.com/organvm/application-pipeline/pull/78#discussion_r3588270905",
+          "https://github.com/organvm/application-pipeline/pull/78#discussion_r3588270912",
+          "https://github.com/organvm/application-pipeline/pull/78#discussion_r3588270918"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/application-pipeline/pull/78",
+        "merge_commit": "ecc43aaa25e7aa4628d1c25d42e27fe62d867a1e",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T14:43:22Z",
+        "closed_at": "2026-07-15T14:43:22Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/application-pipeline"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/daily-engine#17",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/daily-engine#17:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "456f964cba751d0fa99476bd1776c9660a940efc",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 1,
+        "unclassified": 0,
+        "unresolved_current": 1,
+        "urls": [
+          "https://github.com/organvm/daily-engine/pull/17#discussion_r3591469649"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/daily-engine/pull/17",
+        "merge_commit": "20fa14b4a3e386279fadacb5c6e29d0e2f3e4377",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T23:33:01Z",
+        "closed_at": "2026-07-15T23:33:01Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/daily-engine"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/daily-engine#19",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/daily-engine#19:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "64ba0e44f040888f518a3723320315606cc3e23a",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 3,
+        "unclassified": 0,
+        "unresolved_current": 3,
+        "urls": [
+          "https://github.com/organvm/daily-engine/pull/19#discussion_r3591557734",
+          "https://github.com/organvm/daily-engine/pull/19#discussion_r3591557735",
+          "https://github.com/organvm/daily-engine/pull/19#discussion_r3591557736"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/daily-engine/pull/19",
+        "merge_commit": "7bc6e1339eece1089b380550a68b9a6eb4408827",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T23:52:17Z",
+        "closed_at": "2026-07-15T23:52:17Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/daily-engine"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/daily-engine#21",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/daily-engine#21:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "eca6da61c3b067477b951927b5dcf08da83f2c81",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 1,
+        "unclassified": 0,
+        "unresolved_current": 1,
+        "urls": [
+          "https://github.com/organvm/daily-engine/pull/21#discussion_r3597145467"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/daily-engine/pull/21",
+        "merge_commit": "9eda9bf00e42cf0509f151055819dc2fe354262e",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T16:13:18Z",
+        "closed_at": "2026-07-16T16:13:18Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/daily-engine"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/daily-engine#22",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/daily-engine#22:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "225f9bc6ff86a0ee9b05fc70c63f99fc346ff674",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 7,
+        "unclassified": 0,
+        "unresolved_current": 7,
+        "urls": [
+          "https://github.com/organvm/daily-engine/pull/22#discussion_r3597203851",
+          "https://github.com/organvm/daily-engine/pull/22#discussion_r3597203856",
+          "https://github.com/organvm/daily-engine/pull/22#discussion_r3597203858",
+          "https://github.com/organvm/daily-engine/pull/22#discussion_r3597203861",
+          "https://github.com/organvm/daily-engine/pull/22#discussion_r3597203866",
+          "https://github.com/organvm/daily-engine/pull/22#discussion_r3597203871",
+          "https://github.com/organvm/daily-engine/pull/22#discussion_r3597203877"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/daily-engine/pull/22",
+        "merge_commit": "94f401ba18d0c26672ca0607112ec9fcc93da542",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T16:21:14Z",
+        "closed_at": "2026-07-16T16:21:15Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/daily-engine"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/daily-engine#23",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/daily-engine#23:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "6b2380173f3e552971a4de0c0b69ae8baa2f68b6",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 3,
+        "unclassified": 0,
+        "unresolved_current": 3,
+        "urls": [
+          "https://github.com/organvm/daily-engine/pull/23#discussion_r3597296111",
+          "https://github.com/organvm/daily-engine/pull/23#discussion_r3597296123",
+          "https://github.com/organvm/daily-engine/pull/23#discussion_r3597296129"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/daily-engine/pull/23",
+        "merge_commit": "e5ba13f3c61ecdddf4d0c56e19e006c675d9a819",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T16:36:16Z",
+        "closed_at": "2026-07-16T16:36:17Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/daily-engine"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/daily-engine#24",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/daily-engine#24:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "fdfdd2ab90bf3244b6fbe2d45c1c9917afd5c81c",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 6,
+        "unclassified": 0,
+        "unresolved_current": 6,
+        "urls": [
+          "https://github.com/organvm/daily-engine/pull/24#discussion_r3597710127",
+          "https://github.com/organvm/daily-engine/pull/24#discussion_r3597710134",
+          "https://github.com/organvm/daily-engine/pull/24#discussion_r3597710143",
+          "https://github.com/organvm/daily-engine/pull/24#discussion_r3597710146",
+          "https://github.com/organvm/daily-engine/pull/24#discussion_r3597710148",
+          "https://github.com/organvm/daily-engine/pull/24#discussion_r3597710150"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/daily-engine/pull/24",
+        "merge_commit": "00988b150cfdbb9006a2a53ec60c7b110006f535",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T17:40:30Z",
+        "closed_at": "2026-07-16T17:40:30Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/daily-engine"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/domus-genoma#302",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/domus-genoma#302:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "55bb963a060faa2b7cf9e8aa048e9595d45678bd",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 5,
+        "unclassified": 0,
+        "unresolved_current": 5,
+        "urls": [
+          "https://github.com/organvm/domus-genoma/pull/302#discussion_r3588073983",
+          "https://github.com/organvm/domus-genoma/pull/302#discussion_r3588073991",
+          "https://github.com/organvm/domus-genoma/pull/302#discussion_r3588073999",
+          "https://github.com/organvm/domus-genoma/pull/302#discussion_r3588074001",
+          "https://github.com/organvm/domus-genoma/pull/302#discussion_r3588074007"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/domus-genoma/pull/302",
+        "merge_commit": "a91b28369e967e1e3a3360d7052e6fa632a22cd2",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T14:17:24Z",
+        "closed_at": "2026-07-15T14:17:24Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/domus-genoma"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/domus-genoma#304",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/domus-genoma#304:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "79744e42a5f0276069b2c1cfd259ed7d8535cc5a",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 0,
+        "unclassified": 0,
+        "unresolved_current": 0,
+        "urls": []
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "open",
+        "url": "https://github.com/organvm/domus-genoma/pull/304",
+        "merge_commit": null,
+        "review_decision": null,
+        "draft": true,
+        "merged_at": null,
+        "closed_at": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/domus-genoma"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/domus-genoma#305",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/domus-genoma#305:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "c64e0a67463ea4ad4e834d7bdc3de49c6e092c92",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 1,
+        "p2": 0,
+        "unclassified": 0,
+        "unresolved_current": 1,
+        "urls": [
+          "https://github.com/organvm/domus-genoma/pull/305#discussion_r3595554480"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "open",
+        "url": "https://github.com/organvm/domus-genoma/pull/305",
+        "merge_commit": null,
+        "review_decision": null,
+        "draft": true,
+        "merged_at": null,
+        "closed_at": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/domus-genoma"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1076",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1076:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "d5b34f091a199358022a68f42bc4a25649f39dd9",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 4,
+        "unclassified": 0,
+        "unresolved_current": 4,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1076#discussion_r3587845044",
+          "https://github.com/organvm/limen/pull/1076#discussion_r3587845059",
+          "https://github.com/organvm/limen/pull/1076#discussion_r3587958747",
+          "https://github.com/organvm/limen/pull/1076#discussion_r3587958754"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1076",
+        "merge_commit": "9a4225da9cbb8ffcf613147f5d521622e1b0b337",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T14:10:35Z",
+        "closed_at": "2026-07-15T14:10:36Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1077",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1077:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "e207e8deaebc6b38c6f760ee2836b10d543d81e8",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 3,
+        "unclassified": 0,
+        "unresolved_current": 3,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1077#discussion_r3587884597",
+          "https://github.com/organvm/limen/pull/1077#discussion_r3587884603",
+          "https://github.com/organvm/limen/pull/1077#discussion_r3587884616"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1077",
+        "merge_commit": "15ec482a53739e8252ca00274ff155d7bfb1ed44",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T14:19:09Z",
+        "closed_at": "2026-07-15T14:19:09Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1080",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1080:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "37b9002a6714a105c7478eaa83b0708a37e790f3",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 2,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1080#discussion_r3588075635",
+          "https://github.com/organvm/limen/pull/1080#discussion_r3588075640"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1080",
+        "merge_commit": "493f6d59382e2bbbcdc9d1ca037877860c21db2f",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T14:48:30Z",
+        "closed_at": "2026-07-15T14:48:30Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1081",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1081:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "d193b8cea4bb3bda43e8e2783606ca0632eb4b10",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 2,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1081#discussion_r3588130047",
+          "https://github.com/organvm/limen/pull/1081#discussion_r3588130062"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1081",
+        "merge_commit": "383cee7ce9120a8b34bf930734e2397321170317",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T14:48:41Z",
+        "closed_at": "2026-07-15T14:48:41Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1082",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1082:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "ac95eb3e181b4196f5d138ec84c6981b21a0e641",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 5,
+        "unclassified": 0,
+        "unresolved_current": 5,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1082#discussion_r3588154873",
+          "https://github.com/organvm/limen/pull/1082#discussion_r3588154884",
+          "https://github.com/organvm/limen/pull/1082#discussion_r3588154900",
+          "https://github.com/organvm/limen/pull/1082#discussion_r3588154907",
+          "https://github.com/organvm/limen/pull/1082#discussion_r3588154915"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1082",
+        "merge_commit": "b8d0defc4064b78e711dce0b19a9675fe7e355a2",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T14:55:17Z",
+        "closed_at": "2026-07-15T14:55:17Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1083",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1083:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "806429d3441f7ef479361e1160583c8677fc7b02",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 16,
+        "unclassified": 0,
+        "unresolved_current": 16,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588198339",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588198350",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588198358",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588198362",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588198375",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588198383",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588198390",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588198394",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588337746",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588337760",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588337768",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588337774",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588337780",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588514121",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588514126",
+          "https://github.com/organvm/limen/pull/1083#discussion_r3588514133"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1083",
+        "merge_commit": "0471204d228f4e0ee013be808a9dc18c9f7ba70a",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T15:37:32Z",
+        "closed_at": "2026-07-15T15:37:32Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1084",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1084:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "dadd43055f840642c8d628fc5381251b26976b28",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 3,
+        "unclassified": 0,
+        "unresolved_current": 3,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1084#discussion_r3588188756",
+          "https://github.com/organvm/limen/pull/1084#discussion_r3588188762",
+          "https://github.com/organvm/limen/pull/1084#discussion_r3588188769"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1084",
+        "merge_commit": "5d49211d3a9e47af0223a40b1e810b3813ce78e9",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T15:02:31Z",
+        "closed_at": "2026-07-15T15:02:31Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1085",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1085:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "1c3f723eeccde99f225a5a2bb5485b0c6f7387cf",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 2,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1085#discussion_r3588241880",
+          "https://github.com/organvm/limen/pull/1085#discussion_r3588241889"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1085",
+        "merge_commit": "8c7b6bde4b1a1f2c3c4898f20352349a697cbab3",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T16:11:11Z",
+        "closed_at": "2026-07-15T16:11:11Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1086",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1086:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "dd06fa828eda84a5f6ca9fd5ac22c6bbfa57fa11",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 2,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1086#discussion_r3588257036",
+          "https://github.com/organvm/limen/pull/1086#discussion_r3588257048"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1086",
+        "merge_commit": "20d47f0e5755c8121ab65c8ba29611fecbc35de4",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T15:09:32Z",
+        "closed_at": "2026-07-15T15:09:32Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1088",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1088:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "a44d6f0bad75bfa5222b85d59249bb853f7f2662",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 2,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1088#discussion_r3588330360",
+          "https://github.com/organvm/limen/pull/1088#discussion_r3588330365"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1088",
+        "merge_commit": "90994b2fcfc6c89d691eb68ff09a082cdb31c088",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T15:14:19Z",
+        "closed_at": "2026-07-15T15:14:19Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1089",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1089:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "1eacc3f976ba80264229f59e65d1cf4549c12f89",
+      "side_effects": {
+        "status": "observed",
+        "observed": [
+          "privacy_material_publicly_reachable"
+        ],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 1,
+        "p2": 0,
+        "unclassified": 0,
+        "unresolved_current": 1,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1089#discussion_r3588270387"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1089",
+        "merge_commit": "9b1ec00fc5e886af3df80a28739ec5dd2974c09e",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T14:56:50Z",
+        "closed_at": "2026-07-15T14:56:50Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1091",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1091:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "f43d64b3d98b50853edaa18258543d8470fa6430",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 5,
+        "unclassified": 0,
+        "unresolved_current": 5,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1091#discussion_r3588427026",
+          "https://github.com/organvm/limen/pull/1091#discussion_r3588427039",
+          "https://github.com/organvm/limen/pull/1091#discussion_r3588427042",
+          "https://github.com/organvm/limen/pull/1091#discussion_r3588747058",
+          "https://github.com/organvm/limen/pull/1091#discussion_r3588747068"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1091",
+        "merge_commit": "230b1e3edf5dab7bd4e285a36e6817260a89c209",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T23:29:34Z",
+        "closed_at": "2026-07-15T23:29:34Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1092",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1092:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "607c1fcea9c4b7f5118769cdaaf3688fd0e11afa",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 2,
+        "p2": 5,
+        "unclassified": 0,
+        "unresolved_current": 7,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1092#discussion_r3588416306",
+          "https://github.com/organvm/limen/pull/1092#discussion_r3588416312",
+          "https://github.com/organvm/limen/pull/1092#discussion_r3588416319",
+          "https://github.com/organvm/limen/pull/1092#discussion_r3588416328",
+          "https://github.com/organvm/limen/pull/1092#discussion_r3588503125",
+          "https://github.com/organvm/limen/pull/1092#discussion_r3588503134",
+          "https://github.com/organvm/limen/pull/1092#discussion_r3591485821"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1092",
+        "merge_commit": "f1773ab1a5c670895a4617eac5f42460263bdf40",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T00:04:53Z",
+        "closed_at": "2026-07-16T00:04:53Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1095",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1095:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "e514f6ce947c016662bb7747876596b81e3dc062",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 7,
+        "unclassified": 0,
+        "unresolved_current": 7,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1095#discussion_r3588521353",
+          "https://github.com/organvm/limen/pull/1095#discussion_r3588521371",
+          "https://github.com/organvm/limen/pull/1095#discussion_r3588521373",
+          "https://github.com/organvm/limen/pull/1095#discussion_r3588521378",
+          "https://github.com/organvm/limen/pull/1095#discussion_r3588834126",
+          "https://github.com/organvm/limen/pull/1095#discussion_r3588834129",
+          "https://github.com/organvm/limen/pull/1095#discussion_r3588834138"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1095",
+        "merge_commit": "64a6f20e926410edf836ba9079002b24e3f292fc",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T16:23:40Z",
+        "closed_at": "2026-07-15T16:23:40Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1096",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1096:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "05868ece8da8864234be9afa94aa184605b6bc80",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 0,
+        "unclassified": 0,
+        "unresolved_current": 0,
+        "urls": []
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1096",
+        "merge_commit": "75528bc852caa10f9b88739de21f4fc16f4f8f3e",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T15:13:10Z",
+        "closed_at": "2026-07-15T15:13:10Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1097",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1097:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "1b848d19a9928a4391dcefe419a4a6811f438680",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 4,
+        "unclassified": 0,
+        "unresolved_current": 4,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1097#discussion_r3588526686",
+          "https://github.com/organvm/limen/pull/1097#discussion_r3588526697",
+          "https://github.com/organvm/limen/pull/1097#discussion_r3588526703",
+          "https://github.com/organvm/limen/pull/1097#discussion_r3588526709"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1097",
+        "merge_commit": "80c576090b65b874431a3c8856df8f1271c51de1",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T15:51:04Z",
+        "closed_at": "2026-07-15T15:51:04Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1100",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1100:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "7982aaaa4cefc83c4426038151ff8cb7f2c1e9c6",
+      "side_effects": {
+        "status": "observed",
+        "observed": [
+          "media_custody_or_visibility_changed"
+        ],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 1,
+        "unclassified": 0,
+        "unresolved_current": 1,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1100#discussion_r3588827211"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1100",
+        "merge_commit": "47655e030fad7913affda8cbb0ae42014282cb39",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T15:54:35Z",
+        "closed_at": "2026-07-15T15:54:35Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1101",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1101:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "dcc1fc03e0e9028420be1a17379350fcd42672c8",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 0,
+        "unclassified": 0,
+        "unresolved_current": 0,
+        "urls": []
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1101",
+        "merge_commit": "23d614ca0172cd52d02af993ca7ec7f1d915ed5c",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T00:01:51Z",
+        "closed_at": "2026-07-16T00:01:51Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1102",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1102:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "05f3bb30ef8db493373f33cf652d4cbd08a7faec",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 1,
+        "p2": 1,
+        "unclassified": 0,
+        "unresolved_current": 2,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1102#discussion_r3588852310",
+          "https://github.com/organvm/limen/pull/1102#discussion_r3591473220"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1102",
+        "merge_commit": "66fe02116dda3f01137ada941b248c6ede930075",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T00:03:27Z",
+        "closed_at": "2026-07-16T00:03:27Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1103",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1103:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "c770449706b53d1653c8490257ba70c7bef42b4c",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 2,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1103#discussion_r3588840568",
+          "https://github.com/organvm/limen/pull/1103#discussion_r3588840572"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1103",
+        "merge_commit": "40b0dfe91333ec5ef5cec7b472f6de745befdddd",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T23:29:40Z",
+        "closed_at": "2026-07-15T23:29:40Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1104",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1104:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "05dcad5620a41c37d0d0f73b6b156707d480b1a7",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 1,
+        "unclassified": 0,
+        "unresolved_current": 1,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1104#discussion_r3588828746"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1104",
+        "merge_commit": "755d3bd0a310d0298d739d4c2e62886633cbde5b",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T16:24:46Z",
+        "closed_at": "2026-07-15T16:24:46Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1105",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1105:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "8c3e5d5765166c67818adc67ea466bbd7b89b446",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 4,
+        "unclassified": 0,
+        "unresolved_current": 4,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1105#discussion_r3588864521",
+          "https://github.com/organvm/limen/pull/1105#discussion_r3588864541",
+          "https://github.com/organvm/limen/pull/1105#discussion_r3588864554",
+          "https://github.com/organvm/limen/pull/1105#discussion_r3588864565"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1105",
+        "merge_commit": "fe8dcc656004ed383af2e4d342dac78304bf95b7",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-15T15:57:53Z",
+        "closed_at": "2026-07-15T15:57:53Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1118",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1118:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "d6873d811a1e9dbb91c87fadd8f70b177828bd20",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 3,
+        "unclassified": 0,
+        "unresolved_current": 3,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1118#discussion_r3591496674",
+          "https://github.com/organvm/limen/pull/1118#discussion_r3591496679",
+          "https://github.com/organvm/limen/pull/1118#discussion_r3591496683"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1118",
+        "merge_commit": "bdedf229748acfbdf333aa633769c188250beaa9",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T00:09:43Z",
+        "closed_at": "2026-07-16T00:09:43Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1119",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1119:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "47cdc10809e055fb6fd150dc083451ca5dec5c65",
+      "side_effects": {
+        "status": "observed",
+        "observed": [
+          "nominal_check_path_performed_remote_storage_writes"
+        ],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 3,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 5,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1119#discussion_r3591512071",
+          "https://github.com/organvm/limen/pull/1119#discussion_r3591512075",
+          "https://github.com/organvm/limen/pull/1119#discussion_r3591512078",
+          "https://github.com/organvm/limen/pull/1119#discussion_r3591512080",
+          "https://github.com/organvm/limen/pull/1119#discussion_r3591512083"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1119",
+        "merge_commit": "d5e42ca4b703b9f3eff3f8911154fe54b851c27e",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T16:03:57Z",
+        "closed_at": "2026-07-16T16:03:57Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1122",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1122:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "db47fec5d20825868d259f8a99f58a9a72507b4b",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 2,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1122#discussion_r3592481560",
+          "https://github.com/organvm/limen/pull/1122#discussion_r3592481563"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1122",
+        "merge_commit": "6f6f257bb61b832767824a764afd80ed8d38aab9",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T04:19:00Z",
+        "closed_at": "2026-07-16T04:19:00Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1123",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1123:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "b1782125bae4cbca3fb852cbabefa1ee89fb3919",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 2,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1123#discussion_r3592499764",
+          "https://github.com/organvm/limen/pull/1123#discussion_r3592499766"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1123",
+        "merge_commit": "f9a9bb1150770534f05d7179daa22700e70f8531",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T04:19:21Z",
+        "closed_at": "2026-07-16T04:19:21Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1124",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1124:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "87df55ceac384147db72b5cd3fb0c8332b38c72c",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 7,
+        "unclassified": 0,
+        "unresolved_current": 7,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1124#discussion_r3592506766",
+          "https://github.com/organvm/limen/pull/1124#discussion_r3592506774",
+          "https://github.com/organvm/limen/pull/1124#discussion_r3592506776",
+          "https://github.com/organvm/limen/pull/1124#discussion_r3592506779",
+          "https://github.com/organvm/limen/pull/1124#discussion_r3592506780",
+          "https://github.com/organvm/limen/pull/1124#discussion_r3592506782",
+          "https://github.com/organvm/limen/pull/1124#discussion_r3592506787"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1124",
+        "merge_commit": "bdc35841d6f13e793b27382728346917ddbcedeb",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T04:19:18Z",
+        "closed_at": "2026-07-16T04:19:18Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1125",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1125:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "4c33f8aca73ef334713c056c10669f9070f94916",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 0,
+        "unclassified": 0,
+        "unresolved_current": 0,
+        "urls": []
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1125",
+        "merge_commit": "eaa1230af6b3494abfa28b4b69523d64174288c0",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T03:48:04Z",
+        "closed_at": "2026-07-16T03:48:04Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1126",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1126:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "5f07c3249e3a1aeedf6780ce3f82f35364d0aaf1",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 1,
+        "unclassified": 0,
+        "unresolved_current": 1,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1126#discussion_r3592557589"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1126",
+        "merge_commit": "1c3a0a1dfabde5bf1b30676436aa47db2994a856",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T03:59:10Z",
+        "closed_at": "2026-07-16T03:59:10Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1127",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1127:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "745ab5cb68ebceba165dbd742389e49e496eb945",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 2,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1127#discussion_r3592570027",
+          "https://github.com/organvm/limen/pull/1127#discussion_r3592570030"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1127",
+        "merge_commit": "9a03ee16582eafb3aac469b34f9db7fd98284876",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T04:41:06Z",
+        "closed_at": "2026-07-16T04:41:06Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1128",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1128:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "5252caf15a003bdab6c3e7f650e0e81c64ff5e6c",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 1,
+        "unclassified": 0,
+        "unresolved_current": 1,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1128#discussion_r3592584661"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1128",
+        "merge_commit": "6c7aaffe54adc24d82e0fd9c9251c31abf9f4d6c",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T04:56:55Z",
+        "closed_at": "2026-07-16T04:56:55Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1129",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1129:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "5c69cc8750a7d13f344bb2fa52ac24cf4e6d5ce7",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 5,
+        "unclassified": 0,
+        "unresolved_current": 5,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1129#discussion_r3592689392",
+          "https://github.com/organvm/limen/pull/1129#discussion_r3592689395",
+          "https://github.com/organvm/limen/pull/1129#discussion_r3592689397",
+          "https://github.com/organvm/limen/pull/1129#discussion_r3592689398",
+          "https://github.com/organvm/limen/pull/1129#discussion_r3592689400"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1129",
+        "merge_commit": "f5646dae2779722762f114d2c89596edbca05952",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T05:07:28Z",
+        "closed_at": "2026-07-16T05:07:28Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1132",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1132:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "5633bb6bffd08d8efcfcd40d5c3b5ac2e4eca7a0",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 5,
+        "unclassified": 0,
+        "unresolved_current": 5,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1132#discussion_r3595328291",
+          "https://github.com/organvm/limen/pull/1132#discussion_r3595328298",
+          "https://github.com/organvm/limen/pull/1132#discussion_r3595328303",
+          "https://github.com/organvm/limen/pull/1132#discussion_r3595328306",
+          "https://github.com/organvm/limen/pull/1132#discussion_r3595328312"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1132",
+        "merge_commit": "ee00f82b9841b66f35184416b9b5c3622b45295a",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T12:54:14Z",
+        "closed_at": "2026-07-16T12:54:14Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1133",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1133:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "a6cdb8c649d4f48b8333c0cf60119f464a1b85bc",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 4,
+        "unclassified": 0,
+        "unresolved_current": 4,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1133#discussion_r3595348365",
+          "https://github.com/organvm/limen/pull/1133#discussion_r3595348369",
+          "https://github.com/organvm/limen/pull/1133#discussion_r3595348373",
+          "https://github.com/organvm/limen/pull/1133#discussion_r3595348377"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1133",
+        "merge_commit": "6e27475e0369ba8561d1ceea315c4575a5027425",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T12:54:18Z",
+        "closed_at": "2026-07-16T12:54:18Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1134",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1134:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "75833c9aac1424b37d267514686ec9d90092a631",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 5,
+        "unclassified": 0,
+        "unresolved_current": 5,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1134#discussion_r3595638583",
+          "https://github.com/organvm/limen/pull/1134#discussion_r3595638588",
+          "https://github.com/organvm/limen/pull/1134#discussion_r3595638596",
+          "https://github.com/organvm/limen/pull/1134#discussion_r3595638608",
+          "https://github.com/organvm/limen/pull/1134#discussion_r3595638616"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1134",
+        "merge_commit": "1f4b05ce86e526ef4dc6310c452ad609db8b772c",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T13:37:16Z",
+        "closed_at": "2026-07-16T13:37:16Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1135",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1135:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "fa14e41eba74379d209b0dfa2dd1dba7a1e5b6d8",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 5,
+        "unclassified": 0,
+        "unresolved_current": 5,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1135#discussion_r3595683187",
+          "https://github.com/organvm/limen/pull/1135#discussion_r3595683192",
+          "https://github.com/organvm/limen/pull/1135#discussion_r3595683197",
+          "https://github.com/organvm/limen/pull/1135#discussion_r3595683203",
+          "https://github.com/organvm/limen/pull/1135#discussion_r3595683209"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1135",
+        "merge_commit": "dcdfe50518d29611d82491b7444504308233702f",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T13:01:08Z",
+        "closed_at": "2026-07-16T13:01:08Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1138",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1138:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "8118a452d73e63d2dcd6a769be894642f2ea1cd4",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 2,
+        "p2": 0,
+        "unclassified": 0,
+        "unresolved_current": 2,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1138#discussion_r3597091120",
+          "https://github.com/organvm/limen/pull/1138#discussion_r3597091125"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1138",
+        "merge_commit": "19b7c341b303744a5319039b9cf5caace4f60c6f",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T17:40:08Z",
+        "closed_at": "2026-07-16T17:40:08Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1139",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1139:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "2052fdc964b1314f064702041638f4b79e8cc472",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 4,
+        "unclassified": 0,
+        "unresolved_current": 4,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1139#discussion_r3597123260",
+          "https://github.com/organvm/limen/pull/1139#discussion_r3597123267",
+          "https://github.com/organvm/limen/pull/1139#discussion_r3597123274",
+          "https://github.com/organvm/limen/pull/1139#discussion_r3597123282"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1139",
+        "merge_commit": "c2f18318d74a614376b1886ea29744fd87d7b61a",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T17:40:12Z",
+        "closed_at": "2026-07-16T17:40:12Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1140",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1140:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "28b5853269753c9f47e9e7eb1c2d2720170ab3c9",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 2,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1140#discussion_r3597127849",
+          "https://github.com/organvm/limen/pull/1140#discussion_r3597127853"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1140",
+        "merge_commit": "0bd3b91972450d6879cd48c8058902267095de80",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T17:40:35Z",
+        "closed_at": "2026-07-16T17:40:35Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1141",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1141:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "f7b9b6d0ba754e5fa146a31b10bd957e21a132f1",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 1,
+        "p2": 0,
+        "unclassified": 0,
+        "unresolved_current": 1,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1141#discussion_r3597168135"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1141",
+        "merge_commit": "205da7e2c0231384958fb5547d87adf8110d10d0",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T17:40:51Z",
+        "closed_at": "2026-07-16T17:40:51Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1142",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1142:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "9f8bb061d51c23856c5d82df459f07825d18739f",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 2,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 4,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1142#discussion_r3597199645",
+          "https://github.com/organvm/limen/pull/1142#discussion_r3597199654",
+          "https://github.com/organvm/limen/pull/1142#discussion_r3597199660",
+          "https://github.com/organvm/limen/pull/1142#discussion_r3597199669"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1142",
+        "merge_commit": "07f22d70867813bbb01af5c417d39fd0927f95bd",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T16:53:22Z",
+        "closed_at": "2026-07-16T16:53:22Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1143",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1143:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "e5ae2ceae1cf55bfb4513da194ed4c6cfd83966e",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 1,
+        "p2": 1,
+        "unclassified": 0,
+        "unresolved_current": 2,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1143#discussion_r3597203814",
+          "https://github.com/organvm/limen/pull/1143#discussion_r3597203830"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1143",
+        "merge_commit": "6f6475f26bca9f0f5bcd19cb5236b89f5c49b51b",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T17:40:54Z",
+        "closed_at": "2026-07-16T17:40:55Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1144",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1144:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "eeeaa0e8e7d274a0a730dfb8214b1e4be6b6b5d2",
+      "side_effects": {
+        "status": "observed",
+        "observed": [
+          "worktree_roots_moved_or_quarantined"
+        ],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 3,
+        "unclassified": 0,
+        "unresolved_current": 3,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1144#discussion_r3597232305",
+          "https://github.com/organvm/limen/pull/1144#discussion_r3597232308",
+          "https://github.com/organvm/limen/pull/1144#discussion_r3597232313"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1144",
+        "merge_commit": "902f433020d34e7ece8e9c054bc7cb25bef5995a",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T17:41:09Z",
+        "closed_at": "2026-07-16T17:41:09Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1146",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1146:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "5f4fddcffb00b8c596fa401d882280c9e9a11143",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 2,
+        "p2": 4,
+        "unclassified": 0,
+        "unresolved_current": 6,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1146#discussion_r3597378689",
+          "https://github.com/organvm/limen/pull/1146#discussion_r3597378721",
+          "https://github.com/organvm/limen/pull/1146#discussion_r3597378698",
+          "https://github.com/organvm/limen/pull/1146#discussion_r3597378704",
+          "https://github.com/organvm/limen/pull/1146#discussion_r3597378711",
+          "https://github.com/organvm/limen/pull/1146#discussion_r3597378718"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1146",
+        "merge_commit": "24e57094f01aa70925762365453559d3c8fc6f39",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T17:35:58Z",
+        "closed_at": "2026-07-16T17:35:58Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1147",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1147:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "405cd70b732e8929d0661c6b3e06a73f25b6641b",
+      "side_effects": {
+        "status": "observed",
+        "observed": [
+          "backblaze_xml_changed_before_review"
+        ],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 2,
+        "p2": 3,
+        "unclassified": 0,
+        "unresolved_current": 5,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1147#discussion_r3597431649",
+          "https://github.com/organvm/limen/pull/1147#discussion_r3597431660",
+          "https://github.com/organvm/limen/pull/1147#discussion_r3597431652",
+          "https://github.com/organvm/limen/pull/1147#discussion_r3597431654",
+          "https://github.com/organvm/limen/pull/1147#discussion_r3597431658"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "open",
+        "url": "https://github.com/organvm/limen/pull/1147",
+        "merge_commit": null,
+        "review_decision": null,
+        "draft": true,
+        "merged_at": null,
+        "closed_at": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1149",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1149:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "26c4f2a63c48714cbae7c593a0343829ef1d9210",
+      "side_effects": {
+        "status": "observed",
+        "observed": [
+          "private_prompt_checkpoint_or_seal_changed"
+        ],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 0,
+        "unclassified": 0,
+        "unresolved_current": 0,
+        "urls": []
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1149",
+        "merge_commit": "ea8d939f7bdeccbf7ccc05899c45a403ee12ed66",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T19:12:22Z",
+        "closed_at": "2026-07-16T19:12:22Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1150",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1150:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "afffb34636220fcf65c556b9b1d7aeecec32a5d6",
+      "side_effects": {
+        "status": "observed",
+        "observed": [
+          "mail_self_test_sent"
+        ],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 1,
+        "p2": 1,
+        "unclassified": 0,
+        "unresolved_current": 2,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1150#discussion_r3597659159",
+          "https://github.com/organvm/limen/pull/1150#discussion_r3597659166"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/limen/pull/1150",
+        "merge_commit": "158c8c0057318597da779b5b99770c0ab190c6f5",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T17:55:08Z",
+        "closed_at": "2026-07-16T17:55:08Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/limen#1151",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/limen#1151:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "5df104ae3644e62d7f10e3305893287273ee00b4",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 3,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 5,
+        "urls": [
+          "https://github.com/organvm/limen/pull/1151#discussion_r3597814929",
+          "https://github.com/organvm/limen/pull/1151#discussion_r3597814938",
+          "https://github.com/organvm/limen/pull/1151#discussion_r3597814955",
+          "https://github.com/organvm/limen/pull/1151#discussion_r3597814942",
+          "https://github.com/organvm/limen/pull/1151#discussion_r3597814950"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "open",
+        "url": "https://github.com/organvm/limen/pull/1151",
+        "merge_commit": null,
+        "review_decision": null,
+        "draft": true,
+        "merged_at": null,
+        "closed_at": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/limen"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/public-record-data-scrapper#349",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/public-record-data-scrapper#349:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "868fceb7b6e84d122d7a242815c23252989bad5d",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 1,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 3,
+        "urls": [
+          "https://github.com/organvm/public-record-data-scrapper/pull/349#discussion_r3597276061",
+          "https://github.com/organvm/public-record-data-scrapper/pull/349#discussion_r3597276068",
+          "https://github.com/organvm/public-record-data-scrapper/pull/349#discussion_r3597276075"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/public-record-data-scrapper/pull/349",
+        "merge_commit": "63016f67b2f3db53d3cc12674ced7e606262239a",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T16:35:19Z",
+        "closed_at": "2026-07-16T16:35:19Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/public-record-data-scrapper"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/public-record-data-scrapper#351",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/public-record-data-scrapper#351:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "9c744721b172d6b861da83968ae712532854e1c3",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 1,
+        "unclassified": 0,
+        "unresolved_current": 1,
+        "urls": [
+          "https://github.com/organvm/public-record-data-scrapper/pull/351#discussion_r3597674697"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/public-record-data-scrapper/pull/351",
+        "merge_commit": "48be533421de7e65fb95c1fd4aacf8d3a0df8fde",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T17:39:32Z",
+        "closed_at": "2026-07-16T17:39:32Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/public-record-data-scrapper"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/public-record-data-scrapper#352",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/public-record-data-scrapper#352:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "54e86ecd9f425a5762c8f06c3488fdfdb9e0079a",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 1,
+        "p2": 2,
+        "unclassified": 0,
+        "unresolved_current": 3,
+        "urls": [
+          "https://github.com/organvm/public-record-data-scrapper/pull/352#discussion_r3597755806",
+          "https://github.com/organvm/public-record-data-scrapper/pull/352#discussion_r3597755816",
+          "https://github.com/organvm/public-record-data-scrapper/pull/352#discussion_r3597755820"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/public-record-data-scrapper/pull/352",
+        "merge_commit": "c4df87e30feabc08f712257702207b92fff2c404",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T17:50:30Z",
+        "closed_at": "2026-07-16T17:50:30Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/public-record-data-scrapper"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/public-record-data-scrapper#353",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/public-record-data-scrapper#353:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "01c6c60c2b41e90fbba5476722a94cab4c7cf8d0",
+      "side_effects": {
+        "status": "none_identified_yet",
+        "observed": [],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 0,
+        "p2": 1,
+        "unclassified": 0,
+        "unresolved_current": 1,
+        "urls": [
+          "https://github.com/organvm/public-record-data-scrapper/pull/353#discussion_r3597786554"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/public-record-data-scrapper/pull/353",
+        "merge_commit": "09bfc13d4163f030cf0de70182b8bc4f7c36744b",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T17:55:16Z",
+        "closed_at": "2026-07-16T17:55:16Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/public-record-data-scrapper"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "pull_request:organvm/universal-mail--automation#171",
+      "kind": "pull_request",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:pr:organvm/universal-mail--automation#171:unreconciled",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": "f811a9d2362f669e74e173d393b2d196e4f3c7c9",
+      "side_effects": {
+        "status": "observed",
+        "observed": [
+          "mail_send_path_exercised"
+        ],
+        "replay_authorized": false
+      },
+      "review_findings": {
+        "status": "current_remote_snapshot",
+        "p1": 3,
+        "p2": 3,
+        "unclassified": 0,
+        "unresolved_current": 6,
+        "urls": [
+          "https://github.com/organvm/universal-mail--automation/pull/171#discussion_r3597655043",
+          "https://github.com/organvm/universal-mail--automation/pull/171#discussion_r3597655046",
+          "https://github.com/organvm/universal-mail--automation/pull/171#discussion_r3597655068",
+          "https://github.com/organvm/universal-mail--automation/pull/171#discussion_r3597655053",
+          "https://github.com/organvm/universal-mail--automation/pull/171#discussion_r3597655057",
+          "https://github.com/organvm/universal-mail--automation/pull/171#discussion_r3597655059"
+        ]
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "deployed scoped predicate passes; zero current findings; limen.pr_review_gate.v1 accepts exact head"
+      },
+      "receipt": {
+        "status": "merged",
+        "url": "https://github.com/organvm/universal-mail--automation/pull/171",
+        "merge_commit": "d6b570cc84eb62a95aed174ca3319c0e5b0b1008",
+        "review_decision": null,
+        "draft": false,
+        "merged_at": "2026-07-16T17:31:54Z",
+        "closed_at": "2026-07-16T17:31:54Z"
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "github_author": "4444J99",
+        "owner_surface": "organvm/universal-mail--automation"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:02af77d6b62a92a75174",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:02af77d6b62a92a75174",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:02af77d6b62a92a75174",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:030deb13e6d5bb03704b",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:030deb13e6d5bb03704b",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:030deb13e6d5bb03704b",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:062c4405b9bb76bb5623",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:062c4405b9bb76bb5623",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:062c4405b9bb76bb5623",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:0e8f26e709399777ae88",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:0e8f26e709399777ae88",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:0e8f26e709399777ae88",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:1c5551df6dc00dc9349d",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:1c5551df6dc00dc9349d",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:1c5551df6dc00dc9349d",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:2186a25178b53248d9a6",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:2186a25178b53248d9a6",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:2186a25178b53248d9a6",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:3016d4ef4f3c76bf76c8",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:3016d4ef4f3c76bf76c8",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:3016d4ef4f3c76bf76c8",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:33c21a6cd8e36aea83a8",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:33c21a6cd8e36aea83a8",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:33c21a6cd8e36aea83a8",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:367c73d1fe94cf1724dc",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:367c73d1fe94cf1724dc",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:367c73d1fe94cf1724dc",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:3d160c468bb2e472bb86",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:3d160c468bb2e472bb86",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:3d160c468bb2e472bb86",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:3edbf678cd4923d4d317",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:3edbf678cd4923d4d317",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:3edbf678cd4923d4d317",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:4107cd73f6fac4b2ea00",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:4107cd73f6fac4b2ea00",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:4107cd73f6fac4b2ea00",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:480e38099f3b131b0995",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:480e38099f3b131b0995",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:480e38099f3b131b0995",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:48d92804733191ffa947",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:48d92804733191ffa947",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:48d92804733191ffa947",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:4a83ec16b900ed6db926",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:4a83ec16b900ed6db926",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:4a83ec16b900ed6db926",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:4e6e587802dc628cb20f",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:4e6e587802dc628cb20f",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:4e6e587802dc628cb20f",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:52f582a4b5ea4454f1b1",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:52f582a4b5ea4454f1b1",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:52f582a4b5ea4454f1b1",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:61181bbc3c520c9fbfd0",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:61181bbc3c520c9fbfd0",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:61181bbc3c520c9fbfd0",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:8ca36cfe60f49cbfd6a9",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:8ca36cfe60f49cbfd6a9",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:8ca36cfe60f49cbfd6a9",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:97387ef6e00cfb493d8a",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:97387ef6e00cfb493d8a",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:97387ef6e00cfb493d8a",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:b23fc42ba1672ef8b087",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:b23fc42ba1672ef8b087",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:b23fc42ba1672ef8b087",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:b60aca450110204442f3",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:b60aca450110204442f3",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:b60aca450110204442f3",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:c1a8a5d2a386d2218423",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:c1a8a5d2a386d2218423",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:c1a8a5d2a386d2218423",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:c38e2faf3fb37fcda1e8",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:c38e2faf3fb37fcda1e8",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:c38e2faf3fb37fcda1e8",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:cbb64bcb93134a8387bf",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:cbb64bcb93134a8387bf",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:cbb64bcb93134a8387bf",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:e77af5448fc3181bf52b",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:e77af5448fc3181bf52b",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:e77af5448fc3181bf52b",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:ee3e636942a301daa170",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:ee3e636942a301daa170",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:ee3e636942a301daa170",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:fd3fdc1da373b9c4b0d1",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:fd3fdc1da373b9c4b0d1",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:fd3fdc1da373b9c4b0d1",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "session:claude-session-sha256:ff44ad33ce47213300e5",
+      "kind": "session",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-session-sha256:ff44ad33ce47213300e5",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": "claude-session-sha256:ff44ad33ce47213300e5",
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "workflow:claude-workflow-sha256:65721fadf46ded0b1311",
+      "kind": "workflow",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-workflow-sha256:65721fadf46ded0b1311",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "workflow:claude-workflow-sha256:8311dce381c28c66582d",
+      "kind": "workflow",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-workflow-sha256:8311dce381c28c66582d",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "workflow:claude-workflow-sha256:c56b3ef32dfe3a170623",
+      "kind": "workflow",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-workflow-sha256:c56b3ef32dfe3a170623",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "workflow:claude-workflow-sha256:ad675b6a7ac811103aac",
+      "kind": "workflow",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-workflow-sha256:ad675b6a7ac811103aac",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "workflow:claude-workflow-sha256:35bd6af5f60203a113b3",
+      "kind": "workflow",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-workflow-sha256:35bd6af5f60203a113b3",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "workflow:claude-workflow-sha256:24fa4a6f88ff94fd0cee",
+      "kind": "workflow",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-workflow-sha256:24fa4a6f88ff94fd0cee",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "workflow:claude-workflow-sha256:3bd669827d28f877bcd2",
+      "kind": "workflow",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-workflow-sha256:3bd669827d28f877bcd2",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "workflow:claude-workflow-sha256:143a7b4a458355089373",
+      "kind": "workflow",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-workflow-sha256:143a7b4a458355089373",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "workflow:claude-workflow-sha256:b1fe2118c68ebfeba76e",
+      "kind": "workflow",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-workflow-sha256:b1fe2118c68ebfeba76e",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "workflow:claude-workflow-sha256:2661dcf3cdeb10686329",
+      "kind": "workflow",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-workflow-sha256:2661dcf3cdeb10686329",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    },
+    {
+      "id": "workflow:claude-workflow-sha256:c309b0f93ad17f9c1bfc",
+      "kind": "workflow",
+      "source_ask": {
+        "status": "redacted",
+        "reference": "private_prompt_corpus:claude-workflow-sha256:c309b0f93ad17f9c1bfc",
+        "private_owner": "private_prompt_corpus_owner"
+      },
+      "session": null,
+      "spend": {
+        "status": "unreconciled",
+        "tokens": null,
+        "cost": null
+      },
+      "exact_head": null,
+      "side_effects": {
+        "status": "unreconciled",
+        "observed": []
+      },
+      "review_findings": {
+        "status": "not_applicable",
+        "p1": 0,
+        "p2": 0
+      },
+      "predicate": {
+        "status": "not_verified",
+        "command": null,
+        "requirement": "source ask, spend, outputs, effects, predicate, and receipt reconcile"
+      },
+      "receipt": {
+        "status": "missing",
+        "url": null
+      },
+      "keeper": {
+        "executing_keeper": "claude",
+        "reviewing_keeper": null,
+        "provider_route": "claude",
+        "owner_surface": "shared_peer_keepers"
+      },
+      "disposition": "repair_required"
+    }
+  ]
+}

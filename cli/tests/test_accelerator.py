@@ -1,10 +1,11 @@
 """The reset-window front-load accelerator + its brakes.
 
 The daemon paced dispatch EVENLY and left 40–60% of usable headroom expiring unspent at every reset.
-These cover the fix: scale a lane's per-beat volume UP as it under-spends toward its cliff, but only
-on LEDGER-WON work-classes (never pour expiring budget into junk), lane-AWARE (async lanes burst, sync
-local lanes stay pool-bounded), with the reserve decaying to a floor near the cliff and routing
-draining the cliff-edge lane first. All fail-open + floored.
+These cover the fix: scale a lane's per-beat volume UP as it under-spends toward its cliff, while the
+bounded value gate orders work and historical board-event classes remain non-authoritative.
+Acceleration is lane-aware (async lanes burst, sync local lanes stay pool-bounded), with the reserve
+decaying to a floor near the cliff and routing draining the cliff-edge lane first. All fail-open +
+floored.
 """
 
 from __future__ import annotations
@@ -108,49 +109,21 @@ def test_accel_never_decelerates_below_base(monkeypatch):
 
 
 # ── the ledger gate on the acceleration tail ────────────────────────────────────────────────────
-def test_accel_allows_is_ledger_gated():
-    lanes = {
-        "clean": {"waste_classes": [], "win_classes": ["code"]},  # earns across the board
-        "mixed": {"waste_classes": ["coverage"], "win_classes": ["revenue"]},
-        "pit": {"waste_classes": ["code"], "win_classes": []},  # only wastes
-    }
-    rev = Task(id="R", title="t", repo="x/y", target_agent="any", type="code", labels=["revenue"], created="2026-06-22")
-    cov = Task(
-        id="C", title="t", repo="x/y", target_agent="any", type="code", labels=["coverage"], created="2026-06-22"
-    )
-    assert D._accel_allows("clean", cov, lanes) is True  # clean earner accelerates anything
-    assert D._accel_allows("mixed", rev, lanes) is True  # win class rides the tail
-    assert D._accel_allows("mixed", cov, lanes) is False  # its waste class does NOT
-    assert D._accel_allows("pit", rev, lanes) is False  # pure pit never accelerates
-    assert D._accel_allows("unknown", rev, lanes) is False  # no ledger record ⇒ base only
+def test_accel_has_no_board_event_class_gate():
+    assert not hasattr(D, "_accel_allows"), "board-event win/waste classes must not steer acceleration"
 
 
 # ── dispatch_parallel integration: the tail is win-class only ───────────────────────────────────
-def test_dispatch_parallel_accel_tail_is_win_class_only(tmp_path, monkeypatch):
+def test_dispatch_parallel_accel_tail_ignores_board_event_classes(tmp_path, monkeypatch):
     monkeypatch.setenv("LIMEN_DISPATCH_ADMISSION", "0")
     monkeypatch.setattr(D, "_window_hours", lambda a: 24.0)
     monkeypatch.delenv("LIMEN_ACCEL", raising=False)
-    # jules near its cliff with budget to burn; ledger: jules WINS revenue, WASTES coverage.
+    # Jules is under-paced with budget to burn. This hostile legacy ledger must have no effect.
     (tmp_path / "logs").mkdir()
-    (tmp_path / "logs" / "ledger.json").write_text(
-        json.dumps({"lanes": {"jules": {"waste_classes": ["coverage"], "win_classes": ["revenue"]}}})
-    )
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
     now = datetime.datetime.now(datetime.timezone.utc)
-    reset = {"jules": _iso(now, 23)}
+    reset = {"jules": _iso(now, 12)}
     tasks = [
-        Task(
-            id=f"REV{i}",
-            title="t",
-            repo="x/y",
-            target_agent="jules",
-            type="code",
-            labels=["revenue"],
-            status="open",
-            created="2026-06-22",
-        )
-        for i in range(10)
-    ] + [
         Task(
             id=f"COV{i}",
             title="t",
@@ -158,6 +131,20 @@ def test_dispatch_parallel_accel_tail_is_win_class_only(tmp_path, monkeypatch):
             target_agent="jules",
             type="code",
             labels=["coverage"],
+            priority="critical",
+            status="open",
+            created="2026-06-22",
+        )
+        for i in range(10)
+    ] + [
+        Task(
+            id=f"REV{i}",
+            title="t",
+            repo="x/y",
+            target_agent="jules",
+            type="code",
+            labels=["revenue"],
+            priority="low",
             status="open",
             created="2026-06-22",
         )
@@ -165,38 +152,46 @@ def test_dispatch_parallel_accel_tail_is_win_class_only(tmp_path, monkeypatch):
     ]
     lf = _lf({"jules": 100}, {"jules": 5}, reset)
     lf.tasks = tasks
-    tp = tmp_path / "tasks.yaml"
-    picked: list[tuple[str, str]] = []
     monkeypatch.setattr(D, "_deps_met", lambda t, by: True)
     monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
-    monkeypatch.setattr(D, "call_agent_dispatch", lambda agent, task, dry_run=False: True)
-    # dry-run prints picks; capture by monkeypatching print is noisy — instead call and inspect status.
-    D.dispatch_parallel(lf, tp, ["jules"], per_agent_limit=3, dry_run=True)
-    # The accelerated tail beyond the 3 base picks must be REVENUE (win) tasks, never COVERAGE (waste).
-    # Re-run non-dry to see which got reserved=dispatched.
-    D.dispatch_parallel(lf, tp, ["jules"], per_agent_limit=3, dry_run=False)
-    disp = [t.id for t in lf.tasks if t.status == "dispatched"]
-    assert len(disp) > 3, "accelerator dispatched more than the base 3 toward the cliff"
-    assert all(i.startswith("REV") for i in disp), f"tail must be win-class only, got {disp}"
-    assert all(t.dispatch_log[-1].status == "dispatched" for t in lf.tasks if t.status == "dispatched")
-    assert all(t.dispatch_log[-1].session_id == "reserve" for t in lf.tasks if t.status == "dispatched")
-    _ = picked
+    baseline = D._select_parallel_reservations(
+        lf,
+        ["jules"],
+        3,
+        now,
+        dry_run=True,
+        admission_snapshot={},
+    )
+    (tmp_path / "logs" / "ledger.json").write_text(
+        json.dumps({"lanes": {"jules": {"waste_classes": ["coverage"], "win_classes": ["revenue"]}}})
+    )
+    hostile = D._select_parallel_reservations(
+        lf,
+        ["jules"],
+        3,
+        now,
+        dry_run=True,
+        admission_snapshot={},
+    )
+
+    assert 3 < len(baseline) < len(tasks), "fixture must exercise only the accelerated tail"
+    assert hostile == baseline, "historical board-event classes changed accelerated task selection"
 
 
 # ── codex provider-auto selection ───────────────────────────────────────────────────────────────
 def test_codex_uses_provider_auto_without_override(monkeypatch):
     monkeypatch.delenv("LIMEN_CODEX_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "0")
     assert D._codex_model() is None
     argv = D._agent_argv("codex")
     assert "-m" not in argv, f"bare invocation must delegate to provider Auto: {argv}"
 
 
-def test_codex_explicit_model_override_is_opaque(monkeypatch):
-    monkeypatch.setenv("LIMEN_CODEX_MODEL", "future-provider-id")
-    assert D._codex_model() == "future-provider-id"
+def test_codex_explicit_model_override_is_live_validated(monkeypatch):
+    monkeypatch.setenv("LIMEN_CODEX_MODEL", "renamed-provider-id")
+    monkeypatch.setattr(D, "discover_codex_models", lambda *_args, **_kwargs: ["renamed-provider-id"])
+    assert D._codex_model() == "renamed-provider-id"
     argv = D._agent_argv("codex")
-    assert argv[-2:] == ["-m", "future-provider-id"]
+    assert argv[-2:] == ["-m", "renamed-provider-id"]
 
 
 # ── cliff-edge routing (route.py) ───────────────────────────────────────────────────────────────

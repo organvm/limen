@@ -129,10 +129,9 @@ def test_marker_pr_line_unmerged_stays_paused(tmp_path):
     assert (logs / "AUTONOMY_PAUSED").exists()
 
 
-# ── pause-release COMPLETION (the deadly-embrace fix, 2026-07-15) ──────────────────────────────
-# A PR-owned marker (owner:/pr: identity + release_predicate declares the merge + no merge
-# prohibition) gets its release performed by the governor: merge-policy CLEARED → head-pinned
-# squash. Operator pauses are structurally ineligible. Every ambiguity stays paused.
+# ── pause-release observation only ────────────────────────────────────────────────────────────
+# The governor may observe that an owner PR already merged and clear a stale marker. It never
+# performs a merge: only merge-drain.py with a separate exact-target signed receipt may do that.
 
 OPERATOR_MARKER = (
     "reason: operator requested a safe restart and a study interval\n"
@@ -200,13 +199,13 @@ def test_operator_marker_is_never_touched(tmp_path):
     assert _gh_log(tmp_path) == ""  # owner_surface: is not owner: — gh is never even consulted
 
 
-def test_pr_owned_marker_completes_release(tmp_path):
+def test_pr_owned_marker_never_merges_and_stays_paused(tmp_path):
     logs = _seed_pause(tmp_path, PR_OWNED_MARKER)
     proc = run_governor_completion(tmp_path, LOGGING_GH, CLEARED_POLICY, "mode")
-    assert proc.stdout.strip() == "dispatch"
-    assert not (logs / "AUTONOMY_PAUSED").exists()
-    assert "pr merge 7 --squash --match-head-commit abc123" in _gh_log(tmp_path)
-    assert "completed pause release" in proc.stderr
+    assert proc.stdout.strip() == "paused"
+    assert (logs / "AUTONOMY_PAUSED").exists()
+    assert "pr merge" not in _gh_log(tmp_path)
+    assert "completed pause release" not in proc.stderr
 
 
 def test_pr_owned_marker_stays_paused_on_hold(tmp_path):
@@ -225,8 +224,6 @@ def test_ambiguity_battery_stays_paused(tmp_path):
         (PR_OWNED_MARKER + "prohibitions: no merge until the operator resumes\n", LOGGING_GH, None),
         # owner branch resolves to two open PRs
         (PR_OWNED_MARKER, TWO_OPEN_GH, None),
-        # the valve is off
-        (PR_OWNED_MARKER, LOGGING_GH, {"LIMEN_AUTONOMY_MARKER_AUTOMERGE": "0"}),
     ]
     for i, (marker, gh_body, extra_env) in enumerate(cases):
         case_dir = tmp_path / f"case{i}"
@@ -246,3 +243,9 @@ def test_throttle_bounds_the_completion_attempt(tmp_path):
     proc = run_governor_completion(tmp_path, LOGGING_GH, HOLD_POLICY, "mode", extra_env=extra)
     assert proc.stdout.strip() == "paused"
     assert _gh_log(tmp_path).count("\n") == first  # second call throttled — zero new gh reads
+
+
+def test_governor_has_no_direct_merge_effect():
+    source = GOVERNOR.read_text()
+    assert '["gh", "pr", "merge"' not in source
+    assert "merge-drain.py --apply" in source

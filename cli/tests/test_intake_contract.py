@@ -239,7 +239,6 @@ def test_every_tabularius_task_producer_declares_typed_fields() -> None:
         Path("scripts/check-main-green.py"),
         Path("scripts/dispatch-continuity-check.py"),
         Path("scripts/probe-runtime-adapter.py"),
-        Path("scripts/quicken.py"),
         Path("scripts/routine-freshness-audit.py"),
         Path("scripts/self-heal.py"),
     }
@@ -247,3 +246,7 @@ def test_every_tabularius_task_producer_declares_typed_fields() -> None:
         text = (ROOT / relative).read_text(encoding="utf-8")
         assert "predicate" in text or "contract_fields" in text, relative
         assert "receipt_target" in text or "contract_fields" in text, relative
+
+    quicken = (ROOT / "scripts/quicken.py").read_text(encoding="utf-8")
+    assert "tasks.yaml" not in quicken
+    assert "submit_task_upsert" not in quicken

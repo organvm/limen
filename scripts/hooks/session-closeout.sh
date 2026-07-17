@@ -2,10 +2,9 @@
 # session-closeout.sh — SessionEnd hook. The closeout ritual's "this session is done" signal.
 #
 # Every session first refreshes the canonical warm-resume handoff. An isolated session cannot reap
-# its OWN worktree (git refuses to remove the cwd you are standing in), so the actual reversible reap
-# is done from OUTSIDE by the live C_QUICKEN daemon rung (scripts/quicken.py --apply). For those
-# sessions this hook also drops a breadcrumb so reap happens on the NEXT beat instead of waiting out
-# the 18h idle window.
+# its OWN worktree (git refuses to remove the cwd you are standing in), so later cleanup belongs to
+# receipt-backed worktree reclaim. This hook records only the current invocation's own breadcrumb;
+# no heartbeat may enumerate or resume provider sessions from it.
 #
 # Safe by construction (mirrors insights-capture.sh):
 #   - refreshes the canonical handoff for every SessionEnd before worktree-specific handling
@@ -60,7 +59,7 @@ SID="${CLAUDE_SESSION_ID:-unknown}"
 BRANCH="$(git -C "$CWD" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 TS="$(date +%s 2>/dev/null || echo 0)"
 
-# append-only breadcrumb; quicken.py:_ended_sids() reads it and marks the session CLOSED next beat.
+# Append-only current-invocation breadcrumb for owner-authorized continuity/reclaim evidence.
 printf '{"ts":%s,"sid":"%s","cwd":"%s","branch":"%s"}\n' \
   "$TS" "$SID" "$CWD" "$BRANCH" >>"$LOG" 2>/dev/null || true
 
@@ -80,6 +79,12 @@ if [ -f "$GUARD" ] && [ "$SID" != "unknown" ]; then
     *"subagent fanout"*)
       printf '%s\n' "$REPORT" >>"$ROOT/logs/model-tier-audit.jsonl" 2>/dev/null || true
       echo "⚠ model-tier: expensive-tier subagent fan-out this session — tier fan-out agents by job (logs/model-tier-audit.jsonl)" >&2
+      ;;
+  esac
+  case "$REPORT" in
+    *'"fableBillableTokens": '[1-9]*'"ok": false'*)
+      printf '%s\n' "$REPORT" >>"$ROOT/logs/model-tier-audit.jsonl" 2>/dev/null || true
+      echo "⚠ Fable closeout contract red observed; this hook is report-only and does not direct or control the live session" >&2
       ;;
   esac
 fi

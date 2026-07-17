@@ -75,6 +75,16 @@ def _board(tmp_path):
     return {t.id: t for t in load_limen_file(tmp_path / "tasks.yaml").tasks}
 
 
+def _filesystem_snapshot(root: Path) -> tuple[tuple[str, ...], dict[str, tuple[bytes, int, int]]]:
+    paths = tuple(sorted(path.relative_to(root).as_posix() for path in root.rglob("*")))
+    files = {
+        path.relative_to(root).as_posix(): (path.read_bytes(), path.stat().st_mtime_ns, path.stat().st_mode)
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+    return paths, files
+
+
 def _remote_harvest_fixture(tmp_path):
     da = _load(tmp_path, n_open=1, agent="github_actions")
     lf = load_limen_file(tmp_path / "tasks.yaml")
@@ -2789,6 +2799,46 @@ def test_exact_recovery_blocks_markerless_claim_regardless_of_age(tmp_path, monk
     assert _board(tmp_path)[task.id].status == "dispatched"
 
 
+def test_exact_recovery_dry_run_does_not_create_runs_or_take_queue_lock(tmp_path, monkeypatch):
+    da = _load(tmp_path, n_open=1)
+    task, contract_hash, _stamp = _mark_async_dispatched(tmp_path, age_seconds=7200)
+    da.RUNS.rmdir()
+
+    def forbidden_lock(*_args, **_kwargs):
+        raise AssertionError("recovery dry-run must not create or take a queue lock")
+
+    monkeypatch.setattr(da, "_queue_lock", forbidden_lock)
+    result = da.recover_exact_task(task.id, contract_hash, dry_run=True)
+
+    assert result["status"] == "blocked"
+    assert result["blocker"]["id"] == "targeted-recovery-marker-required"
+    assert not da.RUNS.exists()
+    assert not (tmp_path / "logs" / ".queue.lock.d").exists()
+
+
+def test_exact_recovery_dry_run_is_byte_identical_and_takes_no_locks(tmp_path, monkeypatch):
+    da = _load(tmp_path, n_open=1)
+    task, contract_hash, stamp = _mark_async_dispatched(tmp_path, age_seconds=7200)
+    marker = da._running_marker_path(task.id, "codex")
+    da._write_running_marker(task.id, "codex", stamp, 999999, 0.0)
+    monkeypatch.setattr(da, "_pid_alive", lambda _pid: False)
+    monkeypatch.setattr(da, "_inspect_task_admission_leases", lambda _task_id: [])
+    monkeypatch.setenv("LIMEN_TARGETED_RECOVERY_GRACE", "1")
+
+    def forbidden_lock(*_args, **_kwargs):
+        raise AssertionError("recovery dry-run must not take a mutating lock")
+
+    monkeypatch.setattr(da, "_queue_lock", forbidden_lock)
+    monkeypatch.setattr(da, "_machine_admission_lock", forbidden_lock)
+    before = _filesystem_snapshot(tmp_path)
+
+    result = da.recover_exact_task(task.id, contract_hash, dry_run=True)
+
+    assert result == {"status": "would_recover", "recovered_count": 0}
+    assert marker.exists()
+    assert _filesystem_snapshot(tmp_path) == before
+
+
 @pytest.mark.parametrize("pid", ["__missing__", None, 0, -1, "999999", True])
 def test_exact_recovery_blocks_marker_without_explicit_valid_pid(tmp_path, monkeypatch, pid):
     da = _load(tmp_path, n_open=1)
@@ -2836,7 +2886,7 @@ def test_exact_recovery_checks_live_lease_even_with_stale_dead_marker(tmp_path, 
     task, contract_hash, stamp = _mark_async_dispatched(tmp_path, age_seconds=7200)
     da._write_running_marker(task.id, "codex", stamp, 999999, 0.0)
     monkeypatch.setattr(da, "_pid_alive", lambda _pid: False)
-    monkeypatch.setattr(da, "_active_admission_leases", lambda: [{"task_id": task.id, "pid": 1234}])
+    monkeypatch.setattr(da, "_inspect_task_admission_leases", lambda _task_id: [{"task_id": task.id, "pid": 1234}])
     monkeypatch.setenv("LIMEN_TARGETED_RECOVERY_GRACE", "1")
 
     result = da.recover_exact_task(task.id, contract_hash, dry_run=True)

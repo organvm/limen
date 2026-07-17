@@ -13,18 +13,17 @@
   reclaim caches + iCloud local-cache (copy→verify→`brctl evict`, reversible). 19.78 GB reclaimed in one
   pass; finishes the rest each C_BACKUP beat. [[storage-autonomic-solve]]
 - **node_modules creep** — `clone-maintenance.sh`, every 8 beats; `.claude/worktrees/` hard-excluded.
-- **Session / worktree closeout** — DAEMON-OWNED classifier (`quicken.py reap_done`, every
-  `C_QUICKEN` beat) plus receipt-backed removal organs (`reclaim-worktrees.py` / `reap-branches.py`):
-  a finished (DONE) or deliberately-ended (CLOSED) session's spent isolation worktree is only surfaced
+- **Worktree closeout** — receipt-backed removal organs (`reclaim-worktrees.py` /
+  `reap-branches.py`) classify shared git state without reading or controlling provider sessions:
+  a spent isolation worktree is only surfaced
   when verified clean **and** fully merged into `origin/main` (rev-list empty, or `git cherry` shows
   every commit patch-present for squash/rebase, or a merged PR exists). As of 2026-07-06, physical
   removal requires an explicit human acceptance/redaction/archive event in
   `docs/worktree-reclaim-acceptance.jsonl`; the daemon can surface candidates, but it does not delete
   local roots on merge proof alone. You **never** run `git worktree remove` / `git branch -D` by hand
   again; accepted candidates are reaped by the receipt-backed organ. (Optional accelerator: a
-  `SessionEnd` hook `scripts/hooks/session-closeout.sh` drops a breadcrumb so a ctrl+x'd session is
-  classified next beat instead of after the idle window — the daemon already covers the common case,
-  so registering it is nice-to-have, not required.)
+  `SessionEnd` hook `scripts/hooks/session-closeout.sh` may record the current invocation's own
+  breadcrumb, but no heartbeat is allowed to enumerate or resume provider session estates.)
 - **Value measurement** — LIVE: every dispatched task carries a weight (`budget_cost`) and a graded
   return (`score-dispatch.py` → `ledger.py`). Current verdict: *"net WORTH IT — 514 shipped, 252 wasted;
   1110/1253 debits productive."* The "justify your value or die" loop is structural, not a slogan.
@@ -95,12 +94,11 @@ No completed backup. Data already has **3 copies** (iCloud + Archive4T + Backbla
 convenience, not a durability gap. **Owner:** you. **Cheapest path:** staging drive →
 `tmutil setdestination`. Not blocking anything.
 
-### 6. Session residue (from QUICKEN) — *hung in the permanent queue, not this doc*
-QUICKEN drives every reversible step of a sitting session to done, **reaps the spent worktree itself**
-once it's clean+merged (see the closeout bullet under *Already autonomic*), then hangs the one touch a
-loop can't make in the **permanent `needs_human` queue** as `ASK-quicken-<key>` (lockless/atomic into
-`tasks.yaml`; surfaced by `obligations-view` / `organ-health` / `reclassify`; capture-pushed off-disk).
-The running system holds these — this doc is the annotated view, not the home; nothing waits on memory.
+### 6. Historical QUICKEN residue — *frozen; no daemon session control*
+The rows below are legacy receipts from the retired whole-estate QUICKEN implementation. They do not
+authorize inspection, resumption, closeout, or mutation of a Claude, Codex, or other peer session.
+Current work must be continued by that peer or from a bounded owner packet; worktree cleanup uses the
+separate receipt-backed reclaim organs above.
 - **One login/identity step** → hung as `ASK-quicken-login` when surfaced. **Cheapest path:**
   `claude setup-token` (credential-race self-heal staged at `fix/claude-credential-race@b1274bf`,
   probes ready) + reconnect the hotspot.

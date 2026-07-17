@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
 import os
 
 # The ladder rungs, cheapest-first. Shared with dispatch's earned-tier ladder. Fable is a
@@ -41,6 +42,24 @@ _CLAUDE_FABLE_CLASSES_DEFAULT = (
     "final-canonical-decision",
 )
 
+_FABLE_ACCEPTANCE_CATEGORIES = {
+    "substrate",
+    "prompt-corpus",
+    "governance",
+    "adversarial-review",
+    "reserve",
+}
+_FABLE_ACCEPTANCE_CATEGORY_CAPS = {
+    "substrate": 15.0,
+    "prompt-corpus": 10.0,
+    "governance": 10.0,
+    "adversarial-review": 5.0,
+    "reserve": 10.0,
+}
+_FABLE_BALANCE_SCHEMA = "limen.fable_balance.v1"
+_FABLE_ACCEPTANCE_SCHEMA = "limen.fable_acceptance.v1"
+_FABLE_BALANCE_MAX_AGE_SECONDS_DEFAULT = 900
+
 
 def _claude_opus_classes() -> set[str]:
     """The reserved-Opus class set — env override (LIMEN_CLAUDE_OPUS_CLASSES, comma-separated)
@@ -61,34 +80,99 @@ def _claude_fable_classes() -> set[str]:
     return set(_CLAUDE_FABLE_CLASSES_DEFAULT)
 
 
-def _claude_fable_acceptance_present() -> bool:
-    """True only when the operator has provided a written Fable acceptance artifact.
+def _current_week(now: dt.datetime | None = None) -> str:
+    moment = now or dt.datetime.now(dt.timezone.utc)
+    return (moment - dt.timedelta(days=moment.weekday())).date().isoformat()
 
-    The expected value is a path to a receipt produced by ``scripts/fable-allotment.py accept``.
-    Test processes may set ``1``; real runs must point at a current-week receipt so an old shell
-    export or arbitrary existing path cannot become a standing Fable grant.
-    """
-    raw = os.environ.get("LIMEN_FABLE_ACCEPTANCE", "").strip()
-    if not raw:
-        return False
-    if raw == "1":
-        return "PYTEST_CURRENT_TEST" in os.environ
+
+def _parse_utc(value: object) -> dt.datetime | None:
     try:
-        path = os.path.expanduser(raw)
-        with open(path) as fh:
+        parsed = dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def _fable_acceptance_receipt(value: str | None = None) -> dict | None:
+    """Load a current, explicitly plan-only Fable acceptance receipt."""
+
+    raw = (value if value is not None else os.environ.get("LIMEN_FABLE_ACCEPTANCE", "")).strip()
+    if not raw:
+        return None
+    if raw == "1":
+        if "PYTEST_CURRENT_TEST" not in os.environ:
+            return None
+        return {
+            "schema": _FABLE_ACCEPTANCE_SCHEMA,
+            "week": _current_week(),
+            "category": "governance",
+            "percent": 1.0,
+            "sources": ["pytest"],
+            "verification": ["pytest"],
+            "mode": "plan-only",
+            "deliverable": "continuation-capsule",
+            "builder_tier_max": "opus",
+            "motion_receipt_deadline_seconds": 5400,
+        }
+    try:
+        with open(os.path.expanduser(raw)) as fh:
             receipt = json.load(fh)
-        now = dt.datetime.now(dt.timezone.utc)
-        monday = (now - dt.timedelta(days=now.weekday())).date().isoformat()
-        return receipt.get("schema") == "limen.fable_acceptance.v1" and receipt.get("week") == monday
     except Exception:
-        return False
+        return None
+    if not isinstance(receipt, dict):
+        return None
+    try:
+        percent = float(receipt.get("percent"))
+    except (TypeError, ValueError):
+        return None
+    sources = receipt.get("sources") or []
+    packets = receipt.get("redacted_packets") or []
+    verification = receipt.get("verification") or []
+    if not math.isfinite(percent) or percent <= 0:
+        return None
+    if receipt.get("schema") != _FABLE_ACCEPTANCE_SCHEMA or receipt.get("week") != _current_week():
+        return None
+    category = receipt.get("category")
+    if category not in _FABLE_ACCEPTANCE_CATEGORIES:
+        return None
+    if percent > _FABLE_ACCEPTANCE_CATEGORY_CAPS[str(category)]:
+        return None
+    if category == "reserve" and receipt.get("reserve_unlocked") is not True:
+        return None
+    if receipt.get("mode") != "plan-only" or receipt.get("deliverable") != "continuation-capsule":
+        return None
+    if receipt.get("builder_tier_max") not in {"haiku", "sonnet", "opus"}:
+        return None
+    if receipt.get("motion_receipt_deadline_seconds") != 5400:
+        return None
+    source_ok = (
+        isinstance(sources, list) and bool(sources) and all(isinstance(item, str) and item.strip() for item in sources)
+    )
+    packet_ok = (
+        isinstance(packets, list) and bool(packets) and all(isinstance(item, str) and item.strip() for item in packets)
+    )
+    if not source_ok and not packet_ok:
+        return None
+    if (
+        not isinstance(verification, list)
+        or not verification
+        or not all(isinstance(item, str) and item.strip() for item in verification)
+    ):
+        return None
+    return receipt
 
 
-def _fable_balance() -> dict | None:
-    """Read the live weekly Fable balance written by ``scripts/fable-allotment.py balance``
-    (``$LIMEN_ROOT/logs/fable-allotment.json``). Returns the parsed dict for the CURRENT ISO-week,
-    or None when absent / stale / unreadable (fail-open → the acceptance receipt remains the only
-    gate). Env override ``LIMEN_FABLE_BALANCE_PATH`` points at an alternate file (tests)."""
+def _claude_fable_acceptance_present() -> bool:
+    """True only for a current receipt that binds Fable to a plan-only capsule."""
+
+    return _fable_acceptance_receipt() is not None
+
+
+def _fable_balance_status() -> tuple[dict | None, str]:
+    """Return a fresh, internally coherent weekly balance or a fail-closed reason."""
+
     raw = os.environ.get("LIMEN_FABLE_BALANCE_PATH")
     if raw:
         path = raw
@@ -99,15 +183,62 @@ def _fable_balance() -> dict | None:
     try:
         with open(path) as fh:
             data = json.load(fh)
+    except FileNotFoundError:
+        return None, "balance-absent"
     except Exception:
-        return None
-    if not isinstance(data, dict):
-        return None
+        return None, "balance-unreadable"
+    if not isinstance(data, dict) or data.get("schema") != _FABLE_BALANCE_SCHEMA:
+        return None, "balance-malformed"
+    numeric_fields = (data.get("spent_pct"), data.get("deliberate_cap"), data.get("hard_cap"), data.get("spent_tokens"))
+    if any(isinstance(value, bool) for value in numeric_fields):
+        return None, "balance-malformed-numbers"
+    if data.get("week") != _current_week():
+        return None, "balance-stale-week"
+    observed = _parse_utc(data.get("observed_at"))
+    if observed is None:
+        return None, "balance-missing-observation-time"
     now = dt.datetime.now(dt.timezone.utc)
-    monday = (now - dt.timedelta(days=now.weekday())).date().isoformat()
-    if str(data.get("week")) != monday:
-        return None  # stale week — do not trust a prior week's balance
-    return data
+    try:
+        max_age = max(
+            1,
+            int(
+                os.environ.get(
+                    "LIMEN_FABLE_BALANCE_MAX_AGE_SECONDS",
+                    str(_FABLE_BALANCE_MAX_AGE_SECONDS_DEFAULT),
+                )
+            ),
+        )
+    except ValueError:
+        max_age = _FABLE_BALANCE_MAX_AGE_SECONDS_DEFAULT
+    age = (now - observed).total_seconds()
+    if age < -60:
+        return None, "balance-from-future"
+    if age > max_age:
+        return None, "balance-stale-observation"
+    if data.get("meter_ready") is not True:
+        return None, "balance-source-unready"
+    if data.get("source") not in {"ratelimit-header", "transcript-token-sum"}:
+        return None, "balance-unknown-source"
+    try:
+        spent = float(data.get("spent_pct"))
+        deliberate = float(data.get("deliberate_cap"))
+        hard = float(data.get("hard_cap"))
+        spent_tokens = int(data.get("spent_tokens"))
+    except (TypeError, ValueError):
+        return None, "balance-malformed-numbers"
+    if not all(math.isfinite(value) for value in (spent, deliberate, hard)):
+        return None, "balance-nonfinite"
+    if spent < 0 or deliberate <= 0 or hard < deliberate or hard > 100 or spent_tokens < 0:
+        return None, "balance-invalid-range"
+    if not isinstance(data.get("over_cap"), bool) or data["over_cap"] != (spent >= hard):
+        return None, "balance-incoherent-cap-state"
+    return data, "ok"
+
+
+def _fable_balance() -> dict | None:
+    """Return only a fresh authoritative balance; all missing/bad states fail closed."""
+
+    return _fable_balance_status()[0]
 
 
 def _fable_capped_tier(reserve_ok: bool) -> str | None:
@@ -120,18 +251,18 @@ def _fable_capped_tier(reserve_ok: bool) -> str | None:
       * spent_pct ≥ hard_cap (50)               → hard downgrade to Opus, NO exception.
 
     ``reserve_ok`` marks that the caller's authorization is a fresh ``reserve``-category receipt.
-    Fail-open (no balance file / malformed) → None so the meter can never block on a hiccup; the
-    acceptance receipt organ stays the authorization of record. HARD_CAP is a hard cap. The cap
+    Missing, stale, malformed, or source-dark balance state fails closed to the cap downgrade.
+    HARD_CAP is a hard cap. The cap
     downgrade lands on Opus (an over-cap Fable job was legitimately high-value; Opus is the nearest
     tier down), distinct from the acceptance-ABSENT fallback which stays at ``_fable_fallback_tier``.
     """
     bal = _fable_balance()
     if bal is None:
-        return None
+        return _fable_cap_downgrade_tier()
     try:
         spent = float(bal.get("spent_pct"))  # type: ignore[arg-type]
     except (TypeError, ValueError):
-        return None
+        return _fable_cap_downgrade_tier()
     deliberate_cap = float(bal.get("deliberate_cap", 40) or 40)
     hard_cap = float(bal.get("hard_cap", 50) or 50)
     if spent >= hard_cap:
@@ -151,21 +282,8 @@ def _fable_reserve_receipt_present() -> bool:
     """True only when the current acceptance receipt is a fresh (current-ISO-week) ``reserve``
     category receipt — the single exception that passes the 40–50% band. Reuses the same receipt
     file the acceptance gate reads; a test ``LIMEN_FABLE_ACCEPTANCE=1`` is NOT a reserve receipt."""
-    raw = os.environ.get("LIMEN_FABLE_ACCEPTANCE", "").strip()
-    if not raw or raw == "1":
-        return False
-    try:
-        with open(os.path.expanduser(raw)) as fh:
-            receipt = json.load(fh)
-        now = dt.datetime.now(dt.timezone.utc)
-        monday = (now - dt.timedelta(days=now.weekday())).date().isoformat()
-        return (
-            receipt.get("schema") == "limen.fable_acceptance.v1"
-            and receipt.get("week") == monday
-            and receipt.get("category") == "reserve"
-        )
-    except Exception:
-        return False
+    receipt = _fable_acceptance_receipt()
+    return bool(receipt is not None and receipt.get("category") == "reserve")
 
 
 def _fable_or_downgrade(fable_tier: str = "fable") -> str:
@@ -233,6 +351,10 @@ def _resolve_claude_model(tier: str) -> str:
     bare CLI tier alias, which the ``claude`` CLI resolves to the current dated model itself
     (nothing pinned, survives renames). ([[derive-never-pin-hardcodes]])"""
     model = os.environ.get(f"LIMEN_CLAUDE_{tier.upper()}_MODEL") or tier
+    # A lower-tier env alias must not smuggle a Fable model through a fallback/cap decision. Only
+    # the explicitly selected ``fable`` rung may resolve to a Fable-bearing provider value.
+    if tier != "fable" and _claude_model_is_fable(model):
+        return tier if tier in _CLAUDE_TIER_ORDER else "sonnet"
     if _claude_model_is_fable(model) and not _claude_fable_acceptance_present():
         return _resolve_claude_model(_fable_fallback_tier()) if tier == "fable" else tier
     # Live weekly-cap backstop: a valid receipt is necessary-not-sufficient. When the week's Fable
@@ -254,7 +376,9 @@ def _guard_claude_model_pin(model: str | None) -> str | None:
     audited by transcript/workflow guards. This guard covers the global default pin
     ``LIMEN_CLAUDE_MODEL``, which otherwise becomes inherited fan-out for unrelated cheap work.
     """
-    if _claude_model_is_fable(model) and not _claude_fable_acceptance_present():
+    # A global pin has no task/capsule boundary, so it cannot prove plan-only execution. Accepted
+    # task-scoped dispatch declares Fable explicitly after validating that boundary.
+    if _claude_model_is_fable(model):
         return _resolve_claude_model(_fable_fallback_tier())
     if (_claude_model_is_opus(model) or _claude_model_uses_large_context(model)) and not _expensive_model_pin_allowed():
         return _resolve_claude_model(_max_inherited_tier())

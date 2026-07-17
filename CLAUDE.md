@@ -11,13 +11,13 @@ the script/schema/code rather than trusting memory.
 
 ## Instruction File Maintenance
 
-- `AGENTS.md` owns operating modes, task states, dispatch protocol, budget semantics, safety, and
+- `AGENTS.md` defines operating modes, task states, dispatch protocol, budget semantics, safety, and
   `dispatch_log` shape.
-- `CLAUDE.md` owns Claude-specific execution discipline: closeout, merge cadence, credential
+- `CLAUDE.md` defines Claude-specific execution discipline: closeout, merge cadence, credential
   handling, output style, worktree isolation, and compliant gate reroutes.
-- `GEMINI.md` owns conductor/MCP workflow details and PR babysitting mechanics.
-- `CONTRIBUTING.md` owns human contributor guidance.
-- `docs/agent-instruction-standard.md` owns the rationale and cross-surface standard.
+- `GEMINI.md` defines conductor/MCP workflow details and PR babysitting mechanics.
+- `CONTRIBUTING.md` defines human contributor guidance.
+- `docs/agent-instruction-standard.md` defines the rationale and cross-surface standard.
 - If you change task states, precedence, agent names, referenced scripts, or status examples, update
   `scripts/check-agent-docs.py` in the same change. Do not add a competing instruction file unless a
   new tool requires it; link it back to `AGENTS.md`.
@@ -70,7 +70,7 @@ A *closeout* means **ZERO open or dangling items introduced by this task/session
 2. **An idempotent fixed point is reached** — re-running the full verification produces **no changes** (see [Definition of Done](#definition-of-done)). If a re-run still mutates state, you are not done.
 3. **All loose work you introduced or touched is committed across every affected repo** — no uncommitted diffs, no stranded branches; `git status` is clean wherever you touched.
 
-If gaps remain, **close them first**, then archive and hand off. A genuinely human-gated item is **filed in its own git-tracked owner** — a lever in `his-hand-levers.json`, or (for any token/secret/login/env atom) the credential organ + Wall #320 — **never recited back to the operator in a closeout, and never appended as a "but also this" tail.** The relay cites the registry and the green predicate; it does **not** enumerate his atoms. He reads owed work in the registry on his own cadence — **a closeout that hands him a list has failed, even when every item is technically homed.** If an atom is *already* filed, that is DONE: do not re-surface it. Likewise a green-but-pending PR is a **homed** item, not a dangling one: its owner is the beat's merge rung (`scripts/merge-drain.py` via `scripts/drain.sh`) — cite that owner and end, or run the one bounded waiter (`scripts/await-pr.sh`); never babysit CI with a hand-rolled watcher shell. When the predicates are green at the fixed point, end with the terminal statement — **"CLOSEOUT COMPLETE — idempotent fixed point, zero dangling items"** — and **stop**: nothing follows it. A closeout that keeps talking past the terminal statement — any caveat tail — has failed. Run `/closeout` to execute this discipline.
+If gaps remain, **close them first**, then archive and hand off. A genuinely human-gated item is **filed in its own git-tracked owner** — a lever in `his-hand-levers.json`, or (for any token/secret/login/env atom) the credential organ + Wall #320 — **never recited back to the operator in a closeout, and never appended as a "but also this" tail.** The relay cites the registry and the green predicate; it does **not** enumerate his atoms. He reads owed work in the registry on his own cadence — **a closeout that hands him a list has failed, even when every item is technically homed.** If an atom is *already* filed, do not re-surface it. Likewise a green-but-pending PR is homed only when its exact owner surface records the remaining review or merge-authorization predicate; `scripts/merge-drain.py` merely previews candidates by default and cannot supply that authority. Use the bounded observation-only waiter (`scripts/await-pr.sh`) when useful; never babysit CI with a hand-rolled watcher shell. When the predicates are green at the fixed point, end with the terminal statement — **"CLOSEOUT COMPLETE — idempotent fixed point, zero dangling items"** — and **stop**: nothing follows it. A closeout that keeps talking past the terminal statement — any caveat tail — has failed. Run `/closeout` to execute this discipline.
 
 Point 1 has a shipped predicate — **`scripts/no-tasks-on-me.sh`** (exit `0` ⟺ nothing hangs on the ephemeral session). It proves every human-gated item lives in the git-tracked registry with a real owner (recall-only memory at `~/.claude/…` is **not** a durable home), that no preserved work is stranded on a local-only `*-staged-*` ref (each must be merged or cited by a lever), and that the registry stays PII-clean (it publishes). Credential/secret atoms live in a **separate** git-tracked home (the credential organ), so the closeout gate is **both** `scripts/no-tasks-on-me.sh` **and** `scripts/credential-wall.py --check` (exit `0` ⟺ every secret in use is homed). Both green ⟺ nothing hangs, and the relay then names the registry, never the atoms. Run them instead of re-auditing ownership by hand each session; a chat audit you have to repeat next session — or a "here's what's still open" list handed to the operator — *is* leaving the discipline hanging on him.
 
@@ -119,7 +119,11 @@ Do **not** declare work "done" or "fully done" until verified end-to-end:
 - **Prefer minimal in-place edits**, especially during closeouts and cleanups. **Do not create new files unless asked** or genuinely required by the task.
 - **Case-insensitive filesystem (macOS):** never let near-identical filenames (`Foo.md` vs `foo.md`) silently overwrite each other or drop a file from a commit — check before writing.
 - **Confine edits to your worktree + branch.** Stage explicitly with `git add <path>` — **never `git add -A`** in a live checkout. Do not hand-merge contended `main` or edit daemon-contended runtime files.
-- **Merge is a standing grant — Claude merges its own green PRs into `main` without asking** (the routine-merge human-gate is lifted; see [Merge & Branch Protocol](#merge--branch-protocol)). Deploy is *automatic* on merge to `main` for deploy-trigger paths, so the **one guardrail** is the live website: never merge a change that breaks the deployed site/API — a website-sensitive PR requires green CI first. Mass cross-org/fleet merges, sends, wipes, and large spends stay human-gated levers.
+- **Merge candidacy is a protocol judgment shared by every co-equal peer keeper, not authority
+  attached to Claude or PR authorship.** A PR may merge only after `scripts/merge-policy.sh` proves
+  the exact-head CI, peer-review receipt, conversation-resolution, branch, and deployment predicates,
+  and the separate executor validates a short-lived signed authorization for that same target.
+  Mass cross-org/fleet merges, sends, wipes, and large spends stay human-gated levers.
 
 ## Credentials Are Organ-Owned (Never Recited in Chat)
 
@@ -144,7 +148,7 @@ For any search or recon whose scope spans multiple domains, **fan out parallel r
 - **Wait for ALL workers**, then **merge into one ground-truth report that flags conflicts** between packets.
 - **Never park the search early, and never guess a timeframe** — verify every location and timeframe explicitly before reporting. Default to ~3 parallel explorers for non-trivial recon.
 - **Tier every fan-out agent by job — never let it inherit.** In-harness subagents (the Task tool *and* Workflow `agent()`) default to **the session model**, so a fan-out of trivial workers silently rides the session's Opus (the `verify-studio-launch` incident: six broken-link/typo checks on Opus 4.8). Pick each agent's tier by its job: choose an `agentType` from `.claude/agents/` (`verify`/`scan` → haiku, `synth` → opus) or pass an explicit `model` + `effort`. The frontmatter pin is a **floor, not a cap** — a per-call `model` still escalates a genuinely hard job upward. The class→tier authority is `cli/src/limen/model_selection.py` plus `dispatch._claude_tier_for` (do **not** restate the ladder here); an untiered expensive-tier fan-out is surfaced every session by the `scripts/claude-workflow-guard.py` audit wired into `SessionEnd`.
-- **Fable is a reserved tier above Opus, not the new default.** Use it only under [`docs/fable-allotment.md`](docs/fable-allotment.md): a Fable run needs a written `scripts/fable-allotment.py accept ...` command/receipt before it starts, `LIMEN_FABLE_ACCEPTANCE=<receipt>` in the run environment, and a single bounded objective. Retry bumping caps at Opus unless `LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE=1` and that acceptance is present. Untiered Fable/Opus fan-out is blocked by `scripts/claude-workflow-guard.py`.
+- **Fable is a reserved plan-only tier above Opus, not the new default.** Use it only under [`docs/fable-allotment.md`](docs/fable-allotment.md): a Fable run needs `mode:plan-only`, a current plan-bound `scripts/fable-allotment.py accept ...` receipt in `LIMEN_FABLE_ACCEPTANCE`, a fresh/source-ready balance receipt, and one bounded continuation-capsule objective. It never receives the implementation prompt/tool path; provider Auto on a non-Fable tier builds the packet. Retry bumping caps at Opus unless this complete contract passes. Guards act only on their own launched process/session and never stop, retune, or inspect a co-equal peer's continuation. Untiered Fable/Opus fan-out is blocked by `scripts/claude-workflow-guard.py`.
 
 ## Worktree Isolation & CI Gate Matrix
 
@@ -160,7 +164,7 @@ Isolate work in a **git worktree so the live fleet is untouched** (see `GEMINI.m
 
 - For each failure, **fix root-to-leaf and re-run the implicated gates** — loop until they pass end-to-end (the full matrix only when the diff implicates it). Do not chase one gate green while another regresses.
 - **Surface masked failures from dependency bumps** — a green that only passes because a check was skipped or a dependency silently changed behavior.
-- **Only after the implicated gates are green locally**, push and open the PR, pasting the green run as proof. **Then merge it yourself** the moment `scripts/merge-policy.sh <PR#>` exits `0` (CLEARED) — that predicate enforces the website guardrail; never merge on a HOLD/BLOCKED. See [Merge & Branch Protocol](#merge--branch-protocol).
+- **Only after the implicated gates are green locally**, push and open the PR, pasting the green run as proof. A `CLEARED` result from `scripts/merge-policy.sh <PR#>` makes the exact head a merge candidate; it does not authorize mutation. Only the receipt-bound `scripts/merge-drain.py --apply` path may merge, with its separate short-lived signed authorization. See [Merge & Branch Protocol](#merge--branch-protocol).
 
 ## Standing Autonomy & Compliant Gate Reroute
 
@@ -203,7 +207,10 @@ reflex.
 
 ## Merge & Branch Protocol
 
-Authoritative and permanent. Claude **owns the branch cadence and the merge decision** — the requesting human does not have to think about either. This realizes the cascade *protocol → precedent → exploration → ideal-form*: the protocol is below; the executable predicate **`scripts/merge-policy.sh`** is the ideal-form that decides each case by logic, never by memory.
+Authoritative and permanent. Every canonical agent is a co-equal peer keeper; no provider or
+executor owns branch cadence, review, or the merge decision. The shared protocol and its evidence
+decide each case. The executable predicate **`scripts/merge-policy.sh`** is the ideal-form that
+applies that boundary by logic, never by identity or memory.
 
 **Branch cadence.** Never commit to `main` directly. Every change is a topic branch, isolated in a worktree, named by intent:
 
@@ -226,9 +233,9 @@ automatic delete. `main` is the trunk **and** the live deploy source.
 one-file docs appends (the `docs: review … run` class, which was landing as direct `main` commits —
 35 of 40 at its worst). Ship those with **`scripts/ship-docs.sh <slug> "<msg>" <file…>`**: it stages
 only the named files onto a fresh branch cut from `origin/main` in an isolated reclaim-tracked
-worktree (your checkout is never touched), opens the PR, and self-merges the moment
-`merge-policy.sh` clears while retaining the branch/root for later accepted cleanup — one command,
-so the PR path is never harder than the side door. The system's own findings are
+worktree (your checkout is never touched) and opens the PR while retaining the branch/root for later
+accepted cleanup. It never merges; the exact head enters the same review and receipt-bound merge path
+as every other change. The system's own findings are
 githubbed the same way: **`scripts/sync-censor-issues.py`** (beat-wired, dry-run until
 `LIMEN_CENSOR_ISSUES_APPLY=1` arms it) mirrors live censor residuals to public `censor`-labelled
 issues and auto-closes them when the lineage clears — so insight→correction work arrives as an
@@ -236,21 +243,34 @@ issue and leaves as a PR that cites it. Machine board writes (`tasks.yaml` via t
 are the one sanctioned direct-push lane; blanket branch protection stays a lever (#257) for exactly
 that reason.
 
-**Merge authority (standing grant).** Claude merges its own PRs into `main` *without asking*, the moment they are green and mergeable. Do not defer routine merges to the human operator. The grant has exactly one guardrail.
+**Merge protocol.** Every co-equal peer keeper may prepare and review a merge candidate. No peer's
+identity, presence, provider, or session supplies merge authority over another peer's work. Mutation
+requires the shared exact-head predicate plus the separate short-lived signed merge authorization;
+the receipt-bound executor revalidates both immediately before the merge. Executor attribution is
+not ownership or unilateral authority, and unresolved peer review always blocks.
 
 **The website guardrail.** A merge to `main` **auto-deploys** the live public site/API — but *only* when the diff touches a deploy-trigger path. The trigger paths are **declared once** in the `deploy_triggers` block of [`institutio/governance/gates.yaml`](institutio/governance/gates.yaml) (dashboard → `deploy.yml` → Cloudflare Pages, Firebase step dormant; API → `deploy-api.yml` → Cloud Run / Worker); `merge-policy.sh` derives its classification from that registry, and `check-gates.py` holds the registry in exact parity with the workflows on every PR — do not restate the path list here or anywhere else.
 
-For a **website-sensitive** PR, merging *is* the deploy — so it requires **green CI first** (plus a local `web/app` build for dashboard changes). Never blind-merge a live deploy. For every **other** PR (docs, corpus, mcp, ianva, memory, `web/worker`, most of `scripts/**`), merge freely once CLEAN. (`web/worker` is the live runtime but deploys on-demand via wrangler, not on merge — so its merges don't auto-deploy.)
+For a **website-sensitive** PR, merging *is* the deploy — so it requires green exact-head CI plus
+a local `web/app` build for dashboard changes. Every PR, including docs-only work, also requires a
+distinct peer approval on the final commit and zero unresolved current review conversations.
+Never blind-merge a live deploy. (`web/worker` is the live runtime but deploys on-demand via
+wrangler, not on merge — so its merges do not auto-deploy.)
 
 **The predicate decides — not your memory.** Run `scripts/merge-policy.sh <PR#>` (or no arg for the current branch):
 
-- exit **0 CLEARED** → `gh pr merge <PR#> --squash`. Do it; don't ask. Branch cleanup is
-  receipt-backed and separate from the merge.
-- exit **2 HOLD** → website-sensitive with CI not yet green+complete, a draft, or non-deploy checks still running. Wait for green, then merge.
+- exit **0 CLEARED** → current-head CI, review receipt, conversations, branch state, and any deploy
+  predicate all pass. The peer receipt may be a distinct native GitHub approval or a separately
+  custodied SSH-signed exact-head receipt when peers share one login. This is candidate evidence,
+  not mutation authority. `scripts/merge-drain.py --apply` additionally requires and revalidates a
+  short-lived signed authorization for that exact repository, PR, and head; branch cleanup is
+  receipt-backed and separate.
+- exit **2 HOLD** → CI/review/conversation evidence is incomplete, the PR is a draft, or the head
+  moved. Repair or wait for the named evidence, then re-run.
 - exit **3 BLOCKED** → GitHub itself refuses the merge: conflicts (DIRTY), stale base (BEHIND), or a branch-protection gate unsatisfied (BLOCKED — e.g. the required `pr-gate` check never ran on a PR opened before that check existed). Rebase onto current `main` first (the PR#111 silent-revert guard; a rebase also retriggers the required checks), then re-run. If BLOCKED persists after a clean green rebase, a required review or admin merge is needed — surface it, don't force it.
 
 The script **derives** its deploy classification from the GATES registry at run time and fails *toward caution*: if derivation is impossible (broken python/PyYAML/registry), it forces website-sensitive, so a broken environment can only HOLD, never blind-deploy. There is no path list to keep in lockstep — `check-gates.py` enforces registry↔workflow parity on every PR.
 
-**Waiting on a gate.** Never hand-roll a background poll loop on a PR gate (`for … gh pr … sleep … done` is banned — the 2026-07-15 endless-watcher incident: bespoke pollers, silent on FAIL, outliving their sessions). The one sanctioned synchronous waiter is **`scripts/await-pr.sh <PR#> [--merge]`** — hard deadline, loud CLEARED/FAILED/TIMEOUT verdicts, single instance per PR, and it refuses to start under a merge-prohibiting pause marker. Anything longer than its deadline is the beat's job: the merge rung (`scripts/merge-drain.py` via `scripts/drain.sh`) lands green PRs every drain beat — hand off and end. And before arming any watcher or merging, read `logs/AUTONOMY_PAUSED`: its `prohibitions:` bind interactive sessions too — a marker that prohibits merges means no watcher and no merge until the operator releases it.
+**Waiting on a gate.** Never hand-roll a background poll loop on a PR gate (`for … gh pr … sleep … done` is banned — the 2026-07-15 endless-watcher incident: bespoke pollers, silent on FAIL, outliving their sessions). The one sanctioned synchronous waiter is **`scripts/await-pr.sh <PR#>`** — hard deadline, loud CLEARED/FAILED/TIMEOUT verdicts, and a single instance per PR. It is observation-only; the retired `--merge` flag fails closed. Anything longer than its deadline belongs to a bounded scheduled check, not a session-owned watcher. `scripts/merge-drain.py` is preview-only unless an explicit `--apply` carries a valid exact-target signed authorization. A merge-prohibiting pause blocks mutation but does not block read-only observation.
 
 **Still human-gated levers** (unchanged): mass cross-org/fleet merges, anything that **sends** (email) or **wipes/deletes**, and **large spends**. Those stay human-gated; routine code merges do not.

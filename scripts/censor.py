@@ -28,6 +28,7 @@ Anti-waste + never-"NO": read-mostly; every actuator is wrapped + timeout-bounde
 fail-open. Writes only its own state/ledger and delegates contended writes to the
 organs that own them. Default is DRY (report only); --apply lets the executive act.
 """
+
 import argparse
 import json
 import os
@@ -41,9 +42,9 @@ LOGS = ROOT / "logs"
 CENSOR_DIR = ROOT / "censor"
 PROTOCOLS = Path(os.environ.get("LIMEN_CENSOR_PROTOCOLS", CENSOR_DIR / "protocols.yaml"))
 STATE_PATH = LOGS / "censor-state.json"
-LEDGER_PATH = LOGS / "censor-decisions.jsonl"      # high-volume audit trail → runtime (gitignored)
+LEDGER_PATH = LOGS / "censor-decisions.jsonl"  # high-volume audit trail → runtime (gitignored)
 PRECEDENTS_PATH = CENSOR_DIR / "precedents.jsonl"  # judicial case law → durable, committed
-LAST_PATH = LOGS / "censor-last.json"   # compact summary the view reads
+LAST_PATH = LOGS / "censor-last.json"  # compact summary the view reads
 RESIDUAL_PATH = LOGS / "censor-residual.json"
 
 TIER_SECONDS = {"hourly": 3600, "daily": 86400, "weekly": 604800, "monthly": 2592000}
@@ -64,6 +65,7 @@ ACTUATOR_TIMEOUT = _positive_int_env("LIMEN_CENSOR_TIMEOUT", 300)
 
 
 # ─── primitives ──────────────────────────────────────────────────────
+
 
 def _now():
     return datetime.now(timezone.utc)
@@ -93,6 +95,7 @@ def _load_json(path, default):
 def _load_yaml(path):
     try:
         import yaml
+
         return yaml.safe_load(Path(path).read_text()) or {}
     except Exception:
         return {}
@@ -134,8 +137,7 @@ def _run(cmd, env_extra=None):
     if env_extra:
         env.update(env_extra)
     try:
-        r = subprocess.run(cmd, cwd=str(ROOT), env=env, capture_output=True,
-                           text=True, timeout=ACTUATOR_TIMEOUT)
+        r = subprocess.run(cmd, cwd=str(ROOT), env=env, capture_output=True, text=True, timeout=ACTUATOR_TIMEOUT)
         tail = (r.stdout or r.stderr or "").strip().splitlines()[-1:] or [""]
         return r.returncode == 0, tail[0][:200]
     except (subprocess.TimeoutExpired, OSError, ValueError) as e:
@@ -143,6 +145,7 @@ def _run(cmd, env_extra=None):
 
 
 # ─── cadence gating: beat-time → calendar-time ───────────────────────
+
 
 def due_tiers(state, now, force=None):
     if force:
@@ -157,6 +160,7 @@ def due_tiers(state, now, force=None):
 
 
 # ─── signal gathering (read-only) ────────────────────────────────────
+
 
 def _self_improve_proposal(refresh):
     if refresh:
@@ -173,25 +177,48 @@ def gather_signals(tier, refresh=True):
         health = _load_json(LOGS / "organ-health.json", {})
         for o in health.get("organs", []):
             if o.get("status") in ("stale", "down"):
-                sigs.append({"type": "organ_health", "status": o["status"],
-                             "subject": o.get("key", "?"), "age_h": o.get("age_h"),
-                             "expected_h": o.get("expected_h")})
+                sigs.append(
+                    {
+                        "type": "organ_health",
+                        "status": o["status"],
+                        "subject": o.get("key", "?"),
+                        "age_h": o.get("age_h"),
+                        "expected_h": o.get("expected_h"),
+                    }
+                )
     elif tier == "daily":
         prop = _self_improve_proposal(refresh)
         for la in prop.get("lane_adjustments", []):
             if la.get("verdict"):
-                sigs.append({"type": "lane_adjustment", "verdict": la["verdict"],
-                             "subject": la.get("lane", "?"),
-                             "target_weight": la.get("target_weight"),
-                             "reason": la.get("reason", "")})
+                sigs.append(
+                    {
+                        "type": "lane_adjustment",
+                        "verdict": la["verdict"],
+                        "subject": la.get("lane", "?"),
+                        "target_weight": la.get("target_weight"),
+                        "reason": la.get("reason", ""),
+                    }
+                )
         for rk in prop.get("rerank", []):
             if rk.get("move") not in ("boost", "deprioritise"):
-                continue   # 'hold' = self-improve chose no change → not a signal, not a study
-            sigs.append({"type": "rerank", "move": rk.get("move"),
-                         "subject": rk.get("pattern", "?"), "reason": rk.get("reason", "")})
+                continue  # 'hold' = self-improve chose no change → not a signal, not a study
+            sigs.append(
+                {
+                    "type": "rerank",
+                    "move": rk.get("move"),
+                    "subject": rk.get("pattern", "?"),
+                    "reason": rk.get("reason", ""),
+                }
+            )
         for rp in prop.get("retire_patterns", []):
-            sigs.append({"type": "retire_pattern", "subject": rp.get("pattern", "?"),
-                         "action_hint": rp.get("action"), "reason": (rp.get("evidence") or [""])[0]})
+            sigs.append(
+                {
+                    "type": "retire_pattern",
+                    "subject": rp.get("pattern", "?"),
+                    "action_hint": rp.get("action"),
+                    "reason": (rp.get("evidence") or [""])[0],
+                }
+            )
     elif tier == "weekly":
         # behavioural drift — recurring frictions become candidate standing corrections.
         # Read whatever drift signal exists; degrade gracefully if the tooling is absent.
@@ -200,20 +227,28 @@ def gather_signals(tier, refresh=True):
         # the behavioural-rule lever was already blessed once — re-surfacing it every week
         # is the parked-blocker anti-pattern, so the cascade resolves it via precedent.
         # The friction still leaves the drift only empirically (a future report without it).
-        settled = {pc.get("subject") for pc in _load_jsonl(PRECEDENTS_PATH)
-                   if pc.get("type") == "recurring_friction"
-                   and pc.get("outcome") in ("good", "applied-ok")}
+        settled = {
+            pc.get("subject")
+            for pc in _load_jsonl(PRECEDENTS_PATH)
+            if pc.get("type") == "recurring_friction" and pc.get("outcome") in ("good", "applied-ok")
+        }
         for src in (LOGS / "friction-federation.json", LOGS / "insights-drift.json"):
             d = _load_json(src, {})
             for fr in (d.get("recurring") or d.get("frictions") or [])[:8]:
                 label = fr if isinstance(fr, str) else fr.get("pattern") or fr.get("label", "?")
-                sigs.append({"type": "recurring_friction", "subject": label,
-                             "codified": "yes" if label in settled else "no",
-                             "reason": "recurring across the window"})
+                sigs.append(
+                    {
+                        "type": "recurring_friction",
+                        "subject": label,
+                        "codified": "yes" if label in settled else "no",
+                        "reason": "recurring across the window",
+                    }
+                )
     return sigs
 
 
 # ─── LEGISLATIVE: protocol matching ──────────────────────────────────
+
 
 def match_protocol(signal, protocols):
     for p in protocols:
@@ -238,6 +273,7 @@ def match_protocol(signal, protocols):
 
 # ─── JUDICIAL: precedent + outcome review ────────────────────────────
 
+
 def match_precedent(signal, precedents):
     """A prior like-case (same type+subject) whose recorded outcome was good."""
     for pc in reversed(precedents):
@@ -257,35 +293,50 @@ def disposition_for(protocol):
         return "auto"
     if rev == "irreversible":
         return "surface" if protocol.get("his_lever") else "propose"
-    return "propose"   # gated / judicial
+    return "propose"  # gated / judicial
 
 
 # ─── THE CASCADE ─────────────────────────────────────────────────────
+
 
 def cascade(signal, protocols, precedents):
     """protocol → precedent → exploration → (ideal-form, out of band). Returns a verdict."""
     p = match_protocol(signal, protocols)
     if p:
-        return {"branch": "protocol", "protocol": p.get("id"),
-                "action": p.get("action"), "mechanism": p.get("mechanism"),
-                "reversible": p.get("reversible"), "his_lever": p.get("his_lever"),
-                "disposition": disposition_for(p),
-                "rationale": f"protocol {p.get('id')} dictates"}
+        return {
+            "branch": "protocol",
+            "protocol": p.get("id"),
+            "action": p.get("action"),
+            "mechanism": p.get("mechanism"),
+            "reversible": p.get("reversible"),
+            "his_lever": p.get("his_lever"),
+            "disposition": disposition_for(p),
+            "rationale": f"protocol {p.get('id')} dictates",
+        }
     pc = match_precedent(signal, precedents)
     if pc:
         disp = "auto" if pc.get("reversible") == "reversible" else "propose"
-        return {"branch": "precedent", "action": pc.get("action"),
-                "reversible": pc.get("reversible"), "disposition": disp,
-                "rationale": f"precedent {pc.get('id', '?')} (outcome {pc.get('outcome')})"}
+        return {
+            "branch": "precedent",
+            "action": pc.get("action"),
+            "reversible": pc.get("reversible"),
+            "disposition": disp,
+            "rationale": f"precedent {pc.get('id', '?')} (outcome {pc.get('outcome')})",
+        }
     # no protocol, no precedent → explore, never stop
-    return {"branch": "exploration", "action": "study this signal",
-            "reversible": "reversible", "disposition": "explore",
-            "rationale": "no protocol or precedent — exploration required (ideal-form pending)"}
+    return {
+        "branch": "exploration",
+        "action": "study this signal",
+        "reversible": "reversible",
+        "disposition": "explore",
+        "rationale": "no protocol or precedent — exploration required (ideal-form pending)",
+    }
 
 
 # ─── EXECUTIVE: actuators (only run for 'auto' dispositions, only with --apply) ──
 
-def execute(tier, verdict, signal, apply, retire_authorised):
+
+def execute(tier, verdict, signal, apply):
     """Carry out an authorised, reversible action. Returns an outcome string."""
     if not apply:
         return "dry-run"
@@ -298,33 +349,31 @@ def execute(tier, verdict, signal, apply, retire_authorised):
         ok2, t2 = _run([sys.executable, "scripts/organ-health.py"])
         return f"capture={'ok' if ok1 else t1}; proprioception={'ok' if ok2 else t2}"
     if sig_t in ("lane_adjustment", "rerank"):
-        # reversible loop closure: self-improve --apply feeds route.py / sets idempotent priority.
-        # retire stays OFF unless the judicial branch authorised it (it never does in v1).
-        env = {"LIMEN_SI_APPLY": "1", "LIMEN_SI_RETIRE": "1" if retire_authorised else "0"}
-        ok, t = _run([sys.executable, "scripts/self-improve.py", "--apply"], env)
-        return f"self-improve --apply: {'ok' if ok else t}"
+        # Board-event scoring is non-authoritative. Preserve the signal as shadow evidence, but do
+        # not invoke the former route/task mutation seam until trajectory authority is accepted.
+        return "blocked-shadow-only: execution trajectory authority not accepted"
     return "no-actuator"
 
 
 # ─── main ────────────────────────────────────────────────────────────
 
+
 def run_tier(tier, protocols, precedents, apply):
     signals = gather_signals(tier, refresh=apply)
     decisions = []
-    # self-improve --apply covers ALL reversible lane/rerank signals in one idempotent call;
-    # fire it at most once per tier to avoid redundant runs.
+    # Lane/rerank signals remain shadow-only; no board-derived actuator runs.
     si_fired = False
     for s in signals:
         v = cascade(s, protocols, precedents)
         outcome = "pending"
         if v["disposition"] == "auto" and s["type"] in ("lane_adjustment", "rerank"):
             if not si_fired:
-                outcome = execute(tier, v, s, apply, retire_authorised=False)
+                outcome = execute(tier, v, s, apply)
                 si_fired = True
             else:
-                outcome = "covered by single self-improve --apply"
+                outcome = "covered by single shadow-only trajectory-authority refusal"
         else:
-            outcome = execute(tier, v, s, apply, retire_authorised=False)
+            outcome = execute(tier, v, s, apply)
         rec = {"ts": _iso(), "tier": tier, "signal": s, "verdict": v, "outcome": outcome}
         decisions.append(rec)
         # the ledger is the durable audit trail of REAL runs — appended only when the
@@ -385,8 +434,10 @@ def main():
     for d in summary["decisions"]:
         by_disp[d["verdict"]["disposition"]] = by_disp.get(d["verdict"]["disposition"], 0) + 1
     disp_str = ", ".join(f"{n} {k}" for k, n in sorted(by_disp.items())) or "no signals"
-    print(f"censor: tiers={tiers or 'none-due'} · {len(summary['decisions'])} decisions ({disp_str})"
-          f" · {'APPLIED' if args.apply else 'dry-run'}")
+    print(
+        f"censor: tiers={tiers or 'none-due'} · {len(summary['decisions'])} decisions ({disp_str})"
+        f" · {'APPLIED' if args.apply else 'dry-run'}"
+    )
     return 0
 
 

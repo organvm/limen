@@ -114,12 +114,12 @@ def test_tier_alias_resolves_via_env_pin(monkeypatch):
 
 
 def test_fable_model_pins_require_acceptance(monkeypatch):
-    """Model-name pins cannot route Fable around the receipt-backed tier gate."""
+    """A global model pin cannot prove a task-scoped capsule boundary, even if accepted."""
     _clear(monkeypatch)
     monkeypatch.setenv("LIMEN_CLAUDE_MODEL", "claude-fable-5")
     assert model_for_argv(["-p", "hi"]) == "sonnet"
     monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", "1")
-    assert model_for_argv(["-p", "hi"]) == "claude-fable-5"
+    assert model_for_argv(["-p", "hi"]) == "sonnet"
 
 
 def test_global_opus_and_1m_pins_require_explicit_override(monkeypatch):

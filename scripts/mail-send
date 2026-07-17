@@ -1,28 +1,69 @@
 #!/usr/bin/env bash
 # mail-send — limen shim into the UMA interactive send lane (mail_send.py).
 #
-# THE headless CLI email sender (operator directive 2026-07-16: sends happen from
-# the CLI — never a browser, never a GUI, never a draft parked on the operator).
-# Distinct from the autonomic send_drafts.py lane, which stays tier-locked and
-# disarmed; here the human invocation is the authorization. Every send is
+# THE headless CLI email sender. Distinct from the autonomic send_drafts.py lane,
+# which stays tier-locked and disarmed. Invocation is not authorization: the UMA
+# command is zero-write by default, and a send requires explicit --apply plus an
+# exact, unexpired uma.mail_send_authorization.v1 receipt. Every applied send is
 # server-verified against [Gmail]/Sent Mail (non-zero exit if unverified).
 #
-# Usage: scripts/mail-send --self-test
-#        scripts/mail-send --to a@b.c --subject "…" --body-file body.txt
-#        scripts/mail-send --reply-to-search "subject fragment" --body-file body.txt
-#        scripts/mail-send --from-draft "subject fragment"
-# Full docs: universal-mail--automation/CLAUDE.md § Sending mail (interactive lane).
+# Usage: scripts/mail-send --self-test --attempt-id ID
+#        scripts/mail-send --attempt-id ID --to a@b.c --subject "…" --body-file body.txt
+# Apply additionally requires: --apply --authorization-receipt PATH --authorization-key-file PATH
+# Full docs: universal-mail--automation/CLAUDE.md § Sending mail.
 set -euo pipefail
 
-UMA="${UMA_ROOT:-$HOME/Workspace/universal-mail--automation}"
-[ -f "$UMA/mail_send.py" ] || { echo "mail-send: $UMA/mail_send.py not found (set UMA_ROOT?)" >&2; exit 3; }
-
-# Credentials: prefer the tool's own config home; fall back to the credential
-# organ's env sink (only the two GMAIL_ vars — never the whole fleet env).
-if [ -f "$HOME/.config/mail_automation/credentials.env" ]; then
-  set -a; . "$HOME/.config/mail_automation/credentials.env"; set +a
-elif [ -f "$HOME/.limen.env" ]; then
-  eval "$(grep -E '^GMAIL_(USER|APP_PASSWORD)=' "$HOME/.limen.env" | sed 's/^/export /')"
+UMA="${LIMEN_UMA_ROOT:-${UMA_ROOT:-$HOME/Workspace/universal-mail--automation}}"
+launcher=()
+if [ -f "$UMA/mail_send.py" ]; then
+  launcher=(python3 "$UMA/mail_send.py")
+elif python3 -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("mail_send") else 1)' >/dev/null 2>&1; then
+  launcher=(python3 -m mail_send)
+else
+  echo "mail-send: no UMA mail_send interface (checked LIMEN_UMA_ROOT=$UMA and installed module)" >&2
+  exit 3
 fi
 
-exec python3 "$UMA/mail_send.py" "$@"
+apply=0
+explicit_dry_run=0
+for arg in "$@"; do
+  case "$arg" in
+    --apply) apply=1 ;;
+    --dry-run) explicit_dry_run=1 ;;
+  esac
+done
+
+if [ "$apply" -eq 1 ]; then
+  # The deployed UMA owner may lag this wrapper. Never discover that after handing a
+  # send-shaped argv to a legacy invocation-is-authorization entrypoint.
+  if ! help_text="$("${launcher[@]}" --help 2>&1)"; then
+    echo "mail-send: UMA delegate cannot prove the receipt-bound apply contract" >&2
+    exit 4
+  fi
+  for required in --apply --attempt-id --authorization-receipt --authorization-key-file --credentials-file; do
+    case "$help_text" in
+      *"$required"*) ;;
+      *)
+        echo "mail-send: UMA delegate lacks required contract flag $required; refusing apply" >&2
+        exit 4
+        ;;
+    esac
+  done
+fi
+
+# Credential files are passed to UMA's literal data parser. Never source or eval them.
+credential_args=()
+if [ -f "$HOME/.config/mail_automation/credentials.env" ]; then
+  credential_args=(--credentials-file "$HOME/.config/mail_automation/credentials.env")
+elif [ -f "$HOME/.limen.env" ]; then
+  credential_args=(--credentials-file "$HOME/.limen.env")
+fi
+
+mode_args=()
+if [ "$apply" -eq 0 ] && [ "$explicit_dry_run" -eq 0 ]; then
+  # Legacy UMA sends on invocation. Force its existing zero-write mode even while the
+  # owner PR that makes preview the native default remains unaccepted.
+  mode_args=(--dry-run)
+fi
+
+exec "${launcher[@]}" "${credential_args[@]+"${credential_args[@]}"}" "${mode_args[@]+"${mode_args[@]}"}" "$@"

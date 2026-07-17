@@ -21,6 +21,7 @@ Read-only by default (prints a plan). With --apply it appends `open` tasks via t
 (validated) under the canonical queue lock (so it can't clobber a concurrent dispatch write). Never
 dispatches. Floor-gated + id-deduped + capped: bounded, no flood.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -44,7 +45,8 @@ from limen.tabularius import submit_task_upsert  # noqa: E402
 _BUILD_STAGES = {"building", "deploy-ready"}
 
 # A task is "revenue-class" (counts toward the revenue floor) if it carries any of these labels.
-# These are the ledger win_classes for codex/claude/agy, so they also ride the dispatch accelerator.
+# Historical ledgers may classify these labels, but those board-event classes cannot steer routing
+# or acceleration while execution-trajectory fitness remains shadow-only.
 _REVENUE_LABELS = {"revenue", "product", "ship-order"}
 
 # statuses that mean a (repo,lever) is already being worked — never duplicate those.
@@ -55,41 +57,59 @@ _ACTIVE = {"open", "dispatched", "in_progress", "needs_human", "failed_blocked"}
 # deploy-ready (e.g. the Exporter): the FUNNEL is the work — make the donate/Pro path live so the only
 # remaining step is the his-hand account creation.
 _DEPLOY_READY_LEVERS = [
-    ("revenue-funding", "critical",
-     "Stage the donation funnel for {product}",
-     "In {repo}, add .github/FUNDING.yml (ko_fi + github sponsors entries — use the owner handle; if "
-     "the exact Ko-fi slug isn't known yet, leave a single clearly-marked TODO) AND a concise "
-     "'Support / Sponsor' section in the README linking both. Goal: the moment the accounts exist the "
-     "donate path is ALREADY live. Tasteful, no nagware. Open a PR, keep the build green."),
-    ("revenue-pro-tier", "critical",
-     "Make the Pro-tier checkout merge-ready for {product}",
-     "In {repo}, rebase the stacked Pro-tier / LemonSqueezy checkout PRs onto the default branch, "
-     "resolve conflicts, and get every check green so the ONLY remaining step is pasting "
-     "LEMONSQUEEZY_STORE_ID. Don't invent product scope — just unblock what's already built ({path})."),
-    ("revenue-landing", "high",
-     "Ship a landing page for {product}",
-     "Create a single deploy-ready product page for {product} in {repo} (docs/ or a gh-pages-ready "
-     "index) explaining the real value and linking install + the donation/Pro options. Real copy "
-     "derived from what the product ACTUALLY does — no lorem, no invented features."),
-    ("revenue-launch-post", "high",
-     "Draft the build-in-public launch post for {product}",
-     "Write a ready-to-post launch announcement for {product} (Show HN + Reddit + X variants), grounded "
-     "in what it ACTUALLY does and its real users. Save as marketing/launch-post.md in {repo}. No hype, "
-     "no invented metrics."),
+    (
+        "revenue-funding",
+        "critical",
+        "Stage the donation funnel for {product}",
+        "In {repo}, add .github/FUNDING.yml (ko_fi + github sponsors entries — use the owner handle; if "
+        "the exact Ko-fi slug isn't known yet, leave a single clearly-marked TODO) AND a concise "
+        "'Support / Sponsor' section in the README linking both. Goal: the moment the accounts exist the "
+        "donate path is ALREADY live. Tasteful, no nagware. Open a PR, keep the build green.",
+    ),
+    (
+        "revenue-pro-tier",
+        "critical",
+        "Make the Pro-tier checkout merge-ready for {product}",
+        "In {repo}, rebase the stacked Pro-tier / LemonSqueezy checkout PRs onto the default branch, "
+        "resolve conflicts, and get every check green so the ONLY remaining step is pasting "
+        "LEMONSQUEEZY_STORE_ID. Don't invent product scope — just unblock what's already built ({path}).",
+    ),
+    (
+        "revenue-landing",
+        "high",
+        "Ship a landing page for {product}",
+        "Create a single deploy-ready product page for {product} in {repo} (docs/ or a gh-pages-ready "
+        "index) explaining the real value and linking install + the donation/Pro options. Real copy "
+        "derived from what the product ACTUALLY does — no lorem, no invented features.",
+    ),
+    (
+        "revenue-launch-post",
+        "high",
+        "Draft the build-in-public launch post for {product}",
+        "Write a ready-to-post launch announcement for {product} (Show HN + Reddit + X variants), grounded "
+        "in what it ACTUALLY does and its real users. Save as marketing/launch-post.md in {repo}. No hype, "
+        "no invented metrics.",
+    ),
 ]
 # building: ship the product toward deploy-ready + close the gap to a payable feature — revenue-labeled
 # so it outranks generic test-coverage and feeds the accelerator on the earner lanes.
 _BUILDING_LEVERS = [
-    ("revenue-ship", "high",
-     "Drive {product} to deploy-ready",
-     "In {repo}, clear the concrete blockers between the current state and a DEPLOYABLE product: get "
-     "open PRs green + merged, fix the critical path, confirm the app runs end-to-end. Output: a "
-     "deploy-ready build + a short DEPLOY.md listing exactly what remains."),
-    ("revenue-readiness", "high",
-     "First-paying-customer readiness pass on {product}",
-     "In {repo}, find the single highest-leverage gap between the current product and something a "
-     "stranger would pay for (first-dollar path: {path}) and close it with a real, tested change. "
-     "One focused PR; keep CI green."),
+    (
+        "revenue-ship",
+        "high",
+        "Drive {product} to deploy-ready",
+        "In {repo}, clear the concrete blockers between the current state and a DEPLOYABLE product: get "
+        "open PRs green + merged, fix the critical path, confirm the app runs end-to-end. Output: a "
+        "deploy-ready build + a short DEPLOY.md listing exactly what remains.",
+    ),
+    (
+        "revenue-readiness",
+        "high",
+        "First-paying-customer readiness pass on {product}",
+        "In {repo}, find the single highest-leverage gap between the current product and something a "
+        "stranger would pay for (first-dollar path: {path}) and close it with a real, tested change. "
+        "One focused PR; keep CI green.",
+    ),
 ]
 
 # Deploy-ready funnel levers create durable artifacts. Once one lands, a later date suffix should not
@@ -136,10 +156,12 @@ def _products() -> list[dict]:
         return []
     raw_products = data.get("products") or []
     if not isinstance(raw_products, list):
-        print(f"  revenue-ladder products is {type(raw_products).__name__}, not a list — nothing to generate.", file=sys.stderr)
+        print(
+            f"  revenue-ladder products is {type(raw_products).__name__}, not a list — nothing to generate.",
+            file=sys.stderr,
+        )
         return []
-    prods = [p for p in raw_products
-             if isinstance(p, dict) and p.get("repo") and (p.get("stage") in _BUILD_STAGES)]
+    prods = [p for p in raw_products if isinstance(p, dict) and p.get("repo") and (p.get("stage") in _BUILD_STAGES)]
     prods.sort(key=lambda p: p.get("rank", 999))
     return prods
 
@@ -171,6 +193,7 @@ def _plan(tasks: list[Task], floor_base: int, max_new: int, board: object | None
     """Compute the revenue tasks to add. Pure (no I/O side effects). Returns (new_tasks, info)."""
     try:
         from limen.dispatch import _down_lanes
+
         dead = _down_lanes()
     except Exception:
         dead = set()
@@ -180,11 +203,7 @@ def _plan(tasks: list[Task], floor_base: int, max_new: int, board: object | None
         lane = t.target_agent or "any"
         return lane in dispatch_lanes and lane not in dead
 
-    open_rev = sum(
-        1 for t in tasks
-        if t.status == "open" and routable(t)
-        and (set(t.labels or []) & _REVENUE_LABELS)
-    )
+    open_rev = sum(1 for t in tasks if t.status == "open" and routable(t) and (set(t.labels or []) & _REVENUE_LABELS))
     floor = floor_base
     avg_hr = _avg_headroom_pct()
     if avg_hr is not None and avg_hr >= 50:
@@ -240,29 +259,49 @@ def _plan(tasks: list[Task], floor_base: int, max_new: int, board: object | None
             product = prod.get("product", repo)
             path = prod.get("first_dollar_path") or prod.get("next_action") or "the paid tier"
             fmt = {"product": product, "repo": repo, "path": path}
-            new.append(Task(
-                id=tid, title=title.format(**fmt), repo=repo, type="code",
-                target_agent="any", priority=prio, budget_cost=2, status="open",
-                # labels[0] = lever key (dedup handle); the rest are win-classes (ride the accelerator).
-                labels=[key, "revenue", "product", "ship-order", "generated"], urls=[],
-                context=ctx.format(**fmt)
-                + f" [revenue-backlog {stamp}: rank {prod.get('rank','?')}, stage {prod['stage']} — "
-                  f"spend tokens on income, not busywork]",
-                **contract_fields(github_pr_contract(repo, tid)),
-                depends_on=[], created=stamp, dispatch_log=[],
-            ))
+            new.append(
+                Task(
+                    id=tid,
+                    title=title.format(**fmt),
+                    repo=repo,
+                    type="code",
+                    target_agent="any",
+                    priority=prio,
+                    budget_cost=2,
+                    status="open",
+                    # labels[0] = lever key (dedup handle); the rest are win-classes (ride the accelerator).
+                    labels=[key, "revenue", "product", "ship-order", "generated"],
+                    urls=[],
+                    context=ctx.format(**fmt)
+                    + f" [revenue-backlog {stamp}: rank {prod.get('rank', '?')}, stage {prod['stage']} — "
+                    f"spend tokens on income, not busywork]",
+                    **contract_fields(github_pr_contract(repo, tid)),
+                    depends_on=[],
+                    created=stamp,
+                    dispatch_log=[],
+                )
+            )
     return new, info
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", default=os.environ.get("LIMEN_TASKS", "tasks.yaml"))
-    ap.add_argument("--floor", type=int, default=_positive_int(os.environ.get("LIMEN_REVENUE_FLOOR"), 12),
-                    help="keep at least this many routable OPEN revenue-class tasks; generate up to it")
-    ap.add_argument("--max-new", type=int, default=_positive_int(os.environ.get("LIMEN_REVENUE_MAX"), 12),
-                    help="hard cap on tasks generated in one run (anti-flood)")
-    ap.add_argument("--apply", action="store_true",
-                    help="append to tasks.yaml (validated, atomic, under the queue lock)")
+    ap.add_argument(
+        "--floor",
+        type=int,
+        default=_positive_int(os.environ.get("LIMEN_REVENUE_FLOOR"), 12),
+        help="keep at least this many routable OPEN revenue-class tasks; generate up to it",
+    )
+    ap.add_argument(
+        "--max-new",
+        type=int,
+        default=_positive_int(os.environ.get("LIMEN_REVENUE_MAX"), 12),
+        help="hard cap on tasks generated in one run (anti-flood)",
+    )
+    ap.add_argument(
+        "--apply", action="store_true", help="append to tasks.yaml (validated, atomic, under the queue lock)"
+    )
     args = ap.parse_args()
 
     path = Path(args.tasks)
@@ -270,8 +309,10 @@ def main() -> int:
     new, info = _plan(lf.tasks, args.floor, args.max_new, lf)
 
     hr = info.get("avg_hr")
-    print(f"# generate-revenue-backlog: open-revenue={info['open_rev']} floor={info['floor']} "
-          f"(base {args.floor}, avg headroom {hr if hr is None else round(hr)}%)")
+    print(
+        f"# generate-revenue-backlog: open-revenue={info['open_rev']} floor={info['floor']} "
+        f"(base {args.floor}, avg headroom {hr if hr is None else round(hr)}%)"
+    )
     if info.get("no_products"):
         print("no active build-stage products in revenue-ladder.json — nothing to generate.")
         return 0
@@ -282,8 +323,10 @@ def main() -> int:
         print("(every (product,lever) is already active — nothing new to generate.)")
         return 0
 
-    print(f"-> generating {len(new)} revenue-class tasks across "
-          f"{len(set(t.repo for t in new))} products (cap {args.max_new})\n")
+    print(
+        f"-> generating {len(new)} revenue-class tasks across "
+        f"{len(set(t.repo for t in new))} products (cap {args.max_new})\n"
+    )
     print("| new task id | product/repo | prio | lever |")
     print("|---|---|---|---|")
     for t in new:

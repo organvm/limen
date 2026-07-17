@@ -59,6 +59,10 @@ def receipt_data(category: str, percent: float) -> dict:
         "redacted_packets": [],
         "verification": ["python3 scripts/fable-allotment.py audit"],
         "reserve_unlocked": category == "reserve",
+        "mode": "plan-only",
+        "deliverable": "continuation-capsule",
+        "builder_tier_max": "opus",
+        "motion_receipt_deadline_seconds": 5400,
     }
 
 
@@ -72,6 +76,9 @@ def test_accept_writes_receipt_and_env_export(tmp_path):
     data = json.loads(receipt.read_text())
     assert data["category"] == "governance"
     assert data["percent"] == 10
+    assert data["mode"] == "plan-only"
+    assert data["deliverable"] == "continuation-capsule"
+    assert data["builder_tier_max"] == "opus"
     assert "export LIMEN_FABLE_ACCEPTANCE=" in proc.stdout
 
 
@@ -150,6 +157,9 @@ def test_balance_writes_current_week_report(tmp_path):
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout)
     assert out["week"] == _this_monday()
+    assert out["schema"] == "limen.fable_balance.v1"
+    assert out["meter_ready"] is True
+    assert out["observed_at"]
     assert out["deliberate_cap"] == 40 and out["hard_cap"] == 50
     assert out["spent_tokens"] == 0 and out["spent_pct"] == 0.0
     assert out["over_cap"] is False

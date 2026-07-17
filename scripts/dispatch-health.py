@@ -452,7 +452,7 @@ def prompt_packet_snapshot() -> dict[str, Any]:
         1
         for packet in open_packets
         if str(packet.get("dispatchability") or "")
-        in {"codex-owner-packet", "needs-owner-repo", "needs-predicate", "unknown"}
+        in {"keeper-packet", "needs-owner-repo", "needs-predicate", "unknown"}
     )
     ready_after_predicate = sum(
         1 for packet in open_packets if str(packet.get("dispatchability") or "") == "ready-after-predicate"

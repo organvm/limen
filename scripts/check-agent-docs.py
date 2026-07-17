@@ -51,6 +51,11 @@ Checks (exit 0 iff all pass):
      section), and the home-scope Layer-1 AGENTS.md template defers to that shared layer rather
      than diverging.
 
+  N. Canonical agent identities remain co-equal peer keepers: provider/target fields are routing
+     metadata, executor attribution is not ownership, TABVLARIVS single-writer semantics serialize
+     shared records without creating superior authority, and concurrent work uses least-disruptive
+     continuity.
+
 Run directly (``scripts/check-agent-docs.py``) or via ``scripts/verify-whole.sh``.
 """
 
@@ -82,6 +87,7 @@ REQUIRED_SECTIONS = {
         "Precedence",
         "Correction Propagation",
         "Engineering Ownership",
+        "Co-equal Peer-Keepers",
         "Session Discipline",
         "Prompt Corpus as the Control Plane",
         "Full Lifecycle Closure",
@@ -313,6 +319,152 @@ def main() -> int:
             errors.append(f"AGENTS.md prompt-corpus control section lacks {label}")
     if "Treat the full prompt corpus as a concurrent control plane" not in standard_text:
         errors.append("agent instruction standard lacks the concurrent prompt-corpus rule")
+
+    # N. Agent identity and execution routing never create hierarchy or ownership. TABVLARIVS is
+    # a serialization mechanism over shared mutable records, and concurrent peers preserve one
+    # another's live continuity. Bind the correction in both canonical instruction surfaces.
+    peer_keeper_phrases = [
+        ("co-equal peer keeper", "co-equal peer-keeper invariant"),
+        ("routing metadata only", "provider/target routing-not-ownership invariant"),
+        (
+            "Executor attribution records who performed an attempt; it does not confer ownership",
+            "executor-attribution-not-ownership invariant",
+        ),
+        ("single-writer serialization boundary", "TABVLARIVS serialization invariant"),
+        ("not a superior authority", "TABVLARIVS non-superiority invariant"),
+        ("least-disruptive continuity", "concurrent peer continuity invariant"),
+        ("private runtime", "peer-runtime privacy invariant"),
+        ("safety gate may deny", "self-scoped safety-gate invariant"),
+    ]
+    try:
+        peer_keeper_section = section(agents_text, "Co-equal Peer-Keepers")
+        for phrase, label in peer_keeper_phrases:
+            if phrase not in peer_keeper_section:
+                errors.append(f"AGENTS.md 'Co-equal Peer-Keepers' lacks the {label}")
+    except ValueError as exc:
+        errors.append(str(exc))
+    try:
+        standard_peer_keeper_section = section(standard_text, "Co-equal Peer-Keepers")
+        for phrase, label in peer_keeper_phrases:
+            if phrase not in standard_peer_keeper_section:
+                errors.append(f"agent instruction standard lacks the {label}")
+    except ValueError as exc:
+        errors.append(str(exc))
+
+    gemini_text = (ROOT / "GEMINI.md").read_text(encoding="utf-8")
+    if "co-equal peer keeper" not in claude_text:
+        errors.append("CLAUDE.md does not defer merge/coordination authority to co-equal peer keepers")
+    if "co-equal peer keeper" not in gemini_text:
+        errors.append("GEMINI.md does not define conductor as a co-equal peer role")
+    hierarchy_regressions = {
+        ROOT / "CLAUDE.md": (
+            "Claude merges its own",
+            "Claude owns the branch cadence",
+        ),
+        ROOT / "scripts" / "prompt-packet-ledger.py": (
+            "Codex owns judgment",
+            "codex conducts",
+            'return "codex-owner-packet"',
+        ),
+        ROOT / "scripts" / "current-session-fanout.py": ("Planner packets are Codex conductor work",),
+    }
+    for generated_fanout in (ROOT / "docs" / "current-session-fanout").glob("*.md"):
+        hierarchy_regressions[generated_fanout] = ("Planner packets are Codex conductor work",)
+    for path, forbidden_phrases in hierarchy_regressions.items():
+        surface = path.read_text(encoding="utf-8")
+        for phrase in forbidden_phrases:
+            if phrase in surface:
+                errors.append(f"{path.relative_to(ROOT)} reinstates provider hierarchy: {phrase!r}")
+
+    provider_authority = re.compile(
+        rf"\b(?:{'|'.join(re.escape(agent) for agent in sorted(valid_agents - {'any'}))})-"
+        r"(?:owner|conductor|integrator|supervisor)\b",
+        re.IGNORECASE,
+    )
+    for path in (
+        ROOT / "scripts" / "task-writer-audit.py",
+        ROOT / "scripts" / "always-working.py",
+        ROOT / "scripts" / "current-session-fanout.py",
+        ROOT / "scripts" / "worktree-reclaim-candidates.py",
+        ROOT / "docs" / "tabularius-writer-audit.md",
+        ROOT / "docs" / "always-working.md",
+        ROOT / "docs" / "current-session-fanout.md",
+        ROOT / "docs" / "worktree-reclaim-candidates.md",
+    ):
+        match = provider_authority.search(path.read_text(encoding="utf-8"))
+        if match:
+            errors.append(f"{path.relative_to(ROOT)} assigns provider-specific authority: {match.group(0)!r}")
+
+    fanout_text = (ROOT / "scripts" / "current-session-fanout.py").read_text(encoding="utf-8")
+    for forbidden in ('"target_agent": "codex"', "--min-codex-planners", 'if lane == "codex"'):
+        if forbidden in fanout_text:
+            errors.append(f"current-session-fanout reinstates provider-specific planner hierarchy: {forbidden!r}")
+
+    # O. No autonomous surface may enumerate or resume a co-equal peer's private session runtime.
+    # Current-invocation analysis is capability-bound to one exported artifact; the heartbeat never
+    # consumes that interface. Keep this static because running a live-session probe to verify the
+    # invariant would itself violate it.
+    heartbeat_text = (ROOT / "scripts" / "heartbeat-loop.sh").read_text(encoding="utf-8")
+    sensors_text = (ROOT / "institutio" / "governance" / "sensors.yaml").read_text(encoding="utf-8")
+    session_walk_text = (ROOT / "scripts" / "session-walk-census.py").read_text(encoding="utf-8")
+    quicken_text = (ROOT / "scripts" / "quicken.py").read_text(encoding="utf-8")
+    peer_runtime_regressions = {
+        "scripts/heartbeat-loop.sh": (
+            "C_QUICKEN",
+            'quicken.py" --apply',
+            "--breathe all",
+        ),
+        "institutio/governance/sensors.yaml": ("session-walk:",),
+        "scripts/session-walk-census.py": (
+            ".rglob(",
+            '.glob("*/*.jsonl")',
+            '["claude", "--resume"',
+            '["codex", "exec", "resume"',
+        ),
+        "scripts/quicken.py": (
+            '.glob("*/*.jsonl")',
+            '["claude", "--resume"',
+            "tasks.yaml",
+            "save_limen_file",
+            "hang_residue",
+            "write_residue",
+            "RESIDUE_OUT",
+            "subprocess",
+        ),
+    }
+    peer_runtime_surfaces = {
+        "scripts/heartbeat-loop.sh": heartbeat_text,
+        "institutio/governance/sensors.yaml": sensors_text,
+        "scripts/session-walk-census.py": session_walk_text,
+        "scripts/quicken.py": quicken_text,
+    }
+    for label, forbidden_phrases in peer_runtime_regressions.items():
+        for phrase in forbidden_phrases:
+            if phrase in peer_runtime_surfaces[label]:
+                errors.append(f"{label} reinstates cross-peer session control: {phrase!r}")
+    for label, surface in (
+        ("scripts/session-walk-census.py", session_walk_text),
+        ("scripts/quicken.py", quicken_text),
+    ):
+        for required in ("LIMEN_CURRENT_SESSION_ARTIFACT", "authorized_artifact", "private peer state"):
+            if required not in surface:
+                errors.append(f"{label} lacks current-artifact authorization binding: {required!r}")
+        if "session_ref_sha256" not in surface or '"session_ref":' in surface:
+            errors.append(f"{label} does not hash/redact its current-artifact session reference")
+    if quicken_text.count(".write_text(") != 1 or "def write_receipt(" not in quicken_text:
+        errors.append("scripts/quicken.py must expose exactly one write: the redacted current-artifact receipt")
+
+    fanout_receipts = list(ROOT.glob("docs/current-session-fanout*.md"))
+    fanout_receipts.extend((ROOT / "docs" / "current-session-fanout").glob("**/*"))
+    private_session_ref = re.compile(
+        r"(?:/Users/[^/]+/\.(?:codex/sessions|claude/projects)/|"
+        r"rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-[0-9a-f-]{20,}\.jsonl)"
+    )
+    for path in fanout_receipts:
+        if not path.is_file() or path.suffix not in {".md", ".json"}:
+            continue
+        if private_session_ref.search(path.read_text(encoding="utf-8")):
+            errors.append(f"{path.relative_to(ROOT)} exposes a private session path or rollout identifier")
 
     expected = expected_agents(agents_text)
     expected_canonical = valid_agents - {"any"}

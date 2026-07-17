@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""self-improve.py — the LAST rung of the conductor's self-* ladder.
+"""self-improve.py — historical board-pattern telemetry for the shared keeper control plane.
 
 sustain -> route -> feed -> merge -> converge -> heal -> **self-IMPROVE**.
 
 Every other organ acts on the world (assign a lane, merge a PR, close a gap).
-This one acts on the CONDUCTOR ITSELF: it reads the loop's own track record —
+This one reads the loop's historical board track record —
 the `dispatch_log` the dispatcher writes into every task, plus the live status
 ledger — and EMITS a re-plan proposal so the next cycle is wiser than the last.
 Without it the loop repeats its mistakes forever: re-dispatching task patterns
@@ -17,20 +17,18 @@ priors. It learns three things and proposes three moves:
 
   1. LANE PRODUCTIVITY  — per-lane success rate + throughput from dispatch_log.
      "lane X is 0% over its last N tries -> down-weight"; "lane Y idle while Z
-     saturated -> rebalance toward Y". Expressed as a target_weight per lane that
-     route.py's budget-split could honour.
+     saturated -> rebalance toward Y". Expressed as an observational target_weight;
+     route.py deliberately does not consume it.
   2. TASK-PATTERN LEARNING — task-ID prefixes (LIMEN/GH/BLD/REV/CIFIX/GEN/...)
      and types that chronically FAIL or get re-dispatched 3..7..19x. Recommends
      RETIRE (stop feeding) or RE-ROUTE (try a different lane) for each.
   3. BACKLOG RE-RANK — boost patterns that actually SHIP (high done-rate, tied to
      merged/open work), de-prioritise chronic dead-ends.
 
-PROPOSAL-FIRST + READ-ONLY by design. It never writes tasks.yaml and never
-touches route config. It writes ONE structured, timestamped, evidence-backed
-proposal to logs/self-improve-proposal.json. `--dry-run` prints it instead of
-writing. `--apply` is a documented STUB: there is no safe-append / route-update
-mechanism wired yet, so it refuses and explains, leaving the human (or a future
-organ) to act on the proposal. Bounded, idempotent, never crashes its caller.
+SHADOW-ONLY by design. Historical board events are not execution-attribution authority and cannot
+change provider routing, task priority, or lifecycle. The default writes one observable proposal;
+`--dry-run` is literal zero-write, and `--apply` refuses without writing until an accepted
+`limen.execution_trajectory.v1` authority transition exists. Bounded and fail-closed.
 
 Everything is DERIVED or env-tunable — lanes come from capacity.PAID_AGENT_ORDER,
 prefixes/types are read off the board, thresholds are env knobs. No hardcodes;
@@ -48,6 +46,7 @@ Env knobs (all optional, all have derived/sane defaults):
                             "chronic" (re-thrown too many times)             (5)
   LIMEN_SI_MIN_PATTERN      min tasks in a prefix/type before a verdict      (3)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -161,10 +160,7 @@ def lane_stats(tasks: list[dict]) -> dict[str, Counter]:
     """
     stats: dict[str, Counter] = defaultdict(Counter)
     for t in tasks:
-        real_entries = [
-            e for e in (t.get("dispatch_log") or [])
-            if canonical_agent(e.get("agent")) in _REAL_LANES
-        ]
+        real_entries = [e for e in (t.get("dispatch_log") or []) if canonical_agent(e.get("agent")) in _REAL_LANES]
         if not real_entries:
             continue  # no real lane ever took it (limen-only ledger / never dispatched)
         lane = canonical_agent(real_entries[-1].get("agent"))
@@ -207,28 +203,32 @@ def lane_adjustments(stats: dict[str, Counter]) -> list[dict]:
             verdict = "down-weight"
             # weight scales with how much it DID land: a 0%-lane drops hard.
             weight = round(max(0.1, rate), 3)
-            reason = (f"success {rate:.0%} over {n} decided tries "
-                      f"(fail {fail_rate:.0%} >= {FAIL_RATE:.0%}) -> shed new work")
+            reason = (
+                f"success {rate:.0%} over {n} decided tries (fail {fail_rate:.0%} >= {FAIL_RATE:.0%}) -> shed new work"
+            )
         elif max_done and throughput[lane] <= 0.25 * max_done and rate >= 0.5:
             verdict = "boost-underused"
             weight = 1.25
-            reason = (f"success {rate:.0%} but throughput {throughput[lane]} is "
-                      f"<=25% of top lane ({max_done}); feed it more")
+            reason = (
+                f"success {rate:.0%} but throughput {throughput[lane]} is <=25% of top lane ({max_done}); feed it more"
+            )
         else:
             verdict, weight = "keep", 1.0
             reason = f"healthy: success {rate:.0%} over {n} decided tries"
 
-        rows.append({
-            "lane": lane,
-            "verdict": verdict,
-            "target_weight": weight,
-            "success_rate": None if rate is None else round(rate, 3),
-            "throughput_done": c["done"],
-            "decided_tries": n,
-            "inflight": c["inflight"],
-            "fail": c["fail"],
-            "reason": reason,
-        })
+        rows.append(
+            {
+                "lane": lane,
+                "verdict": verdict,
+                "target_weight": weight,
+                "success_rate": None if rate is None else round(rate, 3),
+                "throughput_done": c["done"],
+                "decided_tries": n,
+                "inflight": c["inflight"],
+                "fail": c["fail"],
+                "reason": reason,
+            }
+        )
     return rows
 
 
@@ -237,15 +237,17 @@ def lane_adjustments(stats: dict[str, Counter]) -> list[dict]:
 # ---------------------------------------------------------------------------
 def pattern_stats(tasks: list[dict]) -> dict[str, dict]:
     """Per task-ID-prefix: outcome tally + chronic-redispatch evidence."""
-    by: dict[str, dict] = defaultdict(lambda: {
-        "total": 0,
-        "status": Counter(),       # current task.status (done/archived/open/...)
-        "success_status": 0,
-        "failure_status": 0,
-        "dispatch": Counter(),     # done/fail/inflight summed over dispatch_log
-        "chronic": [],             # task ids re-thrown >= CHRONIC_REDISP times
-        "max_redispatch": 0,
-    })
+    by: dict[str, dict] = defaultdict(
+        lambda: {
+            "total": 0,
+            "status": Counter(),  # current task.status (done/archived/open/...)
+            "success_status": 0,
+            "failure_status": 0,
+            "dispatch": Counter(),  # done/fail/inflight summed over dispatch_log
+            "chronic": [],  # task ids re-thrown >= CHRONIC_REDISP times
+            "max_redispatch": 0,
+        }
+    )
     for t in tasks:
         p = _prefix(t.get("id"))
         b = by[p]
@@ -261,8 +263,7 @@ def pattern_stats(tasks: list[dict]) -> dict[str, dict]:
         for e in real_tries:
             b["dispatch"][_status_class(e.get("status"))] += 1
         if len(real_tries) >= CHRONIC_REDISP:
-            b["chronic"].append({"id": t.get("id"), "tries": len(real_tries),
-                                 "status": t.get("status")})
+            b["chronic"].append({"id": t.get("id"), "tries": len(real_tries), "status": t.get("status")})
         b["max_redispatch"] = max(b["max_redispatch"], len(real_tries))
     return by
 
@@ -289,27 +290,28 @@ def retire_patterns(by: dict[str, dict]) -> list[dict]:
         if ship_rate is not None and terminal >= MIN_PATTERN and ship_rate < (1 - FAIL_RATE):
             flags.append(f"ship rate {ship_rate:.0%} (mostly archived-noop/needs_human)")
         if chronic_n:
-            flags.append(f"{chronic_n} chronic tasks re-thrown >= {CHRONIC_REDISP}x "
-                         f"(max {b['max_redispatch']}x)")
+            flags.append(f"{chronic_n} chronic tasks re-thrown >= {CHRONIC_REDISP}x (max {b['max_redispatch']}x)")
 
         if not flags:
             continue
 
         # RETIRE if it almost never ships; otherwise RE-ROUTE the chronic stragglers.
         action = "retire" if (ship_rate is not None and ship_rate < (1 - FAIL_RATE)) else "re-route"
-        rows.append({
-            "pattern": p,
-            "action": action,
-            "total_tasks": b["total"],
-            "ship_rate": None if ship_rate is None else round(ship_rate, 3),
-            "dispatch_fail_rate": None if dispatch_fail_rate is None else round(dispatch_fail_rate, 3),
-            "chronic_count": chronic_n,
-            "max_redispatch": b["max_redispatch"],
-            "status_breakdown": dict(st),
-            "evidence": flags,
-            # cap the named examples so the proposal stays bounded
-            "chronic_examples": sorted(b["chronic"], key=lambda c: -c["tries"])[:5],
-        })
+        rows.append(
+            {
+                "pattern": p,
+                "action": action,
+                "total_tasks": b["total"],
+                "ship_rate": None if ship_rate is None else round(ship_rate, 3),
+                "dispatch_fail_rate": None if dispatch_fail_rate is None else round(dispatch_fail_rate, 3),
+                "chronic_count": chronic_n,
+                "max_redispatch": b["max_redispatch"],
+                "status_breakdown": dict(st),
+                "evidence": flags,
+                # cap the named examples so the proposal stays bounded
+                "chronic_examples": sorted(b["chronic"], key=lambda c: -c["tries"])[:5],
+            }
+        )
     return rows
 
 
@@ -338,16 +340,18 @@ def rerank(by: dict[str, dict]) -> list[dict]:
             move, delta = "deprioritise", "-1"
         else:
             move, delta = "hold", "0"
-        rows.append({
-            "pattern": p,
-            "move": move,
-            "priority_delta": delta,
-            "ship_rate": round(ship_rate, 3),
-            "done": b["success_status"],
-            "open_remaining": open_n,
-            "reason": f"ship rate {ship_rate:.0%} ({b['success_status']} shipped / {terminal} terminal); "
-                      f"{open_n} still open",
-        })
+        rows.append(
+            {
+                "pattern": p,
+                "move": move,
+                "priority_delta": delta,
+                "ship_rate": round(ship_rate, 3),
+                "done": b["success_status"],
+                "open_remaining": open_n,
+                "reason": f"ship rate {ship_rate:.0%} ({b['success_status']} shipped / {terminal} terminal); "
+                f"{open_n} still open",
+            }
+        )
     # most-shipping first; ties broken by volume shipped
     rows.sort(key=lambda r: (-r["ship_rate"], -r["done"]))
     return rows
@@ -359,6 +363,9 @@ def build_proposal(board: dict, tasks_path: Path) -> dict:
     ps = pattern_stats(tasks)
     statuses = Counter(t.get("status", "?") for t in tasks)
     return {
+        "schema": "limen.board_self_improve_shadow.v1",
+        "authoritative": False,
+        "steering_enabled": False,
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "source": str(tasks_path),
         "organ": "self-improve",
@@ -378,79 +385,36 @@ def build_proposal(board: dict, tasks_path: Path) -> dict:
         "retire_patterns": retire_patterns(ps),
         "rerank": rerank(ps),
         "apply": {
-            "wired": True,
-            "note": "--apply now closes the loop: lane weights are consumed by route.py "
-                    "(_learned_weights, gated LIMEN_SI_APPLY=1); rerank boost/deprioritise "
-                    "set OPEN tasks' priority (idempotent targets); retire→archived/superseded is gated "
-                    "behind LIMEN_SI_RETIRE=1 (destructive, default OFF). All under the canonical "
-                    "queue lock, reversible.",
+            "wired": False,
+            "note": "Board-event scoring is shadow-only. --apply refuses without writing; "
+            "route order, task priority, and lifecycle remain unchanged until an accepted "
+            "limen.execution_trajectory.v1 authority transition exists.",
         },
     }
 
 
 # ---------------------------------------------------------------------------
-# 4. APPLY — the writer that closes the IMPROVE loop (safe, idempotent, reversible)
+# 4. APPLY — fail-closed until trajectory attribution is accepted
 # ---------------------------------------------------------------------------
 def apply_proposal(proposal: dict, tasks_path: Path) -> int:
-    """Consume the proposal and SAFELY re-plan tasks.yaml under the canonical queue lock (cannot
-    race the daemon; fresh-reload + atomic save). Bounded + idempotent + reversible:
-      • rerank boost        -> raise the pattern's OPEN tasks to 'high'  (idempotent TARGET, never a
-                               runaway +1-every-beat delta; 'critical' stays reserved for humans)
-      • rerank deprioritise -> lower the pattern's OPEN tasks to 'low'
-      • retire (supersede)  -> mark OPEN tasks 'archived' with a superseded label ONLY if LIMEN_SI_RETIRE=1 (destructive,
-                               default OFF — never silently cancels real work [[no-never-happens-again]])
-    Lane weights + 're-route' are consumed by route.py's weighting (NOT rewritten here — clearing
-    target_agent would just thrash the router every beat)."""
-    sys.path.insert(0, str(ROOT / "cli" / "src"))
-    from limen.io import load_limen_file, queue_lock, save_limen_file  # noqa: E402
-
-    boost = {r["pattern"] for r in proposal.get("rerank", []) if r.get("move") == "boost"}
-    deprio = {r["pattern"] for r in proposal.get("rerank", []) if r.get("move") == "deprioritise"}
-    retire = {r["pattern"] for r in proposal.get("retire_patterns", []) if r.get("action") == "retire"}
-    allow_retire = os.environ.get("LIMEN_SI_RETIRE") == "1"
-
-    with queue_lock(tasks_path) as got:
-        if not got:
-            print("[self-improve] queue busy — skipped apply this pass (self-corrects next beat)")
-            return 0
-        try:
-            lf = load_limen_file(tasks_path)
-        except Exception as exc:  # never crash the heartbeat — skip apply, proposal already written
-            print(f"[self-improve] could not load {tasks_path} for apply ({exc}); proposal-only this pass")
-            return 0
-        ch = {"boost": 0, "deprio": 0, "retire": 0}
-        for t in lf.tasks:
-            if t.status not in ("open", "failed"):
-                continue
-            p = _prefix(t.id)
-            if p in boost and t.priority not in ("critical", "high"):
-                t.priority = "high"; ch["boost"] += 1
-            elif p in deprio and t.priority not in ("low", "backlog"):
-                t.priority = "low"; ch["deprio"] += 1
-            if p in retire and allow_retire and t.status != "archived":
-                t.status = "archived"
-                if "superseded" not in t.labels:
-                    t.labels.append("superseded")
-                ch["retire"] += 1
-        save_limen_file(tasks_path, lf)
-    held = "" if allow_retire else f" ({len(retire)} retire patterns HELD — set LIMEN_SI_RETIRE=1)"
-    print(f"[self-improve] applied: {ch['boost']} boosted→high, {ch['deprio']} →low, "
-          f"{ch['retire']} retired→archived/superseded{held}")
-    return 0
+    """Refuse the former board mutation without creating a proposal or touching the board."""
+    _ = proposal, tasks_path
+    print(
+        "[self-improve] REFUSED: board-event scoring is shadow-only; "
+        "trajectory attribution has not earned steering authority",
+        file=sys.stderr,
+    )
+    return 2
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="self-improve organ — read the loop's "
-                                             "track record, emit a re-plan proposal")
-    ap.add_argument("--tasks", default=os.environ.get(
-        "LIMEN_TASKS", str(ROOT / "tasks.yaml")))
-    ap.add_argument("--out", default=os.environ.get(
-        "LIMEN_SI_OUT", str(ROOT / "logs" / "self-improve-proposal.json")))
-    ap.add_argument("--dry-run", action="store_true",
-                    help="print the proposal to stdout; write nothing")
-    ap.add_argument("--apply", action="store_true",
-                    help="write the proposal AND apply task-level re-plan (rerank priorities; "
-                         "retire→archived/superseded gated by LIMEN_SI_RETIRE=1). Lane weights via route.py.")
+    ap = argparse.ArgumentParser(
+        description="self-improve organ — read the loop's track record, emit a re-plan proposal"
+    )
+    ap.add_argument("--tasks", default=os.environ.get("LIMEN_TASKS", str(ROOT / "tasks.yaml")))
+    ap.add_argument("--out", default=os.environ.get("LIMEN_SI_OUT", str(ROOT / "logs" / "self-improve-proposal.json")))
+    ap.add_argument("--dry-run", action="store_true", help="print the proposal to stdout; write nothing")
+    ap.add_argument("--apply", action="store_true", help="refuse fail-closed while board-event scoring is shadow-only")
     args = ap.parse_args()
 
     tasks_path = Path(args.tasks)
@@ -468,10 +432,6 @@ def main() -> int:
     blob = json.dumps(proposal, indent=2, ensure_ascii=False)
 
     if args.apply:
-        out = Path(args.out)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(blob + "\n")  # write proposal first so route.py picks up fresh weights
-        print(f"[self-improve] wrote {out}")
         return apply_proposal(proposal, tasks_path)
 
     if args.dry_run:
@@ -485,10 +445,14 @@ def main() -> int:
     la = proposal["lane_adjustments"]
     flagged = [r for r in la if r["verdict"] in ("down-weight", "boost-underused")]
     print(f"[self-improve] wrote {out}")
-    print(f"  board: {proposal['board_summary']['total_tasks']} tasks; "
-          f"lanes judged: {len(la)} ({len(flagged)} flagged for adjustment)")
-    print(f"  retire/re-route patterns: {len(proposal['retire_patterns'])}; "
-          f"rerank moves: {sum(1 for r in proposal['rerank'] if r['move'] != 'hold')}")
+    print(
+        f"  board: {proposal['board_summary']['total_tasks']} tasks; "
+        f"lanes judged: {len(la)} ({len(flagged)} flagged for adjustment)"
+    )
+    print(
+        f"  retire/re-route patterns: {len(proposal['retire_patterns'])}; "
+        f"rerank moves: {sum(1 for r in proposal['rerank'] if r['move'] != 'hold')}"
+    )
     return 0
 
 
