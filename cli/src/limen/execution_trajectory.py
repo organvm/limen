@@ -264,6 +264,36 @@ class ExecutionSideEffect(BaseModel):
     receipt_digest: str = Field(pattern=_SHA256_PATTERN)
 
 
+def reconciliation_digest(
+    spend: ExecutionSpend | dict[str, object],
+    outputs: Iterable[ExecutionOutput | dict[str, object]],
+    side_effects: Iterable[ExecutionSideEffect | dict[str, object]],
+    *,
+    outputs_reconciled: bool = True,
+    side_effects_reconciled: bool = True,
+) -> str:
+    """Digest normalized reconciliation evidence for owner authentication."""
+
+    normalized_spend = ExecutionSpend.model_validate(spend).model_dump(mode="json")
+    normalized_outputs = sorted(
+        (ExecutionOutput.model_validate(item).model_dump(mode="json") for item in outputs),
+        key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":")),
+    )
+    normalized_effects = sorted(
+        (ExecutionSideEffect.model_validate(item).model_dump(mode="json") for item in side_effects),
+        key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":")),
+    )
+    payload = {
+        "spend": normalized_spend,
+        "outputs": normalized_outputs,
+        "outputs_reconciled": outputs_reconciled,
+        "side_effects": normalized_effects,
+        "side_effects_reconciled": side_effects_reconciled,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
 class PredicateVerification(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -293,6 +323,7 @@ class OwnerReceiptClaim(BaseModel):
     task_id: str = Field(min_length=1, max_length=192)
     repository: str = Field(min_length=3, max_length=256)
     predicate_digest: str = Field(pattern=_SHA256_PATTERN)
+    reconciliation_digest: str | None = Field(default=None, pattern=_SHA256_PATTERN)
 
     @model_validator(mode="after")
     def exact_head_if_present(self) -> "OwnerReceiptClaim":
@@ -316,6 +347,7 @@ class OwnerReceiptSnapshot(BaseModel):
     task_id: str = Field(min_length=1, max_length=192)
     repository: str = Field(min_length=3, max_length=256)
     predicate_digest: str = Field(pattern=_SHA256_PATTERN)
+    reconciliation_digest: str = Field(pattern=_SHA256_PATTERN)
     terminal: bool
     predicate_passed: bool
     verified_at: datetime
@@ -427,6 +459,18 @@ class ExecutionTrajectory(BaseModel):
             )
             if binding != expected_binding:
                 raise ValueError("owner receipt binding does not match trajectory identity")
+            if (
+                self.owner_receipt.reconciliation_digest is not None
+                and self.owner_receipt.reconciliation_digest
+                != reconciliation_digest(
+                    self.spend,
+                    self.outputs,
+                    self.side_effects,
+                    outputs_reconciled=self.outputs_reconciled,
+                    side_effects_reconciled=self.side_effects_reconciled,
+                )
+            ):
+                raise ValueError("owner receipt reconciliation digest does not match trajectory evidence")
         expected_identity_digest = launch_identity_digest(
             attempt_id=self.attempt_id,
             task_id=self.task_id,
@@ -484,9 +528,17 @@ def verified_value_credit(
     repository = trajectory.repository
     predicate = trajectory.terminal_predicate
     claim = trajectory.owner_receipt
+    evidence_digest = reconciliation_digest(
+        trajectory.spend,
+        trajectory.outputs,
+        trajectory.side_effects,
+        outputs_reconciled=trajectory.outputs_reconciled,
+        side_effects_reconciled=trajectory.side_effects_reconciled,
+    )
     if (
         trajectory.outcome != "succeeded"
         or not trajectory.spend.reconciled
+        or not trajectory.outputs
         or not trajectory.outputs_reconciled
         or not trajectory.side_effects_reconciled
         or not commit
@@ -498,6 +550,7 @@ def verified_value_credit(
         or predicate.head_sha != commit
         or claim is None
         or claim.head_sha != commit
+        or claim.reconciliation_digest != evidence_digest
         or authority is None
     ):
         return 0
@@ -528,6 +581,7 @@ def verified_value_credit(
         and snapshot.task_id == trajectory.task_id
         and snapshot.repository == repository
         and snapshot.predicate_digest == predicate.command_digest
+        and snapshot.reconciliation_digest == evidence_digest
         and snapshot.terminal
         and snapshot.predicate_passed
         and snapshot.verified_at >= predicate.checked_at
@@ -828,9 +882,7 @@ def trajectory_from_log_entries(
             "outputs": getattr(terminal, "trajectory_outputs", None) or [],
             "outputs_reconciled": bool(getattr(terminal, "trajectory_outputs_reconciled", False)),
             "side_effects": getattr(terminal, "trajectory_side_effects", None) or [],
-            "side_effects_reconciled": bool(
-                getattr(terminal, "trajectory_side_effects_reconciled", False)
-            ),
+            "side_effects_reconciled": bool(getattr(terminal, "trajectory_side_effects_reconciled", False)),
             "started_at": started_at,
             "ended_at": getattr(terminal, "timestamp", None),
             "outcome": outcome,

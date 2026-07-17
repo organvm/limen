@@ -37,6 +37,18 @@ def _as_number(value: object, default: float = 0.0) -> float:
     return parsed if math.isfinite(parsed) else default
 
 
+def _optional_nonnegative_number(value: object) -> float | None:
+    """Preserve unknown provider metadata instead of coercing it to free."""
+
+    if isinstance(value, bool):
+        return None
+    try:
+        parsed = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) and parsed >= 0 else None
+
+
 @dataclass(frozen=True)
 class ExecutionProfile:
     """A provider-neutral request that can evolve without adding model names."""
@@ -173,14 +185,18 @@ class ModelCapability:
     attachment: bool
     context_limit: int
     output_limit: int
-    input_cost: float
-    output_cost: float
+    input_cost: float | None
+    output_cost: float | None
     variant_count: int
     release_ordinal: int
 
     @property
     def zero_cost(self) -> bool:
-        return self.input_cost <= 0 and self.output_cost <= 0
+        return self.price_known and self.input_cost == 0 and self.output_cost == 0
+
+    @property
+    def price_known(self) -> bool:
+        return self.input_cost is not None and self.output_cost is not None
 
     def satisfies(self, profile: ExecutionProfile) -> bool:
         return (
@@ -229,8 +245,8 @@ def _capability_from_payload(payload: dict[str, Any], reported_id: str = "") -> 
         attachment=bool(capabilities.get("attachment")),
         context_limit=max(0, int(_as_number(limits.get("context")))),
         output_limit=max(0, int(_as_number(limits.get("output")))),
-        input_cost=max(0.0, _as_number(costs.get("input"))),
-        output_cost=max(0.0, _as_number(costs.get("output"))),
+        input_cost=_optional_nonnegative_number(costs.get("input")),
+        output_cost=_optional_nonnegative_number(costs.get("output")),
         variant_count=len(variants),
         release_ordinal=_release_ordinal(payload.get("release_date")),
     )
@@ -460,6 +476,9 @@ def model_id_catalog_hash(catalog: Iterable[str]) -> str:
 
 
 def _model_score(model: ModelCapability, profile: ExecutionProfile) -> tuple[float, str]:
+    if not model.price_known:
+        raise ValueError("unknown provider price cannot be ranked")
+    assert model.input_cost is not None and model.output_cost is not None
     cost = model.input_cost + model.output_cost
     context_headroom = math.log2(max(1, model.context_limit / max(1, profile.min_context)))
     output_headroom = math.log2(max(1, model.output_limit / max(1, profile.min_output)))
@@ -476,6 +495,10 @@ def _model_score(model: ModelCapability, profile: ExecutionProfile) -> tuple[flo
 
 def select_opencode_model(models: Iterable[ModelCapability], profile: ExecutionProfile) -> ModelCapability | None:
     eligible = [model for model in models if model.satisfies(profile)]
+    if any(not model.price_known for model in eligible):
+        # Auto owns the choice when the live catalog cannot support an honest
+        # cost comparison. Never promote an unknown price as zero-cost.
+        return None
     return max(eligible, key=lambda model: _model_score(model, profile)) if eligible else None
 
 

@@ -82,6 +82,16 @@ def _failure(blocker_id: str, reason: str, **evidence: object) -> dict[str, obje
     return {"id": blocker_id, "reason": reason[:500], **evidence}
 
 
+def _write_result_receipt(out: dict[str, object], task_id: str, reservation_id: str) -> None:
+    """Atomically preserve the bounded worker result before any board-lock attempt."""
+
+    RUNS.mkdir(parents=True, exist_ok=True)
+    destination = _result_path(task_id, reservation_id)
+    tmp = destination.with_suffix(f".{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(out, sort_keys=True), encoding="utf-8")
+    tmp.replace(destination)
+
+
 def _load_verified_task(
     task_id: str,
     agent: str,
@@ -213,6 +223,13 @@ def _publish_result(
     instead of applying it to a new claim. The counts-only receipt remains
     durable for diagnosis, but harvest will not mutate the reopened row.
     """
+
+    # Provider execution is the expensive, non-repeatable boundary. Preserve its
+    # exact-attempt result before contending for tasks.yaml so a busy queue cannot
+    # erase custody and cause the same attempt to execute again. Duplicate workers
+    # that never executed do not overwrite the canonical receipt.
+    if execution_started:
+        _write_result_receipt(out, task_id, reservation_id)
 
     with _queue_lock(TASKS) as got:
         if not got:
@@ -352,10 +369,7 @@ def _publish_result(
                 actual_hash=current_hash,
                 actual_status=getattr(current, "status", None),
             )
-        RUNS.mkdir(parents=True, exist_ok=True)
-        tmp = _result_path(task_id, reservation_id).with_suffix(f".{os.getpid()}.tmp")
-        tmp.write_text(json.dumps(out))
-        tmp.replace(_result_path(task_id, reservation_id))  # atomic publish while recovery is excluded
+        _write_result_receipt(out, task_id, reservation_id)
         try:
             _running_marker_path(task_id, agent, reservation_id).unlink()
         except OSError:

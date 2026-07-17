@@ -246,6 +246,19 @@ def _rollback_unlaunched_reservation(
         return True
 
 
+def _refund_unexecuted_reservation(lf, task, entry: DispatchLogEntry) -> bool:
+    """Refund the precharge only while the exact async attempt is still unclaimed."""
+
+    if entry.status != "dispatched":
+        return False
+    cost = max(0, int(task.budget_cost or 0))
+    agent = entry.agent or task.target_agent
+    track = lf.portal.budget.track
+    track.spent = max(0, track.spent - cost)
+    track.per_agent[agent] = max(0, track.per_agent.get(agent, 0) - cost)
+    return True
+
+
 def _marker_task_agent(marker: Path) -> tuple[str, str]:
     try:
         data = json.loads(marker.read_text(encoding="utf-8"))
@@ -855,6 +868,7 @@ def reap_stale(max_age_s: int):
                 if t is not None and t.status in {"dispatched", "in_progress"} and reservation_matches:
                     if _result_exists(tid, marker_reservation_id):
                         continue
+                    _refund_unexecuted_reservation(lf, t, last)
                     pids_to_kill.append(_pid)
                     markers_to_remove.append(marker)
                     applied_reaped.append(tid)
@@ -945,6 +959,7 @@ def reap_stale(max_age_s: int):
                         or (now - stamp).total_seconds() <= max_age_s
                     ):
                         continue
+                    _refund_unexecuted_reservation(lf, t, last)
                     if _has_done_transition(t):
                         _restore_done_status(
                             t,
@@ -1525,6 +1540,7 @@ def recover_exact_task(
 
         if dry_run:
             return {"status": "would_recover", "recovered_count": 0}
+        _refund_unexecuted_reservation(lf, task, last)
         task.status = "open"
         task.updated = now
         task.dispatch_log.extend(

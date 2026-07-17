@@ -23,6 +23,7 @@ from limen.execution_trajectory import trajectory_from_log_entries, verified_val
 from limen.io import load_limen_file, save_limen_file
 from limen.jules_remote import JulesRemoteSnapshot
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
+from limen.provider_selection import ModelCapability
 from limen.status import print_status
 
 
@@ -2024,6 +2025,89 @@ def test_serial_fresh_commit_persists_model_and_remote_receipts_on_exact_attempt
     assert committed.portal.budget.track.spent == task.budget_cost
 
 
+def test_busy_commit_keeps_exact_result_pending_then_reconciles_without_reexecution(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import contextlib
+
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.updated = datetime(2026, 7, 15, tzinfo=timezone.utc)
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    board = LimenFile(tasks=[task])
+    save_limen_file(tasks_path, board)
+    result = "https://github.com/example/repository/pull/81"
+    pending = D._persist_pending_dispatch_result(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        attempt_id=str(launch.attempt_id),
+        attempt_contract_hash=str(launch.attempt_contract_hash),
+        result=result,
+    )
+    real_queue_lock = D._queue_lock
+
+    @contextlib.contextmanager
+    def busy_lock(_path):
+        yield False
+
+    monkeypatch.setattr(D, "_queue_lock", busy_lock)
+    D._commit_dispatch_results(tasks_path, board, [], datetime.now(timezone.utc))
+
+    contended = load_limen_file(tasks_path).tasks[0]
+    assert contended.status == "in_progress"
+    assert pending.exists()
+
+    monkeypatch.setattr(D, "_queue_lock", real_queue_lock)
+    D._commit_dispatch_results(
+        tasks_path,
+        load_limen_file(tasks_path),
+        [],
+        datetime.now(timezone.utc),
+    )
+
+    reconciled = load_limen_file(tasks_path).tasks[0]
+    assert reconciled.status == "dispatched"
+    assert reconciled.dispatch_log[-1].attempt_id == launch.attempt_id
+    assert reconciled.dispatch_log[-1].session_id == result
+    assert not pending.exists()
+    assert list((tmp_path / "logs" / "dispatch-results" / "archive" / "reconciled").glob("*.json"))
+
+
+def test_release_stale_routes_pending_result_to_harvest_instead_of_reexecution(
+    tmp_path: Path,
+) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.updated = datetime(2026, 7, 1, tzinfo=timezone.utc)
+    task.dispatch_log.append(
+        launch.model_copy(
+            update={
+                "timestamp": datetime(2026, 7, 1, tzinfo=timezone.utc),
+                "status": "in_progress",
+            }
+        )
+    )
+    board = LimenFile(tasks=[task])
+    save_limen_file(tasks_path, board)
+    D._persist_pending_dispatch_result(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        attempt_id=str(launch.attempt_id),
+        attempt_contract_hash=str(launch.attempt_contract_hash),
+        result=False,
+    )
+
+    report = release_stale_tasks(board, tasks_path, hours=0, dry_run=False)
+
+    assert report["released"] == []
+    assert report["harvest_ready"] == [task.id]
+    assert load_limen_file(tasks_path).tasks[0].status == "in_progress"
+
+
 def test_serial_fresh_commit_binds_receipts_to_old_attempt_on_contract_drift(tmp_path: Path) -> None:
     tasks_path = tmp_path / "tasks.yaml"
     task, launch = _reserved_contract_attempt()
@@ -2152,6 +2236,38 @@ def test_agent_argv_threads_task_into_dynamic_opencode_selector(monkeypatch) -> 
 
     assert observed == [task]
     assert argv == ["run", "-m", "fixture/runtime-output"]
+
+
+def test_opencode_unknown_price_defers_to_auto_and_records_reason(monkeypatch) -> None:
+    task = Task(
+        id="OPENCODE-UNKNOWN-PRICE",
+        title="provider owns pricing uncertainty",
+        target_agent="opencode",
+        created=date(2026, 7, 17),
+    )
+    launch = _register_model_selection_attempt(task)
+    unknown = ModelCapability(
+        model_id="provider/runtime-shape",
+        active=True,
+        text_input=True,
+        text_output=True,
+        toolcall=True,
+        reasoning=True,
+        attachment=False,
+        context_limit=131072,
+        output_limit=32768,
+        input_cost=None,
+        output_cost=None,
+        variant_count=1,
+        release_ordinal=700000,
+    )
+    monkeypatch.setattr(D, "discover_opencode_models", lambda *_args, **_kwargs: [unknown])
+
+    assert D._opencode_model(task) is None
+    receipt = D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+    assert receipt["attempt_id"] == launch.attempt_id
+    assert receipt["selected_model"] is None
+    assert receipt["selection_source"] == "opencode_auto_unknown_price"
 
 
 @pytest.mark.parametrize(

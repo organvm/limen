@@ -21,6 +21,7 @@ from limen.execution_trajectory import (
     launch_attempt_id,
     launch_identity_digest,
     publish_bounded,
+    reconciliation_digest,
     record_digest,
     trajectory_from_log_entries,
     verified_value_credit,
@@ -118,6 +119,14 @@ def trajectory(
             "predicate_digest": predicate_digest,
         },
     }
+    evidence_digest = reconciliation_digest(
+        row["spend"],  # type: ignore[arg-type]
+        row["outputs"],  # type: ignore[arg-type]
+        row["side_effects"],  # type: ignore[arg-type]
+        outputs_reconciled=bool(row["outputs_reconciled"]),
+        side_effects_reconciled=bool(row["side_effects_reconciled"]),
+    )
+    row["owner_receipt"]["reconciliation_digest"] = evidence_digest  # type: ignore[index]
     row["attempt_identity_digest"] = launch_identity_digest(
         attempt_id=bound_attempt_id,
         **launch_facts,
@@ -171,6 +180,7 @@ class Authority:
                 "predicate_digest",
                 claim.predicate_digest,
             ),
+            reconciliation_digest=claim.reconciliation_digest,
             terminal=self.terminal,
             predicate_passed=self.predicate_passed,
             verified_at=self.verified_at,
@@ -216,8 +226,43 @@ def test_motion_or_non_exact_evidence_earns_zero(changes: dict[str, object]) -> 
 def test_value_requires_spend_output_and_side_effect_reconciliation(mutation) -> None:
     row = trajectory()
     mutation(row)
+    row["owner_receipt"]["reconciliation_digest"] = reconciliation_digest(  # type: ignore[index]
+        row["spend"],  # type: ignore[arg-type]
+        row["outputs"],  # type: ignore[arg-type]
+        row["side_effects"],  # type: ignore[arg-type]
+        outputs_reconciled=bool(row["outputs_reconciled"]),
+        side_effects_reconciled=bool(row["side_effects_reconciled"]),
+    )
     record = ExecutionTrajectory.model_validate(row)
 
+    assert verified_value_credit(record, authority=Authority()) == 0
+
+
+def test_empty_self_attested_outputs_never_earn_value() -> None:
+    row = trajectory()
+    row["outputs"] = []
+    row["owner_receipt"]["reconciliation_digest"] = reconciliation_digest(  # type: ignore[index]
+        row["spend"],  # type: ignore[arg-type]
+        [],
+        row["side_effects"],  # type: ignore[arg-type]
+        outputs_reconciled=True,
+        side_effects_reconciled=True,
+    )
+
+    record = ExecutionTrajectory.model_validate(row)
+
+    assert record.outputs_reconciled is True
+    assert verified_value_credit(record, authority=Authority()) == 0
+
+
+def test_reconciliation_requires_fresh_owner_authenticated_digest() -> None:
+    row = trajectory()
+    row["owner_receipt"].pop("reconciliation_digest")  # type: ignore[union-attr]
+    record = ExecutionTrajectory.model_validate(row)
+
+    assert record.spend.reconciled is True
+    assert record.outputs_reconciled is True
+    assert record.side_effects_reconciled is True
     assert verified_value_credit(record, authority=Authority()) == 0
 
 

@@ -2159,6 +2159,8 @@ def test_reaper_reopens_markerless_async_reservation(tmp_path):
             ],
         )
     )
+    lf.portal.budget.track.spent = 1
+    lf.portal.budget.track.per_agent["agy"] = 1
     save_limen_file(tmp_path / "tasks.yaml", lf)
 
     reaped = da.reap_stale(1200)
@@ -2170,6 +2172,44 @@ def test_reaper_reopens_markerless_async_reservation(tmp_path):
     assert task.dispatch_log[-2].status == "failed"
     assert task.dispatch_log[-2].session_id == "async-reap-stale"
     assert "markerless async reservation" in task.dispatch_log[-2].output
+    track = load_limen_file(tmp_path / "tasks.yaml").portal.budget.track
+    assert track.spent == 0
+    assert track.per_agent["agy"] == 0
+
+
+def test_reaper_does_not_refund_an_attempt_that_started_execution(tmp_path):
+    da = _load(tmp_path, n_open=0)
+    lf = load_limen_file(tmp_path / "tasks.yaml")
+    reserved_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=3000)
+    lf.tasks.append(
+        Task(
+            id="STARTED-MARKERLESS",
+            title="t",
+            repo="x/y",
+            target_agent="agy",
+            status="in_progress",
+            created=datetime.date.today(),
+            updated=reserved_at,
+            dispatch_log=[
+                DispatchLogEntry(
+                    timestamp=reserved_at,
+                    agent="agy",
+                    session_id="async-reserve",
+                    status="in_progress",
+                    output="worker claimed exact attempt",
+                )
+            ],
+        )
+    )
+    lf.portal.budget.track.spent = 1
+    lf.portal.budget.track.per_agent["agy"] = 1
+    save_limen_file(tmp_path / "tasks.yaml", lf)
+
+    assert da.reap_stale(1200) == ["STARTED-MARKERLESS"]
+
+    track = load_limen_file(tmp_path / "tasks.yaml").portal.budget.track
+    assert track.spent == 1
+    assert track.per_agent["agy"] == 1
 
 
 def test_reaper_restores_markerless_prior_pr_open_instead_of_reopening(tmp_path):
@@ -2988,6 +3028,40 @@ def test_async_worker_revalidates_contract_before_provider_side_effects(tmp_path
     assert refreshed.portal.budget.track.per_agent["codex"] == 0
 
 
+def test_async_result_survives_publication_lock_contention(tmp_path, monkeypatch):
+    import contextlib
+
+    _load(tmp_path, n_open=0)
+    worker = _load_worker(tmp_path)
+    reservation_id = "async-reserve:" + "d" * 32
+    out = {
+        "task_id": "CUSTODY",
+        "agent": "codex",
+        "reservation_id": reservation_id,
+        "attempt_id": "attempt-custody",
+        "result": "https://github.com/x/y/pull/1",
+        "execution_started": True,
+    }
+
+    @contextlib.contextmanager
+    def busy_lock(_path):
+        yield False
+
+    monkeypatch.setattr(worker, "_queue_lock", busy_lock)
+
+    assert not worker._publish_result(
+        out,
+        task_id="CUSTODY",
+        agent="codex",
+        reservation_id=reservation_id,
+        expected_hash="a" * 64,
+        execution_started=True,
+    )
+    receipt = json.loads(worker._result_path("CUSTODY", reservation_id).read_text(encoding="utf-8"))
+    assert receipt["attempt_id"] == "attempt-custody"
+    assert receipt["result"] == "https://github.com/x/y/pull/1"
+
+
 @pytest.mark.parametrize(
     ("case", "failure_id"),
     [
@@ -3362,6 +3436,8 @@ def test_exact_orphan_recovery_command_reopens_once_and_is_idempotent(tmp_path, 
             output="reserved for exact recovery test",
         )
     )
+    board.portal.budget.track.spent = task.budget_cost
+    board.portal.budget.track.per_agent["codex"] = task.budget_cost
     save_limen_file(tmp_path / "tasks.yaml", board)
     contract_hash = execution_contract_hash(task)
     da._write_running_marker(task.id, "codex", old, 999999, 0.0)
@@ -3395,6 +3471,9 @@ def test_exact_orphan_recovery_command_reopens_once_and_is_idempotent(tmp_path, 
     assert current[task.id].dispatch_log[-1].session_id == "async-recover-exact-requeue"
     assert current[task.id].dispatch_log[-2].status == "failed"
     assert current[task.id].dispatch_log[-2].session_id == "async-recover-exact"
+    track = load_limen_file(tmp_path / "tasks.yaml").portal.budget.track
+    assert track.spent == 0
+    assert track.per_agent["codex"] == 0
 
 
 def test_reaper_rechecks_nonce_result_under_lock_before_reopening(tmp_path, monkeypatch):

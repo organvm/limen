@@ -185,9 +185,15 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
                             output=result[:500],
                         )
                     )
+                    updated.append(task.id)
                     print(f"  rejected {task.id}: jules diff empty/garbage — not 'done'")
                     continue
-                task.status = "done"
+                # A patch is a preserved work product, not completion proof. The
+                # legacy Jules surface has no owner predicate, exact-head check,
+                # or authenticated receipt, so it must never mint `done`.
+                task.status = "failed"
+                if "completion-proof-required" not in task.labels:
+                    task.labels.append("completion-proof-required")
                 task.updated = now
                 task.dispatch_log.append(
                     _terminal_attempt_entry(
@@ -195,11 +201,15 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
                         timestamp=now,
                         agent="jules",
                         session_id=session_id,
-                        status="done",
-                        output=result[:500],
+                        status="failed",
+                        output=(
+                            "Jules work product preserved; owner predicate, exact-head "
+                            f"verification, and owner receipt are required: {result[:400]}"
+                        ),
                     )
                 )
                 updated.append(task.id)
+                print(f"  preserved {task.id}: Jules diff lacks owner completion proof")
                 continue
 
         task_dir = harvest_dir / task.id
@@ -221,7 +231,9 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
                 )
                 updated.append(task.id)
                 continue
-            task.status = "done"
+            task.status = "failed"
+            if "completion-proof-required" not in task.labels:
+                task.labels.append("completion-proof-required")
             task.updated = now
             task.dispatch_log.append(
                 _terminal_attempt_entry(
@@ -229,8 +241,11 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
                     timestamp=now,
                     agent="jules",
                     session_id=task.dispatch_log[-1].session_id if task.dispatch_log else "harvest",
-                    status="done",
-                    output=result[:500],
+                    status="failed",
+                    output=(
+                        "Jules result preserved; owner predicate, exact-head verification, "
+                        f"and owner receipt are required: {result[:400]}"
+                    ),
                 )
             )
             updated.append(task.id)
@@ -320,6 +335,19 @@ def _adopt_orphan_remote_entry(
 ) -> DispatchLogEntry | None:
     """Adopt an intent persisted before a worker crashed prior to its board write."""
 
+    attempt_id = current_attempt_id(task)
+    launch = attempt_launch_for(task, attempt_id)
+    if (
+        not attempt_id
+        or launch is None
+        or not attempt_contract_is_current(task, launch)
+        or task.status not in {"dispatched", "in_progress"}
+    ):
+        # Content-addressed remote intent may only rejoin the board through the
+        # exact registered attempt that authorized it. A manifest alone is not
+        # an execution owner and can never create a terminal trajectory.
+        return None
+
     for manifest, path in store.manifests_for_task(task.id):
         provider = str(manifest.get("provider") or "")
         base_sha = str(manifest.get("base_sha") or "")
@@ -343,7 +371,7 @@ def _adopt_orphan_remote_entry(
                 verification_context=verification_context,
                 instruction=f"Verify completed implementation for task {task.id}; do not modify code: {task.title}",
                 repo=str(task.repo or ""),
-                execution_profile=execution_profile_for(task).as_dict(),
+                execution_profile=dict(launch.execution_profile or {}),
             )
             receipt = load_receipt(path, request)
         except (RemoteExecutionError, ValueError):
@@ -353,26 +381,28 @@ def _adopt_orphan_remote_entry(
             board_path = str(path.relative_to(tasks_path.parent))
         except ValueError:
             board_path = str(path)
-        return DispatchLogEntry(
-            timestamp=datetime.fromisoformat(receipt.run.observed_at),
-            agent=provider,
-            session_id=receipt.run.provider_run_id,
-            status="dispatched",
-            provider_run_id=receipt.run.provider_run_id,
-            provider_url=receipt.run.url,
-            base_sha=receipt.run.base_sha,
-            control_repo=receipt.run.control_repo,
-            control_ref=receipt.run.control_ref,
-            control_ref_kind=receipt.run.control_ref_kind,
-            control_sha=receipt.run.control_sha,
-            workflow_id=receipt.run.workflow_id,
-            workflow_path=receipt.run.workflow_path,
-            workflow_event=receipt.run.workflow_event,
-            verification_context_digest=receipt.run.verification_context_digest,
-            remote_state=receipt.run.state.value,
-            remote_request_id=receipt.run.request_id,
-            remote_receipt=board_path,
-            output="adopted content-addressed attempt after crash-before-board-write",
+        return launch.model_copy(
+            update={
+                "timestamp": datetime.fromisoformat(receipt.run.observed_at),
+                "agent": provider,
+                "session_id": receipt.run.provider_run_id,
+                "status": task.status,
+                "provider_run_id": receipt.run.provider_run_id,
+                "provider_url": receipt.run.url,
+                "base_sha": receipt.run.base_sha,
+                "control_repo": receipt.run.control_repo,
+                "control_ref": receipt.run.control_ref,
+                "control_ref_kind": receipt.run.control_ref_kind,
+                "control_sha": receipt.run.control_sha,
+                "workflow_id": receipt.run.workflow_id,
+                "workflow_path": receipt.run.workflow_path,
+                "workflow_event": receipt.run.workflow_event,
+                "verification_context_digest": receipt.run.verification_context_digest,
+                "remote_state": receipt.run.state.value,
+                "remote_request_id": receipt.run.request_id,
+                "remote_receipt": board_path,
+                "output": "adopted content-addressed receipt into exact registered attempt",
+            }
         )
     return None
 
@@ -502,9 +532,7 @@ def _remote_trajectory_evidence(
     ]
     evidence: dict[str, object] = {
         "trajectory_outputs": bounded_outputs,
-        "trajectory_outputs_reconciled": (
-            len(receipt.outputs) <= 64 and len(bounded_outputs) == len(receipt.outputs)
-        ),
+        "trajectory_outputs_reconciled": (len(receipt.outputs) <= 64 and len(bounded_outputs) == len(receipt.outputs)),
         # The remote receipt does not presently attest external effects. Keep
         # that reconciliation visibly unknown instead of inferring zero.
         "trajectory_side_effects": [],

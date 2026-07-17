@@ -114,9 +114,7 @@ def reconciliation_custody_updates(receipt: Mapping[str, object] | None) -> dict
             except (TypeError, ValueError):
                 output_valid = False
         updates["trajectory_outputs"] = outputs
-        updates["trajectory_outputs_reconciled"] = bool(
-            receipt.get("trajectory_outputs_reconciled") and output_valid
-        )
+        updates["trajectory_outputs_reconciled"] = bool(receipt.get("trajectory_outputs_reconciled") and output_valid)
     raw_effects = receipt.get("trajectory_side_effects")
     if isinstance(raw_effects, (list, tuple)):
         effects: list[dict[str, object]] = []
@@ -200,8 +198,7 @@ def close_changed_contract_attempt(
                 )
             update.update(remote_custody_updates(remote_submission))
             source_reconciliation = {
-                field: getattr(latest_attempt_event or launch, field, None)
-                for field in _RECONCILIATION_FIELDS
+                field: getattr(latest_attempt_event or launch, field, None) for field in _RECONCILIATION_FIELDS
             }
             source_reconciliation.update(dict(reconciliation or {}))
             update.update(reconciliation_custody_updates(source_reconciliation))

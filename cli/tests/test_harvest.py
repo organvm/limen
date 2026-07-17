@@ -79,7 +79,7 @@ def test_diff_is_real_rejects_non_diff_text():
     assert _diff_is_real("I finished the task, looks good!") is False
 
 
-def test_harvest_marks_real_diff_done(tmp_path):
+def test_harvest_preserves_real_diff_without_false_done(tmp_path):
     harvest_dir = tmp_path / "harvest"
     _write_diff(harvest_dir, "555", REAL_DIFF)
     task = _task("LIMEN-1", "555")
@@ -88,8 +88,10 @@ def test_harvest_marks_real_diff_done(tmp_path):
     updated = check_jules_harvest(limen, harvest_dir)
 
     assert updated == ["LIMEN-1"]
-    assert task.status == "done"
-    assert task.dispatch_log[-1].status == "done"
+    assert task.status == "failed"
+    assert task.dispatch_log[-1].status == "failed"
+    assert "completion-proof-required" in task.labels
+    assert "exact-head verification" in task.dispatch_log[-1].output
 
 
 def test_harvest_rejects_empty_diff_instead_of_false_done(tmp_path):
@@ -100,7 +102,7 @@ def test_harvest_rejects_empty_diff_instead_of_false_done(tmp_path):
 
     updated = check_jules_harvest(limen, harvest_dir)
 
-    assert updated == []  # NOT counted as a completion
+    assert updated == ["LIMEN-2"]  # mutation is persisted, but never counted as done
     assert task.status == "failed"  # preserved for recovery, not false-done or cancelled
     assert "noop" in task.labels
     assert "cancelled" not in task.labels
@@ -139,11 +141,24 @@ def test_harvest_carries_attempt_and_model_receipts_into_terminal_row(tmp_path):
 
     assert check_jules_harvest(LimenFile(tasks=[task]), harvest_dir) == ["LIMEN-3"]
     terminal = task.dispatch_log[-1]
-    assert terminal.status == "done"
-    assert terminal.trajectory_outcome == "succeeded"
+    assert terminal.status == "failed"
+    assert terminal.trajectory_outcome == "failed"
     assert terminal.attempt_id == launch.attempt_id
     assert terminal.selected_model == "provider/reported-fixture"
     assert terminal.selection_source == "provider_live_catalog"
+
+
+def test_harvest_result_text_cannot_self_attest_completion(tmp_path):
+    harvest_dir = tmp_path / "harvest"
+    task = _task("LIMEN-TEXT", "901")
+    task_dir = harvest_dir / task.id
+    task_dir.mkdir(parents=True)
+    (task_dir / "result.txt").write_text("Done. All checks pass.", encoding="utf-8")
+
+    assert check_jules_harvest(LimenFile(tasks=[task]), harvest_dir) == [task.id]
+    assert task.status == "failed"
+    assert task.dispatch_log[-1].status == "failed"
+    assert "completion-proof-required" in task.labels
 
 
 def test_jules_harvest_closes_stale_attempt_and_reopens_changed_contract(tmp_path):

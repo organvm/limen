@@ -153,6 +153,28 @@ def test_catalog_parser_uses_metadata_not_reported_name_tokens() -> None:
     assert parsed[0].zero_cost is True
 
 
+def test_catalog_parser_preserves_unknown_price_instead_of_coercing_free() -> None:
+    payload = {
+        "id": "shape-unknown",
+        "providerID": "provider-z",
+        "status": "active",
+        "limit": {"context": 65536, "output": 8192},
+        "capabilities": {
+            "toolcall": True,
+            "input": {"text": True},
+            "output": {"text": True},
+        },
+    }
+
+    parsed = parse_opencode_catalog("provider-z/shape-unknown\n" + json.dumps(payload))
+
+    assert len(parsed) == 1
+    assert parsed[0].input_cost is None
+    assert parsed[0].output_cost is None
+    assert parsed[0].price_known is False
+    assert parsed[0].zero_cost is False
+
+
 def test_selection_changes_with_capabilities_and_pressure_not_names_or_order() -> None:
     cheap = model("p/alpha", reasoning=False)
     capable = model(
@@ -175,6 +197,14 @@ def test_unreachable_or_incapable_models_are_never_synthesized() -> None:
     no_tools = model("p/no-tools", toolcall=False)
     too_small = model("p/too-small", context_limit=4096)
     assert select_opencode_model([unavailable, no_tools, too_small], profile()) is None
+
+
+def test_unknown_price_defers_entire_eligible_catalog_to_provider_auto() -> None:
+    known = model("p/known", input_cost=1, output_cost=1)
+    unknown = model("p/unknown", input_cost=None, output_cost=None)
+
+    assert select_opencode_model([known, unknown], profile()) is None
+    assert select_opencode_model([unknown, known], profile()) is None
 
 
 def test_attachment_requirement_filters_live_catalog() -> None:

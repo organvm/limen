@@ -14,6 +14,7 @@ from typing import Callable, Sequence
 import pytest
 
 from limen.census import Budget, Status, Vendor
+from limen.dispatch import _attempt_launch_entry
 from limen.harvest import check_remote_harvest
 from limen.io import save_limen_file
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
@@ -1303,6 +1304,14 @@ def test_remote_harvest_adopts_intent_after_crash_before_board_write(
         req.task_id,
         status="in_progress",
     )
+    launch = _attempt_launch_entry(
+        task,
+        req.provider,
+        reservation_session="remote-reserve",
+        started_at=datetime.fromisoformat(NOW),
+        output="registered exact attempt before remote submission",
+    )
+    task.dispatch_log = [launch.model_copy(update={"status": "in_progress"})]
     board = harvest_board(task)
     adapter = StableAdapter(req)
     monkeypatch.setattr("limen.harvest.discover_adapters", lambda: ({req.provider: adapter}, []))
@@ -1311,6 +1320,33 @@ def test_remote_harvest_adopts_intent_after_crash_before_board_write(
     assert task.status == "in_progress"
     assert task.dispatch_log[-1].remote_request_id == req.request_id
     assert task.dispatch_log[-1].provider_run_id == pending.provider_run_id
+    assert task.dispatch_log[-1].attempt_id == launch.attempt_id
+
+
+def test_remote_harvest_never_adopts_or_terminalizes_without_registered_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    req = _harvest_request()
+    completed = run(req, RemoteState.SUCCEEDED)
+    store = ReceiptStore(tmp_path / "logs" / "remote-execution")
+    store.write(
+        RemoteReceipt(
+            req,
+            completed,
+            completed.state,
+            observed_at=completed.observed_at,
+            detail=completed.detail,
+        )
+    )
+    task = verification_task(req.task_id, status="in_progress")
+    monkeypatch.setattr(
+        "limen.harvest.discover_adapters",
+        lambda: ({req.provider: StableAdapter(req)}, []),
+    )
+
+    assert check_remote_harvest(harvest_board(task), tmp_path / "tasks.yaml") == []
+    assert task.status == "in_progress"
+    assert task.dispatch_log == []
 
 
 def test_remote_harvest_routes_missing_adapter_to_named_blocker(
