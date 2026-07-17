@@ -277,11 +277,13 @@ def section_autonomy() -> str:
     interactive sessions too (2026-07-15 endless-watcher incident: sessions armed auto-merge
     watchers while the marker prohibited merges, because orientation never showed it).
 
-    A FENCE is not a WALL. A *peer-coordination* pause (reason names a peer / concurrent work)
-    protects a peer agent's lanes — a directed session self-coordinates around them and drives its
-    own insulated work; it is NOT a blanket halt on that work. Rendering it as a wall
-    (``PAUSED … no outward actions … binds THIS session``) is the 2026-07-17 operator correction
-    ("that rule is fucking retarded"). A genuine safety halt (no peer keyword) renders unchanged.
+    A FENCE is not a WALL. A *peer-coordination* pause protects a peer agent's lanes — a directed
+    session self-coordinates around them and drives its own insulated work; it is NOT a blanket halt
+    on that work. Rendering it as a wall (``PAUSED … no outward actions … binds THIS session``) is the
+    2026-07-17 operator correction ("that rule is fucking retarded"). A genuine safety halt renders
+    unchanged. The class is read from an explicit ``class: fence|wall`` marker field when present
+    (declared data, authored by ``scripts/pause.py``); a legacy marker with no ``class:`` line falls
+    back to sniffing the reason for a peer keyword.
 
     Also surfaces an un-clearable marker inline: one with no ``pr:``/``owner:`` release coordinate
     AND no ``next_command`` runbook can never autoclear (autonomy-governor._marker_owner_merged
@@ -300,7 +302,14 @@ def section_autonomy() -> str:
 
     reason = field("reason") or "see logs/AUTONOMY_PAUSED"
     prohibitions = field("prohibitions")
-    if re.search(r"\bpeer\b|concurren|coordination", reason, re.I):
+    # Explicit `class: fence|wall` is authoritative (declared data); a legacy marker with no class
+    # line falls back to sniffing the reason for a peer keyword.
+    declared_class = field("class").lower()
+    if declared_class in ("fence", "wall"):
+        is_fence = declared_class == "fence"
+    else:
+        is_fence = bool(re.search(r"\bpeer\b|concurren|coordination", reason, re.I))
+    if is_fence:
         line = f"**Autonomy** — PEER-COORDINATION FENCE: {reason[:140]}"
         line += (
             "\n  ↳ a peer agent is protected — a directed session self-coordinates around its lanes "

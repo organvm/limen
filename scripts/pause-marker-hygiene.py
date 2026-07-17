@@ -44,7 +44,7 @@ MARKER = ROOT / "logs" / "AUTONOMY_PAUSED"
 
 # The strict ``<name>:`` prefix parse — an ``owner_surface:`` line never reads as ``owner:``.
 # Kept identical to autonomy-governor._marker_fields so the two agree on what a coordinate is.
-_FIELDS = ("owner", "pr", "reason", "prohibitions", "release_predicate", "next_command")
+_FIELDS = ("owner", "pr", "reason", "prohibitions", "release_predicate", "next_command", "class")
 
 
 def _marker_fields(marker: Path) -> dict[str, str]:
@@ -111,6 +111,18 @@ def evaluate(*, resolve: bool, timeout: float) -> tuple[int, str]:
 
     fields = _marker_fields(MARKER)
     reason = (fields.get("reason") or "see logs/AUTONOMY_PAUSED")[:140]
+
+    # Schema guard: an explicit `class:` must be fence|wall. A present-but-invalid value is a defect —
+    # readers (session-orient) silently fall back to reason-sniffing, so a typo'd class can render a
+    # fence as a wall (or vice-versa) against intent. An ABSENT class is fine (legacy → regex fallback).
+    declared_class = (fields.get("class") or "").strip().lower()
+    if declared_class and declared_class not in ("fence", "wall"):
+        return 1, (
+            f"pause-marker-hygiene: DEFECT — marker declares class {declared_class!r}, not fence|wall; "
+            f"readers fall back to reason-sniffing, so the fence/wall render may disagree with intent. "
+            f"Fix the `class:` line (scripts/pause.py writes it well-formed). Marker reason: {reason}"
+        )
+
     has_coordinate = bool(_pr_number(fields)) or bool(fields.get("owner"))
     has_runbook = bool(fields.get("next_command"))
 
