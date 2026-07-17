@@ -129,10 +129,9 @@ def test_marker_pr_line_unmerged_stays_paused(tmp_path):
     assert (logs / "AUTONOMY_PAUSED").exists()
 
 
-# ── pause-release COMPLETION (the deadly-embrace fix, 2026-07-15) ──────────────────────────────
-# A PR-owned marker (owner:/pr: identity + release_predicate declares the merge + no merge
-# prohibition) gets its release performed by the governor: merge-policy CLEARED → head-pinned
-# squash. Operator pauses are structurally ineligible. Every ambiguity stays paused.
+# ── pause-release observation ──────────────────────────────────────────────────────────────────
+# The governor never performs a merge. It releases only after the receipt-bound effector has
+# already produced GitHub's terminal MERGED state.
 
 OPERATOR_MARKER = (
     "reason: operator requested a safe restart and a study interval\n"
@@ -154,6 +153,10 @@ case "$*" in
   *) echo "[]" ;;
 esac
 """
+OPEN_LOGGING_GH = LOGGING_GH.replace(
+    '*"pr view 7 --json state"*) echo \'{"state":"MERGED"}\'',
+    '*"pr view 7 --json state"*) echo \'{"state":"OPEN"}\'',
+)
 
 TWO_OPEN_GH = LOGGING_GH.replace("'[{\"number\":7}]'", '\'[{"number":7},{"number":8}]\'')
 
@@ -200,18 +203,18 @@ def test_operator_marker_is_never_touched(tmp_path):
     assert _gh_log(tmp_path) == ""  # owner_surface: is not owner: — gh is never even consulted
 
 
-def test_pr_owned_marker_completes_release(tmp_path):
+def test_pr_owned_marker_releases_only_after_merge_already_exists(tmp_path):
     logs = _seed_pause(tmp_path, PR_OWNED_MARKER)
     proc = run_governor_completion(tmp_path, LOGGING_GH, CLEARED_POLICY, "mode")
     assert proc.stdout.strip() == "dispatch"
     assert not (logs / "AUTONOMY_PAUSED").exists()
-    assert "pr merge 7 --squash --match-head-commit abc123" in _gh_log(tmp_path)
+    assert "pr merge" not in _gh_log(tmp_path)
     assert "completed pause release" in proc.stderr
 
 
-def test_pr_owned_marker_stays_paused_on_hold(tmp_path):
+def test_pr_owned_marker_stays_paused_while_pr_is_open(tmp_path):
     logs = _seed_pause(tmp_path, PR_OWNED_MARKER)
-    proc = run_governor_completion(tmp_path, LOGGING_GH, HOLD_POLICY, "mode")
+    proc = run_governor_completion(tmp_path, OPEN_LOGGING_GH, HOLD_POLICY, "mode")
     assert proc.stdout.strip() == "paused"
     assert (logs / "AUTONOMY_PAUSED").exists()
     assert "pr merge" not in _gh_log(tmp_path)
@@ -241,8 +244,8 @@ def test_ambiguity_battery_stays_paused(tmp_path):
 def test_throttle_bounds_the_completion_attempt(tmp_path):
     _seed_pause(tmp_path, PR_OWNED_MARKER)
     extra = {"LIMEN_AUTONOMY_MARKER_RECHECK_SECS": "10000"}
-    run_governor_completion(tmp_path, LOGGING_GH, HOLD_POLICY, "mode", extra_env=extra)
+    run_governor_completion(tmp_path, OPEN_LOGGING_GH, HOLD_POLICY, "mode", extra_env=extra)
     first = _gh_log(tmp_path).count("\n")
-    proc = run_governor_completion(tmp_path, LOGGING_GH, HOLD_POLICY, "mode", extra_env=extra)
+    proc = run_governor_completion(tmp_path, OPEN_LOGGING_GH, HOLD_POLICY, "mode", extra_env=extra)
     assert proc.stdout.strip() == "paused"
     assert _gh_log(tmp_path).count("\n") == first  # second call throttled — zero new gh reads

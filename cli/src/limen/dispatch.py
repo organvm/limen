@@ -4036,24 +4036,7 @@ def _create_isolated_pr(task: Task, wt: Path, base: str, branch: str) -> str:
         return branch  # branch is live; record it (manual PR possible)
     url = pr.stdout.strip().splitlines()[-1] if pr.stdout.strip() else branch
     print(f"  dispatched: {task.id} → PR {url}")
-    _arm_auto_merge(task, wt, url)
     return url
-
-
-def _arm_auto_merge(task: Task, wt: Path, url: str) -> None:
-    # Best-effort: repos without branch protection / auto-merge disabled reject this harmlessly.
-    am = subprocess.run(
-        ["gh", "pr", "merge", url, "--auto", "--squash"],
-        cwd=str(wt),
-        capture_output=True,
-        text=True,
-        timeout=60,
-        stdin=subprocess.DEVNULL,
-    )
-    print(
-        f"    auto-merge {'armed' if am.returncode == 0 else 'n/a'}: {task.id}"
-        + ("" if am.returncode == 0 else f" ({am.stderr.strip()[:100]})")
-    )
 
 
 def _resolve_agent_binary(agent: str) -> str:
@@ -4183,7 +4166,6 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
             pushed = True
             url = _existing_pr_url(pr_head)
             print(f"  dispatched: {task.id} → existing PR {url}")
-            _arm_auto_merge(task, wt, url)
             return url
 
         if commit_result is not True:
@@ -4812,7 +4794,7 @@ def _gemini_model(task: "Task | None" = None) -> str | None:
 
 # ─── Claude-lane earned-tier ladder (haiku-first-with-cheap-verify) ──────────
 # The claude lane invoked `claude -p` with NO -m, so the account picked the tier. Now the
-# tier is DERIVED per task: a coding task's failure is cheaply detectable (CI/PR/auto-merge/
+# tier is DERIVED per task: a coding task's failure is cheaply detectable (CI/PR/review receipts/
 # reconcile), so verifiable classes start at HAIKU and rely on the EXISTING _LANE_CASCADE +
 # chronic escalation as the escalate rung — only UNDETECTABLE-failure classes get a higher
 # tier up front. No new escalation machinery. Mirrors _codex_model/_opencode_model: env pin

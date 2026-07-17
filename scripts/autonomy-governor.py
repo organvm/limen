@@ -85,9 +85,9 @@ def _marker_fields(marker: Path) -> dict[str, str]:
 
 
 def _pr_owned_pause(fields: dict[str, str]) -> bool:
-    """True iff the marker DECLARES its own release to be the merge of an identifiable PR.
+    """True iff the marker permits observing an identifiable PR as its release owner.
 
-    Every clause fails toward check-only (today's behavior). An operator pause is structurally
+    Every clause fails toward staying paused. An operator pause is structurally
     ineligible twice over: its prohibitions mention merge, and it carries no ``owner:``/``pr:``
     identity (``owner_surface:`` does not parse as ``owner:``).
     """
@@ -134,41 +134,18 @@ def _resolve_release_pr(fields: dict[str, str]) -> str:
 
 
 def _try_complete_release(fields: dict[str, str]) -> bool:
-    """COMPLETE a PR-owned pause instead of merely checking it — the deadly-embrace fix.
+    """Release only after the owner PR is already merged by the sole merge effector.
 
-    A pause whose release predicate is "the owner PR merges" used to wait on an organ that lives
-    INSIDE the paused beat (merge-drain runs on the drain voice; the heartbeat exits when paused),
-    so a session or human always had to babysit the merge (the 2026-07-15 endless-watcher
-    incident). Here the governor itself runs the ONE merge predicate (scripts/merge-policy.sh)
-    and, only on CLEARED (exit 0), performs the squash merge head-pinned to the predicate's
-    MERGE-HEAD line. Fail-CLOSED everywhere: HOLD/BLOCKED/broken-predicate/failed-merge all
-    return False and the estate stays paused for the next throttled cycle. True only after gh
-    re-confirms the PR is MERGED — the caller then unlinks the marker.
+    The governor is a state observer, not an alternate merge authority. A PR-owned
+    pause stays in place until receipt-bound ``merge-drain.py`` completes the
+    merge and GitHub reports the terminal state.
     """
     if not _pr_owned_pause(fields):
         return False
     pr = _resolve_release_pr(fields)
     if not pr:
         return False
-    policy = os.environ.get("LIMEN_MERGE_POLICY_BIN") or str(Path(__file__).resolve().parent / "merge-policy.sh")
     try:
-        verdict = subprocess.run(
-            ["bash", policy, pr], capture_output=True, text=True, timeout=90, check=False, cwd=str(ROOT)
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
-    if verdict.returncode != 0:
-        return False  # HOLD (2) / BLOCKED (3) / broken predicate — stay paused, retry next window
-    merge_cmd = ["gh", "pr", "merge", pr, "--squash"]
-    sha = re.search(r"^MERGE-HEAD: ([0-9a-f]+)", verdict.stdout, re.M)
-    if sha:
-        merge_cmd += ["--match-head-commit", sha.group(1)]
-    try:
-        if (
-            subprocess.run(merge_cmd, capture_output=True, text=True, timeout=90, check=False, cwd=str(ROOT)).returncode
-            != 0
-        ):
-            return False
         confirm = subprocess.run(
             ["gh", "pr", "view", pr, "--json", "state"],
             capture_output=True,
@@ -185,7 +162,7 @@ def _try_complete_release(fields: dict[str, str]) -> bool:
         return False
     if merged:
         print(
-            f"autonomy-governor: completed pause release — merge-policy CLEARED and PR #{pr} squash-merged",
+            f"autonomy-governor: completed pause release — receipt-bound effector already merged PR #{pr}",
             file=sys.stderr,
         )
     return merged
@@ -200,14 +177,14 @@ def _marker_owner_merged(marker: Path) -> bool:
     because nothing clears the marker. This lets current_mode() — the single chokepoint the
     heartbeat and dispatch admission both read — clear it within one cycle of the merge.
 
-    When the release PR is NOT yet merged, a PR-owned marker (see _pr_owned_pause) gets its
-    release COMPLETED here via _try_complete_release — merge-policy CLEARED → squash merge —
-    so the pause can never deadly-embrace the paused beat that would have merged it.
+    When the release PR is not yet merged, a PR-owned marker (see _pr_owned_pause) remains
+    paused. Only the receipt-bound merge effector may merge it; this governor merely observes
+    the resulting terminal GitHub state.
 
     Fail-CLOSED: any ambiguity (autoclear disabled, no owner line, gh missing/errored, offline,
-    not-yet-merged-and-not-completable) returns False so the beat stays paused. Throttled to at
+    or not-yet-merged) returns False so the beat stays paused. Throttled to at
     most once per LIMEN_AUTONOMY_MARKER_RECHECK_SECS so rapid callers don't hammer ``gh`` while
-    a marker exists — the completion attempt runs inside the same throttle window.
+    a marker exists.
     """
     if os.environ.get("LIMEN_AUTONOMY_MARKER_AUTOCLEAR", "1") != "1":
         return False

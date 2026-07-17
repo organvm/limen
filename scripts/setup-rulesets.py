@@ -7,10 +7,10 @@ Containment is deliberately independent from branch protection and its account/A
     ``delete_branch_on_merge=false``, then drains every active request to a bounded stable-empty
     fixed point
 
-After containment is verified, ``--apply`` installs protected rules only for repos that already
-publish the trusted review-gate workflow from their default branch:
+After containment is verified, ``--apply`` installs protected rules only for repos where the
+central review-gate App has already published a complete authenticated receipt:
   • required_status_checks = current-head CI plus an app-bound ``limen.pr_review_gate.v1``
-  • required_pull_request_reviews = stale dismissal without a native-login approval count
+  • required_pull_request_reviews = one native approval, last-push approval, stale dismissal
   • required_conversation_resolution = true
   • enforce_admins = true
 
@@ -32,6 +32,13 @@ import re
 import subprocess
 import sys
 from collections import OrderedDict
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "cli" / "src"))
+
+from limen.review_gate import validate_check_run_receipt  # noqa: E402
 
 
 def _parse_contain_mode(argv):
@@ -96,7 +103,6 @@ REVIEW_GATE_APP_SLUG = next(
     None,
 )
 REVIEW_GATE_CONTEXT = "limen.pr_review_gate.v1"
-REVIEW_GATE_WORKFLOW = ".github/workflows/pr-review-gate.yml"
 RECOVERY_COHORT_REPOS = (
     "organvm/limen",
     "organvm/domus-genoma",
@@ -107,6 +113,8 @@ RECOVERY_COHORT_REPOS = (
     "organvm/_agent",
 )
 MAX_PULL_REQUEST_PAGES = 1000
+MAX_CHECK_RUN_PAGES = 100
+MAX_APP_PREFLIGHT_PULLS = 20
 MAX_CONTAINMENT_PASSES = 12
 REQUIRED_EMPTY_INVENTORIES = 2
 AUTO_MERGE_QUERY = """
@@ -180,17 +188,7 @@ def checked_gh_json(args, t=45):
 def target_repos():
     if EXPLICIT:
         return EXPLICIT
-    prs = (
-        gh_json(
-            ["search", "prs", "--author", "@me", "--state", "open", "--limit", "200", "--json", "repository"],
-            default=[],
-        )
-        or []
-    )
-    seen = OrderedDict()
-    for p in prs:
-        seen[p["repository"]["nameWithOwner"]] = True
-    return list(seen.keys())
+    return list(RECOVERY_COHORT_REPOS)
 
 
 def containment_repos():
@@ -344,46 +342,37 @@ def is_real_gate(name):
 
 
 def detect_checks(repo):
-    """genuine CI gate names from the newest open PR's rollup (filtered: real test/build/lint only)."""
+    """Genuine CI names from complete current-head CheckRun/status pages."""
     if FORCED:
         return list(FORCED)
-    prs = (
-        gh_json(["pr", "list", "--repo", repo, "--state", "open", "--limit", "1", "--json", "number"], default=[]) or []
+    pulls = gh_json(
+        ["api", f"repos/{repo}/pulls?state=open&sort=updated&direction=desc&per_page=1"],
+        default=None,
     )
-    if not prs:
+    if not isinstance(pulls, list) or len(pulls) != 1 or not isinstance(pulls[0], dict):
         return []
-    d = gh_json(["pr", "view", str(prs[0]["number"]), "--repo", repo, "--json", "statusCheckRollup"], default={}) or {}
-    names = []
-    for c in d.get("statusCheckRollup") or []:
-        n = c.get("name") or c.get("context")
-        if n and n not in names and is_real_gate(n):
-            names.append(n)
-    return names
-
-
-def review_gate_publisher_available(repo: str, branch: str) -> bool:
-    """Prove the required status has a base-controlled producer before requiring it.
-
-    Installing a required context in a repository that cannot publish it would deadlock every PR.
-    The workflow must already exist on the live default branch; a copy present only in a local or PR
-    branch is deliberately insufficient.
-    """
-
-    value = (
-        gh_json(
-            [
-                "api",
-                "--method",
-                "GET",
-                f"repos/{repo}/contents/{REVIEW_GATE_WORKFLOW}",
-                "-f",
-                f"ref={branch}",
-            ],
-            default={},
-        )
-        or {}
+    head = pulls[0].get("head")
+    sha = str(head.get("sha") or "") if isinstance(head, dict) else ""
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", sha):
+        return []
+    runs, runs_error = _paged_rest_rows(
+        f"repos/{repo}/commits/{sha}/check-runs",
+        key="check_runs",
+        max_pages=MAX_CHECK_RUN_PAGES,
     )
-    return isinstance(value, dict) and value.get("type") == "file" and bool(value.get("sha"))
+    statuses, statuses_error = _paged_rest_rows(
+        f"repos/{repo}/commits/{sha}/statuses",
+        key=None,
+        max_pages=MAX_CHECK_RUN_PAGES,
+    )
+    if runs_error or statuses_error:
+        return []
+    names = []
+    for item in [*runs, *statuses]:
+        name = item.get("name") or item.get("context")
+        if isinstance(name, str) and name not in names and is_real_gate(name):
+            names.append(name)
+    return names
 
 
 def configured_review_gate_app_slug() -> str | None:
@@ -400,51 +389,106 @@ def configured_review_gate_app_slug() -> str | None:
     return slug
 
 
-def review_gate_app_id(repo: str, expected_slug: str) -> int | None:
-    """Derive the unique live App id for the explicitly trusted dedicated App slug.
+def _paged_rest_rows(path: str, *, key: str | None, max_pages: int):
+    rows = []
+    separator = "&" if "?" in path else "?"
+    for page in range(1, max_pages + 1):
+        value = gh_json(
+            ["api", f"{path}{separator}per_page=100&page={page}"],
+            default=None,
+        )
+        page_rows = value.get(key) if key is not None and isinstance(value, dict) else value
+        if not isinstance(page_rows, list) or any(not isinstance(row, dict) for row in page_rows):
+            return None, f"invalid paginated {key or 'rows'} response"
+        rows.extend(page_rows)
+        if len(page_rows) < 100:
+            return rows, ""
+    return None, f"{key or 'rows'} exceeded {max_pages} pages"
 
-    The id is never stored in code.  A current check run must prove the mapping from the configured
-    slug to one live id. Generic ``github-actions`` runs and runs from every other App are ignored.
+
+def review_gate_app_evidence(repo: str, expected_slug: str) -> tuple[int | None, str]:
+    """Derive one App id from a complete, executable, accepted CheckRun receipt.
+
+    This is deliberately independent of per-repository workflow files. The
+    producer is the centrally installed App; one of its live App-bound receipts
+    proves both installation and executable publication for this repository.
     """
 
     if expected_slug == "github-actions" or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?", expected_slug):
-        return None
-
-    pulls = (
-        gh_json(
-            ["api", f"repos/{repo}/pulls?state=open&per_page=20"],
-            default=[],
-        )
-        or []
+        return None, "dedicated App slug is invalid"
+    pulls = gh_json(
+        [
+            "api",
+            f"repos/{repo}/pulls?state=all&sort=updated&direction=desc&per_page={MAX_APP_PREFLIGHT_PULLS}",
+        ],
+        default=None,
     )
+    if not isinstance(pulls, list) or any(not isinstance(pull, dict) for pull in pulls):
+        return None, "invalid recent pull-request evidence response"
     app_ids: set[int] = set()
+    authenticated = 0
+    invalid_receipts = 0
+    seen_heads: set[tuple[int, str]] = set()
     for pull in pulls:
-        if not isinstance(pull, dict):
-            continue
         head = pull.get("head")
         sha = str(head.get("sha") or "") if isinstance(head, dict) else ""
-        if not re.fullmatch(r"[0-9a-fA-F]{40}", sha):
+        number = pull.get("number")
+        if (
+            not re.fullmatch(r"[0-9a-fA-F]{40}", sha)
+            or not isinstance(number, int)
+            or isinstance(number, bool)
+            or number <= 0
+            or (number, sha) in seen_heads
+        ):
             continue
-        result = (
-            gh_json(
-                [
-                    "api",
-                    "-H",
-                    "Accept: application/vnd.github+json",
-                    f"repos/{repo}/commits/{sha}/check-runs?per_page=100",
-                ],
-                default={},
-            )
-            or {}
+        seen_heads.add((number, sha))
+        runs, runs_error = _paged_rest_rows(
+            f"repos/{repo}/commits/{sha}/check-runs",
+            key="check_runs",
+            max_pages=MAX_CHECK_RUN_PAGES,
         )
-        for run in result.get("check_runs") or []:
-            if not isinstance(run, dict) or run.get("name") != REVIEW_GATE_CONTEXT:
-                continue
+        if runs_error:
+            return None, runs_error
+        for run in runs:
             app = run.get("app")
-            app_id = app.get("id") if isinstance(app, dict) and app.get("slug") == expected_slug else None
+            if run.get("name") != REVIEW_GATE_CONTEXT or not isinstance(app, dict) or app.get("slug") != expected_slug:
+                continue
+            authenticated += 1
+            app_id = app.get("id")
+            run_for_validation = {
+                **run,
+                "__typename": "CheckRun",
+                "headSha": run.get("head_sha"),
+                "externalId": run.get("external_id"),
+            }
+            valid, _detail = validate_check_run_receipt(
+                run_for_validation,
+                repo=repo,
+                number=number,
+                head=sha,
+                app_slug=expected_slug,
+                require_success=True,
+            )
+            if not valid:
+                invalid_receipts += 1
+                continue
             if isinstance(app_id, int) and not isinstance(app_id, bool) and app_id > 0:
                 app_ids.add(app_id)
-    return next(iter(app_ids)) if len(app_ids) == 1 else None
+    if len(app_ids) != 1:
+        detail = (
+            "no authenticated accepted App receipt"
+            if authenticated == 0
+            else f"App receipt ids are non-unique or invalid (authenticated={authenticated}, invalid={invalid_receipts})"
+        )
+        return None, detail
+    return next(iter(app_ids)), ""
+
+
+def review_gate_app_id(repo: str, expected_slug: str) -> int | None:
+    """Compatibility wrapper around the receipt-authenticated preflight."""
+
+    app_id, _detail = review_gate_app_evidence(repo, expected_slug)
+    return app_id
 
 
 def project_contexts(detected_checks):
@@ -475,11 +519,8 @@ def protection_body(detected_checks, review_app_id: int):
         "required_pull_request_reviews": {
             "dismiss_stale_reviews": True,
             "require_code_owner_reviews": False,
-            # The custom exact-head status accepts either a distinct GitHub login or a
-            # separately custodied SSH keeper principal. Requiring one native approval here
-            # would deadlock co-equal keepers that share the operator's GitHub credential.
-            "required_approving_review_count": 0,
-            "require_last_push_approval": False,
+            "required_approving_review_count": 1,
+            "require_last_push_approval": True,
         },
         "required_conversation_resolution": True,
         "restrictions": None,
@@ -817,7 +858,6 @@ def protection_main():
         print(f"    contexts forced (detection skipped): {FORCED}")
     print()
     no_project_ci = []
-    no_review_publisher = []
     no_review_app = []
     no_default_branch = []
     configured = 0
@@ -838,9 +878,10 @@ def protection_main():
                 failed += 1
             continue
         detected_checks = project_contexts(detect_checks(repo))
-        review_publisher = review_gate_publisher_available(repo, branch)
-        review_app = (
-            review_gate_app_id(repo, review_app_slug) if review_publisher and review_app_slug is not None else None
+        review_app, review_app_detail = (
+            review_gate_app_evidence(repo, review_app_slug)
+            if review_app_slug is not None
+            else (None, "dedicated App slug is not configured")
         )
         checks = required_contexts(detected_checks)
         if not detected_checks:
@@ -849,38 +890,28 @@ def protection_main():
                 f"  {repo}@{branch}: BLOCKED — no project CI checks detected; refusing a review-only "
                 "protection contract"
             )
-        elif not review_publisher:
-            no_review_publisher.append(repo)
-            print(
-                f"  {repo}@{branch}: BLOCKED — {REVIEW_GATE_WORKFLOW} is absent from the live "
-                "default branch; refusing to require an unpublishable status"
-            )
         elif review_app is None:
             no_review_app.append(repo)
             print(
-                f"  {repo}@{branch}: BLOCKED — no unique live {review_app_slug or 'dedicated'} "
-                f"GitHub App producer exists for {REVIEW_GATE_CONTEXT}; refusing generic or "
-                "actor-agnostic protection"
+                f"  {repo}@{branch}: BLOCKED — no executable accepted receipt from the "
+                f"{review_app_slug or 'dedicated'} App exists for {REVIEW_GATE_CONTEXT}: "
+                f"{review_app_detail}"
             )
         else:
             print(
                 f"  {repo}@{branch}: require {len(checks)} check(s) {checks[:4]}"
-                f"{'…' if len(checks) > 4 else ''} · strict current-head · native-or-signed "
-                f"peer receipt · dedicated_app={review_app_slug}:{review_app} · stale dismissal · "
+                f"{'…' if len(checks) > 4 else ''} · strict current-head · native exact-head "
+                f"peer receipt · dedicated_app={review_app_slug}:{review_app} · last-push approval · stale dismissal · "
                 "resolved conversations · admins enforced"
             )
         if not APPLY:
             continue
         # --- APPLY ---
-        if not detected_checks or not review_publisher or review_app is None:
+        if not detected_checks or review_app is None:
             reason = (
                 "strict current-head project CI could not be derived"
                 if not detected_checks
-                else (
-                    "trusted review-gate publisher is not deployed on the default branch"
-                    if not review_publisher
-                    else "review-gate GitHub App identity could not be derived uniquely"
-                )
+                else "review-gate GitHub App executable receipt could not be authenticated"
             )
             print(f"      ✗ unchanged: {reason}")
             failed += 1
@@ -896,10 +927,9 @@ def protection_main():
                 print(f"      ✗ {message[:200]}")
 
     print(
-        f"\n{configured if APPLY else len(repos) - len(no_project_ci) - len(no_review_publisher) - len(no_review_app) - len(no_default_branch)} "
+        f"\n{configured if APPLY else len(repos) - len(no_project_ci) - len(no_review_app) - len(no_default_branch)} "
         f"repo(s) are eligible for project CI beside {REVIEW_GATE_CONTEXT}; "
         f"{len(no_project_ci)} blocked for missing project CI; "
-        f"{len(no_review_publisher)} blocked for missing trusted publisher; "
         f"{len(no_review_app)} blocked for missing unique dedicated App identity; "
         f"{len(no_default_branch)} blocked for unreadable default branch."
     )

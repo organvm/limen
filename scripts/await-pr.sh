@@ -14,24 +14,25 @@
 #   - refuses to start while logs/AUTONOMY_PAUSED prohibits merges (no --force: a paused estate
 #     waits for the operator, and so does every session in it)
 #   - single instance per PR (mkdir lock under logs/); a second waiter exits ALREADY-WATCHED
-#   - --merge completes the standing grant on CLEARED: gh pr merge --squash --match-head-commit
+#   - --merge delegates to the sole receipt-bound effector, merge-drain.py
 #
 # Anything longer than the deadline belongs to the beat's merge rung (scripts/merge-drain.py via
 # scripts/drain.sh): hand off and end the session — never re-arm the waiter in a loop.
 #
-# Usage:  scripts/await-pr.sh <PR#> [--repo OWNER/NAME] [--timeout SECS] [--interval SECS] [--merge]
+# Usage:  scripts/await-pr.sh <PR#> [--repo OWNER/NAME] [--timeout SECS] [--interval SECS]
+#         [--merge --authorization-receipt PATH --allowed-signers PATH]
 #
 # Exit codes:
 #   0  CLEARED (and MERGED when --merge)      2  TIMEOUT — deadline elapsed, still HOLD
 #   1  FAILED — BLOCKED verdict, CI checks    3  REFUSED-PAUSED — pause marker prohibits merges
-#      failing, or gh pr merge itself failed  4  ALREADY-WATCHED — live lock held for this PR
+#      failing, or receipt-bound merge failed 4  ALREADY-WATCHED — live lock held for this PR
 #                                            64  usage error
 set -uo pipefail
 
 ROOT="${LIMEN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 POLICY="${LIMEN_MERGE_POLICY_BIN:-$ROOT/scripts/merge-policy.sh}"
 
-PR=""; REPO=""; MERGE=0
+PR=""; REPO=""; MERGE=0; AUTHORIZATION_RECEIPT=""; ALLOWED_SIGNERS=""
 TIMEOUT="${LIMEN_AWAIT_PR_TIMEOUT:-1200}"
 INTERVAL="${LIMEN_AWAIT_PR_INTERVAL:-45}"
 usage() { sed -n '22,28p' "$0"; exit 64; }
@@ -44,6 +45,10 @@ while [ $# -gt 0 ]; do
     --interval) INTERVAL="${2:-}"; shift 2 ;;
     --interval=*) INTERVAL="${1#*=}"; shift ;;
     --merge) MERGE=1; shift ;;
+    --authorization-receipt) AUTHORIZATION_RECEIPT="${2:-}"; shift 2 ;;
+    --authorization-receipt=*) AUTHORIZATION_RECEIPT="${1#*=}"; shift ;;
+    --allowed-signers) ALLOWED_SIGNERS="${2:-}"; shift 2 ;;
+    --allowed-signers=*) ALLOWED_SIGNERS="${1#*=}"; shift ;;
     -h|--help) sed -n '2,28p' "$0"; exit 0 ;;
     *) PR="$1"; shift ;;
   esac
@@ -51,6 +56,10 @@ done
 case "$PR" in (*[!0-9]*|"") usage ;; esac
 case "$TIMEOUT" in (*[!0-9]*|"") usage ;; esac
 case "$INTERVAL" in (*[!0-9]*|"") usage ;; esac
+if [ "$MERGE" = 1 ] && { [ -z "$AUTHORIZATION_RECEIPT" ] || [ -z "$ALLOWED_SIGNERS" ]; }; then
+  echo "AWAIT-PR $PR: REFUSED — --merge requires an exact-target authorization receipt and owner signer registry"
+  exit 64
+fi
 repo_args=(); [ -n "$REPO" ] && repo_args=(--repo "$REPO")
 # bash 3.2 (macOS /bin/bash): "${repo_args[@]+"${repo_args[@]}"}" at each call site — an empty
 # array expands to nothing under set -u, a populated one to its elements.
@@ -65,8 +74,8 @@ finish() { # exit_code — the single exit path after the lock is held: log one 
 
 # ── pause refusal — before the lock, before the first poll ─────────────────────────────────────
 # A pause marker whose prohibitions mention merge binds every session, not just the beat: no
-# watcher, no merge, until the operator releases it. (The governor completes PR-owned releases
-# itself; an operator pause has no compliant wait to offer, so refuse instead of spinning.)
+# watcher, no merge, until the operator releases it. (The governor only observes PR-owned releases
+# after the receipt-bound effector merges them; an operator pause has no compliant wait to offer.)
 MARKER="$ROOT/logs/AUTONOMY_PAUSED"
 if [ -f "$MARKER" ] && grep -qi '^prohibitions:.*merge' "$MARKER" 2>/dev/null; then
   reason="$(grep -i '^reason:' "$MARKER" 2>/dev/null | head -1)"
@@ -101,19 +110,27 @@ while :; do
     0)
       echo "AWAIT-PR $PR: CLEARED — $last"
       sha="$(printf '%s\n' "$out" | sed -n 's/^MERGE-HEAD: \([0-9a-f][0-9a-f]*\).*/\1/p' | head -1)"
+      merge_repo="$(printf '%s\n' "$out" | sed -n 's/^MERGE-REPO: \(.*\)$/\1/p' | head -1)"
       if [ "$MERGE" = 1 ]; then
-        if [ -z "$sha" ]; then
-          echo "AWAIT-PR $PR: MERGE-CMD-FAILED — CLEARED but merge-policy printed no MERGE-HEAD line"
+        if [ -z "$sha" ] || [ -z "$merge_repo" ]; then
+          echo "AWAIT-PR $PR: MERGE-CMD-FAILED — CLEARED but merge-policy omitted its exact target"
           finish 1
         fi
-        if gh pr merge "$PR" "${repo_args[@]+"${repo_args[@]}"}" --squash --match-head-commit "$sha"; then
-          echo "AWAIT-PR $PR: MERGED (squash, head $sha)"
+        if python3 "$ROOT/scripts/merge-drain.py" \
+          --apply \
+          --limit 1 \
+          --target-repo "$merge_repo" \
+          --target-pr "$PR" \
+          --target-head "$sha" \
+          --authorization-receipt "$AUTHORIZATION_RECEIPT" \
+          --allowed-signers "$ALLOWED_SIGNERS"; then
+          echo "AWAIT-PR $PR: MERGED by receipt-bound merge-drain (head $sha)"
           finish 0
         fi
-        echo "AWAIT-PR $PR: MERGE-CMD-FAILED — gh pr merge exited non-zero"
+        echo "AWAIT-PR $PR: MERGE-CMD-FAILED — receipt-bound merge-drain exited non-zero"
         finish 1
       fi
-      [ -n "$sha" ] && echo "  merge with: gh pr merge $PR${REPO:+ --repo $REPO} --squash --match-head-commit $sha"
+      [ -n "$sha" ] && echo "  merge remains held for an exact-target authorization receipt (head $sha)"
       finish 0 ;;
     3)
       echo "AWAIT-PR $PR: FAILED — $last"

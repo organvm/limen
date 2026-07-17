@@ -67,8 +67,8 @@ def test_setup_rulesets_protection_is_exact_head_and_review_fail_closed() -> Non
     assert body["required_pull_request_reviews"] == {
         "dismiss_stale_reviews": True,
         "require_code_owner_reviews": False,
-        "required_approving_review_count": 0,
-        "require_last_push_approval": False,
+        "required_approving_review_count": 1,
+        "require_last_push_approval": True,
     }
 
 
@@ -91,7 +91,7 @@ def test_setup_rulesets_apply_refuses_when_project_ci_is_not_discoverable(monkey
     assert module.main() == 1
 
 
-def test_setup_rulesets_apply_refuses_unpublishable_review_context(monkeypatch) -> None:
+def test_setup_rulesets_apply_refuses_without_executable_app_receipt(monkeypatch) -> None:
     module = load_setup_rulesets()
     monkeypatch.setattr(module, "APPLY", True)
     monkeypatch.setattr(module, "target_repos", lambda: ["owner/repository"])
@@ -101,7 +101,11 @@ def test_setup_rulesets_apply_refuses_unpublishable_review_context(monkeypatch) 
         lambda *_args, **_kwargs: {"defaultBranchRef": {"name": "main"}},
     )
     monkeypatch.setattr(module, "detect_checks", lambda _repo: ["pr-gate"])
-    monkeypatch.setattr(module, "review_gate_publisher_available", lambda _repo, _branch: False)
+    monkeypatch.setattr(
+        module,
+        "review_gate_app_evidence",
+        lambda _repo, _slug: (None, "no authenticated accepted App receipt"),
+    )
     monkeypatch.setattr(
         module,
         "gh",
@@ -111,23 +115,16 @@ def test_setup_rulesets_apply_refuses_unpublishable_review_context(monkeypatch) 
     assert module.main() == 1
 
 
-def test_review_gate_publisher_requires_a_live_default_branch_file(monkeypatch) -> None:
-    module = load_setup_rulesets()
-    monkeypatch.setattr(module, "gh_json", lambda *_args, **_kwargs: {"type": "file", "sha": "abc123"})
-    assert module.review_gate_publisher_available("owner/repository", "main") is True
-
-    monkeypatch.setattr(module, "gh_json", lambda *_args, **_kwargs: {})
-    assert module.review_gate_publisher_available("owner/repository", "main") is False
-
-
-def test_review_gate_app_identity_is_derived_live_and_must_be_unique(monkeypatch) -> None:
+def test_review_gate_app_identity_is_derived_from_authenticated_receipt_and_must_be_unique(monkeypatch) -> None:
     module = load_setup_rulesets()
     head = "a" * 40
     dedicated_slug = "keeper-review-publisher"
 
+    monkeypatch.setattr(module, "validate_check_run_receipt", lambda *_args, **_kwargs: (True, ""))
+
     def one_app(args, **_kwargs):
-        if "pulls?state=open" in args[-1]:
-            return [{"head": {"sha": head}}]
+        if "/pulls?" in args[-1]:
+            return [{"number": 7, "head": {"sha": head}}]
         return {
             "check_runs": [
                 {
@@ -144,27 +141,54 @@ def test_review_gate_app_identity_is_derived_live_and_must_be_unique(monkeypatch
     monkeypatch.setattr(module, "gh_json", one_app)
     assert module.review_gate_app_id("owner/repository", dedicated_slug) == 424242
 
-    monkeypatch.setattr(
-        module,
-        "gh_json",
-        lambda args, **_kwargs: (
-            [{"head": {"sha": head}}]
-            if "pulls?state=open" in args[-1]
-            else {
-                "check_runs": [
-                    {
-                        "name": "limen.pr_review_gate.v1",
-                        "app": {"id": 424242, "slug": dedicated_slug},
-                    },
-                    {
-                        "name": "limen.pr_review_gate.v1",
-                        "app": {"id": 777777, "slug": dedicated_slug},
-                    },
-                ]
-            }
-        ),
-    )
+    def two_apps(args, **_kwargs):
+        if "/pulls?" in args[-1]:
+            return [{"number": 7, "head": {"sha": head}}]
+        return {
+            "check_runs": [
+                {
+                    "name": "limen.pr_review_gate.v1",
+                    "app": {"id": 424242, "slug": dedicated_slug},
+                },
+                {
+                    "name": "limen.pr_review_gate.v1",
+                    "app": {"id": 777777, "slug": dedicated_slug},
+                },
+            ]
+        }
+
+    monkeypatch.setattr(module, "gh_json", two_apps)
     assert module.review_gate_app_id("owner/repository", dedicated_slug) is None
+
+
+def test_default_protection_scope_is_the_complete_seven_repo_cohort() -> None:
+    module = load_setup_rulesets()
+    assert module.target_repos() == list(module.RECOVERY_COHORT_REPOS)
+    assert len(module.target_repos()) == 7
+
+
+def test_apply_requires_and_reads_back_protection_for_all_seven_repositories(monkeypatch) -> None:
+    module = load_setup_rulesets()
+    monkeypatch.setattr(module, "APPLY", True)
+    monkeypatch.setattr(module, "detect_checks", lambda _repo: ["pr-gate"])
+    monkeypatch.setattr(module, "configured_review_gate_app_slug", lambda: "keeper-gate-v7")
+    monkeypatch.setattr(module, "gh_json", lambda *_args, **_kwargs: {"defaultBranchRef": {"name": "main"}})
+    monkeypatch.setattr(module, "review_gate_app_evidence", lambda _repo, _slug: (987654, ""))
+    readbacks = []
+
+    def apply(repo, branch, body):
+        readbacks.append((repo, branch, body))
+        return True, []
+
+    monkeypatch.setattr(module, "apply_protection_contract", apply)
+    assert module.main() == 0
+    assert [repo for repo, _branch, _body in readbacks] == list(module.RECOVERY_COHORT_REPOS)
+    assert all(branch == "main" for _repo, branch, _body in readbacks)
+    assert all(
+        body["required_pull_request_reviews"]["required_approving_review_count"] == 1
+        and body["required_pull_request_reviews"]["require_last_push_approval"] is True
+        for _repo, _branch, body in readbacks
+    )
 
 
 def test_review_gate_app_rejects_generic_actions_and_requires_explicit_slug(monkeypatch) -> None:
@@ -228,12 +252,11 @@ def _ready_apply(module, monkeypatch) -> None:
         lambda *_args, **_kwargs: {"defaultBranchRef": {"name": "trunk"}},
     )
     monkeypatch.setattr(module, "detect_checks", lambda _repo: ["pr-gate", "python"])
-    monkeypatch.setattr(module, "review_gate_publisher_available", lambda _repo, _branch: True)
     monkeypatch.setattr(module, "configured_review_gate_app_slug", lambda: "keeper-gate-v7")
     monkeypatch.setattr(
         module,
-        "review_gate_app_id",
-        lambda _repo, slug: 987654 if slug == "keeper-gate-v7" else None,
+        "review_gate_app_evidence",
+        lambda _repo, slug: (987654, "") if slug == "keeper-gate-v7" else (None, "wrong slug"),
     )
 
 
@@ -367,9 +390,9 @@ def _mutated_protection(module, field: str):
     elif field == "code_owners":
         value["required_pull_request_reviews"]["require_code_owner_reviews"] = True
     elif field == "approval_count":
-        value["required_pull_request_reviews"]["required_approving_review_count"] = 1
+        value["required_pull_request_reviews"]["required_approving_review_count"] = 0
     elif field == "last_push":
-        value["required_pull_request_reviews"]["require_last_push_approval"] = True
+        value["required_pull_request_reviews"]["require_last_push_approval"] = False
     elif field == "restrictions":
         value["restrictions"] = {"users": []}
     else:  # pragma: no cover - test helper guard
@@ -688,9 +711,8 @@ def test_containment_apply_paginates_cancels_locks_and_reads_back_without_protec
     monkeypatch.setattr(module, "containment_repos", lambda: ["example/nebula"])
     for prerequisite in (
         "detect_checks",
-        "review_gate_publisher_available",
         "configured_review_gate_app_slug",
-        "review_gate_app_id",
+        "review_gate_app_evidence",
     ):
         monkeypatch.setattr(
             module,
