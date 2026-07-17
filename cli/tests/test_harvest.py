@@ -10,6 +10,7 @@ from datetime import date, datetime, timezone
 
 import pytest
 
+from limen.dispatch import _attempt_launch_entry
 from limen.harvest import _diff_is_real, check_jules_harvest
 from limen.models import DispatchLogEntry, LimenFile, Task
 
@@ -103,3 +104,42 @@ def test_harvest_rejects_empty_diff_instead_of_false_done(tmp_path):
     assert "noop" in task.labels
     assert "cancelled" not in task.labels
     assert task.dispatch_log[-1].status == "failed"
+
+
+def test_harvest_carries_attempt_and_model_receipts_into_terminal_row(tmp_path):
+    harvest_dir = tmp_path / "harvest"
+    _write_diff(harvest_dir, "888", REAL_DIFF)
+    task = Task(
+        id="LIMEN-3",
+        title="receipt transport",
+        repo="organvm/limen",
+        target_agent="jules",
+        status="dispatched",
+        created=date(2026, 7, 17),
+    )
+    launch = _attempt_launch_entry(
+        task,
+        "jules",
+        reservation_session="888",
+        started_at=datetime(2026, 7, 17, tzinfo=timezone.utc),
+        output="registered before provider",
+    )
+    task.dispatch_log = [
+        launch,
+        launch.model_copy(
+            update={
+                "status": "dispatched",
+                "selected_model": "provider/reported-fixture",
+                "selection_source": "provider_live_catalog",
+                "catalog_hash": "a" * 64,
+            }
+        ),
+    ]
+
+    assert check_jules_harvest(LimenFile(tasks=[task]), harvest_dir) == ["LIMEN-3"]
+    terminal = task.dispatch_log[-1]
+    assert terminal.status == "done"
+    assert terminal.trajectory_outcome == "succeeded"
+    assert terminal.attempt_id == launch.attempt_id
+    assert terminal.selected_model == "provider/reported-fixture"
+    assert terminal.selection_source == "provider_live_catalog"

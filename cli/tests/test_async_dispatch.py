@@ -26,6 +26,7 @@ sys.path.insert(0, str(CLI_SRC))
 
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.execution_contract import execution_contract_hash  # noqa: E402
+from limen.execution_trajectory import trajectory_from_log_entries, verified_value_credit  # noqa: E402
 from limen.models import Budget, BudgetTrack, DispatchLogEntry, LimenFile, Portal, Task  # noqa: E402
 from limen.provider_selection import execution_profile_for  # noqa: E402
 from limen.remote_execution import verification_context_for_task  # noqa: E402
@@ -84,16 +85,17 @@ def _remote_harvest_fixture(tmp_path):
     task.depends_on = ["PARENT"]
     task.predicate = "python3 scripts/verify.py"
     task.receipt_target = f"artifact:organvm/limen:task:{task.id}"
-    task.status = "dispatched"
     reservation_id = f"async-reserve:{'a' * 32}"
-    task.dispatch_log.append(
-        DispatchLogEntry(
-            timestamp=datetime.datetime.now(datetime.timezone.utc),
-            agent="github_actions",
-            session_id=reservation_id,
-            status="dispatched",
-        )
+    started_at = datetime.datetime.now(datetime.timezone.utc)
+    launch = dispatch_module._attempt_launch_entry(
+        task,
+        "github_actions",
+        reservation_session=reservation_id,
+        started_at=started_at,
+        output="fixture registered before remote provider execution",
     )
+    task.status = "in_progress"
+    task.dispatch_log.extend([launch, launch.model_copy(update={"status": "in_progress"})])
     lf.tasks.append(
         Task(
             id="PARENT",
@@ -231,6 +233,8 @@ def _remote_harvest_fixture(tmp_path):
         "execution_contract_hash": execution_contract_hash(task),
         "actual_execution_contract_hash": execution_contract_hash(task),
         "execution_started": True,
+        "attempt_id": launch.attempt_id,
+        "model_selection": {},
         "remote_submission": metadata,
     }
     return da, result, receipt
@@ -259,6 +263,7 @@ def _assert_remote_harvest_blocked(tmp_path, da, result, *, marker_cleared: bool
         os.getpid(),
         0.0,
         str(result["reservation_id"]),
+        str(result["attempt_id"]),
     )
     result_path = _write_async_result(da, result)
 
@@ -816,16 +821,16 @@ def test_harvest_applies_pr_result_and_cleans(tmp_path):
     lf = load_limen_file(tmp_path / "tasks.yaml")
     lf.portal.budget.track.spent = 1
     lf.portal.budget.track.per_agent["codex"] = 1
-    lf.tasks[0].status = "dispatched"
-    lf.tasks[0].dispatch_log.append(
-        DispatchLogEntry(
-            timestamp=datetime.datetime.now(datetime.timezone.utc),
-            agent="codex",
-            session_id="async-reserve",
-            status="dispatched",
-            output="dispatch-async: reserved before detached worker launch",
-        )
+    started_at = datetime.datetime.now(datetime.timezone.utc)
+    launch = dispatch_module._attempt_launch_entry(
+        lf.tasks[0],
+        "codex",
+        reservation_session="async-reserve",
+        started_at=started_at,
+        output="fixture registered before detached worker launch",
     )
+    lf.tasks[0].status = "in_progress"
+    lf.tasks[0].dispatch_log.extend([launch, launch.model_copy(update={"status": "in_progress"})])
     save_limen_file(tmp_path / "tasks.yaml", lf)
     contract_hash = execution_contract_hash(lf.tasks[0])
     (da.RUNS / "T0__codex.running").write_text(datetime.datetime.now(datetime.timezone.utc).isoformat())
@@ -839,6 +844,8 @@ def test_harvest_applies_pr_result_and_cleans(tmp_path):
                 "err": None,
                 "execution_contract_hash": contract_hash,
                 "execution_started": True,
+                "attempt_id": launch.attempt_id,
+                "model_selection": {},
             }
         )
     )
@@ -901,7 +908,7 @@ def test_forged_remote_preflight_blocker_cannot_cross_execution_contract(tmp_pat
     result["remote_submission"] = {}
 
     _assert_remote_harvest_blocked(tmp_path, da, result, marker_cleared=False)
-    assert _board(tmp_path)["T0"].status == "dispatched"
+    assert _board(tmp_path)["T0"].status == "in_progress"
 
 
 def test_remote_harvest_rejects_result_run_id_that_differs_from_submission(tmp_path):
@@ -2739,11 +2746,11 @@ def _mark_async_dispatched(tmp_path, *, age_seconds=0, reservation_id="async-res
     task.status = "dispatched"
     task.updated = stamp
     task.dispatch_log.append(
-        DispatchLogEntry(
-            timestamp=stamp,
-            agent="codex",
-            session_id=reservation_id,
-            status="dispatched",
+        dispatch_module._attempt_launch_entry(
+            task,
+            "codex",
+            reservation_session=reservation_id,
+            started_at=stamp,
             output="reserved for exact recovery test",
         )
     )
@@ -3065,6 +3072,73 @@ def test_async_worker_fences_result_when_recovery_wins_publication_race(tmp_path
     assert receipt["result"] == "__notask__"
     assert receipt["publication_failure"]["id"] == "async-result-publication-fenced"
     assert _board(tmp_path)[task.id].status == "open"
+
+
+def test_duplicate_worker_executes_registered_attempt_once_without_second_spend_or_value(
+    tmp_path,
+    monkeypatch,
+):
+    da = _load(tmp_path, n_open=1)
+
+    class Process:
+        pid = 424242
+
+    monkeypatch.setattr(da.subprocess, "Popen", lambda *_args, **_kwargs: Process())
+    assert da.reserve_and_launch(["codex"], per_agent=1, cap=1, dry=False) == [("codex", "T0")]
+
+    reserved = _board(tmp_path)["T0"]
+    reservation_id = reserved.dispatch_log[-1].session_id
+    attempt_id = reserved.dispatch_log[-1].attempt_id
+    contract_hash = execution_contract_hash(reserved)
+    assert attempt_id
+    assert load_limen_file(tmp_path / "tasks.yaml").portal.budget.track.per_agent["codex"] == 1
+
+    worker = _load_worker(tmp_path)
+    provider_calls = 0
+
+    def provider(*_args, **_kwargs):
+        nonlocal provider_calls
+        provider_calls += 1
+        return False
+
+    monkeypatch.setattr(worker, "call_agent_dispatch", provider)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "async-run-one.py",
+            "--agent",
+            "codex",
+            "--task-id",
+            "T0",
+            "--reservation-id",
+            reservation_id,
+            "--execution-contract-hash",
+            contract_hash,
+        ],
+    )
+
+    assert worker.main() == 0
+    result_path = worker._result_path("T0", reservation_id)
+    first_receipt = result_path.read_bytes()
+    assert worker.main() == 10
+    assert result_path.read_bytes() == first_receipt
+    assert provider_calls == 1
+
+    claimed = _board(tmp_path)["T0"]
+    assert [entry.attempt_id for entry in claimed.dispatch_log if entry.attempt_id] == [attempt_id, attempt_id]
+    assert da.harvest() == 1
+
+    reconciled = _board(tmp_path)["T0"]
+    assert load_limen_file(tmp_path / "tasks.yaml").portal.budget.track.per_agent["codex"] == 1
+    launch = next(entry for entry in reconciled.dispatch_log if entry.attempt_id == attempt_id)
+    terminal = next(
+        entry
+        for entry in reversed(reconciled.dispatch_log)
+        if entry.attempt_id == attempt_id and entry.trajectory_outcome
+    )
+    trajectory = trajectory_from_log_entries(task_id=reconciled.id, launch=launch, terminal=terminal)
+    assert verified_value_credit(trajectory) == 0
 
 
 def test_exact_orphan_recovery_command_reopens_once_and_is_idempotent(tmp_path, monkeypatch, capsys):

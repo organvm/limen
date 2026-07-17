@@ -11,7 +11,7 @@ from limen.provider_selection import (
     ExecutionProfile,
     ModelCapability,
     catalog_hash,
-    discover_claude_models,
+    discover_anthropic_models,
     discover_codex_models,
     discover_gemini_models,
     effective_profile,
@@ -204,7 +204,7 @@ def test_identifier_catalog_tracks_renamed_add_remove_and_reorder_without_code_c
     assert validate_model_override(first, "shape-m") is None
 
 
-def test_cli_catalog_discovery_preserves_provider_ids_without_substitution(monkeypatch) -> None:
+def test_codex_cli_catalog_discovery_preserves_provider_ids_without_substitution(monkeypatch) -> None:
     observed: list[list[str]] = []
 
     def fake_run(command, **_kwargs):
@@ -218,12 +218,62 @@ def test_cli_catalog_discovery_preserves_provider_ids_without_substitution(monke
 
     monkeypatch.setattr(provider_selection.subprocess, "run", fake_run)
 
-    assert discover_claude_models("claude-fixture") == ["shape-q", "shape-r"]
     assert discover_codex_models("codex-fixture") == ["shape-q", "shape-r"]
-    assert observed == [
-        ["claude-fixture", "models", "--output-format", "json"],
-        ["codex-fixture", "debug", "models"],
-    ]
+    assert observed == [["codex-fixture", "debug", "models"]]
+
+
+def test_anthropic_catalog_tracks_renames_add_remove_and_reorder() -> None:
+    class Page:
+        def __init__(self, identifiers: list[str], next_page=None):
+            self.data = [type("Model", (), {"id": identifier})() for identifier in identifiers]
+            self._next_page = next_page
+
+        def has_next_page(self):
+            return self._next_page is not None
+
+        def get_next_page(self):
+            return self._next_page
+
+    class Client:
+        def __init__(self, page):
+            self._page = page
+            self.models = self
+
+        def list(self, **_kwargs):
+            return self._page
+
+    first = discover_anthropic_models(Client(Page(["shape-z"], Page(["shape-a"]))))
+    reordered = discover_anthropic_models(Client(Page(["shape-a", "shape-z"])))
+    expanded = discover_anthropic_models(Client(Page(["shape-new", "shape-z", "shape-a"])))
+    removed = discover_anthropic_models(Client(Page(["shape-new", "shape-a"])))
+
+    assert first == reordered == ["shape-a", "shape-z"]
+    assert expanded == ["shape-a", "shape-new", "shape-z"]
+    assert removed == ["shape-a", "shape-new"]
+    assert validate_model_override(expanded, "shape-new") == "shape-new"
+    assert validate_model_override(removed, "shape-z") is None
+
+
+def test_anthropic_catalog_failure_or_cycle_is_unverifiable() -> None:
+    class BrokenModels:
+        def list(self, **_kwargs):
+            raise RuntimeError("catalog unavailable")
+
+    broken = type("Client", (), {"models": BrokenModels()})()
+    assert discover_anthropic_models(broken) == []
+
+    class CyclicPage:
+        data = [type("Model", (), {"id": "shape-one"})()]
+
+        def has_next_page(self):
+            return True
+
+        def get_next_page(self):
+            return self
+
+    cyclic_page = CyclicPage()
+    cyclic = type("Client", (), {"models": type("Models", (), {"list": lambda _self, **_kwargs: cyclic_page})()})()
+    assert discover_anthropic_models(cyclic) == []
 
 
 def test_gemini_catalog_discovery_keeps_credential_out_of_url_and_follows_pagination(monkeypatch) -> None:

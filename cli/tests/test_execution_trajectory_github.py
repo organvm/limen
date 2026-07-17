@@ -54,7 +54,11 @@ def test_read_many_returns_exact_owner_bytes_and_treats_only_404_as_absent() -> 
         ]
     )
 
-    assert adapter(runner).read_many(["attempt-a", "attempt-b"]) == {"attempt-a": payload}
+    snapshot = adapter(runner).read_many(["attempt-a", "attempt-b"])
+    assert snapshot.token == BASE
+    assert dict(snapshot.records) == {"attempt-a": payload}
+    with pytest.raises(TypeError):
+        snapshot.records["attempt-c"] = b"mutation"
     assert len(runner.calls) == 3
     assert all(f"?ref={BASE}" in call[0][2] for call in runner.calls[1:])
 
@@ -75,8 +79,9 @@ def test_publish_atomic_creates_one_fast_forward_commit_for_the_batch() -> None:
     payloads = {"attempt-a": b'{"a":1}', "attempt-b": b'{"b":2}'}
     owner = adapter(runner)
 
-    assert owner.read_many([]) == {}
-    receipts = owner.publish_atomic(payloads)
+    snapshot = owner.read_many([])
+    assert dict(snapshot.records) == {}
+    receipts = owner.publish_atomic(payloads, snapshot_token=snapshot.token)
 
     assert set(receipts) == {"attempt-a", "attempt-b"}
     assert all(f"/blob/{COMMIT}/receipts/execution-trajectories/" in receipt.reference for receipt in receipts.values())
@@ -104,8 +109,11 @@ def test_failed_compare_and_set_never_returns_publication_receipts() -> None:
     owner = adapter(runner)
 
     with pytest.raises(RuntimeError, match="fast forward"):
-        owner.read_many([])
-        owner.publish_atomic({"attempt-a": b'{"a":1}'})
+        snapshot = owner.read_many([])
+        owner.publish_atomic(
+            {"attempt-a": b'{"a":1}'},
+            snapshot_token=snapshot.token,
+        )
 
 
 def test_changed_owner_head_fails_before_any_blob_is_created() -> None:
@@ -117,11 +125,50 @@ def test_changed_owner_head_fails_before_any_blob_is_created() -> None:
     )
     owner = adapter(runner)
 
-    assert owner.read_many([]) == {}
+    snapshot = owner.read_many([])
+    assert dict(snapshot.records) == {}
     with pytest.raises(RuntimeError, match="compare-and-set lost"):
-        owner.publish_atomic({"attempt-a": b'{"a":1}'})
+        owner.publish_atomic(
+            {"attempt-a": b'{"a":1}'},
+            snapshot_token=snapshot.token,
+        )
 
     assert len(runner.calls) == 2
+
+
+def test_overlapping_reads_keep_operation_local_compare_and_set_tokens() -> None:
+    runner = ScriptedRunner(
+        [
+            result({"object": {"sha": BASE}}),
+            result({"object": {"sha": OTHER_HEAD}}),
+            result({"object": {"sha": OTHER_HEAD}}),
+        ]
+    )
+    owner = adapter(runner)
+
+    first = owner.read_many([])
+    second = owner.read_many([])
+
+    assert first.token == BASE
+    assert second.token == OTHER_HEAD
+    with pytest.raises(RuntimeError, match="compare-and-set lost"):
+        owner.publish_atomic(
+            {"attempt-a": b'{"a":1}'},
+            snapshot_token=first.token,
+        )
+    assert len(runner.calls) == 3
+
+
+def test_publish_requires_an_explicit_exact_head_snapshot_token() -> None:
+    runner = ScriptedRunner([])
+    owner = adapter(runner)
+
+    with pytest.raises(RuntimeError, match="exact-head snapshot token"):
+        owner.publish_atomic(
+            {"attempt-a": b'{"a":1}'},
+            snapshot_token="not-a-sha",
+        )
+    assert runner.calls == []
 
 
 @pytest.mark.parametrize(

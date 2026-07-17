@@ -29,7 +29,6 @@ SHIM = REPO / "scripts" / "shims" / "claude"
 )
 def test_shim_sorter_never_invents_a_model(args: list[str], monkeypatch) -> None:
     monkeypatch.setenv("LIMEN_CLAUDE_MODEL", "unvalidated-fixture")
-    monkeypatch.setenv("LIMEN_CLAUDE_SHIM_FLOOR", "unvalidated-floor")
 
     assert model_for_argv(args) is None
 
@@ -74,7 +73,6 @@ def test_shim_preserves_provider_auto_even_with_unvalidated_env_pin(stub_claude:
         stub_claude,
         args,
         LIMEN_CLAUDE_MODEL="unvalidated-fixture",
-        LIMEN_CLAUDE_SHIM_FLOOR="unvalidated-floor",
     )
     assert out == args
 

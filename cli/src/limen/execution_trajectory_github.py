@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import json
 import re
@@ -12,7 +13,11 @@ from datetime import datetime, timezone
 from typing import Mapping, Sequence
 from urllib.parse import quote
 
-from limen.execution_trajectory import OwnerPublication, TrajectoryPublicationError
+from limen.execution_trajectory import (
+    OwnerPublication,
+    OwnerTrajectorySnapshot,
+    TrajectoryPublicationError,
+)
 
 
 _REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -76,7 +81,6 @@ class GitHubTrajectoryAdapter:
         self.root = normalized_root
         self.runner = runner or GitHubCommandRunner()
         self.gh = gh
-        self._snapshot_head: str | None = None
 
     @staticmethod
     def _filename(attempt_id: str) -> str:
@@ -113,31 +117,24 @@ class GitHubTrajectoryAdapter:
             raise TrajectoryPublicationError(f"GitHub owner returned non-object JSON for {endpoint}")
         return decoded
 
-    def read_many(self, attempt_ids: Sequence[str]) -> Mapping[str, bytes]:
+    def read_many(self, attempt_ids: Sequence[str]) -> OwnerTrajectorySnapshot:
         snapshot_head = self._ref_head()
-        self._snapshot_head = snapshot_head
         rows: dict[str, bytes] = {}
-        try:
-            for attempt_id in attempt_ids:
-                path = quote(self._path(attempt_id), safe="/")
-                endpoint = f"repos/{self.repository}/contents/{path}?ref={snapshot_head}"
-                response = self._api(endpoint, allow_absent=True)
-                if response is None:
-                    continue
-                encoded = response.get("content")
-                encoding = response.get("encoding")
-                if not isinstance(encoded, str) or encoding != "base64":
-                    raise TrajectoryPublicationError(f"GitHub owner content is malformed for {attempt_id}")
-                try:
-                    rows[attempt_id] = base64.b64decode(encoded, validate=False)
-                except ValueError as exc:
-                    raise TrajectoryPublicationError(
-                        f"GitHub owner content is invalid base64 for {attempt_id}"
-                    ) from exc
-        except Exception:
-            self._snapshot_head = None
-            raise
-        return rows
+        for attempt_id in attempt_ids:
+            path = quote(self._path(attempt_id), safe="/")
+            endpoint = f"repos/{self.repository}/contents/{path}?ref={snapshot_head}"
+            response = self._api(endpoint, allow_absent=True)
+            if response is None:
+                continue
+            encoded = response.get("content")
+            encoding = response.get("encoding")
+            if not isinstance(encoded, str) or encoding != "base64":
+                raise TrajectoryPublicationError(f"GitHub owner content is malformed for {attempt_id}")
+            try:
+                rows[attempt_id] = base64.b64decode("".join(encoded.split()), validate=True)
+            except (ValueError, binascii.Error) as exc:
+                raise TrajectoryPublicationError(f"GitHub owner content is invalid base64 for {attempt_id}") from exc
+        return OwnerTrajectorySnapshot(token=snapshot_head, records=rows)
 
     def _ref_head(self) -> str:
         response = self._api(f"repos/{self.repository}/git/ref/heads/{quote(self.ref, safe='')}")
@@ -147,13 +144,17 @@ class GitHubTrajectoryAdapter:
             raise TrajectoryPublicationError("GitHub owner ref did not resolve to an exact commit")
         return sha
 
-    def publish_atomic(self, payloads: Mapping[str, bytes]) -> Mapping[str, OwnerPublication]:
+    def publish_atomic(
+        self,
+        payloads: Mapping[str, bytes],
+        *,
+        snapshot_token: str,
+    ) -> Mapping[str, OwnerPublication]:
         if not payloads:
             return {}
-        base_sha = self._snapshot_head
-        self._snapshot_head = None
-        if base_sha is None:
-            raise TrajectoryPublicationError("GitHub owner publication requires an exact-head preflight read")
+        base_sha = snapshot_token
+        if not _SHA.fullmatch(base_sha):
+            raise TrajectoryPublicationError("GitHub owner publication requires an exact-head snapshot token")
         if self._ref_head() != base_sha:
             raise TrajectoryPublicationError("GitHub owner compare-and-set lost before publication")
         commit = self._api(f"repos/{self.repository}/git/commits/{base_sha}")

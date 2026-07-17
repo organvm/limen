@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """async-run-one.py — detached worker for the ASYNC dispatch engine.
 
-Runs ONE task's full isolated dispatch (worktree → agent → commit → push → PR) via the SAME
-call_agent_dispatch the sync path uses, then writes the raw result to
+Claims ONE already-registered attempt in tasks.yaml, runs its full isolated dispatch
+(worktree → agent → commit → push → PR) via the SAME call_agent_dispatch the sync path uses, then writes the raw result to
 logs/async-runs/<task-id>.result.json (atomically) and clears its running-marker. It deliberately
-does NOT touch tasks.yaml — the orchestrator (dispatch-async.py) harvests result files under the
-queue-lock. This is what decouples agent runtime from the beat: the orchestrator spawns these
+does not apply the result to tasks.yaml — the orchestrator (dispatch-async.py) harvests result files
+under the queue-lock. This is what decouples agent runtime from the beat: the orchestrator spawns these
 detached and returns immediately; a slow/stuck agent can no longer gate the whole beat.
 
 Usage (spawned detached by dispatch-async.py; rarely run by hand):
@@ -23,8 +23,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.execution_contract import execution_contract_hash  # noqa: E402
-from limen.io import load_limen_file  # noqa: E402
-from limen.dispatch import _REMOTE_SUBMISSION_RECEIPTS, _queue_lock, call_agent_dispatch  # noqa: E402
+from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.dispatch import (  # noqa: E402
+    _MODEL_SELECTION_RECEIPTS,
+    _REMOTE_SUBMISSION_RECEIPTS,
+    _queue_lock,
+    call_agent_dispatch,
+)
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
 TASKS = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
@@ -124,7 +129,15 @@ def _load_verified_task(
                 actual_hash,
             )
         last = task.dispatch_log[-1] if task.dispatch_log else None
-        if last is None or last.session_id != reservation_id or last.status != "dispatched" or last.agent != agent:
+        if (
+            last is None
+            or last.session_id != reservation_id
+            or last.status != "dispatched"
+            or last.agent != agent
+            or not last.attempt_id
+            or last.attempt_classification is None
+            or last.execution_profile is None
+        ):
             return (
                 task,
                 False,
@@ -146,6 +159,19 @@ def _load_verified_task(
                 ),
                 actual_hash,
             )
+        claimed_at = datetime.datetime.now(datetime.timezone.utc)
+        task.status = "in_progress"
+        task.updated = claimed_at
+        task.dispatch_log.append(
+            last.model_copy(
+                update={
+                    "timestamp": claimed_at,
+                    "status": "in_progress",
+                    "output": "async worker claimed exact registered attempt before provider execution",
+                }
+            )
+        )
+        save_limen_file(TASKS, board)
         return task, False, None, actual_hash
 
 
@@ -189,13 +215,19 @@ def _publish_result(
         publication_safe = bool(
             board_error is None
             and current is not None
-            and current.status == "dispatched"
+            and current.status == "in_progress"
             and current_hash == expected_hash
             and last is not None
             and last.session_id == reservation_id
-            and last.status == "dispatched"
+            and last.status == "in_progress"
             and last.agent == agent
+            and last.attempt_id == out.get("attempt_id")
         )
+        if publication_safe and not execution_started:
+            # Another detached process already claimed this exact attempt. It owns
+            # the canonical marker/result paths. The duplicate exits without
+            # erasing or overwriting either artifact and without provider motion.
+            return True
         if not publication_safe:
             out["result"] = "__notask__"
             out["publication_failure"] = board_error or _failure(
@@ -205,10 +237,6 @@ def _publish_result(
                 actual_hash=current_hash,
                 actual_status=getattr(current, "status", None),
             )
-        elif not execution_started:
-            # Validation failures are diagnostic receipts, never task outcomes.
-            out["result"] = "__notask__"
-
         RUNS.mkdir(parents=True, exist_ok=True)
         tmp = _result_path(task_id, reservation_id).with_suffix(f".{os.getpid()}.tmp")
         tmp.write_text(json.dumps(out))
@@ -279,6 +307,7 @@ def main() -> int:
     execution_started = False
     actual_hash = ""
     validation_failure = None
+    attempt_id = None
     try:
         task, result, validation_failure, actual_hash = _load_verified_task(
             a.task_id,
@@ -286,6 +315,8 @@ def main() -> int:
             a.reservation_id,
             a.execution_contract_hash,
         )
+        if task is not None and task.dispatch_log:
+            attempt_id = task.dispatch_log[-1].attempt_id
         if validation_failure is None and task is not None:
             execution_started = True
             result = call_agent_dispatch(a.agent, task, dry_run=False)
@@ -302,6 +333,8 @@ def main() -> int:
         "execution_contract_hash": a.execution_contract_hash,
         "actual_execution_contract_hash": actual_hash,
         "execution_started": execution_started,
+        "attempt_id": attempt_id,
+        "model_selection": dict(_MODEL_SELECTION_RECEIPTS.get(a.task_id, {})),
         "remote_submission": dict(_REMOTE_SUBMISSION_RECEIPTS.get(a.task_id, {})),
     }
     if validation_failure is not None:

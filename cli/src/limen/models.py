@@ -39,6 +39,9 @@ class DispatchLogEntry(BaseModel):
     selected_model: str | None = None
     selection_source: str | None = None
     catalog_hash: str | None = None
+    provider_route: str | None = None
+    executing_keeper: str | None = None
+    executing_session: str | None = None
     # Provider-neutral remote lifecycle.  Submission is only ``dispatched``; these fields make the
     # exact off-box run recoverable without interpreting a provider-shaped session string.
     provider_run_id: str | None = None
@@ -61,6 +64,9 @@ class DispatchLogEntry(BaseModel):
     trajectory_outcome: str | None = None
     trajectory_predicate: dict[str, Any] | None = None
     trajectory_owner_receipt: dict[str, Any] | None = None
+    trajectory_publication_reference: str | None = None
+    trajectory_publication_digest: str | None = None
+    trajectory_publication_error: str | None = None
     output: str | None = None
 
     @field_validator("status")
@@ -116,10 +122,8 @@ class Task(BaseModel):
     # Optional live prerequisites. Missing/empty keeps legacy tasks dispatchable; an explicit
     # requirement is evaluated dynamically by handoff and every dispatch selector.
     execution_requirements: list[ExecutionRequirement] | None = None
-    # Optional per-task Claude tier pin ("haiku"|"sonnet"|"opus"|"fable") — an escape hatch that
-    # overrides the earned-tier ladder's class-based derivation for THIS task (the env
-    # LIMEN_CLAUDE_MODEL still wins above it). Fable still requires LIMEN_FABLE_ACCEPTANCE.
-    # None → derive the tier. See dispatch._claude_model.
+    # Legacy opaque routing hint retained only so historical boards stay loadable.
+    # Dispatch never treats this value as a model name, tier, or capability claim.
     claude_tier: str | None = None
     # task ids that must have a MERGED PR before this task is eligible to dispatch. Lets a
     # dependent increment be seeded NOW and auto-build only once its predecessor lands in the

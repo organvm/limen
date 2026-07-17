@@ -339,16 +339,69 @@ def discover_model_ids(command: Sequence[str], *, timeout: int = 30) -> list[str
     return parse_model_id_catalog(result.stdout) if result.returncode == 0 else []
 
 
-def discover_claude_models(binary: str = "claude", *, timeout: int = 30) -> list[str]:
-    """Read Claude's live CLI catalog when the installed CLI exposes one."""
-
-    return discover_model_ids([binary, "models", "--output-format", "json"], timeout=timeout)
-
-
 def discover_codex_models(binary: str = "codex", *, timeout: int = 30) -> list[str]:
     """Read the current Codex CLI catalog without selecting a model."""
 
     return discover_model_ids([binary, "debug", "models"], timeout=timeout)
+
+
+def discover_anthropic_models(client: object, *, max_pages: int = 100) -> list[str]:
+    """Read exact IDs from Anthropic's non-executing, paginated model catalog.
+
+    The API catalog is identifier-only for Limen's purposes: it may validate an
+    explicit operator override, but it is not treated as capability metadata and
+    cannot select a default. Missing, malformed, cyclic, or failing pagination
+    returns an empty catalog so callers fail closed on an explicit override.
+    """
+
+    models = getattr(client, "models", None)
+    list_models = getattr(models, "list", None)
+    if not callable(list_models):
+        return []
+    try:
+        try:
+            page = list_models(limit=1000)
+        except TypeError:
+            # Small fixture clients and older SDKs may not accept ``limit``.
+            page = list_models()
+    except Exception:
+        return []
+
+    identifiers: set[str] = set()
+    seen_pages: set[int] = set()
+    for _ in range(max(1, max_pages)):
+        identity = id(page)
+        if identity in seen_pages:
+            return []
+        seen_pages.add(identity)
+
+        rows = getattr(page, "data", None)
+        if rows is None and isinstance(page, dict):
+            rows = page.get("data")
+        if rows is None and isinstance(page, (list, tuple)):
+            rows = page
+        try:
+            iterator = iter(rows or ())
+        except TypeError:
+            return []
+        for row in iterator:
+            identifier = row.get("id") if isinstance(row, dict) else getattr(row, "id", None)
+            if isinstance(identifier, str) and identifier.strip():
+                identifiers.add(identifier.strip())
+
+        has_next = getattr(page, "has_next_page", None)
+        get_next = getattr(page, "get_next_page", None)
+        if not callable(has_next):
+            return sorted(identifiers)
+        try:
+            if not has_next():
+                return sorted(identifiers)
+            if not callable(get_next):
+                return []
+            page = get_next()
+        except Exception:
+            return []
+    return []
 
 
 def discover_gemini_models(*, api_key: str | None = None, timeout: int = 30) -> list[str]:

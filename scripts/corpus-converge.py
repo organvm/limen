@@ -16,7 +16,7 @@ THE LOOP (DIVERGE → CONVERGE → ONE):
             context — and assign each to its nearest face (lexical).
   DISTILL   for each face with new material, run converge() over [the face itself + its new shots].
             Offline by default (no network, no write-back — the concat fallback would bloat, so it
-            NEVER touches the corpus). --live uses the real AnthropicSynthesizer; only then is the
+            NEVER touches the corpus). --live uses Claude CLI provider Auto; only then is the
             distillate written back.
   WRITE     (live + --apply + promoted) the better version is written back to the face atomically,
             absorbed shots are marked, THE ONE is itself RE-CONVERGED from the updated faces
@@ -285,41 +285,20 @@ def _kit(live: bool, threshold: float | None = None):
     if not live:
         return _build_dry_run_kit()
     try:
-        from limen.converge import (AnthropicSynthesizer, ClaudeCliSynthesizer,
-                                     DeterministicScorer, LadderSynthesizer,
-                                     LexicalGapFinder, LexicalRanker, NoopPromoter,
-                                     _api_tier_factory, _cli_tier_factory)
-        # Synthesizer cascade ([[cascade-fallback-principle]] / never a silent no), now an
-        # EARNED-TIER LADDER nested inside each reachable rung (haiku-first-with-cheap-verify,
-        # escalate only on a failed check; LIMEN_CONVERGE_LADDER=0 reverts to single-tier):
-        #   1. raw Anthropic API   — only when ANTHROPIC_API_KEY is present (spends API)
-        #   2. claude CLI (keyless)— subscription-authed `claude -p`; the LIVE DAEMON path
-        #      (its launchd env has NO key, so this is the rung that actually closes the
-        #      capture→converge write-back instead of falling silently to offline preview)
-        #   3. offline preview     — handled by the outer except (no synthesizer available)
-        # The ladder eagerly builds its cheapest rung, so a missing mechanism still raises at
-        # construction here and the cascade's fallbacks fire exactly as before.
-        ladder_on = os.environ.get("LIMEN_CONVERGE_LADDER", "1") == "1"
-        # The ladder accept-gate MUST equal the threshold converge() promotes on, else a ladder
-        # -accepted rung gets surprise-rolled-back. main() passes args.threshold (which already
-        # defaults from LIMEN_CORPUS_THRESHOLD) as the single source of truth; fall back to the
-        # env only for callers that don't pass one.
-        if threshold is None:
-            threshold = float(os.environ.get("LIMEN_CORPUS_THRESHOLD", "0.7"))
-        scorer = DeterministicScorer()
-        synth = None
-        if os.environ.get("ANTHROPIC_API_KEY"):
-            try:
-                synth = (LadderSynthesizer(tier_factory=_api_tier_factory(), scorer=scorer, threshold=threshold)
-                         if ladder_on else AnthropicSynthesizer())
-            except Exception as exc:
-                print(f"[corpus-converge] API synth unavailable ({exc}); trying claude CLI")
-        if synth is None:
-            synth = (LadderSynthesizer(tier_factory=_cli_tier_factory(), scorer=scorer, threshold=threshold)
-                     if ladder_on else ClaudeCliSynthesizer())  # raises (→ outer except → offline) if no CLI
-        return {"ranker": LexicalRanker(), "synthesizer": synth,
-                "scorer": scorer, "promoter": NoopPromoter(),
-                "gap_finder": LexicalGapFinder()}
+        from limen.converge import _build_live_kit
+
+        # Central production wiring owns provider selection. Blank model means Claude
+        # provider Auto and therefore emits no --model flag or catalog-probe prompt.
+        args = argparse.Namespace(
+            model=None,
+            mesh=False,
+            mesh_registry=None,
+            promote=False,
+            promote_project_root=None,
+            promote_candidate_root=None,
+            threshold=threshold,
+        )
+        return _build_live_kit(args)
     except Exception as exc:
         print(f"[corpus-converge] live kit unavailable ({exc}); using offline kit")
         return _build_dry_run_kit()
@@ -457,7 +436,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[corpus-converge] {len(items)} new shots, none assigned to a face — nothing to distill")
         return 0
 
-    kit = _kit(args.live, threshold=args.threshold)  # ladder gate == converge() promote gate
+    kit = _kit(args.live, threshold=args.threshold)
     can_write = args.live and args.apply  # write-back requires REAL synthesis (concat would bloat)
     log_path = _log_path()
     log_path.parent.mkdir(parents=True, exist_ok=True)

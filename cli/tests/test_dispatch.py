@@ -41,7 +41,8 @@ def _hermetic_dispatch_env(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path / "hermetic-root"))
     monkeypatch.setenv("LIMEN_DISPATCH_ADMISSION", "0")
     monkeypatch.setenv("LIMEN_WORKTREE_DEBT_GATE", "0")
-    D._ATTEMPT_LAUNCH_RECEIPTS.clear()
+    D._MODEL_SELECTION_RECEIPTS.clear()
+    D._REMOTE_SUBMISSION_RECEIPTS.clear()
     for var in (
         "LIMEN_VALUE_REPOS",
         "LIMEN_VALUE_REPOS_FILE",
@@ -1087,6 +1088,53 @@ def test_dispatch_serial_commit_survives_concurrent_board_write(
     assert tasks["CONCURRENT-FOLD"]["status"] == "open"
 
 
+def test_serial_crash_after_registration_cannot_launch_same_attempt_twice(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "CRASH-FENCED",
+                "title": "Persist identity before provider",
+                "repo": "someorg/dispatch-lab",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-07-17",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    stale = load_limen_file(tasks_path)
+    calls = 0
+
+    def crash_after_registration(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("fixture crash before provider result")
+
+    monkeypatch.setattr(D, "_down_lanes", lambda: set())
+    monkeypatch.setattr(D, "call_agent_dispatch", crash_after_registration)
+
+    with pytest.raises(RuntimeError, match="fixture crash"):
+        dispatch_tasks(stale, tasks_path, agent="codex", dry_run=False, limit=1)
+
+    crashed = load_limen_file(tasks_path).tasks[0]
+    assert crashed.status == "in_progress"
+    attempt_ids = [entry.attempt_id for entry in crashed.dispatch_log if entry.attempt_id]
+    assert len(attempt_ids) == 2
+    assert len(set(attempt_ids)) == 1
+
+    dispatch_tasks(stale, tasks_path, agent="codex", dry_run=False, limit=1)
+    retried = load_limen_file(tasks_path).tasks[0]
+    assert calls == 1
+    assert [entry.attempt_id for entry in retried.dispatch_log if entry.attempt_id] == attempt_ids
+
+
 def test_dispatch_budget_reset_persist_survives_concurrent_board_write(
     tmp_path: Path,
     monkeypatch,
@@ -1732,7 +1780,6 @@ def test_identifier_only_providers_default_to_auto_without_catalog_lookup(
 @pytest.mark.parametrize(
     ("agent", "selector", "discoverer"),
     [
-        ("claude", "_claude_model", "discover_claude_models"),
         ("codex", "_codex_model", "discover_codex_models"),
         ("gemini", "_gemini_model", "discover_gemini_models"),
     ],
@@ -1761,6 +1808,25 @@ def test_provider_override_tracks_renamed_add_remove_and_reorder(
     live.remove("shape-z")
     with pytest.raises(D.ProviderModelSelectionBlocked, match="absent from the live provider catalog"):
         getattr(D, selector)(task)
+
+
+def test_claude_override_never_executes_cli_catalog_probe(monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_CLAUDE_MODEL", "shape-z")
+    monkeypatch.setattr(D, "_resolve_agent_binary", lambda *_args: pytest.fail("must not resolve Claude for metadata"))
+    monkeypatch.setattr(D, "_run_capture", lambda *_args, **_kwargs: pytest.fail("must not execute Claude metadata"))
+    task = Task(
+        id="CLAUDE-OVERRIDE-BLOCK",
+        title="unsafe metadata command is forbidden",
+        target_agent="claude",
+        created=date(2026, 7, 17),
+    )
+
+    with pytest.raises(D.ProviderModelSelectionBlocked, match="no safe metadata catalog"):
+        D._claude_model(task)
+
+    receipt = D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+    assert receipt["selected_model"] is None
+    assert receipt["selection_source"] == "claude_override_unvalidated"
 
 
 def test_unverifiable_override_blocks_before_isolated_worktree_side_effect(monkeypatch) -> None:
@@ -1837,18 +1903,30 @@ def test_attempt_launch_freezes_classification_before_provider_motion() -> None:
         labels=["launch-label"],
         created=date(2026, 7, 10),
     )
-    D._capture_attempt_launch(task, "codex")
+    started_at = datetime.datetime.now(datetime.timezone.utc)
+    launch = D._attempt_launch_entry(
+        task,
+        "codex",
+        reservation_session="fixture-session",
+        started_at=started_at,
+        output="fixture registered before provider",
+    )
+    task.status = "in_progress"
+    task.dispatch_log.extend(
+        [
+            launch,
+            launch.model_copy(update={"status": "in_progress"}),
+        ]
+    )
     task.labels.append("mutated-after-launch")
-    try:
-        D._apply_result(
-            task,
-            "codex",
-            D._NOOP,
-            datetime.datetime.now(datetime.timezone.utc),
-            BudgetTrack(date="2026-07-10"),
-        )
-    finally:
-        D._ATTEMPT_LAUNCH_RECEIPTS.pop(task.id, None)
+    D._apply_result(
+        task,
+        "codex",
+        D._NOOP,
+        datetime.datetime.now(datetime.timezone.utc),
+        BudgetTrack(date="2026-07-10"),
+        expected_attempt_id=launch.attempt_id,
+    )
 
     event = task.dispatch_log[-1]
     assert event.attempt_id and event.attempt_id.startswith("attempt-")

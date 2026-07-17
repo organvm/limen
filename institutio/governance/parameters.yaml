@@ -1804,43 +1804,49 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "Prompt-level guard for isolated async/local worker packets. 1=explicitly forbid live-root and tasks.yaml mutation inside isolated worktrees; 0=omit the extra prompt block for tests or emergency rollback."
-  # --- the non-bypassable Claude model chokepoint (scripts/shims/claude) ----------
-  LIMEN_CLAUDE_SHIM_FLOOR:
-    default: "haiku"           # the cheapest rung — the SAME tier the per-task ladder assigns to unclassed work
-    env: LIMEN_CLAUDE_SHIM_FLOOR
+  LIMEN_TRAJECTORY_PUBLICATION:
+    default: "1"
+    env: LIMEN_TRAJECTORY_PUBLICATION
     self_update: none
     owner: arms-agents
-    note: "Floor the non-bypassable `claude` shim injects when a fleet spawn carries no --model. Spawns that earned more declare --model and pass through untouched; subagents inherit it. Capped by LIMEN_CLAUDE_MAX_INHERITED_TIER so this cannot silently become an Opus/Fable/1M default. See fleet-model-floor-bleed."
-  LIMEN_CLAUDE_MAX_INHERITED_TIER:
-    default: "sonnet"
-    env: LIMEN_CLAUDE_MAX_INHERITED_TIER
+    note: "Publish terminal execution attempts to the owner-native GitHub trajectory ref during harvest. 0 is an explicit operational pause; failures otherwise remain retry-visible on the exact terminal board event."
+  LIMEN_TRAJECTORY_OWNER_REPO:
+    default: "organvm/limen"
+    env: LIMEN_TRAJECTORY_OWNER_REPO
     self_update: none
     owner: arms-agents
-    note: "Maximum tier allowed for inherited/default Claude choices such as shim floors and global LIMEN_CLAUDE_MODEL pins. Default Sonnet keeps routine fan-out cheap; task-specific declaration sites may still earn Opus/Fable through the ladder and acceptance gates."
-  LIMEN_CLAUDE_FABLE_FALLBACK_TIER:
-    default: "sonnet"
-    env: LIMEN_CLAUDE_FABLE_FALLBACK_TIER
+    note: "Exact OWNER/NAME repository holding immutable execution trajectories."
+  LIMEN_TRAJECTORY_OWNER_REF:
+    default: "execution-trajectories"
+    env: LIMEN_TRAJECTORY_OWNER_REF
     self_update: none
     owner: arms-agents
-    note: "Fallback tier when a Fable-class task or Fable model pin lacks a current LIMEN_FABLE_ACCEPTANCE receipt. Default Sonnet prevents unaccepted Fable requests from becoming default Opus spend; set to opus only for an explicit emergency policy change."
-  LIMEN_ALLOW_EXPENSIVE_CLAUDE_MODEL_PIN:
-    default: "0"
-    env: LIMEN_ALLOW_EXPENSIVE_CLAUDE_MODEL_PIN
+    note: "Dedicated owner branch updated through exact-head compare-and-set publication. The branch must be provisioned before publication can succeed."
+  LIMEN_TRAJECTORY_OWNER_ROOT:
+    default: "receipts/execution-trajectories"
+    env: LIMEN_TRAJECTORY_OWNER_ROOT
     self_update: none
     owner: arms-agents
-    note: "Emergency override allowing a global LIMEN_CLAUDE_MODEL pin to route inherited/default fleet spawns to Opus or explicit large-context models. Default 0 forces expensive defaults back under LIMEN_CLAUDE_MAX_INHERITED_TIER."
-  LIMEN_ALLOW_CLAUDE_1M_CONTEXT:
-    default: "0"
-    env: LIMEN_ALLOW_CLAUDE_1M_CONTEXT
+    note: "Safe repository-relative root for one content-addressed trajectory JSON file per attempt."
+  LIMEN_TRAJECTORY_GH_BIN:
+    default: "gh"
+    env: LIMEN_TRAJECTORY_GH_BIN
     self_update: none
     owner: arms-agents
-    note: "Emergency override allowing explicit 1M/large-context Claude model pins. Default 0 strips large-context pins from tier resolution unless a current Fable acceptance receipt is present."
-  LIMEN_CLAUDE_FABLE_CLASSES:
-    default: "fable,long-horizon,huge-context,ambiguous-root-cause,final-canonical-decision"
-    env: LIMEN_CLAUDE_FABLE_CLASSES
+    note: "GitHub CLI used by the owner adapter; authentication remains in the GitHub credential owner."
+  LIMEN_TRAJECTORY_MAX_RECORDS:
+    default: "25"
+    env: LIMEN_TRAJECTORY_MAX_RECORDS
     self_update: none
     owner: arms-agents
-    note: "Comma-separated task classes that may select the reserved Fable rung. Class membership is not enough by itself: LIMEN_FABLE_ACCEPTANCE must point at a written scripts/fable-allotment.py receipt before dispatch may return fable instead of falling back to LIMEN_CLAUDE_FABLE_FALLBACK_TIER."
+    note: "Positive per-task publication record bound. Invalid values fall back to 25."
+  LIMEN_TRAJECTORY_MAX_BYTES:
+    default: "262144"
+    env: LIMEN_TRAJECTORY_MAX_BYTES
+    self_update: none
+    owner: arms-agents
+    note: "Positive per-task canonical publication byte bound. Invalid values fall back to 262144."
+  # --- provider-neutral planning authority ----------------------------------------
   LIMEN_FABLE_ACCEPTANCE:
     default: ""
     env: LIMEN_FABLE_ACCEPTANCE
@@ -1889,12 +1895,6 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "Override path to the live weekly Fable balance file (default $LIMEN_ROOT/logs/fable-allotment.json). Read by the model_selection cap gate, the session guard, and the vendor advisor; used by tests to seed a mock balance. Empty means the default location."
-  LIMEN_CLAUDE_FABLE_CAP_TIER:
-    default: "opus"
-    env: LIMEN_CLAUDE_FABLE_CAP_TIER
-    self_update: none
-    owner: arms-agents
-    note: "Tier an OVER-CAP but acceptance-valid Fable selection lands on (the live weekly-cap downgrade in model_selection). Default Opus (the nearest tier below Fable for legitimately high-value work), capped to the ladder; distinct from the acceptance-absent LIMEN_CLAUDE_FABLE_FALLBACK_TIER."
   LIMEN_LATEST_SESSION_JSONL:
     default: ""
     env: LIMEN_LATEST_SESSION_JSONL
@@ -2884,7 +2884,7 @@ parameters:
     env: LIMEN_CLAUDE_MODEL
     self_update: none
     owner: dispatch
-    note: "Optional Claude override. Blank delegates to provider Auto. Nonblank must match an exact identifier in the current Claude CLI catalog before any worktree or provider side effect."
+    note: "Blank delegates to provider Auto. Nonblank fails blocked before provider execution because Claude CLI exposes no safe non-executing model catalog."
   LIMEN_CODEX_MODEL:
     default: ""
     env: LIMEN_CODEX_MODEL
@@ -2897,12 +2897,6 @@ parameters:
     self_update: none
     owner: dispatch
     note: "Optional Gemini override. Blank delegates to provider Auto. Nonblank must match an exact identifier in the current Gemini API catalog before any worktree or provider side effect."
-  LIMEN_CLAUDE_CATALOG_TIMEOUT:
-    default: 30
-    env: LIMEN_CLAUDE_CATALOG_TIMEOUT
-    self_update: none
-    owner: dispatch
-    note: "Seconds allowed to validate an explicit Claude override. Provider-Auto dispatch performs no catalog lookup."
   LIMEN_CODEX_CATALOG_TIMEOUT:
     default: 30
     env: LIMEN_CODEX_CATALOG_TIMEOUT

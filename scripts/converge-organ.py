@@ -8,7 +8,7 @@ needs someone to FIND the divergent work and ACT on the result. This organ is th
              PR for (≥2 distinct PR URLs in its dispatch_log). Those PRs are divergent shots — exactly
              the "take many shots, then alchemically distill" telos (NOT janitorial dedup).
   DISTILL  — run converge() over each multiverse (offline dry-run kit by default — no network, always
-             works; LIMEN_CONVERGE_LIVE=1 opts into the real AnthropicSynthesizer when available).
+             works; LIMEN_CONVERGE_LIVE=1 opts into Claude CLI provider Auto when available).
   WRITERS  — record the distillate + decision to logs/converge-log.jsonl (audit), and emit the
              gap-finder's next_shots as NEW bounded tasks (gaps become work) under the canonical
              queue lock. Reversible; never closes/merges PRs (that's the merge organ / his gate).
@@ -69,12 +69,18 @@ def _kit(live: bool):
     from limen.converge import _build_dry_run_kit  # offline, always available
     if not live:
         return _build_dry_run_kit()
-    try:  # opt-in real synthesis; fall back to offline if anthropic/key missing
-        from limen.converge import AnthropicSynthesizer, DeterministicScorer, LexicalGapFinder, \
-            LexicalRanker, NoopPromoter
-        return {"ranker": LexicalRanker(), "synthesizer": AnthropicSynthesizer(),
-                "scorer": DeterministicScorer(), "promoter": NoopPromoter(),
-                "gap_finder": LexicalGapFinder()}
+    try:  # opt-in provider-Auto synthesis; fall back to offline if Claude CLI is missing
+        from limen.converge import _build_live_kit
+
+        args = argparse.Namespace(
+            model=None,
+            mesh=False,
+            mesh_registry=None,
+            promote=False,
+            promote_project_root=None,
+            promote_candidate_root=None,
+        )
+        return _build_live_kit(args)
     except Exception as exc:
         print(f"[converge] live kit unavailable ({exc}); using offline kit")
         return _build_dry_run_kit()

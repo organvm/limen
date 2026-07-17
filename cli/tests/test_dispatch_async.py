@@ -177,7 +177,19 @@ def test_reap_leaves_live_pid_marker_before_grace(board, monkeypatch):
 
 def test_harvest_archives_result_receipt_before_unlink(board):
     tasks_path, runs = board
-    task = load_limen_file(tasks_path).tasks[0]
+    board_state = load_limen_file(tasks_path)
+    task = board_state.tasks[0]
+    started_at = datetime.now(timezone.utc)
+    launch = dispatch_async._attempt_launch_entry(
+        task,
+        "jules",
+        reservation_session="async-reserve",
+        started_at=started_at,
+        output="fixture registered before detached worker execution",
+    )
+    task.status = "in_progress"
+    task.dispatch_log = [launch, launch.model_copy(update={"status": "in_progress"})]
+    save_limen_file(tasks_path, board_state)
     result = {
         "task_id": "T1",
         "agent": "jules",
@@ -186,6 +198,8 @@ def test_harvest_archives_result_receipt_before_unlink(board):
         "err": "token sk-secretsecretsecret and contact test@example.com",
         "execution_contract_hash": execution_contract_hash(task),
         "execution_started": True,
+        "attempt_id": launch.attempt_id,
+        "model_selection": {},
     }
     receipt = runs / "T1.result.json"
     receipt.write_text(json.dumps(result))

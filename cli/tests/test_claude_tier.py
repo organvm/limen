@@ -36,29 +36,17 @@ def test_legacy_tier_words_are_opaque_and_provider_auto_wins() -> None:
     assert D._MODEL_SELECTION_RECEIPTS[hinted.id]["selection_source"] == "claude_auto"
 
 
-def test_exact_live_override_is_passed_without_name_inference(monkeypatch) -> None:
+def test_explicit_override_fails_closed_without_executing_claude_as_a_prompt(monkeypatch) -> None:
     monkeypatch.setenv("LIMEN_CLAUDE_MODEL", "shape-z")
-    monkeypatch.setattr(D, "discover_claude_models", lambda *_args, **_kwargs: ["shape-a", "shape-z"])
+    monkeypatch.setattr(D, "_resolve_agent_binary", lambda *_args: pytest.fail("must not resolve Claude metadata"))
+    monkeypatch.setattr(D, "_run_capture", lambda *_args, **_kwargs: pytest.fail("must not execute Claude metadata"))
 
-    assert D._claude_model(task()) == "shape-z"
+    with pytest.raises(D.ProviderModelSelectionBlocked, match="no safe metadata catalog"):
+        D._claude_model(task())
 
 
 def test_unreachable_or_removed_override_fails_closed(monkeypatch) -> None:
     monkeypatch.setenv("LIMEN_CLAUDE_MODEL", "shape-removed")
-    monkeypatch.setattr(D, "discover_claude_models", lambda *_args, **_kwargs: ["shape-current"])
 
-    with pytest.raises(D.ProviderModelSelectionBlocked, match="absent from the live provider catalog"):
+    with pytest.raises(D.ProviderModelSelectionBlocked, match="no safe metadata catalog"):
         D._claude_model(task())
-
-
-def test_catalog_reorder_does_not_change_override_fingerprint(monkeypatch) -> None:
-    live = ["shape-z", "shape-a"]
-    monkeypatch.setenv("LIMEN_CLAUDE_MODEL", "shape-z")
-    monkeypatch.setattr(D, "discover_claude_models", lambda *_args, **_kwargs: list(live))
-    current = task()
-
-    assert D._claude_model(current) == "shape-z"
-    first = D._MODEL_SELECTION_RECEIPTS[current.id]["catalog_hash"]
-    live.reverse()
-    assert D._claude_model(current) == "shape-z"
-    assert D._MODEL_SELECTION_RECEIPTS[current.id]["catalog_hash"] == first
