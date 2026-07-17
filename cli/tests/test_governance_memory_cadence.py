@@ -32,6 +32,8 @@ from pathlib import Path
 import rfc8785
 
 stage = os.environ["LIMEN_GOV_STAGE"]
+if log_bytes := int(os.environ.get("FIXTURE_LOG_BYTES", "0")):
+    print("x" * log_bytes, flush=True)
 run_root = Path(os.environ["LIMEN_GOV_RUN_ROOT"])
 counter_path = run_root / "executions.json"
 counter = json.loads(counter_path.read_text()) if counter_path.exists() else {}
@@ -113,7 +115,8 @@ if traversal == 1:
                 "governance_atlas_receipt": {"receipt_id": "atlas-receipt-1"},
             },
         }
-    output.write_text(json.dumps(document, sort_keys=True))
+    padding = " " * int(os.environ.get("FIXTURE_ARTIFACT_PADDING", "0"))
+    output.write_text(json.dumps(document, sort_keys=True) + padding)
     child_id = f"{stage}-child"
     input_digest = "sha256:" + hashlib.sha256(f"{stage}:input".encode()).hexdigest()
     output_digest = "sha256:" + hashlib.sha256(f"{stage}:output".encode()).hexdigest()
@@ -1009,3 +1012,46 @@ def test_output_limit_is_aggregate_across_declared_artifacts(tmp_path: Path) -> 
             config_path=config,
             run_root=tmp_path / "run",
         )
+
+
+def test_log_limit_does_not_cap_owner_artifact_files(tmp_path: Path) -> None:
+    module = _load("governance_memory_cadence_separate_log_limit")
+    config = _config(module, tmp_path)
+    document = yaml.safe_load(config.read_text(encoding="utf-8"))
+    discover = document["stages"]["discover"]
+    discover["env"]["FIXTURE_ARTIFACT_PADDING"] = "4096"
+    discover["execution_profile"]["max_log_bytes"] = 128
+    config.write_text(yaml.safe_dump(document), encoding="utf-8")
+    run_root = tmp_path / "run"
+
+    module.run_cadence(
+        snapshot_id="snapshot-fixture",
+        snapshot_at="2026-07-16T00:00:00Z",
+        config_path=config,
+        run_root=run_root,
+    )
+
+    assert (run_root / "artifacts" / "discover.json").stat().st_size > 128
+    assert (run_root / "logs" / "traversal-1" / "discover.attempt-1.log").stat().st_size <= 128
+
+
+def test_log_limit_is_enforced_by_parent_owned_drain(tmp_path: Path) -> None:
+    module = _load("governance_memory_cadence_parent_log_limit")
+    config = _config(module, tmp_path)
+    document = yaml.safe_load(config.read_text(encoding="utf-8"))
+    discover = document["stages"]["discover"]
+    discover["env"]["FIXTURE_LOG_BYTES"] = "4096"
+    discover["execution_profile"]["max_log_bytes"] = 128
+    discover["execution_profile"]["max_attempts"] = 1
+    config.write_text(yaml.safe_dump(document), encoding="utf-8")
+    run_root = tmp_path / "run"
+
+    with pytest.raises(module.CadenceError, match="log-byte-limit-exceeded"):
+        module.run_cadence(
+            snapshot_id="snapshot-fixture",
+            snapshot_at="2026-07-16T00:00:00Z",
+            config_path=config,
+            run_root=run_root,
+        )
+
+    assert (run_root / "logs" / "traversal-1" / "discover.attempt-1.log").stat().st_size == 128

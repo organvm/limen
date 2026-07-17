@@ -30,6 +30,8 @@ import re
 import signal
 import subprocess
 import sys
+import threading
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -58,12 +60,6 @@ except ModuleNotFoundError:
             environment,
         )
     raise
-
-try:
-    import resource
-except ImportError:  # pragma: no cover - POSIX is the supported Limen runtime
-    resource = None  # type: ignore[assignment]
-
 
 STAGES: tuple[str, ...] = (
     "discover",
@@ -1297,16 +1293,6 @@ def write_if_changed(path: Path, content: str) -> bool:
     return True
 
 
-def log_limiter(max_bytes: int):
-    if resource is None:
-        return None
-
-    def apply() -> None:
-        resource.setrlimit(resource.RLIMIT_FSIZE, (max_bytes, max_bytes))
-
-    return apply
-
-
 def bounded_command(
     command: Sequence[str],
     *,
@@ -1321,25 +1307,70 @@ def bounded_command(
             cwd=spec.cwd,
             env=dict(environment),
             stdin=subprocess.DEVNULL,
-            stdout=log,
+            stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             start_new_session=True,
-            preexec_fn=log_limiter(spec.profile.max_log_bytes),
         )
+        if process.stdout is None:
+            raise CadenceError(f"stage {spec.stage} command log pipe is unavailable")
+        log_limit_exceeded = threading.Event()
+        reader_failures: list[BaseException] = []
+
+        def drain_output() -> None:
+            try:
+                remaining = spec.profile.max_log_bytes
+                while chunk := process.stdout.read(64 * 1024):
+                    accepted_size = min(len(chunk), remaining)
+                    if accepted_size:
+                        accepted = chunk[:accepted_size]
+                        log.write(accepted)
+                        remaining -= accepted_size
+                    if accepted_size < len(chunk):
+                        log_limit_exceeded.set()
+            except BaseException as exc:  # pragma: no cover - OS pipe failure
+                reader_failures.append(exc)
+
+        reader = threading.Thread(
+            target=drain_output,
+            name=f"governance-cadence-{spec.stage}-log",
+            daemon=True,
+        )
+        reader.start()
+        deadline = time.monotonic() + spec.profile.timeout_seconds
         diagnostic = "nonzero-exit"
-        try:
-            return_code = process.wait(timeout=spec.profile.timeout_seconds)
-        except subprocess.TimeoutExpired:
-            diagnostic = "timeout"
+        return_code: int | None = None
+        while return_code is None:
+            return_code = process.poll()
+            if return_code is not None:
+                break
+            if log_limit_exceeded.is_set():
+                diagnostic = "log-byte-limit-exceeded"
+                return_code = 125
+                break
+            if time.monotonic() >= deadline:
+                diagnostic = "timeout"
+                return_code = 124
+                break
+            time.sleep(0.05)
+        if return_code in {124, 125}:
             os.killpg(process.pid, signal.SIGTERM)
             try:
                 process.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait()
-            return_code = 124
-    if log_path.stat().st_size > spec.profile.max_log_bytes:
-        return 125, "log-byte-limit-exceeded"
+        else:
+            return_code = process.wait()
+        reader.join(timeout=2)
+        if reader.is_alive():
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+            reader.join(timeout=2)
+            return 125, "log-drain-timeout"
+        if reader_failures:
+            return 125, "log-drain-failed"
+        if log_limit_exceeded.is_set():
+            return 125, "log-byte-limit-exceeded"
     return return_code, "ok" if return_code == 0 else diagnostic
 
 
