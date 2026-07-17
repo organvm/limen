@@ -162,7 +162,9 @@ def _history_secret_hits(clone: Path, pp) -> tuple[list[dict], int, int]:
                 continue
             scanned += 1
             text = body.decode("utf-8", errors="replace")
-            if pp._SECRET_RX.search(text):
+            # Same doc/placeholder-aware primitive the HEAD classifier uses, so a secret-
+            # detection reference's fake examples aren't flagged as a live history leak.
+            if pp._real_secret_in(text, path):
                 if len(hits) < 50:
                     hits.append({"path": path or "(unknown)", "oid": oid[:8]})
     finally:

@@ -91,6 +91,52 @@ _SECRET_RX = re.compile(
     r"AIza[\w\-]{4}[\w\-]+|gh[pousr]_[A-Za-z0-9]{4}[A-Za-z0-9]+|\bapi[_-]?key\b\s*[:=]\s*['\"]?[A-Za-z0-9\-_]{16,}"
 )
 
+# Documentation extensions. A prose file that DESCRIBES secrets — a secret-detection
+# reference (`secret-patterns.md`), a "secrets-management" guide — is never itself a live
+# credential: a real secret ships in a config/env/key artifact, not in Markdown. So a doc
+# is exempt from the secret-by-NAME path rule (a `.md` named "secrets-management" is a
+# guide, not a keystore). It is NOT exempt from content scanning — a real, un-annotated
+# key pasted into a doc is still caught below. This kills the over-flag that classed every
+# secret-detection skill reference as a secret and blocked its repo from publishing.
+_DOC_EXT = re.compile(r"\.(?:md|mdx|markdown|rst|txt|adoc)$", re.I)
+
+# An INTENTIONAL inline allow-secret annotation (the convention a secret-detection skill
+# uses to mark its own fake examples), or an unambiguous placeholder token — either marks a
+# secret-shaped string as an illustration, never a live value. These tokens essentially
+# never occur inside a real credential, so exempting them adds no false-negative risk.
+_ALLOW_SECRET_RX = re.compile(
+    r"allow[-_ ]?secret|pragma:\s*allowlist\s*secret|gitleaks:\s*allow|#\s*nosec|noqa:[^\n]*secret",
+    re.I,
+)
+_PLACEHOLDER_RX = re.compile(
+    r"x{4,}|\.{3,}|\*{3,}|<[^>]{0,40}>|"
+    r"example|placeholder|redacted|hidden|sample|dummy|fake|changeme|"
+    r"your[_-]?(?:api|token|key|secret|pass)|test[_-]?key|_here\b",
+    re.I,
+)
+
+
+def _real_secret_in(text: str, path: str | None = None) -> str | None:
+    """Return the first REAL (non-placeholder, non-allowlisted) secret-shaped match, else None.
+
+    The one primitive both the HEAD classifier and the history sweep use, so a documentation
+    example can't slip through one path while being caught by the other. A match is discarded
+    only when it is an obvious placeholder OR its own line carries an explicit `# allow-secret`
+    annotation. A real key with neither marker still counts — in a doc or anywhere else."""
+    if not text:
+        return None
+    for m in _SECRET_RX.finditer(text):
+        s = m.group(0)
+        if _PLACEHOLDER_RX.search(s):
+            continue
+        ls = text.rfind("\n", 0, m.start()) + 1
+        le = text.find("\n", m.end())
+        line = text[ls : le if le != -1 else len(text)]
+        if _ALLOW_SECRET_RX.search(line):
+            continue
+        return s
+    return None
+
 # internal-strategy signals (path): raw session artifacts / planning / premortem / prompt dumps
 _TS_SESSION = re.compile(r"\d{4}-\d{2}-\d{2}-\d{6}-")  # timestamped session dump, e.g. 2026-04-04-145105-*
 _STRATEGY_PATH = re.compile(
@@ -121,10 +167,12 @@ def classify(path: str, text: str | None = None, owner: dict | None = None) -> t
     p = path.replace("\\", "/")
     base = p.rsplit("/", 1)[-1]
 
-    # 1. secret — path shape or in-content secret shape (never restored anywhere)
-    if _SECRET_PATH.search(p):
+    # 1. secret — path shape or in-content secret shape (never restored anywhere).
+    #    A documentation file (.md/.rst/…) is never a secret by NAME; a real value pasted
+    #    inside one is still caught by the content scan (which skips annotated placeholders).
+    if _SECRET_PATH.search(p) and not _DOC_EXT.search(base):
         return "secret", f"secret/credential path shape ({base})"
-    if text and _SECRET_RX.search(text):
+    if text and _real_secret_in(text, p):
         return "secret", "content matches a secret shape (AIza…/gh?_…/api_key:)"
 
     # 2. internal strategy — raw session artifact / planning / premortem / prompt dump
@@ -420,6 +468,29 @@ def _self_test() -> list[str]:
     check(classify(".env.production")[0] == "secret", ".env not secret")
     check(classify("moneta/.env")[0] == "secret", ".env (nested) not secret")
     check(classify("README.md")[0] == "public_safe", "README not public_safe")
+    # doc-secret false-positive guards (2026-07-17): a file that DOCUMENTS secrets is not a
+    # secret, yet a real un-annotated value in any file still is (the gate keeps its teeth).
+    check(
+        classify("skills/dotfile-systems-architect/references/secrets-management.md")[0] != "secret",
+        "a secrets-management GUIDE wrongly classed secret by filename",
+    )
+    check(
+        classify("refs/secret-patterns.md", "fake: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  # allow-secret")[0]
+        != "secret",
+        "annotated fake token in a secret-detection reference wrongly classed secret",
+    )
+    check(
+        classify("guide.md", "placeholder assignment api_key=YOUR_API_KEY_HERE")[0] != "secret",
+        "placeholder api_key in a doc wrongly classed secret",
+    )
+    check(
+        classify("notes.md", "prod api_key = AIzaSyB0nK9rTq7wZ2mVx8LpD4hJ6sYcF3eA1gW")[0] == "secret",
+        "a REAL key pasted into a doc must still be a secret",
+    )
+    check(
+        classify("app/config.py", "api_key = 'AIzaSyB0nK9rTq7wZ2mVx8LpD4hJ6sYcF3eA1gW'")[0] == "secret",
+        "a REAL key in code must still be a secret",
+    )
     check(
         classify("notes.md", "reach me at padavano.anthony@gmail.com")[0] == "personal_pii",
         "owner-PII doc not personal_pii",
