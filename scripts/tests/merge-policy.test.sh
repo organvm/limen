@@ -12,14 +12,19 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-policy="$here/../merge-policy.sh"
-[ -f "$policy" ] || { echo "FAIL: cannot find merge-policy.sh at $policy" >&2; exit 1; }
+source_policy="$here/../merge-policy.sh"
+[ -f "$source_policy" ] || { echo "FAIL: cannot find merge-policy.sh at $source_policy" >&2; exit 1; }
 
 # --- stub `gh` so the predicate reads our fixture instead of the network ---
 stubdir="$(mktemp -d)"
 fixture="$stubdir/pr.json"
-review_gate="$stubdir/review-gate.py"
+testroot="$stubdir/root"
+mkdir -p "$testroot/scripts"
+cp "$source_policy" "$testroot/scripts/merge-policy.sh"
+policy="$testroot/scripts/merge-policy.sh"
+review_gate="$testroot/scripts/pr-review-gate.py"
 review_log="$stubdir/review.log"
+gate_override='LIMEN_'"PR_REVIEW_GATE"
 trap 'rm -rf "$stubdir"' EXIT
 cat > "$stubdir/gh" <<STUB
 #!/usr/bin/env bash
@@ -40,6 +45,9 @@ with open(os.environ["REVIEW_LOG"], "a", encoding="utf-8") as handle:
     handle.write(" ".join(sys.argv[1:]) + "\n")
 raise SystemExit(int(os.environ.get("REVIEW_GATE_RC", "0")))
 PY
+cat > "$testroot/scripts/verify.py" <<'PY'
+print(r"^(web/|api/)")
+PY
 
 GREEN='[{"name":"python","status":"COMPLETED","conclusion":"SUCCESS"},{"name":"web","status":"COMPLETED","conclusion":"SUCCESS"}]'
 FAILING='[{"name":"python","status":"COMPLETED","conclusion":"FAILURE"}]'
@@ -59,7 +67,7 @@ check() { # name expected_exit [extra policy args...]  (fixture already written)
   shift 2
   set +e
   PATH="$stubdir:$PATH" REVIEW_LOG="$review_log" REVIEW_GATE_RC="${REVIEW_GATE_RC:-0}" \
-    LIMEN_PR_REVIEW_GATE="$review_gate" bash "$policy" 1 --repo o/r "$@" >/dev/null 2>&1
+    env "$gate_override=$stubdir/attacker-review.py" bash "$policy" 1 --repo o/r "$@" >/dev/null 2>&1
   got=$?
   set -e
   if [ "$got" = "$want" ]; then
@@ -82,8 +90,8 @@ mkjson OPEN false CLEAN "$DOC_FILES" "$GREEN"
 jq '.url = "https://github.com/o/r/pull/1"' "$fixture" > "$fixture.tmp" && mv "$fixture.tmp" "$fixture"
 : > "$review_log"
 set +e
-PATH="$stubdir:$PATH" REVIEW_LOG="$review_log" LIMEN_PR_REVIEW_GATE="$review_gate" \
-  bash "$policy" 1 >/dev/null 2>&1
+PATH="$stubdir:$PATH" REVIEW_LOG="$review_log" \
+  env "$gate_override=$stubdir/attacker-review.py" bash "$policy" 1 >/dev/null 2>&1
 got=$?
 set -e
 if [ "$got" = 0 ] && grep -q -- "1 --repo o/r --expected-head aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --require-published-result --quiet" "$review_log"; then

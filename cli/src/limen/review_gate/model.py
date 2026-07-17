@@ -17,7 +17,8 @@ CHECK_RECEIPT_SCHEMA = "limen.pr_review_gate.check_receipt.v1"
 GENERIC_ACTIONS_APP_SLUG = "github-actions"
 RECEIPT_KIND = "github_pull_request_review"
 PUBLISHER_CHECK_NAME = "limen review-gate diagnostic publisher"
-TERMINAL_SUCCESS_CONCLUSIONS = frozenset({"SUCCESS", "NEUTRAL", "SKIPPED"})
+TERMINAL_SUCCESS_CONCLUSIONS = frozenset({"SUCCESS"})
+TERMINAL_NONPASSING_CONCLUSIONS = frozenset({"NEUTRAL", "SKIPPED"})
 TRUSTED_REVIEW_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 MAX_REPORT_CHECK_CONTEXTS = 200
 HEAD_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -44,6 +45,7 @@ def report_evidence_digest(report: dict[str, Any]) -> str:
             "head_sha": report.get("head_sha"),
             "executing_keeper": report.get("executing_keeper"),
             "execution_identity_source": report.get("execution_identity_source"),
+            "execution_identities": report.get("execution_identities"),
             "last_push_authority": report.get("last_push_authority"),
             "snapshot_digest": report.get("snapshot_digest"),
             "checks": report.get("checks"),
@@ -101,6 +103,17 @@ def _check_app_slug(node: dict[str, Any]) -> str:
     if not isinstance(app, dict):
         app = node.get("app")
     return str(app.get("slug") or "") if isinstance(app, dict) else ""
+
+
+def _check_app_id(node: dict[str, Any]) -> int | None:
+    suite = node.get("checkSuite")
+    app = suite.get("app") if isinstance(suite, dict) else None
+    if not isinstance(app, dict):
+        app = node.get("app")
+    value = app.get("id") if isinstance(app, dict) else None
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        return None
+    return value
 
 
 def _trusted_diagnostic_publisher(node: dict[str, Any], repo: str) -> bool:
@@ -161,18 +174,113 @@ def _parse_check_receipt_summary(summary: Any) -> dict[str, Any] | None:
     return value
 
 
+def _enabled(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, dict) and isinstance(value.get("enabled"), bool):
+        return value["enabled"]
+    return None
+
+
+def _accepted_protection_authority(value: Any, *, app_id: int) -> bool:
+    """Return whether bounded live protection evidence owns this App gate."""
+
+    if not isinstance(value, dict):
+        return False
+    review_gate = value.get("review_gate")
+    return bool(
+        value.get("source") == "github_live_base_branch_protection"
+        and isinstance(value.get("branch"), str)
+        and value.get("branch")
+        and value.get("require_last_push_approval") is True
+        and value.get("dismiss_stale_reviews") is True
+        and value.get("required_conversation_resolution") is True
+        and value.get("enforce_admins") is True
+        and value.get("strict_current_head_checks") is True
+        and value.get("required_approving_review_count") == 1
+        and isinstance(review_gate, dict)
+        and review_gate
+        == {
+            "context": SCHEMA,
+            "app_id": app_id,
+        }
+    )
+
+
+def _protection_authority(
+    pr: dict[str, Any],
+) -> tuple[dict[str, Any] | None, list[dict[str, str]]]:
+    """Normalize the live base-branch protection contract or fail closed."""
+
+    branch = pr.get("baseRefName")
+    value = pr.get("baseBranchProtection")
+    error = {
+        "code": "base_branch_protection_unavailable",
+        "message": "live base-branch protection could not be authenticated",
+    }
+    if not isinstance(branch, str) or not branch or not isinstance(value, dict):
+        return None, [error]
+    status = value.get("required_status_checks")
+    checks = status.get("checks") if isinstance(status, dict) else None
+    if not isinstance(checks, list) or any(not isinstance(item, dict) for item in checks):
+        return None, [error]
+    gate_checks = [item for item in checks if item.get("context") == SCHEMA]
+    if len(gate_checks) != 1:
+        return None, [error]
+    app_id = gate_checks[0].get("app_id")
+    reviews = value.get("required_pull_request_reviews")
+    if (
+        not isinstance(app_id, int)
+        or isinstance(app_id, bool)
+        or app_id <= 0
+        or not isinstance(reviews, dict)
+        or status.get("strict") is not True
+        or reviews.get("require_last_push_approval") is not True
+        or reviews.get("dismiss_stale_reviews") is not True
+        or reviews.get("required_approving_review_count") != 1
+        or _enabled(value.get("required_conversation_resolution")) is not True
+        or _enabled(value.get("enforce_admins")) is not True
+    ):
+        return None, [error]
+    return (
+        {
+            "source": "github_live_base_branch_protection",
+            "branch": branch,
+            "review_gate": {"context": SCHEMA, "app_id": app_id},
+            "require_last_push_approval": True,
+            "dismiss_stale_reviews": True,
+            "required_conversation_resolution": True,
+            "enforce_admins": True,
+            "strict_current_head_checks": True,
+            "required_approving_review_count": 1,
+        },
+        [],
+    )
+
+
 def validate_check_run_receipt(
     node: dict[str, Any],
     *,
     repo: str,
     number: int,
     head: str,
-    app_slug: str,
+    app_id: int,
+    app_slug: str | None = None,
     require_success: bool,
 ) -> tuple[bool, str]:
     """Authenticate and read back one App-bound exact-head gate receipt."""
 
-    if node.get("name") != SCHEMA or _check_app_slug(node) != app_slug:
+    observed_slug = _check_app_slug(node)
+    try:
+        dedicated_slug = configured_review_gate_app_slug(observed_slug)
+    except GateError:
+        dedicated_slug = None
+    if (
+        node.get("name") != SCHEMA
+        or _check_app_id(node) != app_id
+        or dedicated_slug is None
+        or (app_slug is not None and observed_slug != app_slug)
+    ):
         return False, "check is not owned by the configured review-gate App"
     observed_head = str(node.get("headSha") or node.get("head_sha") or "")
     if observed_head != head:
@@ -206,6 +314,7 @@ def validate_check_run_receipt(
         "reviewed_sha",
         "executing_keeper",
         "execution_identity_source",
+        "execution_identities",
         "last_push_authority",
         "reviewing_keeper",
         "reviewer_receipt",
@@ -248,6 +357,16 @@ def validate_check_run_receipt(
         checks = receipt.get("checks")
         reviewer = receipt.get("reviewer_receipt")
         threads = receipt.get("review_threads")
+        identities = receipt.get("execution_identities")
+        identity_principals = (
+            {
+                str(value).casefold()
+                for value in identities.get("distinct_principals", [])
+                if isinstance(value, str) and value
+            }
+            if isinstance(identities, dict)
+            else set()
+        )
         if (
             reasons
             or receipt.get("fixture") is not False
@@ -257,25 +376,28 @@ def validate_check_run_receipt(
             or receipt.get("unresolved_current_thread_count") != 0
             or not isinstance(checks, dict)
             or checks.get("total", 0) <= 0
+            or checks.get("successful", 0) <= 0
             or any(checks.get(field) != 0 for field in ("pending", "failed", "unknown"))
             or not isinstance(threads, dict)
             or threads.get("unresolved_current") != 0
             or not isinstance(reviewer, dict)
+            or not identity_principals
             or reviewer.get("kind") != RECEIPT_KIND
             or reviewer.get("state") != "APPROVED"
             or reviewer.get("reviewed_sha") != head
             or reviewer.get("executing_keeper") != receipt.get("executing_keeper")
+            or reviewer.get("execution_identities") != identities
             or reviewer.get("reviewing_keeper") != receipt.get("reviewing_keeper")
-            or str(reviewer.get("reviewing_keeper") or "").casefold()
-            == str(reviewer.get("executing_keeper") or "").casefold()
+            or str(reviewer.get("reviewing_keeper") or "").casefold() in identity_principals
             or reviewer.get("reviewer_association") not in TRUSTED_REVIEW_ASSOCIATIONS
-            or receipt.get("execution_identity_source") not in {"head_commit_committer", "head_commit_author"}
-            or receipt.get("last_push_authority")
-            != {
-                "source": "github_native_branch_protection",
-                "require_last_push_approval": True,
-                "login": None,
+            or receipt.get("execution_identity_source")
+            not in {
+                "head_commit_committer",
+                "head_commit_author",
+                "head_commit_author_and_committer",
+                "head_commit_author_with_generic_committer",
             }
+            or not _accepted_protection_authority(receipt.get("last_push_authority"), app_id=app_id)
         ):
             return False, "accepted review-gate App receipt contains failing acceptance evidence"
     expected_external_id = f"{CHECK_RECEIPT_SCHEMA}:{envelope['digest']}"
@@ -296,7 +418,7 @@ def _published_result(
     repo: str,
     number: int,
     head: str,
-    app_slug: str | None,
+    app_id: int | None,
     required: bool,
 ) -> tuple[dict[str, Any], list[dict[str, str]]]:
     errors: list[dict[str, str]] = []
@@ -305,8 +427,9 @@ def _published_result(
         for node in nodes
         if node.get("__typename") == "CheckRun"
         and node.get("name") == SCHEMA
-        and app_slug is not None
-        and _check_app_slug(node) == app_slug
+        and app_id is not None
+        and _check_app_id(node) == app_id
+        and _check_app_slug(node) != GENERIC_ACTIONS_APP_SLUG
     ]
     authenticated.sort(
         key=lambda node: (
@@ -318,13 +441,13 @@ def _published_result(
     valid = False
     detail = ""
     receipt_evidence_digest = None
-    if latest is not None and app_slug is not None:
+    if latest is not None and app_id is not None:
         valid, detail = validate_check_run_receipt(
             latest,
             repo=repo,
             number=number,
             head=head,
-            app_slug=app_slug,
+            app_id=app_id,
             require_success=True,
         )
         output = latest.get("output")
@@ -332,11 +455,11 @@ def _published_result(
         if envelope is not None:
             receipt_evidence_digest = envelope["receipt"].get("evidence_digest")
     if required:
-        if app_slug is None:
+        if app_id is None:
             errors.append(
                 {
                     "code": "review_gate_app_unconfigured",
-                    "message": "consumer requires an explicit dedicated review-gate App identity",
+                    "message": "live branch protection does not bind the review gate to a dedicated App id",
                 }
             )
         elif latest is None:
@@ -351,7 +474,8 @@ def _published_result(
     return (
         {
             "required": required,
-            "app_slug": app_slug,
+            "app_slug": _check_app_slug(latest) if latest else None,
+            "app_id": app_id,
             "authenticated_count": len(authenticated),
             "valid_success": valid,
             "check_id": latest.get("databaseId") if latest else None,
@@ -367,7 +491,7 @@ def _check_summary(
     repo: str,
     number: int,
     head: str,
-    review_gate_app_slug: str | None,
+    review_gate_app_id: int | None,
     require_published_result: bool,
 ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, str]]]:
     errors: list[dict[str, str]] = []
@@ -381,19 +505,19 @@ def _check_summary(
         repo=repo,
         number=number,
         head=head,
-        app_slug=review_gate_app_slug,
+        app_id=review_gate_app_id,
         required=require_published_result,
     )
     errors.extend(published_errors)
     rows: list[dict[str, str]] = []
-    successful = pending = failed = unknown = ignored_untrusted_gate_markers = 0
+    successful = nonpassing = pending = failed = unknown = ignored_untrusted_gate_markers = 0
     for node in nodes:
         kind = str(node.get("__typename") or "")
         name = str(node.get("name") or node.get("context") or "")
         if name == SCHEMA:
             # Authenticate before counting or parsing. Lookalike contexts cannot create a
             # pre-authentication resource or liveness denial.
-            if kind == "CheckRun" and review_gate_app_slug and _check_app_slug(node) == review_gate_app_slug:
+            if kind == "CheckRun" and review_gate_app_id is not None and _check_app_id(node) == review_gate_app_id:
                 continue
             ignored_untrusted_gate_markers += 1
             continue
@@ -410,6 +534,9 @@ def _check_summary(
             elif conclusion in TERMINAL_SUCCESS_CONCLUSIONS:
                 classification = "successful"
                 successful += 1
+            elif conclusion in TERMINAL_NONPASSING_CONCLUSIONS:
+                classification = "nonpassing"
+                nonpassing += 1
             elif conclusion:
                 classification = "failed"
                 failed += 1
@@ -453,6 +580,13 @@ def _check_summary(
 
     if complete and not rows:
         errors.append({"code": "checks_missing", "message": "no project checks exist on the current head"})
+    if complete and rows and successful == 0:
+        errors.append(
+            {
+                "code": "checks_without_success",
+                "message": "current-head CI has no successful project check; neutral or skipped-only CI is insufficient",
+            }
+        )
     if pending:
         errors.append({"code": "checks_pending", "message": f"{pending} current-head check(s) are pending"})
     if failed:
@@ -464,6 +598,7 @@ def _check_summary(
         {
             "total": len(rows),
             "successful": successful,
+            "nonpassing": nonpassing,
             "pending": pending,
             "failed": failed,
             "unknown": unknown,
@@ -524,17 +659,44 @@ def _latest_decisive_reviews(reviews: list[dict[str, Any]]) -> list[dict[str, An
     return [entry[2] for entry in sorted(latest.values(), key=lambda entry: (entry[0], entry[1]))]
 
 
-def _execution_identity(pr: dict[str, Any]) -> tuple[str, str]:
+GENERIC_COMMIT_IDENTITIES = frozenset(
+    {
+        "web-flow",
+        "web-flow[bot]",
+        "github-actions",
+        "github-actions[bot]",
+    }
+)
+
+
+def _execution_identity(pr: dict[str, Any], *, head: str) -> tuple[str, str, dict[str, Any]]:
+    """Conservatively retain both commit identities for peer separation."""
+
     identity = pr.get("headCommitIdentity")
     if not isinstance(identity, dict):
-        return "", ""
-    committer = str(identity.get("committer") or "")
-    author = str(identity.get("author") or "")
-    if committer:
-        return committer, "head_commit_committer"
+        return "", "", {"author": None, "committer": None, "distinct_principals": []}
+    if str(identity.get("oid") or "") != head:
+        return "", "", {"author": None, "committer": None, "distinct_principals": []}
+    committer = str(identity.get("committer") or "").strip()
+    author = str(identity.get("author") or "").strip()
+    principals = sorted(
+        {value for value in (author, committer) if value},
+        key=str.casefold,
+    )
+    evidence = {
+        "author": author or None,
+        "committer": committer or None,
+        "distinct_principals": principals,
+    }
+    committer_is_generic = committer.casefold() in GENERIC_COMMIT_IDENTITIES
+    if committer and not committer_is_generic:
+        if author and author.casefold() != committer.casefold():
+            return committer, "head_commit_author_and_committer", evidence
+        return committer, "head_commit_committer", evidence
     if author:
-        return author, "head_commit_author"
-    return "", ""
+        source = "head_commit_author_with_generic_committer" if committer_is_generic else "head_commit_author"
+        return author, source, evidence
+    return "", "", evidence
 
 
 def _review_receipt(
@@ -542,6 +704,7 @@ def _review_receipt(
     *,
     head: str,
     executing_keeper: str,
+    execution_identities: dict[str, Any],
 ) -> tuple[dict[str, Any] | None, list[dict[str, str]]]:
     reviews, complete = _connection(pr, "reviews")
     errors: list[dict[str, str]] = []
@@ -552,6 +715,11 @@ def _review_receipt(
     if changes:
         errors.append({"code": "changes_requested", "message": f"{len(changes)} active peer review(s) request changes"})
     candidates: list[dict[str, Any]] = []
+    execution_principals = {
+        str(value).casefold()
+        for value in execution_identities.get("distinct_principals", [])
+        if isinstance(value, str) and value
+    }
     for review in latest:
         if str(review.get("state") or "").upper() != "APPROVED":
             continue
@@ -563,7 +731,7 @@ def _review_receipt(
         if (
             not reviewer
             or not executing_keeper
-            or reviewer.casefold() == executing_keeper.casefold()
+            or reviewer.casefold() in execution_principals
             or association not in TRUSTED_REVIEW_ASSOCIATIONS
             or reviewed_sha != head
         ):
@@ -573,6 +741,7 @@ def _review_receipt(
                 "kind": RECEIPT_KIND,
                 "review_id": str(review.get("id") or ""),
                 "executing_keeper": executing_keeper,
+                "execution_identities": execution_identities,
                 "reviewing_keeper": reviewer,
                 "reviewer_association": association,
                 "reviewed_sha": reviewed_sha,
@@ -601,7 +770,7 @@ def snapshot_digest(
     pr: dict[str, Any],
     *,
     repo: str,
-    review_gate_app_slug: str | None,
+    review_gate_app_slug: str | None = None,
 ) -> str:
     """Digest only acceptance inputs, excluding the gate's own outputs."""
 
@@ -628,8 +797,11 @@ def snapshot_digest(
             "state": pr.get("state"),
             "isDraft": pr.get("isDraft"),
             "headRefOid": pr.get("headRefOid"),
+            "baseRefName": pr.get("baseRefName"),
             "author": pr.get("author"),
             "headCommitIdentity": pr.get("headCommitIdentity"),
+            "baseBranchProtection": pr.get("baseBranchProtection"),
+            "baseBranchProtectionError": pr.get("baseBranchProtectionError"),
             "checks": {"complete": checks_complete, "nodes": project_checks},
             **connections,
         }
@@ -675,7 +847,6 @@ def evaluate(
     final_snapshot_digest = snapshot_digest(
         pr,
         repo=repo,
-        review_gate_app_slug=review_gate_app_slug,
     )
     if rechecked_snapshot_digest is not None and final_snapshot_digest != rechecked_snapshot_digest:
         reasons.append(
@@ -685,7 +856,7 @@ def evaluate(
             }
         )
 
-    executing_keeper, execution_source = _execution_identity(pr)
+    executing_keeper, execution_source, execution_identities = _execution_identity(pr, head=head)
     if not executing_keeper:
         reasons.append(
             {
@@ -693,16 +864,24 @@ def evaluate(
                 "message": "head commit has no GitHub committer or author identity",
             }
         )
+    protection_authority, protection_errors = _protection_authority(pr)
+    reasons.extend(protection_errors)
+    review_gate_app_id = protection_authority["review_gate"]["app_id"] if protection_authority is not None else None
     checks, published, check_errors = _check_summary(
         pr,
         repo=repo,
         number=number,
         head=head,
-        review_gate_app_slug=review_gate_app_slug,
+        review_gate_app_id=review_gate_app_id,
         require_published_result=require_published_result,
     )
     threads, thread_errors = _thread_summary(pr)
-    receipt, review_errors = _review_receipt(pr, head=head, executing_keeper=executing_keeper)
+    receipt, review_errors = _review_receipt(
+        pr,
+        head=head,
+        executing_keeper=executing_keeper,
+        execution_identities=execution_identities,
+    )
     reasons.extend(check_errors)
     reasons.extend(thread_errors)
     reasons.extend(review_errors)
@@ -720,11 +899,8 @@ def evaluate(
         "head_sha": head,
         "executing_keeper": executing_keeper,
         "execution_identity_source": execution_source,
-        "last_push_authority": {
-            "source": "github_native_branch_protection",
-            "require_last_push_approval": True,
-            "login": None,
-        },
+        "execution_identities": execution_identities,
+        "last_push_authority": protection_authority,
         "snapshot_digest": final_snapshot_digest,
         "checks": checks,
         "review_threads": threads,
@@ -764,6 +940,7 @@ def evaluate(
         "reviewed_sha": receipt.get("reviewed_sha") if receipt else None,
         "executing_keeper": executing_keeper or None,
         "execution_identity_source": execution_source or None,
+        "execution_identities": execution_identities,
         "last_push_authority": evidence["last_push_authority"],
         "reviewing_keeper": receipt.get("reviewing_keeper") if receipt else None,
         "reviewer_receipt": receipt,
@@ -803,6 +980,7 @@ def error_report(*, repo: str, number: int, expected_head: str | None, message: 
         "reviewed_sha": None,
         "executing_keeper": None,
         "execution_identity_source": None,
+        "execution_identities": None,
         "last_push_authority": None,
         "reviewing_keeper": None,
         "reviewer_receipt": None,

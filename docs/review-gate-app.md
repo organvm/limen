@@ -11,16 +11,19 @@ The evaluator reads two complete normalized snapshots. Each snapshot cursor-pagi
 checks, review threads, issue comments, native reviews, and changed files. A changed head or changed
 normalized evidence between snapshots rejects. Acceptance requires:
 
-- at least one successful non-gate project check and no pending, failed, or unknown project check;
+- at least one `SUCCESS` non-gate project check and no pending, failed, or unknown project check
+  (`NEUTRAL`/`SKIPPED`-only CI is not green);
 - no unresolved current review thread;
 - one active native `APPROVED` review on the exact head from a repository collaborator, member, or
-  owner distinct from the GitHub principal on the head commit; and
+  owner distinct from every GitHub author/committer principal on the head commit; and
 - complete comment, review, thread, check, and file evidence.
 
-The report names the head-commit executor and whether it came from the commit's GitHub committer or
-author. GitHub's native `require_last_push_approval` rule remains the authority for who performed the
-network push. A caller-supplied allowed-signers file is not an authenticated custody source and is
-rejected as review authority.
+The report preserves both head-commit author and committer evidence. Generic `web-flow` attribution
+cannot manufacture peer separation: when it is the committer, the author remains the conservative
+executor identity. The evaluator reads the live base-branch protection endpoint and accepts only
+when it proves last-push approval, stale-review dismissal, conversation resolution, administrator
+enforcement, and exactly one App-ID-bound `limen.pr_review_gate.v1` required check. A 403, missing
+protection, or incomplete readback fails closed.
 
 ## CheckRun publication
 
@@ -33,8 +36,8 @@ then publishes one bounded `limen.pr_review_gate.check_receipt.v1` envelope:
 - a digest of the receipt body; and
 - an `external_id` binding that receipt digest.
 
-Publication first proves that the active installation credentials match both the configured App
-slug and the provisioned `LIMEN_REVIEW_GATE_APP_ID`. It updates
+Publication derives the active installation's dedicated App slug and ID from GitHub. For an
+accepted report, that ID must match the live protection-bound App ID. It updates
 the same current-head CheckRun when one exists, re-reads its version before mutation, and reads the
 written CheckRun back afterward. App identity, target head, conclusion, receipt body, receipt
 digest, and `external_id` must all agree. Merge consumers use `--require-published-result` and
@@ -57,6 +60,7 @@ Before installing protection estate-wide, use one minimal bootstrap PR and recor
    one native approval, last-push approval, stale dismissal, resolved conversations, and admin
    enforcement.
 
-Run `scripts/setup-rulesets.py --apply --review-app-slug <slug>` only after that proof exists. The
-script defaults to the frozen seven-repository cohort and fails closed for any repository without a
-live accepted App receipt or supported protection surface.
+Run `scripts/setup-rulesets.py --apply` only after that proof exists. The script derives a unique
+slug/ID pair from the installed App's complete executable receipt; no caller supplies the identity.
+It defaults to the frozen seven-repository cohort and fails closed for any repository without an
+executable App receipt or supported protection surface.

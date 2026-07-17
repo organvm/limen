@@ -120,6 +120,20 @@ def test_valid_signed_receipt_permits_only_its_exact_target(tmp_path: Path):
     assert not authorization.permits("organvm/limen", 1153, "a" * 40)
 
 
+def test_live_trust_mode_rejects_executor_owned_signer_registry(tmp_path: Path):
+    mod = _load()
+    now = dt.datetime(2026, 7, 16, 18, 0, tzinfo=dt.timezone.utc)
+    receipt, allowed_signers = _signed_receipt(tmp_path, now)
+
+    with pytest.raises(mod.AuthorizationError, match="owned by root"):
+        mod.load_authorization(
+            receipt,
+            allowed_signers=allowed_signers,
+            required_signer_uid=0,
+            now=now,
+        )
+
+
 @pytest.mark.parametrize(
     ("updates", "message"),
     [

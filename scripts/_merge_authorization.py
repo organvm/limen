@@ -24,6 +24,11 @@ from typing import Any, Iterator
 SCHEMA = "limen.merge_authorization.v1"
 ACTION = "merge"
 REVIEW_GATE_CONTEXT = "limen.pr_review_gate.v1"
+# Domus owns this host-level trust root.  It is intentionally outside every
+# repository checkout and absent from the shipped Limen tree.  The merge
+# executor has no CLI or environment override for it; until Domus installs a
+# root-owned file here, every apply attempt fails closed.
+DOMUS_ALLOWED_SIGNERS = Path("/Library/Application Support/org.organvm.domus/limen/merge-authorization.allowed-signers")
 MAX_WINDOW = dt.timedelta(minutes=15)
 MAX_CLOCK_SKEW = dt.timedelta(seconds=30)
 _REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -100,11 +105,18 @@ def _stable_source(path: Path) -> Path:
     return Path(os.path.abspath(os.fspath(path)))
 
 
-def _validate_file_metadata(metadata: os.stat_result, *, label: str) -> None:
+def _validate_file_metadata(
+    metadata: os.stat_result,
+    *,
+    label: str,
+    required_uid: int | None = None,
+) -> None:
     if not stat.S_ISREG(metadata.st_mode):
         raise AuthorizationError(f"{label} must be a non-symlink regular file")
-    if metadata.st_uid != os.getuid():
-        raise AuthorizationError(f"{label} must be owned by the executing user")
+    expected_uid = os.getuid() if required_uid is None else required_uid
+    if metadata.st_uid != expected_uid:
+        owner = "root" if expected_uid == 0 else f"uid {expected_uid}"
+        raise AuthorizationError(f"{label} must be owned by {owner}")
     if metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
         raise AuthorizationError(f"{label} must not be group- or world-writable")
 
@@ -123,7 +135,12 @@ def _version(metadata: os.stat_result) -> tuple[int, int, int, int, int, int, in
     )
 
 
-def _read_owned_bytes(path: Path, *, label: str) -> tuple[Path, bytes]:
+def _read_owned_bytes(
+    path: Path,
+    *,
+    label: str,
+    required_uid: int | None = None,
+) -> tuple[Path, bytes]:
     """Read one bounded owner file through a no-follow descriptor snapshot."""
 
     source = _stable_source(path)
@@ -133,7 +150,7 @@ def _read_owned_bytes(path: Path, *, label: str) -> tuple[Path, bytes]:
         raise AuthorizationError(f"cannot inspect {label}: {exc}") from exc
     if stat.S_ISLNK(metadata.st_mode):
         raise AuthorizationError(f"{label} must be a non-symlink regular file")
-    _validate_file_metadata(metadata, label=label)
+    _validate_file_metadata(metadata, label=label, required_uid=required_uid)
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
         descriptor = os.open(source, flags)
@@ -143,7 +160,7 @@ def _read_owned_bytes(path: Path, *, label: str) -> tuple[Path, bytes]:
         opened = os.fstat(descriptor)
         if (opened.st_dev, opened.st_ino) != (metadata.st_dev, metadata.st_ino):
             raise AuthorizationError(f"{label} changed while it was opened")
-        _validate_file_metadata(opened, label=label)
+        _validate_file_metadata(opened, label=label, required_uid=required_uid)
         if opened.st_size > 64 * 1024:
             raise AuthorizationError(f"{label} exceeds the 64 KiB bound")
         payload = bytearray()
@@ -179,8 +196,16 @@ def _read_object(path: Path) -> tuple[Path, dict[str, Any], str]:
     return source, value, hashlib.sha256(payload).hexdigest()
 
 
-def _read_allowed_signers(path: Path) -> tuple[Path, bytes, str]:
-    source, payload = _read_owned_bytes(path, label="allowed-signers owner")
+def _read_allowed_signers(
+    path: Path,
+    *,
+    required_uid: int | None = None,
+) -> tuple[Path, bytes, str]:
+    source, payload = _read_owned_bytes(
+        path,
+        label="allowed-signers owner",
+        required_uid=required_uid,
+    )
     try:
         lines = payload.decode("utf-8").splitlines()
     except UnicodeDecodeError as exc:
@@ -260,6 +285,7 @@ def load_authorization(
     path: Path,
     *,
     allowed_signers: Path,
+    required_signer_uid: int | None = None,
     now: dt.datetime | None = None,
 ) -> MergeAuthorization:
     """Load and validate one short-lived exact-head merge authorization."""
@@ -302,7 +328,10 @@ def load_authorization(
     if observed_now >= expires_at:
         raise AuthorizationError("authorization receipt is expired")
 
-    trusted_signers, trusted_signers_bytes, trusted_signers_sha256 = _read_allowed_signers(allowed_signers)
+    trusted_signers, trusted_signers_bytes, trusted_signers_sha256 = _read_allowed_signers(
+        allowed_signers,
+        required_uid=required_signer_uid,
+    )
     _verify_signature(
         value,
         signer_principal=signer_principal,

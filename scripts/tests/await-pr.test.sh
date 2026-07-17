@@ -4,7 +4,7 @@
 # The waiter must stay bounded and loud: CLEARED/FAILED/TIMEOUT/REFUSED-PAUSED verdicts map to
 # distinct exit codes, CI-red and BLOCKED are terminal (never waited out), a merge-prohibiting
 # pause marker refuses BEFORE the first poll, the per-PR lock admits exactly one live waiter, and
-# --merge delegates to merge-drain with explicit authorization and signer custody.
+# --merge delegates to merge-drain with explicit authorization; signer trust is pinned by Domus.
 # Deterministic + idempotent: exit 0 ⟺ all cases pass. (2026-07-15 endless-watcher incident.)
 set -euo pipefail
 
@@ -48,6 +48,8 @@ check() { # name want_exit seq_tokens [waiter args...]; captured output in $out
   shift 3
   workroot="$(mktemp -d)"                      # fresh hermetic LIMEN_ROOT per case
   mkdir -p "$workroot/scripts"
+  cp "$waiter" "$workroot/scripts/await-pr.sh"
+  cp "$stubdir/policy" "$workroot/scripts/merge-policy.sh"
   cat > "$workroot/scripts/merge-drain.py" <<'PY'
 import os
 import sys
@@ -57,8 +59,8 @@ raise SystemExit(int(os.environ.get("DRAIN_FAIL", "0")))
 PY
   printf '%s\n' $seq > "$SEQ"; rm -f "$COUNT" "$GHLOG"
   set +e
-  out="$(PATH="$stubdir:$PATH" LIMEN_ROOT="$workroot" LIMEN_MERGE_POLICY_BIN="$stubdir/policy" DRAIN_LOG="$GHLOG" \
-    bash "$waiter" 7 --interval 1 "$@" 2>&1)"
+  out="$(PATH="$stubdir:$PATH" DRAIN_LOG="$GHLOG" \
+    bash "$workroot/scripts/await-pr.sh" 7 --interval 1 "$@" 2>&1)"
   got=$?
   set -e
   if [ "$got" = "$want" ]; then
@@ -82,24 +84,25 @@ check "usage: bad PR"               64 "CLEARED" --timeout x
 
 # --merge: only the receipt-bound merge-drain effector is invoked
 check "--merge on CLEARED" 0 "CLEARED" --merge \
-  --authorization-receipt /owner/receipt.json --allowed-signers /owner/signers
-if ! grep -q -- "--apply --limit 1 --target-repo organvm/limen --target-pr 7 --target-head deadbeefcafedeadbeefcafedeadbeefcafedead --authorization-receipt /owner/receipt.json --allowed-signers /owner/signers" "$GHLOG" 2>/dev/null; then
+  --authorization-receipt /owner/receipt.json
+if ! grep -q -- "--apply --limit 1 --target-repo organvm/limen --target-pr 7 --target-head deadbeefcafedeadbeefcafedeadbeefcafedead --authorization-receipt /owner/receipt.json" "$GHLOG" 2>/dev/null; then
   echo "  FAIL --merge did not delegate the exact authorization to merge-drain"; fail=$((fail+1))
 fi
 export DRAIN_FAIL=1
 check "--merge with failing drain" 1 "CLEARED" --merge \
-  --authorization-receipt /owner/receipt.json --allowed-signers /owner/signers
+  --authorization-receipt /owner/receipt.json
 unset DRAIN_FAIL
 check "--merge without authorization" 64 "CLEARED" --merge
 
 # pause marker: prohibitions mentioning merge refuse BEFORE the first poll
-workroot="$(mktemp -d)"; mkdir -p "$workroot/logs"
+workroot="$(mktemp -d)"; mkdir -p "$workroot/logs" "$workroot/scripts"
+cp "$waiter" "$workroot/scripts/await-pr.sh"
+cp "$stubdir/policy" "$workroot/scripts/merge-policy.sh"
 printf 'reason: operator study interval\nprohibitions: no dispatch, merge, rebase, PR mutation\n' \
   > "$workroot/logs/AUTONOMY_PAUSED"
 printf 'CLEARED\n' > "$SEQ"; rm -f "$COUNT"
 set +e
-out="$(PATH="$stubdir:$PATH" LIMEN_ROOT="$workroot" LIMEN_MERGE_POLICY_BIN="$stubdir/policy" \
-  bash "$waiter" 7 --interval 1 2>&1)"; got=$?
+out="$(PATH="$stubdir:$PATH" bash "$workroot/scripts/await-pr.sh" 7 --interval 1 2>&1)"; got=$?
 set -e
 if [ "$got" = "3" ] && [ ! -f "$COUNT" ] && printf '%s' "$out" | grep -q "REFUSED"; then
   printf '  ok   %-36s exit=%s\n' "merge-prohibiting pause refuses" "$got"; pass=$((pass+1))
@@ -111,8 +114,7 @@ fi
 printf 'reason: study\nprohibitions: no dispatch\n' > "$workroot/logs/AUTONOMY_PAUSED"
 rm -f "$COUNT"
 set +e
-out="$(PATH="$stubdir:$PATH" LIMEN_ROOT="$workroot" LIMEN_MERGE_POLICY_BIN="$stubdir/policy" \
-  bash "$waiter" 7 --interval 1 2>&1)"; got=$?
+out="$(PATH="$stubdir:$PATH" bash "$workroot/scripts/await-pr.sh" 7 --interval 1 2>&1)"; got=$?
 set -e
 if [ "$got" = "0" ]; then
   printf '  ok   %-36s exit=%s\n' "non-merge pause proceeds" "$got"; pass=$((pass+1))
@@ -122,13 +124,14 @@ fi
 rm -rf "$workroot"
 
 # single-instance lock: a LIVE holder pid refuses; a DEAD holder pid is taken over
-workroot="$(mktemp -d)"; mkdir -p "$workroot/logs/.await-pr-7.lock"
+workroot="$(mktemp -d)"; mkdir -p "$workroot/logs/.await-pr-7.lock" "$workroot/scripts"
+cp "$waiter" "$workroot/scripts/await-pr.sh"
+cp "$stubdir/policy" "$workroot/scripts/merge-policy.sh"
 sleep 30 & lockpid=$!
 printf '%s\n' "$lockpid" > "$workroot/logs/.await-pr-7.lock/pid"
 printf 'CLEARED\n' > "$SEQ"; rm -f "$COUNT"
 set +e
-out="$(PATH="$stubdir:$PATH" LIMEN_ROOT="$workroot" LIMEN_MERGE_POLICY_BIN="$stubdir/policy" \
-  bash "$waiter" 7 --interval 1 2>&1)"; got=$?
+out="$(PATH="$stubdir:$PATH" bash "$workroot/scripts/await-pr.sh" 7 --interval 1 2>&1)"; got=$?
 set -e
 if [ "$got" = "4" ] && printf '%s' "$out" | grep -q "ALREADY-WATCHED"; then
   printf '  ok   %-36s exit=%s\n' "live lock holder refuses" "$got"; pass=$((pass+1))
@@ -139,8 +142,7 @@ kill "$lockpid" 2>/dev/null || true; wait "$lockpid" 2>/dev/null || true
 printf '%s\n' "$lockpid" > "$workroot/logs/.await-pr-7.lock/pid"   # now a dead pid
 rm -f "$COUNT"
 set +e
-out="$(PATH="$stubdir:$PATH" LIMEN_ROOT="$workroot" LIMEN_MERGE_POLICY_BIN="$stubdir/policy" \
-  bash "$waiter" 7 --interval 1 2>&1)"; got=$?
+out="$(PATH="$stubdir:$PATH" bash "$workroot/scripts/await-pr.sh" 7 --interval 1 2>&1)"; got=$?
 set -e
 if [ "$got" = "0" ]; then
   printf '  ok   %-36s exit=%s\n' "stale lock taken over" "$got"; pass=$((pass+1))

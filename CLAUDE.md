@@ -243,9 +243,11 @@ that reason.
 
 **Merge authority.** The normal engineering lifecycle proceeds without asking the operator to
 choose mechanics, but acceptance and effect authority remain separate. A native reviewer distinct
-from the last head-commit executor approves the exact head; the dedicated App publishes the
+from every known head-commit author/committer identity approves the exact head; the dedicated App publishes the
 complete `limen.pr_review_gate.v1` receipt; and `merge-drain.py` consumes a short-lived,
-exact-target `limen.merge_authorization.v1` receipt. No other script executes a merge.
+exact-target `limen.merge_authorization.v1` receipt against the fixed Domus-installed root-owned
+signer registry. No caller-selected root, gate, policy, or signer path is authoritative, and no
+other script executes a merge.
 
 **The website guardrail.** A merge to `main` **auto-deploys** the live public site/API — but *only* when the diff touches a deploy-trigger path. The trigger paths are **declared once** in the `deploy_triggers` block of [`institutio/governance/gates.yaml`](institutio/governance/gates.yaml) (dashboard → `deploy.yml` → Cloudflare Pages, Firebase step dormant; API → `deploy-api.yml` → Cloud Run / Worker); `merge-policy.sh` derives its classification from that registry, and `check-gates.py` holds the registry in exact parity with the workflows on every PR — do not restate the path list here or anywhere else.
 

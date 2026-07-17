@@ -56,15 +56,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || inputs.expected_head }}
-          LIMEN_REVIEW_GATE_APP_SLUG: ${{ vars.LIMEN_REVIEW_GATE_APP_SLUG }}
         run: |
           test -n "$PR_NUMBER" || { echo "pr-review-gate: PR number is required" >&2; exit 2; }
           args=("$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --publish-diagnostic)
           if [ -n "$EXPECTED_HEAD" ]; then
             args+=(--expected-head "$EXPECTED_HEAD")
-          fi
-          if [ -n "${LIMEN_REVIEW_GATE_APP_SLUG:-}" ]; then
-            args+=(--review-gate-app-slug "$LIMEN_REVIEW_GATE_APP_SLUG")
           fi
           python3 scripts/pr-review-gate.py "${args[@]}"
 
@@ -115,18 +111,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ matrix.number }}
           EXPECTED_HEAD: ${{ matrix.head }}
-          LIMEN_REVIEW_GATE_APP_SLUG: ${{ vars.LIMEN_REVIEW_GATE_APP_SLUG }}
         run: |
           set -euo pipefail
-          app_args=()
-          if [ -n "${LIMEN_REVIEW_GATE_APP_SLUG:-}" ]; then
-            app_args=(--review-gate-app-slug "$LIMEN_REVIEW_GATE_APP_SLUG")
-          fi
           set +e
           python3 scripts/pr-review-gate.py "$PR_NUMBER" \
             --repo "$GITHUB_REPOSITORY" \
             --expected-head "$EXPECTED_HEAD" \
-            "${app_args[@]}" \
             --publish-diagnostic
           rc=$?
           set -e

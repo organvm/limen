@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -14,7 +13,6 @@ from .model import (
     HEAD_SHA,
     SCHEMA,
     GateError,
-    configured_review_gate_app_slug,
     error_report,
     evaluate,
     report_evidence_digest,
@@ -72,19 +70,6 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--expected-head")
     ap.add_argument("--fixture", type=Path)
     ap.add_argument(
-        "--allowed-signers",
-        type=Path,
-        help="blocked compatibility input; local signer files are not a production custody source",
-    )
-    ap.add_argument(
-        "--review-gate-app-slug",
-        help="dedicated App slug (or LIMEN_REVIEW_GATE_APP_SLUG)",
-    )
-    ap.add_argument(
-        "--review-gate-app-id",
-        help="provisioned App id (or LIMEN_REVIEW_GATE_APP_ID); required for authoritative publication",
-    )
-    ap.add_argument(
         "--require-published-result",
         action="store_true",
         help="consumer mode: require the App's current exact-head successful receipt",
@@ -103,15 +88,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     requested = args.publish_status or args.publish_diagnostic
     check_name = DIAGNOSTIC_SCHEMA if args.publish_diagnostic else SCHEMA
     publication_head = args.expected_head if args.expected_head and HEAD_SHA.fullmatch(args.expected_head) else None
-    raw_slug = args.review_gate_app_slug or os.environ.get("LIMEN_REVIEW_GATE_APP_SLUG")
-    raw_app_id = args.review_gate_app_id or os.environ.get("LIMEN_REVIEW_GATE_APP_ID")
-    app_slug: str | None = None
     report: dict[str, Any]
 
     try:
-        app_slug = configured_review_gate_app_slug(raw_slug)
-        if args.publish_status and app_slug is None:
-            raise GateError("--publish-status requires a dedicated non-generic review-gate App slug")
         if args.publish_status and args.require_published_result:
             raise GateError("App evaluation cannot require its own current output")
         if args.fixture and requested:
@@ -126,8 +105,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 number=args.PR,
                 expected_head=args.expected_head,
                 fixture=True,
-                allowed_signers=args.allowed_signers,
-                review_gate_app_slug=app_slug,
                 require_published_result=args.require_published_result,
             )
         else:
@@ -150,10 +127,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 rechecked_snapshot_digest=snapshot_digest(
                     initial,
                     repo=repo,
-                    review_gate_app_slug=app_slug,
                 ),
-                allowed_signers=args.allowed_signers,
-                review_gate_app_slug=app_slug,
                 require_published_result=args.require_published_result,
             )
     except GateError as exc:
@@ -176,8 +150,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             publish_status(
                 report,
                 check_name=check_name,
-                publisher_app_slug=app_slug,
-                publisher_app_id=raw_app_id,
             )
         except GateError as exc:
             report["status"] = report["final_status"] = "error"

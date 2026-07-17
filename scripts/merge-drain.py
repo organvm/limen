@@ -21,8 +21,6 @@ task instead of letting them clobber the body. ([[pr111-daemon-regression-healed
   --apply       enable exact-target merge attempts; default is zero-write preview
   --authorization-receipt PATH
                short-lived signed limen.merge_authorization.v1 receipt; repeat per target
-  --allowed-signers PATH
-               Domus-owned OpenSSH trust owner (or LIMEN_REVIEW_ALLOWED_SIGNERS)
   --target-repo/--target-pr/--target-head
                optional delegated-call constraint; all three must match the sole receipt target
 
@@ -48,16 +46,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling scripts/ for _pr_scan
 from _pr_scan import enumerate_open_prs, rotating_window, stale_base_verdict  # noqa: E402
 from _merge_authorization import (  # noqa: E402
+    DOMUS_ALLOWED_SIGNERS,
     AuthorizationError,
     MergeAuthorization,
     load_authorization,
-    materialize_allowed_signers,
 )
 
-# DERIVED from env (derive-not-pin) so the conductor survives relocation; same default + classifier
-# as self-heal.py — the two organs are two halves of one verdict and must agree on the PR universe.
+# Fleet discovery remains configurable.  The executable and trust roots used by
+# the live merge effect do not: they are pinned below to the checked-in script
+# location and Domus-owned root custody.
 OWNERS = [o.strip() for o in os.environ.get("LIMEN_OWNERS", "organvm,4444J99").split(",") if o.strip()]
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parent.parent))
+ROOT = Path(__file__).resolve().parent.parent
+REVIEW_GATE = ROOT / "scripts" / "pr-review-gate.py"
+MERGE_POLICY = ROOT / "scripts" / "merge-policy.sh"
 
 
 def pause_active() -> bool:
@@ -76,22 +77,20 @@ def review_accepted(
     repo: str,
     num: int,
     expected_head: str,
-    allowed_signers: Path | None = None,
+    _ignored_signers: Path | None = None,
 ) -> bool:
     """Require the dedicated App's authenticated current-head receipt.
 
-    ``allowed_signers`` remains in the caller signature because it owns merge
-    authorization custody. It is deliberately not forwarded to the review gate:
-    an executor-controlled local file is not peer-review authority.
+    The gate executable is the sibling checked-in implementation.  Environment
+    and caller paths cannot replace it.
     """
 
     if not repo or not expected_head:
         return False
-    gate = Path(os.environ.get("LIMEN_PR_REVIEW_GATE") or ROOT / "scripts" / "pr-review-gate.py")
     try:
         command = [
             sys.executable,
-            str(gate),
+            str(REVIEW_GATE),
             str(num),
             "--repo",
             repo,
@@ -116,20 +115,16 @@ def merge_policy_cleared(
     repo: str,
     num: int,
     expected_head: str,
-    allowed_signers: Path | None = None,
+    _ignored_signers: Path | None = None,
 ) -> bool:
     """Run the shared merge predicate on one exact head, failing closed."""
 
     if not repo or not expected_head:
         return False
-    policy = ROOT / "scripts" / "merge-policy.sh"
     try:
-        environment = os.environ.copy()
-        if allowed_signers is not None:
-            environment["LIMEN_REVIEW_ALLOWED_SIGNERS"] = str(allowed_signers)
         result = subprocess.run(
             [
-                str(policy),
+                str(MERGE_POLICY),
                 str(num),
                 "--repo",
                 repo,
@@ -140,7 +135,6 @@ def merge_policy_cleared(
             text=True,
             timeout=90,
             check=False,
-            env=environment,
         )
     except (OSError, subprocess.SubprocessError):
         return False
@@ -225,12 +219,7 @@ def assess(rn, *, allowed_signers: Path | None = None):
                 return (repo, num, sb)  # STALE-CORE / STALE-BASE — do NOT attempt; rebase first
             if _is_trivial(repo, num):
                 return (repo, num, "TRIVIAL")  # CI-green but no-op/reformat — value gate refuses it
-            if not review_accepted(
-                repo,
-                num,
-                str(d.get("headRefOid") or ""),
-                allowed_signers,
-            ):
+            if not review_accepted(repo, num, str(d.get("headRefOid") or "")):
                 return (repo, num, "REVIEW-HOLD")
             return (repo, num, "READY")
         return (repo, num, "BLOCKED")
@@ -266,7 +255,7 @@ def ready_head_for_merge(
     before = current_head(repo, num)
     if not before:
         return ""
-    verdict = assess((repo, num), allowed_signers=allowed_signers)
+    verdict = assess((repo, num))
     after = current_head(repo, num)
     if before != after or verdict != (repo, num, "READY"):
         return ""
@@ -291,7 +280,8 @@ def merge(
         try:
             current = load_authorization(
                 original_authorization.source,
-                allowed_signers=original_authorization.allowed_signers,
+                allowed_signers=DOMUS_ALLOWED_SIGNERS,
+                required_signer_uid=0,
             )
         except AuthorizationError:
             return None
@@ -307,13 +297,9 @@ def merge(
     authorization = refresh_authorization()
     if authorization is None:
         return False
-    try:
-        with materialize_allowed_signers(authorization) as trusted_signers:
-            if not review_accepted(repo, num, expected_head, trusted_signers):
-                return False
-            if not merge_policy_cleared(repo, num, expected_head, trusted_signers):
-                return False
-    except AuthorizationError:
+    if not review_accepted(repo, num, expected_head):
+        return False
+    if not merge_policy_cleared(repo, num, expected_head):
         return False
     if pause_active():
         return False
@@ -364,7 +350,7 @@ def exact_target_already_merged(repo: str, num: int, expected_head: str) -> bool
 def _load_authorizations(
     paths: list[Path],
     *,
-    allowed_signers: Path,
+    allowed_signers: Path | None = None,
 ) -> dict[tuple[str, int, str], MergeAuthorization]:
     """Load a non-ambiguous set of exact-target authorization receipts."""
 
@@ -372,7 +358,11 @@ def _load_authorizations(
     ids: set[str] = set()
     pull_requests: set[tuple[str, int]] = set()
     for path in paths:
-        authorization = load_authorization(path, allowed_signers=allowed_signers)
+        authorization = load_authorization(
+            path,
+            allowed_signers=DOMUS_ALLOWED_SIGNERS,
+            required_signer_uid=0,
+        )
         key = (
             authorization.repository,
             authorization.pull_request,
@@ -424,11 +414,6 @@ def main(argv: list[str] | None = None) -> int:
         metavar="PATH",
         help="short-lived limen.merge_authorization.v1 receipt; repeat per exact target",
     )
-    ap.add_argument(
-        "--allowed-signers",
-        type=Path,
-        help=("Domus-owned OpenSSH allowed-signers file; defaults to LIMEN_REVIEW_ALLOWED_SIGNERS when set"),
-    )
     ap.add_argument("--target-repo", help="optional exact OWNER/REPO constraint for a delegated apply")
     ap.add_argument("--target-pr", type=int, help="optional exact PR-number constraint for a delegated apply")
     ap.add_argument("--target-head", help="optional exact 40-character head constraint for a delegated apply")
@@ -457,18 +442,10 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--target-head must be a full 40-character Git commit SHA")
     if a.authorization_receipt and not a.apply:
         ap.error("--authorization-receipt requires --apply")
-    if a.allowed_signers is not None and not a.apply:
-        ap.error("--allowed-signers requires --apply")
     if a.apply and not a.authorization_receipt:
         print(
             "[merge-drain] REFUSED: --apply requires at least one limen.merge_authorization.v1 --authorization-receipt"
         )
-        return 2
-    allowed_signers = a.allowed_signers
-    if allowed_signers is None and os.environ.get("LIMEN_REVIEW_ALLOWED_SIGNERS"):
-        allowed_signers = Path(os.environ["LIMEN_REVIEW_ALLOWED_SIGNERS"])
-    if a.apply and allowed_signers is None:
-        print("[merge-drain] REFUSED: --apply requires --allowed-signers or LIMEN_REVIEW_ALLOWED_SIGNERS")
         return 2
     if a.apply and pause_active():
         print("[merge-drain] REFUSED-PAUSED: logs/AUTONOMY_PAUSED is present; zero side effects")
@@ -477,11 +454,7 @@ def main(argv: list[str] | None = None) -> int:
     authorizations: dict[tuple[str, int, str], MergeAuthorization] = {}
     if a.apply:
         try:
-            assert allowed_signers is not None
-            authorizations = _load_authorizations(
-                a.authorization_receipt,
-                allowed_signers=allowed_signers,
-            )
+            authorizations = _load_authorizations(a.authorization_receipt)
         except AuthorizationError as exc:
             print(f"[merge-drain] REFUSED: invalid authorization receipt: {exc}")
             return 2
@@ -503,9 +476,8 @@ def main(argv: list[str] | None = None) -> int:
     if not allprs:
         print("[merge-drain] no open PRs (or gh unavailable)")
         return 0
-    assessor = (lambda item: assess(item, allowed_signers=allowed_signers)) if a.apply else assess
     with cf.ThreadPoolExecutor(max_workers=10) as ex:
-        rows = list(ex.map(assessor, prs))
+        rows = list(ex.map(assess, prs))
     import collections
 
     b = collections.Counter(r[2] for r in rows)
@@ -516,7 +488,7 @@ def main(argv: list[str] | None = None) -> int:
         for repo, num in ready:
             if pause_active():
                 break
-            head = ready_head_for_merge(repo, num, allowed_signers)
+            head = ready_head_for_merge(repo, num)
             authorization = authorizations.get((repo, num, head))
             if merge(repo, num, head, authorization):
                 merged.append(f"{repo}#{num}")

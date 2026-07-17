@@ -29,6 +29,25 @@ APP_SLUG = "keeper-review-gate-v7"
 APP_ID = 424242
 
 
+def _protection(*, app_id=APP_ID, last_push=True):
+    return {
+        "required_status_checks": {
+            "strict": True,
+            "checks": [
+                {"context": "verify", "app_id": 1},
+                {"context": model.SCHEMA, "app_id": app_id},
+            ],
+        },
+        "required_pull_request_reviews": {
+            "dismiss_stale_reviews": True,
+            "require_last_push_approval": last_push,
+            "required_approving_review_count": 1,
+        },
+        "required_conversation_resolution": {"enabled": True},
+        "enforce_admins": {"enabled": True},
+    }
+
+
 def _connection(nodes, *, has_next=False, end_cursor=None):
     return {
         "pageInfo": {"hasNextPage": has_next, "endCursor": end_cursor},
@@ -71,6 +90,8 @@ def _pr():
         "state": "OPEN",
         "isDraft": False,
         "headRefOid": HEAD,
+        "baseRefName": "main",
+        "baseBranchProtection": _protection(),
         "author": {"login": "proposal-author"},
         "headCommitIdentity": {
             "oid": HEAD,
@@ -139,9 +160,15 @@ def test_accepts_native_exact_head_peer_distinct_from_head_commit_executor():
     assert report["executing_keeper"] == "keeper-citrine"
     assert report["execution_identity_source"] == "head_commit_committer"
     assert report["last_push_authority"] == {
-        "source": "github_native_branch_protection",
+        "source": "github_live_base_branch_protection",
+        "branch": "main",
+        "review_gate": {"context": model.SCHEMA, "app_id": APP_ID},
         "require_last_push_approval": True,
-        "login": None,
+        "dismiss_stale_reviews": True,
+        "required_conversation_resolution": True,
+        "enforce_admins": True,
+        "strict_current_head_checks": True,
+        "required_approving_review_count": 1,
     }
     assert report["reviewing_keeper"] == "keeper-umber"
     assert report["reviewed_sha"] == HEAD
@@ -166,6 +193,69 @@ def test_missing_head_commit_identity_fails_closed():
     report = _evaluate(pr)
     assert report["status"] == "rejected"
     assert "executor_identity_unavailable" in report["reason_codes"]
+
+    mismatched = _pr()
+    mismatched["headCommitIdentity"]["oid"] = NEW_HEAD
+    assert "executor_identity_unavailable" in _evaluate(mismatched)["reason_codes"]
+
+
+def test_web_flow_committer_cannot_create_false_peer_separation():
+    pr = _pr()
+    pr["headCommitIdentity"] = {
+        "oid": HEAD,
+        "author": "keeper-umber",
+        "committer": "web-flow",
+    }
+    report = _evaluate(pr)
+    assert report["executing_keeper"] == "keeper-umber"
+    assert report["execution_identity_source"] == "head_commit_author_with_generic_committer"
+    assert "exact_head_peer_approval_missing" in report["reason_codes"]
+
+
+def test_reviewer_must_differ_from_both_distinct_author_and_committer():
+    pr = _pr()
+    pr["headCommitIdentity"] = {
+        "oid": HEAD,
+        "author": "keeper-umber",
+        "committer": "keeper-citrine",
+    }
+    report = _evaluate(pr)
+    assert report["execution_identities"]["distinct_principals"] == [
+        "keeper-citrine",
+        "keeper-umber",
+    ]
+    assert "exact_head_peer_approval_missing" in report["reason_codes"]
+
+
+@pytest.mark.parametrize("conclusion", ["NEUTRAL", "SKIPPED"])
+def test_neutral_or_skipped_only_ci_is_not_green(conclusion):
+    pr = _pr()
+    pr["statusCheckRollup"]["contexts"]["nodes"] = [_project_check(conclusion=conclusion)]
+    report = _evaluate(pr)
+    assert "checks_without_success" in report["reason_codes"]
+    assert report["checks"]["successful"] == 0
+
+
+def test_missing_or_untrusted_live_protection_fails_closed():
+    missing = _pr()
+    missing.pop("baseBranchProtection")
+    assert "base_branch_protection_unavailable" in _evaluate(missing)["reason_codes"]
+
+    wrong_app = _pr()
+    wrong_app["baseBranchProtection"] = _protection(app_id=0)
+    assert "base_branch_protection_unavailable" in _evaluate(wrong_app)["reason_codes"]
+
+    no_last_push = _pr()
+    no_last_push["baseBranchProtection"] = _protection(last_push=False)
+    assert "base_branch_protection_unavailable" in _evaluate(no_last_push)["reason_codes"]
+
+
+def test_published_receipt_must_match_protected_app_id_not_only_slug():
+    accepted = _evaluate()
+    pr = _pr()
+    pr["statusCheckRollup"]["contexts"]["nodes"].append(_app_check(accepted, app_slug=APP_SLUG, app_id=APP_ID + 1))
+    report = _evaluate(pr, require_published_result=True)
+    assert "published_review_gate_missing" in report["reason_codes"]
 
 
 def test_local_signed_fallback_is_blocked_without_reading_caller_path(tmp_path):
@@ -389,6 +479,8 @@ def test_live_fetch_fully_paginates_checks_threads_comments_reviews_and_files(mo
     }
 
     def fake_run(args, **_kwargs):
+        if any(str(value).endswith("/branches/main/protection") for value in args):
+            return _protection()
         query = next(value.removeprefix("query=") for value in args if value.startswith("query="))
         if "commits(last: 1)" in query:
             return {
@@ -400,6 +492,7 @@ def test_live_fetch_fully_paginates_checks_threads_comments_reviews_and_files(mo
                             "state": "OPEN",
                             "isDraft": False,
                             "headRefOid": HEAD,
+                            "baseRefName": "main",
                             "author": {"login": "proposal-author"},
                             "commits": {
                                 "nodes": [
@@ -480,7 +573,7 @@ def test_authoritative_publication_stably_updates_and_reads_back_receipt(monkeyp
         calls.append((list(args), input_text))
         path = next((arg for arg in args if arg == "installation" or "check-runs" in arg), "")
         if path == "installation":
-            return {"app_id": APP_ID}
+            return {"app_id": APP_ID, "app_slug": APP_SLUG}
         if "commits/" in path:
             return {"check_runs": [old]}
         if "--method" not in args:
@@ -519,7 +612,7 @@ def test_authoritative_publication_stably_updates_and_reads_back_receipt(monkeyp
         return fake_run(args, **kwargs)
 
     monkeypatch.setattr(github, "run_gh", sequenced_run)
-    github.publish_status(report, publisher_app_slug=APP_SLUG, publisher_app_id=APP_ID)
+    github.publish_status(report)
 
     assert report["publication"]["check_id"] == old["id"]
     assert report["publication"]["receipt_digest"].startswith("sha256:")
@@ -534,7 +627,7 @@ def test_publication_cas_rejects_changed_existing_check(monkeypatch):
     def fake_run(args, **_kwargs):
         path = next((arg for arg in args if arg == "installation" or "check-runs" in arg), "")
         if path == "installation":
-            return {"app_id": APP_ID}
+            return {"app_id": APP_ID, "app_slug": APP_SLUG}
         if "commits/" in path:
             return {"check_runs": [old]}
         if path.endswith(f"check-runs/{old['id']}"):
@@ -543,16 +636,16 @@ def test_publication_cas_rejects_changed_existing_check(monkeypatch):
 
     monkeypatch.setattr(github, "run_gh", fake_run)
     with pytest.raises(model.GateError, match="changed before stable update"):
-        github.publish_status(report, publisher_app_slug=APP_SLUG, publisher_app_id=APP_ID)
+        github.publish_status(report)
 
 
-def test_authoritative_publication_requires_provisioned_app_id_before_api_write(monkeypatch):
+def test_authoritative_publication_requires_live_dedicated_app_credentials_before_check_write(monkeypatch):
     report = _evaluate(review_gate_app_slug=APP_SLUG)
     calls = []
     monkeypatch.setattr(github, "run_gh", lambda args, **_kwargs: calls.append(args) or {})
-    with pytest.raises(model.GateError, match="App id"):
-        github.publish_status(report, publisher_app_slug=APP_SLUG)
-    assert calls == []
+    with pytest.raises(model.GateError, match="dedicated App installation identity"):
+        github.publish_status(report)
+    assert calls == [["api", "-H", "Accept: application/vnd.github+json", "installation"]]
 
 
 def test_fixture_cli_is_read_only(tmp_path):

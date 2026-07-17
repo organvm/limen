@@ -104,12 +104,12 @@ def test_ready_candidate_requires_exact_head_review_acceptance(monkeypatch):
     assert seen == [("organvm/limen", 7, head)]
 
 
-def test_empty_review_gate_override_uses_repository_default(monkeypatch, tmp_path: Path):
+def test_review_gate_path_cannot_be_replaced_by_root_or_gate_environment(monkeypatch, tmp_path: Path):
     mod = _load()
     head = "d" * 40
     calls = []
     monkeypatch.setattr(mod, "ROOT", tmp_path)
-    monkeypatch.setenv("LIMEN_PR_REVIEW_GATE", "")
+    monkeypatch.setenv("LIMEN_" + "PR_REVIEW_GATE", str(tmp_path / "attacker-gate.py"))
 
     def fake_run(args, **kwargs):
         calls.append((args, kwargs))
@@ -120,7 +120,7 @@ def test_empty_review_gate_override_uses_repository_default(monkeypatch, tmp_pat
     allowed_signers = tmp_path / "allowed-signers"
     assert mod.review_accepted("organvm/limen", 7, head, allowed_signers) is True
     assert calls[0][0][1:] == [
-        str(tmp_path / "scripts" / "pr-review-gate.py"),
+        str(mod.REVIEW_GATE),
         "7",
         "--repo",
         "organvm/limen",
@@ -146,14 +146,14 @@ def test_merge_policy_uses_repository_script_and_exact_head(monkeypatch, tmp_pat
     allowed_signers = tmp_path / "allowed-signers"
     assert mod.merge_policy_cleared("organvm/limen", 7, head, allowed_signers) is True
     assert calls[0][0] == [
-        str(tmp_path / "scripts" / "merge-policy.sh"),
+        str(mod.MERGE_POLICY),
         "7",
         "--repo",
         "organvm/limen",
         "--expected-head",
         head,
     ]
-    assert calls[0][1]["env"]["LIMEN_REVIEW_ALLOWED_SIGNERS"] == str(allowed_signers)
+    assert "env" not in calls[0][1]
 
 
 def test_merge_rechecks_review_and_pins_exact_head(monkeypatch):
@@ -162,7 +162,6 @@ def test_merge_rechecks_review_and_pins_exact_head(monkeypatch):
     gh_calls = []
     review_calls = []
     policy_calls = []
-    signer_snapshots = []
     authorization = _Auth("organvm/limen", 8, head)
 
     monkeypatch.setattr(mod, "pause_active", lambda: False)
@@ -177,7 +176,6 @@ def test_merge_rechecks_review_and_pins_exact_head(monkeypatch):
         "review_accepted",
         lambda repo, num, expected, signers=None: (
             review_calls.append((repo, num, expected, signers)),
-            signer_snapshots.append(signers.read_bytes()),
             True,
         )[-1],
     )
@@ -186,7 +184,6 @@ def test_merge_rechecks_review_and_pins_exact_head(monkeypatch):
         "merge_policy_cleared",
         lambda repo, num, expected, signers=None: (
             policy_calls.append((repo, num, expected, signers)),
-            signer_snapshots.append(signers.read_bytes()),
             True,
         )[-1],
     )
@@ -201,10 +198,8 @@ def test_merge_rechecks_review_and_pins_exact_head(monkeypatch):
     assert len(review_calls) == len(policy_calls) == 1
     assert review_calls[0][:3] == ("organvm/limen", 8, head)
     assert policy_calls[0][:3] == ("organvm/limen", 8, head)
-    assert review_calls[0][3] == policy_calls[0][3]
-    assert review_calls[0][3] != authorization.allowed_signers
-    assert not review_calls[0][3].exists()
-    assert signer_snapshots == [authorization.allowed_signers_bytes] * 2
+    assert review_calls[0][3] is None
+    assert policy_calls[0][3] is None
     assert authorization_reads == [authorization.source, authorization.source]
     assert gh_calls == [["pr", "merge", "8", "-R", "organvm/limen", "--squash", "--match-head-commit", head]]
 
@@ -444,6 +439,41 @@ def test_authorization_set_rejects_multiple_heads_for_one_pull_request(monkeypat
         )
 
 
+def test_authorization_loader_ignores_caller_and_environment_signer_paths(monkeypatch):
+    mod = _load()
+    authorization = _Auth("organvm/limen", 8, "a" * 40)
+    calls = []
+    monkeypatch.setenv("LIMEN_REVIEW_ALLOWED_SIGNERS", "/attacker/env-signers")
+    monkeypatch.setattr(
+        mod,
+        "load_authorization",
+        lambda path, **kwargs: calls.append((path, kwargs)) or authorization,
+    )
+
+    result = mod._load_authorizations(
+        [Path("/fixture/one.json")],
+        allowed_signers=Path("/attacker/caller-signers"),
+    )
+
+    assert result
+    assert calls == [
+        (
+            Path("/fixture/one.json"),
+            {"allowed_signers": mod.DOMUS_ALLOWED_SIGNERS, "required_signer_uid": 0},
+        )
+    ]
+    with pytest.raises(SystemExit):
+        mod.main(
+            [
+                "--apply",
+                "--authorization-receipt",
+                "/fixture/one.json",
+                "--allowed-signers",
+                "/attacker/caller-signers",
+            ]
+        )
+
+
 def test_apply_without_authorization_refuses_before_scan_or_write(monkeypatch, tmp_path: Path):
     mod = _load()
     monkeypatch.setattr(mod, "ROOT", tmp_path)
@@ -502,8 +532,6 @@ def test_apply_assesses_only_receipt_targets_and_passes_exact_authorization(monk
                 "--apply",
                 "--authorization-receipt",
                 "/fixture/authorization.json",
-                "--allowed-signers",
-                "/fixture/allowed-signers",
                 "--limit",
                 "1",
             ]
@@ -532,8 +560,6 @@ def test_apply_fails_when_authorized_target_does_not_merge(monkeypatch, tmp_path
                 "--apply",
                 "--authorization-receipt",
                 "/fixture/authorization.json",
-                "--allowed-signers",
-                "/fixture/allowed-signers",
                 "--limit",
                 "1",
             ]
@@ -562,8 +588,6 @@ def test_apply_delegated_target_must_match_the_only_authorization(monkeypatch, t
                 "--apply",
                 "--authorization-receipt",
                 "/fixture/authorization.json",
-                "--allowed-signers",
-                "/fixture/allowed-signers",
                 "--target-repo",
                 "organvm/limen",
                 "--target-pr",
@@ -614,8 +638,6 @@ def test_pause_marker_refuses_apply_before_loading_or_effect(monkeypatch, tmp_pa
                 "--apply",
                 "--authorization-receipt",
                 "/fixture/authorization.json",
-                "--allowed-signers",
-                "/fixture/allowed-signers",
             ]
         )
         == 3

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from typing import Any, Sequence
+from urllib.parse import quote
 
 from .model import (
     CHECK_RECEIPT_SCHEMA,
@@ -35,6 +36,7 @@ query($owner: String!, $name: String!, $number: Int!) {
       state
       isDraft
       headRefOid
+      baseRefName
       author { login }
       commits(last: 1) {
         nodes {
@@ -295,6 +297,31 @@ def fetch_pull_request(repo: str, number: int) -> dict[str, Any]:
         "author": str(author_user.get("login") or "") if isinstance(author_user, dict) else "",
         "committer": str(committer_user.get("login") or "") if isinstance(committer_user, dict) else "",
     }
+    branch = str(pull.get("baseRefName") or "")
+    if not branch:
+        raise GateError("GitHub did not return the pull request base branch")
+    try:
+        protection = run_gh(
+            [
+                "api",
+                "-H",
+                "Accept: application/vnd.github+json",
+                f"repos/{repo}/branches/{quote(branch, safe='')}/protection",
+            ]
+        )
+    except GateError as exc:
+        # Protection absence/plan denial is acceptance evidence, not permission
+        # to skip the gate. Preserve the bounded failure so a dedicated App can
+        # publish an honest rejected bootstrap receipt.
+        pull["baseBranchProtection"] = None
+        pull["baseBranchProtectionError"] = str(exc)[:500]
+    else:
+        if not isinstance(protection, dict):
+            pull["baseBranchProtection"] = None
+            pull["baseBranchProtectionError"] = "GitHub returned a non-object base-branch protection response"
+        else:
+            pull["baseBranchProtection"] = protection
+            pull["baseBranchProtectionError"] = None
     pull["statusCheckRollup"] = {
         "contexts": _fetch_connection(
             repo,
@@ -342,19 +369,19 @@ def list_check_runs(repo: str, head: str) -> list[dict[str, Any]]:
     return _rest_pages(f"repos/{repo}/commits/{head}/check-runs", key="check_runs")
 
 
-def app_preflight(expected_slug: str, expected_app_id: int | str | None) -> tuple[str, int]:
-    """Prove the current credentials belong to the configured dedicated App."""
+def app_preflight(expected_app_id: int | str | None = None) -> tuple[str, int]:
+    """Derive the live App identity and optionally bind it to branch protection."""
 
-    slug = configured_review_gate_app_slug(expected_slug)
     app_id = configured_review_gate_app_id(expected_app_id)
-    assert slug is not None
-    if app_id is None:
-        raise GateError("authoritative publication requires the provisioned review-gate App id")
     value = run_gh(["api", "-H", "Accept: application/vnd.github+json", "installation"])
     live_app_id = value.get("app_id") if isinstance(value, dict) else None
-    if live_app_id != app_id:
-        raise GateError(f"current credentials are not installation credentials for App {slug}:{app_id}")
-    return slug, app_id
+    live_slug = value.get("app_slug") if isinstance(value, dict) else None
+    slug = configured_review_gate_app_slug(str(live_slug or ""))
+    if slug is None or not isinstance(live_app_id, int) or isinstance(live_app_id, bool) or live_app_id <= 0:
+        raise GateError("current credentials do not expose a dedicated App installation identity")
+    if app_id is not None and live_app_id != app_id:
+        raise GateError(f"current credentials are not installation credentials for protected App id {app_id}")
+    return slug, live_app_id
 
 
 def _check_run_payload(report: dict[str, Any], *, check_name: str) -> dict[str, Any]:
@@ -416,8 +443,6 @@ def publish_status(
     report: dict[str, Any],
     *,
     check_name: str = SCHEMA,
-    publisher_app_slug: str | None = None,
-    publisher_app_id: int | str | None = None,
 ) -> None:
     """Publish, read back, and authenticate one exact-head CheckRun receipt."""
 
@@ -442,10 +467,13 @@ def publish_status(
         report["publication"]["receipt_digest"] = make_check_receipt(report)["digest"]
         return
 
-    app_slug = configured_review_gate_app_slug(publisher_app_slug)
-    if app_slug is None:
-        raise GateError(f"publishing {SCHEMA} requires a configured dedicated non-generic GitHub App")
-    app_slug, app_id = app_preflight(app_slug, publisher_app_id)
+    authority = report.get("last_push_authority")
+    review_gate = authority.get("review_gate") if isinstance(authority, dict) else None
+    protected_app_id = review_gate.get("app_id") if isinstance(review_gate, dict) else None
+    # A rejected bootstrap receipt may be published before protection exists so
+    # setup-rulesets can discover the installed App.  An accepted report always
+    # carries live protection and therefore pins this preflight to its App id.
+    app_slug, app_id = app_preflight(protected_app_id)
     authenticated = _authoritative_runs(list_check_runs(repo, head), app_slug=app_slug, app_id=app_id)
     authenticated.sort(key=lambda run: (str(run.get("updated_at") or ""), int(run.get("id") or 0)))
     current = authenticated[-1] if authenticated else None
@@ -494,6 +522,7 @@ def publish_status(
         repo=repo,
         number=int(report["pull_request"]),
         head=head,
+        app_id=app_id,
         app_slug=app_slug,
         require_success=report.get("status") == "accepted",
     )

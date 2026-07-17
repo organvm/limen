@@ -20,7 +20,7 @@
 # scripts/drain.sh): hand off and end the session — never re-arm the waiter in a loop.
 #
 # Usage:  scripts/await-pr.sh <PR#> [--repo OWNER/NAME] [--timeout SECS] [--interval SECS]
-#         [--merge --authorization-receipt PATH --allowed-signers PATH]
+#         [--merge --authorization-receipt PATH]
 #
 # Exit codes:
 #   0  CLEARED (and MERGED when --merge)      2  TIMEOUT — deadline elapsed, still HOLD
@@ -29,10 +29,10 @@
 #                                            64  usage error
 set -uo pipefail
 
-ROOT="${LIMEN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
-POLICY="${LIMEN_MERGE_POLICY_BIN:-$ROOT/scripts/merge-policy.sh}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+POLICY="$ROOT/scripts/merge-policy.sh"
 
-PR=""; REPO=""; MERGE=0; AUTHORIZATION_RECEIPT=""; ALLOWED_SIGNERS=""
+PR=""; REPO=""; MERGE=0; AUTHORIZATION_RECEIPT=""
 TIMEOUT="${LIMEN_AWAIT_PR_TIMEOUT:-1200}"
 INTERVAL="${LIMEN_AWAIT_PR_INTERVAL:-45}"
 usage() { sed -n '22,28p' "$0"; exit 64; }
@@ -47,8 +47,6 @@ while [ $# -gt 0 ]; do
     --merge) MERGE=1; shift ;;
     --authorization-receipt) AUTHORIZATION_RECEIPT="${2:-}"; shift 2 ;;
     --authorization-receipt=*) AUTHORIZATION_RECEIPT="${1#*=}"; shift ;;
-    --allowed-signers) ALLOWED_SIGNERS="${2:-}"; shift 2 ;;
-    --allowed-signers=*) ALLOWED_SIGNERS="${1#*=}"; shift ;;
     -h|--help) sed -n '2,28p' "$0"; exit 0 ;;
     *) PR="$1"; shift ;;
   esac
@@ -56,8 +54,8 @@ done
 case "$PR" in (*[!0-9]*|"") usage ;; esac
 case "$TIMEOUT" in (*[!0-9]*|"") usage ;; esac
 case "$INTERVAL" in (*[!0-9]*|"") usage ;; esac
-if [ "$MERGE" = 1 ] && { [ -z "$AUTHORIZATION_RECEIPT" ] || [ -z "$ALLOWED_SIGNERS" ]; }; then
-  echo "AWAIT-PR $PR: REFUSED — --merge requires an exact-target authorization receipt and owner signer registry"
+if [ "$MERGE" = 1 ] && [ -z "$AUTHORIZATION_RECEIPT" ]; then
+  echo "AWAIT-PR $PR: REFUSED — --merge requires an exact-target authorization receipt"
   exit 64
 fi
 repo_args=(); [ -n "$REPO" ] && repo_args=(--repo "$REPO")
@@ -122,8 +120,7 @@ while :; do
           --target-repo "$merge_repo" \
           --target-pr "$PR" \
           --target-head "$sha" \
-          --authorization-receipt "$AUTHORIZATION_RECEIPT" \
-          --allowed-signers "$ALLOWED_SIGNERS"; then
+          --authorization-receipt "$AUTHORIZATION_RECEIPT"; then
           echo "AWAIT-PR $PR: MERGED by receipt-bound merge-drain (head $sha)"
           finish 0
         fi

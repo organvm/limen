@@ -82,6 +82,7 @@ def test_setup_rulesets_apply_refuses_when_project_ci_is_not_discoverable(monkey
         lambda *_args, **_kwargs: {"defaultBranchRef": {"name": "main"}},
     )
     monkeypatch.setattr(module, "detect_checks", lambda _repo: [])
+    monkeypatch.setattr(module, "_protection_readback_state", lambda *_args: ("missing", "not protected"))
     monkeypatch.setattr(
         module,
         "gh",
@@ -101,10 +102,11 @@ def test_setup_rulesets_apply_refuses_without_executable_app_receipt(monkeypatch
         lambda *_args, **_kwargs: {"defaultBranchRef": {"name": "main"}},
     )
     monkeypatch.setattr(module, "detect_checks", lambda _repo: ["pr-gate"])
+    monkeypatch.setattr(module, "_protection_readback_state", lambda *_args: ("missing", "not protected"))
     monkeypatch.setattr(
         module,
         "review_gate_app_evidence",
-        lambda _repo, _slug: (None, "no authenticated accepted App receipt"),
+        lambda _repo: (None, "no authenticated executable App receipt"),
     )
     monkeypatch.setattr(
         module,
@@ -171,9 +173,13 @@ def test_apply_requires_and_reads_back_protection_for_all_seven_repositories(mon
     module = load_setup_rulesets()
     monkeypatch.setattr(module, "APPLY", True)
     monkeypatch.setattr(module, "detect_checks", lambda _repo: ["pr-gate"])
-    monkeypatch.setattr(module, "configured_review_gate_app_slug", lambda: "keeper-gate-v7")
     monkeypatch.setattr(module, "gh_json", lambda *_args, **_kwargs: {"defaultBranchRef": {"name": "main"}})
-    monkeypatch.setattr(module, "review_gate_app_evidence", lambda _repo, _slug: (987654, ""))
+    monkeypatch.setattr(module, "_protection_readback_state", lambda *_args: ("missing", "not protected"))
+    monkeypatch.setattr(
+        module,
+        "review_gate_app_evidence",
+        lambda _repo: ({"slug": "keeper-gate-v7", "id": 987654}, ""),
+    )
     readbacks = []
 
     def apply(repo, branch, body):
@@ -191,17 +197,51 @@ def test_apply_requires_and_reads_back_protection_for_all_seven_repositories(mon
     )
 
 
-def test_review_gate_app_rejects_generic_actions_and_requires_explicit_slug(monkeypatch) -> None:
+def test_review_gate_app_rejects_generic_actions_without_caller_identity(monkeypatch) -> None:
     module = load_setup_rulesets()
-    monkeypatch.setattr(module, "REVIEW_GATE_APP_SLUG", None)
-    assert module.configured_review_gate_app_slug() is None
+    head = "a" * 40
+    monkeypatch.setattr(
+        module,
+        "gh_json",
+        lambda args, **_kwargs: (
+            [{"number": 7, "head": {"sha": head}}]
+            if "/pulls?" in args[-1]
+            else {
+                "check_runs": [
+                    {
+                        "name": module.REVIEW_GATE_CONTEXT,
+                        "app": {"id": 1, "slug": "github-actions"},
+                    }
+                ]
+            }
+        ),
+    )
+    assert module.review_gate_app_evidence("owner/repository")[0] is None
 
-    monkeypatch.setattr(module, "REVIEW_GATE_APP_SLUG", "github-actions")
-    assert module.configured_review_gate_app_slug() is None
-    assert module.review_gate_app_id("owner/repository", "github-actions") is None
 
-    monkeypatch.setattr(module, "REVIEW_GATE_APP_SLUG", "keeper-gate-v7")
-    assert module.configured_review_gate_app_slug() == "keeper-gate-v7"
+def test_protection_preview_surfaces_account_plan_blocked_readback(
+    monkeypatch,
+    capsys,
+) -> None:
+    module = load_setup_rulesets()
+    monkeypatch.setattr(module, "APPLY", False)
+    monkeypatch.setattr(module, "target_repos", lambda: ["owner/private-repository"])
+    monkeypatch.setattr(
+        module,
+        "gh_json",
+        lambda *_args, **_kwargs: {"defaultBranchRef": {"name": "main"}},
+    )
+    monkeypatch.setattr(
+        module,
+        "_protection_readback_state",
+        lambda *_args: ("blocked", "HTTP 403: Upgrade to GitHub Pro"),
+    )
+
+    assert module.main() == 1
+    output = capsys.readouterr().out
+    assert "BLOCKED" in output
+    assert "account plan or permission gate" in output
+    assert "HTTP 403" in output
 
 
 def _result(payload=None, *, returncode: int = 0, stderr: str = ""):
@@ -252,11 +292,11 @@ def _ready_apply(module, monkeypatch) -> None:
         lambda *_args, **_kwargs: {"defaultBranchRef": {"name": "trunk"}},
     )
     monkeypatch.setattr(module, "detect_checks", lambda _repo: ["pr-gate", "python"])
-    monkeypatch.setattr(module, "configured_review_gate_app_slug", lambda: "keeper-gate-v7")
+    monkeypatch.setattr(module, "_protection_readback_state", lambda *_args: ("missing", "not protected"))
     monkeypatch.setattr(
         module,
         "review_gate_app_evidence",
-        lambda _repo, slug: (987654, "") if slug == "keeper-gate-v7" else (None, "wrong slug"),
+        lambda _repo: ({"slug": "keeper-gate-v7", "id": 987654}, ""),
     )
 
 
@@ -450,7 +490,7 @@ def test_apply_fails_when_final_protection_cannot_be_read(monkeypatch, protectio
 def test_apply_blocks_without_dedicated_app_before_any_remote_mutation(monkeypatch) -> None:
     module = load_setup_rulesets()
     _ready_apply(module, monkeypatch)
-    monkeypatch.setattr(module, "configured_review_gate_app_slug", lambda: None)
+    monkeypatch.setattr(module, "review_gate_app_evidence", lambda _repo: (None, "missing App receipt"))
     monkeypatch.setattr(
         module,
         "gh",
@@ -680,7 +720,7 @@ def test_containment_preview_is_read_only_and_reports_drift_as_nonzero(
     monkeypatch.setattr(module, "containment_repos", lambda: ["example/nebula"])
     monkeypatch.setattr(
         module,
-        "configured_review_gate_app_slug",
+        "review_gate_app_evidence",
         lambda: (_ for _ in ()).throw(AssertionError("protection prerequisite consulted")),
     )
     spy = ContainmentApiSpy(
@@ -711,7 +751,6 @@ def test_containment_apply_paginates_cancels_locks_and_reads_back_without_protec
     monkeypatch.setattr(module, "containment_repos", lambda: ["example/nebula"])
     for prerequisite in (
         "detect_checks",
-        "configured_review_gate_app_slug",
         "review_gate_app_evidence",
     ):
         monkeypatch.setattr(
@@ -721,7 +760,7 @@ def test_containment_apply_paginates_cancels_locks_and_reads_back_without_protec
         )
     spy = ContainmentApiSpy(
         [
-            (("PATCH", "repos/example/nebula"), _result({})),
+            (("PATCH", "repos/example/nebula"), _result(_live_settings())),
             (("GET", "repos/example/nebula"), _result(_live_settings())),
             (
                 ("inventory", "example/nebula", None),
@@ -748,6 +787,7 @@ def test_containment_apply_paginates_cancels_locks_and_reads_back_without_protec
                 ("inventory", "example/nebula", None),
                 _result(_pull_page([_pull_node(8, active=False)])),
             ),
+            (("GET", "repos/example/nebula"), _result(_live_settings())),
         ]
     )
     monkeypatch.setattr(module, "gh", spy)
@@ -755,8 +795,10 @@ def test_containment_apply_paginates_cancels_locks_and_reads_back_without_protec
     assert module.main() == 0
     spy.assert_finished()
     patch = next(call for call in spy.calls if call["operation"][0] == "PATCH")
-    assert "allow_auto_merge=false" in patch["args"]
-    assert "delete_branch_on_merge=false" in patch["args"]
+    assert json.loads(patch["input"]) == {
+        "allow_auto_merge": False,
+        "delete_branch_on_merge": False,
+    }
     assert [call["operation"][0] for call in spy.calls[:3]] == [
         "PATCH",
         "GET",
@@ -787,7 +829,7 @@ def test_containment_apply_fails_before_inventory_on_initial_settings_mismatch(
     monkeypatch.setattr(module, "containment_repos", lambda: ["sample/aurora"])
     spy = ContainmentApiSpy(
         [
-            (("PATCH", "repos/sample/aurora"), _result({})),
+            (("PATCH", "repos/sample/aurora"), _result(_live_settings())),
             (("GET", "repos/sample/aurora"), settings_result),
         ]
     )
@@ -820,6 +862,32 @@ def test_containment_apply_fails_before_inventory_when_settings_patch_fails(
     assert all(call["operation"][0] not in {"inventory", "cancel"} for call in spy.calls)
 
 
+def test_containment_apply_rejects_patch_response_that_does_not_confirm_request(
+    monkeypatch,
+) -> None:
+    module = load_setup_rulesets()
+    monkeypatch.setattr(module, "CONTAIN_MODE", "apply")
+    monkeypatch.setattr(module, "ARGUMENT_ERROR", "")
+    monkeypatch.setattr(module, "containment_repos", lambda: ["sample/aurora"])
+    spy = ContainmentApiSpy(
+        [
+            (
+                ("PATCH", "repos/sample/aurora"),
+                _result(_live_settings(auto_merge=True)),
+            ),
+        ]
+    )
+    monkeypatch.setattr(module, "gh", spy)
+
+    assert module.main() == 1
+    spy.assert_finished()
+    patch = spy.calls[0]
+    assert json.loads(patch["input"]) == {
+        "allow_auto_merge": False,
+        "delete_branch_on_merge": False,
+    }
+
+
 def test_containment_apply_keeps_settings_locked_and_bounds_cancel_retries(monkeypatch) -> None:
     module = load_setup_rulesets()
     monkeypatch.setattr(module, "CONTAIN_MODE", "apply")
@@ -828,7 +896,7 @@ def test_containment_apply_keeps_settings_locked_and_bounds_cancel_retries(monke
     monkeypatch.setattr(module, "containment_repos", lambda: ["sample/aurora"])
     spy = ContainmentApiSpy(
         [
-            (("PATCH", "repos/sample/aurora"), _result({})),
+            (("PATCH", "repos/sample/aurora"), _result(_live_settings())),
             (("GET", "repos/sample/aurora"), _result(_live_settings())),
             (
                 ("inventory", "sample/aurora", None),
@@ -867,7 +935,7 @@ def test_containment_apply_fails_if_settings_drift_during_drain(monkeypatch) -> 
     monkeypatch.setattr(module, "containment_repos", lambda: ["sample/aurora"])
     spy = ContainmentApiSpy(
         [
-            (("PATCH", "repos/sample/aurora"), _result({})),
+            (("PATCH", "repos/sample/aurora"), _result(_live_settings())),
             (("GET", "repos/sample/aurora"), _result(_live_settings())),
             (
                 ("inventory", "sample/aurora", None),
@@ -887,6 +955,32 @@ def test_containment_apply_fails_if_settings_drift_during_drain(monkeypatch) -> 
     assert spy.calls[-1]["operation"] == ("GET", "repos/sample/aurora")
 
 
+def test_containment_apply_fails_if_settings_drift_after_stable_empty(
+    monkeypatch,
+) -> None:
+    module = load_setup_rulesets()
+    monkeypatch.setattr(module, "CONTAIN_MODE", "apply")
+    monkeypatch.setattr(module, "ARGUMENT_ERROR", "")
+    monkeypatch.setattr(module, "containment_repos", lambda: ["sample/aurora"])
+    spy = ContainmentApiSpy(
+        [
+            (("PATCH", "repos/sample/aurora"), _result(_live_settings())),
+            (("GET", "repos/sample/aurora"), _result(_live_settings())),
+            (("inventory", "sample/aurora", None), _result(_pull_page([]))),
+            (("GET", "repos/sample/aurora"), _result(_live_settings())),
+            (("inventory", "sample/aurora", None), _result(_pull_page([]))),
+            (
+                ("GET", "repos/sample/aurora"),
+                _result(_live_settings(auto_merge=True)),
+            ),
+        ]
+    )
+    monkeypatch.setattr(module, "gh", spy)
+
+    assert module.main() == 1
+    spy.assert_finished()
+
+
 def test_containment_apply_fails_when_new_requests_prevent_bounded_fixed_point(
     monkeypatch,
 ) -> None:
@@ -897,7 +991,7 @@ def test_containment_apply_fails_when_new_requests_prevent_bounded_fixed_point(
     monkeypatch.setattr(module, "containment_repos", lambda: ["sample/aurora"])
     spy = ContainmentApiSpy(
         [
-            (("PATCH", "repos/sample/aurora"), _result({})),
+            (("PATCH", "repos/sample/aurora"), _result(_live_settings())),
             (("GET", "repos/sample/aurora"), _result(_live_settings())),
             (
                 ("inventory", "sample/aurora", None),
@@ -929,13 +1023,13 @@ def test_containment_apply_processes_every_repo_after_one_inventory_failure(monk
     )
     spy = ContainmentApiSpy(
         [
-            (("PATCH", "repos/sample/aurora"), _result({})),
+            (("PATCH", "repos/sample/aurora"), _result(_live_settings())),
             (("GET", "repos/sample/aurora"), _result(_live_settings())),
             (
                 ("inventory", "sample/aurora", None),
                 _result(returncode=1, stderr="inventory unavailable"),
             ),
-            (("PATCH", "repos/example/nebula"), _result({})),
+            (("PATCH", "repos/example/nebula"), _result(_live_settings())),
             (("GET", "repos/example/nebula"), _result(_live_settings())),
             (
                 ("inventory", "example/nebula", None),
@@ -946,6 +1040,7 @@ def test_containment_apply_processes_every_repo_after_one_inventory_failure(monk
                 ("inventory", "example/nebula", None),
                 _result(_pull_page([])),
             ),
+            (("GET", "repos/example/nebula"), _result(_live_settings())),
         ]
     )
     monkeypatch.setattr(module, "gh", spy)

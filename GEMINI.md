@@ -39,5 +39,7 @@ The agent responsible for a task will NOT just push its code and exit. It is exp
 3. **Address Comments:** Poll `pull_request_read` (method: `get_review_comments`). If comments appear, apply the requested fixes to the isolated worktree, commit, and push again.
 4. **Merge:** Once CI, resolved conversations, native exact-head peer approval, and the dedicated
    App receipt pass, route the exact target through receipt-bound `scripts/merge-drain.py --apply`.
-   Never invoke a generic merge mutation directly.
+   Its signer trust is the fixed Domus-installed root-owned registry outside the checkout; never
+   supply or trust a caller-selected root, gate, policy, or signer path. Never invoke a generic
+   merge mutation directly.
 5. **Report & Sync:** Document the successful merge, update `tasks.yaml` via MCP (`update_task_status` to `done`), and notify the necessary stakeholders. Include PR URL, merge commit, checks observed, and any follow-up task IDs.

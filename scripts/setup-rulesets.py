@@ -22,7 +22,7 @@ SAFE: both operations preview by default and execute NOTHING. Mutations are expl
   python3 scripts/setup-rulesets.py --contain          # containment preview (read-only)
   python3 scripts/setup-rulesets.py --contain apply    # ⚠ cancel auto-merge + lock settings
   python3 scripts/setup-rulesets.py                    # protection preview (read-only)
-  python3 scripts/setup-rulesets.py --apply --review-app-slug keeper-gate  # ⚠ install protection
+  python3 scripts/setup-rulesets.py --apply                  # ⚠ install protection
   python3 scripts/setup-rulesets.py --repo owner/name [...]   # limit to specific repos
   python3 scripts/setup-rulesets.py --contexts pr-gate,python,web   # force CI names; review gate remains
 """
@@ -94,14 +94,6 @@ FORCED = next(
     (sys.argv[i + 1].split(",") for i, a in enumerate(sys.argv) if a == "--contexts" and i + 1 < len(sys.argv)), None
 )
 FORCED = [c.strip() for c in FORCED if c.strip()] if FORCED else None
-REVIEW_GATE_APP_SLUG = next(
-    (
-        sys.argv[i + 1]
-        for i, argument in enumerate(sys.argv)
-        if argument == "--review-app-slug" and i + 1 < len(sys.argv)
-    ),
-    None,
-)
 REVIEW_GATE_CONTEXT = "limen.pr_review_gate.v1"
 RECOVERY_COHORT_REPOS = (
     "organvm/limen",
@@ -375,20 +367,6 @@ def detect_checks(repo):
     return names
 
 
-def configured_review_gate_app_slug() -> str | None:
-    """Return the explicitly trusted dedicated review-gate App slug, never generic Actions."""
-
-    slug = REVIEW_GATE_APP_SLUG.strip() if isinstance(REVIEW_GATE_APP_SLUG, str) else ""
-    if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?", slug):
-        return None
-    # GitHub's generic Actions App is shared by every workflow in the repository. Binding a
-    # context to it does not bind that context to this workflow or event, so it is not an
-    # independent acceptance principal.
-    if slug == "github-actions":
-        return None
-    return slug
-
-
 def _paged_rest_rows(path: str, *, key: str | None, max_pages: int):
     rows = []
     separator = "&" if "?" in path else "?"
@@ -406,16 +384,15 @@ def _paged_rest_rows(path: str, *, key: str | None, max_pages: int):
     return None, f"{key or 'rows'} exceeded {max_pages} pages"
 
 
-def review_gate_app_evidence(repo: str, expected_slug: str) -> tuple[int | None, str]:
-    """Derive one App id from a complete, executable, accepted CheckRun receipt.
+def review_gate_app_evidence(repo: str) -> tuple[dict | None, str]:
+    """Derive one App slug/id pair from complete executable CheckRun receipts.
 
     This is deliberately independent of per-repository workflow files. The
-    producer is the centrally installed App; one of its live App-bound receipts
-    proves both installation and executable publication for this repository.
+    producer is the centrally installed App. A rejected bootstrap receipt is
+    sufficient to prove executable publication before protection exists; only
+    live branch protection can later turn that receipt into acceptance.
     """
 
-    if expected_slug == "github-actions" or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?", expected_slug):
-        return None, "dedicated App slug is invalid"
     pulls = gh_json(
         [
             "api",
@@ -425,7 +402,7 @@ def review_gate_app_evidence(repo: str, expected_slug: str) -> tuple[int | None,
     )
     if not isinstance(pulls, list) or any(not isinstance(pull, dict) for pull in pulls):
         return None, "invalid recent pull-request evidence response"
-    app_ids: set[int] = set()
+    app_identities: set[tuple[str, int]] = set()
     authenticated = 0
     invalid_receipts = 0
     seen_heads: set[tuple[int, str]] = set()
@@ -451,10 +428,18 @@ def review_gate_app_evidence(repo: str, expected_slug: str) -> tuple[int | None,
             return None, runs_error
         for run in runs:
             app = run.get("app")
-            if run.get("name") != REVIEW_GATE_CONTEXT or not isinstance(app, dict) or app.get("slug") != expected_slug:
+            slug = str(app.get("slug") or "") if isinstance(app, dict) else ""
+            app_id = app.get("id") if isinstance(app, dict) else None
+            if (
+                run.get("name") != REVIEW_GATE_CONTEXT
+                or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?", slug)
+                or slug == "github-actions"
+                or not isinstance(app_id, int)
+                or isinstance(app_id, bool)
+                or app_id <= 0
+            ):
                 continue
             authenticated += 1
-            app_id = app.get("id")
             run_for_validation = {
                 **run,
                 "__typename": "CheckRun",
@@ -466,29 +451,30 @@ def review_gate_app_evidence(repo: str, expected_slug: str) -> tuple[int | None,
                 repo=repo,
                 number=number,
                 head=sha,
-                app_slug=expected_slug,
-                require_success=True,
+                app_id=app_id,
+                app_slug=slug,
+                require_success=False,
             )
             if not valid:
                 invalid_receipts += 1
                 continue
-            if isinstance(app_id, int) and not isinstance(app_id, bool) and app_id > 0:
-                app_ids.add(app_id)
-    if len(app_ids) != 1:
+            app_identities.add((slug, app_id))
+    if len(app_identities) != 1:
         detail = (
-            "no authenticated accepted App receipt"
+            "no authenticated executable App receipt"
             if authenticated == 0
             else f"App receipt ids are non-unique or invalid (authenticated={authenticated}, invalid={invalid_receipts})"
         )
         return None, detail
-    return next(iter(app_ids)), ""
+    slug, app_id = next(iter(app_identities))
+    return {"slug": slug, "id": app_id}, ""
 
 
-def review_gate_app_id(repo: str, expected_slug: str) -> int | None:
+def review_gate_app_id(repo: str, _expected_slug: str | None = None) -> int | None:
     """Compatibility wrapper around the receipt-authenticated preflight."""
 
-    app_id, _detail = review_gate_app_evidence(repo, expected_slug)
-    return app_id
+    identity, _detail = review_gate_app_evidence(repo)
+    return identity["id"] if identity is not None else None
 
 
 def project_contexts(detected_checks):
@@ -636,6 +622,31 @@ def _read_protection(repo: str, branch: str, expected) -> tuple[bool, str]:
     return protection_matches(value, expected)
 
 
+def _protection_readback_state(repo: str, branch: str) -> tuple[str, str]:
+    """Distinguish an unprotected branch from an unreadable/plan-blocked API."""
+
+    result = gh(
+        [
+            "api",
+            "--method",
+            "GET",
+            f"repos/{repo}/branches/{branch}/protection",
+        ]
+    )
+    if result.returncode == 0:
+        try:
+            value = json.loads(result.stdout or "null")
+        except json.JSONDecodeError as exc:
+            return "blocked", f"invalid JSON response: {exc.msg}"
+        if not isinstance(value, dict):
+            return "blocked", "branch protection response is not an object"
+        return "readable", ""
+    detail = result.stderr.strip() or result.stdout.strip() or f"gh exited {result.returncode}"
+    if "404" in detail or "Branch not protected" in detail:
+        return "missing", detail
+    return "blocked", detail
+
+
 def apply_protection_contract(repo: str, branch: str, body) -> tuple[bool, list[str]]:
     """Install protection only after the independent containment state is live."""
 
@@ -683,11 +694,15 @@ def apply_repository_containment(repo: str):
             "--method",
             "PATCH",
             f"repos/{repo}",
-            "-F",
-            "allow_auto_merge=false",
-            "-F",
-            "delete_branch_on_merge=false",
-        ]
+            "--input",
+            "-",
+        ],
+        input_text=json.dumps(
+            {
+                "allow_auto_merge": False,
+                "delete_branch_on_merge": False,
+            }
+        ),
     )
     if settings.returncode != 0:
         detail = settings.stderr.strip() or f"gh exited {settings.returncode}"
@@ -700,6 +715,27 @@ def apply_repository_containment(repo: str):
                 "passes": 0,
             },
             [f"repository containment settings update failed before cancellation: {detail}"],
+        )
+    try:
+        settings_response = json.loads(settings.stdout or "null")
+    except json.JSONDecodeError as exc:
+        settings_response = None
+        response_detail = f"invalid JSON response: {exc.msg}"
+    else:
+        _response_ok, response_detail = repository_settings_match(settings_response)
+    if settings_response is None or response_detail:
+        return (
+            False,
+            {
+                "initial_active": None,
+                "cancelled": 0,
+                "remaining": None,
+                "passes": 0,
+            },
+            [
+                "repository containment PATCH response did not confirm both settings: "
+                f"{response_detail or 'response is not an object'}"
+            ],
         )
 
     settings_ok, settings_detail = _read_repository_settings(repo)
@@ -744,6 +780,12 @@ def apply_repository_containment(repo: str):
         if not active:
             empty_inventories += 1
             if empty_inventories >= REQUIRED_EMPTY_INVENTORIES:
+                final_settings_ok, final_settings_detail = _read_repository_settings(repo)
+                if not final_settings_ok:
+                    messages.append(
+                        f"repository settings drifted after stable-empty inventory: {final_settings_detail}"
+                    )
+                    break
                 return (
                     True,
                     {
@@ -860,14 +902,9 @@ def protection_main():
     no_project_ci = []
     no_review_app = []
     no_default_branch = []
+    no_protection_readback = []
     configured = 0
     failed = 0
-    review_app_slug = configured_review_gate_app_slug()
-    if review_app_slug is None:
-        print(
-            "    trust blocker: --review-app-slug must name a dedicated GitHub App (generic github-actions is rejected)"
-        )
-        print()
     for repo in repos:
         info = gh_json(["repo", "view", repo, "--json", "defaultBranchRef"], default={}) or {}
         branch = (info.get("defaultBranchRef") or {}).get("name")
@@ -877,12 +914,18 @@ def protection_main():
             if APPLY:
                 failed += 1
             continue
+        readback_state, readback_detail = _protection_readback_state(repo, branch)
+        if readback_state == "blocked":
+            no_protection_readback.append(repo)
+            print(
+                f"  {repo}@{branch}: BLOCKED — branch-protection readback unavailable "
+                f"(account plan or permission gate): {readback_detail[:240]}"
+            )
+            if APPLY:
+                failed += 1
+            continue
         detected_checks = project_contexts(detect_checks(repo))
-        review_app, review_app_detail = (
-            review_gate_app_evidence(repo, review_app_slug)
-            if review_app_slug is not None
-            else (None, "dedicated App slug is not configured")
-        )
+        review_app, review_app_detail = review_gate_app_evidence(repo)
         checks = required_contexts(detected_checks)
         if not detected_checks:
             no_project_ci.append(repo)
@@ -893,15 +936,16 @@ def protection_main():
         elif review_app is None:
             no_review_app.append(repo)
             print(
-                f"  {repo}@{branch}: BLOCKED — no executable accepted receipt from the "
-                f"{review_app_slug or 'dedicated'} App exists for {REVIEW_GATE_CONTEXT}: "
+                f"  {repo}@{branch}: BLOCKED — no executable receipt from the "
+                f"dedicated App exists for {REVIEW_GATE_CONTEXT}: "
                 f"{review_app_detail}"
             )
         else:
             print(
                 f"  {repo}@{branch}: require {len(checks)} check(s) {checks[:4]}"
                 f"{'…' if len(checks) > 4 else ''} · strict current-head · native exact-head "
-                f"peer receipt · dedicated_app={review_app_slug}:{review_app} · last-push approval · stale dismissal · "
+                f"peer receipt · dedicated_app={review_app['slug']}:{review_app['id']} · "
+                "last-push approval · stale dismissal · "
                 "resolved conversations · admins enforced"
             )
         if not APPLY:
@@ -916,7 +960,7 @@ def protection_main():
             print(f"      ✗ unchanged: {reason}")
             failed += 1
             continue
-        body = protection_body(detected_checks, review_app)
+        body = protection_body(detected_checks, review_app["id"])
         accepted, messages = apply_protection_contract(repo, branch, body)
         if accepted:
             configured += 1
@@ -927,18 +971,19 @@ def protection_main():
                 print(f"      ✗ {message[:200]}")
 
     print(
-        f"\n{configured if APPLY else len(repos) - len(no_project_ci) - len(no_review_app) - len(no_default_branch)} "
+        f"\n{configured if APPLY else len(repos) - len(no_project_ci) - len(no_review_app) - len(no_default_branch) - len(no_protection_readback)} "
         f"repo(s) are eligible for project CI beside {REVIEW_GATE_CONTEXT}; "
         f"{len(no_project_ci)} blocked for missing project CI; "
         f"{len(no_review_app)} blocked for missing unique dedicated App identity; "
-        f"{len(no_default_branch)} blocked for unreadable default branch."
+        f"{len(no_default_branch)} blocked for unreadable default branch; "
+        f"{len(no_protection_readback)} blocked for unreadable protection due plan/permissions."
     )
     if not APPLY:
         print("\nDRY-RUN — nothing changed. Re-run with --apply (GATED) to configure.")
         print("Run --contain apply first; --apply never changes repository merge settings.")
     elif failed:
         print(f"\nFAILED — {failed} repo transaction(s) were blocked or not verified.", file=sys.stderr)
-    return 1 if APPLY and failed else 0
+    return 1 if (APPLY and failed) or no_protection_readback else 0
 
 
 def main():

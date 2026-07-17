@@ -14,17 +14,15 @@
 #   bash scripts/merge-ready.sh
 #   bash scripts/merge-ready.sh --scan 80
 #   bash scripts/merge-ready.sh --apply \
-#     --authorization-receipt /private/path/merge-organvm-limen-123.json \
-#     --allowed-signers /domus-owned/path/allowed-signers
+#     --authorization-receipt /private/path/merge-organvm-limen-123.json
 set -euo pipefail
 
-ROOT="${LIMEN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APPLY=0
 APPLY_SEEN=0
 DRY_SEEN=0
 SCAN=80
 LIMIT="${LIMEN_MERGE_LIMIT:-10}"
-ALLOWED_SIGNERS=""
 receipts=()
 
 while [ "$#" -gt 0 ]; do
@@ -69,15 +67,6 @@ while [ "$#" -gt 0 ]; do
       receipts+=("${1#*=}")
       shift
       ;;
-    --allowed-signers)
-      [ "$#" -ge 2 ] || { echo "merge-ready: --allowed-signers requires a path" >&2; exit 2; }
-      ALLOWED_SIGNERS="$2"
-      shift 2
-      ;;
-    --allowed-signers=*)
-      ALLOWED_SIGNERS="${1#*=}"
-      shift
-      ;;
     -h|--help)
       sed -n '2,18p' "$0"
       exit 0
@@ -99,10 +88,6 @@ if [ "$APPLY" -eq 0 ]; then
     echo "merge-ready: --authorization-receipt requires --apply" >&2
     exit 2
   fi
-  if [ -n "$ALLOWED_SIGNERS" ]; then
-    echo "merge-ready: --allowed-signers requires --apply" >&2
-    exit 2
-  fi
   exec python3 "$ROOT/scripts/merge-ready.py" --scan "$SCAN"
 fi
 
@@ -112,9 +97,6 @@ if [ "${#receipts[@]}" -eq 0 ]; then
 fi
 
 args=(--apply --limit "$LIMIT")
-if [ -n "$ALLOWED_SIGNERS" ]; then
-  args+=(--allowed-signers "$ALLOWED_SIGNERS")
-fi
 for receipt in "${receipts[@]}"; do
   args+=(--authorization-receipt "$receipt")
 done

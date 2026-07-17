@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -18,15 +19,13 @@ def _root(tmp_path: Path) -> Path:
             "import json, sys\nprint(json.dumps(sys.argv[1:]))\n",
             encoding="utf-8",
         )
+    shutil.copy2(SCRIPT, scripts / "merge-ready.sh")
     return tmp_path
 
 
 def _run(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    env = os.environ.copy()
-    env["LIMEN_ROOT"] = str(root)
     return subprocess.run(
-        ["bash", str(SCRIPT), *args],
-        env=env,
+        ["bash", str(root / "scripts" / "merge-ready.sh"), *args],
         capture_output=True,
         text=True,
         timeout=10,
@@ -54,20 +53,19 @@ def test_receipt_without_apply_and_ambiguous_mode_fail_closed(tmp_path: Path):
 
     receipt_only = _run(root, "--authorization-receipt", str(tmp_path / "receipt.json"))
     ambiguous = _run(root, "--apply", "--dry-run")
-    signer_without_apply = _run(root, "--allowed-signers", str(tmp_path / "signers"))
+    caller_signers = _run(root, "--allowed-signers", str(tmp_path / "signers"))
 
     assert receipt_only.returncode == 2
     assert "requires --apply" in receipt_only.stderr
     assert ambiguous.returncode == 2
     assert "mutually exclusive" in ambiguous.stderr
-    assert signer_without_apply.returncode == 2
-    assert "requires --apply" in signer_without_apply.stderr
+    assert caller_signers.returncode == 2
+    assert "unknown argument" in caller_signers.stderr
 
 
 def test_apply_delegates_receipt_and_limit_to_guarded_executor(tmp_path: Path):
     root = _root(tmp_path)
     receipt = tmp_path / "receipt.json"
-    allowed_signers = tmp_path / "allowed-signers"
     result = _run(
         root,
         "--apply",
@@ -75,14 +73,28 @@ def test_apply_delegates_receipt_and_limit_to_guarded_executor(tmp_path: Path):
         "1",
         "--authorization-receipt",
         str(receipt),
-        "--allowed-signers",
-        str(allowed_signers),
     )
 
     assert result.returncode == 0
-    assert result.stdout.strip() == (
-        f'["--apply", "--limit", "1", "--allowed-signers", "{allowed_signers}", "--authorization-receipt", "{receipt}"]'
+    assert result.stdout.strip() == (f'["--apply", "--limit", "1", "--authorization-receipt", "{receipt}"]')
+
+
+def test_wrapper_ignores_limen_root_and_uses_its_own_sibling_executor(tmp_path: Path):
+    root = _root(tmp_path)
+    attacker = tmp_path / "attacker"
+    attacker.mkdir()
+    env = os.environ.copy()
+    env["LIMEN_ROOT"] = str(attacker)
+    result = subprocess.run(
+        ["bash", str(root / "scripts" / "merge-ready.sh"), "--scan", "3"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
     )
+    assert result.returncode == 0
+    assert result.stdout.strip() == '["--scan", "3"]'
 
 
 def test_legacy_wrapper_contains_no_direct_github_merge_or_review_command():

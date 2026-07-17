@@ -3051,37 +3051,6 @@ parameters:
     self_update: none
     owner: verify
     note: "Poll interval (seconds) between merge-policy.sh runs inside scripts/await-pr.sh. 45 s keeps a full 20-min wait under ~30 GitHub reads while every poll prints a loud one-liner."
-  LIMEN_MERGE_POLICY_BIN:
-    default: ""                # empty = scripts/merge-policy.sh; set only in tests
-    env: LIMEN_MERGE_POLICY_BIN
-    self_update: none
-    owner: merge-policy
-    note: "Test seam: overrides the merge-policy predicate binary consumed by scripts/await-pr.sh. Empty (the default) resolves to scripts/merge-policy.sh; tests point it at a scripted-verdict stub so the verdict matrix is hermetic. Never set on the live host."
-  LIMEN_PR_REVIEW_GATE:
-    default: "$LIMEN_ROOT/scripts/pr-review-gate.py"
-    env: LIMEN_PR_REVIEW_GATE
-    self_update: none
-    owner: merge-policy
-    note: "Review-gate predicate executable consumed by merge-policy and merge-drain. The override is a hermetic test seam; production resolves to the tracked script and consumers still require a current dedicated-App receipt."
-  LIMEN_REVIEW_ALLOWED_SIGNERS:
-    default: "<unset Domus-owned allowed-signers path>"
-    env: LIMEN_REVIEW_ALLOWED_SIGNERS
-    self_update: none
-    owner: merge-policy
-    note: "Legacy environment spelling for the owner-controlled merge-authorization signer registry. It authorizes signed merge receipts only; it is never accepted as a substitute for a native GitHub peer review."
-  LIMEN_REVIEW_GATE_APP_SLUG:
-    default: "<unset until dedicated review-gate App is installed>"
-    env: LIMEN_REVIEW_GATE_APP_SLUG
-    self_update: none
-    owner: merge-policy
-    note: "Expected slug of the dedicated review-gate GitHub App. Authoritative publication authenticates the live installation before writing; repository workflows are diagnostic consumers, not App identity proof."
-  LIMEN_REVIEW_GATE_APP_ID:
-    default: "<unset until dedicated review-gate App is installed>"
-    env: LIMEN_REVIEW_GATE_APP_ID
-    self_update: none
-    owner: merge-policy
-    note: "Provisioned numeric GitHub App id bound to authoritative review-gate CheckRuns and required branch-protection checks. Provisioning, plan changes, installation, and credentials remain external owner gates."
-
   # --- disk-capacity sensor (sensors.yaml 0g7) ------------------------------------
   LIMEN_DISK_CAPACITY:
     default: "1"               # ON — assert /System/Volumes/Data stays below capacity threshold each beat

@@ -50,7 +50,7 @@ repo_args=(); [ -n "$REPO" ] && repo_args=(--repo "$REPO")
 # forces website-sensitive — a broken environment can only HOLD, never blind-deploy.
 STALE=0
 _root="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)"
-REVIEW_GATE="${LIMEN_PR_REVIEW_GATE:-$_root/scripts/pr-review-gate.py}"
+REVIEW_GATE="$_root/scripts/pr-review-gate.py"
 DEPLOY_RE="$(python3 "$_root/scripts/verify.py" --deploy-regex 2>/dev/null || true)"
 if [ -z "$DEPLOY_RE" ]; then
   echo "merge-policy: cannot derive the deploy regex from the GATES registry — treating the PR as website-sensitive (fail toward caution)." >&2
