@@ -90,5 +90,9 @@ Do not delete the store to seize admission. Inspect it with `status`. A live lea
 and expiry; a stale/dead/PID-reused lease is reaped on the next operation. A corrupt store is an
 owner-routed blocker because silently replacing it would make concurrent work look absent.
 
-The service supersedes the useful singleton and bounded-scan intent of draft PR #744. Its stale
-PID-only implementation is not merge or cherry-pick authority.
+The SessionEnd lifecycle refresh separately preserves the useful low-priority closeout ideas from
+draft PR #744 against current `main`: one dead-PID/stale-safe singleton, a process-group timeout,
+`nice -n 10`, a narrower worktree-debt timeout, and a declared maximum number of roots per size
+scan with explicit partial receipts. Combined with host admission and the existing bounded
+`closeout-fast` queue/test timeouts, this supersedes #744; its old conflicting branch is not merge
+or cherry-pick authority.

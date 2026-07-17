@@ -676,6 +676,24 @@ parameters:
     self_update: none
     owner: continuity
     note: "Timeout in seconds for the lifecycle-pressure worktree-debt scan. On timeout, hooks fail open with an explicit pressure receipt instead of crashing closeout."
+  LIMEN_SESSION_LIFECYCLE_TIMEOUT:
+    default: 45
+    env: LIMEN_SESSION_LIFECYCLE_TIMEOUT
+    self_update: none
+    owner: continuity
+    note: "Hard process-group timeout for the low-priority SessionEnd lifecycle-pressure refresh. Timeout is fail-open and never kills an unrelated peer."
+  LIMEN_SESSION_WORKTREE_DEBT_TIMEOUT:
+    default: 30
+    env: LIMEN_SESSION_WORKTREE_DEBT_TIMEOUT
+    self_update: none
+    owner: continuity
+    note: "Narrow worktree-debt subprocess timeout injected only by the SessionEnd lifecycle-pressure hook."
+  LIMEN_LIFECYCLE_SIZE_SCAN_MAX_ROOTS:
+    default: 50
+    env: LIMEN_LIFECYCLE_SIZE_SCAN_MAX_ROOTS
+    self_update: none
+    owner: continuity
+    note: "Maximum immediate worktree/private-corpus roots measured per lifecycle-pressure refresh. Larger denominators remain visible as partial size scans."
   LIMEN_CLOSEOUT_RUN_LIFECYCLE_TESTS:
     default: "0"
     env: LIMEN_CLOSEOUT_RUN_LIFECYCLE_TESTS
