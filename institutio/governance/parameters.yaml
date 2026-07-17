@@ -2684,6 +2684,20 @@ parameters:
     owner: tabularius
     note: "The effector for the recurring macOS Gatekeeper 'ClaudeCode.app is damaged, move it to Trash' dialog (scripts/heal-claude-lsregister.sh, sensed by dialogs-silenced.sh section 4b, beat-wired on the heartbeat hygiene cadence beside heal-claude-update-marker.sh). Dry-run by default (reports the cure, mutates nothing). When 1, the beat unregisters + removes ONLY the exact-malformed-seal ClaudeCode.app stub (codesign 'code has no resources but signature indicates they must be present') under ~/.local/share/claude or ~/.Trash and sweeps reseeded Trash copies, returning LaunchServices registrations to the steady state of ZERO; never touches /Applications, the versions/ dir, or the resolved CLI symlink. macOS-only; fails OPEN off-darwin. Arm once in the daemon env (~/.limen.env) so occurrence #4 self-heals without a per-incident approval. Set 0 to silence."
 
+  LIMEN_HOOK_DRIFT_HEAL:
+    default: "0"               # OFF — the effector. Arm once to auto-reinstall a drifted trust hook.
+    env: LIMEN_HOOK_DRIFT_HEAL
+    self_update: none
+    owner: tabularius
+    note: "The effector for the recurring Claude Code prompt-flood caused by a drifted PreToolUse trust hook (scripts/heal-hook-drift.sh, sensed by dialogs-silenced.sh class 1b, beat-wired on the heartbeat hygiene cadence beside heal-claude-lsregister.sh). The live ~/.claude/hooks/{allow-trusted-cd-git,insights-capture}.sh must match the repo canonical scripts/hooks/ or the compound-cd guard + destructive-ask rules re-prompt every fleet job. Dry-run by default. When 1, the beat reinstalls (install -m 755) any live hook whose sha256 differs from the LIVE-checkout (LIMEN_ROOT) canonical; it only touches the two hook files it owns, never ~/.claude/settings.json (that stays a human lever). Canonical source is the live checkout, never a WIP worktree. Arm once in ~/.limen.env. Set 0 to silence."
+
+  LIMEN_CASK_DUPLICATE_HEAL:
+    default: "0"               # OFF — the effector. Arm once to auto-uninstall a duplicate claude-code cask.
+    env: LIMEN_CASK_DUPLICATE_HEAL
+    self_update: none
+    owner: tabularius
+    note: "The effector for the recurring Gatekeeper 'claude is an app downloaded from the Internet' dialog (scripts/heal-claude-cask.sh, sensed by dialogs-silenced.sh class 4, beat-wired on the heartbeat hygiene cadence). A duplicate Homebrew *cask* install of claude-code is re-quarantined on every brew upgrade (casks stamp com.apple.quarantine), silently defeating DISABLE_AUTOUPDATER (which only stops the native updater). Dry-run by default. When 1, the beat runs 'brew uninstall --cask claude-code' ONLY when the cask is present and verifies the native ~/.local/bin/claude (the one sanctioned install) survives; it never touches the native install. macOS-only; fails OPEN off-darwin or without brew. Arm once in ~/.limen.env. Set 0 to silence."
+
   LIMEN_BEAT_LAUNCHAGENT_LIVENESS:
     default: 4
     env: LIMEN_BEAT_LAUNCHAGENT_LIVENESS
