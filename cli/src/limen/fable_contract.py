@@ -15,8 +15,10 @@ import math
 import os
 import re
 import stat
+import subprocess
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Callable
+from urllib.parse import urlsplit
 
 ACCEPTANCE_SCHEMA = "limen.fable_acceptance.v1"
 BALANCE_SCHEMA = "limen.fable_balance.v1"
@@ -29,6 +31,11 @@ ACCEPTANCE_CATEGORIES = frozenset({"substrate", "prompt-corpus", "governance", "
 FABLE_READ_ONLY_TOOLS = frozenset({"Read", "Glob", "Grep", "WebFetch", "WebSearch"})
 _PACKET_PATH_PREFIX = ("docs", "continuations", "fable")
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
+_COMMIT_SHA_RE = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
+_PULL_REQUEST_RE = re.compile(
+    r"https://github\.com/(?P<owner>[A-Za-z0-9_.-]+)/"
+    r"(?P<repo>[A-Za-z0-9_.-]+)/pull/(?P<number>[1-9][0-9]*)"
+)
 
 
 class ContractError(ValueError):
@@ -437,24 +444,153 @@ def validate_packet_metadata(
     return value
 
 
-def validate_packet_receipt(
+def _packet_commit_bytes(
+    path_value: Any,
+    digest_value: Any,
+    commit_sha: Any,
+    *,
+    root: Path | None = None,
+) -> bytes:
+    path = canonical_packet_path(path_value)
+    if not isinstance(digest_value, str) or _SHA256_RE.fullmatch(digest_value) is None:
+        raise ContractError("fable-packet-digest-invalid")
+    if not isinstance(commit_sha, str) or _COMMIT_SHA_RE.fullmatch(commit_sha) is None:
+        raise ContractError("fable-packet-receipt-commit-missing")
+    worktree = (root or _root()).resolve()
+    object_spec = f"{commit_sha}:{path.as_posix()}"
+    try:
+        result = subprocess.run(
+            ["git", "show", object_spec],
+            cwd=worktree,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ContractError("fable-packet-commit-unavailable") from exc
+    if result.returncode != 0:
+        raise ContractError("fable-packet-commit-unavailable")
+    payload = bytes(result.stdout)
+    if hashlib.sha256(payload).hexdigest() != digest_value:
+        raise ContractError("fable-packet-commit-digest-mismatch")
+    return payload
+
+
+def validate_packet_commit_receipt(
     value: Any,
     *,
     root: Path | None = None,
 ) -> dict[str, Any]:
+    """Validate exact packet bytes in both the worktree and the recorded commit."""
+
     if not isinstance(value, dict) or value.get("schema") != PACKET_RECEIPT_SCHEMA:
         raise ContractError("fable-packet-receipt-invalid")
-    commit_sha = value.get("commit_sha")
+    current = _packet_bytes(value.get("path"), value.get("content_sha256"), root=root)
+    committed = _packet_commit_bytes(
+        value.get("path"),
+        value.get("content_sha256"),
+        value.get("commit_sha"),
+        root=root,
+    )
+    if current != committed:
+        raise ContractError("fable-packet-worktree-commit-mismatch")
+    return value
+
+
+def _live_pull_request_head(pull_request: str) -> dict[str, str]:
+    match = _PULL_REQUEST_RE.fullmatch(pull_request)
+    if match is None:
+        raise ContractError("fable-packet-receipt-pr-missing")
+    repository = f"{match.group('owner')}/{match.group('repo')}"
+    endpoint = f"repos/{repository}/pulls/{match.group('number')}"
+    try:
+        result = subprocess.run(
+            ["gh", "api", endpoint],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ContractError("fable-packet-receipt-pr-unavailable") from exc
+    if result.returncode != 0:
+        raise ContractError("fable-packet-receipt-pr-unavailable")
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise ContractError("fable-packet-receipt-pr-unavailable") from exc
+    if not isinstance(payload, dict):
+        raise ContractError("fable-packet-receipt-pr-unavailable")
+    base = payload.get("base")
+    base_repo = base.get("repo") if isinstance(base, dict) else None
+    head = payload.get("head")
+    live_repository = base_repo.get("full_name") if isinstance(base_repo, dict) else None
+    head_sha = head.get("sha") if isinstance(head, dict) else None
+    html_url = payload.get("html_url")
+    if (
+        live_repository != repository
+        or html_url != pull_request
+        or not isinstance(head_sha, str)
+        or _COMMIT_SHA_RE.fullmatch(head_sha) is None
+    ):
+        raise ContractError("fable-packet-receipt-pr-identity-mismatch")
+    return {"repository": repository, "head_sha": head_sha}
+
+
+def _worktree_repository(root: Path | None = None) -> str:
+    worktree = (root or _root()).resolve()
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=worktree,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ContractError("fable-packet-receipt-repository-unavailable") from exc
+    if result.returncode != 0:
+        raise ContractError("fable-packet-receipt-repository-unavailable")
+    remote = result.stdout.strip()
+    if remote.startswith("git@github.com:"):
+        repository = remote.removeprefix("git@github.com:")
+    else:
+        parsed = urlsplit(remote)
+        if parsed.hostname != "github.com":
+            raise ContractError("fable-packet-receipt-repository-unavailable")
+        repository = parsed.path.lstrip("/")
+    repository = repository.removesuffix(".git")
+    if re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) is None:
+        raise ContractError("fable-packet-receipt-repository-unavailable")
+    return repository
+
+
+def validate_packet_receipt(
+    value: Any,
+    *,
+    root: Path | None = None,
+    pr_head_resolver: Callable[[str], dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    """Require exact local/commit bytes and a live PR whose current head is that commit."""
+
+    validate_packet_commit_receipt(value, root=root)
+    commit_sha = value["commit_sha"]
     pull_request = value.get("pull_request")
-    valid_commit = isinstance(commit_sha, str) and re.fullmatch(
-        r"(?:[0-9a-f]{40}|[0-9a-f]{64})",
-        commit_sha,
-    )
-    valid_pr = isinstance(pull_request, str) and re.fullmatch(
-        r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[1-9][0-9]*",
-        pull_request,
-    )
-    if not valid_commit and not valid_pr:
-        raise ContractError("fable-packet-receipt-ref-missing")
-    _packet_bytes(value.get("path"), value.get("content_sha256"), root=root)
+    match = _PULL_REQUEST_RE.fullmatch(pull_request) if isinstance(pull_request, str) else None
+    if match is None:
+        raise ContractError("fable-packet-receipt-pr-missing")
+    expected_repository = f"{match.group('owner')}/{match.group('repo')}"
+    if _worktree_repository(root) != expected_repository:
+        raise ContractError("fable-packet-receipt-pr-identity-mismatch")
+    try:
+        live = (pr_head_resolver or _live_pull_request_head)(pull_request)
+    except ContractError:
+        raise
+    except Exception as exc:
+        raise ContractError("fable-packet-receipt-pr-unavailable") from exc
+    if not isinstance(live, dict) or live.get("repository") != expected_repository:
+        raise ContractError("fable-packet-receipt-pr-identity-mismatch")
+    if live.get("head_sha") != commit_sha:
+        raise ContractError("fable-packet-receipt-pr-head-mismatch")
     return value

@@ -7,6 +7,7 @@ never directs, retunes, terminates, or enumerates a live peer session.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import subprocess
 import sys
@@ -98,6 +99,29 @@ def _fable_payload(**overrides) -> dict:
     return payload
 
 
+def _selection(root: Path, model: str) -> Path:
+    models = [{"id": model, "active": True, "execution_roles": ["fable-planner"]}]
+    normalized = json.dumps(models, sort_keys=True, separators=(",", ":")).encode()
+    path = root / "model-selection.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "limen.claude_model_selection.v1",
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "source": "test-live-owner-adapter",
+                "attempt_id": "attempt-session-hook",
+                "selection_source": "provider_live_catalog",
+                "selected_model": model,
+                "execution_profile": _profile(),
+                "models": models,
+                "catalog_hash": hashlib.sha256(normalized).hexdigest(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def test_non_fable_model_is_noop(tmp_path):
     proc = _run({"model": "arbitrarily-renamed-provider-id"})
     assert proc.returncode == 0
@@ -112,6 +136,20 @@ def test_model_name_substring_does_not_infer_fable_role(tmp_path):
 
 def test_explicit_fable_role_does_not_depend_on_a_model_id(tmp_path):
     proc = _run({"model": "arbitrarily-renamed-provider-id", "execution_role": "fable-planner"})
+    assert proc.returncode == 0
+    assert "CONTRACT RED" in proc.stderr
+
+
+def test_live_catalog_role_identifies_opaque_fable_model(tmp_path):
+    model = "opaque-catalog-bound-planner"
+    selection = _selection(tmp_path, model)
+    proc = _run(
+        {"model": model},
+        {
+            "LIMEN_ROOT": str(ROOT),
+            "LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT": str(selection),
+        },
+    )
     assert proc.returncode == 0
     assert "CONTRACT RED" in proc.stderr
 

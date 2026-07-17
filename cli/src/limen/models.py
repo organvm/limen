@@ -106,10 +106,8 @@ class Task(BaseModel):
     # Optional live prerequisites. Missing/empty keeps legacy tasks dispatchable; an explicit
     # requirement is evaluated dynamically by handoff and every dispatch selector.
     execution_requirements: list[ExecutionRequirement] | None = None
-    # Optional per-task Claude tier pin ("haiku"|"sonnet"|"opus"|"fable") — an escape hatch that
-    # overrides the earned-tier ladder's class-based derivation for THIS task (the env
-    # LIMEN_CLAUDE_MODEL still wins above it). Fable still requires LIMEN_FABLE_ACCEPTANCE.
-    # None → derive the tier. See dispatch._claude_model.
+    # Legacy provider hint retained for schema compatibility. It is opaque context,
+    # never a model identifier, capability claim, or routing instruction.
     claude_tier: str | None = None
     # task ids that must have a MERGED PR before this task is eligible to dispatch. Lets a
     # dependent increment be seeded NOW and auto-build only once its predecessor lands in the

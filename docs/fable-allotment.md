@@ -27,21 +27,27 @@ The contract is mechanical for fleet launches:
   5,400-second durable-receipt deadline, and a provider-neutral builder handoff;
 - the balance receipt must be current-week, fresh, source-ready, finite, and internally coherent;
   absent, stale, malformed, or dark state closes the Fable planner role;
+- the selected provider model is an opaque live-catalog identity bound by a fresh
+  `limen.claude_model_selection.v1` owner receipt to the exact Fable execution profile; an explicit
+  override with no current receipt, a removed/stale identity, or role/profile disagreement fails
+  blocked before provider execution;
 - Fable receives an explicit read-only tool surface; unknown, mutation-capable, fan-out, and MCP
   write tools are denied rather than inferred safe;
 - only a canonical `docs/continuations/fable/<task>.md` regular file inside the worktree is a valid
   plan artifact, and its receipt binds the exact SHA-256 content digest; traversal, path aliases,
   symlinks, missing files, and digest drift are rejected; and
 - the launcher captures at most 1 MiB of final stdout, writes through no-symlink directory handles,
-  verifies the exact committed blob, and publishes a receipt only after the packet has an exact PR;
-  empty output, unsafe paths, commit drift, and local or branch-only commits fail closed; and
+  verifies both the exact committed blob and unchanged worktree bytes, and publishes a receipt only
+  after the live preserving PR resolves to that exact commit as its current head; PR-only,
+  commit-only, wrong-repository, stale-head, empty-output, unsafe-path, and drifted custody all fail
+  closed; and
 - implementation returns to provider Auto under requirements that explicitly set
   `fable_allowed=false`. Receipts never pin a provider model or tier.
 
-Fable is an opaque planning role, not a provider catalog promise. Live provider capability and model
-selection remain execution-time state. It is for the small set of jobs justified by long-horizon
-reasoning, huge-context synthesis, ambiguous root-cause work, or final canonical decisions. It is
-not an async worker pool or a coverage grinder.
+Fable is an opaque planning role, not a model-name pattern or provider catalog promise. Live
+provider capability and model selection remain execution-time state; catalog role metadata and the
+accepted execution profile, never identifier text, decide whether the Fable restrictions apply. It
+is for bounded owner-accepted planning work, not an async worker pool or a coverage grinder.
 
 ## Weekly Budget
 
@@ -85,9 +91,12 @@ export LIMEN_FABLE_ACCEPTANCE=<receipt>
 
 Run the Fable planner only after exporting that variable into the same process environment. The
 launch gate must call `fable_contract.authorization_status()` with the exact role-bound execution
-profile and proceed only on `reason == "ok"`.
-There is no named-model fallback in this contract; a closed Fable role returns to provider Auto.
-Receipts issued before the plan-only and provider-neutral handoff fields existed must be re-issued.
+profile and proceed only on `reason == "ok"`. A fresh
+`LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT=<receipt>` must separately bind the opaque selected model to
+that profile and current live catalog. There is no named-model fallback in this contract; a closed
+Fable role fails blocked, while ordinary non-Fable work remains on provider Auto. Receipts issued
+before the plan-only, provider-neutral handoff, live selection, and exact PR-head fields existed
+must be re-issued.
 
 Audit current receipts:
 

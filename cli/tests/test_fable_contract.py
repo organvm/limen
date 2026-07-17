@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -66,6 +67,26 @@ def _packet(root: Path, *, name: str = "recovery.md") -> dict:
         "path": f"docs/continuations/fable/{name}",
         "content_sha256": hashlib.sha256(payload).hexdigest(),
     }
+
+
+def _commit_packet(root: Path, packet: dict, *, repository: str = "organvm/limen") -> str:
+    subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Fable Test"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "fable@example.invalid"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", f"https://github.com/{repository}.git"],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(["git", "add", packet["path"]], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "packet"], cwd=root, check=True, capture_output=True)
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
 def test_provider_neutral_acceptance_and_packet_have_no_model_or_tier(tmp_path) -> None:
@@ -250,26 +271,82 @@ def test_packet_rejects_symlink_leaf_and_symlink_parent_escape(tmp_path) -> None
         contract.validate_packet_metadata(escaped_packet, root=other_root)
 
 
-def test_packet_receipt_requires_exact_ref_and_existing_content(tmp_path) -> None:
+def test_packet_receipt_requires_exact_commit_and_live_pr_head(tmp_path) -> None:
     packet = _packet(tmp_path)
+    commit_sha = _commit_packet(tmp_path, packet)
     receipt = {
         "schema": contract.PACKET_RECEIPT_SCHEMA,
         "path": packet["path"],
         "content_sha256": packet["content_sha256"],
-        "commit_sha": "a" * 40,
+        "commit_sha": commit_sha,
+        "pull_request": "https://github.com/organvm/limen/pull/1169",
     }
-    assert contract.validate_packet_receipt(receipt, root=tmp_path) == receipt
-    for invalid in ("", "not-exact", "A" * 40, "a" * 39, "a" * 41):
-        receipt["commit_sha"] = invalid
-        with pytest.raises(contract.ContractError, match="fable-packet-receipt-ref-missing"):
-            contract.validate_packet_receipt(receipt, root=tmp_path)
 
-    receipt.pop("commit_sha")
-    receipt["pull_request"] = "https://github.com/organvm/limen/pull/1169"
-    assert contract.validate_packet_receipt(receipt, root=tmp_path) == receipt
-    receipt["pull_request"] += "/files"
-    with pytest.raises(contract.ContractError, match="fable-packet-receipt-ref-missing"):
-        contract.validate_packet_receipt(receipt, root=tmp_path)
+    def exact(_url: str) -> dict[str, str]:
+        return {"repository": "organvm/limen", "head_sha": commit_sha}
+
+    assert contract.validate_packet_receipt(receipt, root=tmp_path, pr_head_resolver=exact) == receipt
+
+    for invalid in ("", "not-exact", "A" * 40, "a" * 39, "a" * 41):
+        with pytest.raises(contract.ContractError, match="fable-packet-receipt-commit-missing"):
+            contract.validate_packet_receipt(
+                {**receipt, "commit_sha": invalid},
+                root=tmp_path,
+                pr_head_resolver=exact,
+            )
+
+    with pytest.raises(contract.ContractError, match="fable-packet-receipt-pr-missing"):
+        contract.validate_packet_receipt(
+            {key: value for key, value in receipt.items() if key != "pull_request"},
+            root=tmp_path,
+            pr_head_resolver=exact,
+        )
+    with pytest.raises(contract.ContractError, match="fable-packet-receipt-commit-missing"):
+        contract.validate_packet_receipt(
+            {key: value for key, value in receipt.items() if key != "commit_sha"},
+            root=tmp_path,
+            pr_head_resolver=exact,
+        )
+    with pytest.raises(contract.ContractError, match="fable-packet-receipt-pr-head-mismatch"):
+        contract.validate_packet_receipt(
+            receipt,
+            root=tmp_path,
+            pr_head_resolver=lambda _url: {
+                "repository": "organvm/limen",
+                "head_sha": "b" * 40,
+            },
+        )
+    with pytest.raises(contract.ContractError, match="fable-packet-receipt-pr-identity-mismatch"):
+        contract.validate_packet_receipt(
+            {**receipt, "pull_request": "https://github.com/organvm/wrong/pull/1"},
+            root=tmp_path,
+            pr_head_resolver=lambda _url: {
+                "repository": "organvm/wrong",
+                "head_sha": commit_sha,
+            },
+        )
+
+
+def test_packet_receipt_rejects_local_drift_after_exact_commit(tmp_path) -> None:
+    packet = _packet(tmp_path)
+    commit_sha = _commit_packet(tmp_path, packet)
+    receipt = {
+        "schema": contract.PACKET_RECEIPT_SCHEMA,
+        "path": packet["path"],
+        "content_sha256": packet["content_sha256"],
+        "commit_sha": commit_sha,
+        "pull_request": "https://github.com/organvm/limen/pull/1169",
+    }
+    (tmp_path / packet["path"]).write_text("# drift\n", encoding="utf-8")
+    with pytest.raises(contract.ContractError, match="fable-packet-digest-mismatch"):
+        contract.validate_packet_receipt(
+            receipt,
+            root=tmp_path,
+            pr_head_resolver=lambda _url: {
+                "repository": "organvm/limen",
+                "head_sha": commit_sha,
+            },
+        )
 
 
 def test_authorization_rejects_missing_or_non_plan_execution_profile(

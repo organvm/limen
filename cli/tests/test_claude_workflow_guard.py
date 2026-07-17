@@ -108,12 +108,45 @@ def fable_packet(root: Path, *, name: str = "t1.md") -> dict:
 
 def fable_packet_receipt(root: Path) -> dict:
     packet = fable_packet(root)
+    subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Workflow Guard Test"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "guard@example.invalid"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/organvm/limen.git"],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(["git", "add", packet["path"]], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "packet"], cwd=root, check=True, capture_output=True)
+    commit_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    bin_dir = root / "bin"
+    bin_dir.mkdir()
+    gh = bin_dir / "gh"
+    gh.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json\n"
+        f"print(json.dumps({{'html_url': 'https://github.com/organvm/limen/pull/1169', "
+        f"'base': {{'repo': {{'full_name': 'organvm/limen'}}}}, 'head': {{'sha': '{commit_sha}'}}}}))\n",
+        encoding="utf-8",
+    )
+    gh.chmod(0o755)
     return {
         "schema": "limen.fable_packet_receipt.v1",
         "path": packet["path"],
         "content_sha256": packet["content_sha256"],
-        "commit_sha": "a" * 40,
+        "commit_sha": commit_sha,
+        "pull_request": "https://github.com/organvm/limen/pull/1169",
     }
+
+
+def fable_pr_env(root: Path) -> dict[str, str]:
+    return {"PATH": f"{root / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}"}
 
 
 def test_normalize_candidates_accepts_nested_json_string():
@@ -638,6 +671,7 @@ def test_audit_transcript_allows_current_receipt_env(tmp_path):
             "LIMEN_FABLE_ACCEPTANCE": str(receipt),
             "LIMEN_FABLE_BALANCE_PATH": str(balance),
             "LIMEN_ROOT": str(tmp_path),
+            **fable_pr_env(tmp_path),
         },
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr

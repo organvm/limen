@@ -1804,49 +1804,31 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "Prompt-level guard for isolated async/local worker packets. 1=explicitly forbid live-root and tasks.yaml mutation inside isolated worktrees; 0=omit the extra prompt block for tests or emergency rollback."
-  # --- the non-bypassable Claude model chokepoint (scripts/shims/claude) ----------
-  LIMEN_CLAUDE_SHIM_FLOOR:
-    default: "haiku"           # the cheapest rung — the SAME tier the per-task ladder assigns to unclassed work
-    env: LIMEN_CLAUDE_SHIM_FLOOR
+  # --- fail-closed Claude override chokepoint (scripts/shims/claude) ---------------
+  LIMEN_CLAUDE_MODEL:
+    default: ""
+    env: LIMEN_CLAUDE_MODEL
     self_update: none
     owner: arms-agents
-    note: "Floor the non-bypassable `claude` shim injects when a fleet spawn carries no --model. Spawns that earned more declare --model and pass through untouched; subagents inherit it. Capped by LIMEN_CLAUDE_MAX_INHERITED_TIER so this cannot silently become an Opus/Fable/1M default. See fleet-model-floor-bleed."
-  LIMEN_CLAUDE_MAX_INHERITED_TIER:
-    default: "sonnet"
-    env: LIMEN_CLAUDE_MAX_INHERITED_TIER
+    note: "Optional opaque Claude model override. Bare fleet invocations use provider Auto. A non-empty override is blocked unless LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT freshly binds the exact live catalog identity and execution profile."
+  LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT:
+    default: ""
+    env: LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT
     self_update: none
     owner: arms-agents
-    note: "Maximum tier allowed for inherited/default Claude choices such as shim floors and global LIMEN_CLAUDE_MODEL pins. Default Sonnet keeps routine fan-out cheap; task-specific declaration sites may still earn Opus/Fable through the ladder and acceptance gates."
-  LIMEN_ALLOW_EXPENSIVE_CLAUDE_MODEL_PIN:
-    default: "0"
-    env: LIMEN_ALLOW_EXPENSIVE_CLAUDE_MODEL_PIN
+    note: "Path to a fresh limen.claude_model_selection.v1 owner receipt containing an attempt ID, execution profile, opaque selected model, normalized live catalog rows with explicit execution roles, and matching catalog hash. Required for every explicit Claude override; Fable rows additionally require current Fable authority and the exact read-only launch surface."
+  LIMEN_CLAUDE_MODEL_SELECTION_MAX_AGE_SECONDS:
+    default: 300
+    env: LIMEN_CLAUDE_MODEL_SELECTION_MAX_AGE_SECONDS
     self_update: none
     owner: arms-agents
-    note: "Emergency override allowing a global LIMEN_CLAUDE_MODEL pin to route inherited/default fleet spawns to Opus or explicit large-context models. Default 0 forces expensive defaults back under LIMEN_CLAUDE_MAX_INHERITED_TIER."
-  LIMEN_ALLOW_CLAUDE_1M_CONTEXT:
-    default: "0"
-    env: LIMEN_ALLOW_CLAUDE_1M_CONTEXT
-    self_update: none
-    owner: arms-agents
-    note: "Emergency override allowing explicit 1M/large-context Claude model pins. Default 0 strips large-context pins from tier resolution unless a current Fable acceptance receipt is present."
-  LIMEN_CLAUDE_FABLE_CLASSES:
-    default: "fable,long-horizon,huge-context,ambiguous-root-cause,final-canonical-decision"
-    env: LIMEN_CLAUDE_FABLE_CLASSES
-    self_update: none
-    owner: arms-agents
-    note: "Comma-separated task classes that may request the reserved Fable planner role. Class membership is not enough: dispatch also requires the exact plan-only role binding, a valid acceptance receipt, and a fresh reconciled open-cap balance. Closed requests return to provider Auto without a named fallback."
+    note: "Positive freshness ceiling for the owner-issued Claude live-catalog selection receipt. Stale, future-dated, missing, symlinked, hash-drifted, removed, or profile-mismatched selections fail blocked."
   LIMEN_FABLE_ACCEPTANCE:
     default: ""
     env: LIMEN_FABLE_ACCEPTANCE
     self_update: none
     owner: arms-agents
     note: "Path to the current-week written Fable acceptance receipt emitted by scripts/fable-allotment.py accept. The receipt binds a plan-only continuation-capsule, a provider-neutral Auto builder handoff with Fable forbidden, source lineage, verification, and the motion deadline. Empty, stale, malformed, or arbitrary paths close the Fable planner role."
-  LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE:
-    default: "0"
-    env: LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE
-    self_update: none
-    owner: arms-agents
-    note: "Opt-in gate for tried:claude retry escalation from Opus to Fable. Requires LIMEN_FABLE_ACCEPTANCE as well; default caps retry bumping at Opus so Fable is never reached by inherited escalation."
   LIMEN_MAX_FABLE_SESSION_TOKENS:
     default: "1000000"
     env: LIMEN_MAX_FABLE_SESSION_TOKENS
@@ -1900,7 +1882,7 @@ parameters:
     env: LIMEN_SESSION_MODEL
     self_update: none
     owner: arms-agents
-    note: "Fallback opaque model label for the report-only interactive session observer when hook context lacks one. A hook-provided execution_role=fable-planner is the provider-neutral binding; a legacy fable-bearing label may request the same report but never supplies launch authority."
+    note: "Fallback opaque model label for the report-only interactive session observer when hook context lacks one. Only an explicit execution_role=fable-planner or a fresh live-catalog selection receipt binding that exact identity to the role activates the Fable report; identifier text never supplies authority or classification."
   LIMEN_VENDOR_IDLE_HEADROOM_PCT:
     default: "90"
     env: LIMEN_VENDOR_IDLE_HEADROOM_PCT

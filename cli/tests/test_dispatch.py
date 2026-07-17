@@ -1352,7 +1352,6 @@ def test_fable_packet_writer_rejects_symlink_parent_without_external_write(
 
 def test_fable_packet_receipt_binds_exact_committed_bytes(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     task = Task(
         id="FABLE-BIND",
@@ -1361,32 +1360,28 @@ def test_fable_packet_receipt_binds_exact_committed_bytes(
         created=date(2026, 7, 17),
     )
     receipt = D._persist_fable_plan_output(task, tmp_path, "# Packet")
-    packet_bytes = b"# Packet\n"
-    head = "a" * 40
-
-    def fake_git(args, *_rest, **_kwargs):
-        if args == ["rev-parse", "HEAD"]:
-            return subprocess.CompletedProcess(args, 0, f"{head}\n", "")
-        assert args == ["cat-file", "-s", f"{head}:{receipt['path']}"]
-        return subprocess.CompletedProcess(args, 0, f"{len(packet_bytes)}\n", "")
-
-    monkeypatch.setattr(D, "_git", fake_git)
-    monkeypatch.setattr(
-        D,
-        "_git_binary",
-        lambda args, *_rest, **_kwargs: subprocess.CompletedProcess(args, 0, packet_bytes, b""),
-    )
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Dispatch Test"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "dispatch@example.invalid"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", receipt["path"]], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "packet"], cwd=tmp_path, check=True, capture_output=True)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
     D._bind_fable_packet_commit(task, tmp_path)
 
     assert receipt["commit_sha"] == head
-    D.validate_fable_packet_receipt(receipt, root=tmp_path)
+    D.validate_fable_packet_commit_receipt(receipt, root=tmp_path)
     D._FABLE_PACKET_RECEIPTS.pop(task.id)
 
 
 def test_fable_packet_receipt_rejects_commit_blob_digest_drift(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     task = Task(
         id="FABLE-COMMIT-DRIFT",
@@ -1395,20 +1390,15 @@ def test_fable_packet_receipt_rejects_commit_blob_digest_drift(
         created=date(2026, 7, 17),
     )
     receipt = D._persist_fable_plan_output(task, tmp_path, "# Packet")
-    head = "a" * 40
     drifted = b"# Different committed packet\n"
-
-    def fake_git(args, *_rest, **_kwargs):
-        if args == ["rev-parse", "HEAD"]:
-            return subprocess.CompletedProcess(args, 0, f"{head}\n", "")
-        return subprocess.CompletedProcess(args, 0, f"{len(drifted)}\n", "")
-
-    monkeypatch.setattr(D, "_git", fake_git)
-    monkeypatch.setattr(
-        D,
-        "_git_binary",
-        lambda args, *_rest, **_kwargs: subprocess.CompletedProcess(args, 0, drifted, b""),
-    )
+    packet_path = tmp_path / receipt["path"]
+    packet_path.write_bytes(drifted)
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Dispatch Test"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "dispatch@example.invalid"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", receipt["path"]], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "drifted packet"], cwd=tmp_path, check=True, capture_output=True)
+    packet_path.write_bytes(b"# Packet\n")
 
     with pytest.raises(ValueError, match="does not match bytes in the recorded commit"):
         D._bind_fable_packet_commit(task, tmp_path)
@@ -1850,6 +1840,7 @@ def test_agent_argv_threads_task_into_dynamic_opencode_selector(monkeypatch) -> 
 
 def test_codex_tier_derived_from_task_classes(monkeypatch) -> None:
     """opus-class task -> o3; haiku (plain) task -> o4-mini."""
+    monkeypatch.setenv("LIMEN_CLAUDE_OPUS_CLASSES", "synthesis")
     monkeypatch.delenv("LIMEN_CODEX_MODEL", raising=False)
     monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "1")
     monkeypatch.delenv("LIMEN_CODEX_MODEL_OPUS", raising=False)
@@ -1880,6 +1871,7 @@ def test_codex_model_env_override_wins(monkeypatch) -> None:
 
 
 def test_codex_model_per_tier_env_override(monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_CLAUDE_OPUS_CLASSES", "synthesis")
     monkeypatch.delenv("LIMEN_CODEX_MODEL", raising=False)
     monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "1")
     monkeypatch.setenv("LIMEN_CODEX_MODEL_OPUS", "my-opus-model")
@@ -1914,6 +1906,7 @@ def test_codex_tier_fail_open_on_exception(monkeypatch) -> None:
 
 
 def test_gemini_tier_derived_from_task_classes(monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_CLAUDE_OPUS_CLASSES", "synthesis")
     monkeypatch.delenv("LIMEN_GEMINI_MODEL", raising=False)
     monkeypatch.setenv("LIMEN_GEMINI_TIER_SELECT", "1")
     monkeypatch.delenv("LIMEN_GEMINI_MODEL_OPUS", raising=False)
@@ -2050,8 +2043,10 @@ def test_dispatch_event_records_only_pr_preserved_fable_packet_receipt() -> None
         "path": "docs/continuations/fable/fable-receipt.md",
         "content_sha256": "b" * 64,
         "commit_sha": "c" * 40,
+        "pull_request": "https://github.com/organvm/limen/pull/9999",
     }
     D._FABLE_PACKET_RECEIPTS[task.id] = receipt
+    D._FABLE_PACKET_CUSTODY_VERIFIED.add(task.id)
     pull_request = "https://github.com/organvm/limen/pull/9999"
 
     D._apply_result(
@@ -2063,11 +2058,9 @@ def test_dispatch_event_records_only_pr_preserved_fable_packet_receipt() -> None
     )
 
     event = task.dispatch_log[-1]
-    assert event.fable_packet_receipt == {
-        **receipt,
-        "pull_request": pull_request,
-    }
+    assert event.fable_packet_receipt == receipt
     assert task.id not in D._FABLE_PACKET_RECEIPTS
+    assert task.id not in D._FABLE_PACKET_CUSTODY_VERIFIED
 
 
 @pytest.mark.parametrize("result", [False, "limen/fable-packet-pushed-but-no-pr"])

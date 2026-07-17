@@ -39,6 +39,21 @@ def _contract() -> Any | None:
         return None
 
 
+def _model_selection() -> Any | None:
+    try:
+        path = ROOT / "cli" / "src" / "limen" / "model_selection.py"
+        if not path.exists():
+            path = Path(__file__).resolve().parents[1] / "cli" / "src" / "limen" / "model_selection.py"
+        spec = importlib.util.spec_from_file_location("_limen_fable_session_model_selection", path)
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        return None
+
+
 def _read_stdin_payload() -> dict[str, Any]:
     if sys.stdin is None or sys.stdin.isatty():
         return {}
@@ -75,7 +90,7 @@ def _resolve_model(payload: dict[str, Any], explicit: str | None) -> str:
     return ""
 
 
-def _is_fable_context(payload: dict[str, Any]) -> bool:
+def _is_fable_context(payload: dict[str, Any], model: str) -> bool:
     profile = payload.get("execution_profile") or payload.get("executionProfile")
     roles = [
         profile.get("execution_role") if isinstance(profile, dict) else None,
@@ -84,9 +99,19 @@ def _is_fable_context(payload: dict[str, Any]) -> bool:
     ]
     if any(isinstance(role, str) and role.lower() == "fable-planner" for role in roles):
         return True
-    # Provider model labels are opaque runtime output. A renamed ID containing
-    # "fable" cannot create or imply the explicit planner role.
-    return False
+    # Provider labels remain opaque. Only fresh owner catalog metadata may bind
+    # an exact selected identity to the Fable planner role.
+    selector = _model_selection()
+    try:
+        if selector is None or not model:
+            return False
+        receipt = selector.load_selection_receipt()
+        if receipt.get("selected_model") != model:
+            return False
+        row = next(item for item in receipt["models"] if item["id"] == model)
+        return "fable-planner" in row["execution_roles"]
+    except Exception:
+        return False
 
 
 def _execution_profile(payload: dict[str, Any]) -> dict[str, Any]:
@@ -108,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
 
     payload = _read_stdin_payload()
     model = _resolve_model(payload, args.model)
-    if not _is_fable_context(payload):
+    if not _is_fable_context(payload, model):
         return 0
 
     contract = _contract()

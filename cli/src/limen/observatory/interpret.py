@@ -1,9 +1,9 @@
 """P2-LLM — optional, evidence-constrained interpretation of the day's brief.
 
-Deterministic v1 leaves this dark. When ``OBSERVATORY_LLM=1`` the organ asks a *synthesis*-class
-model (Opus, resolved through :mod:`limen.model_selection`) to explain — **in the evidence's own
-terms** — why the top mechanisms are legibility wins and how to transfer the top one to the hero.
-It invents nothing: the prompt carries only the brief's observed mechanisms / confounders / gaps.
+Deterministic v1 leaves this dark. When ``OBSERVATORY_LLM=1`` the organ asks provider Auto to
+explain — **in the evidence's own terms** — why the top mechanisms are legibility wins and how to
+transfer the top one to the hero. It invents nothing: the prompt carries only the brief's observed
+mechanisms / confounders / gaps.
 
 The model is reached the way the whole fleet reaches one — a bounded ``claude -p`` subprocess
 (this repo is a dispatch orchestrator, not an SDK consumer; cf. ``dispatch._claude_model``). Every
@@ -23,20 +23,8 @@ from . import config
 _TIMEOUT = 60
 _MAX_CHARS = 1500  # bound the returned interpretation
 
-# (prompt, model, timeout) -> (text | None, error | None)
-Invoke = Callable[[str, str, int], "tuple[str | None, str | None]"]
-
-
-def _synthesis_model() -> str:
-    """The ``claude --model`` value for OBSERVATORY's synthesis class, via model_selection (→ opus).
-    Fail-safe to ``opus`` — synthesis is an Opus class by charter."""
-    try:
-        from limen import model_selection as ms
-
-        tier = "opus" if "synthesis" in ms._claude_opus_classes() else "sonnet"
-        return ms._resolve_claude_model(tier)
-    except Exception:
-        return "opus"
+# (prompt, opaque model-or-None, timeout) -> (text | None, error | None)
+Invoke = Callable[[str, str | None, int], "tuple[str | None, str | None]"]
 
 
 def _evidence_prompt(brief: dict) -> str:
@@ -58,13 +46,16 @@ def _evidence_prompt(brief: dict) -> str:
     )
 
 
-def _default_invoke(prompt: str, model: str, timeout: int) -> tuple[str | None, str | None]:
-    """Reach a synthesis model via a bounded ``claude -p`` subprocess. Fail-open, never raises."""
+def _default_invoke(prompt: str, model: str | None, timeout: int) -> tuple[str | None, str | None]:
+    """Reach provider Auto via a bounded ``claude -p`` subprocess. Fail-open, never raises."""
     if not shutil.which("claude"):
         return None, "claude binary not found"
     try:
+        command = ["claude", "-p", prompt]
+        if model:
+            command.extend(["--model", model])
         proc = subprocess.run(
-            ["claude", "-p", prompt, "--model", model],
+            command,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -85,13 +76,14 @@ def interpret(brief: dict, *, apply: bool = False, invoke: Invoke | None = None)
     mutated here — the caller attaches ``interpretation`` only when it is a non-empty string."""
     if not config.get("OBSERVATORY_LLM", 0, cast=int):
         return {"interpretation": None, "model": None, "reason": "off"}
-    model = _synthesis_model()
+    model = None
     prompt = _evidence_prompt(brief)
     text, error = (invoke or _default_invoke)(prompt, model, _TIMEOUT)
     clean = text.strip() if isinstance(text, str) else ""
     return {
         "interpretation": clean[:_MAX_CHARS] if clean else None,
         "model": model,
+        "selection_source": "provider_auto",
         "evidence_keys": sorted(k for k in ("hero", "mechanisms", "confounders", "experiment") if brief.get(k)),
         "reason": None if clean else (error or "no output"),
     }

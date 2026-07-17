@@ -37,6 +37,7 @@ from limen.fable_contract import (
     PACKET_RECEIPT_SCHEMA,
     PACKET_SCHEMA,
     builder_handoff as fable_builder_handoff,
+    validate_packet_commit_receipt as validate_fable_packet_commit_receipt,
     validate_packet_metadata as validate_fable_packet_metadata,
     validate_packet_receipt as validate_fable_packet_receipt,
 )
@@ -77,7 +78,7 @@ from limen.model_selection import (  # the shared model vocabulary — also used
     _claude_opus_classes,
     _fable_authorization_status,
     _guard_fable_model_pin,
-    _resolve_claude_model,
+    selected_model_for_profile,
 )
 from limen.worktree_debt import (
     IMPACT_DEBT_CREATING,
@@ -1488,6 +1489,7 @@ _PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "backlog": 4
 _GIT_PLUMBING_LOCK = threading.Lock()
 _MODEL_SELECTION_RECEIPTS: dict[str, dict[str, Any]] = {}
 _FABLE_PACKET_RECEIPTS: dict[str, dict[str, Any]] = {}
+_FABLE_PACKET_CUSTODY_VERIFIED: set[str] = set()
 _REMOTE_SUBMISSION_RECEIPTS: dict[str, dict[str, Any]] = {}
 _LANE_ROUTING_RECEIPTS: dict[str, dict[str, Any]] = {}
 
@@ -3986,7 +3988,19 @@ def _bind_fable_packet_commit(task: Task, wt: Path) -> None:
     ):
         raise ValueError("Fable packet digest does not match bytes in the recorded commit")
     receipt["commit_sha"] = commit_sha
-    validate_fable_packet_receipt(receipt, root=wt)
+    validate_fable_packet_commit_receipt(receipt, root=wt)
+
+
+def _finalize_fable_packet_receipt(task: Task, wt: Path, pull_request: str) -> None:
+    """Bind a packet to the live current head of its preserving pull request."""
+
+    receipt = _FABLE_PACKET_RECEIPTS.get(task.id)
+    if receipt is None:
+        return
+    candidate = {**receipt, "pull_request": pull_request}
+    validate_fable_packet_receipt(candidate, root=wt)
+    _FABLE_PACKET_RECEIPTS[task.id] = candidate
+    _FABLE_PACKET_CUSTODY_VERIFIED.add(task.id)
 
 
 def _run_isolated_agent(
@@ -4443,6 +4457,11 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
             pushed = True
             url = _existing_pr_url(pr_head)
             print(f"  dispatched: {task.id} → existing PR {url}")
+            try:
+                _finalize_fable_packet_receipt(task, wt, url)
+            except ValueError as exc:
+                print(f"  FAILED Fable PR custody {task.id}: {exc}")
+                return False
             _arm_auto_merge(task, wt, url)
             return url
 
@@ -4452,7 +4471,17 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
         if not _push_isolated_branch(task, wt, branch):
             return False
         pushed = True
-        return _create_isolated_pr(task, wt, pr_base, branch)
+        result = _create_isolated_pr(task, wt, pr_base, branch)
+        if fable_plan_only:
+            if not _GITHUB_PULL_REQUEST_URL_RE.fullmatch(result):
+                print(f"  FAILED Fable PR custody {task.id}: preserving pull request was not created")
+                return False
+            try:
+                _finalize_fable_packet_receipt(task, wt, result)
+            except ValueError as exc:
+                print(f"  FAILED Fable PR custody {task.id}: {exc}")
+                return False
+        return result
     finally:
         # leave the user's checkout pristine: drop the worktree, and the local
         # branch too once its commits are safely on the remote, or when the attempt
@@ -4855,13 +4884,11 @@ def _apply_result(
         entry.selection_source = selection.get("selection_source")
         entry.catalog_hash = selection.get("catalog_hash")
     if fable_packet := _FABLE_PACKET_RECEIPTS.pop(task.id, None):
+        verified = task.id in _FABLE_PACKET_CUSTODY_VERIFIED
+        _FABLE_PACKET_CUSTODY_VERIFIED.discard(task.id)
         pull_request = result if isinstance(result, str) and _GITHUB_PULL_REQUEST_URL_RE.fullmatch(result) else None
-        if fable_packet.get("commit_sha") and pull_request:
-            durable_packet = {
-                **fable_packet,
-                "pull_request": pull_request,
-            }
-            entry.fable_packet_receipt = durable_packet
+        if verified and fable_packet.get("commit_sha") and fable_packet.get("pull_request") == pull_request:
+            entry.fable_packet_receipt = dict(fable_packet)
         elif entry.output:
             entry.output += "; Fable packet has no durable PR receipt and remains unpublished"
         else:
@@ -5106,11 +5133,8 @@ def _gemini_model(task: "Task | None" = None) -> str | None:
 # tier up front. No new escalation machinery. Mirrors _codex_model/_opencode_model: env pin
 # wins, derive at call-time, fail-open. ([[model-tiering-policy]], [[value-is-discovered-never-assumed]])
 #
-# The shared VOCABULARY this ladder sorts with — _CLAUDE_TIER_ORDER, reserved class sets,
-# acceptance gates, and _resolve_claude_model() — lives in model_selection.py (imported at the
-# top) so the NON-BYPASSABLE `claude` shim sorts with the EXACT same vocabulary. One source of
-# truth: this file owns the per-TASK sort; the shim owns the per-SPAWN floor.
-# ([[fleet-model-floor-bleed]])
+# This legacy class projection remains only for older non-Claude adapters. Claude
+# itself uses provider Auto or a fresh opaque owner selection receipt.
 
 
 def _claude_tier_overrides() -> dict[str, list[str]]:
@@ -5164,13 +5188,8 @@ def _fable_authority_for_task(
 
 
 def _task_requests_fable(task: Task | None) -> bool:
-    if task is None:
-        return False
-    if task.claude_tier == "fable":
-        return True
-    classes = _task_classes(task)
-    override = _claude_tier_overrides()
-    return bool(classes & (_claude_fable_classes() | set(override.get("fable") or [])))
+    profile = _fable_execution_profile_for_task(task)
+    return isinstance(profile, dict) and profile.get("execution_role") == "fable-planner"
 
 
 def _earned_fable_tier(task: Task | None) -> str | None:
@@ -5211,28 +5230,6 @@ def _claude_tier_for(task: Task | None) -> str:
     return "haiku"
 
 
-def _bump_tier(
-    tier: str,
-    task: Task | None,
-    *,
-    fable_authorized: bool = False,
-) -> str:
-    """Escalate-on-failed-cheap-check, in-tier: if THIS task already failed on the claude lane
-    (carries the cascade's own 'tried:claude' breadcrumb), the cheap verify failed once here, so
-    step up one rung (capped at opus unless LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE=1 and a Fable
-    acceptance is present). State lives in the EXISTING label — no new retry counter, no schema
-    change. Env-gated LIMEN_CLAUDE_RETRY_BUMP (default on)."""
-    if task is None or tier not in _CLAUDE_TIER_ORDER or os.environ.get("LIMEN_CLAUDE_RETRY_BUMP", "1") != "1":
-        return tier
-    if "tried:claude" not in (getattr(task, "labels", None) or []):
-        return tier
-    i = _CLAUDE_TIER_ORDER.index(tier)
-    bumped = _CLAUDE_TIER_ORDER[min(i + 1, len(_CLAUDE_TIER_ORDER) - 1)]
-    if bumped == "fable" and not (os.environ.get("LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE") == "1" and fable_authorized):
-        return "opus"
-    return bumped
-
-
 def _claude_launch_selection(task: Task | None = None) -> tuple[str | None, bool]:
     """Choose one coherent Claude launch and whether it is an authorized Fable plan.
 
@@ -5247,41 +5244,16 @@ def _claude_launch_selection(task: Task | None = None) -> tuple[str | None, bool
         authority, reason = _fable_authority_for_task(task)
         if authority is None:
             raise ClaudeLaunchContractError(f"Fable planner authority is closed: {reason}")
-        if env:
-            # The provider ID is opaque. Fable authority comes from the task role,
-            # never from a substring in this live/operator-selected identifier.
-            return env, True
-        return _resolve_claude_model("fable", fable_authorized=True), True
+        try:
+            return selected_model_for_profile(profile, explicit_model=env), True
+        except Exception as exc:
+            raise ClaudeLaunchContractError(str(exc)) from exc
     if env:
-        return _guard_fable_model_pin(env, profile), False
-    if os.environ.get("LIMEN_CLAUDE_TIER_SELECT", "1") != "1":
-        return None, False
-    try:
-        tier = _claude_tier_for(task)
-        retry_fable_candidate = bool(
-            task is not None
-            and tier == "opus"
-            and "tried:claude" in (task.labels or [])
-            and os.environ.get("LIMEN_CLAUDE_RETRY_BUMP", "1") == "1"
-            and os.environ.get("LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE") == "1"
-        )
-        retry_fable_authorized = retry_fable_candidate and _fable_authority_for_task(task)[0] is not None
-        tier = _bump_tier(
-            tier,
-            task,
-            fable_authorized=retry_fable_authorized,
-        )
-        if tier == "auto":
-            return None, False
-        if tier == "fable":
-            if not retry_fable_authorized:
-                raise ClaudeLaunchContractError("Fable retry authority is closed")
-            return _resolve_claude_model(tier, fable_authorized=True), True
-        return _resolve_claude_model(tier), False
-    except ClaudeLaunchContractError:
-        raise
-    except Exception:
-        return None, False
+        try:
+            return _guard_fable_model_pin(env, profile), False
+        except Exception as exc:
+            raise ClaudeLaunchContractError(str(exc)) from exc
+    return None, False
 
 
 def _claude_model(task: Task | None = None) -> str | None:

@@ -32,6 +32,9 @@ def _scan_task(**overrides) -> dict:
 
 def _arm(monkeypatch, model="qwen3:8b"):
     monkeypatch.setenv("LIMEN_LOCAL_FLOOR", "1")
+    # Reserved local-floor exclusions are owner configuration, not a provider
+    # tier/class table embedded in model selection.
+    monkeypatch.setenv("LIMEN_CLAUDE_OPUS_CLASSES", "canon,long-horizon")
     monkeypatch.setattr(route, "ollama_model", lambda: model)
 
 

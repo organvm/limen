@@ -166,6 +166,8 @@ echo "── 4. focused contract tests ──"
   cli/tests/test_fable_contract.py \
   cli/tests/test_fable_allotment.py \
   cli/tests/test_fable_session_guard.py \
+  cli/tests/test_model_chokepoint.py \
+  cli/tests/test_claude_tier.py \
   cli/tests/test_claude_workflow_guard.py \
   -q >/dev/null || fail "focused Fable/workflow suite"
 pass "focused Fable/workflow pytest suite green"

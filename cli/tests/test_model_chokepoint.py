@@ -1,208 +1,293 @@
-"""The executable predicate for the NON-BYPASSABLE Claude model chokepoint.
-
-Two layers, both proven here:
-
-  1. ``limen.model_selection.model_for_argv`` — the per-spawn SORT (unit-level): a bare ``-p``
-     spawn floors to haiku; an already-declared ``--model`` is left alone; a non-print
-     invocation is never touched; the env gate / pin / floor-tune all flow through.
-  2. ``scripts/shims/claude`` — the SHIM (end-to-end, via subprocess against a stub "real claude"):
-     it actually splices ``--model`` and execs, it passes declared spawns through unchanged, and it
-     FAILS OPEN to the original argv when the sorter can't load.
-
-Together these are the proof that nothing the fleet spawns can silently inherit the account-default
-Opus: a spawn either declares its tier (passed through) or gets floored (injected). ([[fleet-model-floor-bleed]])
-"""
+"""End-to-end tests for the fail-closed Claude override shim."""
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
-from limen.model_selection import model_for_argv
+import limen.model_selection as MS
 
 REPO = Path(__file__).resolve().parents[2]
 SHIM = REPO / "scripts" / "shims" / "claude"
-
-_TIER_ENV = (
+_SELECTION_ENV = (
     "LIMEN_CLAUDE_MODEL",
-    "LIMEN_CLAUDE_TIER_SELECT",
-    "LIMEN_CLAUDE_SHIM_FLOOR",
-    "LIMEN_CLAUDE_MAX_INHERITED_TIER",
-    "LIMEN_CLAUDE_FABLE_FALLBACK_TIER",
-    "LIMEN_CLAUDE_HAIKU_MODEL",
-    "LIMEN_CLAUDE_SONNET_MODEL",
-    "LIMEN_CLAUDE_OPUS_MODEL",
-    "LIMEN_CLAUDE_FABLE_MODEL",
+    "ANTHROPIC_MODEL",
+    "CLAUDE_MODEL",
+    "LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT",
+    "LIMEN_CLAUDE_MODEL_SELECTION_MAX_AGE_SECONDS",
     "LIMEN_FABLE_ACCEPTANCE",
-    "LIMEN_ALLOW_EXPENSIVE_CLAUDE_MODEL_PIN",
-    "LIMEN_ALLOW_CLAUDE_1M_CONTEXT",
+    "LIMEN_FABLE_BALANCE_PATH",
 )
 
 
-def _clear(monkeypatch):
-    for k in _TIER_ENV:
-        monkeypatch.delenv(k, raising=False)
+def _profile(*, fable: bool = False) -> dict:
+    return {
+        "execution_role": "fable-planner" if fable else None,
+        "planning_only": fable,
+        "build_allowed": not fable,
+        "fanout_allowed": False,
+    }
 
 
-# ── Layer 1: the sorter ──────────────────────────────────────────────────────────────────
+def _selection(
+    root: Path,
+    model: str,
+    *,
+    fable: bool = False,
+    rows: list[dict] | None = None,
+) -> Path:
+    models = rows or [
+        {
+            "id": model,
+            "active": True,
+            "execution_roles": ["fable-planner"] if fable else [],
+        }
+    ]
+    value = {
+        "schema": MS.CLAUDE_MODEL_SELECTION_SCHEMA,
+        "observed_at": datetime.now(timezone.utc).isoformat(),
+        "source": "test-live-owner-adapter",
+        "attempt_id": "attempt-shim-adversarial",
+        "selection_source": "provider_live_catalog",
+        "selected_model": model,
+        "execution_profile": _profile(fable=fable),
+        "models": models,
+        "catalog_hash": MS._catalog_hash(MS._normalized_models(models)),
+    }
+    path = root / "selection.json"
+    path.write_text(json.dumps(value), encoding="utf-8")
+    return path
 
 
-def test_bare_print_spawn_floors_to_haiku(monkeypatch):
-    """A `-p` spawn with no --model gets the ladder's own default-for-unclassed: haiku."""
-    _clear(monkeypatch)
-    assert model_for_argv(["-p", "hello"]) == "haiku"
-    assert model_for_argv(["--print", "hello"]) == "haiku"
-    assert (
-        model_for_argv(["--resume", "S1", "-p", "breathe"]) == "haiku"
-    )  # resume still floors (claude ignores it, harmless)
+def _fable_authority(root: Path) -> tuple[Path, Path]:
+    now = datetime.now(timezone.utc)
+    week = (now - timedelta(days=now.weekday())).date().isoformat()
+    acceptance = root / "acceptance.json"
+    acceptance.write_text(
+        json.dumps(
+            {
+                "schema": "limen.fable_acceptance.v1",
+                "created_at": now.isoformat(),
+                "week": week,
+                "category": "adversarial-review",
+                "percent": 5,
+                "sources": ["docs/fable-allotment.md"],
+                "redacted_packets": [],
+                "verification": ["scripts/verify-fable-gate.sh"],
+                "mode": "plan-only",
+                "deliverable": "continuation-capsule",
+                "builder_handoff": {
+                    "provider_selection": "auto",
+                    "requirements": {
+                        "planning_only": False,
+                        "build_allowed": True,
+                        "fable_allowed": False,
+                    },
+                },
+                "motion_receipt_deadline_seconds": 5400,
+            }
+        ),
+        encoding="utf-8",
+    )
+    balance = root / "balance.json"
+    balance.write_text(
+        json.dumps(
+            {
+                "schema": "limen.fable_balance.v1",
+                "observed_at": now.isoformat(),
+                "week": week,
+                "spent_tokens": 5,
+                "spent_pct": 5,
+                "deliberate_cap": 40,
+                "hard_cap": 50,
+                "over_cap": False,
+                "source": "test-live-owner-adapter",
+                "meter_ready": True,
+                "measurement": {
+                    "method": "owner-used-percent",
+                    "owner_observed_pct": 5,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return acceptance, balance
 
 
-def test_declared_model_is_left_alone(monkeypatch):
-    """A spawn that already carries --model was sorted at its declaration site — never re-touch it."""
-    _clear(monkeypatch)
-    assert model_for_argv(["-p", "--model", "opus", "x"]) is None
-    assert model_for_argv(["-p", "--model=opus", "x"]) is None
-    assert model_for_argv(["--model", "sonnet", "-p", "x"]) is None
+def _fable_args(model: str) -> list[str]:
+    denied = "Agent,AskUserQuestion,Bash,Edit,NotebookEdit,Workflow,Write,mcp__*"
+    return [
+        "-p",
+        "bounded plan",
+        "--model",
+        model,
+        "--permission-mode",
+        "dontAsk",
+        "--tools",
+        "Glob,Grep,Read",
+        "--allowedTools",
+        "Glob,Grep,Read",
+        "--disallowedTools",
+        denied,
+        "--no-chrome",
+    ]
 
 
-def test_non_print_is_never_touched(monkeypatch):
-    """`claude mcp add …`, an interactive launch, --version, etc. carry no -p → never re-tiered."""
-    _clear(monkeypatch)
-    assert model_for_argv(["mcp", "add", "--scope", "user", "ianva", "https://x"]) is None
-    assert model_for_argv(["--version"]) is None
-    assert model_for_argv([]) is None
+@pytest.fixture(autouse=True)
+def _clear(monkeypatch) -> None:
+    for name in _SELECTION_ENV:
+        monkeypatch.delenv(name, raising=False)
 
 
-def test_pin_wins(monkeypatch):
-    """An explicit cheap LIMEN_CLAUDE_MODEL pin wins (mirrors dispatch._claude_model)."""
-    _clear(monkeypatch)
-    monkeypatch.setenv("LIMEN_CLAUDE_MODEL", "pinned-x")
-    assert model_for_argv(["-p", "hi"]) == "pinned-x"
+def test_bare_spawn_stays_on_provider_auto() -> None:
+    assert MS.model_for_argv(["-p", "hello"]) is None
+    assert MS.model_for_argv(["--version"]) is None
 
 
-def test_tiering_gated_off_yields_no_injection(monkeypatch):
-    """LIMEN_CLAUDE_TIER_SELECT=0 → bare invocation (the operator opted out)."""
-    _clear(monkeypatch)
-    monkeypatch.setenv("LIMEN_CLAUDE_TIER_SELECT", "0")
-    assert model_for_argv(["-p", "hi"]) is None
+def test_direct_explicit_override_requires_exact_live_receipt(tmp_path, monkeypatch) -> None:
+    model = "arbitrarily-renamed-ordinary-model"
+    with pytest.raises(MS.ModelSelectionBlocked, match="no live selection receipt"):
+        MS.model_for_argv(["-p", "--model", model, "hello"])
+
+    receipt = _selection(tmp_path, model)
+    monkeypatch.setenv("LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT", str(receipt))
+    assert MS.model_for_argv(["-p", "--model", model, "hello"]) is None
+    with pytest.raises(MS.ModelSelectionBlocked, match="differs from the owner selection"):
+        MS.model_for_argv(["-p", "--model", "renamed-but-not-selected", "hello"])
+
+    payload = json.loads(receipt.read_text())
+    payload["selection_source"] = "manual_assertion"
+    receipt.write_text(json.dumps(payload))
+    with pytest.raises(MS.ModelSelectionBlocked, match="not live-catalog evidence"):
+        MS.model_for_argv(["-p", "--model", model, "hello"])
 
 
-def test_floor_is_tunable_and_capped(monkeypatch):
-    """LIMEN_CLAUDE_SHIM_FLOOR tunes the floor; Opus/Fable are never inherited floors."""
-    _clear(monkeypatch)
-    monkeypatch.setenv("LIMEN_CLAUDE_SHIM_FLOOR", "sonnet")
-    assert model_for_argv(["-p", "hi"]) == "sonnet"
-    monkeypatch.setenv("LIMEN_CLAUDE_SHIM_FLOOR", "opus")
-    assert model_for_argv(["-p", "hi"]) == "sonnet"
-    monkeypatch.setenv("LIMEN_CLAUDE_SHIM_FLOOR", "fable")
-    assert model_for_argv(["-p", "hi"]) == "sonnet"
-    monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", "1")
-    assert model_for_argv(["-p", "hi"]) == "sonnet"
-    monkeypatch.setenv("LIMEN_CLAUDE_SHIM_FLOOR", "nonsense")
-    assert model_for_argv(["-p", "hi"]) == "haiku"
+def test_fable_metadata_blocks_ordinary_mutation_path(tmp_path, monkeypatch) -> None:
+    model = "opaque-plan-identity"
+    receipt = _selection(tmp_path, model, fable=True)
+    acceptance, balance = _fable_authority(tmp_path)
+    monkeypatch.setenv("LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT", str(receipt))
+    monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(acceptance))
+    monkeypatch.setenv("LIMEN_FABLE_BALANCE_PATH", str(balance))
+
+    with pytest.raises(MS.ModelSelectionBlocked, match="plan-only read-only"):
+        MS.model_for_argv(["-p", "--model", model, "--allowedTools", "Edit,Write", "build"])
+    assert MS.model_for_argv(_fable_args(model)) is None
 
 
-def test_tier_alias_resolves_via_env_pin(monkeypatch):
-    """The floor tier resolves through LIMEN_CLAUDE_<TIER>_MODEL (derive-never-pin)."""
-    _clear(monkeypatch)
-    monkeypatch.setenv("LIMEN_CLAUDE_HAIKU_MODEL", "claude-haiku-4-5")
-    assert model_for_argv(["-p", "hi"]) == "claude-haiku-4-5"
-
-
-def test_fable_model_pins_cannot_create_role_authority(monkeypatch):
-    """Model-name pins and test sentinels cannot create task-bound Fable authority."""
-    _clear(monkeypatch)
-    monkeypatch.setenv("LIMEN_CLAUDE_MODEL", "fable")
-    assert model_for_argv(["-p", "hi"]) is None
-    monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", "1")
-    assert model_for_argv(["-p", "hi"]) is None
-
-
-def test_arbitrarily_renamed_provider_id_does_not_imply_fable(monkeypatch):
-    _clear(monkeypatch)
-    opaque_id = "vendor/fable-looking-name-without-role-authority"
-    monkeypatch.setenv("LIMEN_CLAUDE_MODEL", opaque_id)
-    assert model_for_argv(["-p", "hi"]) == opaque_id
-
-
-def test_global_opus_and_1m_pins_require_explicit_override(monkeypatch):
-    """A global model pin is inherited by unrelated fan-out, so expensive pins are gated."""
-    _clear(monkeypatch)
-    monkeypatch.setenv("LIMEN_CLAUDE_MODEL", "claude-opus-4-8[1m]")
-    assert model_for_argv(["-p", "hi"]) == "sonnet"
-
-    monkeypatch.setenv("LIMEN_ALLOW_EXPENSIVE_CLAUDE_MODEL_PIN", "1")
-    assert model_for_argv(["-p", "hi"]) == "sonnet"
-
-    monkeypatch.setenv("LIMEN_ALLOW_CLAUDE_1M_CONTEXT", "1")
-    assert model_for_argv(["-p", "hi"]) == "claude-opus-4-8[1m]"
-
-
-# ── Layer 2: the shim (end-to-end, against a stub "real claude") ───────────────────────────
+def test_fable_name_text_without_role_metadata_is_ordinary(tmp_path, monkeypatch) -> None:
+    model = "vendor/fable-looking-arbitrary-rename"
+    receipt = _selection(tmp_path, model, fable=False)
+    monkeypatch.setenv("LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT", str(receipt))
+    assert MS.model_for_argv(["-p", "--model", model, "ordinary"]) is None
 
 
 @pytest.fixture()
 def stub_claude(tmp_path):
-    """A fake `claude` that just prints its argv, one per line — so a test can see EXACTLY what the
-    shim exec'd."""
     stub = tmp_path / "real-claude"
     stub.write_text('#!/bin/sh\nfor a in "$@"; do printf "%s\\n" "$a"; done\n')
     stub.chmod(0o755)
     return stub
 
 
-def _run_shim(stub, args, **env_overrides):
-    env = {k: v for k, v in os.environ.items() if k not in _TIER_ENV}
+def _run_shim(stub: Path, args: list[str], **env_overrides: str) -> subprocess.CompletedProcess[str]:
+    env = {key: value for key, value in os.environ.items() if key not in _SELECTION_ENV}
     env.update({"LIMEN_REAL_CLAUDE": str(stub), "LIMEN_ROOT": str(REPO)})
     env.update(env_overrides)
-    proc = subprocess.run(
+    return subprocess.run(
         [sys.executable, str(SHIM), *args],
         env=env,
         capture_output=True,
         text=True,
         timeout=30,
     )
-    assert proc.returncode == 0, proc.stderr
-    return proc.stdout.splitlines()
 
 
-def test_shim_is_executable():
-    assert SHIM.exists(), f"shim missing at {SHIM}"
-    assert os.access(SHIM, os.X_OK), "shim must be executable (the exec bit is tracked in git)"
+def test_shim_passes_provider_auto_without_injection(stub_claude) -> None:
+    proc = _run_shim(stub_claude, ["-p", "hello"])
+    assert proc.returncode == 0
+    assert proc.stdout.splitlines() == ["-p", "hello"]
 
 
-def test_shim_injects_floor_for_bare_spawn(stub_claude):
-    """End-to-end: a bare `-p` fleet spawn reaches the real claude WITH --model haiku spliced in."""
-    out = _run_shim(stub_claude, ["-p", "hello"])
-    assert out == ["--model", "haiku", "-p", "hello"]
+def test_shim_blocks_unvalidated_direct_override(stub_claude) -> None:
+    proc = _run_shim(stub_claude, ["-p", "--model", "opaque-unvalidated", "build"])
+    assert proc.returncode == 78
+    assert proc.stdout == ""
+    assert "BLOCKED:" in proc.stderr
 
 
-def test_shim_passes_declared_spawn_through_untouched(stub_claude):
-    """A spawn that already declared --model rides through with no second --model."""
-    out = _run_shim(stub_claude, ["-p", "--model", "opus", "do canon work"])
-    assert out == ["-p", "--model", "opus", "do canon work"]
-    assert out.count("--model") == 1
+@pytest.mark.parametrize("name", ["LIMEN_CLAUDE_MODEL", "ANTHROPIC_MODEL", "CLAUDE_MODEL"])
+def test_shim_blocks_every_unvalidated_environment_override(stub_claude, name) -> None:
+    proc = _run_shim(stub_claude, ["-p", "build"], **{name: "opaque-unvalidated"})
+    assert proc.returncode == 78
+    assert "BLOCKED:" in proc.stderr
 
 
-def test_shim_never_touches_non_print(stub_claude):
-    """`claude mcp add …` reaches the real claude byte-for-byte — the chokepoint only floors -p runs."""
-    args = ["mcp", "add", "--scope", "user", "ianva", "https://x"]
-    assert _run_shim(stub_claude, args) == args
+def test_shim_allows_exact_ordinary_override(stub_claude, tmp_path) -> None:
+    model = "opaque-live-builder"
+    receipt = _selection(tmp_path, model)
+    args = ["-p", "--model", model, "build"]
+    proc = _run_shim(
+        stub_claude,
+        args,
+        LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT=str(receipt),
+    )
+    assert proc.returncode == 0
+    assert proc.stdout.splitlines() == args
 
 
-def test_shim_honors_pin_and_floor_tune(stub_claude):
-    assert _run_shim(stub_claude, ["-p", "hi"], LIMEN_CLAUDE_MODEL="pinned-x")[:2] == ["--model", "pinned-x"]
-    assert _run_shim(stub_claude, ["-p", "hi"], LIMEN_CLAUDE_SHIM_FLOOR="sonnet")[:2] == ["--model", "sonnet"]
-    assert _run_shim(stub_claude, ["-p", "hi"], LIMEN_CLAUDE_SHIM_FLOOR="opus")[:2] == ["--model", "sonnet"]
-    assert _run_shim(stub_claude, ["-p", "hi"], LIMEN_CLAUDE_TIER_SELECT="0") == ["-p", "hi"]
+def test_shim_blocks_fable_identity_with_build_tools(stub_claude, tmp_path) -> None:
+    model = "opaque-live-planner"
+    receipt = _selection(tmp_path, model, fable=True)
+    acceptance, balance = _fable_authority(tmp_path)
+    proc = _run_shim(
+        stub_claude,
+        ["-p", "--model", model, "--allowedTools", "Edit,Write", "build"],
+        LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT=str(receipt),
+        LIMEN_FABLE_ACCEPTANCE=str(acceptance),
+        LIMEN_FABLE_BALANCE_PATH=str(balance),
+    )
+    assert proc.returncode == 78
+    assert "plan-only read-only" in proc.stderr
 
 
-def test_shim_fails_open_when_sorter_unavailable(stub_claude, tmp_path):
-    """If model_selection.py can't be loaded, the shim still execs the real claude with the ORIGINAL
-    argv — it can change which model a spawn uses, never block the spawn."""
-    out = _run_shim(stub_claude, ["-p", "hello"], LIMEN_ROOT=str(tmp_path / "nonexistent"))
-    assert out == ["-p", "hello"]
+def test_shim_allows_exact_authorized_fable_surface(stub_claude, tmp_path) -> None:
+    model = "opaque-live-planner-renamed"
+    receipt = _selection(tmp_path, model, fable=True)
+    acceptance, balance = _fable_authority(tmp_path)
+    args = _fable_args(model)
+    proc = _run_shim(
+        stub_claude,
+        args,
+        LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT=str(receipt),
+        LIMEN_FABLE_ACCEPTANCE=str(acceptance),
+        LIMEN_FABLE_BALANCE_PATH=str(balance),
+    )
+    assert proc.returncode == 0
+    assert proc.stdout.splitlines() == args
+
+
+def test_shim_blocks_override_when_validator_is_unavailable(stub_claude, tmp_path) -> None:
+    proc = _run_shim(
+        stub_claude,
+        ["-p", "--model", "opaque", "build"],
+        LIMEN_ROOT=str(tmp_path / "missing"),
+    )
+    assert proc.returncode == 78
+    assert "validator is unavailable" in proc.stderr
+
+
+def test_shim_keeps_provider_auto_available_when_validator_is_unavailable(stub_claude, tmp_path) -> None:
+    proc = _run_shim(
+        stub_claude,
+        ["-p", "build"],
+        LIMEN_ROOT=str(tmp_path / "missing"),
+    )
+    assert proc.returncode == 0
+    assert proc.stdout.splitlines() == ["-p", "build"]
