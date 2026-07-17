@@ -117,9 +117,10 @@ def gh_graphql(query: str, *, timeout: int = 90, retries: int = 3, **variables: 
 
 
 def fetch_calendar_total(login: str = LOGIN) -> int:
-    """Last-year contribution total, fetched ALONE so it stays under GraphQL resource limits."""
+    """Last-year contribution total, fetched ALONE so it stays under GraphQL resource limits.
+    Load-bearing → extra retries (the resource limit is intermittent, not a rate cap)."""
     q = "query($l:String!){user(login:$l){contributionsCollection{contributionCalendar{totalContributions}}}}"
-    data = gh_graphql(q, l=login)
+    data = gh_graphql(q, retries=5, l=login)
     return int(data["user"]["contributionsCollection"]["contributionCalendar"]["totalContributions"])
 
 
@@ -130,7 +131,7 @@ def fetch_calendar_days(login: str = LOGIN) -> list[dict[str, Any]]:
         "query($l:String!){user(login:$l){contributionsCollection{contributionCalendar{"
         "weeks{contributionDays{contributionCount date weekday}}}}}}"
     )
-    data = gh_graphql(q, l=login)
+    data = gh_graphql(q, retries=5, l=login)
     weeks = data["user"]["contributionsCollection"]["contributionCalendar"]["weeks"]
     return [day for week in weeks for day in week["contributionDays"]]
 
