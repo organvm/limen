@@ -48,24 +48,26 @@ truths:
       memory: mpo-resolved-quaestor-owns
 
   - id: EVO-002
-    claim: "Governance testament authority is ratified upstream; Limen runs the bounded operational read model"
+    claim: "CORPVS owns constitutional authority; ratification is evidence-gated; Limen runs the bounded operational read model"
     line: >-
-      The ratified CORPVS governance testament owns constitutional directives, ideal forms,
-      supersession, and source lineage. Limen's governance organ remains the reversible operations
-      office: it validates local standing, schedules bounded cadence work, verifies owner receipts,
-      and renders redacted readiness without self-ratifying or duplicating raw custody and graph authority.
+      CORPVS owns constitutional directives, ideal forms, supersession, and source lineage, but a
+      testament becomes ratified only after its immutable operator events, assertion evidence, and
+      coverage predicate pass. Limen validates typed owner receipts and renders redacted readiness
+      without self-ratifying or duplicating raw custody and graph authority.
     summons: >-
-      The Governance Organ has two non-competing layers. The ratified CORPVS testament is the
-      constitutional source of truth for directives, axioms, instruments, ideal forms, amendments,
-      and supersession. Limen's Aerarium / Cvrsvs Honorvm is the operational read model and bounded
-      scheduler: it enforces the cursus honorum locally, consumes typed owner receipts, keeps missing
-      or inaccessible sources visible as coverage debt, and never promotes assistant prose into
-      operator authority. The configured governance-testament owner receipt decides current doctrine;
-      absence or mismatch degrades readiness instead of falling back to Limen-local prose.
+      The Governance Organ has two non-competing layers. CORPVS is the constitutional owner for
+      directives, axioms, instruments, ideal forms, amendments, and supersession. Candidate status is
+      honest until the controlling formulation, immutable operator events, assertion evidence, and
+      constitutional coverage pass the public contracts; only the resulting owner ratification receipt
+      makes a testament current authority. Limen's Aerarium / Cvrsvs Honorvm is the operational read
+      model and bounded scheduler: it enforces the cursus honorum locally, consumes typed owner receipts,
+      keeps missing or inaccessible sources visible as coverage debt, and never promotes assistant prose
+      into operator authority. Absence or mismatch degrades readiness instead of falling back to
+      Limen-local prose.
     source_of_record: "parameter-contract:LIMEN_GOV_TESTAMENT"
     confidence: high
     resolved: "2026-07-16"
-    reversible_via: "supersede the ratified governance testament and update LIMEN_GOV_TESTAMENT; keep local validator rollback separate"
+    reversible_via: "supersede the evidence-backed CORPVS owner receipt and update LIMEN_GOV_TESTAMENT; keep local validator rollback separate"
     channels:
       flame: true
       corpus: true
