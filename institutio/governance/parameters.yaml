@@ -1810,30 +1810,6 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "Publish terminal execution attempts to the owner-native GitHub trajectory ref during harvest. 0 is an explicit operational pause; failures otherwise remain retry-visible on the exact terminal board event."
-  LIMEN_TRAJECTORY_OWNER_REPO:
-    default: "organvm/limen"
-    env: LIMEN_TRAJECTORY_OWNER_REPO
-    self_update: none
-    owner: arms-agents
-    note: "Exact OWNER/NAME repository holding immutable execution trajectories."
-  LIMEN_TRAJECTORY_OWNER_REF:
-    default: "execution-trajectories"
-    env: LIMEN_TRAJECTORY_OWNER_REF
-    self_update: none
-    owner: arms-agents
-    note: "Dedicated owner branch updated through exact-head compare-and-set publication. The branch must be provisioned before publication can succeed."
-  LIMEN_TRAJECTORY_OWNER_ROOT:
-    default: "receipts/execution-trajectories"
-    env: LIMEN_TRAJECTORY_OWNER_ROOT
-    self_update: none
-    owner: arms-agents
-    note: "Safe repository-relative root for one content-addressed trajectory JSON file per attempt."
-  LIMEN_TRAJECTORY_GH_BIN:
-    default: "gh"
-    env: LIMEN_TRAJECTORY_GH_BIN
-    self_update: none
-    owner: arms-agents
-    note: "GitHub CLI used by the owner adapter; authentication remains in the GitHub credential owner."
   LIMEN_TRAJECTORY_MAX_RECORDS:
     default: "25"
     env: LIMEN_TRAJECTORY_MAX_RECORDS

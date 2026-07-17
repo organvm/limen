@@ -19,6 +19,7 @@ from limen.execution_trajectory import (
     trajectory_from_log_entries,
 )
 from limen.execution_trajectory_github import GitHubTrajectoryAdapter
+from limen.execution_trajectory_github import load_system_trajectory_adapter
 from limen.models import DispatchLogEntry, Task
 
 
@@ -33,15 +34,10 @@ def _positive_int(env: Mapping[str, str], name: str, default: int) -> int:
     return value if value > 0 else default
 
 
-def _adapter_from_env(env: Mapping[str, str]) -> GitHubTrajectoryAdapter | None:
+def _system_adapter(env: Mapping[str, str]) -> GitHubTrajectoryAdapter | None:
     if env.get("LIMEN_TRAJECTORY_PUBLICATION", "1").strip().lower() in {"0", "false", "no", "off"}:
         return None
-    return GitHubTrajectoryAdapter(
-        repository=env.get("LIMEN_TRAJECTORY_OWNER_REPO", "organvm/limen"),
-        ref=env.get("LIMEN_TRAJECTORY_OWNER_REF", "execution-trajectories"),
-        root=env.get("LIMEN_TRAJECTORY_OWNER_ROOT", "receipts/execution-trajectories"),
-        gh=env.get("LIMEN_TRAJECTORY_GH_BIN", "gh"),
-    )
+    return load_system_trajectory_adapter()
 
 
 def _launch_for(task: Task, attempt_id: str) -> DispatchLogEntry | None:
@@ -86,7 +82,7 @@ def publish_task_trajectories(
 
     settings = env if env is not None else os.environ
     try:
-        owner = adapter if adapter is not None else _adapter_from_env(settings)
+        owner = adapter if adapter is not None else _system_adapter(settings)
     except ValueError as exc:
         error = f"trajectory owner configuration blocked: {str(exc)[:400]}"
         changed = False

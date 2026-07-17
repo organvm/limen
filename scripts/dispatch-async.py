@@ -44,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.capacity import LOCAL_CHECKOUT_AGENTS, _weak_proxy_exhaustion, select_lanes  # noqa: E402
 from limen.execution_contract import execution_contract_hash  # noqa: E402
 from limen.intake import IntakeContractError, normalize_selected_legacy_task  # noqa: E402
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import atomic_write_text, load_limen_file, save_limen_file  # noqa: E402
 from limen.models import DispatchLogEntry  # noqa: E402
 from limen.remote_execution import (  # noqa: E402
     RemoteExecutionError,
@@ -56,6 +56,7 @@ from limen.dispatch import (  # noqa: E402
     _apply_result,
     _REMOTE_SUBMISSION_RECEIPTS,
     _attempt_launch_entry,
+    _consumed_result_receipt_digest,
     _validated_model_selection_receipt,
     _deps_met,
     _dispatchable,
@@ -464,8 +465,84 @@ def _archive_result_receipt(
         archive["raw_preview"] = _redact_receipt_value(raw.decode("utf-8", errors="replace"))
     if blocker:
         archive["blocker"] = _redact_receipt_value(blocker)
-    out.write_text(json.dumps(archive, indent=2, sort_keys=True) + "\n")
+    atomic_write_text(out, json.dumps(archive, indent=2, sort_keys=True) + "\n")
+    _fsync_directory(day_dir)
     return out
+
+
+def _fsync_directory(path: Path) -> None:
+    """Persist directory entries when the platform supports directory fsync."""
+
+    try:
+        descriptor = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(descriptor)
+    except OSError:
+        # APFS and some test filesystems may reject directory fsync. The file
+        # itself is still fsynced by atomic_write_text.
+        pass
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_board(path: Path) -> None:
+    """Confirm the replaced board bytes before any result custody is released."""
+
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    _fsync_directory(path.parent)
+
+
+def _receipt_identity(path: Path) -> tuple[int, int, int, int] | None:
+    try:
+        metadata = path.stat(follow_symlinks=False)
+    except OSError:
+        return None
+    return (metadata.st_dev, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns)
+
+
+def _finalize_result_receipt(
+    receipt_path: Path,
+    raw: bytes,
+    identity: tuple[int, int, int, int] | None,
+    now: datetime.datetime,
+    *,
+    parsed: object | None,
+    reason: str,
+    parse_error: str | None = None,
+    blocker: str | None = None,
+    clear_task_id: str | None = None,
+    clear_reservation_id: str | None = None,
+) -> bool:
+    """Archive and unlink only the exact bytes already fenced by the board.
+
+    A replacement at the same pathname is never archived or deleted under the
+    earlier digest. Archive failure leaves both the result and marker retryable.
+    """
+
+    if identity is None or _receipt_identity(receipt_path) != identity:
+        return False
+    _archive_result_receipt(
+        receipt_path,
+        raw,
+        now,
+        parsed=parsed,
+        reason=reason,
+        parse_error=parse_error,
+        blocker=blocker,
+    )
+    if _receipt_identity(receipt_path) != identity:
+        return False
+    receipt_path.unlink()
+    _fsync_directory(receipt_path.parent)
+    if clear_task_id is not None:
+        _clear_running_markers(clear_task_id, clear_reservation_id)
+    return True
 
 
 def harvest() -> int:
@@ -476,6 +553,35 @@ def harvest() -> int:
         return 0
     now = _now()
     applied = 0
+    board_dirty = False
+    finalizations: list[dict[str, object]] = []
+
+    def schedule_finalization(
+        receipt_path: Path,
+        raw: bytes,
+        identity: tuple[int, int, int, int] | None,
+        *,
+        parsed: object | None,
+        reason: str,
+        parse_error: str | None = None,
+        blocker: str | None = None,
+        clear_task_id: str | None = None,
+        clear_reservation_id: str | None = None,
+    ) -> None:
+        finalizations.append(
+            {
+                "receipt_path": receipt_path,
+                "raw": raw,
+                "identity": identity,
+                "parsed": parsed,
+                "reason": reason,
+                "parse_error": parse_error,
+                "blocker": blocker,
+                "clear_task_id": clear_task_id,
+                "clear_reservation_id": clear_reservation_id,
+            }
+        )
+
     with _queue_lock(TASKS) as got:
         if not got:
             # Lock timed out — skip this pass (honor the contract). The .result.json files are only
@@ -486,30 +592,33 @@ def harvest() -> int:
         track = lf.portal.budget.track
         for rf in files:
             raw = b""
+            identity = _receipt_identity(rf)
             try:
                 raw = rf.read_bytes()
+                if identity is None or _receipt_identity(rf) != identity:
+                    continue
                 data = json.loads(raw.decode("utf-8"))
             except Exception as exc:
-                _archive_result_receipt(
+                if not raw or identity is None or _receipt_identity(rf) != identity:
+                    continue
+                schedule_finalization(
                     rf,
                     raw,
-                    now,
+                    identity,
                     parsed=None,
                     reason="malformed-result",
                     parse_error=str(exc),
                 )
-                rf.unlink(missing_ok=True)
                 continue
             if not isinstance(data, dict):
-                _archive_result_receipt(
+                schedule_finalization(
                     rf,
                     raw,
-                    now,
+                    identity,
                     parsed=data,
                     reason="malformed-result",
                     parse_error="result receipt JSON root is not an object",
                 )
-                rf.unlink(missing_ok=True)
                 continue
             task_id = data.get("task_id")
             remote_submission = data.get("remote_submission")
@@ -517,15 +626,14 @@ def harvest() -> int:
                 remote_submission is not None and remote_submission != {}
             )
             if not isinstance(task_id, str) or not task_id:
-                _archive_result_receipt(
+                schedule_finalization(
                     rf,
                     raw,
-                    now,
+                    identity,
                     parsed=data,
                     reason="remote-metadata-blocked" if remote_hint else "harvest-fenced",
                     blocker="async result task ID is missing or non-string" if remote_hint else None,
                 )
-                rf.unlink(missing_ok=True)
                 continue
             t = byid.get(task_id) if isinstance(task_id, str) else None
             expected_hash = data.get("execution_contract_hash")
@@ -543,6 +651,25 @@ def harvest() -> int:
                     else rf == _result_path(task_id)
                 )
             )
+            result_receipt_digest = f"sha256:{hashlib.sha256(raw).hexdigest()}"
+            consumed_digest = (
+                _consumed_result_receipt_digest(t, attempt_id)
+                if t is not None and isinstance(attempt_id, str)
+                else None
+            )
+            if consumed_digest is not None:
+                same_receipt = consumed_digest == result_receipt_digest
+                schedule_finalization(
+                    rf,
+                    raw,
+                    identity,
+                    parsed=data,
+                    reason="duplicate-consumed" if same_receipt else "conflicting-consumed",
+                    blocker=None if same_receipt else "different result bytes claimed an already-consumed attempt",
+                    clear_task_id=task_id if same_receipt else None,
+                    clear_reservation_id=reservation_id if same_receipt and isinstance(reservation_id, str) else None,
+                )
+                continue
             contract_drift_closed = False
             if (
                 data.get("result") == "__contract_drift_closed__"
@@ -594,15 +721,17 @@ def harvest() -> int:
                     and current_hash != expected_hash
                 )
             if contract_drift_closed:
-                _clear_running_markers(task_id, reservation_id)
-                _archive_result_receipt(
+                terminal.result_receipt_digest = result_receipt_digest
+                board_dirty = True
+                schedule_finalization(
                     rf,
                     raw,
-                    now,
+                    identity,
                     parsed=data,
                     reason="contract-drift-closed",
+                    clear_task_id=task_id,
+                    clear_reservation_id=reservation_id,
                 )
-                rf.unlink(missing_ok=True)
                 continue
             custody_ok = (
                 isinstance(task_id, str)
@@ -718,62 +847,89 @@ def harvest() -> int:
                     remote_blocker = str(exc)
 
             if custody_ok:
-                if data["result"] != "__notask__":
-                    if validated_remote is not None:
-                        _REMOTE_SUBMISSION_RECEIPTS[task_id] = validated_remote
-                    try:
-                        result_applied = _apply_result(
-                            t,
-                            agent,
-                            data["result"],
-                            now,
-                            track,
-                            charge_budget=False,
-                            expected_attempt_id=attempt_id,
-                            model_selection_receipt=validated_model_selection,
-                            reconciliation_receipt={
-                                key: data[key]
-                                for key in (
-                                    "actual_spend",
-                                    "trajectory_outputs",
-                                    "trajectory_outputs_reconciled",
-                                    "trajectory_side_effects",
-                                    "trajectory_side_effects_reconciled",
-                                )
-                                if data.get(key) is not None
-                            },
-                        )
-                    finally:
-                        _REMOTE_SUBMISSION_RECEIPTS.pop(task_id, None)
-                    if result_applied:
-                        applied += 1
-                _clear_running_markers(
-                    task_id,
-                    (reservation_id if isinstance(reservation_id, str) and reservation_id != "async-reserve" else None),
-                )
+                landed_result = False if data["result"] == "__notask__" else data["result"]
+                if validated_remote is not None:
+                    _REMOTE_SUBMISSION_RECEIPTS[task_id] = validated_remote
+                try:
+                    result_applied = _apply_result(
+                        t,
+                        agent,
+                        landed_result,
+                        now,
+                        track,
+                        charge_budget=False,
+                        expected_attempt_id=attempt_id,
+                        model_selection_receipt=validated_model_selection,
+                        reconciliation_receipt={
+                            key: data[key]
+                            for key in (
+                                "actual_spend",
+                                "trajectory_outputs",
+                                "trajectory_outputs_reconciled",
+                                "trajectory_side_effects",
+                                "trajectory_side_effects_reconciled",
+                            )
+                            if data.get(key) is not None
+                        },
+                        result_receipt_digest=result_receipt_digest,
+                    )
+                finally:
+                    _REMOTE_SUBMISSION_RECEIPTS.pop(task_id, None)
+                board_dirty = board_dirty or _consumed_result_receipt_digest(t, attempt_id) == result_receipt_digest
+                if result_applied:
+                    applied += 1
                 archive_reason = "harvested"
+                clear_result_marker = True
             else:
                 _REMOTE_SUBMISSION_RECEIPTS.pop(task_id, None)
-                # A receipt is untrusted input.  Task id alone is never custody: a stale worker or
-                # forged/legacy receipt must not mutate (or clear the marker of) a changed claim.
-                if requires_remote_identity:
-                    if authoritative_worker_receipt and isinstance(reservation_id, str):
-                        _clear_running_markers(task_id, reservation_id)
+                if authoritative_worker_receipt and remote_blocker and t is not None:
+                    # The exact worker/artifact identity is authoritative even
+                    # though its subordinate metadata is not. Bind the digest
+                    # and owner-route the failure before releasing custody.
+                    fence = last.model_copy(
+                        update={
+                            "timestamp": now,
+                            "output": f"async result metadata fenced: {remote_blocker[:400]}",
+                            "result_receipt_digest": result_receipt_digest,
+                        }
+                    )
+                    t.dispatch_log.append(fence)
+                    t.updated = now
+                    board_dirty = True
+                    archive_reason = "remote-metadata-blocked" if requires_remote_identity else "harvest-fenced"
+                    clear_result_marker = True
+                elif requires_remote_identity:
                     archive_reason = "remote-metadata-blocked"
                     remote_blocker = remote_blocker or "remote async result failed authoritative execution custody"
+                    clear_result_marker = False
                 else:
                     archive_reason = "harvest-fenced"
-            _archive_result_receipt(
+                    clear_result_marker = False
+            normalized_reservation = (
+                reservation_id
+                if isinstance(reservation_id, str) and reservation_id != "async-reserve"
+                else None
+            )
+            schedule_finalization(
                 rf,
                 raw,
-                now,
+                identity,
                 parsed=data,
                 reason=archive_reason,
                 blocker=remote_blocker,
+                clear_task_id=task_id if clear_result_marker else None,
+                clear_reservation_id=normalized_reservation,
             )
-            rf.unlink(missing_ok=True)
-        if applied:
+        if board_dirty:
             save_limen_file(TASKS, lf)
+            _fsync_board(TASKS)
+        for finalization in finalizations:
+            try:
+                _finalize_result_receipt(now=now, **finalization)
+            except OSError:
+                # Board-bound results remain inert and retryable by digest.
+                # Unbound/malformed receipts remain at their source path.
+                pass
     return applied
 
 

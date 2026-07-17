@@ -6,7 +6,9 @@ import base64
 import binascii
 import hashlib
 import json
+import os
 import re
+import stat
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -17,10 +19,13 @@ from urllib.parse import quote
 from limen.execution_trajectory import (
     OwnerPublication,
     OwnerReceiptClaim,
+    OwnerReceiptEnvelope,
     OwnerReceiptSnapshot,
     OwnerTrajectorySnapshot,
     ReceiptAuthority,
     TrajectoryPublicationError,
+    canonical_owner_receipt_envelope_bytes,
+    canonical_owner_receipt_payload_bytes,
 )
 
 
@@ -29,7 +34,11 @@ _REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$")
 _PATH = re.compile(r"^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$")
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 _AUTHORITY_OWNER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
-_AUTHORITY_SCHEMA = "limen.receipt_authorities.v1"
+_AUTHORITY_SCHEMA = "limen.receipt_authorities.v2"
+_SYSTEM_CONFIG_SCHEMA = "limen.execution_owner_service.v1"
+_SYSTEM_OWNER_CONFIG = Path("/Library/Application Support/org.limen.execution-owner/config.json")
+_SYSTEM_OWNER_EXECUTABLE = Path("/Library/PrivilegedHelperTools/org.limen.execution-owner")
+_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 @dataclass(frozen=True)
@@ -55,6 +64,129 @@ class GitHubCommandRunner:
         return CommandResult(result.returncode, result.stdout or "", result.stderr or "")
 
 
+def _assert_root_custodied(path: Path, *, executable: bool) -> None:
+    """Reject symlinks or executor-writable components across the full path."""
+
+    if not path.is_absolute():
+        raise ValueError("owner service path must be absolute")
+    components = [Path(path.anchor)]
+    cursor = Path(path.anchor)
+    for part in path.parts[1:]:
+        cursor /= part
+        components.append(cursor)
+    for index, component in enumerate(components):
+        try:
+            metadata = os.lstat(component)
+        except OSError as exc:
+            raise ValueError(f"owner service is unprovisioned: missing {component}") from exc
+        if stat.S_ISLNK(metadata.st_mode):
+            raise ValueError(f"owner service custody rejects symlink {component}")
+        if metadata.st_uid != 0:
+            raise ValueError(f"owner service custody requires root ownership for {component}")
+        if metadata.st_mode & 0o022:
+            raise ValueError(f"owner service custody rejects group/world-writable {component}")
+        is_leaf = index == len(components) - 1
+        if not is_leaf and not stat.S_ISDIR(metadata.st_mode):
+            raise ValueError(f"owner service ancestor is not a directory: {component}")
+        if is_leaf:
+            if not stat.S_ISREG(metadata.st_mode):
+                raise ValueError(f"owner service leaf is not a regular file: {component}")
+            if executable and metadata.st_mode & 0o111 == 0:
+                raise ValueError(f"owner service verifier is not executable: {component}")
+
+
+class SystemOwnerCommandRunner(GitHubCommandRunner):
+    """Invoke only the root-custodied owner client with an inert environment.
+
+    The client talks to the owner LaunchDaemon; GitHub/App credentials remain in
+    that daemon's custody and are never inherited by the executing session.
+    """
+
+    def __init__(self, *, executable: Path, expected_digest: str) -> None:
+        if executable != _SYSTEM_OWNER_EXECUTABLE:
+            raise ValueError("owner service executable path is not the fixed system path")
+        if not _SHA256.fullmatch(expected_digest):
+            raise ValueError("owner service executable digest is invalid")
+        _assert_root_custodied(executable, executable=True)
+        actual = "sha256:" + hashlib.sha256(executable.read_bytes()).hexdigest()
+        if actual != expected_digest:
+            raise ValueError("owner service executable identity does not match root-custodied configuration")
+        self.executable = executable
+
+    def run(self, argv: Sequence[str], *, input_text: str | None = None, timeout: int = 60) -> CommandResult:
+        exact = list(argv)
+        if not exact or exact[0] != str(self.executable):
+            return CommandResult(127, "", "owner service invocation was redirected")
+        try:
+            result = subprocess.run(
+                exact,
+                input=input_text,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+                env={
+                    "HOME": "/var/empty",
+                    "LANG": "C",
+                    "LC_ALL": "C",
+                    "PATH": "/usr/bin:/bin",
+                },
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return CommandResult(127, "", str(exc))
+        return CommandResult(result.returncode, result.stdout or "", result.stderr or "")
+
+
+@dataclass(frozen=True)
+class SystemOwnerConfiguration:
+    runner: SystemOwnerCommandRunner
+    trajectory_owner: Mapping[str, str]
+    receipt_authorities: tuple[Mapping[str, str], ...]
+
+
+def load_system_owner_configuration() -> SystemOwnerConfiguration:
+    """Load the one production owner surface; checkout and environment are irrelevant."""
+
+    _assert_root_custodied(_SYSTEM_OWNER_CONFIG, executable=False)
+    try:
+        raw = _SYSTEM_OWNER_CONFIG.read_bytes()
+        payload = json.loads(raw)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("owner service root-custodied configuration is unreadable") from exc
+    if not isinstance(payload, dict) or set(payload) != {
+        "schema",
+        "verifier",
+        "trajectory_owner",
+        "receipt_authorities",
+    }:
+        raise ValueError("owner service configuration shape is invalid")
+    verifier = payload.get("verifier")
+    trajectory = payload.get("trajectory_owner")
+    authorities = payload.get("receipt_authorities")
+    if (
+        payload.get("schema") != _SYSTEM_CONFIG_SCHEMA
+        or not isinstance(verifier, dict)
+        or set(verifier) != {"path", "sha256"}
+        or verifier.get("path") != str(_SYSTEM_OWNER_EXECUTABLE)
+        or not isinstance(trajectory, dict)
+        or set(trajectory) != {"repository", "ref", "root"}
+        or not isinstance(authorities, list)
+        or not 1 <= len(authorities) <= 32
+    ):
+        raise ValueError("owner service configuration schema is invalid")
+    runner = SystemOwnerCommandRunner(
+        executable=_SYSTEM_OWNER_EXECUTABLE,
+        expected_digest=str(verifier.get("sha256") or ""),
+    )
+    return SystemOwnerConfiguration(
+        runner=runner,
+        trajectory_owner={key: str(value) for key, value in trajectory.items()},
+        receipt_authorities=tuple(
+            {str(key): str(value) for key, value in row.items()} if isinstance(row, dict) else {} for row in authorities
+        ),
+    )
+
+
 class GitHubTrajectoryAdapter:
     """Publish one bounded batch as one fast-forward commit on an owner ref.
 
@@ -69,7 +201,7 @@ class GitHubTrajectoryAdapter:
         ref: str,
         root: str,
         runner: GitHubCommandRunner | None = None,
-        gh: str = "gh",
+        gh: str | None = None,
     ) -> None:
         if not _REPOSITORY.fullmatch(repository):
             raise ValueError("repository must be exact OWNER/NAME")
@@ -82,10 +214,12 @@ class GitHubTrajectoryAdapter:
             or any(segment in {".", ".."} for segment in normalized_root.split("/"))
         ):
             raise ValueError("root is unsafe")
+        if runner is None or not gh:
+            raise ValueError("owner operations require an explicitly validated service runner")
         self.repository = repository
         self.ref = ref
         self.root = normalized_root
-        self.runner = runner or GitHubCommandRunner()
+        self.runner = runner
         self.gh = gh
 
     @staticmethod
@@ -123,6 +257,17 @@ class GitHubTrajectoryAdapter:
             raise TrajectoryPublicationError(f"GitHub owner returned non-object JSON for {endpoint}")
         return decoded
 
+    @staticmethod
+    def _content_bytes(response: Mapping[str, object], attempt_id: str) -> bytes:
+        encoded = response.get("content")
+        encoding = response.get("encoding")
+        if not isinstance(encoded, str) or encoding != "base64":
+            raise TrajectoryPublicationError(f"GitHub owner content is malformed for {attempt_id}")
+        try:
+            return base64.b64decode("".join(encoded.split()), validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise TrajectoryPublicationError(f"GitHub owner content is invalid base64 for {attempt_id}") from exc
+
     def read_many(self, attempt_ids: Sequence[str]) -> OwnerTrajectorySnapshot:
         snapshot_head = self._ref_head()
         rows: dict[str, bytes] = {}
@@ -132,14 +277,7 @@ class GitHubTrajectoryAdapter:
             response = self._api(endpoint, allow_absent=True)
             if response is None:
                 continue
-            encoded = response.get("content")
-            encoding = response.get("encoding")
-            if not isinstance(encoded, str) or encoding != "base64":
-                raise TrajectoryPublicationError(f"GitHub owner content is malformed for {attempt_id}")
-            try:
-                rows[attempt_id] = base64.b64decode("".join(encoded.split()), validate=True)
-            except (ValueError, binascii.Error) as exc:
-                raise TrajectoryPublicationError(f"GitHub owner content is invalid base64 for {attempt_id}") from exc
+            rows[attempt_id] = self._content_bytes(response, attempt_id)
         return OwnerTrajectorySnapshot(token=snapshot_head, records=rows)
 
     def _ref_head(self) -> str:
@@ -149,6 +287,13 @@ class GitHubTrajectoryAdapter:
         if not _SHA.fullmatch(sha):
             raise TrajectoryPublicationError("GitHub owner ref did not resolve to an exact commit")
         return sha
+
+    def _require_ancestor(self, ancestor: str, descendant: str) -> None:
+        response = self._api(f"repos/{self.repository}/compare/{ancestor}...{descendant}")
+        merge_base = response.get("merge_base_commit") if response else None
+        merge_base_sha = str(merge_base.get("sha") or "") if isinstance(merge_base, dict) else ""
+        if merge_base_sha != ancestor:
+            raise TrajectoryPublicationError("GitHub owner publication is not reachable from its base")
 
     def publish_atomic(
         self,
@@ -209,11 +354,24 @@ class GitHubTrajectoryAdapter:
         commit_sha = str(commit_response.get("sha") or "") if commit_response else ""
         if not _SHA.fullmatch(commit_sha):
             raise TrajectoryPublicationError("GitHub owner created commit lacks an exact SHA")
-        self._api(
+        patched = self._api(
             f"repos/{self.repository}/git/refs/heads/{quote(self.ref, safe='')}",
             method="PATCH",
             payload={"sha": commit_sha, "force": False},
         )
+        patched_ref = str(patched.get("ref") or "") if patched else ""
+        patched_object = patched.get("object") if patched else None
+        patched_sha = str(patched_object.get("sha") or "") if isinstance(patched_object, dict) else ""
+        if patched_ref != f"refs/heads/{self.ref}" or patched_sha != commit_sha:
+            raise TrajectoryPublicationError("GitHub owner PATCH response did not confirm the exact new head")
+        if self._ref_head() != commit_sha:
+            raise TrajectoryPublicationError("GitHub owner ref readback did not confirm the exact new head")
+        self._require_ancestor(base_sha, commit_sha)
+        for attempt_id, payload in sorted(payloads.items()):
+            path = quote(self._path(attempt_id), safe="/")
+            response = self._api(f"repos/{self.repository}/contents/{path}?ref={commit_sha}")
+            if self._content_bytes(response or {}, attempt_id) != payload:
+                raise TrajectoryPublicationError(f"GitHub owner exact-commit readback mismatched {attempt_id}")
 
         published_at = datetime.now(timezone.utc)
         return {
@@ -231,7 +389,9 @@ class GitHubReceiptAuthority:
     """Authenticate value evidence from one fixed GitHub owner ref.
 
     The claim may select only the exact attempt-derived path under the
-    configured root, and that reference must name the ref's live exact head.
+    configured root. Its receipt commit may be the live ref head or any
+    reachable ancestor, so a later fast-forward never invalidates an accepted
+    immutable receipt.
     """
 
     def __init__(
@@ -241,14 +401,19 @@ class GitHubReceiptAuthority:
         repository: str,
         ref: str,
         root: str,
-        runner: GitHubCommandRunner | None = None,
-        gh: str = "gh",
+        signature_scheme: str,
+        key_id: str,
+        runner: GitHubCommandRunner,
+        gh: str,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         if not _AUTHORITY_OWNER.fullmatch(owner):
             raise ValueError("receipt authority owner is invalid")
-        # Reuse the publication adapter's strict repository/ref/root validation
-        # and read primitives without granting publication capability here.
+        if signature_scheme != "owner-service-v1":
+            raise ValueError("receipt authority signature scheme is unsupported")
+        if not re.fullmatch(r"^[A-Za-z0-9._-]{1,128}$", key_id):
+            raise ValueError("receipt authority key ID is invalid")
+        # Reuse strict identity/path validation without granting publication.
         adapter = GitHubTrajectoryAdapter(
             repository=repository,
             ref=ref,
@@ -262,6 +427,8 @@ class GitHubReceiptAuthority:
         self.root = adapter.root
         self.runner = adapter.runner
         self.gh = adapter.gh
+        self.signature_scheme = signature_scheme
+        self.key_id = key_id
         self._clock = clock or (lambda: datetime.now(timezone.utc))
 
     @staticmethod
@@ -293,6 +460,49 @@ class GitHubReceiptAuthority:
             raise TrajectoryPublicationError("GitHub receipt authority ref lacks an exact head")
         return sha
 
+    def _receipt_commit_is_reachable(self, receipt_commit: str, live_head: str) -> bool:
+        response = self._api(f"repos/{self.repository}/compare/{receipt_commit}...{live_head}")
+        merge_base = response.get("merge_base_commit")
+        merge_base_sha = str(merge_base.get("sha") or "") if isinstance(merge_base, dict) else ""
+        return merge_base_sha == receipt_commit
+
+    def _verify_owner_signature(self, envelope: OwnerReceiptEnvelope) -> bool:
+        signature = envelope.signature
+        if signature.scheme != self.signature_scheme or signature.key_id != self.key_id:
+            return False
+        unsigned = canonical_owner_receipt_payload_bytes(envelope.payload)
+        unsigned_digest = "sha256:" + hashlib.sha256(unsigned).hexdigest()
+        result = self.runner.run(
+            [
+                self.gh,
+                "verify-signature",
+                "--owner",
+                self.owner,
+                "--scheme",
+                self.signature_scheme,
+                "--key-id",
+                self.key_id,
+                "--signature",
+                signature.value,
+            ],
+            input_text=unsigned.decode("utf-8"),
+            timeout=60,
+        )
+        if result.returncode != 0:
+            return False
+        try:
+            response = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return False
+        return bool(
+            isinstance(response, dict)
+            and response.get("valid") is True
+            and response.get("owner") == self.owner
+            and response.get("scheme") == self.signature_scheme
+            and response.get("key_id") == self.key_id
+            and response.get("payload_digest") == unsigned_digest
+        )
+
     def matches(self, claim: OwnerReceiptClaim) -> bool:
         return claim.owner == self.owner and claim.reference.startswith(f"https://github.com/{self.repository}/blob/")
 
@@ -309,37 +519,61 @@ class GitHubReceiptAuthority:
             return None
         prefix = f"https://github.com/{self.repository}/blob/"
         reference_tail = claim.reference.removeprefix(prefix)
-        head, separator, path = reference_tail.partition("/")
-        if not separator or not _SHA.fullmatch(head) or path != self._path(attempt_id):
+        receipt_commit, separator, path = reference_tail.partition("/")
+        if not separator or not _SHA.fullmatch(receipt_commit) or path != self._path(attempt_id):
             return None
         live_head = self._ref_head()
-        if head != live_head:
+        if not self._receipt_commit_is_reachable(receipt_commit, live_head):
             return None
-        response = self._api(f"repos/{self.repository}/contents/{quote(path, safe='/')}?ref={live_head}")
+        response = self._api(f"repos/{self.repository}/contents/{quote(path, safe='/')}?ref={receipt_commit}")
         encoded = response.get("content")
         if not isinstance(encoded, str) or response.get("encoding") != "base64":
             return None
         try:
             payload = base64.b64decode("".join(encoded.split()), validate=True)
-            snapshot = OwnerReceiptSnapshot.model_validate_json(payload)
-        except (ValueError, binascii.Error):
+            decoded = json.loads(payload)
+            envelope = OwnerReceiptEnvelope.model_validate(decoded)
+        except (ValueError, binascii.Error, json.JSONDecodeError):
             return None
+        if canonical_owner_receipt_envelope_bytes(envelope) != payload:
+            return None
+        if "reference" in decoded or "digest" in decoded:
+            return None
+        if "reference" in decoded.get("payload", {}) or "digest" in decoded.get("payload", {}):
+            return None
+        if "reference" in decoded.get("signature", {}) or "digest" in decoded.get("signature", {}):
+            return None
+        digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+        if digest != claim.digest or not self._verify_owner_signature(envelope):
+            return None
+        signed = envelope.payload
         if (
-            snapshot.owner != claim.owner
-            or snapshot.reference != claim.reference
-            or snapshot.digest != claim.digest
-            or snapshot.head_sha != claim.head_sha
-            or snapshot.attempt_id != attempt_id
-            or snapshot.task_id != task_id
-            or snapshot.repository != repository
-            or snapshot.predicate_digest != predicate_digest
-            or snapshot.reconciliation_digest != claim.reconciliation_digest
+            signed.owner != claim.owner
+            or signed.head_sha != claim.head_sha
+            or signed.attempt_id != attempt_id
+            or signed.task_id != task_id
+            or signed.repository != repository
+            or signed.predicate_digest != predicate_digest
+            or signed.reconciliation_digest != claim.reconciliation_digest
         ):
             return None
         verified_at = self._clock()
         if verified_at.tzinfo is None:
             return None
-        return snapshot.model_copy(update={"verified_at": verified_at})
+        return OwnerReceiptSnapshot(
+            owner=signed.owner,
+            reference=claim.reference,
+            digest=claim.digest,
+            head_sha=signed.head_sha,
+            attempt_id=signed.attempt_id,
+            task_id=signed.task_id,
+            repository=signed.repository,
+            predicate_digest=signed.predicate_digest,
+            reconciliation_digest=signed.reconciliation_digest,
+            terminal=signed.terminal,
+            predicate_passed=signed.predicate_passed,
+            verified_at=verified_at,
+        )
 
 
 class ConfiguredReceiptAuthority:
@@ -374,11 +608,15 @@ class ConfiguredReceiptAuthority:
 def load_configured_receipt_authority(
     path: Path,
     *,
-    runner: GitHubCommandRunner | None = None,
-    gh: str = "gh",
+    runner: GitHubCommandRunner,
+    gh: str,
     clock: Callable[[], datetime] | None = None,
 ) -> ReceiptAuthority | None:
-    """Load a strict tracked registry. An empty shipped registry is unprovisioned."""
+    """Parse an explicit fixture configuration.
+
+    Production never calls this function: it has no CLI/environment route and
+    always resolves :func:`load_system_receipt_authority` instead.
+    """
 
     try:
         payload = json.loads(path.read_bytes())
@@ -399,6 +637,8 @@ def load_configured_receipt_authority(
             "repository",
             "ref",
             "root",
+            "signature_scheme",
+            "key_id",
         }:
             raise ValueError("receipt authority entry shape is invalid")
         if row.get("kind") != "github":
@@ -409,9 +649,67 @@ def load_configured_receipt_authority(
                 repository=str(row["repository"]),
                 ref=str(row["ref"]),
                 root=str(row["root"]),
+                signature_scheme=str(row["signature_scheme"]),
+                key_id=str(row["key_id"]),
                 runner=runner,
                 gh=gh,
                 clock=clock,
             )
         )
     return ConfiguredReceiptAuthority(authorities)
+
+
+def _authorities_from_system(
+    config: SystemOwnerConfiguration,
+    *,
+    clock: Callable[[], datetime] | None = None,
+) -> ReceiptAuthority:
+    authorities: list[GitHubReceiptAuthority] = []
+    for row in config.receipt_authorities:
+        if (
+            set(row)
+            != {
+                "kind",
+                "owner",
+                "repository",
+                "ref",
+                "root",
+                "signature_scheme",
+                "key_id",
+            }
+            or row.get("kind") != "github-signed"
+        ):
+            raise ValueError("owner service receipt authority entry is invalid")
+        authorities.append(
+            GitHubReceiptAuthority(
+                owner=row["owner"],
+                repository=row["repository"],
+                ref=row["ref"],
+                root=row["root"],
+                signature_scheme=row["signature_scheme"],
+                key_id=row["key_id"],
+                runner=config.runner,
+                gh=str(_SYSTEM_OWNER_EXECUTABLE),
+                clock=clock,
+            )
+        )
+    return ConfiguredReceiptAuthority(authorities)
+
+
+def load_system_receipt_authority() -> ReceiptAuthority:
+    """Return the fixed system authority or raise while unprovisioned."""
+
+    return _authorities_from_system(load_system_owner_configuration())
+
+
+def load_system_trajectory_adapter() -> GitHubTrajectoryAdapter:
+    """Return the fixed system trajectory publisher or raise while unprovisioned."""
+
+    config = load_system_owner_configuration()
+    return GitHubTrajectoryAdapter(
+        repository=config.trajectory_owner["repository"],
+        ref=config.trajectory_owner["ref"],
+        root=config.trajectory_owner["root"],
+        runner=config.runner,
+        gh=str(_SYSTEM_OWNER_EXECUTABLE),
+    )

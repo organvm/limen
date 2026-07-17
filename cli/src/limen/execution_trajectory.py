@@ -15,7 +15,6 @@ import uuid
 from collections.abc import Sized
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from types import MappingProxyType
 from typing import Iterable, Literal, Mapping, Protocol, Sequence
 
@@ -43,9 +42,6 @@ _STATUS_OUTCOME = {
 _SHA256_PATTERN = r"^sha256:[0-9a-f]{64}$"
 _HEX_DIGEST_PATTERN = r"^[0-9a-f]{64}$"
 _ATTEMPT_IDENTITY_SCHEMA = "limen.execution_attempt_identity.v2"
-_RECEIPT_AUTHORITY_CONFIG = (
-    Path(__file__).resolve().parents[3] / "institutio" / "governance" / "execution-receipt-authorities.json"
-)
 
 
 def _is_sha(value: str | None) -> bool:
@@ -338,6 +334,103 @@ class OwnerReceiptClaim(BaseModel):
         return self
 
 
+class OwnerReceiptPayload(BaseModel):
+    """Canonical owner-signed facts.
+
+    An immutable Git commit locator and the digest of the stored envelope are
+    deliberately absent: either field would make the signed document
+    self-referential. They are attached by :class:`OwnerReceiptClaim` only after
+    exact-commit readback.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["limen.owner_receipt_payload.v2"] = Field(
+        default="limen.owner_receipt_payload.v2",
+        alias="schema",
+        serialization_alias="schema",
+    )
+    owner: str = Field(min_length=1, max_length=128)
+    head_sha: str = Field(min_length=40, max_length=40)
+    attempt_id: str = Field(min_length=1, max_length=192)
+    task_id: str = Field(min_length=1, max_length=192)
+    repository: str = Field(min_length=3, max_length=256)
+    predicate_digest: str = Field(pattern=_SHA256_PATTERN)
+    reconciliation_digest: str = Field(pattern=_SHA256_PATTERN)
+    terminal: bool
+    predicate_passed: bool
+    issued_at: datetime
+
+    @field_validator("head_sha")
+    @classmethod
+    def exact_head(cls, value: str) -> str:
+        if not _is_sha(value):
+            raise ValueError("owner receipt payload head_sha must be a 40-hex commit")
+        return value
+
+    @field_validator("repository")
+    @classmethod
+    def exact_repository(cls, value: str) -> str:
+        if not _is_repository(value):
+            raise ValueError("owner receipt payload repository must be exact OWNER/NAME")
+        return value
+
+    @field_validator("issued_at")
+    @classmethod
+    def issued_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("owner receipt payload issued_at must include a timezone")
+        return value
+
+
+class OwnerReceiptSignature(BaseModel):
+    """Opaque signature produced by the independently custodied owner service."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    scheme: Literal["owner-service-v1"]
+    key_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$")
+    value: str = Field(min_length=16, max_length=4096, pattern=r"^[A-Za-z0-9_+/=-]+$")
+
+
+class OwnerReceiptEnvelope(BaseModel):
+    """Stored, constructible receipt: signed facts only, never its own locator."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["limen.owner_receipt_envelope.v2"] = Field(
+        default="limen.owner_receipt_envelope.v2",
+        alias="schema",
+        serialization_alias="schema",
+    )
+    payload: OwnerReceiptPayload
+    signature: OwnerReceiptSignature
+
+
+def _canonical_model_bytes(value: BaseModel) -> bytes:
+    return json.dumps(
+        value.model_dump(mode="json", by_alias=True),
+        allow_nan=False,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def canonical_owner_receipt_payload_bytes(value: OwnerReceiptPayload | Mapping[str, object]) -> bytes:
+    """Return the sole byte representation covered by the owner signature."""
+
+    payload = value if isinstance(value, OwnerReceiptPayload) else OwnerReceiptPayload.model_validate(value)
+    return _canonical_model_bytes(payload)
+
+
+def canonical_owner_receipt_envelope_bytes(value: OwnerReceiptEnvelope | Mapping[str, object]) -> bytes:
+    """Return the sole stored representation whose digest is claimed externally."""
+
+    envelope = value if isinstance(value, OwnerReceiptEnvelope) else OwnerReceiptEnvelope.model_validate(value)
+    return _canonical_model_bytes(envelope)
+
+
 class OwnerReceiptSnapshot(BaseModel):
     """Fresh evidence returned by the owner adapter, never copied from the board."""
 
@@ -520,17 +613,17 @@ class ReceiptAuthority(Protocol):
 
 
 def _configured_receipt_authority() -> ReceiptAuthority | None:
-    """Resolve the sole production trust root from the tracked fixed path.
+    """Resolve the sole production trust root from the fixed system service.
 
-    The caller cannot supply a verifier or redirect the registry through an
-    environment variable. Missing, invalid, or unprovisioned authority is an
-    intentional fail-closed zero-value state.
+    Neither a checkout file nor an environment variable can redirect this
+    boundary. Missing, invalid, or unprovisioned owner custody is an intentional
+    fail-closed zero-value state.
     """
 
     try:
-        from limen.execution_trajectory_github import load_configured_receipt_authority
+        from limen.execution_trajectory_github import load_system_receipt_authority
 
-        return load_configured_receipt_authority(_RECEIPT_AUTHORITY_CONFIG)
+        return load_system_receipt_authority()
     except Exception:
         return None
 

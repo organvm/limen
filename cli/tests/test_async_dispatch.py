@@ -269,9 +269,17 @@ def _assert_remote_harvest_blocked(tmp_path, da, result, *, marker_cleared: bool
         str(result["attempt_id"]),
     )
     result_path = _write_async_result(da, result)
+    result_digest = f"sha256:{hashlib.sha256(json.dumps(result).encode()).hexdigest()}"
 
     assert da.harvest() == 0
-    assert (tmp_path / "tasks.yaml").read_bytes() == before
+    if marker_cleared:
+        owner = _board(tmp_path)[str(result["task_id"])]
+        fences = [entry for entry in owner.dispatch_log if entry.result_receipt_digest == result_digest]
+        assert len(fences) == 1
+        assert fences[0].status == "in_progress"
+        assert "metadata fenced" in str(fences[0].output)
+    else:
+        assert (tmp_path / "tasks.yaml").read_bytes() == before
     assert not result_path.exists()
     markers = list(da.RUNS.glob("*.running"))
     assert (not markers) if marker_cleared else bool(markers)

@@ -90,10 +90,18 @@ into value-bearing trajectory receipts.
 The board is transport, not value authority. Success motion earns zero unless the predicate and
 owner receipt both bind the exact commit and a fresh owner adapter independently verifies the
 receipt. Credit belongs to `executing_keeper`, never to the provider route or the observer that
-later reconciled the row.
+later reconciled the row. The canonical signed receipt payload excludes its own digest and
+commit-bearing locator; those claims are attached only after exact-commit content readback,
+reachable-ancestor proof, envelope hashing, and independent owner-service signature verification.
+An owner-ref fast-forward therefore preserves older reachable receipts, while a diverged receipt
+fails closed.
 
 Publication has no local-shadow default. `publish_bounded` requires an owner adapter with atomic
 compare-and-set publication, rejects divergent existing attempts, and enforces finite record and
 byte bounds before the owner write. The GitHub adapter publishes the whole batch through one
-fast-forward commit/ref update; a lost compare-and-set can leave unreachable blobs but exposes no
-partial trajectory paths.
+fast-forward commit/ref update. It returns a receipt only after the PATCH response, live ref,
+ancestor relation, and every exact-commit byte readback agree; a lost compare-and-set can leave
+unreachable blobs but exposes no partial trajectory paths. Production owner identity and
+credentials come only from the fixed root-custodied service documented in
+[`execution-owner-service.md`](execution-owner-service.md), never from a checkout registry,
+environment-selected binary, shell `PATH`, or executor GitHub login.
