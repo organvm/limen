@@ -56,7 +56,6 @@ from limen.dispatch import (  # noqa: E402
     _apply_result,
     _REMOTE_SUBMISSION_RECEIPTS,
     _attempt_launch_entry,
-    _current_attempt_id,
     _validated_model_selection_receipt,
     _deps_met,
     _dispatchable,
@@ -809,20 +808,29 @@ def reap_stale(max_age_s: int):
                     else:
                         t.status = "open"  # dead worker left no result → retry on a later beat
                         t.updated = now
-                        t.dispatch_log.append(
-                            last.model_copy(
-                                update={
-                                    "timestamp": now,
-                                    "agent": agent,
-                                    "session_id": "async-reap-stale",
-                                    "status": "open",
-                                    "trajectory_outcome": "failed",
-                                    "output": (
-                                        f"dispatch-async: stale worker marker older than {max_age_s}s "
-                                        "reaped; attempt closed and task reopened"
-                                    ),
-                                }
-                            )
+                        t.dispatch_log.extend(
+                            [
+                                last.model_copy(
+                                    update={
+                                        "timestamp": now,
+                                        "agent": agent,
+                                        "session_id": "async-reap-stale",
+                                        "status": "failed",
+                                        "trajectory_outcome": "failed",
+                                        "output": (
+                                            f"dispatch-async: stale worker marker older than {max_age_s}s "
+                                            "reaped; attempt closed before retry"
+                                        ),
+                                    }
+                                ),
+                                DispatchLogEntry(
+                                    timestamp=now,
+                                    agent=agent,
+                                    session_id="async-reap-stale-requeue",
+                                    status="open",
+                                    output="dispatch-async: stale attempt reopened for a later beat",
+                                ),
+                            ]
                         )
                         changed = True
                 else:
@@ -887,20 +895,29 @@ def reap_stale(max_age_s: int):
                     else:
                         t.status = "open"
                         t.updated = now
-                        t.dispatch_log.append(
-                            last.model_copy(
-                                update={
-                                    "timestamp": now,
-                                    "agent": agent,
-                                    "session_id": "async-reap-stale",
-                                    "status": "open",
-                                    "trajectory_outcome": "failed",
-                                    "output": (
-                                        f"dispatch-async: markerless async reservation older than {max_age_s}s "
-                                        "reaped; attempt closed and task reopened"
-                                    ),
-                                }
-                            )
+                        t.dispatch_log.extend(
+                            [
+                                last.model_copy(
+                                    update={
+                                        "timestamp": now,
+                                        "agent": agent,
+                                        "session_id": "async-reap-stale",
+                                        "status": "failed",
+                                        "trajectory_outcome": "failed",
+                                        "output": (
+                                            f"dispatch-async: markerless async reservation older than {max_age_s}s "
+                                            "reaped; attempt closed before retry"
+                                        ),
+                                    }
+                                ),
+                                DispatchLogEntry(
+                                    timestamp=now,
+                                    agent=agent,
+                                    session_id="async-reap-stale-requeue",
+                                    status="open",
+                                    output="dispatch-async: markerless stale attempt reopened for a later beat",
+                                ),
+                            ]
                         )
                         applied_markerless.append(tid)
                         changed = True
@@ -1438,17 +1455,26 @@ def recover_exact_task(
             return {"status": "would_recover", "recovered_count": 0}
         task.status = "open"
         task.updated = now
-        task.dispatch_log.append(
-            last.model_copy(
-                update={
-                    "timestamp": now,
-                    "agent": task.target_agent,
-                    "session_id": "async-recover-exact",
-                    "status": "open",
-                    "trajectory_outcome": "failed",
-                    "output": "dispatch-async: exact orphaned async attempt closed and task reopened",
-                }
-            )
+        task.dispatch_log.extend(
+            [
+                last.model_copy(
+                    update={
+                        "timestamp": now,
+                        "agent": task.target_agent,
+                        "session_id": "async-recover-exact",
+                        "status": "failed",
+                        "trajectory_outcome": "failed",
+                        "output": "dispatch-async: exact orphaned async attempt closed before retry",
+                    }
+                ),
+                DispatchLogEntry(
+                    timestamp=now,
+                    agent=task.target_agent,
+                    session_id="async-recover-exact-requeue",
+                    status="open",
+                    output="dispatch-async: exact orphaned attempt reopened for a later beat",
+                ),
+            ]
         )
         save_limen_file(TASKS, lf)
     for marker in markers_to_remove:
@@ -1716,10 +1742,7 @@ def reserve_and_launch(
             by_id = {task.id: task for task in lf.tasks}
             reserved_contract_hashes = {tid: execution_contract_hash(by_id[tid]) for _agent, tid in picked}
             reserved_ids = {tid: by_id[tid].dispatch_log[-1].session_id for _agent, tid in picked}
-            reserved_attempt_ids = {
-                tid: str(by_id[tid].dispatch_log[-1].attempt_id or "")
-                for _agent, tid in picked
-            }
+            reserved_attempt_ids = {tid: str(by_id[tid].dispatch_log[-1].attempt_id or "") for _agent, tid in picked}
             if not dry and (picked or reset_changed):
                 try:
                     save_limen_file(TASKS, lf)

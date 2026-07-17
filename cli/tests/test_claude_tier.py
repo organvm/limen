@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 
@@ -30,9 +30,19 @@ def task(*, labels: list[str] | None = None, claude_tier: str | None = None) -> 
 def test_legacy_tier_words_are_opaque_and_provider_auto_wins() -> None:
     plain = task()
     hinted = task(labels=["tier:any-renamed-shape"], claude_tier="opus")
+    launch = D._attempt_launch_entry(
+        hinted,
+        "claude",
+        reservation_session="claude-tier-test",
+        started_at=datetime.now(timezone.utc),
+        output="fixture model-selection attempt",
+    )
+    hinted.status = "in_progress"
+    hinted.dispatch_log.extend([launch, launch.model_copy(update={"status": "in_progress"})])
 
     assert D._claude_model(plain) is None
     assert D._claude_model(hinted) is None
+    assert D._MODEL_SELECTION_RECEIPTS[hinted.id]["attempt_id"] == launch.attempt_id
     assert D._MODEL_SELECTION_RECEIPTS[hinted.id]["selection_source"] == "claude_auto"
 
 

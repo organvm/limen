@@ -586,6 +586,36 @@ def test_log_conversion_freezes_launch_executor_session_and_provider_route() -> 
     assert record.executing_session == "launch-session"
     assert record.provider_route == "provider-lane"
     assert record.route_selection_source == "dispatch_target_agent"
+    assert record.outcome == "succeeded"
+
+    for status, explicit_outcome in (
+        ("done", "failed"),
+        ("failed", "succeeded"),
+        ("failed_blocked", "failed"),
+        ("needs_human", "succeeded"),
+    ):
+        mismatched_lifecycle = terminal.model_copy(
+            update={
+                "status": status,
+                "trajectory_outcome": explicit_outcome,
+            }
+        )
+        with pytest.raises(ValueError, match="status and trajectory outcome disagree"):
+            trajectory_from_log_entries(
+                task_id="TASK-runtime",
+                launch=launch,
+                terminal=mismatched_lifecycle,
+            )
+
+    for nonterminal_status in ("open", "dispatched", "in_progress", "archived"):
+        nonterminal = terminal.model_copy(
+            update={
+                "status": nonterminal_status,
+                "trajectory_outcome": "succeeded",
+            }
+        )
+        with pytest.raises(ValueError, match="canonical terminal lifecycle status"):
+            trajectory_from_log_entries(task_id="TASK-runtime", launch=launch, terminal=nonterminal)
 
     with pytest.raises(ValueError, match="persisted identity"):
         trajectory_from_log_entries(task_id="TASK-other", launch=launch, terminal=terminal)

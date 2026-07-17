@@ -15,9 +15,11 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import limen.dispatch as D
+import limen.trajectory_publication as trajectory_publication
 from limen.capacity import PAID_AGENT_ORDER, agent_status, capacity_census, format_capacity_census, select_lanes
 from limen.dispatch import dispatch_parallel, dispatch_tasks, release_stale_tasks
 from limen.doctor import qa_report, readiness_report, stale_tasks
+from limen.execution_trajectory import trajectory_from_log_entries
 from limen.io import load_limen_file
 from limen.jules_remote import JulesRemoteSnapshot
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
@@ -701,6 +703,63 @@ def test_parallel_selection_normalizes_only_selected_legacy_task(monkeypatch) ->
     assert selected.status == "dispatched"
     assert unselected.predicate is None and unselected.receipt_target is None
     assert unselected.status == "open"
+
+
+def test_parallel_retry_derives_profile_from_current_contract_not_prior_attempt(monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_VALUE_GATE", "0")
+    old_started = datetime(2026, 7, 17, 12, 0, tzinfo=timezone.utc)
+    retry_started = datetime(2026, 7, 17, 12, 1, tzinfo=timezone.utc)
+    task = Task(
+        id="PROFILE-RETRY",
+        title="retry under a stronger current contract",
+        repo="someorg/dispatch-lab",
+        target_agent="codex",
+        status="open",
+        predicate="python3 -m pytest -q",
+        receipt_target="github:someorg/dispatch-lab:pull-request",
+        created=date(2026, 7, 17),
+    )
+    prior = D._attempt_launch_entry(
+        task,
+        "codex",
+        reservation_session="prior-attempt",
+        started_at=old_started,
+        output="prior reservation",
+    )
+    task.dispatch_log.extend(
+        [
+            prior,
+            prior.model_copy(
+                update={
+                    "status": "failed",
+                    "trajectory_outcome": "failed",
+                    "output": "prior attempt failed",
+                }
+            ),
+        ]
+    )
+    task.labels.append("profile:min_context:65536")
+    board = LimenFile.model_validate(
+        {
+            "portal": {"budget": {"daily": 10, "per_agent": {"codex": 10}, "track": {"date": ""}}},
+            "tasks": [task],
+        }
+    )
+
+    picked = D._select_parallel_reservations(
+        board,
+        ["codex"],
+        1,
+        retry_started,
+        dry_run=False,
+        admission_snapshot=None,
+    )
+
+    assert picked == [("codex", "PROFILE-RETRY")]
+    retry = board.tasks[0].dispatch_log[-1]
+    assert prior.execution_profile["min_context"] == 8192
+    assert retry.execution_profile["min_context"] == 65536
+    assert retry.attempt_id != prior.attempt_id
 
 
 def test_parallel_selection_fails_closed_when_legacy_owner_cannot_be_derived(monkeypatch, capsys) -> None:
@@ -1687,8 +1746,11 @@ def test_rate_limit_and_timeout_events_are_canonical_routes(monkeypatch) -> None
     )
     D._apply_result(rate_limited, "codex", D._RATELIMIT, now, BudgetTrack(date="2026-07-10"))
     assert rate_limited.status == "open"
-    assert rate_limited.dispatch_log[-1].status == "open"
-    assert rate_limited.dispatch_log[-1].route_to == "opencode"
+    assert rate_limited.dispatch_log[-1].status == rate_limited.status
+    assert rate_limited.dispatch_log[-1].attempt_id is None
+    assert rate_limited.dispatch_log[-2].status == "failed_blocked"
+    assert rate_limited.dispatch_log[-2].trajectory_outcome == "blocked"
+    assert rate_limited.dispatch_log[-2].route_to == "opencode"
 
     timed_out = Task(
         id="TIME",
@@ -1699,9 +1761,58 @@ def test_rate_limit_and_timeout_events_are_canonical_routes(monkeypatch) -> None
     )
     D._apply_result(timed_out, "codex", D._TIMEOUT, now, BudgetTrack(date="2026-07-10"))
     assert timed_out.status == "open"
-    assert timed_out.dispatch_log[-1].status == "open"
-    assert timed_out.dispatch_log[-1].route_to == "jules"
+    assert timed_out.dispatch_log[-1].status == timed_out.status
+    assert timed_out.dispatch_log[-1].attempt_id is None
+    assert timed_out.dispatch_log[-2].status == "failed"
+    assert timed_out.dispatch_log[-2].trajectory_outcome == "failed"
+    assert timed_out.dispatch_log[-2].route_to == "jules"
     assert D.agent_can_run_task("codex", timed_out) is False
+
+
+def _register_model_selection_attempt(task: Task, *, agent: str | None = None) -> DispatchLogEntry:
+    launch = D._attempt_launch_entry(
+        task,
+        agent or task.target_agent,
+        reservation_session=f"model-selection-{task.id}",
+        started_at=datetime.now(timezone.utc),
+        output="fixture model-selection attempt",
+    )
+    task.status = "in_progress"
+    task.dispatch_log.extend([launch, launch.model_copy(update={"status": "in_progress"})])
+    return launch
+
+
+def test_requeue_preserves_terminal_attempt_before_attempt_free_open_transition(monkeypatch) -> None:
+    monkeypatch.setattr(D, "_next_lane", lambda _agent: "jules")
+    task = Task(
+        id="ATTEMPT-REQUEUE",
+        title="preserve failed attempt before retry",
+        repo="example/repository",
+        target_agent="codex",
+        status="open",
+        created=date(2026, 7, 17),
+    )
+    launch = _register_model_selection_attempt(task)
+
+    assert D._apply_result(
+        task,
+        "codex",
+        False,
+        datetime.now(timezone.utc),
+        BudgetTrack(date="2026-07-17"),
+        expected_attempt_id=launch.attempt_id,
+    )
+
+    terminal, requeue = task.dispatch_log[-2:]
+    assert task.status == requeue.status == "open"
+    assert terminal.status == "failed"
+    assert terminal.trajectory_outcome == "failed"
+    assert terminal.attempt_id == launch.attempt_id
+    assert requeue.attempt_id is None
+    assert D._current_attempt_id(task) == launch.attempt_id
+    assert trajectory_publication._terminal_events(task) == [terminal]
+    record = trajectory_from_log_entries(task_id=task.id, launch=launch, terminal=terminal)
+    assert record.outcome == "failed"
 
 
 def test_warp_auto_dispatch_sends_dynamic_profile_without_model_override(monkeypatch) -> None:
@@ -1722,6 +1833,7 @@ def test_warp_auto_dispatch_sends_dynamic_profile_without_model_override(monkeyp
         status="open",
         created=date(2026, 7, 10),
     )
+    launch = _register_model_selection_attempt(task)
 
     result = D._call_warp_oz("warp", task, False)
 
@@ -1729,6 +1841,7 @@ def test_warp_auto_dispatch_sends_dynamic_profile_without_model_override(monkeyp
     assert any(arg.startswith("execution_profile={") for arg in captured)
     assert not any(arg.startswith("model=") for arg in captured)
     receipt = D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+    assert receipt["attempt_id"] == launch.attempt_id
     assert receipt["selection_source"] == "warp_auto"
     assert receipt["selected_model"] is None
 
@@ -1766,9 +1879,11 @@ def test_identifier_only_providers_default_to_auto_without_catalog_lookup(
         target_agent=agent,
         created=date(2026, 7, 15),
     )
+    launch = _register_model_selection_attempt(task)
 
     assert getattr(D, selector)(task) is None
     receipt = D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+    assert receipt["attempt_id"] == launch.attempt_id
     assert receipt["selected_model"] is None
     assert receipt["selection_source"] == f"{agent}_auto"
     argv = D._agent_argv(agent, task)
@@ -1796,6 +1911,7 @@ def test_provider_override_tracks_renamed_add_remove_and_reorder(
         target_agent=agent,
         created=date(2026, 7, 15),
     )
+    _register_model_selection_attempt(task)
 
     assert getattr(D, selector)(task) == "shape-z"
     first_hash = D._MODEL_SELECTION_RECEIPTS[task.id]["catalog_hash"]
@@ -1820,11 +1936,13 @@ def test_claude_override_never_executes_cli_catalog_probe(monkeypatch) -> None:
         target_agent="claude",
         created=date(2026, 7, 17),
     )
+    launch = _register_model_selection_attempt(task)
 
     with pytest.raises(D.ProviderModelSelectionBlocked, match="no safe metadata catalog"):
         D._claude_model(task)
 
     receipt = D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+    assert receipt["attempt_id"] == launch.attempt_id
     assert receipt["selected_model"] is None
     assert receipt["selection_source"] == "claude_override_unvalidated"
 
@@ -1869,11 +1987,13 @@ def test_dispatch_event_records_dynamic_selection_receipt() -> None:
         status="open",
         created=date(2026, 7, 10),
     )
+    launch = _register_model_selection_attempt(task)
     D._MODEL_SELECTION_RECEIPTS[task.id] = {
-        "execution_profile": {"reasoning_depth": 0.7},
+        "attempt_id": launch.attempt_id,
+        "execution_profile": launch.execution_profile,
         "selected_model": "fixture/runtime-output",
         "selection_source": "opencode_live_catalog",
-        "catalog_hash": "abc123",
+        "catalog_hash": "a" * 64,
     }
 
     D._apply_result(
@@ -1882,13 +2002,68 @@ def test_dispatch_event_records_dynamic_selection_receipt() -> None:
         True,
         datetime.datetime.now(datetime.timezone.utc),
         BudgetTrack(date="2026-07-10"),
+        expected_attempt_id=launch.attempt_id,
     )
 
     event = task.dispatch_log[-1]
     assert event.status == "dispatched"
     assert event.selected_model == "fixture/runtime-output"
     assert event.selection_source == "opencode_live_catalog"
-    assert event.catalog_hash == "abc123"
+    assert event.catalog_hash == "a" * 64
+
+
+def test_model_selection_receipt_from_prior_identical_profile_cannot_cross_retry() -> None:
+    task = Task(
+        id="SELECTED-RETRY",
+        title="same profile, distinct attempts",
+        target_agent="opencode",
+        status="open",
+        created=date(2026, 7, 17),
+    )
+    first = _register_model_selection_attempt(task)
+    D._record_model_selection(
+        task,
+        profile=dict(first.execution_profile or {}),
+        selected_model="fixture/runtime-output",
+        source="opencode_live_catalog",
+        fingerprint="a" * 64,
+    )
+    stale_receipt = dict(D._MODEL_SELECTION_RECEIPTS[task.id])
+
+    task.status = "open"
+    D._record_model_selection(
+        task,
+        profile=dict(first.execution_profile or {}),
+        selected_model="fixture/runtime-output",
+        source="opencode_live_catalog",
+        fingerprint="a" * 64,
+    )
+    assert task.id not in D._MODEL_SELECTION_RECEIPTS
+    second = D._attempt_launch_entry(
+        task,
+        "opencode",
+        reservation_session="model-selection-retry",
+        started_at=datetime.now(timezone.utc),
+        output="fixture retry attempt",
+    )
+    task.status = "in_progress"
+    task.dispatch_log.extend([second, second.model_copy(update={"status": "in_progress"})])
+    assert second.execution_profile == first.execution_profile
+    assert second.attempt_id != first.attempt_id
+    D._MODEL_SELECTION_RECEIPTS[task.id] = stale_receipt
+
+    with pytest.raises(ValueError, match="registered attempt identity"):
+        D._apply_result(
+            task,
+            "opencode",
+            True,
+            datetime.now(timezone.utc),
+            BudgetTrack(date="2026-07-17"),
+            expected_attempt_id=second.attempt_id,
+        )
+
+    assert task.status == "in_progress"
+    assert not any(entry.selected_model for entry in task.dispatch_log if entry.attempt_id == second.attempt_id)
 
 
 def test_attempt_launch_freezes_classification_before_provider_motion() -> None:
@@ -2070,8 +2245,9 @@ def test_failed_result_skips_down_lane_in_default_cascade(tmp_path: Path, monkey
 
     assert task.status == "open"
     assert task.target_agent == "jules"
-    assert task.dispatch_log[-1].status == "open"
-    assert task.dispatch_log[-1].route_to == "jules"
+    assert task.dispatch_log[-1].status == task.status
+    assert task.dispatch_log[-2].status == "failed"
+    assert task.dispatch_log[-2].route_to == "jules"
     assert "tried:claude" in task.labels
 
 
@@ -2097,9 +2273,10 @@ def test_remote_service_failure_skips_unarmed_ollama_floor(monkeypatch) -> None:
 
     assert task.status == "open"
     assert task.target_agent == "opencode"
-    assert task.dispatch_log[-1].status == "open"
-    assert task.dispatch_log[-1].route_to == "opencode"
-    assert task.dispatch_log[-1].output == "remote/service lane failed; reopened to healthy fleet cascade"
+    assert task.dispatch_log[-1].status == task.status
+    assert task.dispatch_log[-2].status == "failed"
+    assert task.dispatch_log[-2].route_to == "opencode"
+    assert task.dispatch_log[-2].output == "remote/service lane failed; reopened to healthy fleet cascade"
     assert "tried:jules" in task.labels
 
 
@@ -2127,8 +2304,9 @@ def test_remote_service_failure_can_use_armed_matching_ollama_floor(monkeypatch)
 
     assert task.status == "open"
     assert task.target_agent == "ollama"
-    assert task.dispatch_log[-1].status == "open"
-    assert task.dispatch_log[-1].route_to == "ollama"
+    assert task.dispatch_log[-1].status == task.status
+    assert task.dispatch_log[-2].status == "failed"
+    assert task.dispatch_log[-2].route_to == "ollama"
     assert "tried:jules" in task.labels
 
 

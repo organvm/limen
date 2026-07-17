@@ -69,6 +69,12 @@ time. The deterministic attempt ID and launch-receipt digest bind those facts, s
 cannot reassign that attempt. Exact duplicate attempts count once; divergent rows for one attempt
 identity are excluded.
 
+Every retry derives a new profile from the task's current contract before launch. Runtime selection
+may reuse only the exact active attempt's frozen profile, and its model-selection receipt must carry
+that attempt ID. Terminal conversion derives outcome from the canonical lifecycle status and rejects
+any conflicting asserted outcome. A routed retry therefore records the attempt's terminal event
+first, then a separate attempt-free `open` transition.
+
 Pre-v2 board rows remain lifecycle-readable, but they are not backfilled and cannot be converted
 into value-bearing trajectory receipts.
 

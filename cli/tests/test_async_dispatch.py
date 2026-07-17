@@ -1371,6 +1371,53 @@ def test_async_normalizes_only_selected_legacy_task(tmp_path):
     assert lf.tasks[1].predicate is None and lf.tasks[1].receipt_target is None
 
 
+def test_async_retry_derives_profile_from_current_contract_not_prior_attempt(tmp_path):
+    da = _load(tmp_path, n_open=1)
+    lf = load_limen_file(tmp_path / "tasks.yaml")
+    task = lf.tasks[0]
+    task.predicate = "python3 -m pytest -q"
+    task.receipt_target = "github:x/y:pull-request"
+    old_started = datetime.datetime(2026, 7, 17, 12, 0, tzinfo=datetime.timezone.utc)
+    retry_started = datetime.datetime(2026, 7, 17, 12, 1, tzinfo=datetime.timezone.utc)
+    prior = dispatch_module._attempt_launch_entry(
+        task,
+        "codex",
+        reservation_session="prior-attempt",
+        started_at=old_started,
+        output="prior reservation",
+    )
+    task.dispatch_log.extend(
+        [
+            prior,
+            prior.model_copy(
+                update={
+                    "status": "failed",
+                    "trajectory_outcome": "failed",
+                    "output": "prior attempt failed",
+                }
+            ),
+        ]
+    )
+    task.labels.append("profile:min_context:65536")
+
+    picked, _reset_changed = da._pick_reservations(
+        lf,
+        ["codex"],
+        per_agent=1,
+        cap=1,
+        dry=False,
+        now=retry_started,
+        usage_remaining={},
+        weak_proxy_agents=set(),
+    )
+
+    assert picked == [("codex", "T0")]
+    retry = task.dispatch_log[-1]
+    assert prior.execution_profile["min_context"] == 8192
+    assert retry.execution_profile["min_context"] == 65536
+    assert retry.attempt_id != prior.attempt_id
+
+
 def test_async_skips_unowned_legacy_candidate_and_continues(tmp_path, capsys):
     da = _load(tmp_path, n_open=0)
     today = datetime.date.today()
@@ -1896,7 +1943,10 @@ def test_reaper_frees_dead_workers_not_live(tmp_path):
     assert (da.RUNS / "LIVE__codex.running").exists()
     board = _board(tmp_path)
     assert board["DEAD"].status == "open" and board["LIVE"].status == "dispatched"
-    assert board["DEAD"].dispatch_log[-1].session_id == "async-reap-stale"
+    assert board["DEAD"].dispatch_log[-1].status == board["DEAD"].status
+    assert board["DEAD"].dispatch_log[-1].session_id == "async-reap-stale-requeue"
+    assert board["DEAD"].dispatch_log[-2].status == "failed"
+    assert board["DEAD"].dispatch_log[-2].session_id == "async-reap-stale"
 
 
 def test_nonce_scoped_result_prevents_matching_dead_marker_reap(tmp_path):
@@ -2115,9 +2165,11 @@ def test_reaper_reopens_markerless_async_reservation(tmp_path):
 
     assert reaped == ["MARKERLESS"]
     task = _board(tmp_path)["MARKERLESS"]
-    assert task.status == "open"
-    assert task.dispatch_log[-1].session_id == "async-reap-stale"
-    assert "markerless async reservation" in task.dispatch_log[-1].output
+    assert task.dispatch_log[-1].status == task.status == "open"
+    assert task.dispatch_log[-1].session_id == "async-reap-stale-requeue"
+    assert task.dispatch_log[-2].status == "failed"
+    assert task.dispatch_log[-2].session_id == "async-reap-stale"
+    assert "markerless async reservation" in task.dispatch_log[-2].output
 
 
 def test_reaper_restores_markerless_prior_pr_open_instead_of_reopening(tmp_path):
@@ -3186,7 +3238,10 @@ def test_exact_orphan_recovery_command_reopens_once_and_is_idempotent(tmp_path, 
     assert second["recovered_count"] == 0
     assert current[task.id].status == "open"
     assert current["T1"].status == "open"
-    assert current[task.id].dispatch_log[-1].session_id == "async-recover-exact"
+    assert current[task.id].dispatch_log[-1].status == current[task.id].status
+    assert current[task.id].dispatch_log[-1].session_id == "async-recover-exact-requeue"
+    assert current[task.id].dispatch_log[-2].status == "failed"
+    assert current[task.id].dispatch_log[-2].session_id == "async-recover-exact"
 
 
 def test_reaper_rechecks_nonce_result_under_lock_before_reopening(tmp_path, monkeypatch):

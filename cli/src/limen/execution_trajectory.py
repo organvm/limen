@@ -738,7 +738,7 @@ def trajectory_from_log_entries(
     started_at = getattr(launch, "timestamp", None)
     status = str(getattr(terminal, "status", "") or "")
     explicit_outcome = str(getattr(terminal, "trajectory_outcome", "") or "")
-    outcome = explicit_outcome or _STATUS_OUTCOME.get(status, "")
+    outcome = _STATUS_OUTCOME.get(status, "")
     if not launch_attempt or terminal_attempt != launch_attempt:
         raise ValueError("terminal attempt does not match launch identity")
     if not isinstance(classification, Mapping) or not isinstance(profile, Mapping):
@@ -779,8 +779,10 @@ def trajectory_from_log_entries(
         terminal_value = getattr(terminal, field, None)
         if terminal_value != getattr(launch, field, None):
             raise ValueError(f"terminal {field} diverges from immutable launch attribution")
-    if outcome not in _TERMINAL_OUTCOMES:
-        raise ValueError("dispatch row is not a terminal attempt outcome")
+    if not outcome:
+        raise ValueError("dispatch row does not have a canonical terminal lifecycle status")
+    if explicit_outcome and explicit_outcome != outcome:
+        raise ValueError("terminal lifecycle status and trajectory outcome disagree")
     spend = getattr(terminal, "actual_spend", None) or getattr(launch, "actual_spend", None)
     return ExecutionTrajectory.model_validate(
         {

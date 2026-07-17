@@ -1526,14 +1526,22 @@ def _attempt_id(
     )
 
 
-def _dispatch_execution_profile(task: Task | None):
+def _current_task_execution_profile(task: Task | None) -> ExecutionProfile:
+    """Derive a new attempt profile from the task's current execution contract."""
+
+    requested = execution_profile_for(task)
+    return effective_profile(requested, plan_accepted=_claude_fable_acceptance_present())
+
+
+def _dispatch_execution_profile(task: Task | None) -> ExecutionProfile:
+    """Reuse only the profile frozen for the exact attempt being executed."""
+
     if task is not None and task.status in {"dispatched", "in_progress"}:
         current_attempt = _current_attempt_id(task)
         launch = _attempt_launch_for(task, current_attempt) if current_attempt else None
         if launch is not None and launch.execution_profile is not None:
             return ExecutionProfile(**launch.execution_profile)
-    requested = execution_profile_for(task)
-    return effective_profile(requested, plan_accepted=_claude_fable_acceptance_present())
+    return _current_task_execution_profile(task)
 
 
 def _attempt_launch_entry(
@@ -1547,7 +1555,9 @@ def _attempt_launch_entry(
 ) -> DispatchLogEntry:
     """Freeze launch facts in the owner board before any provider can execute."""
 
-    profile = _dispatch_execution_profile(task).as_dict()
+    # Creating an attempt is not executing an existing one. Always derive from
+    # the current task, even if the caller has already marked the row dispatched.
+    profile = _current_task_execution_profile(task).as_dict()
     classification = {
         "task_type": task.type,
         "labels": sorted({str(label) for label in task.labels}),
@@ -1628,7 +1638,24 @@ def _record_model_selection(
 ) -> None:
     if task is None:
         return
+    if task.status not in {"dispatched", "in_progress"}:
+        _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+        return
+    attempt_id = _current_attempt_id(task)
+    launch = _attempt_launch_for(task, attempt_id) if attempt_id else None
+    current_event = next(
+        (entry for entry in reversed(task.dispatch_log) if entry.attempt_id == attempt_id),
+        None,
+    )
+    if launch is None or current_event is None or current_event.status != task.status:
+        # Preview/standalone selection has no immutable launch identity and
+        # therefore cannot produce a value-bearing receipt.
+        _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+        return
+    if launch.execution_profile != profile:
+        raise ValueError("model-selection profile does not match the registered attempt")
     _MODEL_SELECTION_RECEIPTS[task.id] = {
+        "attempt_id": attempt_id,
         "execution_profile": profile,
         "selected_model": selected_model,
         "selection_source": source,
@@ -1647,12 +1674,15 @@ def _validated_model_selection_receipt(
     if value in ({}, None):
         return None
     if not isinstance(value, dict) or set(value) != {
+        "attempt_id",
         "execution_profile",
         "selected_model",
         "selection_source",
         "catalog_hash",
     }:
         raise ValueError("detached model-selection receipt has an invalid shape")
+    if value.get("attempt_id") != expected_attempt_id:
+        raise ValueError("detached model-selection receipt does not match the registered attempt identity")
     launch = _attempt_launch_for(task, expected_attempt_id)
     if launch is None or value.get("execution_profile") != launch.execution_profile:
         raise ValueError("detached model-selection receipt does not match the registered attempt profile")
@@ -4826,7 +4856,19 @@ def _apply_result(
     success → dispatched + spend; no-op/fail → recoverable failed; rate-limit → cascade."""
     if expected_attempt_id is not None and _current_attempt_id(task) != expected_attempt_id:
         return False
-    launch = _attempt_launch_for(task, expected_attempt_id)
+    active_attempt_id = expected_attempt_id or _current_attempt_id(task)
+    launch = _attempt_launch_for(task, active_attempt_id) if active_attempt_id else None
+    detached_selection = model_selection_receipt
+    cached_selection = _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+    selection = detached_selection if detached_selection is not None else cached_selection
+    if selection:
+        if not active_attempt_id:
+            raise ValueError("model-selection receipt lacks a registered attempt identity")
+        selection = _validated_model_selection_receipt(
+            task,
+            expected_attempt_id=active_attempt_id,
+            value=selection,
+        )
     if task.status in {"done", "archived"} and _has_done_transition(task):
         return False
     if _restore_done_status(
@@ -4855,7 +4897,7 @@ def _apply_result(
             task.labels.append("noop")
     elif result == _RATELIMIT:
         nxt = _cascade_or_requeue(agent)
-        entry.status = "open"
+        entry.status = "failed_blocked"
         entry.route_to = nxt
         entry.output = f"rate limited on {agent}; reopened to live fleet route"
         entry.trajectory_outcome = "blocked"
@@ -4863,7 +4905,7 @@ def _apply_result(
         task.status = "open"
     elif result == _TIMEOUT:
         # too big for a sync local lane → hand to jules (async, no wall-clock cap)
-        entry.status = "open"
+        entry.status = "failed"
         entry.route_to = "jules"
         entry.output = f"timeout on {agent}; reopened to asynchronous lane"
         entry.trajectory_outcome = "failed"
@@ -4891,14 +4933,14 @@ def _apply_result(
             task.labels.append(tried)
         if agent in _REMOTE_SERVICE_LANES:
             fallback = _remote_service_failure_lane(task, agent)
-            entry.status = "open"
+            entry.status = "failed"
             entry.route_to = fallback
             entry.output = "remote/service lane failed; reopened to healthy fleet cascade"
             entry.trajectory_outcome = "failed"
             task.target_agent = fallback
             task.status = "open"
         elif next_lane := _next_lane(agent):
-            entry.status = "open"
+            entry.status = "failed"
             entry.route_to = next_lane
             entry.output = f"{agent} lane failed; reopened to healthy fleet cascade"
             entry.trajectory_outcome = "failed"
@@ -4919,9 +4961,6 @@ def _apply_result(
         entry.route_selection_source = launch.route_selection_source
         entry.executing_keeper = launch.executing_keeper or launch.agent
         entry.executing_session = launch.executing_session or launch.session_id
-    selection = model_selection_receipt
-    if selection is None:
-        selection = _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
     if selection:
         entry.execution_profile = entry.execution_profile or selection.get("execution_profile")
         entry.selected_model = selection.get("selected_model")
@@ -4944,6 +4983,17 @@ def _apply_result(
         entry.remote_receipt = remote.get("remote_receipt")
     task.updated = now
     task.dispatch_log.append(entry)
+    if task.status == "open" and entry.status != "open":
+        task.dispatch_log.append(
+            DispatchLogEntry(
+                timestamp=now,
+                agent=agent,
+                session_id="result-requeue",
+                status="open",
+                route_to=entry.route_to,
+                output=f"dispatch: reopened after terminal {entry.status} attempt",
+            )
+        )
     return True
 
 
