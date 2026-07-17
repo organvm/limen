@@ -234,7 +234,7 @@ fi
 #     a `held` row is terminal-for-the-beat (drafted, awaiting the operator's explicit keyed fire).
 #     Guarded on the gate + file so the beat is safe before the script lands.
 if [ "${LIMEN_CORRESPONDENCE_WALK:-1}" = "1" ] && [ -f "$LIMEN_ROOT/scripts/correspondence-walk.py" ]; then
-  run_tmp 120 "$PY" "$LIMEN_ROOT/scripts/correspondence-walk.py" --drain || true
+  run_tmp 120 "$PY" "$LIMEN_ROOT/scripts/correspondence-walk.py" --drain --notify || true
 fi
 
 # 3) STATUS — refresh the read-only UMA mail-status receipt (feeds the beat MAIL: census line).

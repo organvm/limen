@@ -46,8 +46,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -141,20 +143,91 @@ def _hold_reason(ob: dict) -> str:
     return "hold tier — drafted, awaiting operator key"
 
 
-def _disposition(ob: dict, tiers, sent_keys: set, sd) -> tuple[str, str, bool]:
-    """Pure disposition for one reply-owed obligation. Returns (disposition, reason, draft_missing).
+def _recipient_addr(ob: dict) -> str:
+    """Bare email to search Sent by: reply_to preferred, else sender. Strips 'Name <addr>'."""
+    raw = (ob.get("reply_to") or ob.get("sender") or "").strip()
+    if "<" in raw and ">" in raw:
+        raw = raw[raw.find("<") + 1:raw.find(">")].strip()
+    return raw if "@" in raw else ""
+
+
+def _norm_subject(subject: str) -> str:
+    """Strip leading Re:/Fwd:/Fw: prefixes (case-insensitive, repeatable) → the bare subject stem
+    to match a sent reply against. Mirrors the normalization UMA's own handled-check uses."""
+    s = str(subject or "")
+    while True:
+        m = re.match(r"^\s*(re|fwd|fw)\s*:\s*", s, re.IGNORECASE)
+        if not m:
+            break
+        s = s[m.end():]
+    return s.strip()
+
+
+def _make_answered_checker(sd):
+    """Build a callable ob->bool that detects an ALREADY-SENT reply in [Gmail]/Sent Mail, reusing
+    ONE IMAP connection across rows. Returns (checker, provider) or (None, None).
+
+    This is the SENT-state truth the ledger lacks: obligations_build sets requires_reply purely by
+    classification (blind to whether a reply already went out — the operator's, a peer agent's, or
+    via another channel). Reuses UMA's own read-only detector (providers/imap.py::_search_mailbox).
+    FAIL-OPEN at every step: no creds / no UMA / connect error ⇒ (None, None) ⇒ SENT detection is
+    simply skipped (never suppresses a genuine reply-owed row). Gated by LIMEN_CORRESPONDENCE_SENT_CHECK."""
+    if os.environ.get("LIMEN_CORRESPONDENCE_SENT_CHECK", "1") != "1" or sd is None:
+        return None, None
+    user = os.environ.get("IMAP_USER") or os.environ.get("GMAIL_USER")
+    pw = os.environ.get("IMAP_PASS") or os.environ.get("GMAIL_APP_PASSWORD")
+    if not (user and pw):
+        return None, None
+    sent_mbx = os.environ.get("LIMEN_MAIL_SENT_MAILBOX", "[Gmail]/Sent Mail")
+    try:
+        from providers.imap import IMAPProvider  # UMA checkout already on sys.path via _import_uma
+        prov = IMAPProvider(user=user, password=pw, use_gmail_extensions=True)
+        prov.connect()
+        # QUOTED mailbox — Python 3.14's imaplib no longer auto-quotes names with spaces/brackets,
+        # so an unquoted SELECT "[Gmail]/Sent Mail" fails BAD (the latent bug that no-ops UMA's own
+        # _search_mailbox / draft_writer.thread_already_handled on this host — flagged for a UMA fix).
+        conn = prov._connection
+        typ, _ = conn.select(f'"{sent_mbx}"', readonly=True)
+        if typ != "OK":
+            prov.disconnect()
+            return None, None
+    except Exception as exc:  # noqa: BLE001 — fail-open: no SENT detection this run
+        _log_clean(f"sent-check disabled ({type(exc).__name__}) — dispositions from ledger only")
+        return None, None
+
+    def _answered(ob: dict) -> bool:
+        to = _recipient_addr(ob)
+        stem = _norm_subject((ob.get("sample_subjects") or [""])[0])
+        if not to or not stem:
+            return False
+        try:  # a reply already exists in Sent TO this recipient with the same subject stem
+            code, data = conn.uid("search", None, "TO", f'"{to}"', "SUBJECT", f'"{stem}"')
+            return code == "OK" and bool(data) and bool(data[0].split())
+        except Exception:  # noqa: BLE001 — fail-open per row (BAD search ⇒ leave held)
+            return False
+
+    return _answered, prov
+
+
+def _disposition(ob: dict, tiers, sent_keys: set, sd, answered_fn=None) -> tuple[str, str, bool]:
+    """Pure-ish disposition for one reply-owed obligation. Returns (disposition, reason, draft_missing).
 
     draft_missing marks a HOLD row that still lacks a composed draft — the one non-terminal
-    residue the done-predicate sensor fails on (mirrors check-mail-answered's undrafted rule)."""
+    residue the done-predicate sensor fails on (mirrors check-mail-answered's undrafted rule).
+    answered_fn (optional) is the SENT-state checker — its only impurity, and it fails open."""
     # UMA unavailable ⇒ we cannot classify or trust idempotency ⇒ fail-open to needs-human.
     if sd is None:
         return "needs-human", "UMA tier logic unavailable — cannot classify safely", True
 
     key = sd._ob_key(ob)
-    # 1. Already transmitted (idempotent). drafts_sent.json is the authority; a re-run can never
-    #    re-send. This is what flips a `held` row to `sent` after the operator turns the key.
+    # 1. Already transmitted via the system's own audit (idempotent). A re-run can never re-send.
     if key in sent_keys:
         return "sent", "transmitted (present in drafts_sent.json)", False
+
+    # 1b. SENT-state truth: a reply already exists in [Gmail]/Sent Mail — answered by the operator,
+    #     a peer agent, or another channel (the out-of-band send the ledger is blind to). Ball on them.
+    if answered_fn is not None and answered_fn(ob):
+        return "awaiting-them", "reply already in [Gmail]/Sent — thread answered out-of-band", False
 
     cls = ob.get("cls", "")
     # 2. LinkedIn / noreply relay — structurally unsendable in place.
@@ -241,9 +314,29 @@ def _write_status(status: dict) -> None:
         _log_clean("could not write logs/correspondence-dispositions.json (fail-open)")
 
 
+def _emit_notify(title: str, msg: str) -> None:
+    """Push a COUNT-ONLY line through the EXISTING notify cascade (notify-events._emit → macOS + ntfy),
+    the same effector opportunity-review-delta uses. Fail-open: unimportable/erroring ⇒ skip silently,
+    never crash the beat, never a click-list."""
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "_notify_events_probe", ROOT / "scripts" / "notify-events.py")
+        if spec is None or spec.loader is None:
+            return
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        emit = getattr(module, "_emit", None)
+        if callable(emit):
+            emit(title, msg)
+    except Exception:  # noqa: BLE001 — best-effort; never red the beat
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Correspondence walk-to-terminal driver (count-only, PII-clean).")
     ap.add_argument("--drain", action="store_true", help="compose held drafts + run linkedin contact discovery")
+    ap.add_argument("--notify", action="store_true",
+                    help="push a count-only macOS/ntfy line when items need a human (never a click-list)")
     ap.add_argument("--json", action="store_true", help="print a machine-readable (count-only) summary")
     args = ap.parse_args(argv)
 
@@ -251,6 +344,9 @@ def main(argv: list[str] | None = None) -> int:
         sd = _import_uma()
         tiers = sd.load_tiers() if sd is not None else None
         sent_keys = sd._load_sent() if sd is not None else set()
+        # SENT-state truth (the ledger is blind to out-of-band sends): one reused IMAP connection,
+        # fail-open to (None, None) when creds/UMA/connection are unavailable.
+        answered_fn, answered_prov = _make_answered_checker(sd)
 
         # The keyed-fire arm + cap. LIMEN_CORRESPONDENCE_FIRE (default 0) governs whether --drain
         # may actually transmit SAFE-tier rows (HOLD is never fired here — that invariant lives in
@@ -280,7 +376,7 @@ def main(argv: list[str] | None = None) -> int:
         needs_human = 0
 
         for ob in reply_owed:
-            disp, reason, missing = _disposition(ob, tiers, sent_keys, sd)
+            disp, reason, missing = _disposition(ob, tiers, sent_keys, sd, answered_fn)
             key = sd._ob_key(ob) if sd is not None else f"?|?|{(ob.get('sample_subjects') or [''])[0][:40]}"
             by_disposition[disp] += 1
             if missing:
@@ -313,11 +409,19 @@ def main(argv: list[str] | None = None) -> int:
                 })
                 if propose:
                     fires_proposed += 1
-            # --drain effector for the LinkedIn no-path row.
+            # --drain effector for a LinkedIn no-path row: DEFER to the opportunity lane's own
+            # auto-discovery (opportunity_sync.py::maybe_run_discovery, which already runs
+            # contact_discovery for inbound-linkedin no-path rows) when application-pipeline is
+            # present — one owner for the LinkedIn→email steer, no double discovery. Only fall back
+            # to a direct call when that lane is absent.
             if args.drain and disp == "needs-human" and ob.get("cls") == LINKEDIN_CLASS:
-                cnote = _contact_discovery("linkedin-com--inbound")
-                if cnote:
-                    drain_notes.append(cnote)
+                if APPLICATION_PIPELINE.exists():
+                    if "discovery deferred" not in " ".join(drain_notes):
+                        drain_notes.append("linkedin no-path — discovery deferred to opportunity_sync (application-pipeline owns it)")
+                else:
+                    cnote = _contact_discovery("linkedin-com--inbound")
+                    if cnote:
+                        drain_notes.append(cnote)
 
         if args.drain and fire_armed:
             drain_notes.append(
@@ -339,6 +443,7 @@ def main(argv: list[str] | None = None) -> int:
             "by_disposition": by_disposition,
             "fixed_point": fixed_point,
             "uma_available": sd is not None,
+            "sent_check_active": answered_fn is not None,
             "fire_armed": fire_armed,
             "fires_proposed": fires_proposed,
             "fire_cap": fire_cap,
@@ -347,6 +452,21 @@ def main(argv: list[str] | None = None) -> int:
         }
         _write_status(status)
         _write_sidecar(rows_pii)
+
+        if answered_prov is not None:
+            try:
+                answered_prov.disconnect()
+            except Exception:  # noqa: BLE001 — best-effort cleanup
+                pass
+
+        # --notify: push a COUNT-ONLY line ONLY when something genuinely needs a human (a needs-human
+        # row or a HOLD row still missing its draft). A fully-drained walk pushes nothing. No names,
+        # ever — the count face, not a click-list.
+        if args.notify and (needs_human or draft_missing):
+            _emit_notify(
+                "LIMEN correspondence",
+                f"{needs_human} need-human, {draft_missing} draft-missing across {len(reply_owed)} reply-owed",
+            )
 
         summary = (
             f"correspondence-walk: {len(reply_owed)} reply-owed — "

@@ -1502,6 +1502,18 @@ parameters:
     self_update: none
     owner: mail
     note: "Path override for the correspondence disposition ledger (counts-only, gitignored) that correspondence-walk.py writes and check-correspondence-terminal.py reads. Default lives under logs/; overridable for tests/alt hosts."
+  LIMEN_CORRESPONDENCE_SENT_CHECK:
+    default: 1
+    env: LIMEN_CORRESPONDENCE_SENT_CHECK
+    self_update: none
+    owner: mail
+    note: "SENT-state truth gate for correspondence-walk.py: 1 (default) opens one read-only IMAP connection and flips a reply-owed row to `awaiting-them` when a reply already exists in [Gmail]/Sent Mail (answered by the operator, a peer agent, or another channel — the out-of-band send the ledger's requires_reply is blind to). Fail-open: no creds / no UMA / connect error ⇒ skipped, never suppresses a genuine reply-owed row. 0 disables the check (ledger-only dispositions)."
+  LIMEN_MAIL_SENT_MAILBOX:
+    default: "[Gmail]/Sent Mail"
+    env: LIMEN_MAIL_SENT_MAILBOX
+    self_update: none
+    owner: mail
+    note: "IMAP mailbox name for the account's Sent folder — the mailbox correspondence-walk.py (and UMA's mail_send/send_drafts) search to verify/detect a sent reply. Gmail default; overridable for alt providers (iCloud/Outlook) as rung-5 multi-account send lands."
   LIMEN_PRIVATE_MAIL_STORY:
     default: "$LIMEN_ROOT/.limen-private/mail-story"
     env: LIMEN_PRIVATE_MAIL_STORY
