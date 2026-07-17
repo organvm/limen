@@ -339,6 +339,72 @@ def test_public_projection_never_contains_raw_prompt_text(tmp_path: Path):
     assert secret_text not in paths.public_markdown.read_text(encoding="utf-8")
 
 
+def test_session_noise_is_privately_preserved_without_creating_atoms(tmp_path: Path):
+    corpus = _load()
+    paths = _paths(corpus, tmp_path)
+    whole_text = 'session noise: "redacted transport record"'
+    mixed_text = 'session noise: "redacted transport record";\nImplement the residual parser.'
+    whole = _event(whole_text, event_ref="whole-session-noise")
+    whole.update({"body_kind": "session_noise", "task_body": ""})
+    mixed = _event(mixed_text, event_ref="mixed-session-noise")
+    mixed.update(
+        {
+            "body_kind": "session_noise_with_task_body",
+            "task_body": "Implement the residual parser.",
+        }
+    )
+
+    snapshot = corpus.update_ledger(
+        paths,
+        events=[whole, mixed],
+        cursor=_cursor(corpus),
+    )
+
+    assert snapshot["coverage"]["occurrences"] == 2
+    assert snapshot["coverage"]["atoms"] == 1
+    assert snapshot["validation"]["ok"] is True
+    occurrences = {row["body_kind"]: row for row in snapshot["occurrences"]}
+    whole_occurrence = occurrences["session_noise"]
+    mixed_occurrence = occurrences["session_noise_with_task_body"]
+    assert whole_occurrence["excluded_reason"] == "explicit_session_noise"
+    assert whole_occurrence["atom_ids"] == []
+    assert whole_occurrence["coverage_segment_hashes"] == []
+    assert corpus.read_raw_object(paths, whole_occurrence["raw_object"]) == whole_text
+    assert mixed_occurrence["excluded_reason"] is None
+    assert corpus.read_raw_object(paths, mixed_occurrence["raw_object"]) == mixed_text
+    assert [atom["intent"] for atom in snapshot["atoms"]] == [
+        "Implement the residual parser.",
+    ]
+    assert all("redacted transport record" not in atom["intent"] for atom in snapshot["atoms"])
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        'session noise: "unterminated record\nImplement the parser.',
+        'session noise: "redacted record"Implement the parser.',
+        'Implement the literal syntax session noise: "redacted record" in the parser.',
+    ],
+)
+def test_reported_session_noise_label_cannot_hide_actionable_near_miss(
+    tmp_path: Path,
+    text: str,
+):
+    corpus = _load()
+    paths = _paths(corpus, tmp_path)
+    event = _event(text, event_ref="session-noise-near-miss")
+    event.update({"body_kind": "session_noise", "task_body": ""})
+
+    snapshot = corpus.update_ledger(paths, events=[event], cursor=_cursor(corpus))
+
+    occurrence = snapshot["occurrences"][0]
+    assert occurrence["body_kind"] == "direct"
+    assert occurrence["excluded_reason"] is None
+    assert occurrence["atom_ids"]
+    assert corpus.read_raw_object(paths, occurrence["raw_object"]) == text
+    assert snapshot["coverage"]["atoms"] > 0
+
+
 def test_cursor_advance_without_projection_fails_closed(tmp_path: Path):
     corpus = _load()
     paths = _paths(corpus, tmp_path)

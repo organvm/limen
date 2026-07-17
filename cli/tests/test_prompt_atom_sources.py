@@ -5682,7 +5682,7 @@ def _scan_codex_attachment_pair(sources, lifecycle, session: Path, attachment: P
 
 
 @pytest.mark.parametrize("envelope", ["legacy", "current"])
-def test_codex_attachment_scanner_v4_compacted_replay_is_never_a_second_parent(
+def test_codex_attachment_scanner_v5_compacted_replay_is_never_a_second_parent(
     tmp_path: Path,
     envelope: str,
 ):
@@ -5711,7 +5711,7 @@ def test_codex_attachment_scanner_v4_compacted_replay_is_never_a_second_parent(
 
 
 @pytest.mark.parametrize("mutation", ["extra-payload-key", "unknown-role", "unknown-content"])
-def test_codex_attachment_scanner_v4_malformed_compacted_replay_fails_closed(
+def test_codex_attachment_scanner_v5_malformed_compacted_replay_fails_closed(
     tmp_path: Path,
     mutation: str,
 ):
@@ -5749,7 +5749,7 @@ def test_codex_attachment_scanner_v4_malformed_compacted_replay_fails_closed(
     assert result["parent_completeness_unknown"] == [session_key]
 
 
-def test_codex_attachment_scanner_v4_replay_only_reference_stays_unbound(tmp_path: Path):
+def test_codex_attachment_scanner_v5_replay_only_reference_stays_unbound(tmp_path: Path):
     sources = _load()
     lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path, parent_texts=[])
     replay = _codex_attachment_compacted_row(
@@ -5770,7 +5770,7 @@ def test_codex_attachment_scanner_v4_replay_only_reference_stays_unbound(tmp_pat
     assert result["parent_completeness_unknown"] == []
 
 
-def test_codex_attachment_scanner_v4_valid_png_and_reference_bind_together(tmp_path: Path):
+def test_codex_attachment_scanner_v5_valid_png_and_reference_bind_together(tmp_path: Path):
     sources = _load()
     lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
     _add_exact_codex_media_parent(sources, session, attachment)
@@ -5792,7 +5792,7 @@ def test_codex_attachment_scanner_v4_valid_png_and_reference_bind_together(tmp_p
 
 
 @pytest.mark.parametrize("mutation", ["extra-key", "bad-detail", "bad-base64"])
-def test_codex_attachment_scanner_v4_malformed_coexisting_media_fails_closed(
+def test_codex_attachment_scanner_v5_malformed_coexisting_media_fails_closed(
     tmp_path: Path,
     mutation: str,
 ):
@@ -5819,7 +5819,7 @@ def test_codex_attachment_scanner_v4_malformed_coexisting_media_fails_closed(
     assert attachment_key not in result["adapted_unit_receipts"]
 
 
-def test_codex_attachment_scanner_v4_accepts_bounded_large_nonuser_row(tmp_path: Path):
+def test_codex_attachment_scanner_v5_accepts_bounded_large_nonuser_row(tmp_path: Path):
     sources = _load()
     lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
     rows = [json.loads(line) for line in session.read_text(encoding="utf-8").splitlines()]
@@ -5846,9 +5846,123 @@ def test_codex_attachment_scanner_v4_accepts_bounded_large_nonuser_row(tmp_path:
     assert result["parent_completeness_unknown"] == []
 
 
-def test_codex_attachment_scanner_v4_invalidates_v3_cached_receipts(tmp_path: Path, monkeypatch):
+def test_scanner_v5_reclassifies_session_noise_and_second_pass_is_byte_identical(
+    tmp_path: Path,
+    monkeypatch,
+):
     sources = _load()
-    assert sources.SCANNER_VERSION == 4
+    assert sources.SCANNER_VERSION == 5
+    whole_text = 'session noise: "redacted transport record"'
+    mixed_text = 'session noise: "redacted transport record";\nImplement the residual parser.'
+    session_id = "019f-session-noise-v5"
+    lifecycle, _session, _ = _codex_session_v2_fixture(
+        sources,
+        tmp_path,
+        [
+            {"type": "session_meta", "payload": {"id": session_id}},
+            {
+                "timestamp": "2026-07-16T12:00:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": whole_text}],
+                },
+            },
+            {
+                "timestamp": "2026-07-16T12:01:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": mixed_text}],
+                },
+            },
+        ],
+    )
+    monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
+    missing_cursor = tmp_path / "missing-v5-cursor.json"
+    current_events, current_cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=missing_cursor),
+        days=None,
+        max_files=1,
+    )
+    by_kind = {event["body_kind"]: event for event in current_events}
+    assert set(by_kind) == {"session_noise", "session_noise_with_task_body"}
+    assert by_kind["session_noise"]["task_body"] == ""
+    assert by_kind["session_noise_with_task_body"]["task_body"] == ("Implement the residual parser.")
+
+    paths = sources.LedgerPaths.for_root(
+        tmp_path / "ledger",
+        policy=ROOT / "docs" / "prompt-corpus-policy.json",
+    )
+    scanner_v4_events = [dict(event, body_kind="direct", task_body="") for event in current_events]
+    corpus_module = sys.modules[sources.update_ledger.__module__]
+    with monkeypatch.context() as scanner_v4:
+        scanner_v4.setattr(corpus_module, "parse_session_noise_frame", lambda _text: None)
+        before_migration = sources.update_ledger(paths, events=scanner_v4_events)
+    assert before_migration["coverage"]["atoms"] > 1
+
+    stale_cursor = json.loads(json.dumps(current_cursor))
+    stale_cursor["scanner_version"] = 4
+    cursor_path = tmp_path / "scanner-v4-session-noise-cursor.json"
+    cursor_path.write_text(json.dumps(stale_cursor), encoding="utf-8")
+    replacement_events, replacement_cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=cursor_path),
+        days=None,
+        max_files=1,
+    )
+    migrated = sources.update_ledger(paths, events=replacement_events)
+
+    assert replacement_cursor["scanner_version"] == 5
+    assert replacement_cursor["work_units_used"] == 1
+    assert migrated["appended"]["reclassified"] == 2
+    assert migrated["coverage"]["occurrences"] == 2
+    assert migrated["coverage"]["atoms"] == 1
+    occurrences = {row["body_kind"]: row for row in migrated["occurrences"]}
+    assert occurrences["session_noise"]["excluded_reason"] == "explicit_session_noise"
+    assert occurrences["session_noise"]["atom_ids"] == []
+    assert occurrences["session_noise_with_task_body"]["excluded_reason"] is None
+    assert [atom["intent"] for atom in migrated["atoms"]] == [
+        "Implement the residual parser.",
+    ]
+
+    def canonical_bytes() -> dict[str, str]:
+        files = [
+            paths.event_journal,
+            paths.outcome_journal,
+            paths.private_snapshot,
+            paths.public_snapshot,
+            paths.public_seal,
+            paths.public_markdown,
+            *sorted(path for path in paths.raw_objects.rglob("*") if path.is_file()),
+        ]
+        return {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in files if path.exists()}
+
+    migrated_bytes = canonical_bytes()
+    cursor_path.write_text(json.dumps(replacement_cursor), encoding="utf-8")
+    second_events, second_cursor = sources.scan_native_sources(
+        SimpleNamespace(cursor=cursor_path),
+        days=None,
+        max_files=1,
+    )
+    second_snapshot = sources.update_ledger(paths, events=second_events)
+
+    assert second_events == []
+    assert second_cursor["work_units_used"] == 0
+    assert second_snapshot["write_changed"] is False
+    assert second_snapshot["appended"] == {
+        "occurrences": 0,
+        "atoms": 0,
+        "outcomes": 0,
+        "reclassified": 0,
+    }
+    assert canonical_bytes() == migrated_bytes
+
+
+def test_codex_attachment_scanner_v5_invalidates_v4_cached_receipts(tmp_path: Path, monkeypatch):
+    sources = _load()
+    assert sources.SCANNER_VERSION == 5
     lifecycle, session, attachment = _codex_attachment_fixture(sources, tmp_path)
     monkeypatch.setattr(sources, "load_lifecycle_module", lambda: lifecycle)
     missing = tmp_path / "missing-cursor.json"
@@ -5861,8 +5975,8 @@ def test_codex_attachment_scanner_v4_invalidates_v3_cached_receipts(tmp_path: Pa
     assert first_events
     assert attachment_key in first["adapted_unit_receipts"]
     stale = json.loads(json.dumps(first))
-    stale["scanner_version"] = 3
-    cursor_path = tmp_path / "scanner-v3-cursor.json"
+    stale["scanner_version"] = 4
+    cursor_path = tmp_path / "scanner-v4-cursor.json"
     cursor_path.write_text(json.dumps(stale), encoding="utf-8")
 
     replacement_events, replacement = sources.scan_native_sources(
@@ -5872,14 +5986,14 @@ def test_codex_attachment_scanner_v4_invalidates_v3_cached_receipts(tmp_path: Pa
     )
 
     assert replacement_events
-    assert replacement["scanner_version"] == 4
+    assert replacement["scanner_version"] == 5
     assert replacement["work_units_used"] == 2
     assert attachment_key in replacement["adapted_unit_receipts"]
     assert replacement["source_errors"] == []
     assert replacement["unsupported_source_count"] == 0
 
 
-def test_codex_attachment_scanner_v4_integrated_second_pass_is_byte_identical(
+def test_codex_attachment_scanner_v5_integrated_second_pass_is_byte_identical(
     tmp_path: Path,
     monkeypatch,
 ):
@@ -5920,7 +6034,7 @@ def test_codex_attachment_scanner_v4_integrated_second_pass_is_byte_identical(
     second_events, second_cursor = sources.scan_native_sources(paths, days=None, max_files=2)
     second_snapshot = sources.update_ledger(paths, events=second_events, cursor=second_cursor)
 
-    assert first_cursor["scanner_version"] == 4
+    assert first_cursor["scanner_version"] == 5
     assert first_cursor["scope"] == "all"
     assert first_cursor["adapter_gaps"] == []
     assert first_cursor["source_errors"] == []

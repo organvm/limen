@@ -42,6 +42,111 @@ def _write_helper(path: Path, source: str) -> None:
     path.write_text(textwrap.dedent(source), encoding="utf-8")
 
 
+def _normalized_event(ledger, text: str, event_ref: str) -> dict:
+    lifecycle = ledger.load_lifecycle_module()
+    task_body, body_kind = lifecycle.normalize_task_body(text)
+    event = _event(text, event_ref)
+    event["task_body"] = task_body
+    event["body_kind"] = body_kind
+    return event
+
+
+def test_whole_session_noise_never_reaches_runtime_classifier(tmp_path: Path):
+    ledger = _load()
+    helper = tmp_path / "classifier.py"
+    invoked = tmp_path / "classifier-invoked"
+    _write_helper(
+        helper,
+        """
+        from pathlib import Path
+        import sys
+
+        Path(sys.argv[1]).write_text("invoked", encoding="utf-8")
+        """,
+    )
+    event = _normalized_event(
+        ledger,
+        'session noise: "redacted transport record"',
+        "whole-session-noise",
+    )
+
+    result = ledger.classify_events(
+        [event],
+        command=shlex.join([sys.executable, str(helper), str(invoked)]),
+        policy={},
+    )
+
+    assert result.error is None
+    assert result.attempted is False
+    assert result.classified_occurrences == 0
+    assert result.events == [event]
+    assert not invoked.exists()
+
+
+def test_classifier_receives_only_residual_request_from_mixed_session_noise(
+    tmp_path: Path,
+):
+    ledger = _load()
+    helper = tmp_path / "classifier.py"
+    capture = tmp_path / "requests.json"
+    _write_helper(
+        helper,
+        """
+        import json
+        import sys
+
+        requests = [json.loads(line) for line in sys.stdin if line.strip()]
+        with open(sys.argv[1], "w", encoding="utf-8") as handle:
+            json.dump(requests, handle, sort_keys=True)
+        for request in requests:
+            segment = request["segments"][0]
+            print(json.dumps({
+                "occurrence_id": request["occurrence_id"],
+                "atoms": [{
+                    "text": segment["text"],
+                    "kind": "ask",
+                    "coverage_segment_indexes": [segment["index"]],
+                    "source_segments": [segment["text"]],
+                    "classification_confidence": 0.95,
+                }],
+            }, sort_keys=True))
+        """,
+    )
+    whole = _normalized_event(
+        ledger,
+        'session noise: "redacted transport record"',
+        "whole-session-noise",
+    )
+    mixed = _normalized_event(
+        ledger,
+        'session noise: "redacted transport record";\nImplement the residual parser.',
+        "mixed-session-noise",
+    )
+
+    result = ledger.classify_events(
+        [whole, mixed],
+        command=shlex.join([sys.executable, str(helper), str(capture)]),
+        policy={},
+    )
+
+    assert result.error is None
+    assert result.attempted is True
+    assert result.classified_occurrences == 1
+    assert [event["event_ref"] for event in result.events] == [
+        "whole-session-noise",
+        "mixed-session-noise",
+    ]
+    assert "atoms" not in result.events[0]
+    assert result.events[1]["atoms"][0]["text"] == "Implement the residual parser."
+    requests = json.loads(capture.read_text(encoding="utf-8"))
+    assert len(requests) == 1
+    assert requests[0]["body_kind"] == "session_noise_with_task_body"
+    assert requests[0]["text"] == "Implement the residual parser."
+    assert requests[0]["segments"] == [
+        {"index": 0, "text": "Implement the residual parser."},
+    ]
+
+
 def test_classifier_command_uses_exact_jsonl_ids_and_grounded_segments(
     tmp_path: Path,
     monkeypatch,

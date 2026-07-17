@@ -12,7 +12,7 @@ from typing import Any
 
 
 SOURCE_ADAPTER_CONTRACT_VERSION = 1
-PROMPT_SOURCE_SCANNER_VERSION = 4
+PROMPT_SOURCE_SCANNER_VERSION = 5
 SOURCE_FILE_SIGNATURE_FIELDS = ("ctime_ns", "device", "inode", "mtime_ns", "size")
 AGY_CONVERSATION_ROOT_SEGMENTS = (".gemini", "antigravity-cli", "conversations")
 AGY_SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")

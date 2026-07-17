@@ -124,6 +124,62 @@ _ACTION_AFTER_AND_RE = re.compile(
     r"stop|tell|test|update|use|verify|write)\b)",
     re.IGNORECASE,
 )
+_SESSION_NOISE_PREFIX_RE = re.compile(
+    r"\A\s*session\s+noise\s*:\s*",
+    re.IGNORECASE,
+)
+_SESSION_NOISE_BODY_KINDS = frozenset({"session_noise", "session_noise_with_task_body"})
+
+
+def parse_session_noise_frame(text: str) -> tuple[str, str] | None:
+    """Parse one anchored ``session noise: <quoted payload>`` evidence frame.
+
+    The quoted payload may contain escaped quotes and embedded newlines.  It is
+    deliberately discarded from the actionable body while callers retain the
+    original text in private raw custody.  A nonblank trailing body is
+    actionable only when whitespace and/or one optional semicolon separates it
+    from the closing quote.  Malformed and merely quoted specifications do not
+    match, so they remain ordinary actionable input.
+    """
+
+    match = _SESSION_NOISE_PREFIX_RE.match(text)
+    if match is None or match.end() >= len(text):
+        return None
+    quote = text[match.end()]
+    if quote not in {"'", '"'}:
+        return None
+
+    cursor = match.end() + 1
+    while cursor < len(text):
+        character = text[cursor]
+        if character == "\\":
+            cursor += 2
+            continue
+        if character == quote:
+            break
+        cursor += 1
+    else:
+        return None
+
+    trailer = text[cursor + 1 :]
+    if not trailer:
+        return "", "session_noise"
+    if not (trailer[0].isspace() or trailer[0] == ";"):
+        return None
+
+    cursor = 0
+    while cursor < len(trailer) and trailer[cursor].isspace():
+        cursor += 1
+    if cursor < len(trailer) and trailer[cursor] == ";":
+        cursor += 1
+        while cursor < len(trailer) and trailer[cursor].isspace():
+            cursor += 1
+    task_body = trailer[cursor:].strip()
+    if task_body.startswith(";"):
+        return None
+    if task_body:
+        return task_body, "session_noise_with_task_body"
+    return "", "session_noise"
 
 
 @dataclass(frozen=True)
@@ -562,6 +618,16 @@ def _event_position(event: dict[str, Any], field: str) -> int:
 
 def occurrence_from_event(event: dict[str, Any]) -> dict[str, Any]:
     text = str(event.get("text") or "")
+    parsed_noise = parse_session_noise_frame(text)
+    reported_body_kind = str(event.get("body_kind") or "direct")
+    if parsed_noise is not None:
+        _task_body, body_kind = parsed_noise
+    elif reported_body_kind in _SESSION_NOISE_BODY_KINDS:
+        # Body kinds cannot be used by a direct caller to launder malformed or
+        # near-miss text past the canonical anchored parser.
+        body_kind = "direct"
+    else:
+        body_kind = reported_body_kind
     source = str(event.get("source") or "unknown")
     session_ref = str(event.get("session_ref") or "unknown")
     event_index = _event_position(event, "event_index")
@@ -588,12 +654,12 @@ def occurrence_from_event(event: dict[str, Any]) -> dict[str, Any]:
         "source_locator": event.get("source_locator"),
         "timestamp": event.get("timestamp"),
         "prompt_hash": prompt_hash,
-        "body_kind": str(event.get("body_kind") or "direct"),
+        "body_kind": body_kind,
         "provenance": provenance,
         "authority": authority,
         "raw_text": text,
         "atom_ids": [],
-        "excluded_reason": None,
+        "excluded_reason": "explicit_session_noise" if body_kind == "session_noise" else None,
         "duplicate_of": event.get("duplicate_of"),
     }
 
@@ -603,12 +669,29 @@ def atoms_from_event(
     event: dict[str, Any],
     policy: dict[str, Any],
 ) -> list[dict[str, Any]]:
+    raw_text = str(occurrence.get("raw_text") or "")
+    parsed_noise = parse_session_noise_frame(raw_text)
+    if parsed_noise is not None:
+        task_body, body_kind = parsed_noise
+        occurrence["body_kind"] = body_kind
+    else:
+        reported_body_kind = str(event.get("body_kind") or "direct")
+        body_kind = str(occurrence.get("body_kind") or "direct")
+        if reported_body_kind in _SESSION_NOISE_BODY_KINDS or body_kind in _SESSION_NOISE_BODY_KINDS:
+            body_kind = "direct"
+            occurrence["body_kind"] = body_kind
+            task_body = ""
+        else:
+            task_body = str(event.get("task_body") or "")
+    atom_text = task_body if task_body.strip() else raw_text
+    if body_kind == "session_noise":
+        occurrence["excluded_reason"] = "explicit_session_noise"
+        occurrence["coverage_segment_hashes"] = []
+        occurrence["atom_ids"] = []
+        return []
     if occurrence.get("provenance") == "transport_echo":
         occurrence["excluded_reason"] = "transport_echo"
         return []
-    task_body = str(event.get("task_body") or "")
-    body_kind = str(occurrence.get("body_kind") or "direct")
-    atom_text = task_body if task_body.strip() else str(occurrence.get("raw_text") or "")
     if body_kind in {"nontext_context", "nontext_input"}:
         occurrence["excluded_reason"] = "nontext_prompt_input"
         return []
@@ -2641,6 +2724,7 @@ def validate_snapshot(
             errors.append(f"{occurrence_id}: occurrence references missing atoms")
         if occurrence.get("authority") == "operator" and not linked_ids:
             if occurrence.get("excluded_reason") not in {
+                "explicit_session_noise",
                 "source_contract_excluded",
                 "transport_duplicate",
                 "transport_echo",
