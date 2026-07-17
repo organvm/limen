@@ -83,6 +83,10 @@ from limen.worktree_debt import (
     take_admission_snapshot,
 )
 from limen.worktree_roots import dispatch_clone_cache_root, effective_worktree_root
+from limen.workstream_contract import (
+    ContractError as WorkstreamContractError,
+    validate_packet_contract,
+)
 
 
 def _int_or_default(raw: object, default: int) -> int:
@@ -1515,6 +1519,12 @@ def session_id() -> str:
 
 def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str:
     agent = canonical_agent(agent)
+    try:
+        _workstream_packet_for(task)
+    except WorkstreamLaunchContractError as exc:
+        reason = str(exc)
+        print(f"  BLOCKED {task.id}: {reason}; refusing provider launch so the lane can successor-route")
+        return _blocked_result(reason)
     if agent == "jules":
         return _call_jules(task, dry_run)
     if agent == "github_actions":
@@ -2066,14 +2076,18 @@ def _call_warp_oz(agent: str, task: Task, dry_run: bool) -> bool | str:
 # WRITE MODE matters: several CLIs default to read-only / no-edit in headless
 # mode, so they'd execute but never change a file. Flags below opt each into
 # autonomous workspace writes:
-#   - codex: needs --skip-git-repo-check (else aborts outside a "trusted" dir)
-#     and --sandbox workspace-write (default sandbox is read-only). exec is
-#     already non-interactive (approval: never).
+#   - codex: global --ask-for-approval never plus --sandbox workspace-write
+#     must precede exec. --skip-git-repo-check belongs to exec.
 #   - claude: -p is non-interactive; dontAsk plus an explicit build-tool allowlist
 #     runs authorized work and turns every residual permission decision into a hard
 #     denial instead of a modal.  Auto can fall back to prompting, acceptEdits still
 #     prompts for Bash, and bypassPermissions is not safe on the host.
-#   - opencode/agy: edit by default in run/-p mode (verified READY headless).
+#   - opencode: pure run mode is noninteractive. Conducted workstreams add a
+#     deny-by-default permission overlay at the final spawn seam; Bash stays
+#     denied, so this is an edit-capable lane rather than a build/test lane.
+#   - agy: sandboxed print mode is noninteractive. A finite print timeout turns
+#     unresolved tool denials into a bounded lane failure without bypassing
+#     permissions.
 #   - gemini: requires GEMINI_API_KEY / settings.json auth (not configured;
 #     lane is wired but will fail until auth is set).
 def _opencode_model(task: Task | None = None) -> str | None:
@@ -2109,20 +2123,26 @@ def _opencode_model(task: Task | None = None) -> str | None:
 
 
 _LOCAL_AGENTS: dict[str, list[str]] = {
-    "codex": ["exec", "--skip-git-repo-check", "--sandbox", "workspace-write"],
+    "codex": [
+        "--ask-for-approval",
+        "never",
+        "--sandbox",
+        "workspace-write",
+        "exec",
+        "--skip-git-repo-check",
+    ],
     # opencode: `run` with NO -m silently no-ops (no auth.json + no default model in
     # opencode.jsonc → 0 PRs). The model is injected LAZILY in _agent_argv() and DERIVED
     # from `opencode models` (never pinned, never resolved at import) — see _opencode_model().
-    "opencode": ["run"],
+    "opencode": ["--pure", "run"],
     # gemini: flags FIRST, then -p LAST so the appended prompt immediately follows -p
     # (gemini errors "Not enough arguments following: -p" otherwise). auto_edit = edits-only.
     "gemini": ["--approval-mode", "auto_edit", "-p"],
-    # agy/antigravity: -p (=--print) TAKES the prompt as its value, so it MUST come LAST
-    # with the appended prompt immediately after it (same bug class as gemini). With -p not
-    # last, it swallowed --dangerously-skip-permissions as the prompt → agent got no task
-    # ("acknowledged, ready to assist") and wrote nothing. Flags first, -p last.
-    "agy": ["--dangerously-skip-permissions", "-p"],
-    "antigravity": ["--dangerously-skip-permissions", "-p"],
+    # agy/antigravity: -p (=--print) TAKES the prompt as its value, so it MUST come LAST.
+    # The sandbox and finite print timeout are the no-modal boundary; dangerous permission
+    # bypass is deliberately prohibited.
+    "agy": ["--sandbox", "--print-timeout", "30m", "-p"],
+    "antigravity": ["--sandbox", "--print-timeout", "30m", "-p"],
     "claude": [
         "-p",
         "--permission-mode",
@@ -2146,10 +2166,47 @@ _LOCAL_AGENTS: dict[str, list[str]] = {
 
 _CLAUDE_NO_MODAL_MODE = "dontAsk"
 _CLAUDE_REQUIRED_BUILD_TOOLS = frozenset({"Edit", "Write"})
+_OPENCODE_WORKSTREAM_PERMISSION = {
+    "*": "deny",
+    "read": {
+        "*": "allow",
+        ".env": "deny",
+        ".env*": "deny",
+        ".env.*": "deny",
+        "**/.env": "deny",
+        "**/.env*": "deny",
+        "**/.env.*": "deny",
+    },
+    "edit": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "list": "allow",
+    "lsp": "allow",
+    "skill": "allow",
+    "todowrite": "allow",
+    "bash": "deny",
+    "task": "deny",
+    "question": "deny",
+    "external_directory": "deny",
+    "webfetch": "deny",
+    "websearch": "deny",
+    "doom_loop": "deny",
+    "plan_enter": "deny",
+    "plan_exit": "deny",
+}
+_OPENCODE_WORKSTREAM_PERMISSION_JSON = json.dumps(
+    _OPENCODE_WORKSTREAM_PERMISSION,
+    sort_keys=True,
+    separators=(",", ":"),
+)
 
 
 class ClaudeLaunchContractError(RuntimeError):
     """The internal Claude argv could wait for unavailable operator input."""
+
+
+class WorkstreamLaunchContractError(RuntimeError):
+    """A conducted packet cannot be represented safely at a local launch seam."""
 
 
 def _option_values(argv: list[str], *names: str) -> list[str]:
@@ -2248,6 +2305,176 @@ def _assert_claude_no_modal_contract(argv: list[str]) -> None:
         )
 
 
+def _option_positions(argv: list[str], *names: str) -> list[int]:
+    return [
+        index
+        for index, value in enumerate(argv)
+        if any(value == name or value.startswith(f"{name}=") for name in names)
+    ]
+
+
+def _workstream_packet_for(task: Task | None, *, now_epoch: int | None = None) -> dict[str, Any] | None:
+    if task is None:
+        return None
+    value = getattr(task, "workstream_contract", None)
+    if value is None:
+        return None
+    try:
+        packet = validate_packet_contract(value)
+    except WorkstreamContractError as exc:
+        raise WorkstreamLaunchContractError(f"invalid workstream packet contract: {exc}") from exc
+    now = int(time.time()) if now_epoch is None else int(now_epoch)
+    if int(packet["runway"]["deadline_epoch"]) - now <= 0:
+        raise WorkstreamLaunchContractError("workstream packet runway is exhausted; successor-route before launch")
+    return packet
+
+
+def _assert_codex_workstream_argv(argv: list[str]) -> None:
+    approvals = _option_values(argv, "--ask-for-approval", "-a")
+    sandboxes = _option_values(argv, "--sandbox", "-s")
+    if approvals != ["never"]:
+        raise WorkstreamLaunchContractError("Codex workstream launch requires exactly one approval policy: never")
+    if sandboxes != ["workspace-write"]:
+        raise WorkstreamLaunchContractError("Codex workstream launch requires exactly one workspace-write sandbox")
+    if argv.count("exec") != 1:
+        raise WorkstreamLaunchContractError("Codex workstream launch requires exactly one noninteractive exec command")
+    exec_index = argv.index("exec")
+    if any(index >= exec_index for index in _option_positions(argv, "--ask-for-approval", "-a", "--sandbox", "-s")):
+        raise WorkstreamLaunchContractError("Codex approval and sandbox flags must precede exec")
+    forbidden = {
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--dangerously-bypass-hook-trust",
+        "--ignore-rules",
+    }
+    present = sorted(value for value in argv if value.split("=", 1)[0] in forbidden)
+    if present:
+        raise WorkstreamLaunchContractError(
+            f"Codex workstream launch must not bypass approvals, sandboxing, or rules: {', '.join(present)}"
+        )
+    if _option_positions(argv, "--add-dir"):
+        raise WorkstreamLaunchContractError("Codex workstream launch must not widen workspace-write with --add-dir")
+
+
+def _assert_agy_workstream_argv(argv: list[str]) -> None:
+    if argv.count("--sandbox") != 1:
+        raise WorkstreamLaunchContractError("Agy workstream launch requires exactly one terminal sandbox")
+    forbidden = {
+        "--dangerously-skip-permissions",
+        "--prompt-interactive",
+        "-i",
+        "--continue",
+        "-c",
+        "--conversation",
+    }
+    present = sorted(value for value in argv if value.split("=", 1)[0] in forbidden)
+    if present:
+        raise WorkstreamLaunchContractError(
+            f"Agy workstream launch must not bypass permissions or open an interactive session: {', '.join(present)}"
+        )
+    print_positions = [index for index, value in enumerate(argv) if value in {"-p", "--print", "--prompt"}]
+    if print_positions != [len(argv) - 1]:
+        raise WorkstreamLaunchContractError("Agy workstream launch requires exactly one print flag in final position")
+    timeouts = _option_values(argv, "--print-timeout")
+    if len(timeouts) != 1:
+        raise WorkstreamLaunchContractError("Agy workstream launch requires exactly one finite print timeout")
+    match = re.fullmatch(r"([1-9][0-9]*)([smhd])", timeouts[0])
+    if not match:
+        raise WorkstreamLaunchContractError("Agy print timeout must be one positive bounded duration")
+    unit_seconds = {"s": 1, "m": 60, "h": 3_600, "d": 86_400}
+    timeout_seconds = int(match.group(1)) * unit_seconds[match.group(2)]
+    lane_timeout = max(1, _env_int("LIMEN_LANE_TIMEOUT", 1800))
+    if timeout_seconds > lane_timeout:
+        raise WorkstreamLaunchContractError(
+            f"Agy print timeout exceeds the configured lane ceiling of {lane_timeout}s"
+        )
+    if _option_positions(argv, "--add-dir"):
+        raise WorkstreamLaunchContractError("Agy workstream launch must not widen the workspace with --add-dir")
+
+
+def _assert_opencode_workstream_argv(argv: list[str], *, workspace: Path | None = None) -> None:
+    if argv.count("run") != 1:
+        raise WorkstreamLaunchContractError("OpenCode workstream launch requires exactly one noninteractive run command")
+    if argv.count("--pure") != 1:
+        raise WorkstreamLaunchContractError("OpenCode workstream launch requires pure mode")
+    prohibited = {
+        "--auto",
+        "--share",
+        "--attach",
+        "--interactive",
+        "-i",
+        "--yolo",
+        "--dangerously-skip-permissions",
+        "--dangerously-bypass-approvals-and-sandbox",
+    }
+    present = sorted(value for value in argv if value.split("=", 1)[0] in prohibited)
+    if present:
+        raise WorkstreamLaunchContractError(
+            f"OpenCode workstream launch contains unsafe or interactive flags: {', '.join(present)}"
+        )
+    directories = _option_values(argv, "--dir")
+    if workspace is None:
+        if directories:
+            raise WorkstreamLaunchContractError("OpenCode static argv must not carry a stale workspace directory")
+    elif directories != [str(workspace)]:
+        raise WorkstreamLaunchContractError("OpenCode workstream launch must pin --dir to its isolated worktree")
+
+
+def _assert_workstream_agent_argv(agent: str, argv: list[str], *, workspace: Path | None = None) -> None:
+    if agent == "codex":
+        _assert_codex_workstream_argv(argv)
+    elif agent in {"agy", "antigravity"}:
+        _assert_agy_workstream_argv(argv)
+    elif agent == "opencode":
+        _assert_opencode_workstream_argv(argv, workspace=workspace)
+
+
+def _opencode_workstream_env(run_env: dict[str, str]) -> None:
+    """Install the exact post-config safety overlay for a conducted edit packet."""
+
+    run_env["OPENCODE_PERMISSION"] = _OPENCODE_WORKSTREAM_PERMISSION_JSON
+    run_env["OPENCODE_PURE"] = "1"
+    run_env["OPENCODE_DISABLE_EXTERNAL_SKILLS"] = "1"
+    run_env["OPENCODE_DISABLE_SHARE"] = "1"
+    # Project configuration stays enabled so repository AGENTS/instructions remain visible.
+    run_env.pop("OPENCODE_DISABLE_PROJECT_CONFIG", None)
+
+
+def _assert_opencode_workstream_env(run_env: dict[str, str]) -> None:
+    expected = {
+        "OPENCODE_PERMISSION": _OPENCODE_WORKSTREAM_PERMISSION_JSON,
+        "OPENCODE_PURE": "1",
+        "OPENCODE_DISABLE_EXTERNAL_SKILLS": "1",
+        "OPENCODE_DISABLE_SHARE": "1",
+    }
+    drift = [name for name, value in expected.items() if run_env.get(name) != value]
+    if drift:
+        raise WorkstreamLaunchContractError(
+            f"OpenCode workstream safety environment is missing or changed: {', '.join(drift)}"
+        )
+    if _truthy_env_value(run_env.get("OPENCODE_DISABLE_PROJECT_CONFIG")):
+        raise WorkstreamLaunchContractError(
+            "OpenCode workstream launch must preserve project AGENTS/instruction discovery"
+        )
+
+
+def _truthy_env_value(raw: str | None) -> bool:
+    return raw is not None and raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _assert_final_workstream_launch(
+    agent: str,
+    task: Task,
+    argv: list[str],
+    run_env: dict[str, str],
+    workspace: Path,
+) -> None:
+    if _workstream_packet_for(task) is None:
+        return
+    _assert_workstream_agent_argv(agent, argv, workspace=workspace if agent == "opencode" else None)
+    if agent == "opencode":
+        _assert_opencode_workstream_env(run_env)
+
+
 _LOCAL_BIN: dict[str, str] = {
     # opencode-clock wraps the real opencode binary with an internal usage clock
     # (token tracking from SQLite DB) and presence beacon. Falls through to plain
@@ -2277,8 +2504,12 @@ def _agent_argv(agent: str, task: Task | None = None) -> list[str]:
     resolved at import time. OpenCode selects from its live catalog; Codex uses provider Auto unless
     the operator supplied an explicit override; Claude's tier is derived per task (the earned-tier
     ladder). `task` is optional for legacy callers; OpenCode and Claude use its current evidence."""
+    now = int(time.time())
+    workstream_packet = _workstream_packet_for(task, now_epoch=now)
     model: str | None = None
     flags = list(_LOCAL_AGENTS[agent])
+    if agent in {"codex", "opencode"}:
+        _assert_workstream_agent_argv(agent, flags)
     if agent == "opencode":
         model = _opencode_model(task)
         if model:
@@ -2306,6 +2537,15 @@ def _agent_argv(agent: str, task: Task | None = None) -> list[str]:
         if model:
             idx = flags.index("-p")
             flags[idx:idx] = ["-m", model]
+    if agent in {"agy", "antigravity"}:
+        bounded_seconds = max(1, _env_int("LIMEN_LANE_TIMEOUT", 1800))
+        if workstream_packet is not None:
+            remaining = int(workstream_packet["runway"]["deadline_epoch"]) - now
+            bounded_seconds = min(remaining, bounded_seconds)
+        timeout_index = flags.index("--print-timeout") + 1
+        flags[timeout_index] = f"{bounded_seconds}s"
+    if agent in {"codex", "opencode", "agy", "antigravity"}:
+        _assert_workstream_agent_argv(agent, flags)
     return flags
 
 
@@ -3729,7 +3969,7 @@ def _bridge_agy_scratch(task: Task, wt: Path) -> None:
         print(f"  agy-bridge {task.id}: skipped ({str(e)[:80]})")
 
 
-def _lane_run_env(agent: str, wt: Path | None = None) -> dict[str, str]:
+def _lane_run_env(agent: str, wt: Path | None = None, task: Task | None = None) -> dict[str, str]:
     run_env = os.environ.copy()
     if wt is not None:
         live_root = os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))
@@ -3761,6 +4001,8 @@ def _lane_run_env(agent: str, wt: Path | None = None) -> dict[str, str]:
         elif fleet_key:
             run_env["ANTHROPIC_API_KEY"] = fleet_key
         run_env.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
+    if agent == "opencode" and _workstream_packet_for(task) is not None:
+        _opencode_workstream_env(run_env)
     return run_env
 
 
@@ -3796,10 +4038,15 @@ def _run_isolated_agent(
     agent_cmd: list[str],
     lane_timeout: int,
 ) -> bool | str:
-    run_env = _lane_run_env(agent, wt)
-    if agent == "opencode":
-        run_env["LIMEN_OPENCODE_CLOCK"] = "1"
-        run_env["LIMEN_TASK_ID"] = task.id
+    try:
+        run_env = _lane_run_env(agent, wt, task)
+        if agent == "opencode":
+            run_env["LIMEN_OPENCODE_CLOCK"] = "1"
+            run_env["LIMEN_TASK_ID"] = task.id
+        _assert_final_workstream_launch(agent, task, agent_cmd[1:-1], run_env, wt)
+    except WorkstreamLaunchContractError as exc:
+        print(f"  BLOCKED {task.id}: {exc}; refusing provider launch so the lane can cascade")
+        return False
     try:
         run = _run_capture(agent_cmd, cwd=str(wt), timeout=lane_timeout, env=run_env)
         # SELF-HEAL the credential-refresh race (#48786): if claude lost the token rotation,
@@ -4094,7 +4341,21 @@ def _resolve_agent_binary(agent: str) -> str:
     return binary
 
 
-def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
+def _workspace_agent_args(agent: str, base_args: list[str], workspace: Path) -> list[str]:
+    args = list(base_args)
+    if agent == "opencode":
+        args.extend(["--dir", str(workspace)])
+    if agent in {"codex", "opencode", "agy", "antigravity"}:
+        _assert_workstream_agent_argv(agent, args, workspace=workspace if agent == "opencode" else None)
+    return args
+
+
+def _isolated_local_run(
+    agent: str,
+    task: Task,
+    dry_run: bool,
+    base_agent_args: list[str] | None = None,
+) -> bool | str:
     binary = _resolve_agent_binary(agent)
     repo_dir = _resolve_repo_dir(task)
     if repo_dir is None and not dry_run:
@@ -4128,7 +4389,7 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
     branch = f"limen/{slug}-{suffix}"
     isolation_root = _isolation_root()
     wt = isolation_root / (re.sub(r"[^a-zA-Z0-9._-]+", "-", task.id.lower()) + "-" + suffix)
-    agent_args = _agent_argv(agent, task)
+    base_agent_args = list(base_agent_args) if base_agent_args is not None else _agent_argv(agent, task)
     prompt = _build_prompt(task)
     if os.environ.get("LIMEN_ISOLATION_PROMPT_GUARD", "1") == "1":
         prompt = (
@@ -4137,7 +4398,6 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
             "and $LIMEN_ROOT as the only writable checkout. Do not edit the live root, do not edit "
             "$LIMEN_LIVE_ROOT, and do not edit tasks.yaml; the dispatcher records task state."
         )
-    agent_cmd = [binary, *agent_args, prompt]
     # 1800s (was 900): local lanes have ABUNDANT budget headroom (codex/claude/opencode ~60-92 left
     # per window) while jules is scarce (≈100/day). At 900s, big tasks — incl. the revenue/deploy
     # tasks (BLD2-*-deploy, REV-*) — timed out locally then bled to jules, exhausting the scarce lane
@@ -4146,6 +4406,7 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
     lane_timeout = max(1, _env_int("LIMEN_LANE_TIMEOUT", 1800))
 
     if dry_run:
+        agent_args = _workspace_agent_args(agent, base_agent_args, wt)
         pr_note = f"; PR base {pr_base}" if pr_head else ""
         print(
             f"  would isolate {task.id}: worktree {wt} off {checkout_ref}{pr_note} "
@@ -4188,6 +4449,8 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
 
     pushed = False
     try:
+        agent_args = _workspace_agent_args(agent, base_agent_args, wt)
+        agent_cmd = [binary, *agent_args, prompt]
         start_head_result = _git(["rev-parse", "HEAD"], wt)
         start_head = start_head_result.stdout.strip() if start_head_result.returncode == 0 else ""
         run_result = _run_isolated_agent(agent, task, wt, agent_cmd, lane_timeout)
@@ -4230,13 +4493,12 @@ def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str:
     if not agent_can_run_task(agent, task):
         print(f"  SKIP {task.id}: {agent} is gated for Limen registry discovery tasks")
         return False
-    if agent == "claude":
-        try:
-            _assert_claude_no_modal_contract(list(_LOCAL_AGENTS[agent]))
-        except ClaudeLaunchContractError as exc:
-            print(f"  BLOCKED {task.id}: {exc}; refusing provider launch so the lane can cascade")
-            return False
-    if agent == "opencode" and "-m" not in _agent_argv(agent, task):
+    try:
+        agent_args = _agent_argv(agent, task)
+    except (ClaudeLaunchContractError, WorkstreamLaunchContractError) as exc:
+        print(f"  BLOCKED {task.id}: {exc}; refusing provider launch so the lane can cascade")
+        return False
+    if agent == "opencode" and "-m" not in agent_args:
         reason = "no code-capable model is exposed by the live OpenCode catalog"
         if dry_run:
             print(f"  would BLOCK {task.id}: {reason}")
@@ -4244,18 +4506,22 @@ def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str:
         print(f"  BLOCKED {task.id}: {reason}")
         return _blocked_result(reason)
     if _worktree_isolation_enabled():
-        return _isolated_local_run(agent, task, dry_run)
+        return _isolated_local_run(agent, task, dry_run, agent_args)
     # ── legacy in-place path (escape hatch; edits the live checkout directly)
     binary = _resolve_agent_binary(agent)
-    cmd = [binary, *_agent_argv(agent, task), _build_prompt(task)]
     cwd = _resolve_repo_dir(task)
     if cwd is None:
         msg = f"no local checkout of {task.repo or '(no repo)'}"
         if dry_run:
-            print(f"  would [{msg}; clone first]: {binary} {' '.join(_agent_argv(agent, task))} …")
+            print(f"  would [{msg}; clone first]: {binary} {' '.join(agent_args)} …")
             return True
         print(f"  SKIP {task.id}: {msg} — clone it under $LIMEN_WORKDIR first")
         return False
+    if _workstream_packet_for(task) is not None:
+        reason = "conducted workstream packets require the isolated local launch path"
+        print(f"  BLOCKED {task.id}: {reason}")
+        return False
+    cmd = [binary, *agent_args, _build_prompt(task)]
     return _run_cmd(cmd, task, dry_run, cwd=str(cwd))
 
 

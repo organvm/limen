@@ -105,6 +105,9 @@ class Task(BaseModel):
     # Optional live prerequisites. Missing/empty keeps legacy tasks dispatchable; an explicit
     # requirement is evaluated dynamically by handoff and every dispatch selector.
     execution_requirements: list[ExecutionRequirement] | None = None
+    # Immutable provider-neutral workstream policy carried from a generated packet into
+    # the actual adapter launch seam. Historical tasks omit it.
+    workstream_contract: dict[str, Any] | None = None
     # Optional per-task Claude tier pin ("haiku"|"sonnet"|"opus"|"fable") — an escape hatch that
     # overrides the earned-tier ladder's class-based derivation for THIS task (the env
     # LIMEN_CLAUDE_MODEL still wins above it). Fable still requires LIMEN_FABLE_ACCEPTANCE.
@@ -131,6 +134,15 @@ class Task(BaseModel):
         if isinstance(value, bool):
             raise ValueError("budget_cost must be an integer, not a boolean")
         return value
+
+    @field_validator("workstream_contract")
+    @classmethod
+    def validate_workstream_contract(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        if value is None:
+            return None
+        from limen.workstream_contract import validate_packet_contract
+
+        return validate_packet_contract(value)
 
     @field_validator("workstream")
     @classmethod

@@ -337,11 +337,21 @@ A continuation capsule contains:
 
 - one isolated worktree and single-purpose branch when repository-backed, otherwise one isolated
   owner-native workspace or durable remote surface;
+- one validated, machine-readable workstream contract with an explicit finite configurable runway;
+  the first launch admits it, successor sessions inherit its deadline, and malformed, unbounded, or
+  expired contracts fail closed without preempting an already-running provider process;
 - a README with the objective, current evidence links, authorities, prohibitions, first probes,
   executable predicates, ownership rules, and session-switch conditions;
 - one copy/paste command that enters the worktree and starts the next agent with that README as its
   initial prompt;
 - a durable remote receipt for the capsule itself before the producing session closes.
+
+The capsule is a conducted workstream, not an implicit one-packet handoff. Its conductor re-checks
+remaining runway at packet boundaries, derives healthy lanes from live capabilities, and routes
+independently bounded packets across agents without pinning a provider or model. Full approval is
+carried as a no-modal contract: in-scope reversible work proceeds without confirmation under the
+scoped sandbox; destructive, credential, paid-spend, public-send, and runtime/host mutations remain
+gated.
 
 The capsule defines how reality decides what happens next; it never predeclares the ending. At launch,
 derive the exact remote head and CI state, board/task contracts, handoff age, provider headroom, mounted
