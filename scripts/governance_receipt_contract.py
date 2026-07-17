@@ -37,6 +37,16 @@ READINESS_STATUSES = {
 SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 PUBLIC_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,255}$")
 EVENT_ID = re.compile(r"^evt_[0-9a-f]{64}$")
+ASSERTION_EVIDENCE_TYPES = {
+    "immutable_source_event",
+    "ratified_constitutional_record",
+    "owner_record",
+    "fresh_verifier_receipt",
+    "primary_source",
+    "secondary_source",
+    "artifact",
+    "other",
+}
 
 
 class ReceiptContractError(RuntimeError):
@@ -616,9 +626,54 @@ def _assertion_debt(assertions: Sequence[Mapping[str, Any]]) -> list[str]:
         if state not in {"unverified", "verified", "stale", "disputed"}:
             raise ReceiptContractError("assertion verification_state is invalid")
         references = assertion.get("evidence_references")
-        if not isinstance(references, list) or not all(isinstance(item, str) and item for item in references):
+        if not isinstance(references, list) or not references:
             raise ReceiptContractError("assertion evidence references are invalid")
-        if state != "verified" or len(references) < 2 or len(references) != len(set(references)):
+        evidence_ids: list[str] = []
+        reference_values: list[str] = []
+        independence_groups: list[str] = []
+        evidence_types: set[str] = set()
+        for item in references:
+            if not isinstance(item, Mapping):
+                raise ReceiptContractError("assertion evidence references are invalid")
+            evidence_id = item.get("evidence_id")
+            independence_group = item.get("independence_group")
+            evidence_type = item.get("evidence_type")
+            reference = item.get("reference")
+            if (
+                not isinstance(evidence_id, str)
+                or not evidence_id
+                or not isinstance(independence_group, str)
+                or not independence_group
+                or evidence_type not in ASSERTION_EVIDENCE_TYPES
+                or not isinstance(reference, str)
+                or not reference
+            ):
+                raise ReceiptContractError("assertion evidence references are invalid")
+            validate_digest(item.get("body_hash"), "assertion evidence body_hash")
+            observed_at = item.get("observed_at")
+            if observed_at is not None:
+                _utc_timestamp(observed_at, "assertion evidence observed_at")
+            evidence_ids.append(evidence_id)
+            reference_values.append(reference)
+            independence_groups.append(independence_group)
+            evidence_types.add(str(evidence_type))
+        required_types: set[str] = set()
+        assertion_class = assertion.get("assertion_class")
+        if assertion_class == "operator_directive":
+            required_types = {
+                "immutable_source_event",
+                "ratified_constitutional_record",
+            }
+        elif assertion_class == "current_state":
+            required_types = {"owner_record", "fresh_verifier_receipt"}
+        if (
+            state != "verified"
+            or len(references) < 2
+            or len(evidence_ids) != len(set(evidence_ids))
+            or len(reference_values) != len(set(reference_values))
+            or len(set(independence_groups)) < 2
+            or not required_types.issubset(evidence_types)
+        ):
             debt.append(f"assertion:{assertion_id}:verification")
     return debt
 

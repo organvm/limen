@@ -209,7 +209,28 @@ def _artifacts(
         "assertion_class": "operator_directive",
         "statement": "The frozen operator directive controls.",
         "verification_state": "verified",
-        "evidence_references": ["source:one", "source:two"],
+        "freshness": {
+            "verified_at": SNAPSHOT_AT,
+            "status": "not_applicable",
+        },
+        "evidence_references": [
+            {
+                "evidence_id": EVENT_ID,
+                "independence_group": "operator-export",
+                "evidence_type": "immutable_source_event",
+                "reference": f"normalized-events.jsonl#{EVENT_ID}",
+                "body_hash": BODY_DIGEST,
+                "observed_at": SNAPSHOT_AT,
+            },
+            {
+                "evidence_id": "constitutional-record-fixture",
+                "independence_group": "constitutional-chain",
+                "evidence_type": "ratified_constitutional_record",
+                "reference": "docs/memory/constitution.md#fixture",
+                "body_hash": "sha256:" + "e" * 64,
+                "observed_at": SNAPSHOT_AT,
+            },
+        ],
     }
     lineage = {
         "contract_name": "lineage-graph.v1",
@@ -588,6 +609,72 @@ def test_candidate_bundle_is_honestly_blocked_and_accepts_assertion_object(
     assert testament["status"] == "candidate"
     assert testament["constitutional_coverage_ready"] is False
     assert len(document["bundle_payload"]["assertion_evidence"]) == 1
+    assert all(
+        isinstance(reference, dict)
+        for reference in document["bundle_payload"]["assertion_evidence"][0]["evidence_references"]
+    )
+
+
+def test_owner_rejects_legacy_string_assertion_references(
+    tmp_path: Path,
+) -> None:
+    inputs = _artifacts(tmp_path / "inputs", candidate=False)
+    assertion = json.loads(inputs["assertion_evidence"].read_text(encoding="utf-8"))
+    assertion["evidence_references"] = ["source:one", "source:two"]
+    _write_json(inputs["assertion_evidence"], assertion)
+    run_root = tmp_path / "run"
+
+    result = _run(
+        _args(inputs, run_root / "artifacts" / "pre-proof.json"),
+        _env(run_root, run_root / "metrics" / "receipt.json"),
+        expected=2,
+    )
+
+    assert "assertion evidence references are invalid" in result.stderr
+
+
+def test_owner_routes_single_independence_group_to_citation_debt(
+    tmp_path: Path,
+) -> None:
+    inputs = _artifacts(tmp_path / "inputs", candidate=False)
+    assertion = json.loads(inputs["assertion_evidence"].read_text(encoding="utf-8"))
+    assertion["evidence_references"][1]["independence_group"] = "operator-export"
+    _write_json(inputs["assertion_evidence"], assertion)
+    run_root = tmp_path / "run"
+    output = run_root / "artifacts" / "pre-proof.json"
+
+    _run(
+        _args(inputs, output),
+        _env(run_root, run_root / "metrics" / "receipt.json"),
+    )
+
+    readiness = json.loads(output.read_text(encoding="utf-8"))["readiness"]
+    assert readiness["ready"] is False
+    assert readiness["citation_debt"] == [
+        "assertion:assertion-fixture:verification",
+    ]
+
+
+def test_owner_routes_missing_operator_authority_type_to_citation_debt(
+    tmp_path: Path,
+) -> None:
+    inputs = _artifacts(tmp_path / "inputs", candidate=False)
+    assertion = json.loads(inputs["assertion_evidence"].read_text(encoding="utf-8"))
+    assertion["evidence_references"][1]["evidence_type"] = "other"
+    _write_json(inputs["assertion_evidence"], assertion)
+    run_root = tmp_path / "run"
+    output = run_root / "artifacts" / "pre-proof.json"
+
+    _run(
+        _args(inputs, output),
+        _env(run_root, run_root / "metrics" / "receipt.json"),
+    )
+
+    readiness = json.loads(output.read_text(encoding="utf-8"))["readiness"]
+    assert readiness["ready"] is False
+    assert readiness["citation_debt"] == [
+        "assertion:assertion-fixture:verification",
+    ]
 
 
 def test_owner_unions_real_coverage_and_parity_debt(
