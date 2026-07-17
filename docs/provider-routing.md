@@ -75,6 +75,11 @@ that attempt ID. Terminal conversion derives outcome from the canonical lifecycl
 any conflicting asserted outcome. A routed retry therefore records the attempt's terminal event
 first, then a separate attempt-free `open` transition.
 
+Claim and result application both re-hash the current task contract against the launch receipt. If
+the contract changed, the provider cannot start or land against that attempt: the old attempt closes
+failed with its bounded output, effects, model receipt, and actual spend preserved for zero value,
+then an attempt-free `open` event binds the new current contract for a fresh reservation.
+
 Pre-v2 board rows remain lifecycle-readable, but they are not backfilled and cannot be converted
 into value-bearing trajectory receipts.
 

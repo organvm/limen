@@ -19,8 +19,8 @@ import limen.trajectory_publication as trajectory_publication
 from limen.capacity import PAID_AGENT_ORDER, agent_status, capacity_census, format_capacity_census, select_lanes
 from limen.dispatch import dispatch_parallel, dispatch_tasks, release_stale_tasks
 from limen.doctor import qa_report, readiness_report, stale_tasks
-from limen.execution_trajectory import trajectory_from_log_entries
-from limen.io import load_limen_file
+from limen.execution_trajectory import trajectory_from_log_entries, verified_value_credit
+from limen.io import load_limen_file, save_limen_file
 from limen.jules_remote import JulesRemoteSnapshot
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
 from limen.status import print_status
@@ -1139,11 +1139,20 @@ def test_dispatch_serial_commit_survives_concurrent_board_write(
 
     dispatch_tasks(stale, tasks_path, agent="codex", dry_run=False)
 
-    tasks = {task["id"]: task for task in read_board(tasks_path)["tasks"]}
+    board_after = read_board(tasks_path)
+    tasks = {task["id"]: task for task in board_after["tasks"]}
     assert set(tasks) == {"DISPATCH-ME", "CONCURRENT-FOLD"}
-    assert tasks["DISPATCH-ME"]["status"] == "dispatched"
+    assert tasks["DISPATCH-ME"]["status"] == "open"
     assert tasks["DISPATCH-ME"]["predicate"] == "pytest -q concurrent-owner-check"
     assert tasks["DISPATCH-ME"]["receipt_target"].endswith("concurrent-owner.json")
+    terminal, requeue = tasks["DISPATCH-ME"]["dispatch_log"][-2:]
+    assert terminal["status"] == "failed"
+    assert terminal["trajectory_outcome"] == "failed"
+    assert terminal["attempt_id"]
+    assert requeue["status"] == "open"
+    assert requeue.get("attempt_id") is None
+    assert requeue["current_contract_hash"] == D.execution_contract_hash(load_limen_file(tasks_path).tasks[0])
+    assert board_after["portal"]["budget"]["track"]["spent"] == 0
     assert tasks["CONCURRENT-FOLD"]["status"] == "open"
 
 
@@ -1782,6 +1791,180 @@ def _register_model_selection_attempt(task: Task, *, agent: str | None = None) -
     return launch
 
 
+def _reserved_contract_attempt() -> tuple[Task, DispatchLogEntry]:
+    task = Task(
+        id="CONTRACT-CUSTODY",
+        title="execute the frozen contract",
+        repo="example/repository",
+        target_agent="codex",
+        status="open",
+        predicate="python3 -m pytest -q",
+        receipt_target="github:example/repository:pull-request",
+        created=date(2026, 7, 17),
+    )
+    launch = D._attempt_launch_entry(
+        task,
+        "codex",
+        reservation_session="contract-custody",
+        started_at=datetime.now(timezone.utc),
+        output="fixture registered attempt",
+    )
+    task.status = "dispatched"
+    task.dispatch_log.append(launch)
+    return task, launch
+
+
+def test_claim_registered_attempt_closes_changed_contract_before_provider_run(tmp_path: Path) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.context = "contract changed after reservation"
+    current_hash = D.execution_contract_hash(task)
+    assert current_hash != launch.attempt_contract_hash
+    save_limen_file(tasks_path, LimenFile(tasks=[task]))
+
+    assert (
+        D._claim_registered_attempt(
+            tasks_path,
+            task_id=task.id,
+            agent="codex",
+            expected_attempt_id=str(launch.attempt_id),
+        )
+        is None
+    )
+
+    reopened = load_limen_file(tasks_path).tasks[0]
+    terminal, requeue = reopened.dispatch_log[-2:]
+    assert reopened.status == requeue.status == "open"
+    assert terminal.status == "failed"
+    assert terminal.trajectory_outcome == "failed"
+    assert terminal.attempt_id == launch.attempt_id
+    assert requeue.attempt_id is None
+    assert requeue.attempt_contract_hash is None
+    assert requeue.current_contract_hash == current_hash
+    assert D._current_attempt_id(reopened) == launch.attempt_id
+
+    reserved = D._reserve_serial_attempt(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        expected_contract_hash=current_hash,
+    )
+    assert reserved is not None
+    retry, retry_attempt_id = reserved
+    retry_launch = D._attempt_launch_for(retry, retry_attempt_id)
+    assert retry_launch is not None
+    assert retry_attempt_id != launch.attempt_id
+    assert retry_launch.attempt_contract_hash == current_hash
+    assert retry.status == retry.dispatch_log[-1].status == "in_progress"
+
+
+def test_claim_and_apply_current_registered_contract_happy_path(tmp_path: Path) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    save_limen_file(tasks_path, LimenFile(tasks=[task]))
+
+    claimed = D._claim_registered_attempt(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        expected_attempt_id=str(launch.attempt_id),
+    )
+
+    assert claimed is not None
+    assert claimed.status == claimed.dispatch_log[-1].status == "in_progress"
+    assert claimed.dispatch_log[-1].attempt_id == launch.attempt_id
+    track = BudgetTrack(date="2026-07-17")
+    result = "https://github.com/example/repository/pull/17"
+    assert D._apply_result(
+        claimed,
+        "codex",
+        result,
+        datetime.now(timezone.utc),
+        track,
+        expected_attempt_id=launch.attempt_id,
+    )
+    assert claimed.status == claimed.dispatch_log[-1].status == "dispatched"
+    assert claimed.dispatch_log[-1].attempt_id == launch.attempt_id
+    assert claimed.dispatch_log[-1].session_id == result
+    assert track.spent == 1
+    assert track.per_agent["codex"] == 1
+
+
+def test_mid_provider_contract_change_preserves_old_spend_without_current_credit() -> None:
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    spend = {"amount": 2.5, "unit": "token-k"}
+    effects = {"filesystem_writes": 1, "bounded": True}
+    task.dispatch_log.append(
+        launch.model_copy(
+            update={
+                "status": "in_progress",
+                "actual_spend": spend,
+                "provider_run_id": "provider-run-old-contract",
+                "effect_receipt": effects,
+            }
+        )
+    )
+    D._record_model_selection(
+        task,
+        profile=dict(launch.execution_profile or {}),
+        selected_model="fixture/runtime-output",
+        source="provider_live_catalog",
+        fingerprint="a" * 64,
+    )
+    task.context = "changed while the provider was running"
+    current_hash = D.execution_contract_hash(task)
+    stale_result = "https://github.com/example/repository/pull/99"
+    track = BudgetTrack(date="2026-07-17")
+
+    assert not D._apply_result(
+        task,
+        "codex",
+        stale_result,
+        datetime.now(timezone.utc),
+        track,
+        expected_attempt_id=launch.attempt_id,
+    )
+
+    terminal, requeue = task.dispatch_log[-2:]
+    assert task.status == requeue.status == "open"
+    assert terminal.status == "failed"
+    assert terminal.attempt_id == launch.attempt_id
+    assert terminal.actual_spend == spend
+    assert terminal.provider_run_id == "provider-run-old-contract"
+    assert terminal.effect_receipt == effects
+    assert terminal.selected_model == "fixture/runtime-output"
+    assert stale_result in str(terminal.output)
+    assert terminal.session_id != stale_result
+    assert requeue.attempt_id is None
+    assert requeue.actual_spend is None
+    assert requeue.selected_model is None
+    assert getattr(requeue, "effect_receipt", None) is None
+    assert requeue.current_contract_hash == current_hash
+    assert stale_result not in str(requeue.output)
+    assert track.spent == 0
+    assert track.per_agent == {}
+    record = trajectory_from_log_entries(task_id=task.id, launch=launch, terminal=terminal)
+    assert record.spend.amount == 2.5
+    assert record.spend.unit == "token-k"
+    assert verified_value_credit(record) == 0
+
+    event_count = len(task.dispatch_log)
+    assert not D._apply_result(
+        task,
+        "codex",
+        stale_result,
+        datetime.now(timezone.utc),
+        track,
+        expected_attempt_id=launch.attempt_id,
+    )
+    assert len(task.dispatch_log) == event_count
+    stale_terminals = trajectory_publication._terminal_events(task)
+    assert stale_terminals == [terminal]
+    assert stale_terminals[0].actual_spend == spend
+    assert track.spent == 0
+
+
 def test_requeue_preserves_terminal_attempt_before_attempt_free_open_transition(monkeypatch) -> None:
     monkeypatch.setattr(D, "_next_lane", lambda _agent: "jules")
     task = Task(
@@ -2103,7 +2286,7 @@ def test_attempt_launch_freezes_classification_before_provider_motion() -> None:
         expected_attempt_id=launch.attempt_id,
     )
 
-    event = task.dispatch_log[-1]
+    event, requeue = task.dispatch_log[-2:]
     assert event.attempt_id and event.attempt_id.startswith("attempt-")
     assert event.attempt_classification == {
         "task_type": "code",
@@ -2111,6 +2294,9 @@ def test_attempt_launch_freezes_classification_before_provider_motion() -> None:
         "workstream": None,
     }
     assert event.trajectory_outcome == "failed"
+    assert task.status == requeue.status == "open"
+    assert requeue.attempt_id is None
+    assert requeue.current_contract_hash == D.execution_contract_hash(task)
 
 
 def test_pr_open_receipt_blocks_duplicate_dispatch_and_noop_demotion() -> None:

@@ -1628,6 +1628,90 @@ def _current_attempt_id(task: Task) -> str | None:
     return next((entry.attempt_id for entry in reversed(task.dispatch_log) if entry.attempt_id), None)
 
 
+def _attempt_contract_is_current(task: Task, launch: DispatchLogEntry) -> bool:
+    """Prove the owner row still carries the exact contract frozen at launch."""
+
+    if not launch.attempt_contract_hash:
+        return False
+    try:
+        return execution_contract_hash(task) == launch.attempt_contract_hash
+    except (TypeError, ValueError):
+        return False
+
+
+def _close_changed_contract_attempt(
+    task: Task,
+    launch: DispatchLogEntry,
+    *,
+    now: datetime,
+    agent: str,
+    phase: str,
+    stale_result: bool | str | None = None,
+    model_selection: dict[str, Any] | None = None,
+) -> None:
+    """Close one stale attempt once, then expose the changed contract as open work."""
+
+    attempt_id = str(launch.attempt_id or "")
+    latest_attempt_event = next(
+        (entry for entry in reversed(task.dispatch_log) if entry.attempt_id == attempt_id),
+        None,
+    )
+    if latest_attempt_event is None or latest_attempt_event.status not in {
+        "done",
+        "failed",
+        "failed_blocked",
+        "needs_human",
+    }:
+        output = "execution contract changed after reservation; stale attempt closed without applying provider output"
+        if stale_result is not None:
+            output += f"; stale provider result preserved for old attempt only: {str(stale_result)[:300]}"
+        update: dict[str, Any] = {
+            "timestamp": now,
+            "agent": agent,
+            "session_id": f"contract-mismatch-{phase}",
+            "status": "failed",
+            "trajectory_outcome": "failed",
+            "output": output,
+        }
+        if model_selection is not None:
+            update.update(
+                {
+                    "selected_model": model_selection.get("selected_model"),
+                    "selection_source": model_selection.get("selection_source"),
+                    "catalog_hash": model_selection.get("catalog_hash"),
+                }
+            )
+        task.dispatch_log.append(
+            (latest_attempt_event or launch).model_copy(
+                update=update,
+            )
+        )
+    task.status = "open"
+    task.updated = now
+    head = task.dispatch_log[-1] if task.dispatch_log else None
+    try:
+        current_contract_hash = execution_contract_hash(task)
+    except (TypeError, ValueError):
+        current_contract_hash = None
+    if (
+        head is None
+        or head.status != "open"
+        or head.attempt_id is not None
+        or head.current_contract_hash != current_contract_hash
+    ):
+        task.dispatch_log.append(
+            DispatchLogEntry(
+                timestamp=now,
+                agent=agent,
+                session_id=f"contract-mismatch-{phase}-requeue",
+                status="open",
+                route_to=task.target_agent,
+                current_contract_hash=current_contract_hash,
+                output="dispatch: changed execution contract reopened for a fresh attempt",
+            )
+        )
+
+
 def _record_model_selection(
     task: Task | None,
     *,
@@ -4590,6 +4674,16 @@ def _claim_registered_attempt(
         if launch is None or latest is None or latest.status != "dispatched" or latest.agent != agent:
             return None
         claimed_at = datetime.now(timezone.utc)
+        if not _attempt_contract_is_current(task, launch):
+            _close_changed_contract_attempt(
+                task,
+                launch,
+                now=claimed_at,
+                agent=agent,
+                phase="pre-claim",
+            )
+            save_limen_file(tasks_path, fresh)
+            return None
         task.status = "in_progress"
         task.updated = claimed_at
         task.dispatch_log.append(
@@ -4858,6 +4952,47 @@ def _apply_result(
         return False
     active_attempt_id = expected_attempt_id or _current_attempt_id(task)
     launch = _attempt_launch_for(task, active_attempt_id) if active_attempt_id else None
+    if task.status in {"done", "archived"} and _has_done_transition(task):
+        return False
+    if _restore_done_status(
+        task,
+        now,
+        agent=agent,
+        session_id="result-lifecycle-guard",
+        output="dispatch result ignored because this task already recorded done",
+    ):
+        return False
+    if launch is not None and not _attempt_contract_is_current(task, launch):
+        cached_selection = _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+        stale_selection = model_selection_receipt if model_selection_receipt is not None else cached_selection
+        validated_stale_selection = None
+        if stale_selection:
+            try:
+                validated_stale_selection = _validated_model_selection_receipt(
+                    task,
+                    expected_attempt_id=str(launch.attempt_id),
+                    value=stale_selection,
+                )
+            except ValueError:
+                pass
+        _close_changed_contract_attempt(
+            task,
+            launch,
+            now=now,
+            agent=agent,
+            phase="result",
+            stale_result=result,
+            model_selection=validated_stale_selection,
+        )
+        return False
+    if result in {_NOOP, False} and _restore_pr_open_status(
+        task,
+        now,
+        agent=agent,
+        session_id="result-lifecycle-guard",
+    ):
+        _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+        return False
     detached_selection = model_selection_receipt
     cached_selection = _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
     selection = detached_selection if detached_selection is not None else cached_selection
@@ -4869,23 +5004,6 @@ def _apply_result(
             expected_attempt_id=active_attempt_id,
             value=selection,
         )
-    if task.status in {"done", "archived"} and _has_done_transition(task):
-        return False
-    if _restore_done_status(
-        task,
-        now,
-        agent=agent,
-        session_id="result-lifecycle-guard",
-        output="dispatch result ignored because this task already recorded done",
-    ):
-        return False
-    if result in {_NOOP, False} and _restore_pr_open_status(
-        task,
-        now,
-        agent=agent,
-        session_id="result-lifecycle-guard",
-    ):
-        return False
 
     entry = DispatchLogEntry(timestamp=now, agent=agent, session_id=session_id(), status="dispatched")
     if result == _NOOP:

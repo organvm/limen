@@ -36,6 +36,7 @@ class DispatchLogEntry(BaseModel):
     attempt_classification: dict[str, Any] | None = None
     attempt_repository: str | None = None
     attempt_contract_hash: str | None = None
+    current_contract_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     attempt_identity_digest: str | None = None
     execution_profile: dict[str, Any] | None = None
     selected_model: str | None = None
