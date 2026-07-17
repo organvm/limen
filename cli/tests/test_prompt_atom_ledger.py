@@ -2517,6 +2517,153 @@ def test_reclassification_is_append_only_and_preserves_assessed_outcome(tmp_path
     assert corpus.check_ledger(paths) == []
 
 
+def test_non_noise_reclassification_cannot_retire_assessed_atoms(tmp_path: Path):
+    corpus = _load()
+    paths = _paths(corpus, tmp_path)
+    text = "Keep the durable owner. Verify the exact receipt."
+    first = corpus.update_ledger(
+        paths,
+        events=[_event(text, event_ref="assessed-retirement-guard")],
+        cursor=_cursor(corpus),
+    )
+    corpus.update_ledger(
+        paths,
+        outcomes=[
+            {
+                "atom_id": atom["atom_id"],
+                "disposition": "not_done",
+                "assessed_at": "2026-07-11T12:04:00Z",
+            }
+            for atom in first["atoms"]
+        ],
+    )
+    segments = corpus.structural_segments(text)
+
+    with pytest.raises(ValueError, match="classification revision would orphan assessed atoms"):
+        corpus.update_ledger(
+            paths,
+            events=[
+                _event(
+                    text,
+                    event_ref="assessed-retirement-guard",
+                    atoms=[
+                        {
+                            "text": "Combined verified task",
+                            "kind": "ask",
+                            "classifier_provenance": "fixture-adapter",
+                            "classification_confidence": 0.95,
+                            "coverage_segment_indexes": list(range(len(segments))),
+                            "source_segments": segments,
+                        }
+                    ],
+                )
+            ],
+        )
+
+    assert corpus.check_ledger(paths) == []
+
+
+def test_session_noise_retirement_receipt_fails_closed_when_tampered(
+    tmp_path: Path,
+    monkeypatch,
+):
+    corpus = _load()
+    paths = _paths(corpus, tmp_path)
+    text = 'session noise: "redacted transport record"'
+    with monkeypatch.context() as scanner_v4:
+        scanner_v4.setattr(corpus, "parse_session_noise_frame", lambda _text: None)
+        legacy = corpus.update_ledger(
+            paths,
+            events=[_event(text, event_ref="retirement-receipt")],
+            cursor=_cursor(corpus),
+        )
+    legacy_atom_id = legacy["atoms"][0]["atom_id"]
+    corpus.update_ledger(
+        paths,
+        outcomes=[
+            {
+                "atom_id": legacy_atom_id,
+                "disposition": "not_done",
+                "assessed_at": "2026-07-11T12:04:00Z",
+            }
+        ],
+    )
+    corpus.update_ledger(
+        paths,
+        events=[_event(text, event_ref="retirement-receipt")],
+    )
+    rows = corpus.load_jsonl(paths.event_journal)
+    rows[-1]["retirement_reason"] = "unrecognized_retirement"
+    paths.event_journal.write_text(
+        "".join(corpus.canonical_json(row) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+    occurrences, atoms, _history, retired_atom_ids, errors = corpus.load_event_journal_state(paths.event_journal)
+
+    assert any("invalid session-noise atom retirement" in error for error in errors)
+    assert occurrences[0]["body_kind"] == "direct"
+    assert [atom["atom_id"] for atom in atoms] == [legacy_atom_id]
+    assert retired_atom_ids == frozenset()
+    assert any("invalid session-noise atom retirement" in error for error in corpus.check_ledger(paths))
+
+
+def test_active_closure_cannot_reference_retired_session_noise_atom(
+    tmp_path: Path,
+    monkeypatch,
+):
+    corpus = _load()
+    paths = _paths(corpus, tmp_path)
+    noise_text = 'session noise: "redacted transport record"'
+    active_text = "Keep the current operator request active."
+    with monkeypatch.context() as scanner_v4:
+        scanner_v4.setattr(corpus, "parse_session_noise_frame", lambda _text: None)
+        legacy = corpus.update_ledger(
+            paths,
+            events=[
+                _event(noise_text, event_ref="retired-residual"),
+                _event(active_text, event_ref="active-residual"),
+            ],
+            cursor=_cursor(corpus),
+        )
+    atoms_by_intent = {atom["intent"]: atom for atom in legacy["atoms"]}
+    retired_atom_id = atoms_by_intent[noise_text]["atom_id"]
+    active_atom_id = atoms_by_intent[active_text]["atom_id"]
+    corpus.update_ledger(
+        paths,
+        outcomes=[
+            {
+                "atom_id": retired_atom_id,
+                "disposition": "not_done",
+                "assessed_at": "2026-07-11T12:04:00Z",
+            }
+        ],
+    )
+    corpus.update_ledger(
+        paths,
+        events=[_event(noise_text, event_ref="retired-residual")],
+    )
+    outcome_history_before = paths.outcome_journal.read_bytes()
+
+    with pytest.raises(ValueError, match="residual atom ids"):
+        corpus.update_ledger(
+            paths,
+            outcomes=[
+                {
+                    "atom_id": active_atom_id,
+                    "disposition": "partial",
+                    "owner": "organvm/limen",
+                    "assessed_at": "2026-07-11T12:05:00Z",
+                    "residual_atom_ids": [retired_atom_id],
+                    "evidence": [_passing_receipt(paths, active_atom_id)],
+                }
+            ],
+        )
+
+    assert paths.outcome_journal.read_bytes() == outcome_history_before
+    assert corpus.check_ledger(paths) == []
+
+
 def test_operator_authority_band_dominates_derived_volume(tmp_path: Path):
     corpus = _load()
     names = tuple(corpus.DIMENSIONS)

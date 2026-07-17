@@ -5902,6 +5902,19 @@ def test_scanner_v5_reclassifies_session_noise_and_second_pass_is_byte_identical
         scanner_v4.setattr(corpus_module, "parse_session_noise_frame", lambda _text: None)
         before_migration = sources.update_ledger(paths, events=scanner_v4_events)
     assert before_migration["coverage"]["atoms"] > 1
+    legacy_atom_ids = [atom["atom_id"] for atom in before_migration["atoms"]]
+    sources.update_ledger(
+        paths,
+        outcomes=[
+            {
+                "atom_id": atom_id,
+                "disposition": "not_done",
+                "assessed_at": "2026-07-16T12:02:00Z",
+            }
+            for atom_id in legacy_atom_ids
+        ],
+    )
+    outcome_history_before = paths.outcome_journal.read_bytes()
 
     stale_cursor = json.loads(json.dumps(current_cursor))
     stale_cursor["scanner_version"] = 4
@@ -5926,6 +5939,28 @@ def test_scanner_v5_reclassifies_session_noise_and_second_pass_is_byte_identical
     assert [atom["intent"] for atom in migrated["atoms"]] == [
         "Implement the residual parser.",
     ]
+    active_atom_ids = {atom["atom_id"] for atom in migrated["atoms"]}
+    retired_legacy_atom_ids = set(legacy_atom_ids) - active_atom_ids
+    assert retired_legacy_atom_ids
+    assert paths.outcome_journal.read_bytes() == outcome_history_before
+    (
+        _occurrences,
+        _active_atoms,
+        historical_atoms,
+        retired_atom_ids,
+        journal_errors,
+    ) = sources.load_event_journal_state(paths.event_journal)
+    assert journal_errors == []
+    assert set(legacy_atom_ids) <= {atom["atom_id"] for atom in historical_atoms}
+    assert retired_atom_ids == retired_legacy_atom_ids
+    retirement_rows = [
+        row
+        for row in sources.load_jsonl(paths.event_journal)
+        if row.get("retirement_reason") == "session_noise_parser_migration"
+    ]
+    assert retirement_rows
+    assert {atom_id for row in retirement_rows for atom_id in row["retired_atom_ids"]} == retired_legacy_atom_ids
+    assert sources.check_ledger(paths) == []
 
     def canonical_bytes() -> dict[str, str]:
         files = [

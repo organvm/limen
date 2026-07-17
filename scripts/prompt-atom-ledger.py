@@ -37,6 +37,7 @@ from limen.prompt_corpus import (  # noqa: E402
     _json_bytes,
     _path_signature,
     LedgerPaths,
+    active_outcome_rows,
     atomic_write_bytes,
     attest_source_scan,
     build_snapshot,
@@ -45,6 +46,7 @@ from limen.prompt_corpus import (  # noqa: E402
     current_source_scanner_code_digest,
     digest,
     load_event_journal,
+    load_event_journal_state,
     load_json_strict,
     load_jsonl,
     load_jsonl_strict,
@@ -59,6 +61,7 @@ from limen.prompt_corpus import (  # noqa: E402
     structural_segments,
     update_ledger,
     validate_cursor_shape,
+    validate_outcome_journal_state,
     validate_raw_references,
     validate_source_adapter_cursor,
 )
@@ -6110,17 +6113,30 @@ def rebind_checkpoint(paths: LedgerPaths) -> list[str]:
         return ["invalid stored source cursor shape: " + "; ".join(shape_errors)]
 
     policy = load_policy(paths.policy)
-    occurrence_rows, atom_rows, event_errors = load_event_journal(paths.event_journal)
+    (
+        occurrence_rows,
+        atom_rows,
+        historical_atom_rows,
+        retired_atom_ids,
+        event_errors,
+    ) = load_event_journal_state(paths.event_journal)
     outcome_rows, outcome_errors = load_jsonl_strict(paths.outcome_journal)
     raw_errors = validate_raw_references(paths, occurrence_rows, verify_content=True)
-    all_journal_errors = [*event_errors, *outcome_errors, *raw_errors]
+    outcome_state_errors = validate_outcome_journal_state(
+        outcome_rows,
+        atom_rows,
+        historical_atom_rows,
+        retired_atom_ids,
+        evidence_root=paths.root,
+    )
+    all_journal_errors = [*event_errors, *outcome_errors, *raw_errors, *outcome_state_errors]
     if all_journal_errors:
         return ["journals contain errors; refusing to rebind: " + "; ".join(str(e) for e in all_journal_errors)]
 
     snapshot = build_snapshot(
         occurrence_rows,
         atom_rows,
-        outcome_rows,
+        active_outcome_rows(outcome_rows, atom_rows),
         policy,
         loaded_cursor,
         journal_errors=[],

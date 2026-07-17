@@ -129,6 +129,7 @@ _SESSION_NOISE_PREFIX_RE = re.compile(
     re.IGNORECASE,
 )
 _SESSION_NOISE_BODY_KINDS = frozenset({"session_noise", "session_noise_with_task_body"})
+_SESSION_NOISE_RETIREMENT_REASON = "session_noise_parser_migration"
 
 
 def parse_session_noise_frame(text: str) -> tuple[str, str] | None:
@@ -365,15 +366,24 @@ def read_raw_object(paths: LedgerPaths, relative: str) -> str:
     return gzip.decompress(candidate.read_bytes()).decode("utf-8", errors="replace")
 
 
-def load_event_journal(
+def load_event_journal_state(
     path: Path,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
-    """Load transactional occurrence+atom rows from the append-only journal."""
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    frozenset[str],
+    list[str],
+]:
+    """Load active rows plus the private atom history and authorized retirements."""
 
     rows, errors = load_jsonl_strict(path)
     occurrence_order: list[str] = []
     occurrences_by_id: dict[str, dict[str, Any]] = {}
     atoms_by_occurrence: dict[str, list[dict[str, Any]]] = {}
+    historical_atom_order: list[str] = []
+    historical_atoms_by_id: dict[str, dict[str, Any]] = {}
+    retired_atom_ids: set[str] = set()
     for line_number, row in enumerate(rows, start=1):
         occurrence = row.get("occurrence")
         event_atoms = row.get("atoms")
@@ -388,18 +398,69 @@ def load_event_journal(
             errors.append(f"{path.name}:{line_number}: occurrence id is missing")
             continue
         revision_of = str(row.get("revision_of") or "")
+        prior_occurrence = occurrences_by_id.get(occurrence_id)
+        prior_atom_ids = {
+            str(atom.get("atom_id") or "") for atom in atoms_by_occurrence.get(occurrence_id, []) if atom.get("atom_id")
+        }
         if occurrence_id in occurrences_by_id and revision_of != occurrence_id:
             errors.append(f"{path.name}:{line_number}: duplicate base occurrence")
             continue
         if revision_of and revision_of not in occurrences_by_id:
             errors.append(f"{path.name}:{line_number}: classification revision lacks a base event")
             continue
+        event_atom_ids = [str(atom.get("atom_id") or "") for atom in event_atoms]
+        if any(not atom_id for atom_id in event_atom_ids) or len(set(event_atom_ids)) != len(event_atom_ids):
+            errors.append(f"{path.name}:{line_number}: event atoms require unique nonempty ids")
+            continue
+        retirement_reason = row.get("retirement_reason")
+        raw_retired_atom_ids = row.get("retired_atom_ids")
+        has_retirement = retirement_reason is not None or raw_retired_atom_ids is not None
+        if has_retirement:
+            retired_values = (
+                [str(value) for value in raw_retired_atom_ids] if isinstance(raw_retired_atom_ids, list) else []
+            )
+            expected_retired = prior_atom_ids - set(event_atom_ids)
+            retirement_valid = bool(
+                revision_of == occurrence_id
+                and prior_occurrence is not None
+                and retirement_reason == _SESSION_NOISE_RETIREMENT_REASON
+                and isinstance(raw_retired_atom_ids, list)
+                and retired_values
+                and len(set(retired_values)) == len(retired_values)
+                and set(retired_values) == expected_retired
+                and str(prior_occurrence.get("body_kind") or "direct") not in _SESSION_NOISE_BODY_KINDS
+                and str(occurrence.get("body_kind") or "direct") in _SESSION_NOISE_BODY_KINDS
+                and (
+                    occurrence.get("body_kind") != "session_noise"
+                    or occurrence.get("excluded_reason") == "explicit_session_noise"
+                )
+            )
+            if not retirement_valid:
+                errors.append(f"{path.name}:{line_number}: invalid session-noise atom retirement")
+                continue
+            retired_atom_ids.update(retired_values)
         if occurrence_id not in occurrences_by_id:
             occurrence_order.append(occurrence_id)
         occurrences_by_id[occurrence_id] = occurrence
         atoms_by_occurrence[occurrence_id] = list(event_atoms)
+        retired_atom_ids.difference_update(event_atom_ids)
+        for atom in event_atoms:
+            atom_id = str(atom["atom_id"])
+            if atom_id not in historical_atoms_by_id:
+                historical_atom_order.append(atom_id)
+            historical_atoms_by_id[atom_id] = atom
     occurrences = [occurrences_by_id[value] for value in occurrence_order]
     atoms = [atom for value in occurrence_order for atom in atoms_by_occurrence[value]]
+    historical_atoms = [historical_atoms_by_id[value] for value in historical_atom_order]
+    return occurrences, atoms, historical_atoms, frozenset(retired_atom_ids), errors
+
+
+def load_event_journal(
+    path: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    """Load the current occurrence+atom projection from the append-only journal."""
+
+    occurrences, atoms, _historical_atoms, _retired_atom_ids, errors = load_event_journal_state(path)
     return occurrences, atoms, errors
 
 
@@ -1184,6 +1245,57 @@ def validate_outcome_history(
         if previous_time is not None and (assessed_time is None or assessed_time <= previous_time):
             errors.append(f"{atom_id}: outcome revision assessed_at must increase monotonically")
         effective[atom_id] = row
+    return errors
+
+
+def active_outcome_rows(
+    rows: Sequence[dict[str, Any]],
+    active_atoms: Sequence[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Keep retired outcomes in private history but out of the active projection."""
+
+    active_atom_ids = {str(atom.get("atom_id") or "") for atom in active_atoms if atom.get("atom_id")}
+    return [row for row in rows if isinstance(row, dict) and str(row.get("atom_id") or "") in active_atom_ids]
+
+
+def validate_outcome_journal_state(
+    rows: Sequence[dict[str, Any]],
+    active_atoms: Sequence[dict[str, Any]],
+    historical_atoms: Sequence[dict[str, Any]],
+    retired_atom_ids: frozenset[str] | set[str],
+    *,
+    evidence_root: Path | None,
+) -> list[str]:
+    """Validate outcomes against private history and require explicit retirement."""
+
+    active_atom_ids = {str(atom.get("atom_id") or "") for atom in active_atoms if atom.get("atom_id")}
+    active_atoms_by_id = {str(atom.get("atom_id") or ""): atom for atom in active_atoms if atom.get("atom_id")}
+    historical_atoms_by_id = {str(atom.get("atom_id") or ""): atom for atom in historical_atoms if atom.get("atom_id")}
+    retired_ids = set(retired_atom_ids)
+    active_rows = [row for row in rows if isinstance(row, dict) and str(row.get("atom_id") or "") in active_atom_ids]
+    retired_rows = [row for row in rows if isinstance(row, dict) and str(row.get("atom_id") or "") in retired_ids]
+    errors = validate_outcome_history(
+        active_rows,
+        active_atoms_by_id,
+        evidence_root=evidence_root,
+    )
+    errors.extend(
+        validate_outcome_history(
+            retired_rows,
+            historical_atoms_by_id,
+            evidence_root=evidence_root,
+        )
+    )
+    known_outcome_ids = active_atom_ids | retired_ids
+    unauthorized = {
+        str(row.get("atom_id") or "")
+        for row in rows
+        if isinstance(row, dict) and row.get("atom_id") and str(row.get("atom_id") or "") not in known_outcome_ids
+    }
+    if unauthorized:
+        errors.append(
+            "outcomes reference inactive atoms without an authorized retirement: " + ", ".join(sorted(unauthorized))
+        )
     return errors
 
 
@@ -4132,13 +4244,21 @@ def update_ledger(
             }
             return result
 
-        occurrence_rows, atom_rows, event_errors = load_event_journal(paths.event_journal)
+        (
+            occurrence_rows,
+            atom_rows,
+            historical_atom_rows,
+            retired_atom_ids,
+            event_errors,
+        ) = load_event_journal_state(paths.event_journal)
         outcome_rows, outcome_errors = load_jsonl_strict(paths.outcome_journal)
         journal_errors = [*event_errors, *outcome_errors]
         if journal_errors:
             raise ValueError("; ".join(journal_errors))
         occurrence_by_id = _index_by_id(occurrence_rows, "occurrence_id")
         atom_by_id = _index_by_id(atom_rows, "atom_id")
+        historical_atom_by_id = _index_by_id(historical_atom_rows, "atom_id")
+        authorized_retired_atom_ids = set(retired_atom_ids)
         atoms_by_occurrence = {
             str(row.get("occurrence_id") or ""): [str(value) for value in (row.get("atom_ids") or [])]
             for row in occurrence_rows
@@ -4283,23 +4403,31 @@ def update_ledger(
                 occurrence["classification_digest"] = classification_digest
                 old_atom_ids = set(atoms_by_occurrence.get(occurrence_id, []))
                 new_atom_ids = {str(atom["atom_id"]) for atom in atoms}
+                removed_atom_ids = old_atom_ids - new_atom_ids
                 assessed_removed = {
                     atom_id
-                    for atom_id in old_atom_ids - new_atom_ids
+                    for atom_id in removed_atom_ids
                     if str((outcomes_by_atom.get(atom_id) or {}).get("disposition") or "unassessed") != "unassessed"
                 }
-                if assessed_removed:
+                session_noise_migration = bool(
+                    str(existing_occurrence.get("body_kind") or "direct") not in _SESSION_NOISE_BODY_KINDS
+                    and str(occurrence.get("body_kind") or "direct") in _SESSION_NOISE_BODY_KINDS
+                )
+                if assessed_removed and not session_noise_migration:
                     raise ValueError(
                         "classification revision would orphan assessed atoms: " + ", ".join(sorted(assessed_removed))
                     )
                 replacements[occurrence_id] = (occurrence, atoms)
-                new_event_rows.append(
-                    {
-                        "occurrence": occurrence,
-                        "atoms": atoms,
-                        "revision_of": occurrence_id,
-                    }
-                )
+                revision_row: dict[str, Any] = {
+                    "occurrence": occurrence,
+                    "atoms": atoms,
+                    "revision_of": occurrence_id,
+                }
+                if removed_atom_ids and session_noise_migration:
+                    revision_row["retired_atom_ids"] = sorted(removed_atom_ids)
+                    revision_row["retirement_reason"] = _SESSION_NOISE_RETIREMENT_REASON
+                    authorized_retired_atom_ids.update(removed_atom_ids)
+                new_event_rows.append(revision_row)
                 for old_atom_id in old_atom_ids:
                     atom_by_id.pop(old_atom_id, None)
             else:
@@ -4315,7 +4443,10 @@ def update_ledger(
             occurrence_by_id[occurrence_id] = occurrence
             atoms_by_occurrence[occurrence_id] = [str(atom["atom_id"]) for atom in atoms]
             for atom in atoms:
-                atom_by_id[str(atom["atom_id"])] = atom
+                atom_id = str(atom["atom_id"])
+                atom_by_id[atom_id] = atom
+                historical_atom_by_id[atom_id] = atom
+                authorized_retired_atom_ids.discard(atom_id)
                 new_atoms.append(atom)
 
         malformed_outcomes = [
@@ -4338,9 +4469,11 @@ def update_ledger(
         ]
         if unknown_outcomes:
             raise ValueError(f"outcomes reference unknown atoms: {', '.join(unknown_outcomes)}")
-        outcome_validation_errors = validate_outcome_history(
+        outcome_validation_errors = validate_outcome_journal_state(
             [*outcome_rows, *new_outcomes],
-            atom_by_id,
+            list(atom_by_id.values()),
+            list(historical_atom_by_id.values()),
+            authorized_retired_atom_ids,
             evidence_root=paths.root,
         )
         if outcome_validation_errors:
@@ -4398,7 +4531,7 @@ def update_ledger(
         snapshot = build_snapshot(
             occurrence_rows,
             atom_rows,
-            outcome_rows,
+            active_outcome_rows(outcome_rows, atom_rows),
             policy,
             effective_cursor,
             journal_errors=raw_errors,
@@ -4485,16 +4618,29 @@ def check_ledger(paths: LedgerPaths, *, require_scope: str | None = None) -> lis
         errors.extend(validate_live_source_custody(live_cursor))
         if private.get("source_cursor_digest") != cursor_digest(live_cursor):
             errors.append("source cursor changed after the private projection")
-        occurrence_rows, atom_rows, event_errors = load_event_journal(paths.event_journal)
+        (
+            occurrence_rows,
+            atom_rows,
+            historical_atom_rows,
+            retired_atom_ids,
+            event_errors,
+        ) = load_event_journal_state(paths.event_journal)
         outcome_rows, outcome_errors = load_jsonl_strict(paths.outcome_journal)
         raw_errors = validate_raw_references(paths, occurrence_rows, verify_content=True)
+        outcome_state_errors = validate_outcome_journal_state(
+            outcome_rows,
+            atom_rows,
+            historical_atom_rows,
+            retired_atom_ids,
+            evidence_root=paths.root,
+        )
         rebuilt = build_snapshot(
             occurrence_rows,
             atom_rows,
-            outcome_rows,
+            active_outcome_rows(outcome_rows, atom_rows),
             load_policy(paths.policy),
             live_cursor,
-            journal_errors=[*event_errors, *outcome_errors, *raw_errors],
+            journal_errors=[*event_errors, *outcome_errors, *raw_errors, *outcome_state_errors],
             evidence_root=paths.root,
         )
         if not (rebuilt.get("validation") or {}).get("ok"):
