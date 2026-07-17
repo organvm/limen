@@ -56,9 +56,9 @@ Checks (exit 0 iff all pass):
      (a) predicate-not-prose done, (b) terminal closeout / fixed-point, (c) derive-before-asking,
      (d) durable-homing for all produced state, (e) active-unblocking, (f) triage-window anchor.
 
-  O. The Record-Keeper Covenant keeper law is encoded: AGENTS.md tabularius note contains both
-     "memory" and "memory-ticket"; the Session Discipline bearer line about memory-is-keeper-owned
-     is present; GEMINI.md contains the keeper/memoria mirror line.
+  O. The Record-Keeper Covenant keeper law is encoded: AGENTS.md tabularius note (under
+     ## Agent-Specific Notes / ### Claude) contains "memory", "memory-ticket", and the
+     "Memory is keeper-owned" line; GEMINI.md contains the keeper/memoria mirror line.
 
 Run directly (``scripts/check-agent-docs.py``) or via ``scripts/verify-whole.sh``.
 """
@@ -461,11 +461,11 @@ def main() -> int:
                 f"AGENTS.md 'Agent-Specific Notes' lacks {label} "
                 f"(fix: add the TABVLARIVS keeper law to the ### Claude note)"
             )
-    if "Memory is keeper-owned" not in agents_text:
+    if "Memory is keeper-owned" not in claude_note:
         errors.append(
-            "AGENTS.md lacks the Session Discipline keeper line "
+            "AGENTS.md 'Agent-Specific Notes' lacks the keeper line "
             "'Memory is keeper-owned — never Write MEMORY.md or memory atoms; submit a memory ticket' "
-            "(fix: add it to the TABVLARIVS note in ### Claude)"
+            "(fix: add it to the TABVLARIVS note in ### Claude under ## Agent-Specific Notes)"
         )
     gemini_text = (ROOT / "GEMINI.md").read_text(encoding="utf-8")
     if "keeper" not in gemini_text or "memoria" not in gemini_text:
