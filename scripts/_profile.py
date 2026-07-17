@@ -639,20 +639,26 @@ def render_typing_header(lines: list[str], *, width: int = 760, height: int = 90
     n = max(len(lines), 1)
     per = 3.6            # seconds each line owns within the cycle
     cycle = per * n      # one full loop; every line runs an indefinite dur=cycle animation
+    fade = min(0.05, 0.2 / n)   # crossfade fraction of the cycle
     for i, text in enumerate(lines):
-        start = (i * per) / cycle
-        fade = 0.5 / cycle
-        # a pulse that shows this line only during its slot, looping forever (repeatCount=indefinite).
-        # keyTimes must be strictly increasing across [0,1]; guard the edges.
-        k1 = max(0.0, start)
-        k2 = min(1.0, start + fade)
-        k3 = min(1.0, start + (per / cycle) - fade)
-        k4 = min(1.0, start + (per / cycle))
-        kt = sorted({0.0, k1, k2, k3, k4, 1.0})
-        # map opacity to each keyTime: 0 outside the slot, 1 inside
-        vals = []
-        for t in kt:
-            vals.append("1" if (k2 - 1e-6) <= t <= (k3 + 1e-6) else "0")
+        s, e = i / n, (i + 1) / n
+        # Crossfading keyframes with NO all-blank gap, and line 0 == 1 at t=0 so the initial
+        # (and non-animating) frame always shows a line. Line i rises over [s-fade, s],
+        # overlapping the previous line's fall over [s-fade, s] (== its own [e-fade, e]).
+        if i == 0:
+            pts = [(0.0, 1.0), (e - fade, 1.0), (e, 0.0), (1.0, 0.0)]
+        elif i == n - 1:
+            pts = [(0.0, 0.0), (s - fade, 0.0), (s, 1.0), (1.0, 1.0)]
+        else:
+            pts = [(0.0, 0.0), (s - fade, 0.0), (s, 1.0), (e - fade, 1.0), (e, 0.0), (1.0, 0.0)]
+        kt, vals = [], []
+        for t, v in pts:
+            t = min(max(t, 0.0), 1.0)
+            if kt and abs(t - kt[-1]) < 1e-6:
+                vals[-1] = f"{v:g}"
+                continue
+            kt.append(t)
+            vals.append(f"{v:g}")
         base = "1" if i == 0 else "0"   # a static (non-animating) viewer still sees the first line
         body.append(
             f'<text x="{width/2}" y="{height/2+9}" text-anchor="middle" fill="{THEME["accent"]}" '
