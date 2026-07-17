@@ -37,46 +37,60 @@ _HEAVY_COMMAND = re.compile(
     )
     """
 )
+_EXECUTION_TTL_SECONDS = 24 * 60 * 60
 
 
 def _hash_label(prefix: str, raw: str) -> str:
     return f"{prefix}-{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:24]}"
 
 
-def _ps_row(pid: int) -> tuple[int | None, str]:
+def _process_table() -> dict[int, tuple[int, str]]:
     try:
         result = subprocess.run(
-            ["ps", "-p", str(pid), "-o", "ppid=,comm="],
+            ["ps", "-axo", "pid=,ppid=,comm="],
             capture_output=True,
             text=True,
-            timeout=2,
+            timeout=0.5,
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
-        return None, ""
-    parts = result.stdout.strip().split(maxsplit=1)
-    if result.returncode != 0 or not parts or not parts[0].isdigit():
-        return None, ""
-    return int(parts[0]), parts[1] if len(parts) > 1 else ""
+        return {}
+    if result.returncode != 0:
+        return {}
+    table: dict[int, tuple[int, str]] = {}
+    for line in result.stdout.splitlines():
+        parts = line.strip().split(maxsplit=2)
+        if len(parts) < 2 or not parts[0].isdigit() or not parts[1].isdigit():
+            continue
+        table[int(parts[0])] = (int(parts[1]), parts[2] if len(parts) > 2 else "")
+    return table
 
 
 def codex_owner_pid() -> int:
     """Resolve the durable Codex ancestor instead of leasing to this short hook."""
 
     current = os.getppid()
-    fallback = current
+    table = _process_table()
+    if not table:
+        raise ValueError("durable Codex owner process table is unavailable")
     seen: set[int] = set()
+    oldest: int | None = None
     for _ in range(32):
         if current <= 1 or current in seen:
             break
         seen.add(current)
-        parent, command = _ps_row(current)
-        if "codex" in command.lower():
-            return current
-        if parent is None:
+        row = table.get(current)
+        if row is None:
             break
+        parent, command = row
+        oldest = current
+        lowered = command.lower()
+        if any(marker in lowered for marker in ("codex", "chatgpt", "openai")):
+            return current
         current = parent
-    return fallback
+    if oldest is None:
+        raise ValueError("durable Codex owner ancestor cannot be proven")
+    return oldest
 
 
 def _turn_owner(payload: dict[str, Any]) -> str | None:
@@ -108,7 +122,7 @@ def _needs_bounded_closeout(cwd: str) -> bool:
             ["git", "-C", cwd, "branch", "--show-current"],
             capture_output=True,
             text=True,
-            timeout=2,
+            timeout=0.5,
             check=False,
         ).stdout.strip()
         if not branch or branch in {"main", "master"}:
@@ -117,14 +131,14 @@ def _needs_bounded_closeout(cwd: str) -> bool:
             ["git", "-C", cwd, "status", "--porcelain=v1", "--untracked-files=no"],
             capture_output=True,
             text=True,
-            timeout=3,
+            timeout=1,
             check=False,
         )
         ahead = subprocess.run(
             ["git", "-C", cwd, "rev-list", "--count", "@{upstream}..HEAD"],
             capture_output=True,
             text=True,
-            timeout=3,
+            timeout=1,
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
@@ -140,17 +154,27 @@ def _release_execution(
     owner: str,
     pid: int,
 ) -> None:
-    status = controller.status(probe=False)
-    lease = next(
-        (
-            item
-            for item in status.get("leases") or []
-            if item.get("kind") == "execution" and item.get("owner") == owner and int(item.get("pid") or 0) == pid
-        ),
-        None,
+    controller.release_owned("execution", owner=owner, pid=pid)
+
+
+def _ensure_execution(
+    controller: AdmissionController,
+    *,
+    owner: str | None,
+    pid: int,
+    permission_mode: str,
+) -> dict[str, Any] | None:
+    """Atomically refresh or reacquire a live non-plan turn lease."""
+
+    if owner is None or permission_mode == "plan":
+        return None
+    return controller.acquire(
+        "execution",
+        owner=owner,
+        surface="codex-active-event",
+        pid=pid,
+        ttl_seconds=_EXECUTION_TTL_SECONDS,
     )
-    if lease:
-        controller.release(lease_id=str(lease["lease_id"]), owner=owner, pid=pid)
 
 
 def handle(
@@ -176,6 +200,7 @@ def handle(
             owner=owner,
             surface="codex-user-prompt",
             pid=pid,
+            ttl_seconds=_EXECUTION_TTL_SECONDS,
         )
         if not decision["allowed"]:
             reasons = ",".join(decision.get("reasons") or ["execution-lease-held"])
@@ -186,6 +211,19 @@ def handle(
         return None
 
     if event == "PreToolUse":
+        turn_decision = _ensure_execution(
+            controller,
+            owner=owner,
+            pid=pid,
+            permission_mode=permission_mode,
+        )
+        if turn_decision is not None and not turn_decision["allowed"]:
+            reasons = ",".join(turn_decision.get("reasons") or ["execution-lease-held"])
+            return _message(
+                "Limen detected a conflicting Codex turn lease: "
+                + reasons
+                + ". Stop this root; guarded heavy entrypoints remain fail-closed."
+            )
         command = _tool_command(payload)
         if not _HEAVY_COMMAND.search(command):
             return None
@@ -204,10 +242,23 @@ def handle(
         return None
 
     if event == "SubagentStart":
+        turn_decision = _ensure_execution(
+            controller,
+            owner=owner,
+            pid=pid,
+            permission_mode=permission_mode,
+        )
+        conflict = bool(turn_decision is not None and not turn_decision["allowed"])
+        conflict_note = (
+            " A conflicting execution lease is active; do not proceed with this child."
+            if conflict
+            else ""
+        )
         return {
             "systemMessage": (
                 "Limen subagent bounds: the parent execution family owns this turn; "
                 "max_threads=3, max_depth=1, and heavy entrypoints require the shared host lease."
+                + conflict_note
             ),
             "hookSpecificOutput": {
                 "hookEventName": "SubagentStart",
@@ -225,26 +276,20 @@ def handle(
         first_stop = payload.get("stop_hook_active") is False
         if first_stop and closeout_probe(str(payload.get("cwd") or "")):
             try:
-                status = controller.status(probe=False)
-                lease = next(
-                    (
-                        item
-                        for item in status.get("leases") or []
-                        if item.get("kind") == "execution"
-                        and item.get("owner") == owner
-                        and int(item.get("pid") or 0) == pid
-                    ),
-                    None,
+                decision = _ensure_execution(
+                    controller,
+                    owner=owner,
+                    pid=pid,
+                    permission_mode=permission_mode,
                 )
-                if lease:
-                    controller.refresh(lease_id=str(lease["lease_id"]), owner=owner, pid=pid)
             except AdmissionStateError:
-                pass
-            return _message(
-                "One bounded closeout pass remains: preserve named changes and leave a durable "
-                "owner receipt. Do not launch broad scans or full verification.",
-                stop=True,
-            )
+                decision = None
+            if decision is not None and decision["allowed"]:
+                return _message(
+                    "One bounded closeout pass remains: preserve named changes and leave a durable "
+                    "owner receipt. Do not launch broad scans or full verification.",
+                    stop=True,
+                )
         _release_execution(controller, owner=owner, pid=pid)
         return None
 
@@ -262,7 +307,7 @@ def main() -> int:
     except (AdmissionStateError, ValueError) as exc:
         output = _message(
             f"Limen host admission hook failed closed: {exc}",
-            stop=event in {"UserPromptSubmit", "Stop"},
+            stop=event == "UserPromptSubmit",
         )
     if output is not None:
         print(json.dumps(output, separators=(",", ":")))

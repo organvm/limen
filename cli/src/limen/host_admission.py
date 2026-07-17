@@ -19,6 +19,7 @@ import tempfile
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -102,7 +103,7 @@ def process_identity(pid: int) -> str | None:
             ["ps", "-p", str(pid), "-o", "lstart="],
             capture_output=True,
             text=True,
-            timeout=2,
+            timeout=0.5,
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
@@ -111,24 +112,31 @@ def process_identity(pid: int) -> str | None:
     return f"ps-start:{started}" if result.returncode == 0 and started else None
 
 
-def _parent_pid(pid: int) -> int | None:
+def _parent_table() -> dict[int, int]:
     try:
         result = subprocess.run(
-            ["ps", "-p", str(pid), "-o", "ppid="],
+            ["ps", "-axo", "pid=,ppid="],
             capture_output=True,
             text=True,
-            timeout=2,
+            timeout=0.5,
             check=False,
         )
-        raw = result.stdout.strip()
-        return int(raw) if result.returncode == 0 and raw.isdigit() else None
-    except (OSError, ValueError, subprocess.SubprocessError):
-        return None
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    if result.returncode != 0:
+        return {}
+    table: dict[int, int] = {}
+    for line in result.stdout.splitlines():
+        parts = line.strip().split()
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            table[int(parts[0])] = int(parts[1])
+    return table
 
 
 def is_descendant(pid: int, ancestor_pid: int) -> bool:
     """True when ``pid`` is a live child of the process holding a parent lease."""
 
+    parents = _parent_table()
     seen: set[int] = set()
     current = pid
     for _ in range(64):
@@ -137,7 +145,7 @@ def is_descendant(pid: int, ancestor_pid: int) -> bool:
         if current <= 1 or current in seen:
             return False
         seen.add(current)
-        parent = _parent_pid(current)
+        parent = parents.get(current)
         if parent is None:
             return False
         current = parent
@@ -189,7 +197,7 @@ def _backblaze_observation(errors: list[str]) -> tuple[float | None, int | None]
             ["ps", "-axo", "pcpu=,rss=,comm="],
             capture_output=True,
             text=True,
-            timeout=3,
+            timeout=1,
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
@@ -218,27 +226,23 @@ def _backblaze_observation(errors: list[str]) -> tuple[float | None, int | None]
 def _swap_observation(errors: list[str]) -> tuple[int | None, int | None]:
     if sys.platform == "darwin":
         try:
-            swap = subprocess.run(
-                ["sysctl", "-n", "vm.swapusage"],
+            observation = subprocess.run(
+                ["sysctl", "-n", "vm.swapusage", "hw.memsize"],
                 capture_output=True,
                 text=True,
-                timeout=3,
-                check=False,
-            )
-            memory = subprocess.run(
-                ["sysctl", "-n", "hw.memsize"],
-                capture_output=True,
-                text=True,
-                timeout=3,
+                timeout=1,
                 check=False,
             )
         except (OSError, subprocess.SubprocessError):
             errors.append("swap-sensor")
             return None, None
-        used_match = re.search(r"\bused\s*=\s*([^ ]+)", swap.stdout)
+        lines = observation.stdout.splitlines()
+        swap_line = lines[0] if lines else ""
+        memory_line = lines[-1].strip() if len(lines) >= 2 else ""
+        used_match = re.search(r"\bused\s*=\s*([^ ]+)", swap_line)
         used = _parse_size(used_match.group(1)) if used_match else None
-        total = int(memory.stdout.strip()) if memory.stdout.strip().isdigit() else None
-        if swap.returncode != 0 or memory.returncode != 0 or used is None or total is None:
+        total = int(memory_line) if memory_line.isdigit() else None
+        if observation.returncode != 0 or used is None or total is None:
             errors.append("swap-sensor")
             return None, None
         return used, total
@@ -264,7 +268,13 @@ def _disk_observation(errors: list[str]) -> list[float] | None:
             ["iostat", "-d", "-w", "1", "-c", "3"],
             capture_output=True,
             text=True,
-            timeout=int(params.get("LIMEN_HOST_ADMISSION_PROBE_TIMEOUT", 5, cast=int)),
+            timeout=min(
+                4,
+                max(
+                    2,
+                    int(params.get("LIMEN_HOST_ADMISSION_PROBE_TIMEOUT", 4, cast=int)),
+                ),
+            ),
             check=False,
             env={**os.environ, "LC_ALL": "C"},
         )
@@ -282,17 +292,26 @@ def collect_pressure() -> dict[str, Any]:
     """Collect one bounded host-pressure observation without mutating peer state."""
 
     errors: list[str] = []
-    backblaze_cpu, backblaze_rss = _backblaze_observation(errors)
-    swap_used, memory_bytes = _swap_observation(errors)
-    disk_samples = _disk_observation(errors)
-    try:
-        from limen.vigilia.vitals import beat_gate
 
-        vitals = beat_gate(shed=False)
-        vitals_action = str(vitals.get("action") or "unknown")
-    except Exception:  # pragma: no cover - defensive boundary around host sensor
-        vitals_action = "unknown"
-        errors.append("vitals-sensor")
+    def vitals_observation() -> str:
+        try:
+            from limen.vigilia.vitals import beat_gate
+
+            vitals = beat_gate(shed=False)
+            return str(vitals.get("action") or "unknown")
+        except Exception:  # pragma: no cover - defensive boundary around host sensor
+            errors.append("vitals-sensor")
+            return "unknown"
+
+    with ThreadPoolExecutor(max_workers=4, thread_name_prefix="limen-admission-probe") as pool:
+        backblaze_future = pool.submit(_backblaze_observation, errors)
+        swap_future = pool.submit(_swap_observation, errors)
+        disk_future = pool.submit(_disk_observation, errors)
+        vitals_future = pool.submit(vitals_observation)
+        backblaze_cpu, backblaze_rss = backblaze_future.result()
+        swap_used, memory_bytes = swap_future.result()
+        disk_samples = disk_future.result()
+        vitals_action = vitals_future.result()
     return {
         "observed_epoch": time.time(),
         "backblaze_cpu_percent": backblaze_cpu,
@@ -732,6 +751,53 @@ class AdmissionController:
                 )
             state["leases"] = [item for item in state["leases"] if item["lease_id"] != lease_id]
             self._write(state)
+            return self._decision(
+                "release",
+                allowed=True,
+                reasons=[],
+                state=state,
+                lease=lease,
+                reaped=reaped,
+            )
+
+    def release_owned(self, kind: str, *, owner: str, pid: int) -> dict[str, Any]:
+        """Atomically release this owner's lease without a prior status scan."""
+
+        if kind not in LEASE_KINDS:
+            raise ValueError(f"kind must be one of {sorted(LEASE_KINDS)}")
+        owner = _bounded_label(owner, "owner")
+        if pid <= 0:
+            raise ValueError("pid must be positive")
+        now = self.clock()
+        identity = self.identity(pid)
+        with self._locked():
+            state = self._load()
+            lease = next(
+                (
+                    item
+                    for item in state["leases"]
+                    if item["kind"] == kind
+                    and item["owner"] == owner
+                    and int(item["pid"]) == pid
+                ),
+                None,
+            )
+            exact = bool(lease and identity is not None and lease["process_identity"] == identity)
+            if lease is not None and exact:
+                state["leases"] = [
+                    item for item in state["leases"] if item["lease_id"] != lease["lease_id"]
+                ]
+            reaped = self._cleanup(state, now)
+            self._write(state)
+            if lease is not None and not exact:
+                return self._decision(
+                    "release",
+                    allowed=False,
+                    reasons=["lease-owner-mismatch"],
+                    state=state,
+                    lease=lease,
+                    reaped=reaped,
+                )
             return self._decision(
                 "release",
                 allowed=True,

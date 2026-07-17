@@ -249,6 +249,17 @@ def test_refresh_and_release_require_exact_owner_pid_and_start_identity(tmp_path
     assert service.release(lease_id=lease_id, owner="codex", pid=101)["allowed"] is True
 
 
+def test_release_owned_is_atomic_and_does_not_release_another_owner(tmp_path: Path) -> None:
+    service = controller(tmp_path / "state")
+    service.acquire("execution", owner="codex", surface="turn", pid=101)
+
+    assert service.release_owned("execution", owner="other", pid=202)["allowed"] is True
+    assert len(service.status(probe=False)["leases"]) == 1
+    assert service.release_owned("execution", owner="codex", pid=101)["allowed"] is True
+    assert service.status(probe=False)["leases"] == []
+    assert service.release_owned("execution", owner="codex", pid=101)["allowed"] is True
+
+
 def test_corrupt_state_is_preserved_and_blocks_acquire(tmp_path: Path) -> None:
     root = tmp_path / "state"
     root.mkdir(mode=0o700)
@@ -445,6 +456,10 @@ if [[ "${1:-}" == "-axo" ]]; then exit 0; fi
 exec /bin/ps "$@"
 """,
         "sysctl": """#!/usr/bin/env bash
+if [[ "$*" == *"vm.swapusage hw.memsize"* ]]; then
+  printf 'total = 0.00M  used = 0.00M  free = 0.00M\\n17179869184\\n'
+  exit 0
+fi
 case "${*: -1}" in
   vm.swapusage) printf 'total = 0.00M  used = 0.00M  free = 0.00M\\n' ;;
   hw.memsize) printf '17179869184\\n' ;;
