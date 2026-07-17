@@ -46,6 +46,13 @@ class DispatchLogEntry(BaseModel):
     selected_model: str | None = None
     selection_source: str | None = None
     catalog_hash: str | None = None
+    # Owner-bound authority evidence travels with the exact provider attempt.
+    # These are complete receipts, not status summaries reconstructed after the
+    # provider result has already been committed.
+    model_selection_receipt: dict[str, Any] | None = None
+    fable_packet_receipt: dict[str, Any] | None = None
+    builder_handoff_receipt: dict[str, Any] | None = None
+    implementation_receipt: dict[str, Any] | None = None
     provider_route: str | None = None
     route_selection_source: str | None = None
     executing_keeper: str | None = None

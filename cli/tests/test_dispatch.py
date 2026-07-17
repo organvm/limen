@@ -2026,6 +2026,175 @@ def test_serial_fresh_commit_persists_model_and_remote_receipts_on_exact_attempt
     assert committed.portal.budget.track.spent == task.budget_cost
 
 
+def test_pending_result_preserves_owner_bound_authority_receipts_on_exact_attempt(tmp_path: Path) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    board = LimenFile(tasks=[task])
+    board.portal.budget.track = BudgetTrack(date="2026-07-17")
+    save_limen_file(tasks_path, board)
+    selection_receipt = {
+        "schema": "fixture.owner_selection.v1",
+        "task_id": task.id,
+        "attempt_id": launch.attempt_id,
+        "execution_profile": dict(launch.execution_profile or {}),
+        "selected_model": "opaque/runtime-selection",
+        "selection_source": "provider_live_catalog",
+        "catalog_hash": "4" * 64,
+    }
+    selection = {
+        "attempt_id": launch.attempt_id,
+        "execution_profile": dict(launch.execution_profile or {}),
+        "selected_model": "opaque/runtime-selection",
+        "selection_source": "provider_live_catalog",
+        "catalog_hash": "4" * 64,
+        "receipt": selection_receipt,
+    }
+    authority = {
+        "fable_packet_receipt": {
+            "schema": "fixture.fable_packet.v1",
+            "task_id": task.id,
+            "attempt_id": launch.attempt_id,
+        },
+        "builder_handoff_receipt": {
+            "schema": "fixture.builder_handoff.v1",
+            "task_id": task.id,
+            "parent_attempt_id": launch.attempt_id,
+        },
+        "implementation_receipt": {
+            "schema": "fixture.implementation.v1",
+            "task_id": task.id,
+            "attempt_id": launch.attempt_id,
+        },
+    }
+    pending = D._persist_pending_dispatch_result(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        attempt_id=str(launch.attempt_id),
+        attempt_contract_hash=str(launch.attempt_contract_hash),
+        result="https://github.com/example/repository/pull/18",
+        model_selection=selection,
+        authority_receipts=authority,
+    )
+
+    assert D._commit_dispatch_results(
+        tasks_path,
+        board,
+        [],
+        datetime(2026, 7, 17, 12, tzinfo=timezone.utc),
+    )
+
+    terminal = load_limen_file(tasks_path).tasks[0].dispatch_log[-1]
+    assert terminal.model_selection_receipt == selection_receipt
+    assert terminal.fable_packet_receipt == authority["fable_packet_receipt"]
+    assert terminal.builder_handoff_receipt == authority["builder_handoff_receipt"]
+    assert terminal.implementation_receipt == authority["implementation_receipt"]
+    assert not pending.exists()
+
+
+def test_pending_result_rejects_authority_receipt_from_another_attempt(tmp_path: Path) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    board = LimenFile(tasks=[task])
+    save_limen_file(tasks_path, board)
+    D._persist_pending_dispatch_result(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        attempt_id=str(launch.attempt_id),
+        attempt_contract_hash=str(launch.attempt_contract_hash),
+        result=True,
+        authority_receipts={
+            "fable_packet_receipt": {
+                "schema": "fixture.fable_packet.v1",
+                "task_id": task.id,
+                "attempt_id": "another-attempt",
+            }
+        },
+    )
+
+    D._commit_dispatch_results(
+        tasks_path,
+        board,
+        [],
+        datetime(2026, 7, 17, 12, tzinfo=timezone.utc),
+    )
+
+    owner = load_limen_file(tasks_path).tasks[0]
+    terminal = owner.dispatch_log[-1]
+    assert owner.status == "failed_blocked"
+    assert terminal.fable_packet_receipt is None
+    assert "failed exact-attempt validation" in str(terminal.output)
+
+
+def test_pending_writer_fsync_failure_publishes_no_partial_receipt(tmp_path: Path, monkeypatch) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+
+    def fail_fsync(_fd: int) -> None:
+        raise OSError("adversarial pending fsync failure")
+
+    monkeypatch.setattr(D.os, "fsync", fail_fsync)
+    with pytest.raises(OSError, match="pending fsync failure"):
+        D._persist_pending_dispatch_result(
+            tasks_path,
+            task_id=task.id,
+            agent="codex",
+            attempt_id=str(launch.attempt_id),
+            attempt_contract_hash=str(launch.attempt_contract_hash),
+            result=True,
+        )
+
+    pending_root = D._pending_dispatch_result_root(tasks_path)
+    assert not list(pending_root.glob("*.json"))
+    assert not list(pending_root.glob("*.tmp"))
+
+
+def test_board_fsync_failure_keeps_pending_and_transient_evidence(tmp_path: Path, monkeypatch) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    board = LimenFile(tasks=[task])
+    save_limen_file(tasks_path, board)
+    selection = {
+        "attempt_id": launch.attempt_id,
+        "execution_profile": dict(launch.execution_profile or {}),
+        "selected_model": "opaque/runtime-selection",
+        "selection_source": "provider_live_catalog",
+        "catalog_hash": "4" * 64,
+    }
+    D._MODEL_SELECTION_RECEIPTS[task.id] = dict(selection)
+    pending = D._persist_pending_dispatch_result(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        attempt_id=str(launch.attempt_id),
+        attempt_contract_hash=str(launch.attempt_contract_hash),
+        result=True,
+        model_selection=selection,
+    )
+
+    def fail_board_fsync(_path: Path) -> None:
+        raise OSError("adversarial board fsync failure")
+
+    monkeypatch.setattr(D, "_fsync_file_and_parent", fail_board_fsync)
+    with pytest.raises(OSError, match="board fsync failure"):
+        D._commit_dispatch_results(
+            tasks_path,
+            board,
+            [],
+            datetime(2026, 7, 17, 12, tzinfo=timezone.utc),
+        )
+
+    assert pending.exists()
+    assert task.id in D._MODEL_SELECTION_RECEIPTS
+
+
 def test_busy_commit_keeps_exact_result_pending_then_reconciles_without_reexecution(
     tmp_path: Path, monkeypatch
 ) -> None:

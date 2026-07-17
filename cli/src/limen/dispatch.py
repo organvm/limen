@@ -1662,13 +1662,18 @@ def _validated_model_selection_receipt(
 
     if value in ({}, None):
         return None
-    if not isinstance(value, dict) or set(value) != {
+    required_fields = {
         "attempt_id",
         "execution_profile",
         "selected_model",
         "selection_source",
         "catalog_hash",
-    }:
+    }
+    if (
+        not isinstance(value, dict)
+        or not required_fields.issubset(value)
+        or not set(value).issubset(required_fields | {"receipt"})
+    ):
         raise ValueError("detached model-selection receipt has an invalid shape")
     if value.get("attempt_id") != expected_attempt_id:
         raise ValueError("detached model-selection receipt does not match the registered attempt identity")
@@ -1686,6 +1691,28 @@ def _validated_model_selection_receipt(
         not isinstance(fingerprint, str) or re.fullmatch(r"[0-9a-f]{64}", fingerprint) is None
     ):
         raise ValueError("detached model-selection receipt has an invalid catalog hash")
+    owner_receipt = value.get("receipt")
+    if owner_receipt is not None:
+        if not isinstance(owner_receipt, dict):
+            raise ValueError("detached model-selection authority is not a receipt object")
+        try:
+            encoded = json.dumps(owner_receipt, sort_keys=True, separators=(",", ":")).encode()
+        except (TypeError, ValueError) as exc:
+            raise ValueError("detached model-selection authority is not JSON-serializable") from exc
+        if not encoded or len(encoded) > _MAX_PENDING_AUTHORITY_RECEIPT_BYTES:
+            raise ValueError("detached model-selection authority exceeds bounded custody")
+        if owner_receipt.get("task_id") != task.id:
+            raise ValueError("detached model-selection authority does not match the task identity")
+        if owner_receipt.get("attempt_id") != expected_attempt_id:
+            raise ValueError("detached model-selection authority does not match the registered attempt identity")
+        for owner_field, selection_field in (
+            ("execution_profile", "execution_profile"),
+            ("selected_model", "selected_model"),
+            ("selection_source", "selection_source"),
+            ("catalog_hash", "catalog_hash"),
+        ):
+            if owner_field in owner_receipt and owner_receipt[owner_field] != value.get(selection_field):
+                raise ValueError(f"detached model-selection authority has conflicting {owner_field}")
     return dict(value)
 
 
@@ -3295,6 +3322,14 @@ def _blocked_reason(result: bool | str) -> str:
 
 _PENDING_DISPATCH_RESULT_SCHEMA = "limen.pending_dispatch_result.v1"
 _MAX_PENDING_DISPATCH_RESULT_BYTES = 262_144
+_MAX_PENDING_AUTHORITY_RECEIPT_BYTES = 65_536
+_AUTHORITY_RECEIPT_FIELDS = frozenset(
+    {
+        "fable_packet_receipt",
+        "builder_handoff_receipt",
+        "implementation_receipt",
+    }
+)
 
 
 def _pending_dispatch_result_root(tasks_path: Path) -> Path:
@@ -3321,6 +3356,117 @@ def _bounded_dispatch_result(result: bool | str) -> bool | str:
     return _blocked_result("provider result exceeded the bounded custody receipt")
 
 
+def _fsync_directory(path: Path) -> None:
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _fsync_file_and_parent(path: Path) -> None:
+    """Seal a replaced file and its directory before dependent custody moves."""
+
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    _fsync_directory(path.parent)
+
+
+def _atomic_exclusive_bytes(destination: Path, payload: bytes) -> None:
+    """Publish bytes once, durably, without overwriting an existing attempt."""
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    parent_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    parent_fd = os.open(destination.parent, parent_flags)
+    temporary_name = f".{destination.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+    fd: int | None = None
+    try:
+        fd = os.open(
+            temporary_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+            dir_fd=parent_fd,
+        )
+        with os.fdopen(fd, "wb") as handle:
+            fd = None
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(
+                temporary_name,
+                destination.name,
+                src_dir_fd=parent_fd,
+                dst_dir_fd=parent_fd,
+                follow_symlinks=False,
+            )
+        except FileExistsError:
+            existing_fd = os.open(
+                destination.name,
+                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=parent_fd,
+            )
+            try:
+                existing = b""
+                while chunk := os.read(existing_fd, 64 * 1024):
+                    existing += chunk
+                    if len(existing) > _MAX_PENDING_DISPATCH_RESULT_BYTES:
+                        break
+            finally:
+                os.close(existing_fd)
+            if existing != payload:
+                raise ValueError("pending dispatch result already exists with different evidence")
+        os.fsync(parent_fd)
+    finally:
+        if fd is not None:
+            os.close(fd)
+        try:
+            os.unlink(temporary_name, dir_fd=parent_fd)
+        except FileNotFoundError:
+            pass
+        finally:
+            os.close(parent_fd)
+
+
+def _validated_authority_receipts(
+    task: Task,
+    *,
+    expected_attempt_id: str,
+    value: object,
+) -> dict[str, dict[str, Any]]:
+    """Bind detached authority artifacts to the same task and provider attempt."""
+
+    if value in ({}, None):
+        return {}
+    if not isinstance(value, dict) or not set(value).issubset(_AUTHORITY_RECEIPT_FIELDS):
+        raise ValueError("detached authority receipts have an invalid shape")
+    validated: dict[str, dict[str, Any]] = {}
+    for name, receipt in value.items():
+        if not isinstance(receipt, dict):
+            raise ValueError(f"{name} is not a receipt object")
+        try:
+            encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} is not JSON-serializable") from exc
+        if not encoded or len(encoded) > _MAX_PENDING_AUTHORITY_RECEIPT_BYTES:
+            raise ValueError(f"{name} exceeds bounded authority custody")
+        if receipt.get("task_id") != task.id:
+            raise ValueError(f"{name} does not match the task identity")
+        binding_field = {
+            "fable_packet_receipt": "attempt_id",
+            "builder_handoff_receipt": "parent_attempt_id",
+            "implementation_receipt": "attempt_id",
+        }[name]
+        if receipt.get(binding_field) != expected_attempt_id:
+            raise ValueError(f"{name} does not match the registered attempt identity")
+        validated[name] = dict(receipt)
+    return validated
+
+
 def _persist_pending_dispatch_result(
     tasks_path: Path,
     *,
@@ -3330,6 +3476,7 @@ def _persist_pending_dispatch_result(
     attempt_contract_hash: str,
     result: bool | str,
     model_selection: dict[str, Any] | None = None,
+    authority_receipts: dict[str, Any] | None = None,
     remote_submission: dict[str, Any] | None = None,
     reconciliation: dict[str, Any] | None = None,
 ) -> Path:
@@ -3347,6 +3494,7 @@ def _persist_pending_dispatch_result(
         "attempt_contract_hash": attempt_contract_hash,
         "result": _bounded_dispatch_result(result),
         "model_selection": dict(model_selection or {}),
+        "authority_receipts": dict(authority_receipts or {}),
         "remote_submission": dict(remote_submission or {}),
         "reconciliation": dict(reconciliation or {}),
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -3357,17 +3505,24 @@ def _persist_pending_dispatch_result(
             {
                 "result": _blocked_result("provider receipts exceeded bounded result custody"),
                 "model_selection": {},
+                "authority_receipts": {},
                 "remote_submission": {},
                 "reconciliation": {},
             }
         )
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    root = _pending_dispatch_result_root(tasks_path)
-    root.mkdir(parents=True, exist_ok=True)
     destination = _pending_dispatch_result_path(tasks_path, task_id, attempt_id)
-    tmp = destination.with_suffix(f".{os.getpid()}.tmp")
-    tmp.write_bytes(encoded + b"\n")
-    os.replace(tmp, destination)
+    payload_bytes = encoded + b"\n"
+    if destination.exists():
+        try:
+            existing = json.loads(destination.read_text())
+        except (OSError, TypeError, ValueError) as exc:
+            raise ValueError("pending dispatch result already exists but is unreadable") from exc
+        proposed = json.loads(payload_bytes)
+        if isinstance(existing, dict) and isinstance(proposed, dict):
+            proposed["created_at"] = existing.get("created_at")
+            payload_bytes = json.dumps(proposed, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+    _atomic_exclusive_bytes(destination, payload_bytes)
     return destination
 
 
@@ -3412,6 +3567,9 @@ def _load_pending_dispatch_results(
                 and re.fullmatch(r"[0-9a-f]{64}", str(payload.get("attempt_contract_hash") or ""))
                 and (type(result) is bool or isinstance(result, str))
                 and isinstance(payload.get("model_selection"), dict)
+                # Backward-compatible read: v1 pending artifacts created before
+                # authority custody existed carry no authority_receipts member.
+                and isinstance(payload.get("authority_receipts", {}), dict)
                 and isinstance(payload.get("remote_submission"), dict)
                 and isinstance(payload.get("reconciliation"), dict)
                 and created_at.tzinfo is not None
@@ -3429,22 +3587,29 @@ def _load_pending_dispatch_results(
     return loaded
 
 
+def _durable_move_pending_dispatch_result(path: Path, destination: Path) -> None:
+    """No-clobber, crash-replay-safe move using link/unlink plus directory seals."""
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.link(path, destination, follow_symlinks=False)
+    except FileExistsError:
+        source_bytes = path.read_bytes()
+        if destination.is_symlink() or destination.read_bytes() != source_bytes:
+            raise OSError("pending result archive collision has different evidence")
+    _fsync_directory(destination.parent)
+    path.unlink()
+    _fsync_directory(path.parent)
+
+
 def _archive_pending_dispatch_result(path: Path, reason: str) -> None:
     archive = path.parent.parent / "archive" / re.sub(r"[^a-z0-9-]+", "-", reason.lower()).strip("-")
-    archive.mkdir(parents=True, exist_ok=True)
-    destination = archive / path.name
-    if destination.exists():
-        destination = archive / f"{path.stem}-{time.time_ns()}.json"
-    os.replace(path, destination)
+    _durable_move_pending_dispatch_result(path, archive / path.name)
 
 
 def _quarantine_pending_dispatch_result(path: Path, reason: str) -> None:
     quarantine = path.parent.parent / "quarantine" / re.sub(r"[^a-z0-9-]+", "-", reason.lower()).strip("-")
-    quarantine.mkdir(parents=True, exist_ok=True)
-    destination = quarantine / path.name
-    if destination.exists():
-        destination = quarantine / f"{path.stem}-{time.time_ns()}.json"
-    os.replace(path, destination)
+    _durable_move_pending_dispatch_result(path, quarantine / path.name)
 
 
 def _consumed_result_receipt_digest(task: Task, attempt_id: str | None) -> str | None:
@@ -4812,6 +4977,7 @@ def _commit_dispatch_results(
     *,
     attempt_ids: dict[str, str] | None = None,
     model_selection_receipts: dict[str, dict[str, Any]] | None = None,
+    authority_receipts: dict[str, dict[str, Any]] | None = None,
     remote_submission_receipts: dict[str, dict[str, Any]] | None = None,
     reconciliation_receipts: dict[str, dict[str, Any]] | None = None,
 ) -> bool:
@@ -4857,6 +5023,7 @@ def _commit_dispatch_results(
                 "attempt_contract_hash": str(payload["attempt_contract_hash"]),
                 "result": payload["result"],
                 "model_selection": dict(payload["model_selection"]),
+                "authority_receipts": dict(payload.get("authority_receipts", {})),
                 "remote_submission": dict(payload["remote_submission"]),
                 "reconciliation": dict(payload["reconciliation"]),
                 "result_receipt_digest": receipt_digest,
@@ -4877,6 +5044,7 @@ def _commit_dispatch_results(
                 "attempt_contract_hash": None,
                 "result": res,
                 "model_selection": (model_selection_receipts or {}).get(tid),
+                "authority_receipts": (authority_receipts or {}).get(tid),
                 "remote_submission": (remote_submission_receipts or {}).get(tid),
                 "reconciliation": (reconciliation_receipts or {}).get(tid),
                 "result_receipt_digest": None,
@@ -4912,6 +5080,7 @@ def _commit_dispatch_results(
                 ):
                     res = _blocked_result("pending provider result failed immutable attempt-contract validation")
                     record["model_selection"] = None
+                    record["authority_receipts"] = None
                     record["remote_submission"] = None
                     record["reconciliation"] = None
                 try:
@@ -4923,9 +5092,11 @@ def _commit_dispatch_results(
                         ftrack,
                         expected_attempt_id=attempt_id,
                         model_selection_receipt=record.get("model_selection"),
+                        authority_receipts=record.get("authority_receipts"),
                         remote_submission_receipt=record.get("remote_submission"),
                         reconciliation_receipt=record.get("reconciliation"),
                         result_receipt_digest=result_receipt_digest,
+                        consume_transient_receipts=False,
                     )
                 except (TypeError, ValueError):
                     if key not in pending_paths:
@@ -4938,8 +5109,8 @@ def _commit_dispatch_results(
                         ftrack,
                         expected_attempt_id=attempt_id,
                         result_receipt_digest=result_receipt_digest,
+                        consume_transient_receipts=False,
                     )
-                _REMOTE_SUBMISSION_RECEIPTS.pop(tid, None)
                 if key in pending_paths:
                     archive_reasons[pending_paths[key]] = "reconciled"
             elif key in pending_paths:
@@ -4966,9 +5137,18 @@ def _commit_dispatch_results(
                     ftrack,
                     expected_attempt_id=owner_attempt_id,
                     result_receipt_digest=receipt_digest,
+                    consume_transient_receipts=False,
                 )
             quarantine_reasons[path] = "malformed-owner-routed" if owner is not None else "malformed-owner-missing"
         save_limen_file(tasks_path, fresh)
+        # save_limen_file fsyncs its temporary bytes before rename. Seal the new
+        # board inode and directory entry before any exact-attempt evidence is
+        # removed from pending custody or transient memory.
+        _fsync_file_and_parent(tasks_path)
+        for _key, record in records.items():
+            tid = str(record["task_id"])
+            _MODEL_SELECTION_RECEIPTS.pop(tid, None)
+            _REMOTE_SUBMISSION_RECEIPTS.pop(tid, None)
         for path, reason in archive_reasons.items():
             try:
                 _archive_pending_dispatch_result(path, reason)
@@ -5221,9 +5401,11 @@ def _apply_result(
     charge_budget: bool = True,
     expected_attempt_id: str | None = None,
     model_selection_receipt: dict[str, Any] | None = None,
+    authority_receipts: dict[str, Any] | None = None,
     remote_submission_receipt: dict[str, Any] | None = None,
     reconciliation_receipt: dict[str, Any] | None = None,
     result_receipt_digest: str | None = None,
+    consume_transient_receipts: bool = True,
 ) -> bool:
     """Apply one dispatch result to a task (same semantics as the serial path):
     success → dispatched + spend; no-op/fail → recoverable failed; rate-limit → cascade."""
@@ -5251,7 +5433,11 @@ def _apply_result(
     ):
         return False
     if launch is not None and not _attempt_contract_is_current(task, launch):
-        cached_selection = _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+        cached_selection = (
+            _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+            if consume_transient_receipts
+            else _MODEL_SELECTION_RECEIPTS.get(task.id)
+        )
         stale_selection = model_selection_receipt if model_selection_receipt is not None else cached_selection
         validated_stale_selection = None
         if stale_selection:
@@ -5297,10 +5483,15 @@ def _apply_result(
         agent=agent,
         session_id="result-lifecycle-guard",
     ):
-        _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+        if consume_transient_receipts:
+            _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
         return False
     detached_selection = model_selection_receipt
-    cached_selection = _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+    cached_selection = (
+        _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+        if consume_transient_receipts
+        else _MODEL_SELECTION_RECEIPTS.get(task.id)
+    )
     selection = detached_selection if detached_selection is not None else cached_selection
     if selection:
         if not active_attempt_id:
@@ -5310,6 +5501,15 @@ def _apply_result(
             expected_attempt_id=active_attempt_id,
             value=selection,
         )
+    validated_authority = (
+        _validated_authority_receipts(
+            task,
+            expected_attempt_id=active_attempt_id,
+            value=authority_receipts,
+        )
+        if authority_receipts
+        else {}
+    )
     reconciliation_updates = reconciliation_custody_updates(reconciliation_receipt)
 
     entry = DispatchLogEntry(timestamp=now, agent=agent, session_id=session_id(), status="dispatched")
@@ -5392,6 +5592,10 @@ def _apply_result(
         entry.selected_model = selection.get("selected_model")
         entry.selection_source = selection.get("selection_source")
         entry.catalog_hash = selection.get("catalog_hash")
+        if isinstance(selection.get("receipt"), dict):
+            entry.model_selection_receipt = dict(selection["receipt"])
+    for receipt_field, receipt in validated_authority.items():
+        setattr(entry, receipt_field, receipt)
     remote = (
         remote_submission_receipt if remote_submission_receipt is not None else _REMOTE_SUBMISSION_RECEIPTS.get(task.id)
     )
