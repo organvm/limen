@@ -37,5 +37,7 @@ The agent responsible for a task will NOT just push its code and exit. It is exp
 1. **Open PR:** Use the GitHub tool to `create_pull_request`. Open as draft if known gates are still failing; mark ready only when local predicates pass or the task explicitly asks for an exploratory PR.
 2. **Watch Status:** Poll `pull_request_read` (methods: `get_status` and `get_check_runs`) with bounded backoff to monitor CI checks until they resolve. Use the task budget or CI timeout as the stop condition; if checks do not resolve, update the task to `failed_blocked` or `needs_human` with the last observed status.
 3. **Address Comments:** Poll `pull_request_read` (method: `get_review_comments`). If comments appear, apply the requested fixes to the isolated worktree, commit, and push again.
-4. **Merge:** Once CI passes and all review comments are resolved, invoke `merge_pull_request`.
+4. **Merge:** Once CI, resolved conversations, native exact-head peer approval, and the dedicated
+   App receipt pass, route the exact target through receipt-bound `scripts/merge-drain.py --apply`.
+   Never invoke a generic merge mutation directly.
 5. **Report & Sync:** Document the successful merge, update `tasks.yaml` via MCP (`update_task_status` to `done`), and notify the necessary stakeholders. Include PR URL, merge commit, checks observed, and any follow-up task IDs.

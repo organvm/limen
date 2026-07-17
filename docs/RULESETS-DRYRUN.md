@@ -59,14 +59,16 @@ Before protection is installed, the selected repository must already have:
 
 - confirmed containment settings;
 - current project CI contexts;
-- `.github/workflows/pr-review-gate.yml` on the live default branch;
 - a dedicated review-gate GitHub App named by `--review-app-slug`; and
-- a current `limen.pr_review_gate.v1` CheckRun mapping that slug to one unique live App ID.
+- a recent complete, accepted `limen.pr_review_gate.v1` receipt published by that App.
 
-`github-actions` is rejected. For an eligible repository, protection requires strict current-head
-project CI plus the dedicated-App-bound review gate, stale-review dismissal, resolved conversations,
-and administrator enforcement. The script then reads repository settings and protection back and
-requires the full contract.
+This preflight is central-App evidence, not a per-repository workflow-file test. Generic
+`github-actions`, same-named statuses, incomplete receipts, invalid receipt digests, and ambiguous
+App IDs are rejected. For an eligible repository, protection requires strict current-head project
+CI plus the App-bound gate, one native approval, approval by someone other than the last pusher,
+stale-review dismissal, resolved conversations, and administrator enforcement. The script reads
+repository settings and protection back and requires the full contract on every selected
+repository. With no `--repo`, that means all seven recovery-cohort repositories.
 
 Missing CI, App installation, private-repository plan support, or branch-protection permission can
 block protected-rule installation, but none of those prerequisites block the independent
