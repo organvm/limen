@@ -55,8 +55,18 @@ and are consumed by attempt ID in the fixed owner registry before the first appl
 opened without following links, streamed into private staging, and checked against the signed size
 and SHA-256 manifest before final-destination copies. Every ciphertext must be a single-link
 regular file with the ARCA envelope header and must unseal to the exact plaintext manifest.
-Remote objects use versioned attempt-hash paths; every object has a before/after owner-journal
-record, and the immutable set's `manifest-current.json` is last.
+Remote objects use versioned attempt-hash paths. Creation first proves the exact
+object absent, then calls rclone with `--immutable`, checksum, and structured
+single-transfer result semantics. Success additionally requires one reported
+transfer, an owner-visible remote object ID and size, downloaded byte comparison,
+and the same ID on a second readback. A pre-existing object, provider race,
+zero-transfer result, missing ID, changed ID, or uncertain response fails closed;
+the effector never retries an overwrite. Every remote/local copy, probe delete,
+and cleanup has a durable `planned` journal event before the command and a
+`returned` event immediately after it. Partial outcomes remain explicitly
+ambiguous and are not cleaned up unless the exact probe creation was proven.
+The immutable set's `manifest-current.json` is created last under the same
+boundary.
 
 Limen does not provision the signer, private key, trust root, owner config, fixed rclone config,
 apply temp root, or consumption registry. Those deployed paths are currently absent. Until Domus

@@ -1,7 +1,7 @@
 # Disk-capacity apply authorization
 
 `scripts/disk-capacity.py` is an observation-only sensor. It cannot remove a file,
-truncate a log, or publish a receipt.
+rotate a log, or publish a receipt.
 
 The separate `scripts/disk-capacity-reclaim.py` effector is also zero-write by
 default. An apply requires:
@@ -25,6 +25,16 @@ with `O_EXCL`, so a differently signed receipt cannot replay the same attempt. T
 rechecks the target and expiry at every mutation boundary, consumes the signed
 receipt once, and publishes its effect-aware result only below
 `authority/results/disk-capacity`.
+
+Oversized `logs/heartbeat.err.log` is never truncated in place. The effector
+revalidates the exact receipt-bound single-link inode through the parent dirfd,
+atomically renames it to an unpredictable same-directory quarantine name,
+revalidates its hash/device/inode/link count, creates an exclusive empty
+replacement with the original uid/gid/mode, fsyncs the file and parent, and only
+then unlinks the old inode and fsyncs the parent again. Any hard-link race fails
+before content mutation. A failure before durable replacement restores the
+original name without clobbering a concurrent occupant; a later failure records
+the retained old inode and replacement state instead of pretending rollback.
 
 Generate the zero-write plan and receipt template:
 

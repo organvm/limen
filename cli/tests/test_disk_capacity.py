@@ -6,7 +6,9 @@ import importlib.util
 import json
 import os
 import shutil
+import stat
 import subprocess
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -347,6 +349,18 @@ def test_apply_without_receipt_refuses_without_writes(tmp_path, monkeypatch, cap
 
 def test_exact_receipt_applies_once_and_publishes_result(tmp_path, monkeypatch):
     module, probe, log = _repo(tmp_path, monkeypatch)
+    log.chmod(0o640)
+    before_log = log.stat()
+    old_identity = (before_log.st_dev, before_log.st_ino)
+    real_ftruncate = module.os.ftruncate
+
+    def reject_user_inode_truncate(fd, length):
+        metadata = os.fstat(fd)
+        if (metadata.st_dev, metadata.st_ino) == old_identity:
+            raise AssertionError("user log inode reached ftruncate")
+        return real_ftruncate(fd, length)
+
+    monkeypatch.setattr(module.os, "ftruncate", reject_user_inode_truncate)
     plan = module.build_plan(1)
     receipt = _receipt(module, tmp_path / "apply-receipt.json", plan)
 
@@ -354,12 +368,16 @@ def test_exact_receipt_applies_once_and_publishes_result(tmp_path, monkeypatch):
 
     assert not probe.exists()
     assert log.read_bytes() == b""
+    after_log = log.stat()
+    assert (after_log.st_dev, after_log.st_ino) != old_identity
+    assert (after_log.st_uid, after_log.st_gid) == (before_log.st_uid, before_log.st_gid)
+    assert stat.S_IMODE(after_log.st_mode) == stat.S_IMODE(before_log.st_mode)
     results = list(module.RESULTS_DIR.glob("*.json"))
     assert len(results) == 1
     result = json.loads(results[0].read_text(encoding="utf-8"))
     assert result["schema"] == module.RESULT_SCHEMA
     assert result["status"] == "applied"
-    assert {row["kind"] for row in result["effects"]} == {"unlink", "truncate"}
+    assert {row["kind"] for row in result["effects"]} == {"rotate", "unlink"}
 
     # The same exact receipt cannot authorize the now-different plan or a second result.
     assert module.main(["--apply", *_signed_args(receipt)]) == 2
@@ -524,7 +542,7 @@ def test_replaced_unlink_candidate_is_restored_from_quarantine(tmp_path, monkeyp
     assert "original restored" in result["error"]
 
 
-def test_post_truncate_fsync_failure_reports_the_effect(tmp_path, monkeypatch):
+def test_partial_rotation_failure_restores_original_inode_without_truncation(tmp_path, monkeypatch):
     root = tmp_path / "root"
     root.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
@@ -538,35 +556,34 @@ def test_post_truncate_fsync_failure_reports_the_effect(tmp_path, monkeypatch):
     _configure_test_root(module, root, log_cap_mb=1)
     plan = module.build_plan(1)
     receipt = _receipt(module, tmp_path / "post-truncate.json", plan, attempt_id="post-truncate")
-    target_identity = (log.stat().st_dev, log.stat().st_ino)
+    original = log.read_bytes()
+    real_open = module.os.open
     real_fsync = module.os.fsync
-    failed = False
+    replacement_fd = None
 
-    def fail_target_fsync(fd):
-        nonlocal failed
-        metadata = os.fstat(fd)
-        if not failed and (metadata.st_dev, metadata.st_ino) == target_identity:
-            failed = True
-            raise OSError("synthetic post-truncate durability failure")
+    def capture_replacement(path, flags, *args, **kwargs):
+        nonlocal replacement_fd
+        fd = real_open(path, flags, *args, **kwargs)
+        if path == log.name and flags & os.O_EXCL:
+            replacement_fd = fd
+        return fd
+
+    def fail_replacement_fsync(fd):
+        if fd == replacement_fd:
+            raise OSError("synthetic replacement durability failure")
         return real_fsync(fd)
 
-    monkeypatch.setattr(module.os, "fsync", fail_target_fsync)
+    monkeypatch.setattr(module.os, "open", capture_replacement)
+    monkeypatch.setattr(module.os, "fsync", fail_replacement_fsync)
 
     assert module.main(["--apply", *_signed_args(receipt)]) == 1
 
-    assert log.stat().st_size == 0
+    assert log.read_bytes() == original
+    assert not list(log.parent.glob(".heartbeat.err.log.rotate-*"))
     result = json.loads(next(module.RESULTS_DIR.glob("*.json")).read_text(encoding="utf-8"))
-    assert result["status"] == "failed_after_effects"
-    assert result["effects"] == [
-        {
-            "kind": "truncate",
-            "relative_path": "logs/heartbeat.err.log",
-            "size_bytes_before": 1024 * 1024 + 1,
-            "mutation_observed": True,
-            "durability_confirmed": False,
-        }
-    ]
-    assert "truncated but durability confirmation failed" in result["error"]
+    assert result["status"] == "failed_before_effects"
+    assert result["effects"] == []
+    assert "original restored" in result["error"]
 
 
 def test_result_finalization_failure_reports_completed_effects(tmp_path, monkeypatch, capsys):
@@ -614,33 +631,30 @@ def test_distinct_signed_receipt_cannot_replay_same_attempt_id(tmp_path, monkeyp
         module._consume_receipt(second_receipt, plan)
 
 
-def test_truncate_hardlink_added_after_fingerprint_is_refused(tmp_path, monkeypatch):
+def test_real_concurrent_hardlink_creation_during_rotation_is_refused(tmp_path, monkeypatch):
     module, probe, log = _repo(tmp_path, monkeypatch)
     probe.unlink()
     plan = module.build_plan(1)
     receipt = _receipt(module, tmp_path / "link-race.json", plan, attempt_id="link-race")
     original = log.read_bytes()
-    target_identity = (log.stat().st_dev, log.stat().st_ino)
-    real_fstat = module.os.fstat
-    target_reads = 0
+    raced_link = tmp_path / "concurrent-hard-link"
+    real_rename = module.os.rename
 
-    def add_link_at_final_boundary(fd):
-        nonlocal target_reads
-        metadata = real_fstat(fd)
-        if (metadata.st_dev, metadata.st_ino) == target_identity:
-            target_reads += 1
-            if target_reads >= 3:
-                values = list(metadata)
-                values[3] = 2
-                return os.stat_result(values)
-        return metadata
+    def rename_then_race(source, destination, *args, **kwargs):
+        result = real_rename(source, destination, *args, **kwargs)
+        if source == log.name and str(destination).startswith(f".{log.name}.rotate-"):
+            worker = threading.Thread(target=os.link, args=(log.parent / destination, raced_link))
+            worker.start()
+            worker.join()
+        return result
 
-    monkeypatch.setattr(module.os, "fstat", add_link_at_final_boundary)
+    monkeypatch.setattr(module.os, "rename", rename_then_race)
     assert module.main(["--apply", *_signed_args(receipt)]) == 1
     assert log.read_bytes() == original
+    assert raced_link.read_bytes() == original
     result = json.loads(next(module.RESULTS_DIR.glob("*.json")).read_text(encoding="utf-8"))
     assert result["status"] == "failed_before_effects"
-    assert "link identity changed" in result["error"]
+    assert "inode changed during rotation" in result["error"]
 
 
 def test_sensor_threshold_is_owner_only_bounded_and_df_is_hermetic(tmp_path, monkeypatch):

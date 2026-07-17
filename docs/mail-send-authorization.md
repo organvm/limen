@@ -11,26 +11,50 @@ The delegate and every path component must be owner-owned, non-symlinked, and
 non-writable by the ordinary executor. `LIMEN_UMA_ROOT`, `UMA_ROOT`, `PATH`, and
 `PYTHONPATH` cannot select executable mail code.
 
-Preview is the default. It passes `--dry-run` under a fixed owner HOME, TMPDIR,
-and working directory with a minimal environment, no `PYTHONPATH`, and
-`PYTHONSAFEPATH=1`. It never resolves or passes a credential file. Apply requires
-the complete UMA attempt/receipt/signature shape. Only then may the shim pass the
-fixed root-owned mode-0400/0600 credential file and fixed owner-only attempt
-registry. Caller-selected credential, authorization-key, and attempt-store flags
-are refused.
+The wrapper is authorization-request-only. It never sends mail, resolves
+credentials, reads caller/default mail files, opens IMAP/SMTP, or selects an
+apply attempt store. `--apply`, caller-selected credential/authority paths, and
+live `--from-draft` / `--reply-to-search` preview sources are refused before the
+delegate can execute.
 
-The delegate and its owner home/tmp/run/credential/attempt-store paths are currently
-unprovisioned by Limen. Until Domus installs an accepted exact-head UMA build and
-those paths, every invocation fails closed before SMTP access.
+Before any `execve`, the wrapper requires a root-custodied
+`config/mail-send-delegate-contract.json` with schema
+`uma.mail.authorization_request_delegate.v1`. The contract binds the exact
+delegate SHA-256 and UMA commit, the fixed
+`--authorization-request-only` protocol, an owner test predicate and receipt
+hash, and the ordered attestation that the delegate returns before credential
+resolution, default-file resolution, IMAP, SMTP, and mutation. The delegate is
+always invoked with that request flag first, `--dry-run`, a minimal environment,
+and fixed owner HOME/TMPDIR/working directory.
 
 Domus provisions the fixed `uma/` subtree with root-owned, non-symlinked,
 non-group/world-writable ancestors and these exact leaves:
 
 - executable `bin/mail-send`;
-- mode `0400` or `0600` single-link `credentials/mail.env`;
-- owner-only directories `state/mail-attempts`, `home`, `tmp`, and `run`.
+- `config/mail-send-delegate-contract.json`;
+- owner-only directories `state/mail-source-receipts`,
+  `state/mail-source-snapshots`, `home`, `tmp`, and `run`.
 
-The wrapper injects `--attempt-store` with that fixed registry only on apply.
-The installed UMA delegate owns signed-receipt validation and atomic `O_EXCL`
-attempt consumption. A checkout or caller-selected registry cannot prove replay
-protection.
+An owner-produced immutable source may be named only by the basename of a
+single-link JSON receipt in `state/mail-source-receipts`. Schema
+`uma.mail.immutable_source_snapshot.v1` binds the delegate-contract hash,
+`draft` or `search` source kind, snapshot basename, byte size, and SHA-256 of a
+single-link file in `state/mail-source-snapshots`. The wrapper verifies all of
+those bindings and passes only the owner receipt path. It never accepts a live
+provider lookup as a substitute.
+
+## Current UMA owner blocker
+
+The re-audited UMA candidate at `0bd0dd8` does not publish this contract or a
+mechanically verifiable early-return integration receipt, so it must not be
+treated as accepted and the Limen wrapper honestly fails closed. UMA clears the
+blocker only when an exact installed commit provides:
+
+1. the contract above with `delegate_sha256` equal to the installed executable;
+2. an owner-held integration receipt whose hash equals
+   `owner_receipt_sha256`;
+3. the named `owner_predicate` passing against that exact commit and proving
+   zero credential/default-file resolution, SMTP, IMAP, and mutation; and
+4. immutable owner snapshot receipts for any draft/search-derived request.
+
+A newer commit number by itself does not clear the predicate.

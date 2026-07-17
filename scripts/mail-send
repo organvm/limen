@@ -6,6 +6,10 @@ root-owned UMA entrypoint; repository paths, Python modules, PATH, and caller
 environment variables cannot select executable code.
 """
 
+from __future__ import annotations
+
+import hashlib
+import json
 import os
 import stat
 import sys
@@ -14,18 +18,27 @@ from pathlib import Path
 
 DOMUS_MAIL_ROOT = Path("/Library/Application Support/org.organvm.domus/limen/uma")
 DOMUS_MAIL_DELEGATE = DOMUS_MAIL_ROOT / "bin" / "mail-send"
-OWNER_CREDENTIALS = DOMUS_MAIL_ROOT / "credentials" / "mail.env"
-OWNER_ATTEMPT_STORE = DOMUS_MAIL_ROOT / "state" / "mail-attempts"
+OWNER_DELEGATE_CONTRACT = DOMUS_MAIL_ROOT / "config" / "mail-send-delegate-contract.json"
+OWNER_SOURCE_RECEIPTS = DOMUS_MAIL_ROOT / "state" / "mail-source-receipts"
+OWNER_SOURCE_SNAPSHOTS = DOMUS_MAIL_ROOT / "state" / "mail-source-snapshots"
 OWNER_HOME = DOMUS_MAIL_ROOT / "home"
 OWNER_TMPDIR = DOMUS_MAIL_ROOT / "tmp"
 OWNER_WORKDIR = DOMUS_MAIL_ROOT / "run"
 OWNER_PATH_ANCHOR = Path("/")
 OWNER_UID = 0
 SAFE_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
+CONTRACT_SCHEMA = "uma.mail.authorization_request_delegate.v1"
+REQUEST_PROTOCOL = "uma.mail.authorization_request.v1"
+REQUEST_FLAG = "--authorization-request-only"
+SNAPSHOT_RECEIPT_SCHEMA = "uma.mail.immutable_source_snapshot.v1"
+MAX_OWNER_JSON_BYTES = 64 * 1024
 REFUSED_CALLER_FLAGS = (
+    "--apply",
     "--authorization-key-file",
     "--credentials-file",
     "--attempt-store",
+    "--from-draft",
+    "--reply-to-search",
 )
 
 
@@ -73,65 +86,201 @@ def _validate_delegate() -> None:
         raise DelegateError("UMA delegate is not owner-executable")
 
 
+def _sha256_fd(fd: int) -> tuple[str, int]:
+    digest = hashlib.sha256()
+    total = 0
+    while True:
+        chunk = os.read(fd, 64 * 1024)
+        if not chunk:
+            break
+        digest.update(chunk)
+        total += len(chunk)
+    return "sha256:" + digest.hexdigest(), total
+
+
+def _read_owner_json(path: Path, label: str) -> tuple[dict, str]:
+    _assert_owner_chain(path)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise DelegateError(f"{label} is unavailable ({type(exc).__name__})") from exc
+    try:
+        metadata = os.fstat(fd)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or metadata.st_uid != OWNER_UID
+            or metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+            or metadata.st_size > MAX_OWNER_JSON_BYTES
+        ):
+            raise DelegateError(f"{label} lost immutable owner custody")
+        raw = os.read(fd, MAX_OWNER_JSON_BYTES + 1)
+        if len(raw) > MAX_OWNER_JSON_BYTES:
+            raise DelegateError(f"{label} exceeds its bounded size")
+    finally:
+        os.close(fd)
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise DelegateError(f"{label} is not valid JSON") from exc
+    if not isinstance(value, dict):
+        raise DelegateError(f"{label} must be a JSON object")
+    return value, "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def _delegate_hash() -> str:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    fd = os.open(DOMUS_MAIL_DELEGATE, flags)
+    try:
+        digest, _size = _sha256_fd(fd)
+        return digest
+    finally:
+        os.close(fd)
+
+
+def _load_delegate_contract() -> tuple[dict, str]:
+    value, contract_hash = _read_owner_json(OWNER_DELEGATE_CONTRACT, "UMA delegate contract")
+    expected_fields = {
+        "schema",
+        "protocol",
+        "request_flag",
+        "delegate_sha256",
+        "returns_before",
+        "owner_predicate",
+        "owner_receipt_sha256",
+        "uma_commit",
+    }
+    if set(value) != expected_fields:
+        raise DelegateError("UMA delegate contract fields do not match the pinned schema")
+    if (
+        value.get("schema") != CONTRACT_SCHEMA
+        or value.get("protocol") != REQUEST_PROTOCOL
+        or value.get("request_flag") != REQUEST_FLAG
+        or value.get("returns_before")
+        != ["credential_resolution", "default_file_resolution", "imap", "smtp", "mutation"]
+    ):
+        raise DelegateError("UMA delegate does not attest the required pure authorization-request protocol")
+    if value.get("delegate_sha256") != _delegate_hash():
+        raise DelegateError("UMA delegate bytes do not match the owner contract")
+    if not isinstance(value.get("owner_predicate"), str) or not value["owner_predicate"].strip():
+        raise DelegateError("UMA delegate contract omits its owner integration predicate")
+    if not isinstance(value.get("owner_receipt_sha256"), str) or not value["owner_receipt_sha256"].startswith(
+        "sha256:"
+    ):
+        raise DelegateError("UMA delegate contract omits its owner integration receipt")
+    commit = value.get("uma_commit")
+    if not isinstance(commit, str) or len(commit) != 40 or any(ch not in "0123456789abcdef" for ch in commit):
+        raise DelegateError("UMA delegate contract does not pin an exact UMA commit")
+    return value, contract_hash
+
+
 def _flag_present(args, flag):
     return any(value == flag or value.startswith(flag + "=") for value in args)
+
+
+def _option_value(args: list[str], flag: str) -> str | None:
+    matches: list[str] = []
+    for index, value in enumerate(args):
+        if value.startswith(flag + "="):
+            matches.append(value.split("=", 1)[1])
+        elif value == flag:
+            if index + 1 >= len(args) or args[index + 1].startswith("--"):
+                raise DelegateError(f"{flag} requires one value")
+            matches.append(args[index + 1])
+    if len(matches) > 1:
+        raise DelegateError(f"{flag} may be supplied only once")
+    return matches[0] if matches else None
 
 
 def _validate_args(args):
     for flag in REFUSED_CALLER_FLAGS:
         if _flag_present(args, flag):
             raise DelegateError(f"caller-selected {flag} is refused")
-    apply = _flag_present(args, "--apply")
-    dry_run = _flag_present(args, "--dry-run")
-    if apply and dry_run:
-        raise DelegateError("--apply and --dry-run are mutually exclusive")
-    if apply:
-        for required in ("--attempt-id", "--authorization-receipt", "--authorization-signature"):
-            if not _flag_present(args, required):
-                raise DelegateError(f"apply requires {required}")
-    return apply
+    value_options = {"--attempt-id", "--source-snapshot-receipt"}
+    boolean_options = {"--dry-run", "--self-test"}
+    index = 0
+    while index < len(args):
+        value = args[index]
+        option = value.split("=", 1)[0]
+        if option in value_options:
+            if "=" not in value:
+                if index + 1 >= len(args) or args[index + 1].startswith("--"):
+                    raise DelegateError(f"{option} requires one value")
+                index += 1
+        elif option not in boolean_options:
+            raise DelegateError(f"mail authorization request option {option!r} is not allowed")
+        index += 1
+    return _option_value(args, "--source-snapshot-receipt")
 
 
-def _credential_file(home: Path) -> Path:
-    del home
-    _assert_owner_chain(OWNER_CREDENTIALS)
-    metadata = OWNER_CREDENTIALS.stat()
-    if (
-        not stat.S_ISREG(metadata.st_mode)
-        or stat.S_ISLNK(metadata.st_mode)
-        or metadata.st_nlink != 1
-        or metadata.st_uid != OWNER_UID
-        or stat.S_IMODE(metadata.st_mode) not in {0o400, 0o600}
-    ):
-        raise DelegateError("credential file must remain an owner-custodied mode-0400/0600 regular file")
-    return OWNER_CREDENTIALS
-
-
-def _validate_owner_directories(*, apply: bool) -> None:
+def _validate_owner_directories() -> None:
     for directory in (OWNER_HOME, OWNER_TMPDIR, OWNER_WORKDIR):
         _assert_owner_chain(directory, leaf_directory=True)
-    if apply:
-        _assert_owner_chain(OWNER_ATTEMPT_STORE, leaf_directory=True)
+
+
+def _validate_source_snapshot(receipt_name: str, contract_hash: str) -> Path:
+    if not receipt_name or Path(receipt_name).name != receipt_name or receipt_name in {".", ".."}:
+        raise DelegateError("source snapshot receipt must be one owner-registry basename")
+    _assert_owner_chain(OWNER_SOURCE_RECEIPTS, leaf_directory=True)
+    _assert_owner_chain(OWNER_SOURCE_SNAPSHOTS, leaf_directory=True)
+    receipt_path = OWNER_SOURCE_RECEIPTS / receipt_name
+    value, _receipt_hash = _read_owner_json(receipt_path, "UMA source snapshot receipt")
+    expected_fields = {
+        "schema",
+        "contract_hash",
+        "source_kind",
+        "snapshot_name",
+        "snapshot_sha256",
+        "snapshot_size",
+    }
+    if set(value) != expected_fields or value.get("schema") != SNAPSHOT_RECEIPT_SCHEMA:
+        raise DelegateError("UMA source snapshot receipt fields do not match the pinned schema")
+    if value.get("contract_hash") != contract_hash or value.get("source_kind") not in {"draft", "search"}:
+        raise DelegateError("UMA source snapshot receipt is not bound to this delegate contract")
+    snapshot_name = value.get("snapshot_name")
+    if not isinstance(snapshot_name, str) or Path(snapshot_name).name != snapshot_name:
+        raise DelegateError("UMA source snapshot receipt names an unsafe snapshot")
+    snapshot_path = OWNER_SOURCE_SNAPSHOTS / snapshot_name
+    _assert_owner_chain(snapshot_path)
+    fd = os.open(snapshot_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0))
+    try:
+        metadata = os.fstat(fd)
+        digest, size = _sha256_fd(fd)
+    finally:
+        os.close(fd)
+    if (
+        metadata.st_nlink != 1
+        or digest != value.get("snapshot_sha256")
+        or size != value.get("snapshot_size")
+    ):
+        raise DelegateError("UMA source snapshot bytes do not match the immutable owner receipt")
+    return receipt_path
 
 
 def build_invocation(args, environ=None):
     del environ
-    apply = _validate_args(args)
+    snapshot_receipt = _validate_args(args)
     _validate_delegate()
-    _validate_owner_directories(apply=apply)
-    delegate_args = [str(DOMUS_MAIL_DELEGATE)]
-    if apply:
-        delegate_args.extend(
-            [
-                "--credentials-file",
-                str(_credential_file(OWNER_HOME)),
-                "--attempt-store",
-                str(OWNER_ATTEMPT_STORE),
-            ]
-        )
-    elif not _flag_present(args, "--dry-run"):
-        delegate_args.append("--dry-run")
-    delegate_args.extend(args)
+    _contract, contract_hash = _load_delegate_contract()
+    _validate_owner_directories()
+    delegate_args = [str(DOMUS_MAIL_DELEGATE), REQUEST_FLAG, "--dry-run"]
+    if snapshot_receipt is not None:
+        owner_receipt = _validate_source_snapshot(snapshot_receipt, contract_hash)
+        delegate_args.extend(["--source-snapshot-receipt", str(owner_receipt)])
+    filtered_args: list[str] = []
+    skip = False
+    for index, value in enumerate(args):
+        if skip:
+            skip = False
+            continue
+        option = value.split("=", 1)[0]
+        if option == "--dry-run" or option == "--source-snapshot-receipt":
+            if option == "--source-snapshot-receipt" and "=" not in value:
+                skip = True
+            continue
+        filtered_args.append(value)
+    delegate_args.extend(filtered_args)
     clean_environment = {
         "HOME": str(OWNER_HOME),
         "TMPDIR": str(OWNER_TMPDIR),

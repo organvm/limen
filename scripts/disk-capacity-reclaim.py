@@ -18,9 +18,9 @@ The bounded effect surface is deliberately narrow:
 
 * quarantine, verify, then unlink single-link regular, git-ignored
   ``.heal-probe-*.yaml`` files under the owner-configured, descriptor-opened root;
-* truncate the single-link regular ``logs/heartbeat.err.log`` through no-follow
-  directory descriptors only when its exact receipt-bound contents exceed
-  the owner-configured log cap.
+* atomically rotate the exact single-link ``logs/heartbeat.err.log`` inode,
+  durably create an empty replacement with the same ownership/mode, and only
+  then unlink the old inode, all through no-follow directory descriptors.
 
 Usage:
   python3 scripts/disk-capacity-reclaim.py --check
@@ -1027,54 +1027,191 @@ def _unlink_exact(
         _close_quietly(parent_fd)
 
 
-def _truncate_exact(target: dict[str, Any], root_fd: int, receipt: dict[str, Any]) -> dict[str, Any]:
+def _rotation_effect(
+    target: dict[str, Any],
+    quarantine_name: str,
+    *,
+    replacement_created: bool,
+    old_inode_retained: bool,
+    durability_confirmed: bool,
+) -> dict[str, Any]:
+    parent = Path(str(target["relative_path"])).parent.as_posix()
+    return {
+        "kind": "rotate",
+        "relative_path": target["relative_path"],
+        "size_bytes_before": target["size_bytes"],
+        "mutation_observed": True,
+        "replacement_created": replacement_created,
+        "old_inode_retained": old_inode_retained,
+        "quarantine_path": f"{parent}/{quarantine_name}",
+        "durability_confirmed": durability_confirmed,
+    }
+
+
+def _rotate_exact(target: dict[str, Any], root_fd: int, receipt: dict[str, Any]) -> dict[str, Any]:
     relative = str(target["relative_path"])
     parent_fd, name = _open_parent_dir(root_fd, relative)
-    flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
-    effect: dict[str, Any] | None = None
-    try:
+    quarantine_name = f".{name}.rotate-{uuid.uuid4().hex}"
+    moved = False
+    replacement_fd: int | None = None
+    replacement_identity: tuple[int, int] | None = None
+    replacement_durable = False
+    old_deleted = False
+    original_metadata: os.stat_result | None = None
+
+    def recover_original() -> tuple[bool, bool, str]:
+        nonlocal replacement_fd
+        if replacement_fd is not None:
+            _close_quietly(replacement_fd)
+            replacement_fd = None
         try:
-            fd = os.open(name, flags, dir_fd=parent_fd)
+            current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            current = None
         except OSError as exc:
-            raise ReceiptError(f"{relative}: could not open safely ({type(exc).__name__})") from exc
+            return False, True, f"replacement state is unknown ({type(exc).__name__})"
+        if current is not None:
+            current_identity = (current.st_dev, current.st_ino)
+            if replacement_identity is None or current_identity != replacement_identity:
+                return False, True, "original path is occupied; rotated inode retained"
+            try:
+                os.unlink(name, dir_fd=parent_fd)
+            except OSError as exc:
+                return False, True, f"replacement removal failed ({type(exc).__name__})"
+        return _restore_quarantined(parent_fd, quarantine_name, parent_fd, name)
+
+    try:
+        fingerprint, problem = _fingerprint_name(
+            parent_fd,
+            name,
+            kind="truncate",
+            relative_path=relative,
+        )
+        if problem or fingerprint is None or not _matches(target, fingerprint):
+            raise ReceiptError(f"{relative}: target changed after receipt validation")
+        original_metadata = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(original_metadata.st_mode)
+            or original_metadata.st_nlink != 1
+            or (original_metadata.st_dev, original_metadata.st_ino)
+            != (target["device"], target["inode"])
+        ):
+            raise ReceiptError(f"{relative}: target link identity changed before rotation")
+        _require_receipt_current(receipt)
         try:
-            fingerprint, problem = _fingerprint_fd(fd, kind="truncate", relative_path=relative)
-            if problem or fingerprint is None or not _matches(target, fingerprint):
-                raise ReceiptError(f"{relative}: target changed after receipt validation")
-            latest = os.fstat(fd)
-            if latest.st_nlink != 1 or (latest.st_dev, latest.st_ino) != (
-                target["device"],
-                target["inode"],
-            ):
-                raise ReceiptError(f"{relative}: target link identity changed before truncation")
-            _require_receipt_current(receipt)
-            os.ftruncate(fd, 0)
-            effect = {
-                "kind": "truncate",
-                "relative_path": relative,
-                "size_bytes_before": target["size_bytes"],
-                "mutation_observed": True,
-                "durability_confirmed": False,
-            }
-            try:
-                os.fsync(fd)
-            except OSError as exc:
-                raise EffectAppliedError(
-                    f"{relative}: truncated but durability confirmation failed",
-                    effect,
-                ) from exc
-            effect["durability_confirmed"] = True
-            return effect
-        finally:
-            pending_error = sys.exc_info()[0] is not None
-            try:
-                os.close(fd)
-            except OSError as exc:
-                if not pending_error and effect is not None:
-                    raise EffectAppliedError(f"{relative}: truncated but close reporting failed", effect) from exc
-                if not pending_error:
-                    raise ReceiptError(f"{relative}: target close failed") from exc
+            os.rename(name, quarantine_name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+            moved = True
+        except OSError as exc:
+            raise ReceiptError(f"{relative}: atomic rotation failed ({type(exc).__name__})") from exc
+
+        moved_fingerprint, moved_problem = _fingerprint_name(
+            parent_fd,
+            quarantine_name,
+            kind="truncate",
+            relative_path=relative,
+        )
+        if moved_problem or moved_fingerprint is None or not _matches(target, moved_fingerprint):
+            restored, retained, detail = recover_original()
+            if restored and not retained:
+                raise ReceiptError(f"{relative}: inode changed during rotation; {detail}")
+            effect = _rotation_effect(
+                target,
+                quarantine_name,
+                replacement_created=False,
+                old_inode_retained=retained,
+                durability_confirmed=False,
+            )
+            raise EffectAppliedError(f"{relative}: inode changed during rotation; {detail}", effect)
+
+        create_flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        replacement_fd = os.open(
+            name,
+            create_flags,
+            stat.S_IMODE(original_metadata.st_mode),
+            dir_fd=parent_fd,
+        )
+        replacement_metadata = os.fstat(replacement_fd)
+        replacement_identity = (replacement_metadata.st_dev, replacement_metadata.st_ino)
+        os.fchmod(replacement_fd, stat.S_IMODE(original_metadata.st_mode))
+        if (replacement_metadata.st_uid, replacement_metadata.st_gid) != (
+            original_metadata.st_uid,
+            original_metadata.st_gid,
+        ):
+            os.fchown(replacement_fd, original_metadata.st_uid, original_metadata.st_gid)
+        os.fsync(replacement_fd)
+        os.close(replacement_fd)
+        replacement_fd = None
+        os.fsync(parent_fd)
+        replacement_durable = True
+
+        final_metadata = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(final_metadata.st_mode)
+            or final_metadata.st_nlink != 1
+            or final_metadata.st_size != 0
+            or (final_metadata.st_dev, final_metadata.st_ino) != replacement_identity
+            or stat.S_IMODE(final_metadata.st_mode) != stat.S_IMODE(original_metadata.st_mode)
+            or (final_metadata.st_uid, final_metadata.st_gid)
+            != (original_metadata.st_uid, original_metadata.st_gid)
+        ):
+            raise OSError("empty replacement verification failed")
+
+        old_fingerprint, old_problem = _fingerprint_name(
+            parent_fd,
+            quarantine_name,
+            kind="truncate",
+            relative_path=relative,
+        )
+        if old_problem or old_fingerprint is None or not _matches(target, old_fingerprint):
+            raise OSError("rotated inode changed before cleanup")
+        os.unlink(quarantine_name, dir_fd=parent_fd)
+        old_deleted = True
+        os.fsync(parent_fd)
+        return _rotation_effect(
+            target,
+            quarantine_name,
+            replacement_created=True,
+            old_inode_retained=False,
+            durability_confirmed=True,
+        )
+    except EffectAppliedError:
+        raise
+    except ReceiptError:
+        raise
+    except OSError as exc:
+        if moved and not replacement_durable and not old_deleted:
+            restored, retained, detail = recover_original()
+            if restored and not retained:
+                raise ReceiptError(f"{relative}: rotation failed; {detail}") from exc
+            effect = _rotation_effect(
+                target,
+                quarantine_name,
+                replacement_created=replacement_identity is not None,
+                old_inode_retained=retained,
+                durability_confirmed=False,
+            )
+            raise EffectAppliedError(f"{relative}: rotation failed; {detail}", effect) from exc
+        if moved:
+            effect = _rotation_effect(
+                target,
+                quarantine_name,
+                replacement_created=replacement_durable,
+                old_inode_retained=not old_deleted,
+                durability_confirmed=False,
+            )
+            raise EffectAppliedError(
+                f"{relative}: replacement published but rotation cleanup/durability failed",
+                effect,
+            ) from exc
+        raise ReceiptError(f"{relative}: rotation failed ({type(exc).__name__})") from exc
     finally:
+        _close_quietly(replacement_fd)
         _close_quietly(parent_fd)
 
 
@@ -1114,7 +1251,7 @@ def apply(receipt_path: Path, signature_path: Path, log_cap_mb: int) -> int:
             if target["kind"] == "unlink":
                 effect = _unlink_exact(target, root_fd, quarantine_fd, receipt)
             elif target["kind"] == "truncate":
-                effect = _truncate_exact(target, root_fd, receipt)
+                effect = _rotate_exact(target, root_fd, receipt)
             else:
                 raise ReceiptError(f"unsupported target kind {target['kind']!r}")
             effects.append(effect)

@@ -209,6 +209,10 @@ def rclone(args: list[str], *, receipt: ApplyReceipt | None = None, timeout: int
             for value in remote_arguments
         ):
             raise EffectRefused("rclone deletefile is restricted to the signed probe object")
+        if args[0] == "copyto" and len(args) >= 3 and ":" in args[2]:
+            required = {"--immutable", "--checksum", "--stats-one-line-json"}
+            if not required.issubset(args):
+                raise EffectRefused("remote creation requires rclone immutable, checksum, and transfer-result semantics")
     return run([str(RCLONE), "--config", str(RCLONE_CONF), *args], timeout)
 
 
@@ -416,6 +420,197 @@ def _probe_payload(remote: str, attempt_id: str) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
 
 
+def _remote_object_stat(destination: str) -> tuple[str, dict[str, Any] | None]:
+    """Return absent/present/unknown without mutating the remote."""
+
+    rc, out = rclone(["lsjson", destination, "--stat", "--hash"], timeout=90)
+    if rc == 3:
+        return "absent", None
+    if rc != 0:
+        return "unknown", None
+    try:
+        value = json.loads(out)
+    except ValueError:
+        return "unknown", None
+    if not isinstance(value, dict) or value.get("IsDir") is True:
+        return "unknown", None
+    identity = value.get("ID") or value.get("OrigID")
+    if not isinstance(identity, str) or not identity:
+        return "unknown", None
+    return "present", value
+
+
+def _copy_result_proves_one_create(output: str) -> bool:
+    for line in reversed(output.splitlines()):
+        try:
+            value = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(value, dict):
+            continue
+        transfers = value.get("transfers")
+        errors = value.get("errors")
+        return (
+            isinstance(transfers, int)
+            and not isinstance(transfers, bool)
+            and transfers == 1
+            and isinstance(errors, int)
+            and not isinstance(errors, bool)
+            and errors == 0
+        )
+    return False
+
+
+def _remote_identity(value: dict[str, Any]) -> tuple[str, int] | None:
+    identity = value.get("ID") or value.get("OrigID")
+    size = value.get("Size")
+    if (
+        not isinstance(identity, str)
+        or not identity
+        or isinstance(size, bool)
+        or not isinstance(size, int)
+        or size < 0
+    ):
+        return None
+    return identity, size
+
+
+def _immutable_remote_create(
+    local: Path,
+    destination: str,
+    receipt: ApplyReceipt,
+    *,
+    phase_prefix: str,
+    timeout: int,
+) -> bool:
+    """Create one absent object exactly once and prove its post-readback identity."""
+
+    digest, size = _safe_regular_hash(local)
+    preflight, _before = _remote_object_stat(destination)
+    if preflight == "present":
+        raise EffectRefused(f"{destination}: immutable destination already exists")
+    if preflight != "absent":
+        raise EffectRefused(f"{destination}: immutable destination absence is not provable")
+    _append_effect_journal(
+        receipt,
+        {
+            "phase": f"{phase_prefix}-copy-planned",
+            "object": destination,
+            "sha256": digest,
+            "size_bytes": size,
+            "preflight": "absent",
+        },
+    )
+    try:
+        rc, out = rclone(
+            [
+                "copyto",
+                str(local),
+                destination,
+                "--immutable",
+                "--checksum",
+                "--stats-one-line-json",
+                "--stats",
+                "1s",
+            ],
+            receipt=receipt,
+            timeout=timeout,
+        )
+    except Exception as exc:
+        _append_effect_journal(
+            receipt,
+            {
+                "phase": f"{phase_prefix}-copy-returned",
+                "object": destination,
+                "command_rc": None,
+                "ambiguity": True,
+                "boundary_error": type(exc).__name__,
+            },
+        )
+        raise
+    _append_effect_journal(
+        receipt,
+        {
+            "phase": f"{phase_prefix}-copy-returned",
+            "object": destination,
+            "command_rc": rc,
+            "output_sha256": _sha256_bytes(out.encode("utf-8")),
+            "ambiguity": True,
+        },
+    )
+    created_once = rc == 0 and _copy_result_proves_one_create(out)
+    first_state, first = _remote_object_stat(destination)
+    first_identity = _remote_identity(first) if first_state == "present" and first is not None else None
+    readback_rc: int | None = None
+    second_identity: tuple[str, int] | None = None
+    if created_once and first_identity is not None and first_identity[1] == size:
+        readback_rc, _ = rclone(
+            ["check", str(local), destination, "--one-way", "--download"],
+            timeout=max(600, timeout),
+        )
+        second_state, second = _remote_object_stat(destination)
+        if second_state == "present" and second is not None:
+            second_identity = _remote_identity(second)
+    ok = (
+        created_once
+        and first_identity is not None
+        and first_identity[1] == size
+        and readback_rc == 0
+        and second_identity == first_identity
+    )
+    _append_effect_journal(
+        receipt,
+        {
+            "phase": f"{phase_prefix}-verified" if ok else f"{phase_prefix}-unverified",
+            "object": destination,
+            "sha256": digest,
+            "readback_rc": readback_rc,
+            "remote_identity_hash": (
+                _sha256_bytes(first_identity[0].encode("utf-8")) if first_identity is not None else None
+            ),
+            "ambiguity": not ok,
+        },
+    )
+    return ok
+
+
+def _journaled_probe_delete(
+    destination: str,
+    receipt: ApplyReceipt,
+    *,
+    phase_prefix: str,
+) -> int | None:
+    _append_effect_journal(
+        receipt,
+        {"phase": f"{phase_prefix}-cleanup-planned", "object": destination},
+    )
+    try:
+        rc, out = rclone(["deletefile", destination], receipt=receipt, timeout=60)
+    except Exception as exc:
+        _append_effect_journal(
+            receipt,
+            {
+                "phase": f"{phase_prefix}-cleanup-returned",
+                "object": destination,
+                "command_rc": None,
+                "ambiguity": True,
+                "boundary_error": type(exc).__name__,
+            },
+        )
+        raise
+    _append_effect_journal(
+        receipt,
+        {
+            "phase": f"{phase_prefix}-cleanup-returned",
+            "object": destination,
+            "command_rc": rc,
+            "output_sha256": _sha256_bytes(out.encode("utf-8")),
+            "ambiguity": rc != 0,
+        },
+    )
+    return rc
+
+
 def gate_b(remote: str, workdir: Path, receipt: ApplyReceipt) -> bool:
     """Receipt-bound exact-object roundtrip; no namespace-wide cleanup is permitted."""
 
@@ -429,26 +624,11 @@ def gate_b(remote: str, workdir: Path, receipt: ApplyReceipt) -> bool:
     if not probe_path.startswith(f"{remote}:{receipt.object_set}/probes/"):
         raise EffectRefused("probe escaped the approved namespace")
 
-    _append_effect_journal(receipt, {"phase": "probe-copy-planned", "object": probe_path})
-    rc, _ = rclone(["copyto", str(local), probe_path], receipt=receipt, timeout=90)
-    _append_effect_journal(
-        receipt,
-        {"phase": "probe-copy-returned", "object": probe_path, "command_rc": rc},
-    )
-    if rc != 0:
-        # A failed copy may still have materialized a partial object. Cleanup remains exact-target.
-        delete_rc, _ = rclone(["deletefile", probe_path], receipt=receipt, timeout=60)
-        _append_effect_journal(
-            receipt,
-            {"phase": "probe-cleanup-returned", "object": probe_path, "command_rc": delete_rc},
-        )
+    if not _immutable_remote_create(local, probe_path, receipt, phase_prefix="probe", timeout=90):
+        # A failed create is ambiguous. Never retry or delete an object we did not exactly prove.
         return False
     rc, out = rclone(["cat", probe_path], timeout=60)
-    delete_rc, _ = rclone(["deletefile", probe_path], receipt=receipt, timeout=60)
-    _append_effect_journal(
-        receipt,
-        {"phase": "probe-cleanup-returned", "object": probe_path, "command_rc": delete_rc},
-    )
+    delete_rc = _journaled_probe_delete(probe_path, receipt, phase_prefix="probe")
     return rc == 0 and out.encode("utf-8") == payload and delete_rc == 0
 
 
@@ -1738,23 +1918,52 @@ def restore_test(
     if not probe_path.startswith(f"{remote}:{receipt.object_set}/probes/"):
         raise EffectRefused("restore probe escaped the approved namespace")
     pulled = workdir / "pulled-kernel.tar.enc"
-    upload_attempted = False
     uploaded = False
     copy_ok = unseal_ok = False
     delete_rc: int | None = None
     try:
         _assert_domus_owner_chain(ARCA, "Domus ARCA effector")
-        upload_attempted = True
-        _append_effect_journal(receipt, {"phase": "restore-probe-copy-planned", "object": probe_path})
-        rc, _ = rclone(["copyto", str(kernel), probe_path], receipt=receipt, timeout=600)
-        _append_effect_journal(
+        uploaded = _immutable_remote_create(
+            kernel,
+            probe_path,
             receipt,
-            {"phase": "restore-probe-copy-returned", "object": probe_path, "command_rc": rc},
+            phase_prefix="restore-probe",
+            timeout=600,
         )
-        uploaded = rc == 0
         if not uploaded:
             return False
-        rc, _ = rclone(["copyto", probe_path, str(pulled)], receipt=receipt, timeout=600)
+        _append_effect_journal(
+            receipt,
+            {
+                "phase": "restore-pull-planned",
+                "object": probe_path,
+                "local_target_hash": _sha256_bytes(str(pulled).encode("utf-8")),
+            },
+        )
+        try:
+            rc, pull_out = rclone(["copyto", probe_path, str(pulled)], receipt=receipt, timeout=600)
+        except Exception as exc:
+            _append_effect_journal(
+                receipt,
+                {
+                    "phase": "restore-pull-returned",
+                    "object": probe_path,
+                    "command_rc": None,
+                    "ambiguity": True,
+                    "boundary_error": type(exc).__name__,
+                },
+            )
+            raise
+        _append_effect_journal(
+            receipt,
+            {
+                "phase": "restore-pull-returned",
+                "object": probe_path,
+                "command_rc": rc,
+                "output_sha256": _sha256_bytes(pull_out.encode("utf-8")),
+                "ambiguity": rc != 0,
+            },
+        )
         expected = VERIFIED_CIPHERTEXT_MANIFESTS.get(str(kernel.resolve()))
         copy_ok = (
             rc == 0
@@ -1774,11 +1983,11 @@ def restore_test(
             except EffectRefused:
                 unseal_ok = False
     finally:
-        if upload_attempted:
-            delete_rc, _ = rclone(["deletefile", probe_path], receipt=receipt, timeout=60)
-            _append_effect_journal(
+        if uploaded:
+            delete_rc = _journaled_probe_delete(
+                probe_path,
                 receipt,
-                {"phase": "restore-probe-cleanup-returned", "object": probe_path, "command_rc": delete_rc},
+                phase_prefix="restore-probe",
             )
     ok = copy_ok and unseal_ok and delete_rc == 0
     say(f"  {remote}: restore-proof {'PASSED' if ok else 'FAILED'}")
@@ -1835,37 +2044,12 @@ def _copy_payloads(remote: str, staged: list[tuple[Path, str]], receipt: ApplyRe
         destination = f"{remote}:{receipt.object_set}/objects/{subpath}"
         if destination not in receipt.destinations:
             raise EffectRefused("final object destination is outside the signed immutable set")
-        _append_effect_journal(
+        ok = _immutable_remote_create(
+            local,
+            destination,
             receipt,
-            {
-                "phase": "planned",
-                "object": destination,
-                "sha256": digest,
-                "size_bytes": size,
-            },
-        )
-        rc, _ = rclone(["copyto", str(local), destination], receipt=receipt, timeout=1800)
-        _append_effect_journal(
-            receipt,
-            {
-                "phase": "copy-returned",
-                "object": destination,
-                "sha256": digest,
-                "command_rc": rc,
-            },
-        )
-        ok = rc == 0
-        if ok:
-            rc, _ = rclone(["check", str(local), destination, "--one-way"], timeout=600)
-            ok = rc == 0
-        _append_effect_journal(
-            receipt,
-            {
-                "phase": "verified" if ok else "unverified",
-                "object": destination,
-                "sha256": digest,
-                "check_rc": rc,
-            },
+            phase_prefix="object",
+            timeout=1800,
         )
         say(f"  {remote}: {local.name} {'shipped+verified' if ok else 'FAILED'}")
         if not ok:
@@ -1892,32 +2076,15 @@ def _copy_payloads(remote: str, staged: list[tuple[Path, str]], receipt: ApplyRe
         "objects": manifest_objects,
     }
     _write_exclusive_json(manifest_path, manifest)
-    manifest_hash, manifest_size = _safe_regular_hash(manifest_path)
     manifest_destination = f"{remote}:{receipt.object_set}/manifest-current.json"
     if manifest_destination not in receipt.destinations:
         raise EffectRefused("manifest-current destination is outside the signed immutable set")
-    _append_effect_journal(
+    ok = _immutable_remote_create(
+        manifest_path,
+        manifest_destination,
         receipt,
-        {
-            "phase": "manifest-planned",
-            "object": manifest_destination,
-            "sha256": manifest_hash,
-            "size_bytes": manifest_size,
-        },
-    )
-    rc, _ = rclone(["copyto", str(manifest_path), manifest_destination], receipt=receipt, timeout=600)
-    ok = rc == 0
-    if ok:
-        rc, _ = rclone(["check", str(manifest_path), manifest_destination, "--one-way"], timeout=600)
-        ok = rc == 0
-    _append_effect_journal(
-        receipt,
-        {
-            "phase": "manifest-current-verified" if ok else "manifest-current-unverified",
-            "object": manifest_destination,
-            "sha256": manifest_hash,
-            "check_rc": rc,
-        },
+        phase_prefix="manifest-current",
+        timeout=600,
     )
     return ok
 

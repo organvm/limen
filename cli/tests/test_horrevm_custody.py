@@ -261,6 +261,8 @@ class CommandSpy:
         self.final_copy_fails = final_copy_fails
         self.commands: list[list[str]] = []
         self.remote_objects: dict[str, bytes] = {}
+        self.remote_ids: dict[str, str] = {}
+        self._next_remote_id = 0
         self.sealed_sources: dict[bytes, Path] = {}
 
     def __call__(self, command: list[str], timeout: int = 120):
@@ -296,13 +298,31 @@ class CommandSpy:
             return 0, "rail-zeta-73:\n"
         if verb == "about":
             return 0, json.dumps({"total": 10_000_000, "free": 9_000_000})
+        if verb == "lsjson":
+            target = args[0]
+            if target not in self.remote_objects:
+                return 3, "object not found"
+            return 0, json.dumps(
+                {
+                    "Path": target.rsplit("/", 1)[-1],
+                    "Name": target.rsplit("/", 1)[-1],
+                    "Size": len(self.remote_objects[target]),
+                    "IsDir": False,
+                    "ID": self.remote_ids[target],
+                    "Hashes": {},
+                }
+            )
         if verb == "copyto":
             source, target = args[:2]
             if ":" in target:
                 if self.final_copy_fails and "/probes/" not in target:
                     return 1, "copy refused"
+                if target in self.remote_objects and "--immutable" in args:
+                    return 8, "immutable object already exists"
                 self.remote_objects[target] = Path(source).read_bytes()
-                return 0, ""
+                self._next_remote_id += 1
+                self.remote_ids[target] = f"fixture-object-{self._next_remote_id}"
+                return 0, json.dumps({"transfers": 1, "errors": 0})
             if self.restore_pull_fails and source.endswith("/probes/kernel.tar.enc"):
                 return 1, "restore refused"
             Path(target).write_bytes(self.remote_objects[source])
@@ -317,9 +337,13 @@ class CommandSpy:
             return 0, self.remote_objects[args[0]].decode("utf-8")
         if verb == "deletefile":
             self.remote_objects.pop(args[0], None)
+            self.remote_ids.pop(args[0], None)
             return 0, ""
         if verb == "check":
-            return 0, ""
+            source, target = args[:2]
+            if ":" in target and Path(source).read_bytes() == self.remote_objects.get(target):
+                return 0, ""
+            return 1, "readback mismatch"
         raise AssertionError(f"unexpected rclone command: {command!r}")
 
 
@@ -1119,9 +1143,143 @@ def test_partial_remote_effect_is_journaled_without_current_manifest(custody, mo
     assert not any(key.endswith("/manifest-current.json") for key in spy.remote_objects)
     journal = mod.OWNER_CONSUMED_DIR / mod._attempt_journal_name(receipt)
     events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
-    assert any(event.get("phase") == "verified" for event in events)
-    assert any(event.get("phase") == "unverified" for event in events)
+    assert any(event.get("phase") == "object-verified" for event in events)
+    assert any(event.get("phase") == "object-unverified" for event in events)
     assert not any(event.get("phase") == "manifest-current-verified" for event in events)
+
+
+def test_preexisting_remote_object_fails_before_copy(custody, monkeypatch):
+    mod, remote, root = custody
+    receipt_path = _write_receipt(
+        mod,
+        root,
+        action="probe",
+        remote=remote,
+        attempt_id="preexisting-object",
+    )
+    receipt, _plan = mod.load_apply_receipt(receipt_path, _signature(receipt_path), "probe")
+    mod._consume_receipt(receipt)
+    spy = CommandSpy()
+    destination = f"{remote}:{receipt.object_set}/probes/roundtrip.txt"
+    spy.remote_objects[destination] = b"concurrent owner"
+    spy.remote_ids[destination] = "preexisting-id"
+    monkeypatch.setattr(mod, "run", spy)
+    workdir = root / "preexisting-work"
+    workdir.mkdir()
+
+    with pytest.raises(mod.EffectRefused, match="already exists"):
+        mod.gate_b(remote, workdir, receipt)
+    assert not any(command[3] == "copyto" for command in spy.commands)
+
+
+def test_concurrent_remote_writer_is_ambiguous_and_never_retried_or_deleted(custody, monkeypatch):
+    mod, remote, root = custody
+    receipt_path = _write_receipt(
+        mod,
+        root,
+        action="probe",
+        remote=remote,
+        attempt_id="concurrent-writer",
+    )
+    receipt, _plan = mod.load_apply_receipt(receipt_path, _signature(receipt_path), "probe")
+    mod._consume_receipt(receipt)
+    spy = CommandSpy()
+
+    def concurrent_writer(command, timeout=120):
+        if Path(command[0]).name == "rclone" and command[3] == "copyto":
+            spy.commands.append(list(command))
+            destination = command[5]
+            spy.remote_objects[destination] = b"won by another writer"
+            spy.remote_ids[destination] = "concurrent-writer-id"
+            return 0, json.dumps({"transfers": 0, "errors": 0})
+        return spy(command, timeout)
+
+    monkeypatch.setattr(mod, "run", concurrent_writer)
+    workdir = root / "concurrent-work"
+    workdir.mkdir()
+
+    assert mod.gate_b(remote, workdir, receipt) is False
+    assert sum(command[3] == "copyto" for command in spy.commands) == 1
+    assert not any(command[3] == "deletefile" for command in spy.commands)
+    journal = mod.OWNER_CONSUMED_DIR / mod._attempt_journal_name(receipt)
+    events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+    assert [event["phase"] for event in events if "phase" in event] == [
+        "probe-copy-planned",
+        "probe-copy-returned",
+        "probe-unverified",
+    ]
+    assert events[-1]["ambiguity"] is True
+
+
+def test_remote_readback_failure_remains_ambiguous_without_cleanup(custody, monkeypatch):
+    mod, remote, root = custody
+    receipt_path = _write_receipt(
+        mod,
+        root,
+        action="probe",
+        remote=remote,
+        attempt_id="readback-failure",
+    )
+    receipt, _plan = mod.load_apply_receipt(receipt_path, _signature(receipt_path), "probe")
+    mod._consume_receipt(receipt)
+    spy = CommandSpy()
+
+    def fail_readback(command, timeout=120):
+        if Path(command[0]).name == "rclone" and command[3] == "check" and "--download" in command:
+            spy.commands.append(list(command))
+            return 1, "synthetic downloaded readback mismatch"
+        return spy(command, timeout)
+
+    monkeypatch.setattr(mod, "run", fail_readback)
+    workdir = root / "readback-work"
+    workdir.mkdir()
+
+    assert mod.gate_b(remote, workdir, receipt) is False
+    assert not any(command[3] == "deletefile" for command in spy.commands)
+    journal = mod.OWNER_CONSUMED_DIR / mod._attempt_journal_name(receipt)
+    events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+    assert events[-1]["phase"] == "probe-unverified"
+    assert events[-1]["ambiguity"] is True
+
+
+def test_every_remote_mutation_has_planned_then_returned_journal_events(custody, monkeypatch):
+    mod, remote, root = custody
+    attempt = "journal-order-complete"
+    receipt_path = _write_receipt(mod, root, action="push", remote=remote, attempt_id=attempt)
+    receipt, _plan = mod.load_apply_receipt(receipt_path, _signature(receipt_path), "push")
+    spy = CommandSpy()
+    monkeypatch.setattr(mod, "run", spy)
+
+    assert mod.main(["--push", "--apply", *_signed_args(receipt_path)]) == 0
+    journal = mod.OWNER_CONSUMED_DIR / mod._attempt_journal_name(receipt)
+    events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+    phases = [event["phase"] for event in events if "phase" in event]
+    required_pairs = [
+        ("probe-copy-planned", "probe-copy-returned"),
+        ("probe-cleanup-planned", "probe-cleanup-returned"),
+        ("restore-probe-copy-planned", "restore-probe-copy-returned"),
+        ("restore-pull-planned", "restore-pull-returned"),
+        ("restore-probe-cleanup-planned", "restore-probe-cleanup-returned"),
+        ("object-copy-planned", "object-copy-returned"),
+        ("manifest-current-copy-planned", "manifest-current-copy-returned"),
+    ]
+    for planned, returned in required_pairs:
+        assert planned in phases
+        assert returned in phases
+        assert phases.index(planned) < phases.index(returned)
+    mutation_commands = [
+        command
+        for command in spy.commands
+        if Path(command[0]).name == "rclone" and command[3] in {"copyto", "deletefile"}
+    ]
+    returned_events = [
+        phase
+        for phase in phases
+        if phase.endswith("-copy-returned")
+        or phase.endswith("-cleanup-returned")
+        or phase == "restore-pull-returned"
+    ]
+    assert len(returned_events) == len(mutation_commands)
 
 
 def test_recovery_card_exposes_only_hashed_attempt(custody):
