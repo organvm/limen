@@ -637,6 +637,11 @@ def render_typing_header(lines: list[str], *, width: int = 760, height: int = 90
     """Animated typing header — SMIL only so GitHub's camo proxy keeps it animated."""
     body = [f'<rect width="{width}" height="{height}" fill="{THEME["bg"]}" rx="8"/>']
     n = max(len(lines), 1)
+    # Auto-fit: pick the largest font (<=26px) at which the LONGEST line fits the width with a
+    # margin — monospace advance is ~0.6em, so overflow/clipping can't happen (the raw-SVG preview
+    # caught a 25px line overrunning a 760px canvas).
+    longest = max((len(s) for s in lines), default=1)
+    font_size = max(13, min(26, int((width - 48) / (longest * 0.62))))
     per = 3.6            # seconds each line owns within the cycle
     cycle = per * n      # one full loop; every line runs an indefinite dur=cycle animation
     fade = min(0.05, 0.2 / n)   # crossfade fraction of the cycle
@@ -661,8 +666,8 @@ def render_typing_header(lines: list[str], *, width: int = 760, height: int = 90
             vals.append(f"{v:g}")
         base = "1" if i == 0 else "0"   # a static (non-animating) viewer still sees the first line
         body.append(
-            f'<text x="{width/2}" y="{height/2+9}" text-anchor="middle" fill="{THEME["accent"]}" '
-            f'font-family="Consolas,Menlo,monospace" font-size="25" font-weight="700" opacity="{base}">'
+            f'<text x="{width/2}" y="{height/2+font_size/3:.0f}" text-anchor="middle" fill="{THEME["accent"]}" '
+            f'font-family="Consolas,Menlo,monospace" font-size="{font_size}" font-weight="700" opacity="{base}">'
             f'{_esc(text)}'
             f'<animate attributeName="opacity" values="{";".join(vals)}" '
             f'keyTimes="{";".join(f"{t:.4f}" for t in kt)}" dur="{cycle}s" '
