@@ -27,16 +27,21 @@ trunk-health proxy for pr-gate. This sensor reads it (`gh run list --workflow ci
   drift — which the trunk-only read cannot see. Only FRESH PRs count (chronic stale backlog excluded).
 
 - **CI-JAM CLASS (2026-07-17):** a RED whose failed jobs all have ZERO steps is not a broken tree —
-  the runner never started (billing hold / infra outage; every job "fails" in 3-4 s with no logs).
-  Emitting a HEAL-mainred repair task for that is the WRONG effector, so the RED path first
-  classifies: ``ci-fail`` (real — heal path unchanged) vs ``ci-jam-billing``/``ci-jam-infra``
-  (never-started; billing detected from the check-run annotation text). A jam instead (a) notifies
-  ONCE per onset via scripts/_notify.py — the billing message names the filed lever
-  ``L-CARD-FRAUD-HOLD``, never a chore list — and (b) behind ``LIMEN_CI_JAM_RERUN`` (default armed,
-  the organ-tended precedent) attempts a bounded ``gh run rerun --failed`` per jammed run with
-  per-run exponential backoff, so the FIRST beat after billing is restored re-greens main and the
-  jammed PR-head runs with zero hands (merge-drain then lands the green PRs). Backoff state:
-  ``logs/vigilia/ci-jam-state.json``; both it and the notification clear when trunk is green again.
+  the runner never started (every job "fails" in 3-4 s with no logs). Emitting a HEAL-mainred repair
+  task for that is the WRONG effector, so the RED path first classifies ``ci-fail`` (real — heal path
+  unchanged) vs ``ci-jam`` (never-started). The 2026-07-17 root cause taught the real lesson: the jam
+  was **visibility drift** — organvm/limen had been flipped PRIVATE while the estate registry
+  (`institutio/github/estate.yaml`) declares it PUBLIC, so its CI silently began consuming the Free
+  plan's metered private-repo Actions minutes, exhausted them, and every job then died at start with
+  GitHub's generic "payments failed OR spending limit" string. **Nothing was owed** — the fix was to
+  restore the repo to its registry-desired public visibility, NOT to pay anything. So on a jam the
+  sensor (a) checks `_visibility_drift(repo)` — private-but-registry-says-public — and, if so, notifies
+  ONCE via scripts/_notify.py naming the DRIFT and its real fix (restore public → free Actions), never
+  a billing/payment chore; a neutral "Actions quota/infra jam" message otherwise; and (b) behind
+  ``LIMEN_CI_JAM_RERUN`` (default armed) attempts a bounded ``gh run rerun --failed`` per jammed run
+  with per-run exponential backoff — harmless while the jam persists, and the FIRST beat after the
+  drift/quota clears re-greens main and the jammed PR heads with zero hands (merge-drain then lands
+  them). Backoff state ``logs/vigilia/ci-jam-state.json``; it and the notification clear on green.
 
 Fail-open: no ``gh`` / offline / parse error → exit 0 (never breaks the beat).
 
@@ -78,16 +83,23 @@ RED = {"failure", "cancelled", "timed_out", "startup_failure"}
 WEDGE_K = int(os.environ.get("LIMEN_MAIN_GREEN_WEDGE_K", "5"))
 FRESH_HOURS = int(os.environ.get("LIMEN_MAIN_GREEN_FRESH_HOURS", "36"))
 BAD_CHECK = {"FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "STARTUP_FAILURE"}
-# CI-jam recovery (2026-07-17 billing outage): rerun valve + per-run exponential backoff bounds.
-# Backoff caps at hours, never a hard attempt cap — recovery must still fire if billing is fixed
-# days later, while API spam stays logarithmic during the outage.
+# CI-jam recovery (2026-07-17): rerun valve + per-run exponential backoff bounds.
+# Backoff caps at hours, never a hard attempt cap — recovery must still fire if the jam clears
+# days later, while API spam stays logarithmic while it persists.
 JAM_RERUN = os.environ.get("LIMEN_CI_JAM_RERUN", "1").strip() == "1"
 JAM_BACKOFF_S = int(os.environ.get("LIMEN_CI_JAM_BACKOFF_S", "1800"))
 JAM_BACKOFF_MAX_S = int(os.environ.get("LIMEN_CI_JAM_BACKOFF_MAX_S", "14400"))
 JAM_RERUN_CAP = int(os.environ.get("LIMEN_CI_JAM_RERUN_CAP", "6"))
 JAM_STATE = ROOT / "logs" / "vigilia" / "ci-jam-state.json"
-JAM_KEY = "ci-jam-billing"
-_BILLING_RE = re.compile(r"payments? have failed|spending limit", re.IGNORECASE)
+JAM_KEY = "ci-jam"
+# The estate registry: a repo classed here as public but observed private is a VISIBILITY DRIFT —
+# on the Free plan that silently meters its CI into the never-started jam (the 2026-07-17 root cause).
+ESTATE = ROOT / "institutio" / "github" / "estate.yaml"
+# GitHub's generic never-started string — payment failure OR (more often) an exhausted quota /
+# $0 spending limit. It does NOT imply a bill is owed; on 2026-07-17 nothing was owed and the true
+# cause was a private repo metering the Free tier. Used only to distinguish a quota/infra jam from
+# a real test failure — never to attribute a payment problem.
+_QUOTA_RE = re.compile(r"payments? have failed|spending limit", re.IGNORECASE)
 _RUN_ID_RE = re.compile(r"/actions/runs/(\d+)")
 # Mirrors limen.dispatch._ACTIVE_SUPERSEDER_STATUSES (parity asserted in test_check_main_green.py so a
 # drift is a red test, not silent). A HEAL-mainred singleton in one of these states is already being
@@ -310,13 +322,15 @@ def open_pr_impact(
 
 
 def classify_red_run(run_id: int | str) -> tuple[str, str]:
-    """Classify a RED run: ``ci-fail`` (real test failure) vs ``ci-jam-billing``/``ci-jam-infra``.
+    """Classify a RED run: ``ci-fail`` (real test failure) vs ``ci-jam`` (never-started).
 
     Jam fingerprint: every failed job has ZERO steps — the runner never started the work (the
-    2026-07-17 billing outage: each job "fails" in 3-4 s, ``gh run view --log-failed`` says
-    "log not found"). A real failure always has executed steps. Billing is confirmed from the
-    check-run annotation text (job id == check-run id). Fail-open to ``ci-fail`` so an API outage
-    never suppresses the real-failure heal path. Returns ``(klass, detail)``.
+    2026-07-17 event: each job "fails" in 3-4 s, ``gh run view --log-failed`` says "log not found").
+    A real failure always has executed steps. GitHub's generic never-started annotation ("payments
+    failed OR spending limit") confirms the quota/never-started class — but it does NOT mean a bill
+    is owed (the real 2026-07-17 cause was a private repo metering the Free tier; nothing was owed).
+    Fail-open to ``ci-fail`` so an API outage never suppresses the real-failure heal path. Returns
+    ``(klass, detail)``.
     """
     if not run_id:
         return "ci-fail", ""
@@ -329,9 +343,38 @@ def classify_red_run(run_id: int | str) -> tuple[str, str]:
         return "ci-fail", ""
     ann = _gh_json(["api", f"repos/{REPO}/check-runs/{failed[0].get('id')}/annotations"], [])
     msgs = " ".join(str(a.get("message", "")) for a in ann if isinstance(a, dict)) if isinstance(ann, list) else ""
-    if _BILLING_RE.search(msgs):
-        return "ci-jam-billing", msgs[:200]
-    return "ci-jam-infra", "failed jobs have zero steps (runner never started)"
+    if _QUOTA_RE.search(msgs):
+        return "ci-jam", "runner never started (Actions quota / spending-limit / metered-private)"
+    return "ci-jam", "failed jobs have zero steps (runner never started)"
+
+
+def _visibility_drift(repo: str) -> bool:
+    """True iff ``repo`` is observed PRIVATE while the estate registry desires it PUBLIC.
+
+    The 2026-07-17 root cause: organvm/limen was flipped private against `estate.yaml` (which classes
+    it public), so its CI silently metered the Free tier into the never-started jam. This is the
+    real, actionable cause of a quota jam — its fix is 'restore public → free Actions', never a
+    payment. Fail-closed to False (no false drift alarm) on any read error.
+    """
+    private = _gh_json(["api", f"repos/{repo}", "--jq", ".private"], None)
+    if private is not True:
+        return False
+    try:
+        import yaml  # lazy — only when a jam is being classified
+
+        estate = yaml.safe_load(ESTATE.read_text())
+    except Exception:
+        return False
+    classes = (estate or {}).get("classes", {}) if isinstance(estate, dict) else {}
+    # desired-public if any class matching this repo declares visibility: public (conductor first-match).
+    for cls in classes.values() if isinstance(classes, dict) else []:
+        if not isinstance(cls, dict):
+            continue
+        match = cls.get("match") or []
+        names = match if isinstance(match, list) else [match]
+        if repo in names and str(cls.get("visibility", "")).lower() == "public":
+            return True
+    return False
 
 
 def jammed_pr_run_ids(prs: list[dict], required: set[str], fresh_since: str | None) -> list[int]:
@@ -360,7 +403,7 @@ def attempt_reruns(run_ids: list[int], now: float | None = None) -> list[dict]:
     """Bounded ``gh run rerun --failed`` per jammed run, per-run exponential backoff, state-tracked.
 
     No hard attempt cap — backoff doubles from JAM_BACKOFF_S to JAM_BACKOFF_MAX_S so recovery still
-    fires if billing is fixed days later, while attempts during the outage stay ~a handful per day.
+    fires if the jam clears days later, while attempts while it persists stay ~a handful per day.
     While the jam persists a rerun is accepted and instantly re-fails (same run id) — harmless, free,
     and the attempt is recorded. State clears wholesale when trunk goes green.
     """
@@ -596,21 +639,27 @@ def main(argv=None) -> int:
         print(f"check-main-green: GREEN — main {WORKFLOW} {conclusion} @ {head} ({v.get('source')})")
         return 0
 
-    # RED — first split the class: a never-started jam (billing/infra) is not a broken tree, so the
-    # HEAL-mainred repair task would be the wrong effector for it (nothing in the tree to fix).
+    # RED — first split the class: a never-started jam is not a broken tree, so the HEAL-mainred
+    # repair task would be the wrong effector for it (nothing in the tree to fix).
     klass, detail = classify_red_run(v.get("run_id") or 0)
     tag = f" [{klass}]" if klass != "ci-fail" else ""
     print(f"check-main-green: RED{tag} — main {WORKFLOW} {conclusion} @ {head}{blast} ({url})")
 
     if klass != "ci-fail":
-        if klass == "ci-jam-billing":
+        # Name the REAL cause. The 2026-07-17 jam was VISIBILITY DRIFT — a registry-public repo
+        # observed private, silently metering the Free tier — whose fix is 'restore public', never a
+        # payment. Check for that first; fall back to a neutral quota/infra message. Never a card lever.
+        if _visibility_drift(REPO):
             msg = (
-                "GitHub Actions cannot start jobs — account billing/payment failure. "
-                "The atom is the filed lever L-CARD-FRAUD-HOLD; recovery reruns are armed and "
-                "will re-green CI on the first beat after billing is restored."
+                f"VISIBILITY DRIFT — {REPO} is PRIVATE but the estate registry declares it PUBLIC, so its "
+                "CI is metering the Free plan's private-repo Actions minutes and jammed. Fix: restore it "
+                "to public (`gh repo edit --visibility public`) → free unlimited Actions. Nothing is owed."
             )
         else:
-            msg = "GitHub Actions runs fail before any step executes (infra jam); bounded reruns armed."
+            msg = (
+                "GitHub Actions runs fail before any step executes (Actions quota / spending-limit / infra "
+                "jam) — no bill is implied; bounded reruns are armed and re-green CI once the quota clears."
+            )
         _notify.notify_once(ROOT, JAM_KEY, msg, title="LIMEN trunk CI")
         run_ids = [int(v.get("run_id") or 0)] + jammed_pr_run_ids(prs, required, _fresh_since())
         results = attempt_reruns([rid for rid in run_ids if rid])

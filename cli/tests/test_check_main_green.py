@@ -272,12 +272,14 @@ def test_remote_main_head_reads_owner_ref_not_cached_tracking_ref(monkeypatch):
     assert m._remote_main_head() == current
 
 
-# --- CI-jam class (2026-07-17 billing outage) --------------------------------------------------
+# --- CI-jam class (2026-07-17: the never-started jam; root cause = VISIBILITY DRIFT) -----------
 # Fingerprint from the real incident (run 29581455210): every job "fails" in 3-4 s with ZERO steps
 # and the check-run annotation reads "...recent account payments have failed or your spending limit
-# needs to be increased...". A real failure always has executed steps.
+# needs to be increased...". That generic string is a QUOTA/never-started signal, NOT proof a bill is
+# owed — the true cause was limen flipped private, metering the Free tier. A real failure always has
+# executed steps.
 
-BILLING_ANNOTATION = (
+QUOTA_ANNOTATION = (
     "The job was not started because recent account payments have failed or "
     "your spending limit needs to be increased. Please check the 'Billing & plans' section"
 )
@@ -302,23 +304,25 @@ def _classify_with(monkeypatch, m, jobs, annotations):
     return m.classify_red_run(29581455210)
 
 
-def test_classify_jam_billing_from_zero_steps_and_annotation(monkeypatch):
+def test_classify_jam_from_zero_steps_and_quota_annotation(monkeypatch):
     m = _load()
-    klass, detail = _classify_with(monkeypatch, m, _jobs(steps=0), [{"message": BILLING_ANNOTATION}])
-    assert klass == "ci-jam-billing"
-    assert "payments have failed" in detail
+    klass, detail = _classify_with(monkeypatch, m, _jobs(steps=0), [{"message": QUOTA_ANNOTATION}])
+    assert klass == "ci-jam"
+    # detail names the quota/never-started cause — never "payment failure" or a card lever
+    assert "quota" in detail.lower() or "never started" in detail.lower()
+    assert "card" not in detail.lower() and "payment failure" not in detail.lower()
 
 
-def test_classify_jam_infra_when_annotation_is_not_billing(monkeypatch):
+def test_classify_jam_when_zero_steps_without_quota_text(monkeypatch):
     m = _load()
     klass, _ = _classify_with(monkeypatch, m, _jobs(steps=0), [{"message": "runner exploded"}])
-    assert klass == "ci-jam-infra"
+    assert klass == "ci-jam"  # zero-step never-started is still a jam, whatever the annotation
 
 
 def test_classify_real_failure_when_steps_executed(monkeypatch):
     m = _load()
-    klass, _ = _classify_with(monkeypatch, m, _jobs(steps=3), [{"message": BILLING_ANNOTATION}])
-    assert klass == "ci-fail"  # steps ran — a real failure even if annotation text were misleading
+    klass, _ = _classify_with(monkeypatch, m, _jobs(steps=3), [{"message": QUOTA_ANNOTATION}])
+    assert klass == "ci-fail"  # steps ran — a real failure even if the annotation text were misleading
 
 
 def test_classify_fails_open_to_ci_fail(monkeypatch):
@@ -390,7 +394,8 @@ def test_jam_red_path_notifies_reruns_and_skips_heal_task(tmp_path, monkeypatch,
     stamp["run_id"] = 29581455210
     (tmp_path / "logs" / "main-green.json").write_text(json.dumps(stamp), encoding="utf-8")
 
-    monkeypatch.setattr(m, "classify_red_run", lambda rid: ("ci-jam-billing", "payments have failed"))
+    monkeypatch.setattr(m, "classify_red_run", lambda rid: ("ci-jam", "runner never started (Actions quota)"))
+    monkeypatch.setattr(m, "_visibility_drift", lambda repo: True)  # the real 2026-07-17 cause
     monkeypatch.setattr(m, "_fetch_open_prs", lambda: [])
     seen = {}
     monkeypatch.setattr(m, "attempt_reruns", lambda ids, now=None: seen.setdefault("ids", ids) and [])
@@ -400,10 +405,13 @@ def test_jam_red_path_notifies_reruns_and_skips_heal_task(tmp_path, monkeypatch,
 
     assert m.main([]) == 1
     out = capsys.readouterr().out
-    assert "[ci-jam-billing]" in out and "jam recovery" in out
+    assert "[ci-jam]" in out and "jam recovery" in out
+    assert "L-CARD-FRAUD" not in out and "payment failure" not in out.lower()  # the mislabel is gone
     assert seen["ids"] == [29581455210]  # the trunk run is the first rerun target
     relief = json.loads((tmp_path / "logs" / "vigilia" / "relief-state.json").read_text())
-    assert "ci-jam-billing" in relief  # onset recorded (dedup) even with notifications killed
+    assert "ci-jam" in relief  # onset recorded (dedup) even with notifications killed
+    # the notification names the drift + its real fix (restore public), never a payment chore
+    assert "VISIBILITY DRIFT" in relief["ci-jam"]["message"] and "restore" in relief["ci-jam"]["message"].lower()
 
 
 def test_green_clears_jam_state_and_notification(tmp_path, monkeypatch, capsys):
@@ -415,10 +423,39 @@ def test_green_clears_jam_state_and_notification(tmp_path, monkeypatch, capsys):
     jam = tmp_path / "logs" / "vigilia"
     jam.mkdir(parents=True, exist_ok=True)
     (jam / "ci-jam-state.json").write_text('{"111": {"attempts": 3, "last": 1.0}}')
-    (jam / "relief-state.json").write_text('{"ci-jam-billing": {"first_seen": 1.0}}')
+    (jam / "relief-state.json").write_text('{"ci-jam": {"first_seen": 1.0}}')
     monkeypatch.setattr(m, "_fetch_open_prs", lambda: [])
 
     assert m.main([]) == 0
     assert "GREEN" in capsys.readouterr().out
     assert not (jam / "ci-jam-state.json").exists()  # backoff history reset
-    assert "ci-jam-billing" not in json.loads((jam / "relief-state.json").read_text())  # re-arms
+    assert "ci-jam" not in json.loads((jam / "relief-state.json").read_text())  # re-arms
+
+
+def test_visibility_drift_detects_registry_public_but_observed_private(tmp_path, monkeypatch):
+    """The 2026-07-17 root cause, as a unit: a conductor-class repo (registry public) observed
+    private is a drift; a public observed repo, or a genuinely-private-desired repo, is not."""
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    est = tmp_path / "institutio" / "github"
+    est.mkdir(parents=True, exist_ok=True)
+    (est / "estate.yaml").write_text(
+        "classes:\n"
+        "  conductor:\n"
+        '    match: ["organvm/limen"]\n'
+        "    visibility: public\n"
+        "  operation_private:\n"
+        '    match: ["organvm/arca"]\n'
+        "    visibility: private\n"
+    )
+    m = _load()  # ESTATE now resolves under tmp LIMEN_ROOT
+
+    def observed(private):
+        return lambda args, default: private if args[:2] == ["api", "repos/organvm/limen"] else default
+
+    monkeypatch.setattr(m, "_gh_json", observed(True))
+    assert m._visibility_drift("organvm/limen") is True  # registry public, observed private → DRIFT
+    monkeypatch.setattr(m, "_gh_json", observed(False))
+    assert m._visibility_drift("organvm/limen") is False  # already public → no drift
+    # a repo the registry WANTS private, observed private, is not a drift
+    monkeypatch.setattr(m, "_gh_json", lambda args, default: True if "arca" in args[1] else default)
+    assert m._visibility_drift("organvm/arca") is False
