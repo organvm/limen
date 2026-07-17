@@ -149,6 +149,20 @@ def test_private_session_corpus_env_owns_default_journal_root(tmp_path: Path, mo
     assert paths.public_seal == tmp_path / "checkout" / "docs" / "prompt-authority-seal.json"
 
 
+def test_tracked_partial_prompt_artifacts_are_coherent_without_private_custody(tmp_path: Path):
+    corpus = _load()
+    paths = corpus.LedgerPaths.for_root(
+        ROOT,
+        private_root=tmp_path / "fresh-checkout-private-custody",
+    )
+
+    assert corpus.check_ledger(paths) == []
+    all_scope_errors = corpus.check_ledger(paths, require_scope="all")
+    assert "source scope is partial:recent:2; require all" in all_scope_errors
+    assert "public prompt authority seal is not authority-ready for required all scope" in all_scope_errors
+    assert corpus.load_json(paths.public_seal)["authority_ready"] is False
+
+
 def test_compound_prompt_yields_distinct_asks_and_correction(tmp_path: Path):
     corpus = _load()
     snapshot = corpus.update_ledger(
@@ -1065,6 +1079,110 @@ def test_prompt_authority_seal_is_byte_identical_on_zero_change_rerun(tmp_path: 
     assert paths.public_seal.read_bytes() == before
     assert paths.public_seal.stat().st_mtime_ns == before_mtime
     assert corpus.check_ledger(paths) == []
+
+
+def _publication_artifacts(paths) -> tuple[Path, ...]:
+    return (
+        paths.public_snapshot,
+        paths.public_seal,
+        paths.public_markdown,
+        paths.private_snapshot,
+    )
+
+
+@pytest.mark.parametrize("failure_index", (1, 2, 3, 4))
+def test_update_ledger_rolls_back_entire_publication_generation(
+    tmp_path: Path,
+    monkeypatch,
+    failure_index: int,
+):
+    corpus = _load()
+    paths = _paths(corpus, tmp_path)
+    corpus.update_ledger(
+        paths,
+        events=[_event("Preserve the first coherent generation.", event_ref="transaction-before")],
+        cursor=_cursor(corpus),
+    )
+    artifacts = _publication_artifacts(paths)
+    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in artifacts}
+    targets = set(artifacts)
+    real_replace = corpus.os.replace
+    replacements = 0
+    attempted_event = _event("Attempt the next coherent generation.", event_ref="transaction-after")
+
+    def fail_one_generation_replace(source, destination):
+        nonlocal replacements
+        destination_path = Path(destination)
+        if destination_path in targets:
+            replacements += 1
+            if replacements == failure_index:
+                raise OSError(f"injected generation failure {failure_index}")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(corpus.os, "replace", fail_one_generation_replace)
+    with pytest.raises(ValueError, match="previous generation restored"):
+        corpus.update_ledger(paths, events=[attempted_event])
+
+    assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in artifacts} == before
+    assert not [
+        temporary
+        for path in artifacts
+        for temporary in path.parent.glob(f".{path.name}.*")
+        if ".stage." in temporary.name or ".rollback." in temporary.name
+    ]
+    monkeypatch.setattr(corpus.os, "replace", real_replace)
+    recovered = corpus.update_ledger(paths, events=[attempted_event])
+    assert recovered["write_changed"] is True
+    assert corpus.check_ledger(paths) == []
+
+
+def test_initial_publication_failure_removes_every_partial_artifact(tmp_path: Path, monkeypatch):
+    corpus = _load()
+    paths = _paths(corpus, tmp_path)
+    artifacts = _publication_artifacts(paths)
+    targets = set(artifacts)
+    real_replace = corpus.os.replace
+    replacements = 0
+
+    def fail_third_generation_replace(source, destination):
+        nonlocal replacements
+        destination_path = Path(destination)
+        if destination_path in targets:
+            replacements += 1
+            if replacements == 3:
+                raise OSError("injected initial-generation failure")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(corpus.os, "replace", fail_third_generation_replace)
+    with pytest.raises(ValueError, match="previous generation restored"):
+        corpus.update_ledger(
+            paths,
+            events=[_event("Do not expose a partial first generation.", event_ref="transaction-initial")],
+            cursor=_cursor(corpus),
+        )
+
+    assert all(not path.exists() for path in artifacts)
+
+
+def test_publication_rejects_symlink_parent_without_external_mutation(
+    tmp_path: Path,
+) -> None:
+    corpus = _load()
+    trusted = tmp_path / "trusted"
+    outside = tmp_path / "outside"
+    trusted.mkdir()
+    outside.mkdir()
+    (trusted / "escape").symlink_to(outside, target_is_directory=True)
+    artifact = trusted / "escape" / "projection.json"
+
+    with pytest.raises(
+        ValueError,
+        match="symlink or non-directory component",
+    ):
+        corpus.publish_artifact_transaction(((artifact, b'{"safe":true}\n', 0o644),))
+
+    assert list(outside.iterdir()) == []
+    assert not artifact.exists()
 
 
 def test_duplicate_event_is_byte_identical_across_authority_clock_change(tmp_path: Path, monkeypatch):
@@ -3546,6 +3664,52 @@ def test_rebind_checkpoint_cas_refuses_noncooperative_cursor_writer(tmp_path: Pa
     assert all(path.read_bytes() == payload for path, payload in before.items())
 
 
+@pytest.mark.parametrize("failure_index", (1, 2, 3, 4))
+def test_rebind_checkpoint_rolls_back_entire_publication_generation(
+    tmp_path: Path,
+    monkeypatch,
+    failure_index: int,
+):
+    corpus = _load()
+    ledger = _load_ledger_script()
+    paths = _paths(corpus, tmp_path)
+    _scan_and_bind(tmp_path)
+    paths.cursor.write_bytes(paths.cursor.read_bytes())
+    assert any("not bound" in error for error in ledger.check_cursor_state(paths))
+
+    artifacts = _publication_artifacts(paths)
+    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in artifacts}
+    targets = set(artifacts)
+    publication_os = ledger.publish_artifact_transaction.__globals__["os"]
+    real_replace = publication_os.replace
+    replacements = 0
+
+    def fail_one_generation_replace(source, destination):
+        nonlocal replacements
+        destination_path = Path(destination)
+        if destination_path in targets:
+            replacements += 1
+            if replacements == failure_index:
+                raise OSError(f"injected rebind failure {failure_index}")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(publication_os, "replace", fail_one_generation_replace)
+    errors = ledger.rebind_checkpoint(paths)
+
+    assert len(errors) == 1
+    assert "previous generation restored" in errors[0]
+    assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in artifacts} == before
+    assert not [
+        temporary
+        for path in artifacts
+        for temporary in path.parent.glob(f".{path.name}.*")
+        if ".stage." in temporary.name or ".rollback." in temporary.name
+    ]
+    monkeypatch.setattr(publication_os, "replace", real_replace)
+    assert ledger.rebind_checkpoint(paths) == []
+    assert ledger.check_cursor_state(paths) == []
+
+
 def test_rebind_checkpoint_seals_semantic_validation_findings(tmp_path: Path, monkeypatch):
     """Semantic validation findings do NOT block the reseal.
 
@@ -3632,7 +3796,7 @@ def test_exact_scan_attestation_binds_the_freshness_timestamp():
     assert not corpus._pending_source_scan_valid(cursor)
 
 
-def test_noop_scan_retains_custody_time_but_changed_source_state_advances_it():
+def test_attested_exact_all_noop_scan_renews_custody_but_ordinary_noop_is_stable():
     corpus = _load()
     prior = _cursor(corpus, scope="all")
     prior.update(
@@ -3648,9 +3812,85 @@ def test_noop_scan_retains_custody_time_but_changed_source_state_advances_it():
     candidate["last_scan_at"] = "2026-07-16T20:00:00Z"
 
     assert corpus.stable_source_scan_timestamp(candidate, prior) == prior["last_scan_at"]
+    assert (
+        corpus.stable_source_scan_timestamp(
+            candidate,
+            prior,
+            renew_exact_all=True,
+        )
+        == "2026-07-16T20:00:00Z"
+    )
+    candidate["last_scan_at"] = corpus.stable_source_scan_timestamp(
+        candidate,
+        prior,
+        renew_exact_all=True,
+    )
+    corpus.attest_source_scan(
+        candidate,
+        scanner_code_digest=corpus.current_source_scanner_code_digest(),
+    )
+    assert corpus._pending_source_scan_valid(candidate)
 
+    candidate = corpus._clear_source_scan_authority(candidate)
     candidate["source_manifest_digest"] = corpus.digest({"fixture": 2})
     assert corpus.stable_source_scan_timestamp(candidate, prior) == "2026-07-16T20:00:00Z"
+
+    partial_prior = dict(prior)
+    partial_prior.update({"scope": "recent:2", "target_scope": "recent:2"})
+    partial_candidate = dict(partial_prior)
+    partial_candidate["last_scan_at"] = "2026-07-16T20:00:00Z"
+    assert (
+        corpus.stable_source_scan_timestamp(
+            partial_candidate,
+            partial_prior,
+            renew_exact_all=True,
+        )
+        == prior["last_scan_at"]
+    )
+
+
+def test_unchanged_exact_all_rescan_renews_bound_freshness_but_no_scan_does_not(
+    tmp_path: Path,
+    monkeypatch,
+):
+    ledger = _load_ledger_script()
+    paths = ledger.LedgerPaths.for_root(tmp_path)
+    _scan_and_bind(tmp_path, all_history=True)
+    monkeypatch.setattr(ledger, "SOURCE_HOME_OVERRIDE", tmp_path)
+    prior = json.loads(paths.cursor.read_text(encoding="utf-8"))
+    prior_scan = datetime.datetime.fromisoformat(prior["last_scan_at"].replace("Z", "+00:00"))
+    renewed_scan = prior_scan + datetime.timedelta(hours=1)
+    real_datetime = datetime.datetime
+
+    class RenewedDatetime(real_datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return renewed_scan.replace(tzinfo=None) if tz is None else renewed_scan.astimezone(tz)
+
+    monkeypatch.setattr(ledger.dt, "datetime", RenewedDatetime)
+    events, candidate = ledger.scan_native_sources(
+        paths,
+        days=None,
+        max_files=ledger.DEFAULT_MAX_WORK_UNITS,
+        policy=ledger.load_policy(paths.policy),
+        unbounded=True,
+    )
+    assert candidate["last_scan_at"] == renewed_scan.isoformat(timespec="seconds")
+
+    refreshed = ledger.update_ledger(paths, events=events, cursor=candidate)
+    current = json.loads(paths.cursor.read_text(encoding="utf-8"))
+    public = json.loads(paths.public_snapshot.read_text(encoding="utf-8"))
+    freshness = public["source_scope"]["source_custody_freshness"]
+    assert refreshed["write_changed"] is True
+    assert current["last_scan_at"] == renewed_scan.isoformat(timespec="seconds")
+    assert freshness["last_scan_at"] == renewed_scan.isoformat(timespec="seconds").replace("+00:00", "Z")
+    assert freshness["reason"] == "fresh"
+
+    artifacts = _publication_artifacts(paths)
+    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in artifacts}
+    no_scan = ledger.update_ledger(paths)
+    assert no_scan["write_changed"] is False
+    assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in artifacts} == before
 
 
 def test_append_jsonl_zero_rows_materializes_empty_journal(tmp_path):

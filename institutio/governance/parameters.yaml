@@ -1817,12 +1817,6 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "Maximum tier allowed for inherited/default Claude choices such as shim floors and global LIMEN_CLAUDE_MODEL pins. Default Sonnet keeps routine fan-out cheap; task-specific declaration sites may still earn Opus/Fable through the ladder and acceptance gates."
-  LIMEN_CLAUDE_FABLE_FALLBACK_TIER:
-    default: "sonnet"
-    env: LIMEN_CLAUDE_FABLE_FALLBACK_TIER
-    self_update: none
-    owner: arms-agents
-    note: "Fallback tier when a Fable-class task or Fable model pin lacks a current LIMEN_FABLE_ACCEPTANCE receipt. Default Sonnet prevents unaccepted Fable requests from becoming default Opus spend; set to opus only for an explicit emergency policy change."
   LIMEN_ALLOW_EXPENSIVE_CLAUDE_MODEL_PIN:
     default: "0"
     env: LIMEN_ALLOW_EXPENSIVE_CLAUDE_MODEL_PIN
@@ -1840,7 +1834,7 @@ parameters:
     env: LIMEN_CLAUDE_FABLE_CLASSES
     self_update: none
     owner: arms-agents
-    note: "Comma-separated task classes that may select the reserved Fable rung. Class membership is not enough by itself: LIMEN_FABLE_ACCEPTANCE must point at a written scripts/fable-allotment.py receipt before dispatch may return fable instead of falling back to LIMEN_CLAUDE_FABLE_FALLBACK_TIER."
+    note: "Comma-separated task classes that may request the reserved Fable planner role. Class membership is not enough: dispatch also requires the exact plan-only role binding, a valid acceptance receipt, and a fresh reconciled open-cap balance. Closed requests return to provider Auto without a named fallback."
   LIMEN_FABLE_ACCEPTANCE:
     default: ""
     env: LIMEN_FABLE_ACCEPTANCE
@@ -1895,12 +1889,6 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "Maximum age of a limen.fable_balance.v1 observation that may authorize a Fable planner. Missing, malformed, future-dated, source-dark, or older observations fail closed."
-  LIMEN_CLAUDE_FABLE_CAP_TIER:
-    default: "opus"
-    env: LIMEN_CLAUDE_FABLE_CAP_TIER
-    self_update: none
-    owner: arms-agents
-    note: "Tier an OVER-CAP but acceptance-valid Fable selection lands on (the live weekly-cap downgrade in model_selection). Default Opus (the nearest tier below Fable for legitimately high-value work), capped to the ladder; distinct from the acceptance-absent LIMEN_CLAUDE_FABLE_FALLBACK_TIER."
   LIMEN_LATEST_SESSION_JSONL:
     default: ""
     env: LIMEN_LATEST_SESSION_JSONL

@@ -2,8 +2,10 @@
 
 ## Primary control: Fable plans, provider Auto builds
 
-**Fable is PLAN-ONLY.** Its role is planning + handoff: it does the deep analysis, emits a build
-packet into an isolated worktree, and hands off to a provider-Auto non-Fable builder.
+**Fable is PLAN-ONLY.** Its role is planning + handoff: it does the deep analysis and returns one
+complete continuation packet as its final stdout, then hands implementation to a provider-Auto
+non-Fable builder. The launcher—not Fable's tool surface—materializes the packet; Fable itself has
+no write-capable tool.
 **Building on Fable is prohibited** — no coding grind, no coverage sweeps, no PR babysitting, no
 detached async dispatch on the Fable rung. A Fable session's deliverable is a *plan a non-Fable
 builder can execute*, not the implementation itself.
@@ -25,8 +27,14 @@ The contract is mechanical for fleet launches:
   5,400-second durable-receipt deadline, and a provider-neutral builder handoff;
 - the balance receipt must be current-week, fresh, source-ready, finite, and internally coherent;
   absent, stale, malformed, or dark state closes the Fable planner role;
-- Fable receives a read/plan/capsule-only tool surface, never an implementation or fan-out surface;
-- only `docs/continuations/fable/<task>.md` is a valid plan artifact; and
+- Fable receives an explicit read-only tool surface; unknown, mutation-capable, fan-out, and MCP
+  write tools are denied rather than inferred safe;
+- only a canonical `docs/continuations/fable/<task>.md` regular file inside the worktree is a valid
+  plan artifact, and its receipt binds the exact SHA-256 content digest; traversal, path aliases,
+  symlinks, missing files, and digest drift are rejected; and
+- the launcher captures at most 1 MiB of final stdout, writes through no-symlink directory handles,
+  verifies the exact committed blob, and publishes a receipt only after the packet has an exact PR;
+  empty output, unsafe paths, commit drift, and local or branch-only commits fail closed; and
 - implementation returns to provider Auto under requirements that explicitly set
   `fable_allowed=false`. Receipts never pin a provider model or tier.
 
@@ -76,7 +84,8 @@ export LIMEN_FABLE_ACCEPTANCE=<receipt>
 ```
 
 Run the Fable planner only after exporting that variable into the same process environment. The
-launch gate must call `fable_contract.authorization_status()` and proceed only on `reason == "ok"`.
+launch gate must call `fable_contract.authorization_status()` with the exact role-bound execution
+profile and proceed only on `reason == "ok"`.
 There is no named-model fallback in this contract; a closed Fable role returns to provider Auto.
 Receipts issued before the plan-only and provider-neutral handoff fields existed must be re-issued.
 

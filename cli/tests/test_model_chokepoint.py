@@ -113,13 +113,20 @@ def test_tier_alias_resolves_via_env_pin(monkeypatch):
     assert model_for_argv(["-p", "hi"]) == "claude-haiku-4-5"
 
 
-def test_fable_model_pins_require_acceptance(monkeypatch):
-    """Model-name pins cannot route Fable around the receipt-backed tier gate."""
+def test_fable_model_pins_cannot_create_role_authority(monkeypatch):
+    """Model-name pins and test sentinels cannot create task-bound Fable authority."""
     _clear(monkeypatch)
-    monkeypatch.setenv("LIMEN_CLAUDE_MODEL", "claude-fable-5")
-    assert model_for_argv(["-p", "hi"]) == "sonnet"
+    monkeypatch.setenv("LIMEN_CLAUDE_MODEL", "fable")
+    assert model_for_argv(["-p", "hi"]) is None
     monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", "1")
-    assert model_for_argv(["-p", "hi"]) == "claude-fable-5"
+    assert model_for_argv(["-p", "hi"]) is None
+
+
+def test_arbitrarily_renamed_provider_id_does_not_imply_fable(monkeypatch):
+    _clear(monkeypatch)
+    opaque_id = "vendor/fable-looking-name-without-role-authority"
+    monkeypatch.setenv("LIMEN_CLAUDE_MODEL", opaque_id)
+    assert model_for_argv(["-p", "hi"]) == opaque_id
 
 
 def test_global_opus_and_1m_pins_require_explicit_override(monkeypatch):

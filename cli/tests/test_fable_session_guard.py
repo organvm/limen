@@ -78,8 +78,34 @@ def _acceptance() -> dict:
     }
 
 
+def _profile(**overrides) -> dict:
+    profile = {
+        "execution_role": "fable-planner",
+        "planning_only": True,
+        "build_allowed": False,
+        "fanout_allowed": False,
+    }
+    profile.update(overrides)
+    return profile
+
+
+def _fable_payload(**overrides) -> dict:
+    payload = {
+        "model": "arbitrarily-renamed-provider-id",
+        "execution_profile": _profile(),
+    }
+    payload.update(overrides)
+    return payload
+
+
 def test_non_fable_model_is_noop(tmp_path):
     proc = _run({"model": "arbitrarily-renamed-provider-id"})
+    assert proc.returncode == 0
+    assert proc.stderr.strip() == ""
+
+
+def test_model_name_substring_does_not_infer_fable_role(tmp_path):
+    proc = _run({"model": "vendor/fable-looking-name-without-role-authority"})
     assert proc.returncode == 0
     assert proc.stderr.strip() == ""
 
@@ -94,7 +120,7 @@ def test_fable_over_cap_reports_without_controlling_the_session(tmp_path):
     balance = tmp_path / "fable-allotment.json"
     balance.write_text(json.dumps(_balance(100.0)))
     proc = _run(
-        {"model": "arbitrarily-renamed-provider-id", "execution_role": "fable-planner"},
+        _fable_payload(),
         {"LIMEN_FABLE_BALANCE_PATH": str(balance)},
     )
     assert proc.returncode == 0
@@ -108,7 +134,7 @@ def test_fable_no_receipt_reports_even_under_cap(tmp_path):
     balance = tmp_path / "fable-allotment.json"
     balance.write_text(json.dumps(_balance(5.0)))
     proc = _run(
-        {"model": "arbitrarily-renamed-provider-id", "execution_role": "fable-planner"},
+        _fable_payload(),
         {"LIMEN_FABLE_BALANCE_PATH": str(balance)},
     )
     assert proc.returncode == 0
@@ -122,7 +148,7 @@ def test_fable_under_cap_with_receipt_is_clean(tmp_path):
     receipt = tmp_path / "accept.json"
     receipt.write_text(json.dumps(_acceptance()))
     proc = _run(
-        {"model": "arbitrarily-renamed-provider-id", "execution_role": "fable-planner"},
+        _fable_payload(),
         {"LIMEN_FABLE_BALANCE_PATH": str(balance), "LIMEN_FABLE_ACCEPTANCE": str(receipt)},
     )
     assert proc.returncode == 0, proc.stderr
@@ -137,9 +163,37 @@ def test_fable_stale_balance_fails_closed_without_session_control(tmp_path):
     receipt = tmp_path / "accept.json"
     receipt.write_text(json.dumps(_acceptance()))
     proc = _run(
-        {"model": "arbitrarily-renamed-provider-id", "execution_role": "fable-planner"},
+        _fable_payload(),
         {"LIMEN_FABLE_BALANCE_PATH": str(balance), "LIMEN_FABLE_ACCEPTANCE": str(receipt)},
     )
     assert proc.returncode == 0
     assert "balance-stale-observation" in proc.stderr
     assert "/model" not in proc.stderr
+
+
+def test_fable_wrong_role_or_build_profile_reports_red(tmp_path):
+    balance = tmp_path / "fable-allotment.json"
+    balance.write_text(json.dumps(_balance(5.0)))
+    receipt = tmp_path / "accept.json"
+    receipt.write_text(json.dumps(_acceptance()))
+    env = {
+        "LIMEN_FABLE_BALANCE_PATH": str(balance),
+        "LIMEN_FABLE_ACCEPTANCE": str(receipt),
+    }
+
+    for profile in (
+        _profile(execution_role="builder"),
+        _profile(planning_only=False),
+        _profile(build_allowed=True),
+        _profile(fanout_allowed=True),
+    ):
+        proc = _run(
+            {
+                "model": "arbitrarily-renamed-provider-id",
+                "execution_profile": profile,
+                "execution_role": "fable-planner",
+            },
+            env,
+        )
+        assert proc.returncode == 0
+        assert "fable-execution-profile-invalid" in proc.stderr

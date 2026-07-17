@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -1264,6 +1265,158 @@ def test_run_isolated_agent_retries_transient_claude_auth_blip(tmp_path: Path, m
     assert len(calls) == 2
 
 
+def test_fable_plan_stdout_is_launcher_owned_digest_bound_packet(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    task = Task(
+        id="FABLE/Plan-42",
+        title="bounded plan",
+        target_agent="claude",
+        created=date(2026, 7, 17),
+    )
+    run = subprocess.CompletedProcess(["claude"], 0, "  # Build packet\n\nOwner: Auto  \n", "")
+    monkeypatch.setattr(D, "_run_capture", lambda *_args, **_kwargs: run)
+
+    assert (
+        D._run_isolated_agent(
+            "claude",
+            task,
+            tmp_path,
+            ["claude"],
+            3,
+            fable_plan_only=True,
+        )
+        is True
+    )
+
+    packet = tmp_path / "docs" / "continuations" / "fable" / "fable-plan-42.md"
+    assert packet.read_bytes() == b"# Build packet\n\nOwner: Auto\n"
+    receipt = D._FABLE_PACKET_RECEIPTS.pop(task.id)
+    assert receipt == {
+        "schema": "limen.fable_packet_receipt.v1",
+        "path": "docs/continuations/fable/fable-plan-42.md",
+        "content_sha256": hashlib.sha256(packet.read_bytes()).hexdigest(),
+    }
+
+
+@pytest.mark.parametrize("output", ["", " \n\t "])
+def test_fable_plan_empty_stdout_fails_without_packet(
+    tmp_path: Path,
+    monkeypatch,
+    output: str,
+) -> None:
+    task = Task(
+        id="FABLE-EMPTY",
+        title="empty plan",
+        target_agent="claude",
+        created=date(2026, 7, 17),
+    )
+    run = subprocess.CompletedProcess(["claude"], 0, output, "")
+    monkeypatch.setattr(D, "_run_capture", lambda *_args, **_kwargs: run)
+
+    assert (
+        D._run_isolated_agent(
+            "claude",
+            task,
+            tmp_path,
+            ["claude"],
+            3,
+            fable_plan_only=True,
+        )
+        is False
+    )
+    assert task.id not in D._FABLE_PACKET_RECEIPTS
+    assert not (tmp_path / "docs").exists()
+
+
+def test_fable_packet_writer_rejects_symlink_parent_without_external_write(
+    tmp_path: Path,
+) -> None:
+    task = Task(
+        id="FABLE-SYMLINK",
+        title="reject symlink",
+        target_agent="claude",
+        created=date(2026, 7, 17),
+    )
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside.mkdir()
+    (tmp_path / "docs").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="not a real directory"):
+        D._persist_fable_plan_output(task, tmp_path, "# Packet")
+
+    assert list(outside.iterdir()) == []
+    assert task.id not in D._FABLE_PACKET_RECEIPTS
+
+
+def test_fable_packet_receipt_binds_exact_committed_bytes(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    task = Task(
+        id="FABLE-BIND",
+        title="bind plan",
+        target_agent="claude",
+        created=date(2026, 7, 17),
+    )
+    receipt = D._persist_fable_plan_output(task, tmp_path, "# Packet")
+    packet_bytes = b"# Packet\n"
+    head = "a" * 40
+
+    def fake_git(args, *_rest, **_kwargs):
+        if args == ["rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(args, 0, f"{head}\n", "")
+        assert args == ["cat-file", "-s", f"{head}:{receipt['path']}"]
+        return subprocess.CompletedProcess(args, 0, f"{len(packet_bytes)}\n", "")
+
+    monkeypatch.setattr(D, "_git", fake_git)
+    monkeypatch.setattr(
+        D,
+        "_git_binary",
+        lambda args, *_rest, **_kwargs: subprocess.CompletedProcess(args, 0, packet_bytes, b""),
+    )
+
+    D._bind_fable_packet_commit(task, tmp_path)
+
+    assert receipt["commit_sha"] == head
+    D.validate_fable_packet_receipt(receipt, root=tmp_path)
+    D._FABLE_PACKET_RECEIPTS.pop(task.id)
+
+
+def test_fable_packet_receipt_rejects_commit_blob_digest_drift(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    task = Task(
+        id="FABLE-COMMIT-DRIFT",
+        title="reject drift",
+        target_agent="claude",
+        created=date(2026, 7, 17),
+    )
+    receipt = D._persist_fable_plan_output(task, tmp_path, "# Packet")
+    head = "a" * 40
+    drifted = b"# Different committed packet\n"
+
+    def fake_git(args, *_rest, **_kwargs):
+        if args == ["rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(args, 0, f"{head}\n", "")
+        return subprocess.CompletedProcess(args, 0, f"{len(drifted)}\n", "")
+
+    monkeypatch.setattr(D, "_git", fake_git)
+    monkeypatch.setattr(
+        D,
+        "_git_binary",
+        lambda args, *_rest, **_kwargs: subprocess.CompletedProcess(args, 0, drifted, b""),
+    )
+
+    with pytest.raises(ValueError, match="does not match bytes in the recorded commit"):
+        D._bind_fable_packet_commit(task, tmp_path)
+
+    assert "commit_sha" not in receipt
+    D._FABLE_PACKET_RECEIPTS.pop(task.id)
+
+
 def test_dispatch_numeric_env_knobs_fail_open_when_malformed(tmp_path: Path, monkeypatch) -> None:
     import datetime
     import socket
@@ -1656,7 +1809,6 @@ def test_warp_auto_dispatch_sends_dynamic_profile_without_model_override(monkeyp
 
     monkeypatch.delenv("LIMEN_WARP_MODEL_OVERRIDE", raising=False)
     monkeypatch.setattr(D, "_run_cmd", fake_run)
-    monkeypatch.setattr(D, "_claude_fable_acceptance_present", lambda: False)
     task = Task(
         id="WARP-AUTO",
         title="repair parser",
@@ -1702,8 +1854,6 @@ def test_codex_tier_derived_from_task_classes(monkeypatch) -> None:
     monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "1")
     monkeypatch.delenv("LIMEN_CODEX_MODEL_OPUS", raising=False)
     monkeypatch.delenv("LIMEN_CODEX_MODEL_HAIKU", raising=False)
-    # Patch fable acceptance so opus class -> "opus" not "fable fallback"
-    monkeypatch.setattr(D, "_claude_fable_acceptance_present", lambda: False)
 
     opus_task = Task(
         id="CODEX-OPUS",
@@ -1733,7 +1883,6 @@ def test_codex_model_per_tier_env_override(monkeypatch) -> None:
     monkeypatch.delenv("LIMEN_CODEX_MODEL", raising=False)
     monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "1")
     monkeypatch.setenv("LIMEN_CODEX_MODEL_OPUS", "my-opus-model")
-    monkeypatch.setattr(D, "_claude_fable_acceptance_present", lambda: False)
 
     opus_task = Task(
         id="CODEX-PER-TIER",
@@ -1769,7 +1918,6 @@ def test_gemini_tier_derived_from_task_classes(monkeypatch) -> None:
     monkeypatch.setenv("LIMEN_GEMINI_TIER_SELECT", "1")
     monkeypatch.delenv("LIMEN_GEMINI_MODEL_OPUS", raising=False)
     monkeypatch.delenv("LIMEN_GEMINI_MODEL_HAIKU", raising=False)
-    monkeypatch.setattr(D, "_claude_fable_acceptance_present", lambda: False)
 
     opus_task = Task(
         id="GEMINI-OPUS",
@@ -1885,6 +2033,75 @@ def test_dispatch_event_records_dynamic_selection_receipt() -> None:
     assert event.selected_model == "fixture/runtime-output"
     assert event.selection_source == "opencode_live_catalog"
     assert event.catalog_hash == "abc123"
+
+
+def test_dispatch_event_records_only_pr_preserved_fable_packet_receipt() -> None:
+    import datetime
+
+    task = Task(
+        id="FABLE-RECEIPT",
+        title="packet receipt",
+        target_agent="claude",
+        status="open",
+        created=date(2026, 7, 17),
+    )
+    receipt = {
+        "schema": "limen.fable_packet_receipt.v1",
+        "path": "docs/continuations/fable/fable-receipt.md",
+        "content_sha256": "b" * 64,
+        "commit_sha": "c" * 40,
+    }
+    D._FABLE_PACKET_RECEIPTS[task.id] = receipt
+    pull_request = "https://github.com/organvm/limen/pull/9999"
+
+    D._apply_result(
+        task,
+        "claude",
+        pull_request,
+        datetime.datetime.now(datetime.timezone.utc),
+        BudgetTrack(date="2026-07-17"),
+    )
+
+    event = task.dispatch_log[-1]
+    assert event.fable_packet_receipt == {
+        **receipt,
+        "pull_request": pull_request,
+    }
+    assert task.id not in D._FABLE_PACKET_RECEIPTS
+
+
+@pytest.mark.parametrize("result", [False, "limen/fable-packet-pushed-but-no-pr"])
+def test_local_or_branch_only_fable_commit_is_not_a_durable_receipt(
+    result: bool | str,
+) -> None:
+    import datetime
+
+    task = Task(
+        id="FABLE-NOT-DURABLE",
+        title="packet not durable",
+        target_agent="claude",
+        status="open",
+        created=date(2026, 7, 17),
+    )
+    D._FABLE_PACKET_RECEIPTS[task.id] = {
+        "schema": "limen.fable_packet_receipt.v1",
+        "path": "docs/continuations/fable/fable-not-durable.md",
+        "content_sha256": "b" * 64,
+        "commit_sha": "c" * 40,
+    }
+
+    D._apply_result(
+        task,
+        "claude",
+        result,
+        datetime.datetime.now(datetime.timezone.utc),
+        BudgetTrack(date="2026-07-17"),
+    )
+
+    event = task.dispatch_log[-1]
+    assert event.fable_packet_receipt is None
+    assert "no durable PR receipt" in str(event.output)
+    assert task.id not in D._FABLE_PACKET_RECEIPTS
 
 
 def test_pr_open_receipt_blocks_duplicate_dispatch_and_noop_demotion() -> None:
@@ -3595,6 +3812,31 @@ def test_local_runtime_uses_same_worktree_isolation_authority(tmp_path: Path, mo
     monkeypatch.setenv("LIMEN_ISOLATION", " OFF ")
     assert not D._worktree_isolation_enabled()
     assert D._call_local_agent("codex", task, False) == "in-place"
+
+
+def test_authorized_fable_cannot_use_legacy_in_place_path(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    task = _wtask(repo="example/repo")
+    monkeypatch.setenv("LIMEN_ISOLATION", "off")
+    monkeypatch.setattr(
+        D,
+        "_claude_launch_selection",
+        lambda _task=None: ("opaque-provider-id", True),
+    )
+    monkeypatch.setattr(D, "_resolve_repo_dir", lambda _task: tmp_path)
+    monkeypatch.setattr(
+        D,
+        "_run_cmd",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("in-place provider must not launch")),
+    )
+
+    result = D._call_local_agent("claude", task, False)
+
+    assert D._is_blocked_result(result)
+    assert "requires the isolated stdout packet preservation pipeline" in capsys.readouterr().out
 
 
 def test_isolation_creation_root_follows_live_env_after_module_import(tmp_path: Path, monkeypatch) -> None:

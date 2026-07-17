@@ -230,6 +230,17 @@ def _fable_packet_metadata_valid(value: Any) -> bool:
         return False
 
 
+def _fable_packet_receipt_valid(value: Any) -> bool:
+    mod = _fable_contract()
+    try:
+        if mod is None:
+            return False
+        mod.validate_packet_receipt(value)
+        return True
+    except Exception:
+        return False
+
+
 def _fable_execution_profile_valid(value: Any) -> bool:
     mod = _fable_contract()
     try:
@@ -492,16 +503,8 @@ def audit_transcript(
                 fable_acceptance = row_acceptance
                 fable_acceptance_seen = True
             receipt = row.get("fableReceipt") or (msg.get("fableReceipt") if isinstance(msg, dict) else None)
-            if isinstance(receipt, dict):
-                receipt_path = str(receipt.get("path") or "")
-                exact_ref = str(receipt.get("commit_sha") or receipt.get("pull_request") or "")
-                if (
-                    receipt.get("schema") == "limen.fable_packet_receipt.v1"
-                    and receipt_path.startswith("docs/continuations/fable/")
-                    and receipt_path.endswith(".md")
-                    and exact_ref
-                ):
-                    fable_receipt_seen = True
+            if _fable_packet_receipt_valid(receipt):
+                fable_receipt_seen = True
             if row.get("type") == "user":
                 text = _content_text(msg.get("content"))
                 if unbounded_re.search(text):
@@ -533,17 +536,10 @@ def audit_transcript(
                     if not isinstance(item, dict) or item.get("type") != "tool_use":
                         continue
                     tool_name = str(item.get("name") or "")
-                    tool_input = item.get("input") or {}
-                    if fable_turn and tool_name in {"Bash", "NotebookEdit", "Agent", "Workflow"}:
+                    contract = _fable_contract()
+                    allowed_tools = contract.FABLE_READ_ONLY_TOOLS if contract is not None else frozenset()
+                    if fable_turn and tool_name not in allowed_tools:
                         fable_tool_violations.append({"path": str(path), "line": line_no, "tool": tool_name})
-                    if fable_turn and tool_name in {"Write", "Edit"}:
-                        target = str(tool_input.get("file_path") or tool_input.get("path") or "")
-                        if target.startswith("docs/continuations/fable/") and target.endswith(".md"):
-                            fable_packet_writes.append({"path": str(path), "line": line_no, "target": target})
-                        else:
-                            fable_tool_violations.append(
-                                {"path": str(path), "line": line_no, "tool": tool_name, "target": target}
-                            )
                     if item.get("name") in {"Agent", "Workflow"}:
                         agent_calls += 1
                     elif item.get("name") == "Bash":
@@ -584,10 +580,10 @@ def audit_transcript(
             violations.append("Fable balance/cap contract is closed")
         if fable_tool_violations:
             violations.append(
-                "Fable used implementation/fanout tools outside its capsule boundary "
+                "Fable used mutation-capable or unclassified tools outside its explicit read-only surface "
                 f"({len(fable_tool_violations)} call(s))"
             )
-        if not fable_packet_writes and not fable_receipt_seen:
+        if not fable_receipt_seen:
             violations.append("Fable run produced no bounded continuation-capsule evidence")
     fable_motion_seconds = 0
     if fable_first_ts is not None and fable_last_ts is not None:

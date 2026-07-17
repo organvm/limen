@@ -11,7 +11,11 @@ from limen.models import Task
 
 
 def test_real_claude_dispatch_argv_is_noninteractive_and_fail_closed(monkeypatch):
-    monkeypatch.setattr(D, "_claude_model", lambda task=None: None)
+    monkeypatch.setattr(
+        D,
+        "_claude_launch_selection",
+        lambda task=None: (None, False),
+    )
 
     argv = D._agent_argv("claude")
 
@@ -155,7 +159,11 @@ def test_question_tool_must_be_removed_before_launch():
 
 
 def test_model_selection_cannot_displace_no_modal_flags(monkeypatch):
-    monkeypatch.setattr(D, "_claude_model", lambda task=None: "fixture-model")
+    monkeypatch.setattr(
+        D,
+        "_claude_launch_selection",
+        lambda task=None: ("fixture-model", False),
+    )
 
     argv = D._agent_argv("claude")
 
@@ -165,7 +173,11 @@ def test_model_selection_cannot_displace_no_modal_flags(monkeypatch):
 
 
 def test_static_flag_drift_is_rejected_at_runtime(monkeypatch):
-    monkeypatch.setattr(D, "_claude_model", lambda task=None: None)
+    monkeypatch.setattr(
+        D,
+        "_claude_launch_selection",
+        lambda task=None: (None, False),
+    )
     monkeypatch.setitem(
         D._LOCAL_AGENTS,
         "claude",

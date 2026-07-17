@@ -37,7 +37,6 @@ from limen.prompt_corpus import (  # noqa: E402
     _json_bytes,
     _path_signature,
     LedgerPaths,
-    atomic_write_bytes,
     attest_source_scan,
     build_snapshot,
     check_ledger,
@@ -52,6 +51,7 @@ from limen.prompt_corpus import (  # noqa: E402
     load_policy,
     occurrence_from_event,
     private_marker,
+    publish_artifact_transaction,
     prompt_authority_seal,
     public_projection,
     read_raw_object,
@@ -6038,7 +6038,11 @@ def scan_native_sources(
         "all_source_manifest_digest": all_source_manifest_digest,
         "files": files,
     }
-    updated["last_scan_at"] = stable_source_scan_timestamp(updated, loaded_cursor)
+    updated["last_scan_at"] = stable_source_scan_timestamp(
+        updated,
+        loaded_cursor,
+        renew_exact_all=True,
+    )
     attest_source_scan(updated, scanner_code_digest=current_source_scanner_code_digest())
     cursor_errors = validate_source_adapter_cursor(updated)
     if cursor_errors:
@@ -6165,11 +6169,17 @@ def _rebind_checkpoint_locked(
     marker_bytes = _json_bytes(next_marker)
     markdown_bytes = markdown.encode("utf-8")
 
-    atomic_write_bytes(paths.public_snapshot, public_bytes, mode=0o644)
-    atomic_write_bytes(paths.public_seal, seal_bytes, mode=0o644)
-    atomic_write_bytes(paths.public_markdown, markdown_bytes, mode=0o644)
-    # Write the marker last: a crash before this line leaves check_ledger red.
-    atomic_write_bytes(paths.private_snapshot, marker_bytes, mode=0o600)
+    try:
+        publish_artifact_transaction(
+            (
+                (paths.public_snapshot, public_bytes, 0o644),
+                (paths.public_seal, seal_bytes, 0o644),
+                (paths.public_markdown, markdown_bytes, 0o644),
+                (paths.private_snapshot, marker_bytes, 0o600),
+            )
+        )
+    except OSError as exc:
+        return [f"checkpoint publication failed; previous generation restored: {exc}"]
     return []
 
 

@@ -84,7 +84,11 @@ def write_fable_balance(tmp_path: Path, spent_pct: float = 5.0) -> Path:
     return balance
 
 
-def fable_packet() -> dict:
+def fable_packet(root: Path, *, name: str = "t1.md") -> dict:
+    path = root / "docs" / "continuations" / "fable" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = b"# Bounded continuation plan\n"
+    path.write_bytes(payload)
     return {
         "schema": "limen.fable_build_packet.v1",
         "mode": "plan-only",
@@ -97,7 +101,18 @@ def fable_packet() -> dict:
                 "fable_allowed": False,
             },
         },
-        "path": "docs/continuations/fable/t1.md",
+        "path": f"docs/continuations/fable/{name}",
+        "content_sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def fable_packet_receipt(root: Path) -> dict:
+    packet = fable_packet(root)
+    return {
+        "schema": "limen.fable_packet_receipt.v1",
+        "path": packet["path"],
+        "content_sha256": packet["content_sha256"],
+        "commit_sha": "a" * 40,
     }
 
 
@@ -196,7 +211,7 @@ def test_audit_workflow_allows_accepted_single_fable(tmp_path):
             "build_allowed": False,
             "fanout_allowed": False,
         },
-        "fablePacket": fable_packet(),
+        "fablePacket": fable_packet(tmp_path),
         "workflowProgress": [
             {
                 "model": "arbitrarily-renamed-provider-id",
@@ -208,7 +223,14 @@ def test_audit_workflow_allows_accepted_single_fable(tmp_path):
     }
     p = tmp_path / "wf.json"
     p.write_text(json.dumps(wf))
-    proc = run_guard("audit-workflow", str(p), env={"LIMEN_FABLE_BALANCE_PATH": str(balance)})
+    proc = run_guard(
+        "audit-workflow",
+        str(p),
+        env={
+            "LIMEN_FABLE_BALANCE_PATH": str(balance),
+            "LIMEN_ROOT": str(tmp_path),
+        },
+    )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert json.loads(proc.stdout)["ok"] is True
 
@@ -216,7 +238,7 @@ def test_audit_workflow_allows_accepted_single_fable(tmp_path):
 def test_audit_workflow_rejects_static_builder_model_or_tier(tmp_path):
     receipt = write_fable_receipt(tmp_path)
     balance = write_fable_balance(tmp_path)
-    packet = fable_packet()
+    packet = fable_packet(tmp_path)
     packet["builder_handoff"] = {
         "provider_selection": "auto",
         "requirements": {
@@ -250,7 +272,86 @@ def test_audit_workflow_rejects_static_builder_model_or_tier(tmp_path):
     proc = run_guard(
         "audit-workflow",
         str(path),
-        env={"LIMEN_FABLE_BALANCE_PATH": str(balance)},
+        env={
+            "LIMEN_FABLE_BALANCE_PATH": str(balance),
+            "LIMEN_ROOT": str(tmp_path),
+        },
+    )
+    assert proc.returncode == 2
+    assert "provider-neutral builder packet" in "\n".join(json.loads(proc.stdout)["reports"][0]["violations"])
+
+
+def test_audit_workflow_rejects_traversal_packet_path(tmp_path):
+    receipt = write_fable_receipt(tmp_path)
+    balance = write_fable_balance(tmp_path)
+    packet = fable_packet(tmp_path)
+    packet["path"] = "docs/continuations/fable/../../outside.md"
+    workflow = {
+        "workflowName": "traversal-packet",
+        "status": "completed",
+        "fableAcceptance": str(receipt),
+        "executionProfile": {
+            "execution_role": "fable-planner",
+            "planning_only": True,
+            "build_allowed": False,
+            "fanout_allowed": False,
+        },
+        "fablePacket": packet,
+        "workflowProgress": [
+            {
+                "model": "arbitrarily-renamed-provider-id",
+                "execution_role": "fable-planner",
+                "state": "done",
+            }
+        ],
+    }
+    path = tmp_path / "traversal.json"
+    path.write_text(json.dumps(workflow))
+    proc = run_guard(
+        "audit-workflow",
+        str(path),
+        env={
+            "LIMEN_FABLE_BALANCE_PATH": str(balance),
+            "LIMEN_ROOT": str(tmp_path),
+        },
+    )
+    assert proc.returncode == 2
+    assert "provider-neutral builder packet" in "\n".join(json.loads(proc.stdout)["reports"][0]["violations"])
+
+
+def test_audit_workflow_rejects_declared_packet_that_does_not_exist(tmp_path):
+    receipt = write_fable_receipt(tmp_path)
+    balance = write_fable_balance(tmp_path)
+    packet = fable_packet(tmp_path)
+    packet["path"] = "docs/continuations/fable/missing.md"
+    workflow = {
+        "workflowName": "missing-packet",
+        "status": "completed",
+        "fableAcceptance": str(receipt),
+        "executionProfile": {
+            "execution_role": "fable-planner",
+            "planning_only": True,
+            "build_allowed": False,
+            "fanout_allowed": False,
+        },
+        "fablePacket": packet,
+        "workflowProgress": [
+            {
+                "model": "arbitrarily-renamed-provider-id",
+                "execution_role": "fable-planner",
+                "state": "done",
+            }
+        ],
+    }
+    path = tmp_path / "missing.json"
+    path.write_text(json.dumps(workflow))
+    proc = run_guard(
+        "audit-workflow",
+        str(path),
+        env={
+            "LIMEN_FABLE_BALANCE_PATH": str(balance),
+            "LIMEN_ROOT": str(tmp_path),
+        },
     )
     assert proc.returncode == 2
     assert "provider-neutral builder packet" in "\n".join(json.loads(proc.stdout)["reports"][0]["violations"])
@@ -503,19 +604,21 @@ def test_audit_transcript_policy_mentions_do_not_accept_fable(tmp_path):
 
 
 def test_audit_transcript_allows_current_receipt_env(tmp_path):
+    packet_receipt = fable_packet_receipt(tmp_path)
     transcript = tmp_path / "session.jsonl"
     transcript.write_text(
         json.dumps(
             {
                 "type": "assistant",
                 "execution_role": "fable-planner",
+                "fableReceipt": packet_receipt,
                 "message": {
                     "model": "arbitrarily-renamed-provider-id",
                     "content": [
                         {
                             "type": "tool_use",
-                            "name": "Write",
-                            "input": {"file_path": "docs/continuations/fable/t1.md"},
+                            "name": "Read",
+                            "input": {"file_path": "docs/fable-allotment.md"},
                         }
                     ],
                     "usage": {"input_tokens": 5, "output_tokens": 5},
@@ -534,6 +637,7 @@ def test_audit_transcript_allows_current_receipt_env(tmp_path):
         env={
             "LIMEN_FABLE_ACCEPTANCE": str(receipt),
             "LIMEN_FABLE_BALANCE_PATH": str(balance),
+            "LIMEN_ROOT": str(tmp_path),
         },
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
@@ -541,6 +645,7 @@ def test_audit_transcript_allows_current_receipt_env(tmp_path):
 
 
 def test_audit_transcript_rejects_fable_implementation_tools(tmp_path):
+    packet_receipt = fable_packet_receipt(tmp_path)
     transcript = tmp_path / "session.jsonl"
     transcript.write_text(
         json.dumps(
@@ -548,6 +653,7 @@ def test_audit_transcript_rejects_fable_implementation_tools(tmp_path):
                 "type": "assistant",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "execution_role": "fable-planner",
+                "fableReceipt": packet_receipt,
                 "message": {
                     "model": "arbitrarily-renamed-provider-id",
                     "content": [
@@ -555,7 +661,12 @@ def test_audit_transcript_rejects_fable_implementation_tools(tmp_path):
                         {
                             "type": "tool_use",
                             "name": "Write",
-                            "input": {"file_path": "cli/src/limen/build.py"},
+                            "input": {"file_path": "docs/continuations/fable/t1.md"},
+                        },
+                        {
+                            "type": "tool_use",
+                            "name": "mcp__github__create_pull_request",
+                            "input": {"repo": "organvm/limen"},
                         },
                     ],
                     "usage": {"input_tokens": 5, "output_tokens": 5},
@@ -574,12 +685,67 @@ def test_audit_transcript_rejects_fable_implementation_tools(tmp_path):
         env={
             "LIMEN_FABLE_ACCEPTANCE": str(receipt),
             "LIMEN_FABLE_BALANCE_PATH": str(balance),
+            "LIMEN_ROOT": str(tmp_path),
         },
     )
     assert proc.returncode == 2
     report = json.loads(proc.stdout)
-    assert len(report["fableToolViolations"]) == 2
-    assert "implementation/fanout tools" in "\n".join(report["violations"])
+    assert len(report["fableToolViolations"]) == 3
+    assert {item["tool"] for item in report["fableToolViolations"]} == {
+        "Bash",
+        "Write",
+        "mcp__github__create_pull_request",
+    }
+    assert "mutation-capable or unclassified tools" in "\n".join(report["violations"])
+
+
+def test_audit_transcript_rejects_traversal_or_digest_unbound_packet_receipt(tmp_path):
+    receipt = write_fable_receipt(tmp_path)
+    balance = write_fable_balance(tmp_path)
+    valid = fable_packet_receipt(tmp_path)
+    invalid_receipts = [
+        {**valid, "path": "docs/continuations/fable/../../outside.md"},
+        {**valid, "content_sha256": "0" * 64},
+    ]
+
+    for index, packet_receipt in enumerate(invalid_receipts):
+        transcript = tmp_path / f"invalid-receipt-{index}.jsonl"
+        transcript.write_text(
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "execution_role": "fable-planner",
+                    "fableReceipt": packet_receipt,
+                    "message": {
+                        "model": "arbitrarily-renamed-provider-id",
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "name": "Read",
+                                "input": {"file_path": "docs/fable-allotment.md"},
+                            }
+                        ],
+                        "usage": {"input_tokens": 5, "output_tokens": 5},
+                    },
+                }
+            )
+            + "\n"
+        )
+        proc = run_guard(
+            "audit-transcript",
+            str(transcript),
+            "--max-billable-tokens",
+            "1000000",
+            env={
+                "LIMEN_FABLE_ACCEPTANCE": str(receipt),
+                "LIMEN_FABLE_BALANCE_PATH": str(balance),
+                "LIMEN_ROOT": str(tmp_path),
+            },
+        )
+        assert proc.returncode == 2
+        report = json.loads(proc.stdout)
+        assert report["fableDurableReceiptSeen"] is False
+        assert "no bounded continuation-capsule evidence" in "\n".join(report["violations"])
 
 
 def test_audit_transcript_rejects_ninety_minutes_without_durable_packet_receipt(tmp_path):
@@ -598,8 +764,8 @@ def test_audit_transcript_rejects_ninety_minutes_without_durable_packet_receipt(
                         "content": [
                             {
                                 "type": "tool_use",
-                                "name": "Write",
-                                "input": {"file_path": "docs/continuations/fable/t1.md"},
+                                "name": "Read",
+                                "input": {"file_path": "docs/fable-allotment.md"},
                             }
                         ],
                         "usage": {"input_tokens": 5, "output_tokens": 5},

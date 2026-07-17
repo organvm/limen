@@ -75,11 +75,30 @@ def _resolve_model(payload: dict[str, Any], explicit: str | None) -> str:
     return ""
 
 
-def _is_fable_context(payload: dict[str, Any], model: str) -> bool:
-    role = payload.get("execution_role") or payload.get("role")
-    if isinstance(role, str) and role.lower() == "fable-planner":
+def _is_fable_context(payload: dict[str, Any]) -> bool:
+    profile = payload.get("execution_profile") or payload.get("executionProfile")
+    roles = [
+        profile.get("execution_role") if isinstance(profile, dict) else None,
+        payload.get("execution_role"),
+        payload.get("role"),
+    ]
+    if any(isinstance(role, str) and role.lower() == "fable-planner" for role in roles):
         return True
-    return "fable" in model.lower()
+    # Provider model labels are opaque runtime output. A renamed ID containing
+    # "fable" cannot create or imply the explicit planner role.
+    return False
+
+
+def _execution_profile(payload: dict[str, Any]) -> dict[str, Any]:
+    value = payload.get("execution_profile") or payload.get("executionProfile")
+    if isinstance(value, dict):
+        return dict(value)
+    return {
+        "execution_role": payload.get("execution_role") or payload.get("role"),
+        "planning_only": payload.get("planning_only"),
+        "build_allowed": payload.get("build_allowed"),
+        "fanout_allowed": payload.get("fanout_allowed"),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -89,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
 
     payload = _read_stdin_payload()
     model = _resolve_model(payload, args.model)
-    if not _is_fable_context(payload, model):
+    if not _is_fable_context(payload):
         return 0
 
     contract = _contract()
@@ -102,17 +121,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    acceptance, acceptance_reason = contract.acceptance_status()
-    balance, balance_reason = contract.balance_status()
-    reason = "ok"
-    if acceptance is None:
-        reason = acceptance_reason
-    elif balance is None:
-        reason = balance_reason
-    else:
-        closed, cap_reason = contract.cap_status(balance, acceptance)
-        if closed:
-            reason = cap_reason
+    authority, reason = contract.authorization_status(execution_profile_value=_execution_profile(payload))
+    balance = authority.get("balance") if authority is not None else None
+    if balance is None:
+        balance, _balance_reason = contract.balance_status()
+    if balance is not None:
         print(
             f"[fable-session-guard] Current Fable planning context ({model or 'role-bound'}). "
             f"Weekly spend: {balance.get('spent_pct')}% "

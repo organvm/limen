@@ -180,10 +180,12 @@ update/rebind boundary; pure seal validation never reads the wall clock. A stale
 still be mechanically re-bound, but its bound freshness verdict is false and therefore
 `authority_ready=false`.
 
-An exclusive writer lock serializes updates; journal appends are flushed before atomic projection
-replacement, and the compact checkpoint is written last. Stable occurrence and atom IDs plus a
-monotonic cursor merge make concurrent or repeated drains idempotent. The cursor digest is embedded
-in the projection, so a cursor advance without a matching projection fails closed. Before the
+An exclusive writer lock serializes updates; journal appends are flushed before publication. The
+public JSON, authority seal, public Markdown, and compact private checkpoint are staged together
+beside their destinations, then installed as one generation; any cooperative install failure rolls
+every replaced artifact back to its prior bytes, mode, and timestamp. Stable occurrence and atom IDs
+plus a monotonic cursor merge make concurrent or repeated drains idempotent. The cursor digest is
+embedded in the projection, so a cursor advance without a matching projection fails closed. Before the
 zero-input fast path adopts existing public bytes, it re-derives the full seal inputs from the private
 checkpoint and current cursor; coherently rehashed projection/seal references that disagree with that
 custody are rebuilt. Verification rebuilds the public JSON and Markdown byte-for-byte from the private
@@ -199,12 +201,15 @@ chronology; missing, equal-order, or future-predecessor edges remain validation 
 
 The heartbeat sensor is intentionally dark (`LIMEN_PROMPT_ATOM_CONTROL=0`) and is not an Omega rung.
 Activation requires a measured, resource-bounded canary that proves both a healthy first pass and a
-cheap idempotent second pass. The canary requires fresh canonical outputs, spends one work unit on
-each of the Codex, Claude, Gemini, OpenCode, and Agy fixture families, and records run-local work-unit
-use so a reused cursor cannot impersonate fresh proof. Its default mode also refuses implementation
-files that differ from Git HEAD and records both the exact head and a combined implementation digest
-in the private receipt. Until that receipt exists, use the commands below manually; do not turn the
-gate on merely because the implementation or a narrow unit test is green.
+cheap semantic fixed-point second pass. The second pass deliberately crosses the scanner's bounded
+freshness tick and must publish new custody evidence while appending/reclassifying nothing and
+preserving the normalized evidence digest; byte identity would incorrectly treat renewed custody as
+drift. The canary requires fresh canonical outputs, spends one work unit on each of the Codex,
+Claude, Gemini, OpenCode, and Agy fixture families, and records run-local work-unit use so a reused
+cursor cannot impersonate fresh proof. Its default mode also refuses implementation files that
+differ from Git HEAD and records both the exact head and a combined implementation digest in the
+private receipt. Until that receipt exists, use the commands below manually; do not turn the gate on
+merely because the implementation or a narrow unit test is green.
 
 ```bash
 # Incremental scan; an existing all-history target rechecks its complete manifest.

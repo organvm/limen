@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import limen.dispatch as D
+import pytest
 from limen.model_selection import _CLAUDE_TIER_ORDER
 from limen.models import Task
 
@@ -49,11 +50,24 @@ def _write_fable_acceptance(root: Path) -> Path:
         json.dumps(
             {
                 "schema": "limen.fable_acceptance.v1",
+                "created_at": now.isoformat(),
                 "week": monday,
                 "category": "adversarial-review",
                 "percent": 5,
                 "sources": ["docs/fable-allotment.md"],
+                "redacted_packets": [],
                 "verification": ["python3 scripts/fable-allotment.py audit"],
+                "mode": "plan-only",
+                "deliverable": "continuation-capsule",
+                "builder_handoff": {
+                    "provider_selection": "auto",
+                    "requirements": {
+                        "planning_only": False,
+                        "build_allowed": True,
+                        "fable_allowed": False,
+                    },
+                },
+                "motion_receipt_deadline_seconds": 5400,
             }
         )
     )
@@ -93,12 +107,20 @@ def _write_balance(root: Path, spent_pct: float, week: str | None = None) -> Pat
     path.write_text(
         json.dumps(
             {
+                "schema": "limen.fable_balance.v1",
+                "observed_at": datetime.now(timezone.utc).isoformat(),
                 "week": week if week is not None else _this_monday(),
                 "spent_tokens": 0,
                 "spent_pct": spent_pct,
                 "deliberate_cap": 40,
                 "hard_cap": 50,
                 "over_cap": spent_pct >= 50,
+                "source": "test-owner-adapter",
+                "meter_ready": True,
+                "measurement": {
+                    "method": "owner-used-percent",
+                    "owner_observed_pct": spent_pct,
+                },
             }
         )
     )
@@ -106,20 +128,39 @@ def _write_balance(root: Path, spent_pct: float, week: str | None = None) -> Pat
 
 
 def _write_reserve_acceptance(root: Path) -> Path:
+    now = datetime.now(timezone.utc)
     path = root / "fable-reserve.json"
     path.write_text(
         json.dumps(
             {
                 "schema": "limen.fable_acceptance.v1",
+                "created_at": now.isoformat(),
                 "week": _this_monday(),
                 "category": "reserve",
                 "percent": 5,
                 "sources": ["docs/fable-allotment.md"],
+                "redacted_packets": [],
                 "verification": ["python3 scripts/fable-allotment.py audit"],
+                "reserve_unlocked": True,
+                "mode": "plan-only",
+                "deliverable": "continuation-capsule",
+                "builder_handoff": {
+                    "provider_selection": "auto",
+                    "requirements": {
+                        "planning_only": False,
+                        "build_allowed": True,
+                        "fable_allowed": False,
+                    },
+                },
+                "motion_receipt_deadline_seconds": 5400,
             }
         )
     )
     return path
+
+
+def _fable_labels(*labels: str) -> list[str]:
+    return ["execution-role:fable-planner", "mode:plan-only", *labels]
 
 
 def test_haiku_default_for_verifiable_class(tmp_path, monkeypatch):
@@ -158,15 +199,20 @@ def test_fable_is_reserved_above_opus_and_requires_acceptance(tmp_path, monkeypa
     assert _CLAUDE_TIER_ORDER[-1] == "fable"
 
     _write_tiers(tmp_path, {"fable": ["final-canonical-decision"]})
-    task = _task(type_="final-canonical-decision")
-    assert D._claude_model(task) == "sonnet"
+    task = _task(
+        type_="final-canonical-decision",
+        labels=_fable_labels(),
+    )
+    assert D._claude_model(task) is None
 
     acceptance = _write_fable_acceptance(tmp_path)
     monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(acceptance))
+    assert D._claude_model(task) is None
+    _write_balance(tmp_path, 5)
     assert D._claude_model(task) == "fable"
 
     monkeypatch.setenv("LIMEN_CLAUDE_FABLE_MODEL", "claude-fable-5")
-    assert D._resolve_claude_model("fable") == "claude-fable-5"
+    assert D._resolve_claude_model("fable", fable_authorized=True) == "claude-fable-5"
 
 
 def test_env_override_wins(tmp_path, monkeypatch):
@@ -193,15 +239,17 @@ def test_global_opus_and_large_context_pin_is_guarded(tmp_path, monkeypatch):
     assert D._claude_model(_task(type_="code")) == "claude-opus-4-8[1m]"
 
 
-def test_env_fable_pin_is_guarded_by_acceptance(tmp_path, monkeypatch):
-    """A model-name env pin cannot route Fable around the written acceptance receipt."""
+def test_env_fable_pin_is_guarded_by_complete_role_bound_authority(tmp_path, monkeypatch):
+    """A model-name env pin cannot create a Fable role or bypass balance/profile checks."""
     _clear(monkeypatch)
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
     _write_ledger(tmp_path, {"waste_classes": []})
-    monkeypatch.setenv("LIMEN_CLAUDE_MODEL", "claude-fable-5")
-    assert D._claude_model(_task(type_="code")) == "sonnet"
+    monkeypatch.setenv("LIMEN_CLAUDE_MODEL", "fable")
+    assert D._claude_model(_task(type_="code")) is None
     monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(_write_fable_acceptance(tmp_path)))
-    assert D._claude_model(_task(type_="code")) == "claude-fable-5"
+    _write_balance(tmp_path, 5)
+    assert D._claude_model(_task(type_="code")) is None
+    assert D._claude_model(_task(type_="code", labels=_fable_labels())) == "fable"
 
 
 def test_fail_open_on_missing_or_corrupt_ledger(tmp_path, monkeypatch):
@@ -236,6 +284,63 @@ def test_agent_argv_injects_claude_model(tmp_path, monkeypatch):
     assert "-p" in D._agent_argv("claude")  # no task → no crash, static flags intact
 
 
+def test_authorized_fable_launch_uses_opaque_model_and_exact_read_only_tools(
+    tmp_path,
+    monkeypatch,
+):
+    _clear(monkeypatch)
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    _write_ledger(tmp_path, {"waste_classes": []})
+    _write_tiers(tmp_path, {"fable": ["final-canonical-decision"]})
+    monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(_write_fable_acceptance(tmp_path)))
+    _write_balance(tmp_path, 5)
+    monkeypatch.setenv(
+        "LIMEN_CLAUDE_MODEL",
+        "vendor/fable-looking-name-without-role-authority",
+    )
+    task = _task(type_="final-canonical-decision", labels=_fable_labels())
+
+    argv = D._agent_argv("claude", task)
+    assert argv[argv.index("--model") + 1] == "vendor/fable-looking-name-without-role-authority"
+    assert set(argv[argv.index("--tools") + 1].split(",")) == {"Read", "Glob", "Grep"}
+    assert set(argv[argv.index("--allowedTools") + 1].split(",")) == {
+        "Read",
+        "Glob",
+        "Grep",
+    }
+    denied = set(argv[argv.index("--disallowedTools") + 1].split(","))
+    assert {"Bash", "Edit", "Write", "NotebookEdit", "Agent", "Workflow", "mcp__*"} <= denied
+
+
+def test_closed_then_open_fable_authority_is_sampled_once_and_fails_closed(
+    monkeypatch,
+) -> None:
+    _clear(monkeypatch)
+    calls = 0
+
+    def changing_authority(_task):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return None, "balance-stale-observation"
+        return {"authority": "would-open-on-second-sample"}, "ok"
+
+    monkeypatch.setattr(D, "_fable_authority_for_task", changing_authority)
+    task = _task(
+        type_="final-canonical-decision",
+        labels=_fable_labels(),
+        claude_tier="fable",
+    )
+
+    with pytest.raises(
+        D.ClaudeLaunchContractError,
+        match="Fable planner authority is closed",
+    ):
+        D._agent_argv("claude", task)
+
+    assert calls == 1
+
+
 def test_retry_bump_on_tried_claude(tmp_path, monkeypatch):
     """A task that already failed on the claude lane (the cascade's 'tried:claude' breadcrumb)
     bumps one rung — the in-tier expression of escalate-on-failed-check. Capped at opus, gateable."""
@@ -247,9 +352,18 @@ def test_retry_bump_on_tried_claude(tmp_path, monkeypatch):
     assert D._claude_model(_task(type_="code", labels=["canon", "tried:claude"])) == "opus"  # caps
     acceptance = _write_fable_acceptance(tmp_path)
     monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(acceptance))
+    _write_balance(tmp_path, 5)
     assert D._claude_model(_task(type_="code", labels=["canon", "tried:claude"])) == "opus"
     monkeypatch.setenv("LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE", "1")
-    assert D._claude_model(_task(type_="code", labels=["canon", "tried:claude"])) == "fable"
+    assert (
+        D._claude_model(
+            _task(
+                type_="code",
+                labels=_fable_labels("canon", "tried:claude"),
+            )
+        )
+        == "fable"
+    )
     monkeypatch.setenv("LIMEN_CLAUDE_RETRY_BUMP", "0")
     assert D._claude_model(_task(type_="code", labels=["tried:claude"])) == "haiku"  # gated off
 
@@ -331,59 +445,57 @@ def test_agent_type_pins_match_the_earned_tier_ladder(tmp_path, monkeypatch):
 
 # ── Live weekly Fable cap: the runtime backstop layered on the accept-time receipt gate ────────
 # A valid acceptance receipt is necessary-not-sufficient. Once the week's Fable spend crosses the
-# caps in logs/fable-allotment.json, even an accepted Fable selection downgrades to Opus.
+# caps in logs/fable-allotment.json, an accepted Fable role closes back to provider Auto.
 
 
-def test_fable_over_hard_cap_downgrades_even_with_receipt(tmp_path, monkeypatch):
-    """spent_pct ≥ 50 → hard downgrade to opus, no exception (even a valid receipt)."""
+def test_fable_over_hard_cap_returns_to_provider_auto(tmp_path, monkeypatch):
+    """spent_pct ≥ 50 closes the role with no named-model fallback."""
     _clear(monkeypatch)
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
     _write_ledger(tmp_path, {"waste_classes": []})
     _write_tiers(tmp_path, {"fable": ["final-canonical-decision"]})
     monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(_write_fable_acceptance(tmp_path)))
-    task = _task(type_="final-canonical-decision")
+    task = _task(type_="final-canonical-decision", labels=_fable_labels())
     # Under cap → fable.
     _write_balance(tmp_path, 10.0)
     assert D._claude_tier_for(task) == "fable"
     assert D._claude_model(task) == "fable"
-    # Over the hard cap → opus, receipt notwithstanding.
+    # Over the hard cap → provider Auto, receipt notwithstanding.
     _write_balance(tmp_path, 60.0)
-    assert D._claude_tier_for(task) == "opus"
-    assert D._claude_model(task) == "opus"
+    assert D._claude_tier_for(task) == "auto"
+    assert D._claude_model(task) is None
 
 
 def test_fable_reserve_band_passes_only_reserve_receipt(tmp_path, monkeypatch):
-    """40 ≤ spent_pct < 50 → only a current-week reserve receipt passes; else opus."""
+    """40 ≤ spent_pct < 50 → only a current-week reserve receipt passes; else Auto."""
     _clear(monkeypatch)
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
     _write_ledger(tmp_path, {"waste_classes": []})
     _write_tiers(tmp_path, {"fable": ["final-canonical-decision"]})
-    task = _task(type_="final-canonical-decision")
+    task = _task(type_="final-canonical-decision", labels=_fable_labels())
     _write_balance(tmp_path, 45.0)
     # A non-reserve receipt is valid for acceptance but does not pass the 40–50% band.
     monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(_write_fable_acceptance(tmp_path)))
-    assert D._claude_tier_for(task) == "opus"
+    assert D._claude_tier_for(task) == "auto"
     # A reserve receipt passes the band.
     monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(_write_reserve_acceptance(tmp_path)))
     assert D._claude_tier_for(task) == "fable"
     # …but not at/over the hard cap.
     _write_balance(tmp_path, 55.0)
-    assert D._claude_tier_for(task) == "opus"
+    assert D._claude_tier_for(task) == "auto"
 
 
-def test_fable_cap_fails_open_when_no_balance_or_stale(tmp_path, monkeypatch):
-    """No balance file, or a stale (prior-week) one → the receipt gate alone decides (fail-open)."""
+def test_fable_cap_fails_closed_when_balance_is_missing_or_stale(tmp_path, monkeypatch):
+    """No balance file or a stale one closes Fable and returns to provider Auto."""
     _clear(monkeypatch)
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
     _write_ledger(tmp_path, {"waste_classes": []})
     _write_tiers(tmp_path, {"fable": ["final-canonical-decision"]})
     monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(_write_fable_acceptance(tmp_path)))
-    task = _task(type_="final-canonical-decision")
-    # No balance file at all → fable (receipt gate only).
-    assert D._claude_tier_for(task) == "fable"
-    # A stale prior-week balance is ignored, even if over cap.
+    task = _task(type_="final-canonical-decision", labels=_fable_labels())
+    assert D._claude_tier_for(task) == "auto"
     _write_balance(tmp_path, 99.0, week="2020-01-06")
-    assert D._claude_tier_for(task) == "fable"
+    assert D._claude_tier_for(task) == "auto"
 
 
 def test_fable_per_task_pin_is_also_capped(tmp_path, monkeypatch):
@@ -392,11 +504,11 @@ def test_fable_per_task_pin_is_also_capped(tmp_path, monkeypatch):
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
     _write_ledger(tmp_path, {"waste_classes": []})
     monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(_write_fable_acceptance(tmp_path)))
-    task = _task(type_="code", claude_tier="fable")
+    task = _task(type_="code", labels=_fable_labels(), claude_tier="fable")
     _write_balance(tmp_path, 10.0)
     assert D._claude_tier_for(task) == "fable"
     _write_balance(tmp_path, 70.0)
-    assert D._claude_tier_for(task) == "opus"
+    assert D._claude_tier_for(task) == "auto"
 
 
 def test_all_agent_type_models_are_valid_tier_aliases():

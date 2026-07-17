@@ -88,16 +88,19 @@ root = Path(os.environ["TMP"])
 authority, reason = C.authorization_status(
     acceptance_path=root / "fable-acceptance.json",
     balance_path=root / "fable-band.json",
+    execution_profile_value=C.execution_profile(),
 )
 assert authority is None and reason == "reserve-required", (authority, reason)
 authority, reason = C.authorization_status(
     acceptance_path=root / "fable-reserve.json",
     balance_path=root / "fable-band.json",
+    execution_profile_value=C.execution_profile(),
 )
 assert authority is not None and reason == "ok", (authority, reason)
 authority, reason = C.authorization_status(
     acceptance_path=root / "fable-reserve.json",
     balance_path=root / "fable-over.json",
+    execution_profile_value=C.execution_profile(),
 )
 assert authority is None and reason == "hard-cap", (authority, reason)
 PYEOF
@@ -107,7 +110,7 @@ echo "── 2. interactive observer reports but never controls ──"
 NON_FABLE="$(printf '%s\n' '{"model":"arbitrarily-renamed-provider-id"}' | \
   "${PY[@]}" scripts/fable-session-guard.py 2>&1)"
 [ -z "$NON_FABLE" ] || fail "non-Fable context was not a clean no-op"
-REPORT="$(printf '%s\n' '{"model":"arbitrarily-renamed-provider-id","execution_role":"fable-planner"}' | \
+REPORT="$(printf '%s\n' '{"model":"arbitrarily-renamed-provider-id","execution_profile":{"execution_role":"fable-planner","planning_only":true,"build_allowed":false,"fanout_allowed":false}}' | \
   LIMEN_FABLE_ACCEPTANCE="$TMP/fable-acceptance.json" \
   LIMEN_FABLE_BALANCE_PATH="$TMP/fable-over.json" \
   "${PY[@]}" scripts/fable-session-guard.py 2>&1)"
@@ -121,11 +124,16 @@ pass "current invocation is observed without model or peer-session control"
 echo "── 3. workflow receipt is plan-only and provider-neutral ──"
 TMP="$TMP" "${PY[@]}" - <<'PYEOF'
 import json
+import hashlib
 import os
 from pathlib import Path
 from limen import fable_contract as C
 
 root = Path(os.environ["TMP"])
+packet_path = root / "docs" / "continuations" / "fable" / "predicate.md"
+packet_path.parent.mkdir(parents=True)
+packet_payload = b"# Predicate plan\n"
+packet_path.write_bytes(packet_payload)
 workflow = {
     "workflowName": "bounded-fable-plan",
     "status": "completed",
@@ -142,12 +150,13 @@ workflow = {
         "implementation_by_fable": "prohibited",
         "builder_handoff": C.builder_handoff(),
         "path": "docs/continuations/fable/predicate.md",
+        "content_sha256": hashlib.sha256(packet_payload).hexdigest(),
     },
     "workflowProgress": [{"model": "fable-role-observation", "state": "done"}],
 }
 (root / "workflow.json").write_text(json.dumps(workflow))
 PYEOF
-LIMEN_FABLE_BALANCE_PATH="$TMP/fable-open.json" \
+LIMEN_ROOT="$TMP" LIMEN_FABLE_BALANCE_PATH="$TMP/fable-open.json" \
   "${PY[@]}" scripts/claude-workflow-guard.py audit-workflow "$TMP/workflow.json" \
   >/dev/null || fail "valid plan-only workflow was rejected"
 pass "workflow profile and build packet contain no model/tier pin"

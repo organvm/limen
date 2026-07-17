@@ -9,9 +9,12 @@ automatic non-Fable builder handoff with no encoded model or tier identifier.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import math
 import os
+import re
+import stat
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -23,6 +26,9 @@ MOTION_RECEIPT_DEADLINE_SECONDS = 5_400
 DEFAULT_BALANCE_MAX_AGE_SECONDS = 900
 FUTURE_SKEW_SECONDS = 300
 ACCEPTANCE_CATEGORIES = frozenset({"substrate", "prompt-corpus", "governance", "adversarial-review", "reserve"})
+FABLE_READ_ONLY_TOOLS = frozenset({"Read", "Glob", "Grep", "WebFetch", "WebSearch"})
+_PACKET_PATH_PREFIX = ("docs", "continuations", "fable")
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
 
 
 class ContractError(ValueError):
@@ -75,6 +81,17 @@ def builder_handoff() -> dict[str, Any]:
             "build_allowed": True,
             "fable_allowed": False,
         },
+    }
+
+
+def execution_profile() -> dict[str, Any]:
+    """Return the sole role-bound execution profile that may request Fable."""
+
+    return {
+        "execution_role": "fable-planner",
+        "planning_only": True,
+        "build_allowed": False,
+        "fanout_allowed": False,
     }
 
 
@@ -325,8 +342,13 @@ def authorization_status(
     *,
     acceptance_path: str | os.PathLike[str] | None = None,
     balance_path: str | os.PathLike[str] | None = None,
+    execution_profile_value: Any = None,
     moment: dt.datetime | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
+    try:
+        validate_execution_profile(execution_profile_value)
+    except ContractError as exc:
+        return None, str(exc)
     acceptance, acceptance_reason = acceptance_status(acceptance_path, moment=moment)
     if acceptance is None:
         return None, acceptance_reason
@@ -336,20 +358,74 @@ def authorization_status(
     closed, reason = cap_status(balance, acceptance)
     if closed:
         return None, reason
-    return {"acceptance": acceptance, "balance": balance}, "ok"
+    return {
+        "acceptance": acceptance,
+        "balance": balance,
+        "execution_profile": dict(execution_profile_value),
+    }, "ok"
 
 
 def validate_execution_profile(value: Any) -> None:
-    if not isinstance(value, dict) or value != {
-        "execution_role": "fable-planner",
-        "planning_only": True,
-        "build_allowed": False,
-        "fanout_allowed": False,
-    }:
+    if not isinstance(value, dict) or value != execution_profile():
         raise ContractError("fable-execution-profile-invalid")
 
 
-def validate_packet_metadata(value: Any) -> dict[str, Any]:
+def canonical_packet_path(value: Any) -> PurePosixPath:
+    """Return the sole canonical packet path shape, rejecting every alias/traversal form."""
+
+    if not isinstance(value, str) or not value or "\\" in value:
+        raise ContractError("fable-packet-path-invalid")
+    path = PurePosixPath(value)
+    if (
+        path.is_absolute()
+        or path.as_posix() != value
+        or len(path.parts) != 4
+        or path.parts[:3] != _PACKET_PATH_PREFIX
+        or path.suffix != ".md"
+        or path.name in {".md", "..md"}
+    ):
+        raise ContractError("fable-packet-path-invalid")
+    return path
+
+
+def _packet_bytes(path_value: Any, digest_value: Any, *, root: Path | None = None) -> bytes:
+    path = canonical_packet_path(path_value)
+    if not isinstance(digest_value, str) or _SHA256_RE.fullmatch(digest_value) is None:
+        raise ContractError("fable-packet-digest-invalid")
+    worktree = (root or _root()).resolve()
+    candidate = worktree.joinpath(*path.parts)
+    try:
+        parent = worktree
+        for part in path.parts[:-1]:
+            parent = parent / part
+            if parent.is_symlink():
+                raise ContractError("fable-packet-path-invalid")
+        file_stat = candidate.lstat()
+        resolved = candidate.resolve(strict=True)
+    except ContractError:
+        raise
+    except OSError as exc:
+        raise ContractError("fable-packet-file-missing") from exc
+    if candidate.is_symlink() or not stat.S_ISREG(file_stat.st_mode):
+        raise ContractError("fable-packet-file-not-regular")
+    try:
+        resolved.relative_to(worktree)
+    except ValueError as exc:
+        raise ContractError("fable-packet-path-invalid") from exc
+    try:
+        payload = candidate.read_bytes()
+    except OSError as exc:
+        raise ContractError("fable-packet-file-unreadable") from exc
+    if hashlib.sha256(payload).hexdigest() != digest_value:
+        raise ContractError("fable-packet-digest-mismatch")
+    return payload
+
+
+def validate_packet_metadata(
+    value: Any,
+    *,
+    root: Path | None = None,
+) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ContractError("fable-packet-missing")
     if value.get("schema") != PACKET_SCHEMA:
@@ -357,17 +433,28 @@ def validate_packet_metadata(value: Any) -> dict[str, Any]:
     if value.get("mode") != "plan-only" or value.get("implementation_by_fable") != "prohibited":
         raise ContractError("fable-packet-mode-invalid")
     _validate_builder_handoff(value.get("builder_handoff"))
-    raw_path = value.get("path")
-    if not isinstance(raw_path, str):
-        raise ContractError("fable-packet-path-invalid")
-    path = PurePosixPath(raw_path)
-    if (
-        path.is_absolute()
-        or ".." in path.parts
-        or len(path.parts) != 4
-        or path.parts[:3] != ("docs", "continuations", "fable")
-        or path.suffix != ".md"
-        or path.name in {".md", "..md"}
-    ):
-        raise ContractError("fable-packet-path-invalid")
+    _packet_bytes(value.get("path"), value.get("content_sha256"), root=root)
+    return value
+
+
+def validate_packet_receipt(
+    value: Any,
+    *,
+    root: Path | None = None,
+) -> dict[str, Any]:
+    if not isinstance(value, dict) or value.get("schema") != PACKET_RECEIPT_SCHEMA:
+        raise ContractError("fable-packet-receipt-invalid")
+    commit_sha = value.get("commit_sha")
+    pull_request = value.get("pull_request")
+    valid_commit = isinstance(commit_sha, str) and re.fullmatch(
+        r"(?:[0-9a-f]{40}|[0-9a-f]{64})",
+        commit_sha,
+    )
+    valid_pr = isinstance(pull_request, str) and re.fullmatch(
+        r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[1-9][0-9]*",
+        pull_request,
+    )
+    if not valid_commit and not valid_pr:
+        raise ContractError("fable-packet-receipt-ref-missing")
+    _packet_bytes(value.get("path"), value.get("content_sha256"), root=root)
     return value

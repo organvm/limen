@@ -4,8 +4,8 @@
 The canary deliberately has no useful implicit paths. A caller must declare one
 isolated sandbox containing HOME, every private/public output, and the receipt.
 It runs the exact all-history scanner command twice with a hard five-work-unit
-ceiling, then proves that the second run did not append, reclassify, or change any
-canonical byte.
+ceiling, then proves that the second run renews source-custody freshness without
+appending, reclassifying, or changing the normalized evidence digest.
 
 The receipt is redacted by construction: it contains a caller-safe label,
 numeric counts/timings, and content hashes, never prompt text or filesystem paths.
@@ -40,6 +40,7 @@ from limen.prompt_sources import (  # noqa: E402
     PROMPT_SOURCE_SCANNER_VERSION,
     source_adapter_contract,
 )
+from limen.prompt_corpus import cursor_semantic  # noqa: E402
 
 
 SCANNER = ROOT / "scripts" / "prompt-atom-ledger.py"
@@ -199,6 +200,64 @@ def artifact_metrics(
         "public_markdown": file_metric(public_markdown),
         "public_seal": file_metric(public_seal),
     }
+
+
+def normalized_evidence_digest(
+    cursor: dict[str, Any],
+    public: dict[str, Any],
+    metrics: dict[str, dict[str, Any]],
+) -> str:
+    """Digest stable evidence while excluding the renewed custody receipt identity."""
+
+    normalized_cursor = cursor_semantic(cursor)
+    normalized_cursor.pop("last_scan_at", None)
+    normalized_cursor.pop("source_scan_receipt", None)
+
+    normalized_public = json.loads(json.dumps(public))
+    for field in ("semantic_digest", "source_cursor_digest", "projection_digest"):
+        normalized_public.pop(field, None)
+    public_scope = normalized_public.get("source_scope")
+    if isinstance(public_scope, dict):
+        public_scope.pop("source_custody_freshness", None)
+        public_scope.pop("source_scan_receipt", None)
+
+    stable_artifacts = {
+        name: metrics[name]
+        for name in (
+            "event_journal",
+            "outcome_journal",
+            "private_raw_objects",
+            "public_markdown",
+        )
+    }
+    return sha256_bytes(
+        json.dumps(
+            {
+                "cursor": normalized_cursor,
+                "public": normalized_public,
+                "stable_artifacts": stable_artifacts,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+
+
+def wait_for_next_freshness_tick(last_scan_at: str, *, timeout_seconds: float = 2.0) -> bool:
+    """Cross the scanner's one-second timestamp boundary with a finite wait."""
+
+    try:
+        prior = dt.datetime.fromisoformat(last_scan_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+        if now > prior.astimezone(dt.timezone.utc).replace(microsecond=0):
+            return True
+        time.sleep(0.02)
+    return False
 
 
 def load_object(path: Path, label: str) -> dict[str, Any]:
@@ -643,6 +702,11 @@ def main(argv: list[str] | None = None) -> int:
         first_public = load_object(public_snapshot, "public_snapshot")
         failures.extend(fixed_failures(first_cursor, first_public, args.cap, first_summary, expected_contract))
         first_metrics = artifact_metrics(private_root, public_snapshot, public_markdown, public_seal)
+        first_evidence_digest = normalized_evidence_digest(
+            first_cursor,
+            first_public,
+            first_metrics,
+        )
         first_journal = journal_counts(event_journal)
         first_outcomes = outcome_count(outcome_journal)
         receipt["first_pass"] = {
@@ -656,6 +720,7 @@ def main(argv: list[str] | None = None) -> int:
             "atoms": int((first_public.get("coverage") or {}).get("atoms") or 0),
             "event_rows": first_journal["rows"],
             "outcome_rows": first_outcomes,
+            "normalized_evidence_digest": first_evidence_digest,
             "source_families": {
                 name: {
                     field: int(((first_cursor.get("source_families") or {}).get(name) or {}).get(field) or 0)
@@ -669,6 +734,13 @@ def main(argv: list[str] | None = None) -> int:
         failures.append(str(exc))
 
     if failures:
+        receipt["failures"] = list(dict.fromkeys(failures))
+        atomic_receipt(receipt_path, receipt)
+        print(f"prompt-atom-canary: FAIL — {', '.join(receipt['failures'])}", file=sys.stderr)
+        return 1
+
+    if not wait_for_next_freshness_tick(str(first_cursor.get("last_scan_at") or "")):
+        failures.append("second_pass_freshness_tick_unavailable")
         receipt["failures"] = list(dict.fromkeys(failures))
         atomic_receipt(receipt_path, receipt)
         print(f"prompt-atom-canary: FAIL — {', '.join(receipt['failures'])}", file=sys.stderr)
@@ -688,7 +760,14 @@ def main(argv: list[str] | None = None) -> int:
         failures.append("second_scanner_failed")
 
     try:
+        second_cursor = load_object(cursor_path, "source_cursor")
+        second_public = load_object(public_snapshot, "public_snapshot")
         second_metrics = artifact_metrics(private_root, public_snapshot, public_markdown, public_seal)
+        second_evidence_digest = normalized_evidence_digest(
+            second_cursor,
+            second_public,
+            second_metrics,
+        )
         second_journal = journal_counts(event_journal)
         second_outcomes = outcome_count(outcome_journal)
         journal_delta = {
@@ -703,6 +782,8 @@ def main(argv: list[str] | None = None) -> int:
             "atom_delta": journal_delta["atoms"],
             "outcome_delta": journal_delta["outcomes"],
             "reclassification_delta": journal_delta["reclassifications"],
+            "custody_renewed": second_cursor.get("last_scan_at") != first_cursor.get("last_scan_at"),
+            "normalized_evidence_digest": second_evidence_digest,
         }
         receipt["artifacts_after_second"] = second_metrics
         if any(journal_delta.values()):
@@ -713,12 +794,14 @@ def main(argv: list[str] | None = None) -> int:
             failures.append("second_pass_appended_atoms")
         if second_summary["outcomes"] != 0:
             failures.append("second_pass_appended_outcomes")
-        if second_summary["changed"] is not False:
-            failures.append("second_pass_reported_change")
+        if second_summary["changed"] is not True:
+            failures.append("second_pass_did_not_report_custody_renewal")
         if second_summary["work_units"] != 0:
             failures.append("second_pass_used_work_units")
-        if first_metrics != second_metrics:
-            failures.append("second_pass_bytes_changed")
+        if second_cursor.get("last_scan_at") == first_cursor.get("last_scan_at"):
+            failures.append("second_pass_did_not_renew_custody")
+        if first_evidence_digest != second_evidence_digest:
+            failures.append("second_pass_normalized_evidence_changed")
     except CanaryFailure as exc:
         failures.append(str(exc))
 
@@ -783,7 +866,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(
         "prompt-atom-canary: PASS — five bounded work units; "
-        "second pass appended/reclassified zero and changed no canonical bytes"
+        "second pass renewed custody, appended/reclassified zero, and preserved normalized evidence"
     )
     return 0
 

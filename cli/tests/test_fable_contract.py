@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
@@ -51,20 +53,29 @@ def _balance(now: datetime | None = None, *, spent_pct: float = 5) -> dict:
     }
 
 
-def test_provider_neutral_acceptance_and_packet_have_no_model_or_tier() -> None:
+def _packet(root: Path, *, name: str = "recovery.md") -> dict:
+    path = root / "docs" / "continuations" / "fable" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = b"# Bounded plan\n"
+    path.write_bytes(payload)
+    return {
+        "schema": contract.PACKET_SCHEMA,
+        "mode": "plan-only",
+        "implementation_by_fable": "prohibited",
+        "builder_handoff": contract.builder_handoff(),
+        "path": f"docs/continuations/fable/{name}",
+        "content_sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def test_provider_neutral_acceptance_and_packet_have_no_model_or_tier(tmp_path) -> None:
     receipt = contract.validate_acceptance_receipt(_acceptance())
     encoded = json.dumps(receipt, sort_keys=True)
     assert "model" not in encoded
     assert "tier" not in encoded
 
-    packet = {
-        "schema": contract.PACKET_SCHEMA,
-        "mode": "plan-only",
-        "implementation_by_fable": "prohibited",
-        "builder_handoff": contract.builder_handoff(),
-        "path": "docs/continuations/fable/recovery.md",
-    }
-    assert contract.validate_packet_metadata(packet) == packet
+    packet = _packet(tmp_path)
+    assert contract.validate_packet_metadata(packet, root=tmp_path) == packet
 
 
 @pytest.mark.parametrize(
@@ -137,30 +148,32 @@ def test_authorization_fails_closed_and_reserve_band_is_exact(tmp_path, monkeypa
 
     acceptance_path.write_text(json.dumps(_acceptance(now)))
     balance_path.write_text(json.dumps(_balance(now, spent_pct=45)))
-    authority, reason = contract.authorization_status(moment=now)
+    authority, reason = contract.authorization_status(
+        moment=now,
+        execution_profile_value=contract.execution_profile(),
+    )
     assert authority is None
     assert reason == "reserve-required"
 
     acceptance_path.write_text(json.dumps(_acceptance(now, category="reserve")))
-    authority, reason = contract.authorization_status(moment=now)
+    authority, reason = contract.authorization_status(
+        moment=now,
+        execution_profile_value=contract.execution_profile(),
+    )
     assert authority is not None
     assert reason == "ok"
 
     balance_path.write_text(json.dumps(_balance(now, spent_pct=50)))
-    authority, reason = contract.authorization_status(moment=now)
+    authority, reason = contract.authorization_status(
+        moment=now,
+        execution_profile_value=contract.execution_profile(),
+    )
     assert authority is None
     assert reason == "hard-cap"
 
 
 def test_execution_profile_is_exactly_plan_only() -> None:
-    contract.validate_execution_profile(
-        {
-            "execution_role": "fable-planner",
-            "planning_only": True,
-            "build_allowed": False,
-            "fanout_allowed": False,
-        }
-    )
+    contract.validate_execution_profile(contract.execution_profile())
     with pytest.raises(contract.ContractError, match="fable-execution-profile-invalid"):
         contract.validate_execution_profile(
             {
@@ -170,3 +183,117 @@ def test_execution_profile_is_exactly_plan_only() -> None:
                 "fanout_allowed": False,
             }
         )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "docs/continuations/fable/../../outside.md",
+        "docs/continuations/fable/../outside.md",
+        "docs/continuations/fable//plan.md",
+        "./docs/continuations/fable/plan.md",
+        "/docs/continuations/fable/plan.md",
+        r"docs\continuations\fable\plan.md",
+        "docs/continuations/fable/not-markdown.txt",
+    ],
+)
+def test_packet_path_rejects_aliases_and_traversal(path: str) -> None:
+    with pytest.raises(contract.ContractError, match="fable-packet-path-invalid"):
+        contract.canonical_packet_path(path)
+
+
+def test_packet_must_be_regular_in_worktree_and_digest_bound(tmp_path) -> None:
+    packet = _packet(tmp_path)
+    contract.validate_packet_metadata(packet, root=tmp_path)
+
+    packet["content_sha256"] = "0" * 64
+    with pytest.raises(contract.ContractError, match="fable-packet-digest-mismatch"):
+        contract.validate_packet_metadata(packet, root=tmp_path)
+
+    packet["path"] = "docs/continuations/fable/missing.md"
+    with pytest.raises(contract.ContractError, match="fable-packet-file-missing"):
+        contract.validate_packet_metadata(packet, root=tmp_path)
+
+    directory = tmp_path / "docs" / "continuations" / "fable" / "directory.md"
+    directory.mkdir()
+    packet["path"] = "docs/continuations/fable/directory.md"
+    with pytest.raises(contract.ContractError, match="fable-packet-file-not-regular"):
+        contract.validate_packet_metadata(packet, root=tmp_path)
+
+
+def test_packet_rejects_symlink_leaf_and_symlink_parent_escape(tmp_path) -> None:
+    outside = tmp_path.parent / f"{tmp_path.name}-outside.md"
+    outside.write_text("outside", encoding="utf-8")
+    packet_dir = tmp_path / "docs" / "continuations" / "fable"
+    packet_dir.mkdir(parents=True)
+    leaf = packet_dir / "leaf.md"
+    leaf.symlink_to(outside)
+    digest = hashlib.sha256(outside.read_bytes()).hexdigest()
+    packet = {
+        **_packet(tmp_path, name="valid.md"),
+        "path": "docs/continuations/fable/leaf.md",
+        "content_sha256": digest,
+    }
+    with pytest.raises(contract.ContractError, match="fable-packet-file-not-regular"):
+        contract.validate_packet_metadata(packet, root=tmp_path)
+
+    escaped_root = tmp_path / "escaped"
+    escaped_root.mkdir()
+    (escaped_root / "parent.md").write_text("outside", encoding="utf-8")
+    other_root = tmp_path / "parent-link-root"
+    (other_root / "docs" / "continuations").mkdir(parents=True)
+    (other_root / "docs" / "continuations" / "fable").symlink_to(escaped_root)
+    escaped_packet = dict(packet)
+    escaped_packet["path"] = "docs/continuations/fable/parent.md"
+    escaped_packet["content_sha256"] = hashlib.sha256(b"outside").hexdigest()
+    with pytest.raises(contract.ContractError, match="fable-packet-path-invalid"):
+        contract.validate_packet_metadata(escaped_packet, root=other_root)
+
+
+def test_packet_receipt_requires_exact_ref_and_existing_content(tmp_path) -> None:
+    packet = _packet(tmp_path)
+    receipt = {
+        "schema": contract.PACKET_RECEIPT_SCHEMA,
+        "path": packet["path"],
+        "content_sha256": packet["content_sha256"],
+        "commit_sha": "a" * 40,
+    }
+    assert contract.validate_packet_receipt(receipt, root=tmp_path) == receipt
+    for invalid in ("", "not-exact", "A" * 40, "a" * 39, "a" * 41):
+        receipt["commit_sha"] = invalid
+        with pytest.raises(contract.ContractError, match="fable-packet-receipt-ref-missing"):
+            contract.validate_packet_receipt(receipt, root=tmp_path)
+
+    receipt.pop("commit_sha")
+    receipt["pull_request"] = "https://github.com/organvm/limen/pull/1169"
+    assert contract.validate_packet_receipt(receipt, root=tmp_path) == receipt
+    receipt["pull_request"] += "/files"
+    with pytest.raises(contract.ContractError, match="fable-packet-receipt-ref-missing"):
+        contract.validate_packet_receipt(receipt, root=tmp_path)
+
+
+def test_authorization_rejects_missing_or_non_plan_execution_profile(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    now = _now()
+    acceptance = tmp_path / "acceptance.json"
+    balance = tmp_path / "balance.json"
+    acceptance.write_text(json.dumps(_acceptance(now)), encoding="utf-8")
+    balance.write_text(json.dumps(_balance(now)), encoding="utf-8")
+    monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(acceptance))
+    monkeypatch.setenv("LIMEN_FABLE_BALANCE_PATH", str(balance))
+
+    for profile in (
+        None,
+        {**contract.execution_profile(), "execution_role": "builder"},
+        {**contract.execution_profile(), "planning_only": False},
+        {**contract.execution_profile(), "build_allowed": True},
+        {**contract.execution_profile(), "fanout_allowed": True},
+    ):
+        authority, reason = contract.authorization_status(
+            moment=now,
+            execution_profile_value=profile,
+        )
+        assert authority is None
+        assert reason == "fable-execution-profile-invalid"

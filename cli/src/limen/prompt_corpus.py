@@ -257,6 +257,213 @@ def atomic_write_text(path: Path, text: str, *, mode: int = 0o600) -> None:
     atomic_write_bytes(path, text.encode("utf-8"), mode=mode)
 
 
+@dataclass
+class _StagedPublication:
+    path: Path
+    staged_path: Path
+    backup_path: Path | None
+    existed: bool
+    prior_mode: int | None
+    prior_atime_ns: int | None
+    prior_mtime_ns: int | None
+
+
+def _stage_publication_file(path: Path, content: bytes, *, mode: int) -> Path:
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.stage.", dir=path.parent)
+    try:
+        os.fchmod(fd, mode)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        return Path(tmp_name)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.close(fd)
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_name)
+        raise
+
+
+def _backup_publication_file(path: Path) -> Path:
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.rollback.", dir=path.parent)
+    try:
+        os.close(fd)
+        os.unlink(tmp_name)
+        # The destination and rollback name share a directory/filesystem. A hard
+        # link preserves the old inode across os.replace without copying a large
+        # public projection (hundreds of MiB in full-corpus generations).
+        os.link(path, tmp_name)
+        return Path(tmp_name)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.close(fd)
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_name)
+        raise
+
+
+def _fsync_directories(paths: Iterable[Path]) -> None:
+    for path in sorted(set(paths), key=str):
+        fd = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+
+def _validate_publication_parent_nofollow(parent: Path) -> None:
+    """Reject every existing symlink/non-directory ancestor without mutating."""
+
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    anchor = Path(parent.anchor)
+    try:
+        current_fd = os.open(anchor, flags)
+    except OSError as exc:
+        raise ValueError(f"publication root cannot be opened safely: {anchor}") from exc
+    try:
+        for part in parent.parts[1:]:
+            try:
+                next_fd = os.open(part, flags, dir_fd=current_fd)
+            except FileNotFoundError:
+                return
+            except OSError as exc:
+                raise ValueError(f"publication parent contains a symlink or non-directory component: {parent}") from exc
+            os.close(current_fd)
+            current_fd = next_fd
+    finally:
+        os.close(current_fd)
+
+
+def _ensure_publication_parent_nofollow(parent: Path) -> None:
+    """Create missing parent components while holding no-follow directory handles."""
+
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    anchor = Path(parent.anchor)
+    try:
+        current_fd = os.open(anchor, flags)
+    except OSError as exc:
+        raise ValueError(f"publication root cannot be opened safely: {anchor}") from exc
+    try:
+        for part in parent.parts[1:]:
+            try:
+                next_fd = os.open(part, flags, dir_fd=current_fd)
+            except FileNotFoundError:
+                try:
+                    os.mkdir(part, 0o755, dir_fd=current_fd)
+                    next_fd = os.open(part, flags, dir_fd=current_fd)
+                except OSError as exc:
+                    raise ValueError(f"publication parent cannot be created safely: {parent}") from exc
+            except OSError as exc:
+                raise ValueError(f"publication parent contains a symlink or non-directory component: {parent}") from exc
+            os.close(current_fd)
+            current_fd = next_fd
+    finally:
+        os.close(current_fd)
+
+
+def publish_artifact_transaction(
+    artifacts: Sequence[tuple[Path, bytes, int]],
+) -> bool:
+    """Publish a coherent artifact generation or restore every prior artifact.
+
+    POSIX has no multi-directory atomic rename, and the public projections may
+    live outside private custody. Stage every target beside its destination,
+    retain same-filesystem rollback copies, then replace the generation under
+    the caller's writer lock. Any cooperative write failure restores every
+    artifact already replaced before the exception is re-raised.
+    """
+
+    if not artifacts:
+        return False
+    normalized = [(Path(os.path.abspath(os.fspath(path))), content, mode) for path, content, mode in artifacts]
+    keys = [str(path) for path, _content, _mode in normalized]
+    if len(keys) != len(set(keys)):
+        raise ValueError("publication transaction contains duplicate artifact paths")
+    for path, _content, mode in normalized:
+        if mode < 0 or mode > 0o777:
+            raise ValueError(f"invalid publication mode for {path}")
+        _validate_publication_parent_nofollow(path.parent)
+    for path, _content, _mode in normalized:
+        if os.path.lexists(path) and (path.is_symlink() or not path.is_file()):
+            raise ValueError(f"publication artifact is not a regular file: {path}")
+    for path, _content, _mode in normalized:
+        _ensure_publication_parent_nofollow(path.parent)
+
+    changed = any(
+        not path.exists() or path.read_bytes() != content or path.stat().st_mode & 0o777 != mode
+        for path, content, mode in normalized
+    )
+    if not changed:
+        return False
+
+    staged: list[_StagedPublication] = []
+    committed: list[_StagedPublication] = []
+    try:
+        for path, content, mode in normalized:
+            existed = path.exists()
+            prior = path.stat() if existed else None
+            staged_path = _stage_publication_file(path, content, mode=mode)
+            try:
+                backup_path = _backup_publication_file(path) if prior is not None else None
+            except BaseException:
+                with contextlib.suppress(OSError):
+                    staged_path.unlink()
+                raise
+            staged.append(
+                _StagedPublication(
+                    path=path,
+                    staged_path=staged_path,
+                    backup_path=backup_path,
+                    existed=existed,
+                    prior_mode=prior.st_mode & 0o777 if prior is not None else None,
+                    prior_atime_ns=prior.st_atime_ns if prior is not None else None,
+                    prior_mtime_ns=prior.st_mtime_ns if prior is not None else None,
+                )
+            )
+
+        for item, (_path, _content, mode) in zip(staged, normalized, strict=True):
+            os.replace(item.staged_path, item.path)
+            committed.append(item)
+            os.chmod(item.path, mode)
+        _fsync_directories(item.path.parent for item in staged)
+    except BaseException as exc:
+        rollback_errors: list[str] = []
+        for item in reversed(committed):
+            try:
+                if item.existed:
+                    if item.backup_path is None:
+                        raise OSError("rollback copy is missing")
+                    os.replace(item.backup_path, item.path)
+                    item.backup_path = None
+                    os.chmod(item.path, int(item.prior_mode))
+                    os.utime(
+                        item.path,
+                        ns=(int(item.prior_atime_ns), int(item.prior_mtime_ns)),
+                    )
+                elif os.path.lexists(item.path):
+                    item.path.unlink()
+            except OSError as rollback_exc:
+                rollback_errors.append(f"{item.path}: {rollback_exc}")
+        with contextlib.suppress(OSError):
+            _fsync_directories(item.path.parent for item in committed)
+        if rollback_errors:
+            raise RuntimeError(
+                "artifact publication failed and rollback was incomplete: " + "; ".join(rollback_errors)
+            ) from exc
+        raise
+    finally:
+        for item in staged:
+            with contextlib.suppress(OSError):
+                item.staged_path.unlink()
+            if item.backup_path is not None:
+                with contextlib.suppress(OSError):
+                    item.backup_path.unlink()
+
+    _fsync_directories(item.path.parent for item in staged)
+    return True
+
+
 def append_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> int:
     """Append rows; ALWAYS materialize the journal file, even for zero rows.
 
@@ -1723,12 +1930,26 @@ def source_scan_state_digest(cursor: dict[str, Any]) -> str:
     return digest(cursor_semantic(clean))
 
 
-def stable_source_scan_timestamp(candidate: dict[str, Any], prior: dict[str, Any]) -> str:
-    """Retain custody time when a scan proves no semantic source-state change."""
+def stable_source_scan_timestamp(
+    candidate: dict[str, Any],
+    prior: dict[str, Any],
+    *,
+    renew_exact_all: bool = False,
+) -> str:
+    """Choose the custody time for a scanner-owned candidate.
+
+    A genuine exact-all rescan is new custody evidence even when its manifest
+    is unchanged, so the scanner may explicitly renew its timestamp before
+    binding that timestamp into a fresh in-process attestation. Ordinary
+    callers retain the stable timestamp and therefore preserve byte-identical
+    no-op publication.
+    """
 
     candidate_time = str(candidate.get("last_scan_at") or "")
     prior_time = str(prior.get("last_scan_at") or "")
     if not prior_time:
+        return candidate_time
+    if renew_exact_all and _exact_all_scope(candidate):
         return candidate_time
     comparison = dict(candidate)
     comparison["last_scan_at"] = prior_time
@@ -4636,20 +4857,17 @@ def update_ledger(
             raise ValueError("public prompt authority seal exceeds its hard byte ceiling")
         markdown_bytes = markdown.encode("utf-8")
         marker_bytes = _json_bytes(next_marker)
-        changed = False
-        if not paths.public_snapshot.exists() or paths.public_snapshot.read_bytes() != public_bytes:
-            atomic_write_bytes(paths.public_snapshot, public_bytes, mode=0o644)
-            changed = True
-        if not paths.public_seal.exists() or paths.public_seal.read_bytes() != seal_bytes:
-            atomic_write_bytes(paths.public_seal, seal_bytes, mode=0o644)
-            changed = True
-        if not paths.public_markdown.exists() or paths.public_markdown.read_bytes() != markdown_bytes:
-            atomic_write_bytes(paths.public_markdown, markdown_bytes, mode=0o644)
-            changed = True
-        # The checkpoint is last: a crash before this line leaves check_ledger red.
-        if not paths.private_snapshot.exists() or paths.private_snapshot.read_bytes() != marker_bytes:
-            atomic_write_bytes(paths.private_snapshot, marker_bytes, mode=0o600)
-            changed = True
+        try:
+            changed = publish_artifact_transaction(
+                (
+                    (paths.public_snapshot, public_bytes, 0o644),
+                    (paths.public_seal, seal_bytes, 0o644),
+                    (paths.public_markdown, markdown_bytes, 0o644),
+                    (paths.private_snapshot, marker_bytes, 0o600),
+                )
+            )
+        except OSError as exc:
+            raise ValueError("prompt artifact publication failed; previous generation restored") from exc
         snapshot["write_changed"] = changed
         snapshot["appended"] = {
             "occurrences": len(new_occurrences),
