@@ -11,12 +11,17 @@ matches no branch, can therefore idle the whole beat forever. autonomy-governor'
 This is that catch.
 
 A marker is HEALTHY when it can either self-clear or tell someone how to clear it:
-  • a release COORDINATE — a ``pr:`` number or a non-empty ``owner:`` branch (best-effort resolved
-    against GitHub when ``gh`` is available; fail-OPEN so offline/gh-down never false-fails), OR
+  • a release COORDINATE — a ``pr:`` number or a non-empty ``owner:`` branch that is still
+    merge-reachable (best-effort resolved against GitHub when ``gh`` is available; fail-OPEN so
+    offline/gh-down never false-fails). The governor autoclears ONLY on a MERGED PR, so a coordinate
+    that resolves to a CLOSED-but-unmerged PR is itself a defect — it can never self-clear (the
+    superseded-coordinate case: a preservation/draft PR whose remedy was extracted into other PRs and
+    which then closes unmerged, leaving the marker pinned to a dead coordinate), OR
   • a ``next_command:`` recovery runbook (machine-executable per the 2026-07-15 discipline).
 
 Exit 0 ⟺ no marker, or the marker is healthy.
-Exit 1 ⟺ a marker exists that has neither — it can neither self-clear nor be cleared by runbook.
+Exit 1 ⟺ a marker exists that can neither self-clear nor be cleared by runbook — no coordinate/runbook,
+         a coordinate that matches NO PR, or a coordinate that names only a CLOSED-unmerged PR.
 
 Wired advisory into the beat (institutio/governance/sensors.yaml → ``pause-marker-hygiene``): an
 advisory sensor never breaks the beat, it just surfaces the defect with a ``↑`` every cycle until a
@@ -59,12 +64,16 @@ def _pr_number(fields: dict[str, str]) -> str:
     return match.group(1) if match else ""
 
 
-def _coordinate_resolves(fields: dict[str, str], *, timeout: float) -> bool | None:
-    """Best-effort: does the ``pr:``/``owner:`` coordinate name a real PR (any state)?
+def _coordinate_status(fields: dict[str, str], *, timeout: float) -> str:
+    """Best-effort classification of the ``pr:``/``owner:`` release coordinate against GitHub.
 
-    Returns True (resolves → healthy), False (gh SUCCEEDED and the coordinate matches nothing → the
-    2026-07-15 label-mismatch defect), or None (cannot tell — gh missing/errored/offline → fail-open,
-    the caller treats None as healthy so a network hiccup never nags).
+    The governor autoclears a marker ONLY when the coordinate names a MERGED PR — so a coordinate that
+    can still reach a merge is healthy, but one that never can is the freeze defect. Returns:
+      • ``"reachable"``       — resolves to an OPEN or MERGED PR (can still self-clear, or already has),
+                                OR gh is unavailable/offline/errored (fail-OPEN: a hiccup must never nag);
+      • ``"unmatched"``       — gh SUCCEEDED and the coordinate names NO PR (the 2026-07-15 label defect);
+      • ``"closed_unmerged"`` — resolves ONLY to a CLOSED-but-unmerged PR; the governor clears on MERGED
+                                alone, so this can never autoclear (the superseded-coordinate defect).
     """
     pr = _pr_number(fields)
     owner = fields.get("owner", "")
@@ -75,21 +84,25 @@ def _coordinate_resolves(fields: dict[str, str], *, timeout: float) -> bool | No
                 capture_output=True, text=True, timeout=timeout, check=False, cwd=str(ROOT),
             )
             if proc.returncode != 0:
-                return None  # PR not found is a non-zero exit too — but so is auth/offline; fail-open
-            json.loads(proc.stdout)  # parses ⟹ a real PR
-            return True
+                return "unknown"  # not-found, auth, or offline all land here → fail-open
+            state = str(json.loads(proc.stdout).get("state", "")).upper()
+            return "closed_unmerged" if state == "CLOSED" else "reachable"
         if owner:
             proc = subprocess.run(
-                ["gh", "pr", "list", "--head", owner, "--state", "all", "--json", "number", "--limit", "1"],
+                ["gh", "pr", "list", "--head", owner, "--state", "all", "--json", "state", "--limit", "20"],
                 capture_output=True, text=True, timeout=timeout, check=False, cwd=str(ROOT),
             )
             if proc.returncode != 0:
-                return None
+                return "unknown"
             rows = json.loads(proc.stdout)
-            return bool(isinstance(rows, list) and rows)
+            if not (isinstance(rows, list) and rows):
+                return "unmatched"
+            states = {str(r.get("state", "")).upper() for r in rows}
+            # healthy if any branch PR is still merge-reachable (OPEN) or already MERGED
+            return "reachable" if (states & {"OPEN", "MERGED"}) else "closed_unmerged"
     except (OSError, subprocess.SubprocessError, ValueError):
-        return None
-    return None
+        return "unknown"
+    return "unknown"
 
 
 def evaluate(*, resolve: bool, timeout: float) -> tuple[int, str]:
@@ -107,17 +120,25 @@ def evaluate(*, resolve: bool, timeout: float) -> tuple[int, str]:
     if has_coordinate:
         if not resolve:
             return 0, f"pause-marker-hygiene: OK — marker declares a release coordinate ({reason})"
-        resolved = _coordinate_resolves(fields, timeout=timeout)
-        if resolved is False:
-            coord = fields.get("pr") or fields.get("owner")
+        status = _coordinate_status(fields, timeout=timeout)
+        coord = fields.get("pr") or fields.get("owner")
+        if status == "unmatched":
             return 1, (
                 f"pause-marker-hygiene: DEFECT — release coordinate {coord!r} resolves to NO PR and "
                 f"there is no next_command runbook; the governor can never autoclear this marker "
                 f"(the 2026-07-15 label-mismatch freeze). Point pr:/owner: at a real PR or add a "
                 f"next_command. Marker reason: {reason}"
             )
-        # resolved True or None (fail-open) → healthy
-        return 0, f"pause-marker-hygiene: OK — marker's release coordinate is resolvable ({reason})"
+        if status == "closed_unmerged":
+            return 1, (
+                f"pause-marker-hygiene: DEFECT — release coordinate {coord!r} resolves ONLY to a "
+                f"CLOSED-but-unmerged PR and there is no next_command runbook; the governor autoclears "
+                f"on MERGED alone, so this marker can never self-clear (the superseded-coordinate "
+                f"freeze). Repoint pr:/owner: at the PR that will actually land, or add a next_command. "
+                f"Marker reason: {reason}"
+            )
+        # reachable or unknown (fail-open) → healthy
+        return 0, f"pause-marker-hygiene: OK — marker's release coordinate is merge-reachable ({reason})"
 
     # No coordinate at all AND no runbook — the exact defect (this is the owner_surface-only class).
     return 1, (
