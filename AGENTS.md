@@ -249,6 +249,11 @@ source of truth. A local checkout is a disposable cache or staging area; it is n
 - Do not fall back to local files when the canonical object is remote and queryable.
 - Do not let local clone presence, local profile copies, or stale generated artifacts define public
   truth. If a remote cannot be updated, record the owner repo, missing gate, and next command.
+- Do not generalize one failed GitHub surface into "GitHub is blocked." A zero-step hosted Actions
+  job, including a runner-allocation or billing annotation, describes that exact execution surface;
+  it does not make repository/API/PR custody unavailable and is not by itself an external stop
+  condition. Verify live permissions and current receipts, continue every available local or remote
+  predicate, and name the narrow failing surface without stalling unrelated closeout work.
 
 ## Run-and-Gun Substrate
 
@@ -365,6 +370,23 @@ CI must shard module predicates and run eligible shards in parallel. The final i
 the shard receipts plus only genuine cross-module seams. Each shard has an execution-profile timeout,
 finite transient retry policy, output cap, and stable receipt; no unbounded wait, retry, or log stream
 is a valid verification strategy.
+
+## Machine-Wide Host Admission
+
+Every heavy local Codex, Claude, OpenCode, Agy, or Limen surface must enter through the shared host
+admission boundary documented in [`docs/host-work-admission.md`](docs/host-work-admission.md).
+Admission is machine-wide across worktrees: at most one non-plan Codex root turn and at most one
+heavy local surface. New heavy work is denied under declared Backblaze, swap, disk, or VITALS
+pressure; existing work is never killed, restarted, or retuned and may perform bounded closeout.
+
+Hooks are an early control layer, not sole enforcement. Codex `PreToolUse` cannot reliably block a
+tool and `SubagentStart` cannot prevent creation, so heavy entrypoints must acquire the same atomic
+lease internally. Leases bind PID plus process-start identity, refresh finitely, and clean up only
+dead, reused, or stale owners. Never delete the lease store or signal a peer to seize capacity.
+
+Project Codex families are capped at three threads and depth one. Global hook deployment and the
+verified non-backed scratch root belong to the Domus cartridge; Limen must not patch home-directory
+hooks or backup configuration directly.
 
 ## Task States
 
