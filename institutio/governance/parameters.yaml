@@ -3367,3 +3367,10 @@ parameters:
     self_update: none
     owner: mail
     note: "Safety-valve arg for the opportunity-pipeline effector (--notify). When 1, review-due detections append COUNT-ONLY events to the sealed private log ~/Workspace/_people-private/opportunities/review-due.jsonl (ARCA-sealed, never public) and push a count-only line through the existing notify cascade. ON by default because both write targets are private/count-only; set 0 to run detection without recording."
+
+  LIMEN_COVENANT_CHECK:
+    default: "1"               # ON — surface un-receipted memory writes (session-written atoms) each beat
+    env: LIMEN_COVENANT_CHECK
+    self_update: none
+    owner: tabularius
+    note: "Beat gate for the covenant attribution sensor (scripts/covenant-attribution.py --check) run each beat by metabolize.sh via the derive runner (section 0r). Proves every MEMORY.md change since the prior beat has a covering keeper receipt in <memdir>/.covenant-receipts.jsonl. Advisory severity; fail-open when memdir, receipts, or the state file (logs/covenant-attribution-state.json) are absent. Part of the Record-Keeper Covenant: the lane (memoria.py) ships in a sibling PR; this sensor surfaces the live leak as evidence before the wall (PR 6) arms. Set 0 to silence."
