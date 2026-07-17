@@ -53,7 +53,8 @@ def test_interpret_attaches_and_is_evidence_constrained(monkeypatch):
     r = interpret.interpret(_brief_core(), invoke=_invoke)
     assert r["interpretation"].startswith("names_outcome is a legibility win")
     assert "names_outcome" in seen["prompt"] and "o/hero" in seen["prompt"]  # only observed evidence
-    assert seen["model"]  # a model was resolved via model_selection
+    assert seen["model"] is None  # identifier-only state leaves selection to provider Auto
+    assert r["selection_source"] == "provider_auto"
 
 
 def test_interpret_fail_open_on_error_and_empty(monkeypatch):

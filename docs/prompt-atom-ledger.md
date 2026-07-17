@@ -10,13 +10,13 @@
 
 ## Coverage
 
-- Source scope: `partial:all`; target: `all`; horizon days: `None`; pending files: `19511`; source errors: `0`; unsupported: `0`; unresolved units: `19511`.
-- Prompt occurrences: `81491`; operator: `7125`; derived: `61703`.
-- Ask atoms: `738547` across `163978` lineages; current intents: `738547`.
-- Assessed atoms: `0`; excluded occurrences: `47731`.
-- Dispositions: `unassessed` 738547.
-- Speech acts: `ask` 611531, `constraint` 88071, `correction` 29122, `acceptance_criterion` 9234, `human_gate` 589.
-- Validation: `FAIL`.
+- Source scope: `partial:recent:2`; target: `recent:2`; horizon days: `2`; pending files: `1028`; source errors: `1`; unsupported: `0`; unresolved units: `1029`.
+- Prompt occurrences: `191`; operator: `20`; derived: `158`.
+- Ask atoms: `3062` across `1090` lineages; current intents: `3062`.
+- Assessed atoms: `0`; excluded occurrences: `104`.
+- Dispositions: `unassessed` 3062.
+- Speech acts: `ask` 2209, `constraint` 456, `correction` 245, `acceptance_criterion` 148, `human_gate` 4.
+- Validation: `PASS`.
 
 ## Dynamic Priority Contract
 
@@ -35,56 +35,56 @@ Priority is recomputed from evidence and lineage on every projection. The runtim
 
 | Rank | Atom | Kind | Authority | Score | Reasons | Disposition | Evidence |
 |---:|---|---|---|---:|---|---|---|
-| 1 | `pa-2650bbcd53438cb4f86715ea` | `correction` | `operator` | 77.534 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 2 | `pa-9fbaabaeb3685cbe3ae6ba75` | `correction` | `operator` | 77.525 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 3 | `pa-4bc2125829cfc9b1447f8877` | `constraint` | `operator` | 77.43 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 4 | `pa-9fd77a5f921c86b20bc2ea46` | `correction` | `operator` | 77.41 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 5 | `pa-968ef7183e0991cf0b25f609` | `correction` | `operator` | 77.328 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 6 | `pa-e450426ec45124cffa44bc19` | `correction` | `operator` | 77.306 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
-| 7 | `pa-7fddf0ed3f13b24454d1658e` | `constraint` | `operator` | 77.286 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 8 | `pa-2579ca48f9488aa5218fcf8c` | `correction` | `operator` | 77.284 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
-| 9 | `pa-e68aebb0fde779c63dd5334b` | `correction` | `operator` | 77.217 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 10 | `pa-354223228026fb3af972d43a` | `constraint` | `operator` | 77.195 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 11 | `pa-dec01d0dbfaf8575d7b6aa64` | `constraint` | `operator` | 77.185 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 12 | `pa-d094f98024abba03b2c084ce` | `correction` | `operator` | 77.178 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 13 | `pa-3a6fda1976cdb233c1d52cca` | `constraint` | `operator` | 77.146 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 14 | `pa-9dc09c0f325de3b2e9fb1aec` | `constraint` | `operator` | 77.058 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 15 | `pa-f0840ea7c28a3a8a64d9b7b9` | `correction` | `operator` | 77.05 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 16 | `pa-2a749e5d7221648bfaf6a990` | `constraint` | `operator` | 77.032 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 17 | `pa-3e5a3710f5cc9d5a7c4a94ea` | `constraint` | `operator` | 77.029 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 18 | `pa-31569b591ebf43ce35fd59b8` | `correction` | `operator` | 77.024 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
-| 19 | `pa-7f3014a426721758c6c9a951` | `correction` | `operator` | 77.004 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
-| 20 | `pa-a37a54cc0e1ef63b24175731` | `correction` | `operator` | 77.001 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
-| 21 | `pa-1b096be5723237e0954d900a` | `constraint` | `operator` | 76.986 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 22 | `pa-a6aad4b47d61b7e8623a38aa` | `constraint` | `operator` | 76.983 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 23 | `pa-6486c5b9a4579fcedb4e30eb` | `acceptance_criterion` | `operator` | 76.974 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 24 | `pa-91fecb4ba75b8b5384021c80` | `correction` | `operator` | 76.971 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 25 | `pa-10415cc5a18421d773930ed9` | `constraint` | `operator` | 76.966 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 26 | `pa-1a8b07d606e88e95cbcde283` | `constraint` | `operator` | 76.954 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 27 | `pa-ab2d0161b907cbfc8662ea98` | `constraint` | `operator` | 76.951 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 28 | `pa-46483961800194f590b06b89` | `constraint` | `operator` | 76.937 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 29 | `pa-cc103f40084faa494a2d78a8` | `constraint` | `operator` | 76.93 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 30 | `pa-341b1e9a5cf8b58abb01f202` | `constraint` | `operator` | 76.919 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 31 | `pa-825f488d155d45535e351107` | `acceptance_criterion` | `operator` | 76.908 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 32 | `pa-b97784341e4593a5f320cbdd` | `correction` | `operator` | 76.905 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
-| 33 | `pa-7afdf0f6ca90f427463e4fb6` | `constraint` | `operator` | 76.903 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 34 | `pa-a08d3906b6b772379f2d2a36` | `constraint` | `operator` | 76.899 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 35 | `pa-37f69e62621f57e9da9cfd10` | `acceptance_criterion` | `operator` | 76.895 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 36 | `pa-52ade754b778569eae0baac9` | `constraint` | `operator` | 76.895 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 37 | `pa-4053354b6a98a013c9fe22af` | `constraint` | `operator` | 76.893 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 38 | `pa-ab71ff70223a12986108f8a4` | `acceptance_criterion` | `operator` | 76.89 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 39 | `pa-b5d7def83763b74417a827d5` | `constraint` | `operator` | 76.887 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 40 | `pa-94efe5406d14e230e1dc8d25` | `constraint` | `operator` | 76.875 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 41 | `pa-e585fc556362d159bf769023` | `acceptance_criterion` | `operator` | 76.871 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 42 | `pa-8aa0c3dde368bea770030fe5` | `acceptance_criterion` | `operator` | 76.868 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 43 | `pa-bcbc62cff7d9c90aa16562c0` | `acceptance_criterion` | `operator` | 76.865 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 44 | `pa-a0296afb40d9cd70d4fc0052` | `constraint` | `operator` | 76.864 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 45 | `pa-72620dcdf9c9db728a643e3d` | `constraint` | `operator` | 76.863 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 46 | `pa-e2ee4acb6f3d8820be5bd7fa` | `constraint` | `operator` | 76.863 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 47 | `pa-6342523150ff64f8d9e52ae0` | `constraint` | `operator` | 76.858 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 48 | `pa-0d12566959055eb921657dc4` | `constraint` | `operator` | 76.856 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 49 | `pa-683812264df86dd694507217` | `constraint` | `operator` | 76.854 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
-| 50 | `pa-64728acffe99bf1a5a658647` | `constraint` | `operator` | 76.841 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
+| 1 | `pa-23e2c374eec793da5df3a801` | `ask` | `operator` | 76.325 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
+| 2 | `pa-9bbd2f6c4e7d053e32b348c1` | `ask` | `operator` | 76.325 | `magnitude`, `recency`, `operator_emphasis` | `unassessed` | none |
+| 3 | `pa-a893f9e424e28b588deda8a5` | `constraint` | `operator` | 75.822 | `recency`, `operator_emphasis`, `magnitude` | `unassessed` | none |
+| 4 | `pa-e9a4c550127d6b36afbf3ece` | `ask` | `operator` | 75.462 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 5 | `pa-c419249b5fcea486d369bdcf` | `ask` | `operator` | 75.263 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 6 | `pa-1c4a5cc079f12bc6e2a80d35` | `ask` | `operator` | 75.262 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 7 | `pa-8168682f8ab28e81c9e06f82` | `ask` | `operator` | 75.175 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 8 | `pa-3dcb81e9fbfd498d51ad178a` | `ask` | `operator` | 75.145 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 9 | `pa-5057f8b2b9663850bded74bb` | `ask` | `operator` | 75.109 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 10 | `pa-a6352795977d6d8d442ff510` | `ask` | `operator` | 75.109 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 11 | `pa-15cfda59e550d95f126b961e` | `ask` | `operator` | 75.079 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 12 | `pa-69516f4eed9148afaee88b1a` | `ask` | `operator` | 75.079 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 13 | `pa-0be1f7998528f2b28f92fc2f` | `ask` | `operator` | 75.042 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 14 | `pa-3d6c307fb2f6c1be2bfd1b63` | `ask` | `operator` | 75.005 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 15 | `pa-0728737ef5aede01e633771e` | `ask` | `operator` | 74.97 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 16 | `pa-4afc0f9e2f7aa1dcf8370a97` | `ask` | `operator` | 74.782 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 17 | `pa-a64015e623bb61f149d7f8cc` | `correction` | `operator` | 74.769 | `recency`, `operator_emphasis`, `magnitude` | `unassessed` | none |
+| 18 | `pa-30b3efd56b2bd162f20dfa02` | `ask` | `operator` | 74.736 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 19 | `pa-dbf9807047fad5e0df2aad08` | `ask` | `operator` | 74.728 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 20 | `pa-8abf68523a51ff39b24362f2` | `ask` | `operator` | 74.672 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 21 | `pa-cd0ee4e8e4d2465ea7f3eddb` | `ask` | `operator` | 74.672 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 22 | `pa-9c5ff594e64e0c778cce3d3b` | `ask` | `operator` | 74.643 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 23 | `pa-eb70f2565faee64baaa723ac` | `ask` | `operator` | 74.643 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 24 | `pa-9fee08a7c1ea4b42140d942f` | `correction` | `operator` | 74.57 | `recency`, `operator_emphasis`, `magnitude` | `unassessed` | none |
+| 25 | `pa-d12921c93d1fa1d104bbfc94` | `ask` | `operator` | 74.545 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 26 | `pa-9290ab2b2d82c577b3d5d573` | `ask` | `operator` | 74.492 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 27 | `pa-776c5120c9f9a9b62dd3236b` | `ask` | `operator` | 74.475 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 28 | `pa-886e0f105bfbd473f7e519b4` | `ask` | `operator` | 74.457 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 29 | `pa-f95c0190d4393ea15d530098` | `ask` | `operator` | 74.444 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 30 | `pa-54fa545e79abf8e323d9e356` | `constraint` | `operator` | 74.437 | `recency`, `operator_emphasis`, `magnitude` | `unassessed` | none |
+| 31 | `pa-ab65c179fae1e019b2788c52` | `ask` | `operator` | 74.386 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 32 | `pa-4621beac066b3b1c8221f5b6` | `ask` | `operator` | 74.314 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 33 | `pa-d4391c5d9d062001fa60f193` | `ask` | `operator` | 74.307 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 34 | `pa-39b1a3bde148ec126bb3756a` | `ask` | `operator` | 74.256 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 35 | `pa-0d4ac936b4640635913f9382` | `ask` | `operator` | 74.237 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 36 | `pa-d8b706af23113f52366663bd` | `ask` | `operator` | 74.237 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 37 | `pa-06e10d1fd1a9aff70733fe30` | `ask` | `operator` | 74.223 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 38 | `pa-aa7504c71135360002dea9c5` | `ask` | `operator` | 74.211 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 39 | `pa-c2f64c58349e2516307ce552` | `ask` | `operator` | 74.211 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 40 | `pa-5f63ca32f1c0f573c3f8bb28` | `ask` | `operator` | 74.209 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 41 | `pa-87734a513c151ecbe3fd82fe` | `ask` | `operator` | 74.209 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 42 | `pa-631c9b696b3b6fdb575455a4` | `ask` | `operator` | 74.204 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 43 | `pa-c6347ac4e43e90d5bb597d9c` | `ask` | `operator` | 74.204 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 44 | `pa-c6b344b3b6b8dcaf58c30dbe` | `ask` | `operator` | 74.151 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 45 | `pa-5a517db8e308d88fc4f2547a` | `ask` | `operator` | 74.15 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 46 | `pa-c0eb4642c73674aaf575771d` | `ask` | `operator` | 74.15 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 47 | `pa-980e233552a402980cf1ad84` | `ask` | `operator` | 74.088 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 48 | `pa-005213bd4a8809b2972d0b07` | `ask` | `operator` | 73.984 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 49 | `pa-128f8069f39040237b6035c4` | `ask` | `operator` | 73.96 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
+| 50 | `pa-fedb7b2ec971893440745bc9` | `ask` | `operator` | 73.96 | `recency`, `magnitude`, `operator_emphasis` | `unassessed` | none |
 
 ## Commands
 

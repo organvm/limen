@@ -24,16 +24,13 @@ import re
 import shlex
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 BAD_TARGET_RE = re.compile(r"\bundefined#undefined\b|repo[=:]\\?\"?undefined|number[=:]\\?\"?undefined")
 FAILED_LOG_RE = re.compile(r"\bfailed:|agent died|monthly spend limit|rate[_ -]?limit", re.IGNORECASE)
-FABLE_ACCEPTANCE_RE = re.compile(
-    r"fable-allotment\.py\s+accept|LIMEN_FABLE_ACCEPTANCE|fableAcceptance|fable-acceptance",
-    re.IGNORECASE,
-)
 
 # pytest at command position, in any of its shapes (mirrors scripts/hooks/pytest-scope-guard.sh).
 _PYTEST_CMD_RE = re.compile(
@@ -97,60 +94,42 @@ def _full_suite_pytest(cmd: str) -> bool:
     return False
 
 
-def _model_selection() -> Any:
-    """Load the shared tier vocabulary BY FILE PATH — the same self-contained importlib load
-    ``scripts/shims/claude`` uses — so this guard never re-encodes the model ladder and never
-    drags in the ``limen`` package ``__init__``. Fail-open to None so the guard still runs
-    standalone if the module is missing. ([[fleet-model-floor-bleed]] [[derive-never-pin-hardcodes]])"""
+def _fable_contract() -> Any:
+    """Load the provider-neutral authority validator without importing limen package state."""
+
     try:
         import importlib.util
 
-        root = Path(os.environ.get("LIMEN_ROOT") or Path(__file__).resolve().parents[1])
-        path = root / "cli" / "src" / "limen" / "model_selection.py"
+        root = Path(__file__).resolve().parents[1]
+        path = root / "cli" / "src" / "limen" / "fable_contract.py"
         if not path.exists():
-            path = Path(__file__).resolve().parents[1] / "cli" / "src" / "limen" / "model_selection.py"
-        spec = importlib.util.spec_from_file_location("_limen_model_selection_guard", path)
+            path = Path(__file__).resolve().parents[1] / "cli" / "src" / "limen" / "fable_contract.py"
+        spec = importlib.util.spec_from_file_location("_limen_fable_workflow_contract", path)
         if spec is None or spec.loader is None:
             return None
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        return mod
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
     except Exception:
         return None
 
 
-def _tier_order() -> tuple[str, ...]:
-    mod = _model_selection()
+_FABLE_ROLE = "fable-planner"
+
+
+def _model_selection() -> Any:
     try:
-        if mod is not None:
-            return tuple(str(t) for t in mod._CLAUDE_TIER_ORDER)
+        import importlib.util
+
+        path = Path(__file__).resolve().parents[1] / "cli" / "src" / "limen" / "model_selection.py"
+        spec = importlib.util.spec_from_file_location("_limen_fable_workflow_selection", path)
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
     except Exception:
-        pass
-    return ("haiku", "sonnet", "opus")
-
-
-def _expensive_tier() -> str:
-    """The Opus-class expensive rung's alias. Fable is guarded separately because it has a
-    written-acceptance rule; adding it above Opus must not make Opus fan-out invisible."""
-    order = _tier_order()
-    if "opus" in order:
-        return "opus"
-    try:
-        return order[-1]
-    except Exception:
-        return "opus"
-
-
-def _fable_tier() -> str:
-    order = _tier_order()
-    if "fable" in order:
-        return "fable"
-    return "fable"
-
-
-# The expensive rung, resolved once per process from the one brain (not a hardcoded literal).
-_EXPENSIVE = _expensive_tier()
-_FABLE = _fable_tier()
+        return None
 
 
 def _read_text(path: str | None) -> str:
@@ -174,17 +153,103 @@ def _as_text(value: Any) -> str:
     return json.dumps(value, sort_keys=True, ensure_ascii=False)
 
 
-def _current_fable_acceptance_present() -> bool:
-    mod = _model_selection()
+def _execution_role(value: Any) -> str:
+    if not isinstance(value, dict):
+        return ""
+    containers = (
+        value,
+        value.get("message"),
+        value.get("metadata"),
+        value.get("executionProfile"),
+        value.get("execution_profile"),
+    )
+    for container in containers:
+        if not isinstance(container, dict):
+            continue
+        role = container.get("executionRole") or container.get("execution_role") or container.get("role")
+        if isinstance(role, str) and role:
+            return role
+    return ""
+
+
+def _aware_moment(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
     try:
-        return bool(mod is not None and mod._claude_fable_acceptance_present())
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
+def _structured_fable_authority(
+    value: Any,
+    profile: Any,
+    *,
+    moment: datetime | None = None,
+) -> dict[str, Any] | None:
+    """Validate evidence at its execution time, never against current live authority."""
+
+    selector = _model_selection()
+    contract = _fable_contract()
+    if selector is None or contract is None or not isinstance(profile, dict):
+        return None
+    try:
+        evidence_moment = moment
+        if evidence_moment is None and isinstance(value, dict):
+            evidence_moment = _aware_moment(value.get("observed_at"))
+        selection = selector.validate_selection_receipt(value, moment=evidence_moment)
+        return contract.validate_authority_bundle(
+            selection.get("fable_authority"),
+            execution_profile_value=profile,
+            moment=evidence_moment,
+        )
+    except Exception:
+        return None
+
+
+def _fable_cap_closed(balance: dict[str, Any], acceptance: dict[str, Any]) -> bool:
+    mod = _fable_contract()
+    try:
+        if mod is None:
+            return True
+        closed, _reason = mod.cap_status(balance, acceptance)
+        return bool(closed)
+    except Exception:
+        return True
+
+
+def _fable_packet_metadata_valid(value: Any) -> bool:
+    mod = _fable_contract()
+    try:
+        if mod is None:
+            return False
+        mod.validate_packet_metadata(value)
+        return True
     except Exception:
         return False
 
 
-def _structured_fable_acceptance(value: Any) -> bool:
-    text = _as_text(value).strip()
-    return bool(text and FABLE_ACCEPTANCE_RE.search(text))
+def _fable_packet_receipt_valid(value: Any) -> bool:
+    mod = _fable_contract()
+    try:
+        if mod is None:
+            return False
+        mod.validate_packet_receipt(value)
+        return True
+    except Exception:
+        return False
+
+
+def _fable_execution_profile_valid(value: Any) -> bool:
+    mod = _fable_contract()
+    try:
+        if mod is None:
+            return False
+        mod.validate_execution_profile(value)
+        return True
+    except Exception:
+        return False
 
 
 def normalize_candidates(data: Any, *, allow_empty: bool = False) -> list[dict[str, Any]]:
@@ -232,13 +297,10 @@ def _workflow_violations(
     name = wf.get("workflowName") or wf.get("summary") or path.name
     progress = wf.get("workflowProgress") or []
     int(wf.get("agentCount") or len(progress) or 0)
-    models = [str(p.get("model", "")) for p in progress if isinstance(p, dict)]
-    opus_agents = sum(1 for m in models if _EXPENSIVE in m.lower())
-    fable_agents = sum(1 for m in models if _FABLE in m.lower())
+    fable_agents = sum(1 for item in progress if _execution_role(item) == _FABLE_ROLE)
+    fable_workflow = _execution_role(wf) == _FABLE_ROLE or fable_agents > 0
 
-    if opus_agents > max_opus_agents and os.environ.get("LIMEN_ALLOW_OPUS_FANOUT") != "1":
-        violations.append(f"{name}: Opus fanout blocked ({opus_agents} Opus agents; max {max_opus_agents})")
-    if fable_agents > max_fable_agents and os.environ.get("LIMEN_ALLOW_FABLE_FANOUT") != "1":
+    if fable_agents > max_fable_agents:
         violations.append(f"{name}: Fable fanout blocked ({fable_agents} Fable agents; max {max_fable_agents})")
 
     scan_parts = [
@@ -259,9 +321,35 @@ def _workflow_violations(
                 ]
             )
     scan = "\n".join(_as_text(x) for x in scan_parts)
-    fable_acceptance_ok = _structured_fable_acceptance(wf.get("fableAcceptance"))
-    if fable_agents and not fable_acceptance_ok and os.environ.get("LIMEN_ALLOW_UNACCEPTED_FABLE") != "1":
-        violations.append(f"{name}: Fable run lacks written acceptance command")
+    workflow_moment = next(
+        (
+            parsed
+            for parsed in (
+                _aware_moment(wf.get("startedAt")),
+                _aware_moment(wf.get("started_at")),
+                _aware_moment(wf.get("createdAt")),
+                _aware_moment(wf.get("created_at")),
+            )
+            if parsed is not None
+        ),
+        None,
+    )
+    authority = _structured_fable_authority(
+        wf.get("modelSelectionReceipt"),
+        wf.get("executionProfile"),
+        moment=workflow_moment,
+    )
+    fable_acceptance = authority.get("acceptance") if authority is not None else None
+    if fable_workflow and authority is None:
+        violations.append(f"{name}: Fable run lacks prelaunch signed selection/authority evidence")
+    if fable_workflow:
+        balance = authority.get("balance") if authority is not None else None
+        if balance is not None and fable_acceptance is not None and _fable_cap_closed(balance, fable_acceptance):
+            violations.append(f"{name}: Fable balance/cap contract is closed")
+        if not _fable_execution_profile_valid(wf.get("executionProfile")):
+            violations.append(f"{name}: Fable workflow is not bound to a plan-only execution profile")
+        if not _fable_packet_metadata_valid(wf.get("fablePacket")):
+            violations.append(f"{name}: Fable workflow lacks a bounded provider-neutral builder packet")
     if BAD_TARGET_RE.search(scan):
         violations.append(f"{name}: undefined PR target detected")
 
@@ -403,18 +491,20 @@ def audit_transcript(
     output_tokens = 0
     usage_messages = 0
     agent_calls = 0
-    opus_billable = 0
     fable_billable = 0
     user_unbounded: list[dict[str, Any]] = []
     full_suite_pytest: list[dict[str, Any]] = []
+    fable_tool_violations: list[dict[str, Any]] = []
+    fable_packet_writes: list[dict[str, Any]] = []
+    fable_receipt_seen = False
+    fable_first_ts: datetime | None = None
+    fable_last_ts: datetime | None = None
     models: dict[str, int] = {}
-    # A fan-out of subagents each riding the expensive tier is the exact shape of the
-    # verify-studio-launch incident (6 trivial verifiers on Opus). Count subagent transcripts
-    # (files[1:], never the main session) that ran ANY assistant turn on the costliest rung.
-    subagent_paths = {str(p) for p in files[1:]}
-    expensive_subagent_files: set[str] = set()
     fable_subagent_files: set[str] = set()
-    fable_acceptance_seen = _current_fable_acceptance_present()
+    fable_acceptance = None
+    fable_balance = None
+    fable_acceptance_seen = False
+    fable_prelaunch_missing = False
 
     unbounded_re = re.compile(
         r"\b(no stopping|indefinite|indefinitely|until ideal form|keep going until ideal form)\b",
@@ -424,10 +514,27 @@ def audit_transcript(
     for path in files:
         for line_no, row in _iter_jsonl(path):
             msg = row.get("message") or {}
-            if _structured_fable_acceptance(row.get("fableAcceptance")) or (
-                isinstance(msg, dict) and _structured_fable_acceptance(msg.get("fableAcceptance"))
-            ):
+            row_profile = (
+                row.get("execution_profile")
+                or row.get("executionProfile")
+                or (msg.get("execution_profile") if isinstance(msg, dict) else None)
+                or (msg.get("executionProfile") if isinstance(msg, dict) else None)
+            )
+            row_selection = row.get("modelSelectionReceipt") or (
+                msg.get("modelSelectionReceipt") if isinstance(msg, dict) else None
+            )
+            row_authority = _structured_fable_authority(
+                row_selection,
+                row_profile,
+                moment=_aware_moment(row.get("timestamp")),
+            )
+            if row_authority is not None:
+                fable_acceptance = row_authority["acceptance"]
+                fable_balance = row_authority["balance"]
                 fable_acceptance_seen = True
+            receipt = row.get("fableReceipt") or (msg.get("fableReceipt") if isinstance(msg, dict) else None)
+            if _fable_packet_receipt_valid(receipt):
+                fable_receipt_seen = True
             if row.get("type") == "user":
                 text = _content_text(msg.get("content"))
                 if unbounded_re.search(text):
@@ -441,16 +548,30 @@ def audit_transcript(
                     )
             if row.get("type") != "assistant":
                 continue
+            if _execution_role(row) == _FABLE_ROLE and not fable_acceptance_seen:
+                fable_prelaunch_missing = True
             model = str(msg.get("model") or "unknown")
-            if str(path) in subagent_paths and _EXPENSIVE in model.lower():
-                expensive_subagent_files.add(str(path))
-            if str(path) in subagent_paths and _FABLE in model.lower():
+            fable_turn = _execution_role(row) == _FABLE_ROLE
+            if fable_turn:
+                try:
+                    stamp = datetime.fromisoformat(str(row.get("timestamp") or "").replace("Z", "+00:00"))
+                except ValueError:
+                    stamp = None
+                if stamp is not None and stamp.tzinfo is not None:
+                    fable_first_ts = stamp if fable_first_ts is None else min(fable_first_ts, stamp)
+                    fable_last_ts = stamp if fable_last_ts is None else max(fable_last_ts, stamp)
+            if path != main and fable_turn:
                 fable_subagent_files.add(str(path))
             content = msg.get("content") or []
             if isinstance(content, list):
                 for item in content:
                     if not isinstance(item, dict) or item.get("type") != "tool_use":
                         continue
+                    tool_name = str(item.get("name") or "")
+                    contract = _fable_contract()
+                    allowed_tools = contract.FABLE_READ_ONLY_TOOLS if contract is not None else frozenset()
+                    if fable_turn and tool_name not in allowed_tools:
+                        fable_tool_violations.append({"path": str(path), "line": line_no, "tool": tool_name})
                     if item.get("name") in {"Agent", "Workflow"}:
                         agent_calls += 1
                     elif item.get("name") == "Bash":
@@ -466,31 +587,44 @@ def audit_transcript(
             cache_read_tokens += int(usage.get("cache_read_input_tokens", 0))
             output_tokens += int(usage.get("output_tokens", 0))
             models[model] = models.get(model, 0) + billable
-            if _EXPENSIVE in model.lower():
-                opus_billable += billable
-            if _FABLE in model.lower():
+            if fable_turn:
                 fable_billable += billable
 
     violations: list[str] = []
     if total_billable > max_billable_tokens and os.environ.get("LIMEN_ALLOW_EXPENSIVE_SESSION") != "1":
         violations.append(f"billable token budget exceeded ({total_billable} > {max_billable_tokens})")
-    if opus_billable > max_opus_billable_tokens and os.environ.get("LIMEN_ALLOW_OPUS_SESSION_BURN") != "1":
-        violations.append(f"Opus billable budget exceeded ({opus_billable} > {max_opus_billable_tokens})")
-    if fable_billable > max_fable_billable_tokens and os.environ.get("LIMEN_ALLOW_FABLE_SESSION_BURN") != "1":
+    if fable_billable > max_fable_billable_tokens:
         violations.append(f"Fable billable budget exceeded ({fable_billable} > {max_fable_billable_tokens})")
     if agent_calls > max_agent_calls and os.environ.get("LIMEN_ALLOW_AGENT_FANOUT") != "1":
         violations.append(f"agent/workflow fanout exceeded ({agent_calls} > {max_agent_calls})")
-    expensive_subagents = len(expensive_subagent_files)
-    if expensive_subagents > max_opus_agents and os.environ.get("LIMEN_ALLOW_OPUS_FANOUT") != "1":
-        violations.append(
-            f"{_EXPENSIVE} subagent fanout ({expensive_subagents} subagents on {_EXPENSIVE}; "
-            f"max {max_opus_agents}) — tier each fan-out agent by job, don't inherit the session model"
-        )
     fable_subagents = len(fable_subagent_files)
-    if fable_subagents > max_fable_agents and os.environ.get("LIMEN_ALLOW_FABLE_FANOUT") != "1":
-        violations.append(f"Fable subagent fanout ({fable_subagents} subagents on {_FABLE}; max {max_fable_agents})")
-    if fable_billable and not fable_acceptance_seen and os.environ.get("LIMEN_ALLOW_UNACCEPTED_FABLE") != "1":
-        violations.append("Fable run lacks written acceptance command")
+    if fable_subagents > max_fable_agents:
+        violations.append(
+            f"Fable subagent fanout ({fable_subagents} subagents in role {_FABLE_ROLE}; max {max_fable_agents})"
+        )
+    if fable_billable and (not fable_acceptance_seen or fable_prelaunch_missing):
+        violations.append("Fable run lacks prelaunch signed selection/authority evidence")
+    if fable_billable:
+        if (
+            fable_balance is not None
+            and fable_acceptance is not None
+            and _fable_cap_closed(fable_balance, fable_acceptance)
+        ):
+            violations.append("Fable balance/cap contract is closed")
+        if fable_tool_violations:
+            violations.append(
+                "Fable used mutation-capable or unclassified tools outside its explicit read-only surface "
+                f"({len(fable_tool_violations)} call(s))"
+            )
+        if not fable_receipt_seen:
+            violations.append("Fable run produced no bounded continuation-capsule evidence")
+    fable_motion_seconds = 0
+    if fable_first_ts is not None and fable_last_ts is not None:
+        fable_motion_seconds = max(0, int((fable_last_ts - fable_first_ts).total_seconds()))
+    contract = _fable_contract()
+    motion_deadline = int(contract.MOTION_RECEIPT_DEADLINE_SECONDS) if contract is not None else 5_400
+    if fable_motion_seconds >= motion_deadline and not fable_receipt_seen:
+        violations.append(f"Fable motion exceeded {motion_deadline} seconds without a durable packet receipt")
     if user_unbounded and os.environ.get("LIMEN_ALLOW_UNBOUNDED_GOAL") != "1":
         violations.append(f"unbounded goal phrase detected ({len(user_unbounded)} occurrence(s))")
     if full_suite_pytest and os.environ.get("LIMEN_ALLOW_FULL_PYTEST") != "1":
@@ -508,14 +642,22 @@ def audit_transcript(
         "billableTokens": total_billable,
         "cacheReadTokens": cache_read_tokens,
         "outputTokens": output_tokens,
-        "opusBillableTokens": opus_billable,
+        # Compatibility fields remain explicit unknowns. Provider IDs are opaque runtime
+        # outputs, so this observer cannot honestly infer a price/capability class from a name.
+        "opusBillableTokens": None,
         "fableBillableTokens": fable_billable,
         "agentCalls": agent_calls,
-        "expensiveSubagents": expensive_subagents,
+        "expensiveSubagents": None,
         "fableSubagents": fable_subagents,
         "fableAcceptanceSeen": fable_acceptance_seen,
-        "expensiveTier": _EXPENSIVE,
-        "fableTier": _FABLE,
+        "fablePacketWrites": len(fable_packet_writes),
+        "fablePacketWriteEvidence": fable_packet_writes[:10],
+        "fableToolViolations": fable_tool_violations[:10],
+        "fableDurableReceiptSeen": fable_receipt_seen,
+        "fableMotionSeconds": fable_motion_seconds,
+        "expensiveTier": None,
+        "providerCostClassified": False,
+        "fableRole": _FABLE_ROLE,
         "modelsBillable": models,
         "unboundedGoalEvidence": user_unbounded[:10],
         "fullSuitePytestCalls": len(full_suite_pytest),

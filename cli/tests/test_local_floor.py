@@ -32,6 +32,9 @@ def _scan_task(**overrides) -> dict:
 
 def _arm(monkeypatch, model="qwen3:8b"):
     monkeypatch.setenv("LIMEN_LOCAL_FLOOR", "1")
+    # Reserved local-floor exclusions are owner configuration, not a provider
+    # tier/class table embedded in model selection.
+    monkeypatch.setenv("LIMEN_CLAUDE_OPUS_CLASSES", "canon,long-horizon")
     monkeypatch.setattr(route, "ollama_model", lambda: model)
 
 
@@ -87,6 +90,29 @@ def test_reserved_classes_never_route_local(monkeypatch):
     _arm(monkeypatch)
     assert route._local_floor_lane(_scan_task(labels=["canon"]), HEALTH) is None
     assert route._local_floor_lane(_scan_task(labels=["long-horizon"]), HEALTH) is None
+
+
+def test_fable_role_and_plan_mode_never_route_local_floor(monkeypatch):
+    _arm(monkeypatch)
+    assert (
+        route._local_floor_lane(
+            _scan_task(labels=["execution-role:fable-planner", "mode:plan-only"]),
+            HEALTH,
+        )
+        is None
+    )
+    task = Task(
+        id="t-floor-fable",
+        title="plan",
+        type="scan",
+        repo="organvm/limen",
+        labels=["execution-role:fable-planner", "mode:plan-only"],
+        created="2026-07-17T00:00:00Z",
+        target_agent="ollama",
+    )
+    monkeypatch.setattr(dispatch, "ollama_model", lambda: "fixture/local-model")
+    assert dispatch._local_floor_allowed_for_task(task) is False
+    assert dispatch.agent_can_run_task("ollama", task) is False
 
 
 def test_non_floor_class_falls_through(monkeypatch):

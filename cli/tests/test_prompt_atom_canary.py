@@ -189,7 +189,7 @@ def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_five_family_canary_proves_second_pass_byte_identity(tmp_path: Path) -> None:
+def test_five_family_canary_proves_second_pass_semantic_fixed_point(tmp_path: Path) -> None:
     home = _fixture_home(tmp_path)
     command, receipt_path = _command(tmp_path, home)
 
@@ -217,13 +217,20 @@ def test_five_family_canary_proves_second_pass_byte_identity(tmp_path: Path) -> 
     }
     assert receipt["second_pass"] == {
         "atom_delta": 0,
+        "custody_renewed": True,
         "event_row_delta": 0,
+        "normalized_evidence_digest": receipt["first_pass"]["normalized_evidence_digest"],
         "outcome_delta": 0,
         "reclassification_delta": 0,
         "work_units_used": 0,
     }
-    assert receipt["artifacts_after_first"] == receipt["artifacts_after_second"]
     assert receipt["artifacts_after_first"]["private_source_scan_receipts"]["files"] == 1
+    assert receipt["artifacts_after_second"]["private_source_scan_receipts"]["files"] == 2
+    assert receipt["artifacts_after_first"]["event_journal"] == receipt["artifacts_after_second"]["event_journal"]
+    assert (
+        receipt["artifacts_after_first"]["private_raw_objects"]
+        == receipt["artifacts_after_second"]["private_raw_objects"]
+    )
     assert receipt["verification"]["returncode"] == 0
     assert receipt["verification"]["authority_ready"] is True
     assert receipt["code_identity_reverified"] is True

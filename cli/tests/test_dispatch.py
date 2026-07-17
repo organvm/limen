@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -1264,6 +1265,148 @@ def test_run_isolated_agent_retries_transient_claude_auth_blip(tmp_path: Path, m
     assert len(calls) == 2
 
 
+def test_fable_plan_stdout_is_launcher_owned_digest_bound_packet(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    task = Task(
+        id="FABLE/Plan-42",
+        title="bounded plan",
+        target_agent="claude",
+        created=date(2026, 7, 17),
+    )
+    run = subprocess.CompletedProcess(["claude"], 0, "  # Build packet\n\nOwner: Auto  \n", "")
+    monkeypatch.setattr(D, "_run_capture", lambda *_args, **_kwargs: run)
+
+    assert (
+        D._run_isolated_agent(
+            "claude",
+            task,
+            tmp_path,
+            ["claude"],
+            3,
+            fable_plan_only=True,
+        )
+        is True
+    )
+
+    packet = tmp_path / "docs" / "continuations" / "fable" / "fable-plan-42.md"
+    assert packet.read_bytes() == b"# Build packet\n\nOwner: Auto\n"
+    receipt = D._FABLE_PACKET_RECEIPTS.pop(task.id)
+    assert receipt == {
+        "schema": "limen.fable_packet_receipt.v1",
+        "path": "docs/continuations/fable/fable-plan-42.md",
+        "content_sha256": hashlib.sha256(packet.read_bytes()).hexdigest(),
+    }
+
+
+@pytest.mark.parametrize("output", ["", " \n\t "])
+def test_fable_plan_empty_stdout_fails_without_packet(
+    tmp_path: Path,
+    monkeypatch,
+    output: str,
+) -> None:
+    task = Task(
+        id="FABLE-EMPTY",
+        title="empty plan",
+        target_agent="claude",
+        created=date(2026, 7, 17),
+    )
+    run = subprocess.CompletedProcess(["claude"], 0, output, "")
+    monkeypatch.setattr(D, "_run_capture", lambda *_args, **_kwargs: run)
+
+    assert (
+        D._run_isolated_agent(
+            "claude",
+            task,
+            tmp_path,
+            ["claude"],
+            3,
+            fable_plan_only=True,
+        )
+        is False
+    )
+    assert task.id not in D._FABLE_PACKET_RECEIPTS
+    assert not (tmp_path / "docs").exists()
+
+
+def test_fable_packet_writer_rejects_symlink_parent_without_external_write(
+    tmp_path: Path,
+) -> None:
+    task = Task(
+        id="FABLE-SYMLINK",
+        title="reject symlink",
+        target_agent="claude",
+        created=date(2026, 7, 17),
+    )
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside.mkdir()
+    (tmp_path / "docs").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="not a real directory"):
+        D._persist_fable_plan_output(task, tmp_path, "# Packet")
+
+    assert list(outside.iterdir()) == []
+    assert task.id not in D._FABLE_PACKET_RECEIPTS
+
+
+def test_fable_packet_receipt_binds_exact_committed_bytes(
+    tmp_path: Path,
+) -> None:
+    task = Task(
+        id="FABLE-BIND",
+        title="bind plan",
+        target_agent="claude",
+        created=date(2026, 7, 17),
+    )
+    receipt = D._persist_fable_plan_output(task, tmp_path, "# Packet")
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Dispatch Test"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "dispatch@example.invalid"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", receipt["path"]], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "packet"], cwd=tmp_path, check=True, capture_output=True)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    D._bind_fable_packet_commit(task, tmp_path)
+
+    assert receipt["commit_sha"] == head
+    D.validate_fable_packet_commit_receipt(receipt, root=tmp_path)
+    D._FABLE_PACKET_RECEIPTS.pop(task.id)
+
+
+def test_fable_packet_receipt_rejects_commit_blob_digest_drift(
+    tmp_path: Path,
+) -> None:
+    task = Task(
+        id="FABLE-COMMIT-DRIFT",
+        title="reject drift",
+        target_agent="claude",
+        created=date(2026, 7, 17),
+    )
+    receipt = D._persist_fable_plan_output(task, tmp_path, "# Packet")
+    drifted = b"# Different committed packet\n"
+    packet_path = tmp_path / receipt["path"]
+    packet_path.write_bytes(drifted)
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Dispatch Test"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "dispatch@example.invalid"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", receipt["path"]], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "drifted packet"], cwd=tmp_path, check=True, capture_output=True)
+    packet_path.write_bytes(b"# Packet\n")
+
+    with pytest.raises(ValueError, match="does not match bytes in the recorded commit"):
+        D._bind_fable_packet_commit(task, tmp_path)
+
+    assert "commit_sha" not in receipt
+    D._FABLE_PACKET_RECEIPTS.pop(task.id)
+
+
 def test_dispatch_numeric_env_knobs_fail_open_when_malformed(tmp_path: Path, monkeypatch) -> None:
     import datetime
     import socket
@@ -1656,7 +1799,6 @@ def test_warp_auto_dispatch_sends_dynamic_profile_without_model_override(monkeyp
 
     monkeypatch.delenv("LIMEN_WARP_MODEL_OVERRIDE", raising=False)
     monkeypatch.setattr(D, "_run_cmd", fake_run)
-    monkeypatch.setattr(D, "_claude_fable_acceptance_present", lambda: False)
     task = Task(
         id="WARP-AUTO",
         title="repair parser",
@@ -1698,12 +1840,11 @@ def test_agent_argv_threads_task_into_dynamic_opencode_selector(monkeypatch) -> 
 
 def test_codex_tier_derived_from_task_classes(monkeypatch) -> None:
     """opus-class task -> o3; haiku (plain) task -> o4-mini."""
+    monkeypatch.setenv("LIMEN_CLAUDE_OPUS_CLASSES", "synthesis")
     monkeypatch.delenv("LIMEN_CODEX_MODEL", raising=False)
     monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "1")
     monkeypatch.delenv("LIMEN_CODEX_MODEL_OPUS", raising=False)
     monkeypatch.delenv("LIMEN_CODEX_MODEL_HAIKU", raising=False)
-    # Patch fable acceptance so opus class -> "opus" not "fable fallback"
-    monkeypatch.setattr(D, "_claude_fable_acceptance_present", lambda: False)
 
     opus_task = Task(
         id="CODEX-OPUS",
@@ -1730,10 +1871,10 @@ def test_codex_model_env_override_wins(monkeypatch) -> None:
 
 
 def test_codex_model_per_tier_env_override(monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_CLAUDE_OPUS_CLASSES", "synthesis")
     monkeypatch.delenv("LIMEN_CODEX_MODEL", raising=False)
     monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "1")
     monkeypatch.setenv("LIMEN_CODEX_MODEL_OPUS", "my-opus-model")
-    monkeypatch.setattr(D, "_claude_fable_acceptance_present", lambda: False)
 
     opus_task = Task(
         id="CODEX-PER-TIER",
@@ -1765,11 +1906,11 @@ def test_codex_tier_fail_open_on_exception(monkeypatch) -> None:
 
 
 def test_gemini_tier_derived_from_task_classes(monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_CLAUDE_OPUS_CLASSES", "synthesis")
     monkeypatch.delenv("LIMEN_GEMINI_MODEL", raising=False)
     monkeypatch.setenv("LIMEN_GEMINI_TIER_SELECT", "1")
     monkeypatch.delenv("LIMEN_GEMINI_MODEL_OPUS", raising=False)
     monkeypatch.delenv("LIMEN_GEMINI_MODEL_HAIKU", raising=False)
-    monkeypatch.setattr(D, "_claude_fable_acceptance_present", lambda: False)
 
     opus_task = Task(
         id="GEMINI-OPUS",
@@ -1885,6 +2026,268 @@ def test_dispatch_event_records_dynamic_selection_receipt() -> None:
     assert event.selected_model == "fixture/runtime-output"
     assert event.selection_source == "opencode_live_catalog"
     assert event.catalog_hash == "abc123"
+
+
+def test_fable_launch_is_wrapped_by_attempt_bound_sealed_orchestrator(tmp_path, monkeypatch) -> None:
+    task = Task(
+        id="FABLE-SEALED-LAUNCH",
+        title="plan under owner orchestration",
+        target_agent="claude",
+        created=date(2026, 7, 17),
+    )
+    D._MODEL_SELECTION_RECEIPTS[task.id] = {
+        "receipt": {
+            "attempt_id": "owner-attempt-17",
+            "task_id": task.id,
+        }
+    }
+    orchestrator = tmp_path / "limen-preservation-dispatch"
+    monkeypatch.setattr(D, "require_sealed_runtime", lambda name: orchestrator)
+
+    command = D._fable_preservation_command(
+        task,
+        "claude",
+        ["-p", "--model", "provider/opaque-plan"],
+        "bounded prompt",
+    )
+
+    assert command == [
+        str(orchestrator),
+        "--attempt-id",
+        "owner-attempt-17",
+        "--task-id",
+        task.id,
+        "--",
+        "claude",
+        "-p",
+        "--model",
+        "provider/opaque-plan",
+        "bounded prompt",
+    ]
+    D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+
+
+def test_dispatch_event_records_only_pr_preserved_fable_packet_receipt() -> None:
+    import datetime
+
+    task = Task(
+        id="FABLE-RECEIPT",
+        title="packet receipt",
+        repo="organvm/limen",
+        target_agent="claude",
+        status="open",
+        labels=["execution-role:fable-planner", "mode:plan-only"],
+        predicate="scripts/verify-scoped.sh cli/src/limen/dispatch.py",
+        receipt_target="https://github.com/organvm/limen/pull/9999",
+        created=date(2026, 7, 17),
+    )
+    receipt = {
+        "schema": "limen.fable_packet_receipt.v1",
+        "path": "docs/continuations/fable/fable-receipt.md",
+        "content_sha256": "b" * 64,
+        "commit_sha": "c" * 40,
+        "pull_request": "https://github.com/organvm/limen/pull/9999",
+    }
+    D._FABLE_PACKET_RECEIPTS[task.id] = receipt
+    D._FABLE_PACKET_CUSTODY_VERIFIED.add(task.id)
+    D._MODEL_SELECTION_RECEIPTS[task.id] = {
+        "execution_profile": {
+            "execution_role": "fable-planner",
+            "planning_only": True,
+            "build_allowed": False,
+            "fanout_allowed": False,
+        },
+        "selected_model": "provider/opaque-plan",
+        "selection_source": "claude_live_catalog",
+        "catalog_hash": "a" * 64,
+        "receipt": {
+            "attempt_id": "fable-parent-attempt",
+            "task_id": task.id,
+            "selection_source": "claude_live_catalog",
+        },
+    }
+    pull_request = "https://github.com/organvm/limen/pull/9999"
+
+    D._apply_result(
+        task,
+        "claude",
+        pull_request,
+        datetime.datetime.now(datetime.timezone.utc),
+        BudgetTrack(date="2026-07-17"),
+    )
+
+    event = task.dispatch_log[-1]
+    assert event.fable_packet_receipt == receipt
+    assert event.builder_handoff_receipt["provider_selection"] == "auto"
+    assert event.builder_handoff_receipt["parent_attempt_id"] == "fable-parent-attempt"
+    assert task.status == "open"
+    assert task.target_agent == "any"
+    assert task.execution_profile["execution_role"] == "implementation-builder"
+    assert "mode:plan-only" not in task.labels
+    assert pull_request in task.urls
+    assert task.id not in D._FABLE_PACKET_RECEIPTS
+    assert task.id not in D._FABLE_PACKET_CUSTODY_VERIFIED
+
+
+def test_serial_fresh_board_commit_preserves_fable_handoff_receipts(tmp_path: Path) -> None:
+    """The stale bookkeeping pass must not consume evidence before the locked commit."""
+
+    import datetime
+
+    task_id = "FABLE-SERIAL-RECEIPT"
+    pull_request = "https://github.com/organvm/limen/pull/9999"
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": task_id,
+                "title": "preserve plan then build",
+                "repo": "organvm/limen",
+                "target_agent": "claude",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "labels": ["execution-role:fable-planner", "mode:plan-only"],
+                "predicate": "scripts/verify-scoped.sh cli/src/limen/dispatch.py",
+                "receipt_target": pull_request,
+                "created": "2026-07-17",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    stale = load_limen_file(tasks_path)
+    packet = {
+        "schema": "limen.fable_packet_receipt.v1",
+        "path": "docs/continuations/fable/fable-serial-receipt.md",
+        "content_sha256": "b" * 64,
+        "commit_sha": "c" * 40,
+        "pull_request": pull_request,
+    }
+    selection_receipt = {
+        "attempt_id": "fable-parent-serial",
+        "task_id": task_id,
+        "selection_source": "claude_live_catalog",
+    }
+    D._FABLE_PACKET_RECEIPTS[task_id] = packet
+    D._FABLE_PACKET_CUSTODY_VERIFIED.add(task_id)
+    D._MODEL_SELECTION_RECEIPTS[task_id] = {
+        "execution_profile": {
+            "execution_role": "fable-planner",
+            "planning_only": True,
+            "build_allowed": False,
+            "fanout_allowed": False,
+        },
+        "selected_model": "provider/opaque-plan",
+        "selection_source": "claude_live_catalog",
+        "catalog_hash": "a" * 64,
+        "receipt": selection_receipt,
+    }
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    D._apply_result(
+        stale.tasks[0],
+        "claude",
+        pull_request,
+        now,
+        stale.portal.budget.track,
+        consume_transient_receipts=False,
+    )
+    assert task_id in D._FABLE_PACKET_RECEIPTS
+    assert task_id in D._MODEL_SELECTION_RECEIPTS
+
+    D._commit_dispatch_results(
+        tasks_path,
+        stale,
+        [("claude", task_id, pull_request)],
+        now,
+    )
+
+    persisted = read_board(tasks_path)["tasks"][0]
+    event = persisted["dispatch_log"][-1]
+    assert persisted["status"] == "open"
+    assert persisted["target_agent"] == "any"
+    assert persisted["builder_handoff_receipt"]["parent_attempt_id"] == "fable-parent-serial"
+    assert event["model_selection_receipt"] == selection_receipt
+    assert event["fable_packet_receipt"] == packet
+    assert event["builder_handoff_receipt"]["provider_selection"] == "auto"
+    assert task_id not in D._FABLE_PACKET_RECEIPTS
+    assert task_id not in D._MODEL_SELECTION_RECEIPTS
+    assert task_id not in D._FABLE_PACKET_CUSTODY_VERIFIED
+
+
+def test_fable_builder_result_requires_exact_head_predicate_receipt() -> None:
+    import datetime
+
+    task = Task(
+        id="FABLE-BUILDER-RECEIPT",
+        title="implement packet",
+        repo="organvm/limen",
+        target_agent="any",
+        status="open",
+        labels=["execution-role:implementation-builder", "fable-builder-child"],
+        predicate="bash scripts/verify-fable-gate.sh",
+        receipt_target="https://github.com/organvm/limen/pull/9999",
+        created=date(2026, 7, 17),
+        builder_handoff_receipt={
+            "schema": "limen.fable_builder_handoff_receipt.v1",
+            "parent_attempt_id": "parent",
+            "child_attempt_id": "child",
+        },
+    )
+    pull_request = "https://github.com/organvm/limen/pull/9999"
+    implementation = {
+        "schema": "limen.fable_builder_implementation.v1",
+        "parent_attempt_id": "parent",
+        "attempt_id": "child",
+        "commit_sha": "d" * 40,
+        "predicate_exit_code": 0,
+        "pull_request": pull_request,
+    }
+    D._FABLE_IMPLEMENTATION_RECEIPTS[task.id] = implementation
+    D._apply_result(
+        task,
+        "codex",
+        pull_request,
+        datetime.datetime.now(datetime.timezone.utc),
+        BudgetTrack(date="2026-07-17"),
+    )
+    assert task.status == "dispatched"
+    assert task.dispatch_log[-1].implementation_receipt == implementation
+
+
+@pytest.mark.parametrize("result", [False, "limen/fable-packet-pushed-but-no-pr"])
+def test_local_or_branch_only_fable_commit_is_not_a_durable_receipt(
+    result: bool | str,
+) -> None:
+    import datetime
+
+    task = Task(
+        id="FABLE-NOT-DURABLE",
+        title="packet not durable",
+        target_agent="claude",
+        status="open",
+        created=date(2026, 7, 17),
+    )
+    D._FABLE_PACKET_RECEIPTS[task.id] = {
+        "schema": "limen.fable_packet_receipt.v1",
+        "path": "docs/continuations/fable/fable-not-durable.md",
+        "content_sha256": "b" * 64,
+        "commit_sha": "c" * 40,
+    }
+
+    D._apply_result(
+        task,
+        "claude",
+        result,
+        datetime.datetime.now(datetime.timezone.utc),
+        BudgetTrack(date="2026-07-17"),
+    )
+
+    event = task.dispatch_log[-1]
+    assert event.fable_packet_receipt is None
+    assert "no durable PR receipt" in str(event.output)
+    assert task.id not in D._FABLE_PACKET_RECEIPTS
 
 
 def test_pr_open_receipt_blocks_duplicate_dispatch_and_noop_demotion() -> None:
@@ -3595,6 +3998,31 @@ def test_local_runtime_uses_same_worktree_isolation_authority(tmp_path: Path, mo
     monkeypatch.setenv("LIMEN_ISOLATION", " OFF ")
     assert not D._worktree_isolation_enabled()
     assert D._call_local_agent("codex", task, False) == "in-place"
+
+
+def test_authorized_fable_cannot_use_legacy_in_place_path(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    task = _wtask(repo="example/repo")
+    monkeypatch.setenv("LIMEN_ISOLATION", "off")
+    monkeypatch.setattr(
+        D,
+        "_claude_launch_selection",
+        lambda _task=None: ("opaque-provider-id", True),
+    )
+    monkeypatch.setattr(D, "_resolve_repo_dir", lambda _task: tmp_path)
+    monkeypatch.setattr(
+        D,
+        "_run_cmd",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("in-place provider must not launch")),
+    )
+
+    result = D._call_local_agent("claude", task, False)
+
+    assert D._is_blocked_result(result)
+    assert "requires the isolated stdout packet preservation pipeline" in capsys.readouterr().out
 
 
 def test_isolation_creation_root_follows_live_env_after_module_import(tmp_path: Path, monkeypatch) -> None:

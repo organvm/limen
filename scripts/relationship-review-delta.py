@@ -1,161 +1,458 @@
 #!/usr/bin/env python3
-"""relationship-review-delta — the review-due detector (the L1 effector for the Maddie/relationship cadence).
+"""PII-clean, zero-write relationship review-due observation.
 
-THE PROBLEM IT CLOSES: the relationship-pipeline delta review ("review her messages / dice up what needs
-tending") keeps NO cross-review state and has NO schedule — it fires only when the operator remembers to ask,
-so a wave of new asks can sit unreviewed indefinitely. This is the beat sensor that replaces the operator's
-memory: on a weekly cadence it counts, per person, how many NEW inbound messages have arrived since the last
-review recorded in that person's durable register, and when the volume crosses a threshold it surfaces a
-PII-CLEAN "review due" signal — a count, never a name — so the operator knows to run the (semantic) dice-up.
+Limen is only a consumer. The private relationship owner produces an immutable
+Messages snapshot and a coherent review adapter, preserves that bundle in durable
+content-addressed custody, and atomically hydrates a private local handoff. This
+script refuses raw database/registry paths and consumes only that verified handoff.
 
-It does NOT auto-dice: extracting the actual asks is a reasoning pass, not a deterministic one. This detector
-only answers "is a review owed, and roughly how big" — the honest deterministic half.
-
-DESIGN (bounded, read-only, fail-open, PII-clean):
-  - Reads the slug list from the relationship-pipeline `people.json` and each person's durable register
-    `~/Workspace/_people-private/people/<slug>/open-asks.yaml` (the `last_review` cursor).
-  - Counts inbound messages since `last_review` from `~/Library/Messages/chat.db` via a READ-ONLY, immutable
-    sqlite connection (never locks the live Messages DB). Phone handles are read at runtime and NEVER printed.
-  - Effector (`--notify`): appends a per-slug record to the SEALED private log `~/Workspace/_people-private/
-    review-due.jsonl` and stamps `review_due` back into the register. The only thing printed to stdout (which
-    the beat log captures) is a count-only summary — no person is ever named on a public surface.
-  - FAIL-OPEN: any error (chat.db absent / FDA-denied / locked / bad register) prints a PII-clean note and
-    exits 0. This runs on the live beat; it must never red the beat and never leak.
-
-Usage:
-  python3 scripts/relationship-review-delta.py            # dry: compute + print the count summary only
-  python3 scripts/relationship-review-delta.py --notify   # + write the sealed log + register review_due flag
-  python3 scripts/relationship-review-delta.py --json      # machine-readable summary (counts only)
+The observation never hydrates, checkpoints, copies, notifies, or writes state. It
+prints only aggregate counts. Missing, stale, mutable, or locally orphaned custody
+is explicit unavailable coverage, never a zero-due result.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sqlite3
+import stat
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
 
-import yaml
-
-HOME = Path.home()
-# Canonical host paths (facts on this machine, not tunable config — kept out of the parameter panel).
-RP_ROOT = HOME / "Workspace" / "4444J99" / "relationship-pipeline"
-PEOPLE_PRIVATE = HOME / "Workspace" / "_people-private" / "people"
-CHAT_DB = HOME / "Library" / "Messages" / "chat.db"
-REVIEW_LOG = PEOPLE_PRIVATE.parent / "review-due.jsonl"  # sealed with the _people-private estate
-# New inbound messages since last review at or above this count ⇒ a delta review is worth running.
-THRESHOLD = int(os.environ.get("LIMEN_RELATIONSHIP_REVIEW_THRESHOLD", "20"))
-APPLE_EPOCH_OFFSET = 978307200  # seconds between 1970-01-01 and 2001-01-01 (Apple Core Data epoch)
-
-
-def _log_clean(msg: str) -> None:
-    """PII-clean line to stdout (captured by the beat log). Never contains a name or a handle."""
-    print(f"relationship-review-delta: {msg}")
+HANDOFF_SCHEMA = "limen.relationship_review_handoff.v1"
+SNAPSHOT_SCHEMA = "relationship.review_snapshot.v1"
+ADAPTER_SCHEMA = "relationship.review_adapter.v1"
+ARTIFACT_KEYS = frozenset({"adapter", "messages"})
+THRESHOLD = 20
+MAX_SNAPSHOT_AGE_SECONDS = 8 * 24 * 60 * 60
+FUTURE_SKEW_SECONDS = 300
+APPLE_EPOCH_OFFSET = 978307200
 
 
-def _slugs_and_handles() -> list[tuple[str, list[str]]]:
-    """(slug, [handles]) from people.json. Handles are PII — returned for querying, never logged."""
-    people = json.loads((RP_ROOT / "people.json").read_text(encoding="utf-8")).get("people", [])
-    out: list[tuple[str, list[str]]] = []
-    for person in people:
+class HandoffError(ValueError):
+    """The private owner handoff is absent, stale, mutable, or unbound."""
+
+
+def _log_clean(message: str) -> None:
+    """Print one PII-clean line suitable for the public heartbeat log."""
+
+    print(f"relationship-review-delta: {message}")
+
+
+def _coverage_unavailable(*, as_json: bool, threshold: int | None, reason: str) -> int:
+    """Report unknown coverage explicitly; unavailable never means zero due."""
+
+    if as_json:
+        print(
+            json.dumps(
+                {
+                    "available": False,
+                    "checked": 0,
+                    "review_due": None,
+                    "threshold": threshold,
+                    "reason": reason,
+                }
+            )
+        )
+    else:
+        _log_clean(f"coverage unavailable ({reason}); review-due state is unknown")
+    return 0
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    value = int(raw)
+    if value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return value
+
+
+def _utc_timestamp(value: Any, field: str) -> datetime:
+    if not isinstance(value, str) or not value.strip():
+        raise HandoffError(f"{field} is missing")
+    text = value.strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise HandoffError(f"{field} is invalid") from exc
+    if parsed.tzinfo is None:
+        raise HandoffError(f"{field} lacks a timezone")
+    return parsed.astimezone(timezone.utc)
+
+
+def _sha256_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _safe_private_path(root: Path, relative: Any, *, label: str) -> Path:
+    if not isinstance(relative, str) or not relative:
+        raise HandoffError(f"{label} path is missing")
+    candidate = Path(relative)
+    if candidate.is_absolute() or any(part in {"", ".", ".."} for part in candidate.parts):
+        raise HandoffError(f"{label} path is not a safe relative path")
+
+    root = root.resolve(strict=True)
+    current = root
+    for part in candidate.parts:
+        current = current / part
+        try:
+            current_stat = current.lstat()
+        except OSError as exc:
+            raise HandoffError(f"{label} is unavailable") from exc
+        if stat.S_ISLNK(current_stat.st_mode):
+            raise HandoffError(f"{label} path contains a symlink")
+
+    try:
+        resolved = current.resolve(strict=True)
+        resolved.relative_to(root)
+    except (OSError, ValueError) as exc:
+        raise HandoffError(f"{label} escapes private handoff custody") from exc
+    return resolved
+
+
+def _private_file_state(path: Path, *, label: str) -> tuple[int, int, int, int]:
+    try:
+        file_stat = path.lstat()
+    except OSError as exc:
+        raise HandoffError(f"{label} is unavailable") from exc
+    if not stat.S_ISREG(file_stat.st_mode) or stat.S_ISLNK(file_stat.st_mode):
+        raise HandoffError(f"{label} is not a regular file")
+    if file_stat.st_uid != os.geteuid():
+        raise HandoffError(f"{label} has the wrong owner")
+    if stat.S_IMODE(file_stat.st_mode) & 0o077:
+        raise HandoffError(f"{label} is not private")
+    if file_stat.st_nlink != 1:
+        raise HandoffError(f"{label} is not an isolated hydrated copy")
+    return (file_stat.st_dev, file_stat.st_ino, file_stat.st_size, file_stat.st_mtime_ns)
+
+
+def _private_directory_state(path: Path, *, label: str) -> tuple[int, int, int]:
+    try:
+        directory_stat = path.lstat()
+    except OSError as exc:
+        raise HandoffError(f"{label} is unavailable") from exc
+    if not stat.S_ISDIR(directory_stat.st_mode) or stat.S_ISLNK(directory_stat.st_mode):
+        raise HandoffError(f"{label} is not a private directory")
+    if directory_stat.st_uid != os.geteuid():
+        raise HandoffError(f"{label} has the wrong owner")
+    if stat.S_IMODE(directory_stat.st_mode) & 0o077:
+        raise HandoffError(f"{label} is not private")
+    return (directory_stat.st_dev, directory_stat.st_ino, directory_stat.st_mtime_ns)
+
+
+def _read_private_json(
+    path: Path,
+    *,
+    label: str,
+) -> tuple[dict[str, Any], tuple[int, int, int, int], bytes]:
+    before = _private_file_state(path, label=label)
+    try:
+        payload = path.read_bytes()
+        value = json.loads(payload)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HandoffError(f"{label} is unreadable") from exc
+    if not isinstance(value, dict):
+        raise HandoffError(f"{label} is not an object")
+    if _private_file_state(path, label=label) != before:
+        raise HandoffError(f"{label} changed while reading")
+    return value, before, payload
+
+
+def _remote_immutable_uri(value: Any, immutable_ref: str, *, field: str) -> str:
+    if not isinstance(value, str) or not value or any(char.isspace() for char in value):
+        raise HandoffError(f"{field} is missing")
+    parsed = urlparse(value)
+    if not parsed.scheme or parsed.scheme.lower() == "file" or not parsed.netloc:
+        raise HandoffError(f"{field} lacks durable remote custody")
+    if (parsed.hostname or "").lower() in {"localhost", "127.0.0.1", "::1"}:
+        raise HandoffError(f"{field} points back to the local host")
+    if immutable_ref not in value:
+        raise HandoffError(f"{field} is not content-addressed")
+    return value
+
+
+def _artifact_contract(value: Any, *, label: str) -> tuple[str, int, str]:
+    if not isinstance(value, dict):
+        raise HandoffError(f"{label} artifact contract is missing")
+    path = value.get("path")
+    digest = value.get("sha256")
+    size = value.get("bytes")
+    if not isinstance(path, str) or not path:
+        raise HandoffError(f"{label} artifact path is missing")
+    if not isinstance(digest, str) or len(digest) != 64:
+        raise HandoffError(f"{label} artifact digest is invalid")
+    try:
+        int(digest, 16)
+    except ValueError as exc:
+        raise HandoffError(f"{label} artifact digest is invalid") from exc
+    if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+        raise HandoffError(f"{label} artifact size is invalid")
+    return path, size, digest.lower()
+
+
+def _snapshot_id(artifacts: dict[str, Any]) -> str:
+    frozen: dict[str, dict[str, Any]] = {}
+    for key in sorted(ARTIFACT_KEYS):
+        _path, size, digest = _artifact_contract(artifacts.get(key), label=key)
+        frozen[key] = {"bytes": size, "sha256": digest}
+    canonical = json.dumps(frozen, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return f"sha256:{_sha256_bytes(canonical)}"
+
+
+def _load_handoff(
+    handoff_path: Path,
+    *,
+    now: datetime,
+    max_age_seconds: int,
+) -> dict[str, Any]:
+    """Validate owner custody and return only exact, private hydrated artifact paths."""
+
+    expanded_handoff = handoff_path.expanduser()
+    try:
+        root = expanded_handoff.parent
+        root_state = _private_directory_state(root, label="handoff directory")
+        _private_file_state(expanded_handoff, label="handoff")
+        handoff_path = expanded_handoff.resolve(strict=True)
+    except (OSError, HandoffError) as exc:
+        raise HandoffError("handoff is unavailable") from exc
+    root = handoff_path.parent
+    handoff, handoff_state, _handoff_bytes = _read_private_json(handoff_path, label="handoff")
+    if handoff.get("schema") != HANDOFF_SCHEMA:
+        raise HandoffError("handoff schema is invalid")
+
+    source = handoff.get("snapshot_receipt")
+    if not isinstance(source, dict):
+        raise HandoffError("snapshot receipt binding is missing")
+    receipt_path = _safe_private_path(root, source.get("path"), label="snapshot receipt")
+    receipt, receipt_state, receipt_bytes = _read_private_json(receipt_path, label="snapshot receipt")
+    expected_receipt_digest = source.get("sha256")
+    if not isinstance(expected_receipt_digest, str) or _sha256_bytes(receipt_bytes) != expected_receipt_digest:
+        raise HandoffError("snapshot receipt digest does not match hydration handoff")
+
+    if receipt.get("schema") != SNAPSHOT_SCHEMA:
+        raise HandoffError("snapshot receipt schema is invalid")
+    produced_at = _utc_timestamp(receipt.get("produced_at"), "produced_at")
+    expires_at = _utc_timestamp(receipt.get("expires_at"), "expires_at")
+    hydrated_at = _utc_timestamp(handoff.get("hydrated_at"), "hydrated_at")
+    custody = receipt.get("custody")
+    if not isinstance(custody, dict) or handoff.get("custody_verification") != "verified":
+        raise HandoffError("durable owner custody is unverified")
+    custody_verified_at = _utc_timestamp(handoff.get("custody_verified_at"), "custody_verified_at")
+    skew = timedelta(seconds=FUTURE_SKEW_SECONDS)
+    max_age = timedelta(seconds=max_age_seconds)
+    if produced_at > now + skew or custody_verified_at > now + skew or hydrated_at > now + skew:
+        raise HandoffError("snapshot custody timestamp is in the future")
+    if custody_verified_at + skew < produced_at or hydrated_at + skew < custody_verified_at:
+        raise HandoffError("custody and hydration timestamps are out of order")
+    if expires_at <= produced_at or now >= expires_at:
+        raise HandoffError("snapshot custody is expired")
+    if now - produced_at > max_age or now - custody_verified_at > max_age or now - hydrated_at > max_age:
+        raise HandoffError("snapshot custody is stale")
+
+    artifacts = receipt.get("artifacts")
+    if not isinstance(artifacts, dict) or set(artifacts) != ARTIFACT_KEYS:
+        raise HandoffError("snapshot artifacts are incomplete")
+    snapshot_id = _snapshot_id(artifacts)
+    if receipt.get("snapshot_id") != snapshot_id or handoff.get("snapshot_id") != snapshot_id:
+        raise HandoffError("snapshot identity is unbound")
+
+    if custody.get("immutable_ref") != snapshot_id:
+        raise HandoffError("durable owner custody is unbound")
+    snapshot_uri = _remote_immutable_uri(custody.get("snapshot_uri"), snapshot_id, field="snapshot_uri")
+    receipt_uri = _remote_immutable_uri(custody.get("receipt_uri"), snapshot_id, field="receipt_uri")
+    if handoff.get("source_snapshot_uri") != snapshot_uri or handoff.get("source_receipt_uri") != receipt_uri:
+        raise HandoffError("hydration source does not match owner custody")
+
+    paths: dict[str, Path] = {}
+    states: dict[str, tuple[int, int, int, int]] = {}
+    for key in sorted(ARTIFACT_KEYS):
+        relative, size, digest = _artifact_contract(artifacts[key], label=key)
+        path = _safe_private_path(root, relative, label=key)
+        file_state = _private_file_state(path, label=key)
+        if file_state[2] != size or _sha256_file(path) != digest:
+            raise HandoffError(f"{key} artifact does not match owner receipt")
+        if _private_file_state(path, label=key) != file_state:
+            raise HandoffError(f"{key} artifact changed while hashing")
+        paths[key] = path
+        states[key] = file_state
+
+    if _private_file_state(handoff_path, label="handoff") != handoff_state:
+        raise HandoffError("handoff changed during validation")
+    if _private_file_state(receipt_path, label="snapshot receipt") != receipt_state:
+        raise HandoffError("snapshot receipt changed during validation")
+
+    return {
+        "paths": paths,
+        "states": states,
+        "control_paths": {"handoff": handoff_path, "receipt": receipt_path},
+        "control_states": {"handoff": handoff_state, "receipt": receipt_state},
+        "root": root,
+        "root_state": root_state,
+        "produced_at": produced_at,
+    }
+
+
+def _review_subjects(adapter: Path) -> list[tuple[str, list[str], datetime]]:
+    value, _state, _payload = _read_private_json(adapter, label="adapter")
+    if value.get("schema") != ADAPTER_SCHEMA or not isinstance(value.get("people"), list) or not value["people"]:
+        raise HandoffError("adapter schema is invalid")
+
+    out: list[tuple[str, list[str], datetime]] = []
+    seen: set[str] = set()
+    for person in value["people"]:
+        if not isinstance(person, dict):
+            raise HandoffError("adapter person is invalid")
         slug = person.get("slug")
-        if not slug:
-            continue
-        handles: list[str] = []
-        for h in person.get("handles", []) or []:
-            handles.append(h if isinstance(h, str) else (h.get("handle") or h.get("id") or ""))
-        out.append((slug, [h for h in handles if h]))
+        handles = person.get("handles")
+        last_review = person.get("last_review")
+        if not isinstance(slug, str) or not slug or Path(slug).name != slug or slug in {".", ".."} or slug in seen:
+            raise HandoffError("adapter person identity is invalid")
+        if (
+            not isinstance(handles, list)
+            or not handles
+            or any(not isinstance(item, str) or not item for item in handles)
+        ):
+            raise HandoffError("adapter handles are invalid")
+        cursor = _utc_timestamp(last_review, "last_review")
+        seen.add(slug)
+        out.append((slug, list(dict.fromkeys(handles)), cursor))
     return out
 
 
-def _last_review_cursor(slug: str) -> str | None:
-    """The `last_review` date from the person's durable register, or None if there is no register yet."""
-    reg = PEOPLE_PRIVATE / slug / "open-asks.yaml"
-    if not reg.exists():
-        return None
-    data = yaml.safe_load(reg.read_text(encoding="utf-8")) or {}
-    val = data.get("last_review")
-    return str(val) if val is not None else None
+def _apple_ns_since(cursor: datetime) -> int:
+    """Convert a validated owner cursor to the Apple Core Data nanosecond boundary."""
+
+    return int((cursor.timestamp() - APPLE_EPOCH_OFFSET) * 1_000_000_000)
 
 
-def _apple_ns_since(date_str: str) -> int:
-    """Convert a YYYY-MM-DD (local midnight) cursor to the chat.db nanosecond timestamp threshold."""
-    dt = datetime.fromisoformat(date_str).replace(tzinfo=timezone.utc)
-    return int((dt.timestamp() - APPLE_EPOCH_OFFSET) * 1_000_000_000)
+def _sqlite_companions(chat_db: Path) -> tuple[Path, ...]:
+    return tuple(chat_db.with_name(f"{chat_db.name}{suffix}") for suffix in ("-wal", "-shm", "-journal"))
 
 
-def _count_new_inbound(handles: list[str], since_ns: int) -> int:
-    """Read-only COUNT of inbound messages from `handles` after `since_ns`. Immutable ⇒ never locks live DB."""
-    uri = f"file:{CHAT_DB}?mode=ro&immutable=1"
-    conn = sqlite3.connect(uri, uri=True, timeout=5)
+def _open_chat_db(chat_db: Path) -> sqlite3.Connection:
+    """Open only a stable owner snapshot; never participate in a live WAL protocol."""
+
+    if any(path.exists() for path in _sqlite_companions(chat_db)):
+        raise sqlite3.OperationalError("immutable snapshot has mutable SQLite companions")
+    uri = f"{chat_db.resolve().as_uri()}?mode=ro&immutable=1"
+    connection = sqlite3.connect(uri, uri=True, timeout=5)
+    try:
+        connection.execute("PRAGMA query_only = ON")
+        state = connection.execute("PRAGMA query_only").fetchone()
+        if not state or int(state[0]) != 1:
+            raise sqlite3.OperationalError("query_only could not be enabled")
+    except Exception:
+        connection.close()
+        raise
+    return connection
+
+
+def _count_new_inbound(chat_db: Path, handles: list[str], since_ns: int) -> int:
+    connection = _open_chat_db(chat_db)
     try:
         placeholders = ",".join("?" for _ in handles)
         sql = (
             f"SELECT COUNT(*) FROM message m JOIN handle h ON m.handle_id = h.ROWID "
             f"WHERE h.id IN ({placeholders}) AND m.is_from_me = 0 AND m.date > ?"
         )
-        row = conn.execute(sql, [*handles, since_ns]).fetchone()
+        row = connection.execute(sql, [*handles, since_ns]).fetchone()
         return int(row[0]) if row else 0
     finally:
-        conn.close()
+        connection.close()
+
+
+def _unchanged(bundle: dict[str, Any]) -> bool:
+    for key, path in bundle["paths"].items():
+        if _private_file_state(path, label=key) != bundle["states"][key]:
+            return False
+    for key, path in bundle["control_paths"].items():
+        if _private_file_state(path, label=key) != bundle["control_states"][key]:
+            return False
+    if any(path.exists() for path in _sqlite_companions(bundle["paths"]["messages"])):
+        return False
+    if _private_directory_state(bundle["root"], label="handoff directory") != bundle["root_state"]:
+        return False
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Relationship review-due detector (deterministic half).")
-    ap.add_argument("--notify", action="store_true", help="write the sealed review-due log + register flag")
-    ap.add_argument("--json", action="store_true", help="print a machine-readable (count-only) summary")
-    args = ap.parse_args(argv)
+    parser = argparse.ArgumentParser(description="Relationship review-due observation (zero-write consumer).")
+    parser.add_argument("--json", action="store_true", help="print a machine-readable count-only summary")
+    parser.add_argument(
+        "--handoff",
+        type=Path,
+        default=None,
+        help="private owner hydration handoff (or LIMEN_RELATIONSHIP_REVIEW_HANDOFF)",
+    )
+    args = parser.parse_args(argv)
 
-    # FAIL-OPEN wrapper: nothing below may red the beat or leak.
+    threshold: int | None = None
     try:
-        if not CHAT_DB.exists():
-            _log_clean("chat.db not present — skipping (nothing to detect)")
-            return 0
+        threshold = _positive_int_env("LIMEN_RELATIONSHIP_REVIEW_THRESHOLD", THRESHOLD)
+        max_age_seconds = _positive_int_env(
+            "LIMEN_RELATIONSHIP_REVIEW_MAX_SNAPSHOT_AGE_SECONDS",
+            MAX_SNAPSHOT_AGE_SECONDS,
+        )
+        handoff_raw = args.handoff or os.environ.get("LIMEN_RELATIONSHIP_REVIEW_HANDOFF")
+        if not handoff_raw:
+            return _coverage_unavailable(as_json=args.json, threshold=threshold, reason="handoff_missing")
 
-        results: list[dict] = []
-        for slug, handles in _slugs_and_handles():
-            cursor = _last_review_cursor(slug)
-            if not cursor or not handles:
-                continue  # only track people who have a durable register and a handle
-            try:
-                new_inbound = _count_new_inbound(handles, _apple_ns_since(cursor))
-            except sqlite3.OperationalError:
-                # Almost always Full Disk Access denied to this interpreter — fail-open, note it once.
-                _log_clean("chat.db unreadable (Full Disk Access for the beat interpreter?) — skipping")
-                return 0
-            results.append({"slug": slug, "last_review": cursor, "new_inbound": new_inbound,
-                            "review_due": new_inbound >= THRESHOLD})
+        bundle = _load_handoff(
+            Path(handoff_raw),
+            now=datetime.now(timezone.utc),
+            max_age_seconds=max_age_seconds,
+        )
+        subjects = _review_subjects(bundle["paths"]["adapter"])
+        results: list[bool] = []
+        for _slug, handles, cursor in subjects:
+            if cursor > bundle["produced_at"] + timedelta(seconds=FUTURE_SKEW_SECONDS):
+                raise HandoffError("adapter review cursor is newer than its source snapshot")
+            count = _count_new_inbound(bundle["paths"]["messages"], handles, _apple_ns_since(cursor))
+            results.append(count >= threshold)
+        if not _unchanged(bundle):
+            raise HandoffError("snapshot changed during observation")
 
-        due = [r for r in results if r["review_due"]]
-        if args.notify and due:
-            _write_effector(due)
-
+        due = sum(results)
         if args.json:
-            # Count-only: slugs are internal identifiers, not handles; still, summarize rather than dump.
-            print(json.dumps({"checked": len(results), "review_due": len(due), "threshold": THRESHOLD}))
+            print(
+                json.dumps(
+                    {
+                        "available": True,
+                        "checked": len(results),
+                        "review_due": due,
+                        "threshold": threshold,
+                    }
+                )
+            )
         else:
-            _log_clean(f"{len(due)}/{len(results)} people review-due (>= {THRESHOLD} new inbound since last review)")
+            _log_clean(f"{due}/{len(results)} people review-due (>= {threshold} new inbound since last review)")
         return 0
-    except Exception as exc:  # noqa: BLE001 — beat safety: never propagate, never leak the message verbatim
-        _log_clean(f"skipped on error ({type(exc).__name__})")
-        return 0
-
-
-def _write_effector(due: list[dict]) -> None:
-    """Append to the sealed private review-due log (append-only; the commented register is never rewritten).
-
-    The next review reads this log to know a dice-up is owed. We deliberately do NOT edit open-asks.yaml here —
-    that file carries extensive human-authored comments a `yaml.safe_dump` round-trip would destroy; its
-    review_due state is derived from this log, not stamped back into the YAML.
-    """
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    REVIEW_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with REVIEW_LOG.open("a", encoding="utf-8") as fh:
-        for r in due:
-            fh.write(json.dumps({**r, "detected_at": stamp}) + "\n")
+    except (HandoffError, sqlite3.Error):
+        return _coverage_unavailable(as_json=args.json, threshold=threshold, reason="snapshot_unavailable")
+    except Exception as exc:  # noqa: BLE001 - heartbeat safety; never print private exception text
+        return _coverage_unavailable(
+            as_json=args.json,
+            threshold=threshold,
+            reason=f"internal_{type(exc).__name__.lower()}",
+        )
 
 
 if __name__ == "__main__":

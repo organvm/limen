@@ -1,336 +1,459 @@
-"""Single source of truth for the Claude-lane model vocabulary + the non-bypassable shim's
-per-spawn floor sort.
+"""Fail-closed Claude override validation from live owner metadata.
 
-Two callers share this ONE module so the model decision never drifts across copies:
+Provider model identifiers are opaque runtime outputs. Limen does not infer cost,
+context, or execution role from an identifier and does not maintain a provider
+tier ladder. A bare invocation stays on provider Auto. An explicit override is
+accepted only when a fresh owner selection receipt binds the exact identifier to
+the live catalog and current execution profile.
 
-  * ``dispatch.py``'s per-TASK earned-tier ladder (``_claude_tier_for`` / ``_bump_tier`` /
-    ``_claude_model``) imports the shared primitives below — it owns the rich sort, keyed on a
-    task's classes/labels, and passes ``--model`` explicitly.
-  * ``scripts/shims/claude`` — the non-bypassable chokepoint prepended onto the FLEET PATH —
-    calls :func:`model_for_argv` to decide what ``--model`` to inject when a fleet spawn carries
-    NONE. It owns the per-SPAWN floor: nothing escapes the sort to the account default (Opus 4.8 +
-    auto-1M context, which drove the 2026-06-25 usage bleed) WITHOUT a declaration.
-
-Design note — this module is PURE stdlib (only ``os``) and imports nothing from the ``limen``
-package, so the shim can ``importlib``-load it by file path without triggering ``limen``'s package
-``__init__`` or depending on ``PYTHONPATH``. ([[fleet-model-floor-bleed]] [[derive-never-pin-hardcodes]])
+This module is stdlib-only because ``scripts/shims/claude`` loads it directly by
+file path before every fleet Claude invocation.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import importlib.util
 import json
 import os
+import re
+from pathlib import Path
+from typing import Any
 
-# The ladder rungs, cheapest-first. Shared with dispatch's earned-tier ladder. Fable is a
-# reserved top tier above Opus, not a new default escalation target.
-_CLAUDE_TIER_ORDER = ("haiku", "sonnet", "opus", "fable")
-
-# Reserved-Opus classes: the doctrine's small principled set whose failure is BOTH undetectable
-# AND high-stakes (final/canon synthesis, irreversible go-live reasoning, kernel abstraction). A
-# stated principle, env-overridable (comma-separated LIMEN_CLAUDE_OPUS_CLASSES) — not inherited config.
-_CLAUDE_OPUS_CLASSES_DEFAULT = ("canon", "synthesis", "kernel", "go-live", "irreversible")
-
-# Fable classes are narrower than reserved-Opus classes and still require an explicit acceptance
-# receipt before model selection is allowed to return the Fable rung.
-_CLAUDE_FABLE_CLASSES_DEFAULT = (
-    "fable",
-    "long-horizon",
-    "huge-context",
-    "ambiguous-root-cause",
-    "final-canonical-decision",
+CLAUDE_MODEL_SELECTION_SCHEMA = "limen.claude_model_selection.v1"
+DEFAULT_SELECTION_MAX_AGE_SECONDS = 300
+FUTURE_SKEW_SECONDS = 60
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+_FABLE_ROLE = "fable-planner"
+_SELECTION_NAMESPACE = "limen-claude-model-selection"
+_FABLE_LAUNCH_SCHEMA = "limen.fable_preservation_launch.v1"
+_FABLE_ORCHESTRATOR = "limen.preservation-orchestrator"
+_FABLE_REQUIRED_DENIALS = frozenset(
+    {
+        "Agent",
+        "AskUserQuestion",
+        "Bash",
+        "Edit",
+        "NotebookEdit",
+        "Workflow",
+        "Write",
+        "mcp__*",
+    }
 )
 
 
-def _claude_opus_classes() -> set[str]:
-    """The reserved-Opus class set — env override (LIMEN_CLAUDE_OPUS_CLASSES, comma-separated)
-    wins, else the stated default. Shared by dispatch's per-task ladder."""
-    raw = os.environ.get("LIMEN_CLAUDE_OPUS_CLASSES")
-    if raw is not None:
-        return {c.strip() for c in raw.split(",") if c.strip()}
-    return set(_CLAUDE_OPUS_CLASSES_DEFAULT)
+class ModelSelectionBlocked(RuntimeError):
+    """The requested provider override lacks current owner evidence."""
 
 
-def _claude_fable_classes() -> set[str]:
-    """The reserved-Fable class set — env override (LIMEN_CLAUDE_FABLE_CLASSES,
-    comma-separated) wins, else the stated default. A class match alone is not enough;
-    :func:`_claude_fable_acceptance_present` must also pass."""
-    raw = os.environ.get("LIMEN_CLAUDE_FABLE_CLASSES")
-    if raw is not None:
-        return {c.strip() for c in raw.split(",") if c.strip()}
-    return set(_CLAUDE_FABLE_CLASSES_DEFAULT)
-
-
-def _claude_fable_acceptance_present() -> bool:
-    """True only when the operator has provided a written Fable acceptance artifact.
-
-    The expected value is a path to a receipt produced by ``scripts/fable-allotment.py accept``.
-    Test processes may set ``1``; real runs must point at a current-week receipt so an old shell
-    export or arbitrary existing path cannot become a standing Fable grant.
-    """
-    raw = os.environ.get("LIMEN_FABLE_ACCEPTANCE", "").strip()
-    if not raw:
-        return False
-    if raw == "1":
-        return "PYTEST_CURRENT_TEST" in os.environ
+def _owner_authority() -> Any | None:
     try:
-        path = os.path.expanduser(raw)
-        with open(path) as fh:
-            receipt = json.load(fh)
-        now = dt.datetime.now(dt.timezone.utc)
-        monday = (now - dt.timedelta(days=now.weekday())).date().isoformat()
-        return receipt.get("schema") == "limen.fable_acceptance.v1" and receipt.get("week") == monday
+        from limen import owner_authority
+
+        return owner_authority
     except Exception:
-        return False
+        try:
+            path = Path(__file__).with_name("owner_authority.py")
+            spec = importlib.util.spec_from_file_location("_limen_model_selection_owner_authority", path)
+            if spec is None or spec.loader is None:
+                return None
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
+        except Exception:
+            return None
 
 
-def _fable_balance() -> dict | None:
-    """Read the live weekly Fable balance written by ``scripts/fable-allotment.py balance``
-    (``$LIMEN_ROOT/logs/fable-allotment.json``). Returns the parsed dict for the CURRENT ISO-week,
-    or None when absent / stale / unreadable (fail-open → the acceptance receipt remains the only
-    gate). Env override ``LIMEN_FABLE_BALANCE_PATH`` points at an alternate file (tests)."""
-    raw = os.environ.get("LIMEN_FABLE_BALANCE_PATH")
-    if raw:
-        path = raw
-    else:
-        root = os.environ.get("LIMEN_ROOT")
-        base = root if root else os.path.join(os.path.expanduser("~"), "Workspace", "limen")
-        path = os.path.join(base, "logs", "fable-allotment.json")
+def _fable_contract() -> Any | None:
     try:
-        with open(path) as fh:
-            data = json.load(fh)
+        path = Path(__file__).with_name("fable_contract.py")
+        spec = importlib.util.spec_from_file_location("_limen_model_selection_fable_contract", path)
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
     except Exception:
         return None
-    if not isinstance(data, dict):
-        return None
-    now = dt.datetime.now(dt.timezone.utc)
-    monday = (now - dt.timedelta(days=now.weekday())).date().isoformat()
-    if str(data.get("week")) != monday:
-        return None  # stale week — do not trust a prior week's balance
-    return data
 
 
-def _fable_capped_tier(reserve_ok: bool) -> str | None:
-    """The live-cap decision for a would-be Fable selection whose acceptance receipt already
-    passed. Returns None when Fable is still allowed, else the fallback tier to use instead:
-
-      * spent_pct < deliberate_cap (40)         → None (Fable allowed).
-      * deliberate_cap ≤ spent_pct < hard_cap   → only a current-week ``reserve`` receipt passes;
-                                                   every other Fable route → Opus.
-      * spent_pct ≥ hard_cap (50)               → hard downgrade to Opus, NO exception.
-
-    ``reserve_ok`` marks that the caller's authorization is a fresh ``reserve``-category receipt.
-    Fail-open (no balance file / malformed) → None so the meter can never block on a hiccup; the
-    acceptance receipt organ stays the authorization of record. HARD_CAP is a hard cap. The cap
-    downgrade lands on Opus (an over-cap Fable job was legitimately high-value; Opus is the nearest
-    tier down), distinct from the acceptance-ABSENT fallback which stays at ``_fable_fallback_tier``.
-    """
-    bal = _fable_balance()
-    if bal is None:
-        return None
+def _fable_authorization_status(
+    execution_profile_value: Any = None,
+) -> tuple[dict[str, Any] | None, str]:
+    contract = _fable_contract()
+    if contract is None:
+        return None, "fable-contract-validator-unavailable"
     try:
-        spent = float(bal.get("spent_pct"))  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return None
-    deliberate_cap = float(bal.get("deliberate_cap", 40) or 40)
-    hard_cap = float(bal.get("hard_cap", 50) or 50)
-    if spent >= hard_cap:
-        return _fable_cap_downgrade_tier()
-    if spent >= deliberate_cap:
-        return None if reserve_ok else _fable_cap_downgrade_tier()
-    return None
-
-
-def _fable_cap_downgrade_tier() -> str:
-    """Where an OVER-CAP (but acceptance-valid) Fable selection lands: Opus by default, capped to
-    the ladder, env-overridable via ``LIMEN_CLAUDE_FABLE_CAP_TIER``."""
-    return _cap_tier(os.environ.get("LIMEN_CLAUDE_FABLE_CAP_TIER", "opus"), "opus")
-
-
-def _fable_reserve_receipt_present() -> bool:
-    """True only when the current acceptance receipt is a fresh (current-ISO-week) ``reserve``
-    category receipt — the single exception that passes the 40–50% band. Reuses the same receipt
-    file the acceptance gate reads; a test ``LIMEN_FABLE_ACCEPTANCE=1`` is NOT a reserve receipt."""
-    raw = os.environ.get("LIMEN_FABLE_ACCEPTANCE", "").strip()
-    if not raw or raw == "1":
-        return False
-    try:
-        with open(os.path.expanduser(raw)) as fh:
-            receipt = json.load(fh)
-        now = dt.datetime.now(dt.timezone.utc)
-        monday = (now - dt.timedelta(days=now.weekday())).date().isoformat()
-        return (
-            receipt.get("schema") == "limen.fable_acceptance.v1"
-            and receipt.get("week") == monday
-            and receipt.get("category") == "reserve"
+        receipt = load_selection_receipt()
+        if receipt.get("execution_profile") != execution_profile_value:
+            return None, "fable-authority-profile-mismatch"
+        authority = contract.validate_authority_bundle(
+            receipt.get("fable_authority"),
+            execution_profile_value=execution_profile_value,
         )
-    except Exception:
-        return False
+        return authority, "ok"
+    except Exception as exc:
+        return None, str(exc) or "fable-contract-validator-failed"
 
 
-def _fable_or_downgrade(fable_tier: str = "fable") -> str:
-    """Resolve a Fable-authorized selection against the LIVE weekly cap. Precondition: the caller
-    has already confirmed a valid acceptance receipt is present. Returns ``fable_tier`` when the
-    cap still allows Fable, else the fallback tier (Opus). This is the runtime backstop layered on
-    top of the accept-time receipt gate."""
-    downgrade = _fable_capped_tier(_fable_reserve_receipt_present())
-    return downgrade if downgrade is not None else fable_tier
-
-
-def _claude_model_is_fable(model: str | None) -> bool:
-    return bool(model and "fable" in str(model).lower())
-
-
-def _claude_model_is_opus(model: str | None) -> bool:
-    return bool(model and "opus" in str(model).lower())
-
-
-def _claude_model_uses_large_context(model: str | None) -> bool:
-    text = str(model or "").lower()
-    return bool("1m" in text or "1000000" in text or "1,000,000" in text)
-
-
-def _tier_index(tier: str) -> int:
+def _timestamp(value: Any) -> dt.datetime:
+    if not isinstance(value, str) or not value.strip():
+        raise ModelSelectionBlocked("Claude model selection receipt lacks observed_at")
+    text = value.strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
     try:
-        return _CLAUDE_TIER_ORDER.index(tier)
-    except ValueError:
-        return 0
+        parsed = dt.datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise ModelSelectionBlocked("Claude model selection observed_at is invalid") from exc
+    if parsed.tzinfo is None:
+        raise ModelSelectionBlocked("Claude model selection observed_at lacks a timezone")
+    return parsed.astimezone(dt.timezone.utc)
 
 
-def _cap_tier(tier: str, cap: str) -> str:
-    """Return ``tier`` capped to ``cap`` in the shared cheap→expensive ladder."""
-    if tier not in _CLAUDE_TIER_ORDER:
-        tier = "haiku"
-    if cap not in _CLAUDE_TIER_ORDER:
-        cap = "sonnet"
-    return _CLAUDE_TIER_ORDER[min(_tier_index(tier), _tier_index(cap))]
+def _selection_age_limit() -> int:
+    return DEFAULT_SELECTION_MAX_AGE_SECONDS
 
 
-def _max_inherited_tier() -> str:
-    """The highest tier allowed for inherited/default fleet choices.
+def _normalized_models(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or not value:
+        raise ModelSelectionBlocked("Claude model selection receipt has no live catalog")
+    normalized: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise ModelSelectionBlocked("Claude model catalog row is invalid")
+        model_id = item.get("id")
+        active = item.get("active")
+        roles = item.get("execution_roles")
+        if (
+            not isinstance(model_id, str)
+            or not model_id.strip()
+            or active is not True
+            or not isinstance(roles, list)
+            or any(not isinstance(role, str) or not role.strip() for role in roles)
+        ):
+            raise ModelSelectionBlocked("Claude model catalog row is invalid")
+        model_id = model_id.strip()
+        if model_id in seen:
+            raise ModelSelectionBlocked("Claude model catalog contains a duplicate identifier")
+        seen.add(model_id)
+        normalized.append(
+            {
+                "id": model_id,
+                "active": True,
+                "execution_roles": sorted(set(roles)),
+            }
+        )
+    return sorted(normalized, key=lambda row: row["id"])
 
-    This applies to unclassed shim floors and global ``LIMEN_CLAUDE_MODEL`` pins. Task-specific
-    declaration sites can still earn Opus/Fable through the ladder and acceptance gates.
-    """
-    hard_cap = "fable" if _expensive_model_pin_allowed() else "sonnet"
-    return _cap_tier(os.environ.get("LIMEN_CLAUDE_MAX_INHERITED_TIER", "sonnet"), hard_cap)
+
+def _catalog_hash(models: list[dict[str, Any]]) -> str:
+    payload = json.dumps(models, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(payload).hexdigest()
 
 
-def _fable_fallback_tier() -> str:
-    return _cap_tier(os.environ.get("LIMEN_CLAUDE_FABLE_FALLBACK_TIER", "sonnet"), "opus")
+def _selection_path(raw: str | os.PathLike[str] | None = None) -> Path:
+    if raw is not None:
+        raise ModelSelectionBlocked("caller-selected Claude selection receipt paths are prohibited")
+    authority = _owner_authority()
+    if authority is None:
+        raise ModelSelectionBlocked("Claude owner authority is unprovisioned")
+    try:
+        return authority.receipt_path("claude-model-selection.json")
+    except Exception as exc:
+        raise ModelSelectionBlocked("Claude owner authority is unprovisioned") from exc
 
 
-def _expensive_model_pin_allowed() -> bool:
-    return os.environ.get("LIMEN_ALLOW_EXPENSIVE_CLAUDE_MODEL_PIN") == "1"
+def _validate_launch_contract(value: Any, *, attempt_id: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or value != {
+        "schema": _FABLE_LAUNCH_SCHEMA,
+        "orchestrator": _FABLE_ORCHESTRATOR,
+        "attempt_id": attempt_id,
+        "mode": "noninteractive-print",
+        "resume_allowed": False,
+        "direct_launch_allowed": False,
+    }:
+        raise ModelSelectionBlocked("Fable selection lacks the canonical preservation-orchestrator launch contract")
+    return dict(value)
 
 
-def _large_context_allowed() -> bool:
-    return os.environ.get("LIMEN_ALLOW_CLAUDE_1M_CONTEXT") == "1" or _claude_fable_acceptance_present()
+def _verify_owner_selection(value: Any) -> None:
+    authority = _owner_authority()
+    if authority is None:
+        raise ModelSelectionBlocked("Claude owner authority is unprovisioned")
+    try:
+        authority.verify_receipt(value, namespace=_SELECTION_NAMESPACE)
+    except Exception as exc:
+        raise ModelSelectionBlocked(f"Claude owner attestation is invalid: {str(exc) or 'invalid'}") from exc
 
 
-def _resolve_claude_model(tier: str) -> str:
-    """tier → the ``claude --model`` value. Env pin wins (LIMEN_CLAUDE_<TIER>_MODEL); else the
-    bare CLI tier alias, which the ``claude`` CLI resolves to the current dated model itself
-    (nothing pinned, survives renames). ([[derive-never-pin-hardcodes]])"""
-    model = os.environ.get(f"LIMEN_CLAUDE_{tier.upper()}_MODEL") or tier
-    if _claude_model_is_fable(model) and not _claude_fable_acceptance_present():
-        return _resolve_claude_model(_fable_fallback_tier()) if tier == "fable" else tier
-    # Live weekly-cap backstop: a valid receipt is necessary-not-sufficient. When the week's Fable
-    # spend is at/over cap, downgrade to Opus even for an accepted Fable selection (reserve receipts
-    # pass only in the 40–50% band). Fail-open when no balance meter is present.
-    if _claude_model_is_fable(model):
-        capped = _fable_capped_tier(_fable_reserve_receipt_present())
-        if capped is not None:
-            return _resolve_claude_model(capped)
-    if _claude_model_uses_large_context(model) and not _large_context_allowed():
-        return tier if tier in _CLAUDE_TIER_ORDER else _max_inherited_tier()
+def _require_fable_orchestrator() -> None:
+    authority = _owner_authority()
+    if authority is None:
+        raise ModelSelectionBlocked("Fable preservation orchestrator is unprovisioned")
+    try:
+        authority.require_canonical_orchestrator_parent()
+    except Exception as exc:
+        raise ModelSelectionBlocked(f"Fable direct launch is prohibited: {str(exc) or 'invalid'}") from exc
+
+
+def validate_selection_receipt(
+    value: Any,
+    *,
+    moment: dt.datetime | None = None,
+) -> dict[str, Any]:
+    if not isinstance(value, dict) or value.get("schema") != CLAUDE_MODEL_SELECTION_SCHEMA:
+        raise ModelSelectionBlocked("Claude model selection receipt schema is invalid")
+    if value.get("authority_status") != "owner-signed":
+        raise ModelSelectionBlocked("Claude model selection receipt is not owner-signed authority")
+    observed_at = _timestamp(value.get("observed_at"))
+    now = (moment or dt.datetime.now(dt.timezone.utc)).astimezone(dt.timezone.utc)
+    age = (now - observed_at).total_seconds()
+    if age < -FUTURE_SKEW_SECONDS:
+        raise ModelSelectionBlocked("Claude model selection receipt is future-dated")
+    if age > _selection_age_limit():
+        raise ModelSelectionBlocked("Claude model selection receipt is stale")
+    if not isinstance(value.get("source"), str) or not value["source"].strip():
+        raise ModelSelectionBlocked("Claude model selection receipt lacks an owner source")
+    if not isinstance(value.get("attempt_id"), str) or not value["attempt_id"].strip():
+        raise ModelSelectionBlocked("Claude model selection receipt lacks an attempt identity")
+    if not isinstance(value.get("task_id"), str) or not value["task_id"].strip():
+        raise ModelSelectionBlocked("Claude model selection receipt lacks a task identity")
+    if not isinstance(value.get("selection_source"), str) or not value["selection_source"].strip().endswith(
+        "_live_catalog"
+    ):
+        raise ModelSelectionBlocked("Claude model selection source is not live-catalog evidence")
+    selected = value.get("selected_model")
+    if not isinstance(selected, str) or not selected.strip():
+        raise ModelSelectionBlocked("Claude model selection receipt lacks a selected model")
+    models = _normalized_models(value.get("models"))
+    digest = value.get("catalog_hash")
+    if not isinstance(digest, str) or _SHA256_RE.fullmatch(digest) is None or digest != _catalog_hash(models):
+        raise ModelSelectionBlocked("Claude model selection catalog hash is invalid")
+    matching = [row for row in models if row["id"] == selected]
+    if len(matching) != 1:
+        raise ModelSelectionBlocked("selected Claude model is absent from the live catalog")
+    profile = value.get("execution_profile")
+    if not isinstance(profile, dict):
+        raise ModelSelectionBlocked("Claude model selection receipt lacks an execution profile")
+    role = profile.get("execution_role")
+    selected_row = matching[0]
+    if role is not None:
+        if not isinstance(role, str) or not role.strip() or role.strip() not in selected_row["execution_roles"]:
+            raise ModelSelectionBlocked("Claude execution role is absent from the selected live-catalog row")
+    if role == _FABLE_ROLE:
+        _validate_launch_contract(value.get("launch_contract"), attempt_id=value["attempt_id"])
+        contract = _fable_contract()
+        if contract is None:
+            raise ModelSelectionBlocked("Fable contract validator is unavailable")
+        try:
+            contract.validate_authority_bundle(
+                value.get("fable_authority"),
+                execution_profile_value=profile,
+                moment=now,
+            )
+        except Exception as exc:
+            raise ModelSelectionBlocked(f"Fable planner authority is closed: {str(exc) or 'invalid'}") from exc
+    elif value.get("fable_authority") is not None or value.get("launch_contract") is not None:
+        raise ModelSelectionBlocked("non-Fable Claude selection carries Fable-only authority")
+    _verify_owner_selection(value)
+    return {**value, "selected_model": selected.strip(), "models": models}
+
+
+def load_selection_receipt(
+    raw: str | os.PathLike[str] | None = None,
+    *,
+    moment: dt.datetime | None = None,
+) -> dict[str, Any]:
+    path = _selection_path(raw)
+    try:
+        if path.is_symlink() or not path.is_file():
+            raise ModelSelectionBlocked("Claude model selection receipt is unavailable")
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except ModelSelectionBlocked:
+        raise
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ModelSelectionBlocked("Claude model selection receipt is unreadable") from exc
+    return validate_selection_receipt(value, moment=moment)
+
+
+def _option_values(args: list[str], *names: str) -> list[str]:
+    values: list[str] = []
+    for index, arg in enumerate(args):
+        for name in names:
+            if arg == name:
+                if index + 1 < len(args):
+                    values.append(args[index + 1])
+            elif arg.startswith(f"{name}="):
+                values.append(arg.split("=", 1)[1])
+    return values
+
+
+def _tool_rules(values: list[str]) -> set[str]:
+    return {item.strip() for value in values for item in value.split(",") if item.strip()}
+
+
+def _validate_fable_argv(args: list[str]) -> None:
+    contract = _fable_contract()
+    if contract is None:
+        raise ModelSelectionBlocked("Fable contract validator is unavailable")
+    tools = _tool_rules(_option_values(args, "--tools"))
+    allowed = _tool_rules(_option_values(args, "--allowedTools", "--allowed-tools"))
+    disallowed = _tool_rules(_option_values(args, "--disallowedTools", "--disallowed-tools"))
+    permission_modes = _option_values(args, "--permission-mode")
+    print_flags = [arg for arg in args if arg in {"-p", "--print"}]
+    resume_flags = {
+        "-c",
+        "--continue",
+        "--resume",
+        "--session-id",
+        "--fork-session",
+        "--teleport",
+    }
+    if (
+        not tools
+        or tools != allowed
+        or not tools <= set(contract.FABLE_READ_ONLY_TOOLS)
+        or not _FABLE_REQUIRED_DENIALS <= disallowed
+        or permission_modes != ["dontAsk"]
+        or "--no-chrome" not in args
+        or "--dangerously-skip-permissions" in args
+        or len(print_flags) != 1
+        or any(
+            arg in resume_flags or any(arg.startswith(f"{flag}=") for flag in resume_flags if flag.startswith("--"))
+            for arg in args
+        )
+    ):
+        raise ModelSelectionBlocked(
+            "Fable model identity cannot run outside the exact plan-only read-only tool surface"
+        )
+
+
+def validate_claude_model_override(
+    model: str,
+    *,
+    execution_profile_value: Any = None,
+    args: list[str] | None = None,
+    receipt_path: str | os.PathLike[str] | None = None,
+    moment: dt.datetime | None = None,
+) -> str:
+    """Validate an opaque explicit model against current catalog and role evidence."""
+
+    if not isinstance(model, str) or not model.strip():
+        raise ModelSelectionBlocked("explicit Claude model override is empty")
+    model = model.strip()
+    receipt = load_selection_receipt(receipt_path, moment=moment)
+    if receipt["selected_model"] != model:
+        raise ModelSelectionBlocked("explicit Claude model override differs from the owner selection")
+    if execution_profile_value is not None and receipt["execution_profile"] != execution_profile_value:
+        raise ModelSelectionBlocked("Claude model selection execution profile does not match this launch")
+    row = next(item for item in receipt["models"] if item["id"] == model)
+    roles = set(row["execution_roles"])
+    receipt_profile = receipt["execution_profile"]
+    role = receipt_profile.get("execution_role")
+    if _FABLE_ROLE in roles or role == _FABLE_ROLE:
+        if _FABLE_ROLE not in roles or role != _FABLE_ROLE:
+            raise ModelSelectionBlocked("Fable model identity and execution role are not mutually bound")
+        if args is not None:
+            _require_fable_orchestrator()
+            _validate_fable_argv(args)
     return model
 
 
-def _guard_claude_model_pin(model: str | None) -> str | None:
-    """Prevent global model pins from turning every inherited fleet spawn expensive.
+def selected_model_for_profile(
+    execution_profile_value: Any,
+    *,
+    explicit_model: str | None = None,
+) -> str:
+    """Return the receipt-selected opaque model for an owner-bound profile."""
 
-    Per-task declaration sites still pass explicit ``--model`` values through the shim; those are
-    audited by transcript/workflow guards. This guard covers the global default pin
-    ``LIMEN_CLAUDE_MODEL``, which otherwise becomes inherited fan-out for unrelated cheap work.
-    """
-    if _claude_model_is_fable(model) and not _claude_fable_acceptance_present():
-        return _resolve_claude_model(_fable_fallback_tier())
-    if (_claude_model_is_opus(model) or _claude_model_uses_large_context(model)) and not _expensive_model_pin_allowed():
-        return _resolve_claude_model(_max_inherited_tier())
-    if _claude_model_uses_large_context(model) and not _large_context_allowed():
-        return _resolve_claude_model(_max_inherited_tier())
-    return model
-
-
-def _guard_fable_model_pin(model: str | None) -> str | None:
-    """Backward-compatible name for the global Claude model-pin guard."""
-    return _guard_claude_model_pin(model)
+    receipt = load_selection_receipt()
+    candidate = explicit_model or receipt["selected_model"]
+    return validate_claude_model_override(
+        candidate,
+        execution_profile_value=execution_profile_value,
+    )
 
 
-# ── The non-bypassable shim's per-spawn floor sort ──────────────────────────────────────────
-# The shim sits FIRST on the fleet PATH, so every fleet-spawned `claude` resolves to it. It is the
-# ENFORCEMENT half of the tiering chain: the rich, per-task SORT happens at the declaration sites
-# (dispatch's ladder, converge's tier factory) which pass --model explicitly; the shim GUARANTEES
-# nothing escapes that sort to the account default WITHOUT a declaration. The rule:
-#
-#   • --model already present  → leave it (the declaration site already sorted this spawn);
-#   • not a `-p` / `--print` run → leave it (interactive / `claude mcp …` / etc. — never re-tier);
-#   • else                      → inject the FLOOR: LIMEN_CLAUDE_SHIM_FLOOR (default "haiku" — the
-#                                 SAME tier dispatch's ladder assigns to unclassed work, so this is
-#                                 the ladder's own default, NOT a blanket downgrade).
-#
-# Subagents default to `inherit`, so this one top-level injection governs the ENTIRE fan-out tree.
-# CAVEAT: `claude --resume` ignores --model (a resumed session keeps its BIRTH model), so a resume
-# is governed by the tier it was born at — which this shim sets for every NEW session. Fail-open to
-# None in every branch (→ bare invocation under the ANTHROPIC_MODEL seatbelt), never block a spawn.
-
-
-def _shim_floor_tier() -> str:
-    """The floor tier for an unclassed fleet spawn.
-
-    ``LIMEN_CLAUDE_SHIM_FLOOR`` tunes it, but inherited/default floors are capped by
-    ``LIMEN_CLAUDE_MAX_INHERITED_TIER`` (default Sonnet) so a shell export cannot make trivial
-    workers inherit Opus/Fable or 1M context by default.
-    """
-    tier = os.environ.get("LIMEN_CLAUDE_SHIM_FLOOR", "haiku")
-    if tier not in _CLAUDE_TIER_ORDER:
-        return "haiku"
-    return _cap_tier(tier, _max_inherited_tier())
+def _explicit_model(args: list[str]) -> str | None:
+    values: list[str] = []
+    for index, arg in enumerate(args):
+        if arg == "--model":
+            if index + 1 >= len(args) or args[index + 1].startswith("-"):
+                raise ModelSelectionBlocked("explicit Claude --model override lacks a value")
+            values.append(args[index + 1])
+        elif arg.startswith("--model="):
+            values.append(arg.split("=", 1)[1])
+    if len(values) > 1:
+        raise ModelSelectionBlocked("Claude invocation contains multiple model overrides")
+    return values[0] if values else None
 
 
 def model_for_argv(args: list[str]) -> str | None:
-    """The ``--model`` value to INJECT for a fleet ``claude`` invocation, or None to leave the
-    spawn untouched.
+    """Validate every explicit override; leave an unpinned invocation on provider Auto."""
 
-    ``args`` is argv WITHOUT the program name (i.e. ``sys.argv[1:]``). Returns a model string to
-    splice in as ``--model <value>``, or None when the spawn must not be touched: it already
-    carries --model (a declaration site sorted it), it is not a print/headless run, tiering is
-    deliberately gated off, or anything errors (fail-open). Mirrors the precedence of
-    ``dispatch._claude_model``: explicit pin > feature gate > derived floor.
-    """
-    try:
-        if any(arg == "--model" or arg.startswith("--model=") for arg in args):
-            return None  # the declaration site already sorted this spawn — respect it
-        if not ("-p" in args or "--print" in args):
-            return None  # interactive / `claude mcp …` / any non-print — never re-tier
-        pin = os.environ.get("LIMEN_CLAUDE_MODEL")
-        if pin:
-            return _guard_claude_model_pin(pin)  # a manual pin wins only inside the expensive gates
-        if os.environ.get("LIMEN_CLAUDE_TIER_SELECT", "1") != "1":
-            return None  # tiering deliberately disabled → bare invocation (account default)
-        return _resolve_claude_model(_shim_floor_tier())
-    except Exception:
-        return None  # never block a spawn on a sort hiccup
+    explicit = _explicit_model(args)
+    configured = [
+        value.strip()
+        for name in ("LIMEN_CLAUDE_MODEL", "ANTHROPIC_MODEL", "CLAUDE_MODEL")
+        if (value := os.environ.get(name)) and value.strip()
+    ]
+    if explicit is None and len(set(configured)) > 1:
+        raise ModelSelectionBlocked("Claude invocation contains conflicting environment model overrides")
+    pin = configured[0] if configured else None
+    requested = explicit or pin
+    if requested:
+        validate_claude_model_override(requested, args=args)
+        if explicit is None and ("-p" in args or "--print" in args):
+            return requested
+    return None
+
+
+# Compatibility surfaces for older readers. They deliberately expose no fixed
+# provider tiers/classes; selection now comes only from live owner metadata.
+_CLAUDE_TIER_ORDER: tuple[str, ...] = ()
+
+
+def _claude_opus_classes() -> set[str]:
+    return {value.strip() for value in os.environ.get("LIMEN_CLAUDE_OPUS_CLASSES", "").split(",") if value.strip()}
+
+
+def _claude_fable_classes() -> set[str]:
+    return set()
+
+
+def _resolve_claude_model(_tier: str, *, fable_authorized: bool = False) -> str | None:
+    del fable_authorized
+    return None
+
+
+def _guard_fable_model_pin(
+    model: str | None,
+    execution_profile_value: Any = None,
+) -> str | None:
+    if not model:
+        return None
+    return validate_claude_model_override(
+        model,
+        execution_profile_value=execution_profile_value,
+    )
+
+
+def _claude_fable_acceptance_present(execution_profile_value: Any = None) -> bool:
+    authority, _reason = _fable_authorization_status(execution_profile_value)
+    return authority is not None
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Debug/inspection entrypoint: print the model :func:`model_for_argv` would inject for the
-    given args (nothing if it would leave the spawn untouched). Example:
-    ``python -m limen.model_selection -p hello`` → ``haiku``."""
     import sys
 
-    model = model_for_argv(list(argv if argv is not None else sys.argv[1:]))
+    try:
+        model = model_for_argv(list(argv if argv is not None else sys.argv[1:]))
+    except ModelSelectionBlocked as exc:
+        print(f"BLOCKED: {exc}", file=sys.stderr)
+        return 78
     if model:
         print(model)
     return 0

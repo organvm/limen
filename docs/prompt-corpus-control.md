@@ -106,7 +106,7 @@ unresolved units remain durable tombstones and owner-routed gaps across unchange
 reappear with parsed or excluded resolution proof. Cursor proposals require an exact revision and
 digest pair; stale proposals are rejected without changing private cursor bytes.
 An exact `all` result is not self-certifying: the scanner issues an in-process attestation which the
-writer seals as a private, read-only, SHA-bound `limen.prompt-source-scan.v1` receipt. That receipt
+writer seals as a private, read-only, SHA-bound `limen.prompt-source-scan.v2` receipt. That receipt
 binds the running scanner code, adapter contract, CAS base, discovery specification, source manifest,
 container generation, and parsed/excluded/adapted custody. The checker re-discovers those roots and
 re-stats strong file and SQLite/WAL identities; a new, deleted, replaced, or racing unit makes exact
@@ -162,7 +162,7 @@ tracked JSON and Markdown projections contain only opaque IDs, aggregate counts,
 dispositions, owner routes, and canonical receipt references.
 
 `docs/prompt-authority-seal.json` is the bounded publication receipt for source-corpus authority. Its
-schema is `limen.prompt-authority-seal.v1`; it contains only fixed numeric aggregates, safe family and
+schema is `limen.prompt-authority-seal.v2`; it contains only fixed numeric aggregates, safe family and
 reason labels, and SHA-256 bindings to the semantic projection, cursor, manifests, adapter contract,
 sealed scan, bounded family aggregates, and exact public-projection digest. Alias blocker counts use
 the contract-owned fixed reason taxonomy and any nonzero blocker makes the derived authority verdict
@@ -173,10 +173,19 @@ writer refuses any receipt over 64 KiB. `--require-scope all` requires the seal'
 `authority_ready` verdict, not only the textual scope labels. A zero-change rerun must leave its bytes
 and modification time unchanged.
 
-An exclusive writer lock serializes updates; journal appends are flushed before atomic projection
-replacement, and the compact checkpoint is written last. Stable occurrence and atom IDs plus a
-monotonic cursor merge make concurrent or repeated drains idempotent. The cursor digest is embedded
-in the projection, so a cursor advance without a matching projection fails closed. Before the
+The v2 source-scan receipt binds `last_scan_at` into the attested payload. The v2 authority seal and
+public projection bind a fixed-schema freshness receipt containing only evaluation time, scan time,
+expiry, the 24-hour bound, and a controlled reason. The writer supplies the evaluation time at its
+update/rebind boundary; pure seal validation never reads the wall clock. A stale exact-all cursor may
+still be mechanically re-bound, but its bound freshness verdict is false and therefore
+`authority_ready=false`.
+
+An exclusive writer lock serializes updates; journal appends are flushed before publication. The
+public JSON, authority seal, public Markdown, and compact private checkpoint are staged together
+beside their destinations, then installed as one generation; any cooperative install failure rolls
+every replaced artifact back to its prior bytes, mode, and timestamp. Stable occurrence and atom IDs
+plus a monotonic cursor merge make concurrent or repeated drains idempotent. The cursor digest is
+embedded in the projection, so a cursor advance without a matching projection fails closed. Before the
 zero-input fast path adopts existing public bytes, it re-derives the full seal inputs from the private
 checkpoint and current cursor; coherently rehashed projection/seal references that disagree with that
 custody are rebuilt. Verification rebuilds the public JSON and Markdown byte-for-byte from the private
@@ -192,12 +201,15 @@ chronology; missing, equal-order, or future-predecessor edges remain validation 
 
 The heartbeat sensor is intentionally dark (`LIMEN_PROMPT_ATOM_CONTROL=0`) and is not an Omega rung.
 Activation requires a measured, resource-bounded canary that proves both a healthy first pass and a
-cheap idempotent second pass. The canary requires fresh canonical outputs, spends one work unit on
-each of the Codex, Claude, Gemini, OpenCode, and Agy fixture families, and records run-local work-unit
-use so a reused cursor cannot impersonate fresh proof. Its default mode also refuses implementation
-files that differ from Git HEAD and records both the exact head and a combined implementation digest
-in the private receipt. Until that receipt exists, use the commands below manually; do not turn the
-gate on merely because the implementation or a narrow unit test is green.
+cheap semantic fixed-point second pass. The second pass deliberately crosses the scanner's bounded
+freshness tick and must publish new custody evidence while appending/reclassifying nothing and
+preserving the normalized evidence digest; byte identity would incorrectly treat renewed custody as
+drift. The canary requires fresh canonical outputs, spends one work unit on each of the Codex,
+Claude, Gemini, OpenCode, and Agy fixture families, and records run-local work-unit use so a reused
+cursor cannot impersonate fresh proof. Its default mode also refuses implementation files that
+differ from Git HEAD and records both the exact head and a combined implementation digest in the
+private receipt. Until that receipt exists, use the commands below manually; do not turn the gate on
+merely because the implementation or a narrow unit test is green.
 
 ```bash
 # Incremental scan; an existing all-history target rechecks its complete manifest.

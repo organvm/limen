@@ -59,20 +59,40 @@ def receipt_data(category: str, percent: float) -> dict:
         "redacted_packets": [],
         "verification": ["python3 scripts/fable-allotment.py audit"],
         "reserve_unlocked": category == "reserve",
+        "mode": "plan-only",
+        "deliverable": "continuation-capsule",
+        "builder_handoff": {
+            "provider_selection": "auto",
+            "requirements": {
+                "planning_only": False,
+                "build_allowed": True,
+                "fable_allowed": False,
+            },
+        },
+        "motion_receipt_deadline_seconds": 5400,
     }
 
 
-def test_accept_writes_receipt_and_env_export(tmp_path):
+def test_accept_writes_unsigned_owner_proposal_not_runtime_authority(tmp_path):
     receipts_dir = tmp_path / "receipts"
     proc = run_fable(*base_accept_args(receipts_dir))
     assert proc.returncode == 0, proc.stderr
-    payload = json.loads("\n".join(proc.stdout.splitlines()[:-1]))
+    payload = json.loads(proc.stdout)
     receipt = Path(payload["receipt"])
     assert receipt.exists()
     data = json.loads(receipt.read_text())
     assert data["category"] == "governance"
     assert data["percent"] == 10
-    assert "export LIMEN_FABLE_ACCEPTANCE=" in proc.stdout
+    assert data["mode"] == "plan-only"
+    assert data["deliverable"] == "continuation-capsule"
+    assert data["builder_handoff"]["provider_selection"] == "auto"
+    assert data["builder_handoff"]["requirements"]["fable_allowed"] is False
+    assert "model" not in json.dumps(data["builder_handoff"])
+    assert "tier" not in json.dumps(data["builder_handoff"])
+    assert receipt.stat().st_mode & 0o077 == 0
+    assert payload["authorized"] is False
+    assert payload["authority_status"] == "unsigned-proposal"
+    assert "export LIMEN_FABLE_ACCEPTANCE=" not in proc.stdout
 
 
 def test_category_cap_and_reserve_lock_are_enforced(tmp_path):
@@ -143,13 +163,24 @@ def test_balance_writes_current_week_report(tmp_path):
         text=True,
         env={
             "LIMEN_ROOT": str(root),
-            "LIMEN_CLAUDE_TRANSCRIPTS_DIR": str(empty_transcripts),
+            "LIMEN_FABLE_USAGE_TRANSCRIPTS_DIR": str(empty_transcripts),
+            "LIMEN_FABLE_WEEKLY_TOKENS": "1000000",
             "PATH": __import__("os").environ.get("PATH", ""),
         },
     )
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout)
     assert out["week"] == _this_monday()
+    assert out["schema"] == "limen.fable_balance.v1"
+    assert out["meter_ready"] is True
+    assert out["observed_at"]
+    assert out["measurement"] == {
+        "method": "token-ratio",
+        "numerator_tokens": 0,
+        "denominator_tokens": 1000000,
+        "unbound_usage_rows": 0,
+        "role_binding": "execution_role:fable-planner",
+    }
     assert out["deliberate_cap"] == 40 and out["hard_cap"] == 50
     assert out["spent_tokens"] == 0 and out["spent_pct"] == 0.0
     assert out["over_cap"] is False
@@ -165,10 +196,149 @@ def test_balance_is_idempotent(tmp_path):
     empty.mkdir()
     env = {
         "LIMEN_ROOT": str(root),
-        "LIMEN_CLAUDE_TRANSCRIPTS_DIR": str(empty),
+        "LIMEN_FABLE_USAGE_TRANSCRIPTS_DIR": str(empty),
+        "LIMEN_FABLE_WEEKLY_TOKENS": "1000000",
         "PATH": __import__("os").environ.get("PATH", ""),
     }
     subprocess.run([sys.executable, str(SCRIPT), "balance"], capture_output=True, text=True, env=env)
     first = (root / "logs" / "fable-allotment.json").read_text()
     subprocess.run([sys.executable, str(SCRIPT), "balance"], capture_output=True, text=True, env=env)
     assert (root / "logs" / "fable-allotment.json").read_text() == first
+
+
+def test_balance_without_owner_denominator_is_explicitly_dark(tmp_path):
+    root = tmp_path / "root"
+    (root / "logs").mkdir(parents=True)
+    transcripts = tmp_path / "transcripts"
+    transcripts.mkdir()
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), "balance", "--no-write"],
+        capture_output=True,
+        text=True,
+        env={
+            "LIMEN_ROOT": str(root),
+            "LIMEN_FABLE_USAGE_TRANSCRIPTS_DIR": str(transcripts),
+            "PATH": __import__("os").environ.get("PATH", ""),
+        },
+    )
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["meter_ready"] is False
+    assert out["spent_pct"] is None
+    assert out["over_cap"] is None
+    assert out["measurement"] == {
+        "method": "token-ratio",
+        "numerator_tokens": 0,
+        "denominator_tokens": None,
+        "unbound_usage_rows": 0,
+        "role_binding": "execution_role:fable-planner",
+    }
+
+
+def test_transcript_balance_fails_dark_on_unbound_provider_model_rows(tmp_path):
+    root = tmp_path / "root"
+    (root / "logs").mkdir(parents=True)
+    transcripts = tmp_path / "transcripts"
+    transcripts.mkdir()
+    (transcripts / "session.jsonl").write_text(
+        json.dumps(
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "message": {
+                    "model": "arbitrarily-renamed-provider-id",
+                    "usage": {"input_tokens": 10, "output_tokens": 5},
+                },
+            }
+        )
+        + "\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), "balance", "--no-write"],
+        capture_output=True,
+        text=True,
+        env={
+            "LIMEN_ROOT": str(root),
+            "LIMEN_FABLE_USAGE_TRANSCRIPTS_DIR": str(transcripts),
+            "LIMEN_FABLE_WEEKLY_TOKENS": "1000000",
+            "PATH": __import__("os").environ.get("PATH", ""),
+        },
+    )
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["meter_ready"] is False
+    assert out["spent_pct"] is None
+    assert out["measurement"]["unbound_usage_rows"] == 1
+
+
+def test_transcript_balance_uses_explicit_role_not_provider_model_name(tmp_path):
+    root = tmp_path / "root"
+    (root / "logs").mkdir(parents=True)
+    transcripts = tmp_path / "transcripts"
+    transcripts.mkdir()
+    (transcripts / "session.jsonl").write_text(
+        json.dumps(
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "execution_role": "fable-planner",
+                "message": {
+                    "model": "arbitrarily-renamed-provider-id",
+                    "usage": {"input_tokens": 10, "output_tokens": 5},
+                },
+            }
+        )
+        + "\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), "balance", "--no-write"],
+        capture_output=True,
+        text=True,
+        env={
+            "LIMEN_ROOT": str(root),
+            "LIMEN_FABLE_USAGE_TRANSCRIPTS_DIR": str(transcripts),
+            "LIMEN_FABLE_WEEKLY_TOKENS": "100",
+            "PATH": __import__("os").environ.get("PATH", ""),
+        },
+    )
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["meter_ready"] is True
+    assert out["spent_tokens"] == 15
+    assert out["spent_pct"] == 15.0
+    assert out["measurement"]["unbound_usage_rows"] == 0
+
+
+def test_fresh_owner_used_percent_meter_needs_no_provider_model_catalog(tmp_path):
+    root = tmp_path / "root"
+    (root / "logs").mkdir(parents=True)
+    meter = tmp_path / "usage-meter.json"
+    meter.write_text(
+        json.dumps(
+            {
+                "schema": "limen.fable_usage_meter.v1",
+                "execution_role": "fable-planner",
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "week": _this_monday(),
+                "meter_ready": True,
+                "weekly_used_percent": 12.5,
+            }
+        )
+    )
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), "balance", "--no-write"],
+        capture_output=True,
+        text=True,
+        env={
+            "LIMEN_ROOT": str(root),
+            "LIMEN_FABLE_USAGE_METER_PATH": str(meter),
+            "PATH": __import__("os").environ.get("PATH", ""),
+        },
+    )
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["meter_ready"] is True
+    assert out["source"] == "owner-used-percent"
+    assert out["spent_pct"] == 12.5
+    assert out["measurement"] == {
+        "method": "owner-used-percent",
+        "owner_observed_pct": 12.5,
+    }

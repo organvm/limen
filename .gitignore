@@ -60,6 +60,5 @@ docs/positioning/*.internal.md
 # never track them in this public repo (studium re-derives them locally each run).
 studium/_converged/converge-log.jsonl
 .codex/worktrees/
-docs/prompt-atom-ledger.json
 # cross-vendor raw extraction packets (PII-risk; generated locally, fed to synthesis pass)
 logs/insight-cross-vendor/

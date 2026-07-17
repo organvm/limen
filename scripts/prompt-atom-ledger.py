@@ -37,13 +37,13 @@ from limen.prompt_corpus import (  # noqa: E402
     _json_bytes,
     _path_signature,
     LedgerPaths,
-    atomic_write_bytes,
     attest_source_scan,
     build_snapshot,
     check_ledger,
     cursor_digest,
     current_source_scanner_code_digest,
     digest,
+    exclusive_lock,
     load_event_journal,
     load_json_strict,
     load_jsonl,
@@ -51,13 +51,16 @@ from limen.prompt_corpus import (  # noqa: E402
     load_policy,
     occurrence_from_event,
     private_marker,
+    publish_artifact_transaction,
     prompt_authority_seal,
     public_projection,
     read_raw_object,
     render_markdown,
+    stable_source_scan_timestamp,
     structural_segments,
     update_ledger,
     validate_cursor_shape,
+    validate_live_source_custody,
     validate_raw_references,
     validate_source_adapter_cursor,
 )
@@ -6035,6 +6038,11 @@ def scan_native_sources(
         "all_source_manifest_digest": all_source_manifest_digest,
         "files": files,
     }
+    updated["last_scan_at"] = stable_source_scan_timestamp(
+        updated,
+        loaded_cursor,
+        renew_exact_all=True,
+    )
     attest_source_scan(updated, scanner_code_digest=current_source_scanner_code_digest())
     cursor_errors = validate_source_adapter_cursor(updated)
     if cursor_errors:
@@ -6042,7 +6050,24 @@ def scan_native_sources(
     return events, updated
 
 
-def rebind_checkpoint(paths: LedgerPaths) -> list[str]:
+def rebind_checkpoint(
+    paths: LedgerPaths,
+    *,
+    authority_evaluated_at: dt.datetime | None = None,
+) -> list[str]:
+    """Serialize checkpoint recovery with the same writer lock as normal ledger updates."""
+
+    paths.private_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(paths.private_dir, 0o700)
+    with exclusive_lock(paths.lock):
+        return _rebind_checkpoint_locked(paths, authority_evaluated_at=authority_evaluated_at)
+
+
+def _rebind_checkpoint_locked(
+    paths: LedgerPaths,
+    *,
+    authority_evaluated_at: dt.datetime | None,
+) -> list[str]:
     """Rebuild and write the private checkpoint from the live cursor and journals.
 
     This is the recovery effector for the "cursor not bound to current private
@@ -6072,6 +6097,22 @@ def rebind_checkpoint(paths: LedgerPaths) -> list[str]:
     shape_errors = validate_cursor_shape(loaded_cursor, role="stored")
     if shape_errors:
         return ["invalid stored source cursor shape: " + "; ".join(shape_errors)]
+    adapter_errors = validate_source_adapter_cursor(
+        loaded_cursor,
+        receipt_root=paths.private_dir,
+    )
+    if adapter_errors:
+        return ["sealed source adapter custody is invalid; refusing to rebind: " + "; ".join(adapter_errors)]
+    custody_errors = validate_live_source_custody(loaded_cursor)
+    if custody_errors:
+        return ["live source custody changed; refusing to rebind: " + "; ".join(custody_errors)]
+
+    source_signatures = {
+        "cursor": _path_signature(paths.cursor),
+        "events": _path_signature(paths.event_journal),
+        "outcomes": _path_signature(paths.outcome_journal),
+        "raw_objects": _path_signature(paths.raw_objects),
+    }
 
     policy = load_policy(paths.policy)
     occurrence_rows, atom_rows, event_errors = load_event_journal(paths.event_journal)
@@ -6081,6 +6122,7 @@ def rebind_checkpoint(paths: LedgerPaths) -> list[str]:
     if all_journal_errors:
         return ["journals contain errors; refusing to rebind: " + "; ".join(str(e) for e in all_journal_errors)]
 
+    evaluation_time = authority_evaluated_at or dt.datetime.now(dt.timezone.utc)
     snapshot = build_snapshot(
         occurrence_rows,
         atom_rows,
@@ -6089,9 +6131,33 @@ def rebind_checkpoint(paths: LedgerPaths) -> list[str]:
         loaded_cursor,
         journal_errors=[],
         evidence_root=paths.root,
+        authority_evaluated_at=evaluation_time,
     )
     # Semantic validation findings stay recorded in snapshot["validation"]
     # (exactly as update_ledger seals them); --check remains their reporter.
+
+    final_cursor, final_cursor_errors = load_json_strict(paths.cursor)
+    if final_cursor_errors:
+        return ["stored source cursor changed during rebind: " + "; ".join(final_cursor_errors)]
+    if cursor_digest(final_cursor) != cursor_digest(loaded_cursor):
+        return ["stored source cursor changed during rebind; retry from the new generation"]
+    final_signatures = {
+        "cursor": _path_signature(paths.cursor),
+        "events": _path_signature(paths.event_journal),
+        "outcomes": _path_signature(paths.outcome_journal),
+        "raw_objects": _path_signature(paths.raw_objects),
+    }
+    if final_signatures != source_signatures:
+        return ["prompt journals or cursor changed during rebind; retry from the new generation"]
+    final_custody_errors = validate_live_source_custody(final_cursor)
+    if final_custody_errors:
+        return ["live source custody changed during rebind: " + "; ".join(final_custody_errors)]
+    final_adapter_errors = validate_source_adapter_cursor(
+        final_cursor,
+        receipt_root=paths.private_dir,
+    )
+    if final_adapter_errors:
+        return ["sealed source adapter custody changed during rebind: " + "; ".join(final_adapter_errors)]
 
     public = public_projection(snapshot)
     seal = prompt_authority_seal(snapshot, public=public)
@@ -6103,12 +6169,17 @@ def rebind_checkpoint(paths: LedgerPaths) -> list[str]:
     marker_bytes = _json_bytes(next_marker)
     markdown_bytes = markdown.encode("utf-8")
 
-    paths.private_dir.mkdir(parents=True, exist_ok=True)
-    atomic_write_bytes(paths.public_snapshot, public_bytes, mode=0o644)
-    atomic_write_bytes(paths.public_seal, seal_bytes, mode=0o644)
-    atomic_write_bytes(paths.public_markdown, markdown_bytes, mode=0o644)
-    # Write the marker last: a crash before this line leaves check_ledger red.
-    atomic_write_bytes(paths.private_snapshot, marker_bytes, mode=0o600)
+    try:
+        publish_artifact_transaction(
+            (
+                (paths.public_snapshot, public_bytes, 0o644),
+                (paths.public_seal, seal_bytes, 0o644),
+                (paths.public_markdown, markdown_bytes, 0o644),
+                (paths.private_snapshot, marker_bytes, 0o600),
+            )
+        )
+    except OSError as exc:
+        return [f"checkpoint publication failed; previous generation restored: {exc}"]
     return []
 
 

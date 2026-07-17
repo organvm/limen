@@ -24,7 +24,7 @@ data instead of vibes.
 |------|-------|-------------|
 | Host machine | Apple M5, **16 GB RAM**, 36 GB free disk | Can run ~4-8B quantized models only. This box is the *floor*, never the frontier. Owned frontier inference = a second machine. |
 | Ollama | installed, **zero models pulled** | The FLAME.md "ollama floor" is aspirational, not enacted. Phase 1 makes it real. |
-| Routing layer | `_CLAUDE_TIER_ORDER = (haiku, sonnet, opus, fable)` + `LIMEN_CLAUDE_<TIER>_MODEL` env pins | The provider-liberation seam already exists. A local/open tier is one adapter + env pins, not a rewrite. |
+| Routing layer | Provider Auto plus fresh owner selection receipts for exact opaque overrides | Provider catalogs remain live external state. New adapters expose current capabilities and validate owner profiles; no tier table, identifier substring, or fixed fallback is encoded. |
 | Spend | "~$500+/mo, probably for different AIs" — **not itemized anywhere** | Phase 0 is an audit. You cannot liberate from a bill you can't enumerate. |
 
 ## The capability ledger (be honest about the gap)

@@ -71,6 +71,10 @@ class DispatchLogEntry(BaseModel):
     selected_model: Optional[str] = None
     selection_source: Optional[str] = None
     catalog_hash: Optional[str] = None
+    model_selection_receipt: Optional[Dict[str, Any]] = None
+    fable_packet_receipt: Optional[Dict[str, Any]] = None
+    builder_handoff_receipt: Optional[Dict[str, Any]] = None
+    implementation_receipt: Optional[Dict[str, Any]] = None
     output: Optional[str] = None
 
     @field_validator("status")
