@@ -9,11 +9,15 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 import subprocess
 from dataclasses import asdict, dataclass, replace
 from datetime import date
 from typing import Any, Iterable, Sequence, get_type_hints
+from urllib import error as urlerror
+from urllib import parse as urlparse
+from urllib import request as urlrequest
 
 
 _ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -269,6 +273,137 @@ def discover_opencode_models(binary: str = "opencode", *, timeout: int = 30) -> 
     except (OSError, subprocess.SubprocessError):
         return []
     return parse_opencode_catalog(result.stdout) if result.returncode == 0 else []
+
+
+_MODEL_ID_FIELDS = ("slug", "id", "model_id", "modelId", "name", "baseModelId")
+_MODEL_COLLECTION_FIELDS = ("models", "data", "availableModels", "items")
+
+
+def parse_model_id_catalog(output: str) -> list[str]:
+    """Extract exact provider-reported identifiers from a JSON model catalog.
+
+    Identifier-only catalogs are sufficient to validate a human override, but not
+    sufficient to infer capabilities or rank a default. Callers therefore leave
+    selection to provider Auto unless richer metadata is available.
+    """
+
+    text = _ANSI.sub("", output).strip()
+    if not text:
+        return []
+    try:
+        roots: list[object] = [json.loads(text)]
+    except json.JSONDecodeError:
+        roots = []
+        for line in text.splitlines():
+            try:
+                roots.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+    identifiers: set[str] = set()
+
+    def visit(value: object) -> None:
+        if isinstance(value, list):
+            for item in value:
+                visit(item)
+            return
+        if not isinstance(value, dict):
+            return
+        for field in _MODEL_ID_FIELDS:
+            reported = value.get(field)
+            if isinstance(reported, str) and reported.strip():
+                identifiers.add(reported.strip())
+        for field in _MODEL_COLLECTION_FIELDS:
+            nested = value.get(field)
+            if isinstance(nested, (dict, list)):
+                visit(nested)
+
+    for root in roots:
+        visit(root)
+    return sorted(identifiers)
+
+
+def discover_model_ids(command: Sequence[str], *, timeout: int = 30) -> list[str]:
+    """Run a provider-owned catalog command and return its exact live IDs."""
+
+    try:
+        result = subprocess.run(
+            list(command),
+            capture_output=True,
+            text=True,
+            timeout=max(1, timeout),
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return parse_model_id_catalog(result.stdout) if result.returncode == 0 else []
+
+
+def discover_claude_models(binary: str = "claude", *, timeout: int = 30) -> list[str]:
+    """Read Claude's live CLI catalog when the installed CLI exposes one."""
+
+    return discover_model_ids([binary, "models", "--output-format", "json"], timeout=timeout)
+
+
+def discover_codex_models(binary: str = "codex", *, timeout: int = 30) -> list[str]:
+    """Read the current Codex CLI catalog without selecting a model."""
+
+    return discover_model_ids([binary, "debug", "models"], timeout=timeout)
+
+
+def discover_gemini_models(*, api_key: str | None = None, timeout: int = 30) -> list[str]:
+    """Read Gemini's live API catalog when provider credentials are reachable."""
+
+    key = (
+        api_key
+        or os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY")
+        or os.environ.get("GOOGLE_GENERATIVE_AI_API_KEY")
+    )
+    if not key:
+        return []
+    base_url = "https://generativelanguage.googleapis.com/v1beta/models"
+    identifiers: set[str] = set()
+    page_token = ""
+    seen_tokens: set[str] = set()
+    for _page in range(100):
+        url = base_url
+        if page_token:
+            url += "?" + urlparse.urlencode({"pageToken": page_token})
+        request = urlrequest.Request(url, headers={"x-goog-api-key": key})
+        try:
+            with urlrequest.urlopen(request, timeout=max(1, timeout)) as response:
+                payload = response.read().decode("utf-8")
+            decoded = json.loads(payload)
+        except (OSError, TimeoutError, UnicodeError, ValueError, urlerror.URLError):
+            return []
+        if not isinstance(decoded, dict):
+            return []
+        identifiers.update(parse_model_id_catalog(payload))
+        raw_next = decoded.get("nextPageToken")
+        next_token = raw_next.strip() if isinstance(raw_next, str) else ""
+        if not next_token:
+            return sorted(identifiers)
+        if next_token in seen_tokens:
+            return []
+        seen_tokens.add(next_token)
+        page_token = next_token
+    return []
+
+
+def validate_model_override(catalog: Iterable[str], override: str | None) -> str | None:
+    """Accept an explicit override only when the exact ID is live now."""
+
+    available = {str(item).strip() for item in catalog if str(item).strip()}
+    candidate = override.strip() if override else ""
+    return candidate if candidate and candidate in available else None
+
+
+def model_id_catalog_hash(catalog: Iterable[str]) -> str:
+    """Stable receipt fingerprint independent of provider response order."""
+
+    identifiers = sorted({str(item).strip() for item in catalog if str(item).strip()})
+    return hashlib.sha256(json.dumps(identifiers, separators=(",", ":")).encode()).hexdigest()
 
 
 def _model_score(model: ModelCapability, profile: ExecutionProfile) -> tuple[float, str]:

@@ -32,6 +32,7 @@ from limen.capacity import (
     select_lanes,
 )
 from limen.dispatch_ownership import ACTIVE_OWNER_STATUSES
+from limen.execution_trajectory import new_attempt_id
 from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
 from limen.intake import IntakeContractError, normalize_selected_legacy_task, validate_intake_contract
 from limen.jules_remote import (
@@ -46,12 +47,17 @@ from limen.runtime_requirements import task_execution_ready
 from limen.doctor import stale_tasks
 from limen.provider_selection import (
     catalog_hash,
+    discover_claude_models,
+    discover_codex_models,
+    discover_gemini_models,
     discover_opencode_models,
     discover_warp_override,
     effective_profile,
     execution_profile_for,
+    model_id_catalog_hash,
     paid_service_block_reason,
     select_opencode_model,
+    validate_model_override,
 )
 from limen.remote_execution import (
     GitHubWorkflowAdapter,
@@ -63,17 +69,7 @@ from limen.remote_execution import (
     resolve_pushed_sha,
     verification_context_for_task,
 )
-from limen.model_selection import (  # the shared model vocabulary — also used by the non-bypassable `claude` shim
-    _CLAUDE_TIER_ORDER,
-    _claude_fable_acceptance_present,
-    _claude_fable_classes,
-    _claude_opus_classes,
-    _fable_capped_tier,
-    _fable_fallback_tier,
-    _fable_reserve_receipt_present,
-    _guard_fable_model_pin,
-    _resolve_claude_model,
-)
+from limen.model_selection import _claude_fable_acceptance_present
 from limen.worktree_debt import (
     IMPACT_DEBT_CREATING,
     IMPACT_REMOTE,
@@ -1484,6 +1480,41 @@ _GIT_PLUMBING_LOCK = threading.Lock()
 _MODEL_SELECTION_RECEIPTS: dict[str, dict[str, Any]] = {}
 _REMOTE_SUBMISSION_RECEIPTS: dict[str, dict[str, Any]] = {}
 _LANE_ROUTING_RECEIPTS: dict[str, dict[str, Any]] = {}
+_ATTEMPT_LAUNCH_RECEIPTS: dict[str, dict[str, Any]] = {}
+
+
+class ProviderModelSelectionBlocked(RuntimeError):
+    """Live provider evidence cannot satisfy a required routing constraint."""
+
+
+_PROVIDER_MODEL_OVERRIDE_ENV = {
+    "claude": "LIMEN_CLAUDE_MODEL",
+    "codex": "LIMEN_CODEX_MODEL",
+    "gemini": "LIMEN_GEMINI_MODEL",
+}
+_PROVIDER_CATALOG_TIMEOUT_ENV = {
+    "claude": "LIMEN_CLAUDE_CATALOG_TIMEOUT",
+    "codex": "LIMEN_CODEX_CATALOG_TIMEOUT",
+    "gemini": "LIMEN_GEMINI_CATALOG_TIMEOUT",
+}
+
+
+def _capture_attempt_launch(task: Task, agent: str, *, started_at: datetime | None = None) -> None:
+    """Freeze executor, classification, and profile before provider execution."""
+
+    _ATTEMPT_LAUNCH_RECEIPTS[task.id] = {
+        "attempt_id": new_attempt_id(),
+        "attempt_classification": {
+            "task_type": task.type,
+            "labels": sorted({str(label) for label in task.labels}),
+            "workstream": task.workstream,
+        },
+        "attempt_repository": task.repo,
+        "execution_profile": execution_profile_for(task).as_dict(),
+        "executing_keeper": agent,
+        "executing_session": session_id(),
+        "started_at": started_at or datetime.now(timezone.utc),
+    }
 
 
 def _record_model_selection(
@@ -2052,7 +2083,7 @@ def _call_warp_oz(agent: str, task: Task, dry_run: bool) -> bool | str:
 #   - gemini: requires GEMINI_API_KEY / settings.json auth (not configured;
 #     lane is wired but will fail until auth is set).
 def _opencode_model(task: Task | None = None) -> str | None:
-    """Select a reachable OpenCode model by live capabilities, never by name."""
+    """Select from rich live metadata, otherwise defer to provider Auto."""
 
     binary = os.environ.get("LIMEN_OPENCODE_BIN", "opencode")
     models = discover_opencode_models(
@@ -2071,16 +2102,34 @@ def _opencode_model(task: Task | None = None) -> str | None:
             source="opencode_override" if selected else "opencode_override_missing",
             fingerprint=catalog_hash(models),
         )
-        return selected.model_id if selected else None
+        if selected:
+            return selected.model_id
+        if models:
+            raise ProviderModelSelectionBlocked(
+                "opencode model override is absent or incapable in the live provider catalog"
+            )
+        raise ProviderModelSelectionBlocked(
+            "opencode model override cannot be validated because the live provider catalog is unavailable"
+        )
+    if not models:
+        _record_model_selection(
+            task,
+            profile=profile.as_dict(),
+            selected_model=None,
+            source="opencode_auto",
+        )
+        return None
     selected = select_opencode_model(models, profile)
     _record_model_selection(
         task,
         profile=profile.as_dict(),
         selected_model=selected.model_id if selected else None,
-        source="opencode_live_catalog" if selected else "opencode_no_capable_model",
+        source="opencode_live_catalog" if selected else "opencode_capability_blocked",
         fingerprint=catalog_hash(models),
     )
-    return selected.model_id if selected else None
+    if selected:
+        return selected.model_id
+    raise ProviderModelSelectionBlocked("no model in the live OpenCode catalog satisfies the execution profile")
 
 
 _LOCAL_AGENTS: dict[str, list[str]] = {
@@ -2358,7 +2407,8 @@ def _local_floor_allowed_for_task(task: Task) -> bool:
         classes = _task_classes(task)
         if not classes & local_floor_classes():
             return False
-        if classes & (_claude_opus_classes() | _claude_fable_classes()):
+        profile = execution_profile_for(task)
+        if profile.planning_only or profile.attachments_required or profile.reasoning_depth > 0.75:
             return False
         return ollama_model() is not None
     except Exception:
@@ -4069,7 +4119,13 @@ def _resolve_agent_binary(agent: str) -> str:
     return binary
 
 
-def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
+def _isolated_local_run(
+    agent: str,
+    task: Task,
+    dry_run: bool,
+    *,
+    agent_args: list[str] | None = None,
+) -> bool | str:
     binary = _resolve_agent_binary(agent)
     repo_dir = _resolve_repo_dir(task)
     if repo_dir is None and not dry_run:
@@ -4103,7 +4159,7 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
     branch = f"limen/{slug}-{suffix}"
     isolation_root = _isolation_root()
     wt = isolation_root / (re.sub(r"[^a-zA-Z0-9._-]+", "-", task.id.lower()) + "-" + suffix)
-    agent_args = _agent_argv(agent, task)
+    agent_args = list(agent_args) if agent_args is not None else _agent_argv(agent, task)
     prompt = _build_prompt(task)
     if os.environ.get("LIMEN_ISOLATION_PROMPT_GUARD", "1") == "1":
         prompt = (
@@ -4211,23 +4267,25 @@ def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str:
         except ClaudeLaunchContractError as exc:
             print(f"  BLOCKED {task.id}: {exc}; refusing provider launch so the lane can cascade")
             return False
-    if agent == "opencode" and "-m" not in _agent_argv(agent, task):
-        reason = "no code-capable model is exposed by the live OpenCode catalog"
+    try:
+        agent_args = _agent_argv(agent, task)
+    except ProviderModelSelectionBlocked as exc:
+        reason = str(exc)
         if dry_run:
             print(f"  would BLOCK {task.id}: {reason}")
             return True
         print(f"  BLOCKED {task.id}: {reason}")
         return _blocked_result(reason)
     if _worktree_isolation_enabled():
-        return _isolated_local_run(agent, task, dry_run)
+        return _isolated_local_run(agent, task, dry_run, agent_args=agent_args)
     # ── legacy in-place path (escape hatch; edits the live checkout directly)
     binary = _resolve_agent_binary(agent)
-    cmd = [binary, *_agent_argv(agent, task), _build_prompt(task)]
+    cmd = [binary, *agent_args, _build_prompt(task)]
     cwd = _resolve_repo_dir(task)
     if cwd is None:
         msg = f"no local checkout of {task.repo or '(no repo)'}"
         if dry_run:
-            print(f"  would [{msg}; clone first]: {binary} {' '.join(_agent_argv(agent, task))} …")
+            print(f"  would [{msg}; clone first]: {binary} {' '.join(agent_args)} …")
             return True
         print(f"  SKIP {task.id}: {msg} — clone it under $LIMEN_WORKDIR first")
         return False
@@ -4333,6 +4391,7 @@ def _commit_dispatch_results(
                     ft.predicate, ft.receipt_target = contract
                 _apply_result(ft, agent, res, now, ftrack)
                 _REMOTE_SUBMISSION_RECEIPTS.pop(tid, None)
+                _ATTEMPT_LAUNCH_RECEIPTS.pop(tid, None)
         save_limen_file(tasks_path, fresh)
 
 
@@ -4463,8 +4522,14 @@ def dispatch_tasks(
             print(f"  Worktree admission blocked {task.id}: {msg}")
             continue
 
+        if not dry_run:
+            _capture_attempt_launch(task, agent_filter)
         try:
             result = call_agent_dispatch(agent_filter, task, dry_run)
+        except Exception:
+            if not dry_run:
+                _ATTEMPT_LAUNCH_RECEIPTS.pop(task.id, None)
+            raise
         finally:
             if not dry_run:
                 _release_machine_admission(task.id)
@@ -4521,6 +4586,7 @@ def _apply_result(
     if result == _NOOP:
         entry.status = "failed"
         entry.output = "No-op result; failed for recovery instead of archived."
+        entry.trajectory_outcome = "failed"
         task.status = "failed"
         if "noop" not in task.labels:
             task.labels.append("noop")
@@ -4529,6 +4595,7 @@ def _apply_result(
         entry.status = "open"
         entry.route_to = nxt
         entry.output = f"rate limited on {agent}; reopened to live fleet route"
+        entry.trajectory_outcome = "blocked"
         task.target_agent = nxt
         task.status = "open"
     elif result == _TIMEOUT:
@@ -4536,6 +4603,7 @@ def _apply_result(
         entry.status = "open"
         entry.route_to = "jules"
         entry.output = f"timeout on {agent}; reopened to asynchronous lane"
+        entry.trajectory_outcome = "failed"
         task.target_agent = "jules"
         task.status = "open"
         if "slow" not in task.labels:
@@ -4543,6 +4611,7 @@ def _apply_result(
     elif _is_blocked_result(result):
         entry.status = "failed_blocked"
         entry.output = _blocked_reason(result)
+        entry.trajectory_outcome = "blocked"
         task.status = "failed_blocked"
         if "blocked:routing" not in task.labels:
             task.labels.append("blocked:routing")
@@ -4562,19 +4631,27 @@ def _apply_result(
             entry.status = "open"
             entry.route_to = fallback
             entry.output = "remote/service lane failed; reopened to healthy fleet cascade"
+            entry.trajectory_outcome = "failed"
             task.target_agent = fallback
             task.status = "open"
         elif next_lane := _next_lane(agent):
             entry.status = "open"
             entry.route_to = next_lane
             entry.output = f"{agent} lane failed; reopened to healthy fleet cascade"
+            entry.trajectory_outcome = "failed"
             task.target_agent = next_lane
             task.status = "open"
         else:
             entry.status = "failed"
+            entry.trajectory_outcome = "failed"
             task.status = "failed"
+    if launch := _ATTEMPT_LAUNCH_RECEIPTS.get(task.id):
+        entry.attempt_id = launch.get("attempt_id")
+        entry.attempt_classification = launch.get("attempt_classification")
+        entry.attempt_repository = launch.get("attempt_repository")
+        entry.execution_profile = launch.get("execution_profile")
     if selection := _MODEL_SELECTION_RECEIPTS.pop(task.id, None):
-        entry.execution_profile = selection.get("execution_profile")
+        entry.execution_profile = entry.execution_profile or selection.get("execution_profile")
         entry.selected_model = selection.get("selected_model")
         entry.selection_source = selection.get("selection_source")
         entry.catalog_hash = selection.get("catalog_hash")
@@ -4718,200 +4795,62 @@ def _accel_limit(limen: LimenFile, agent: str, base_limit: int, now: datetime) -
         return base_limit
 
 
-_CODEX_TIER_MODELS_DEFAULT: dict[str, str] = {
-    "haiku": "o4-mini",
-    "sonnet": "o4-mini",
-    "opus": "o3",
-    "fable": "o3",
-}
+def _provider_model_override(agent: str, task: Task | None = None) -> str | None:
+    """Use provider Auto unless an exact operator override is live now.
 
-_GEMINI_TIER_MODELS_DEFAULT: dict[str, str] = {
-    "haiku": "gemini-2.5-flash",
-    "sonnet": "gemini-2.5-flash",
-    "opus": "gemini-2.5-pro",
-    "fable": "gemini-2.5-pro",
-}
+    Identifier-only catalogs never authorize automatic ranking because they do
+    not expose enough metadata to match the provider-neutral execution profile.
+    """
 
-
-def _codex_model(task: "Task | None" = None) -> str | None:
-    """Derive the Codex model for THIS task. Order:
-      1. LIMEN_CODEX_MODEL --- blanket operator pin, always wins;
-      2. LIMEN_CODEX_TIER_SELECT != "1" -> None (provider Auto, old behaviour);
-      3. derive tier via _claude_tier_for(task) (same class->tier semantics);
-      4. LIMEN_CODEX_MODEL_<TIER> per-tier env override -> _CODEX_TIER_MODELS_DEFAULT[tier];
-      5. Record selection; return model.
-    Fail-open to None on any exception --- never block the lane."""
-    env = os.environ.get("LIMEN_CODEX_MODEL")
-    if env:
-        _record_model_selection(
-            task, profile={"tier": "override", "source": "codex_override"}, selected_model=env, source="codex_override"
-        )
-        return env
-    if os.environ.get("LIMEN_CODEX_TIER_SELECT", "1") != "1":
+    override = os.environ.get(_PROVIDER_MODEL_OVERRIDE_ENV[agent])
+    profile = execution_profile_for(task)
+    if not override:
         _record_model_selection(
             task,
-            profile={"tier": None, "source": "codex_tier_disabled"},
+            profile=profile.as_dict(),
             selected_model=None,
-            source="codex_tier_disabled",
+            source=f"{agent}_auto",
         )
         return None
-    try:
-        tier = _claude_tier_for(task)
-        per_tier_env = f"LIMEN_CODEX_MODEL_{tier.upper()}"
-        model = os.environ.get(per_tier_env) or _CODEX_TIER_MODELS_DEFAULT.get(tier)
-        _record_model_selection(
-            task,
-            profile={"tier": tier, "source": "codex_tier_derived"},
-            selected_model=model,
-            source="codex_tier_derived",
-        )
-        return model
-    except Exception:
-        return None
 
+    binary = _resolve_agent_binary(agent)
+    timeout = max(1, _env_int(_PROVIDER_CATALOG_TIMEOUT_ENV[agent], 30))
+    if agent == "claude":
+        catalog = discover_claude_models(binary, timeout=timeout)
+    elif agent == "codex":
+        catalog = discover_codex_models(binary, timeout=timeout)
+    elif agent == "gemini":
+        catalog = discover_gemini_models(timeout=timeout)
+    else:  # pragma: no cover - every caller is a fixed lane adapter
+        raise ValueError(f"unsupported provider model override: {agent}")
 
-def _gemini_model(task: "Task | None" = None) -> str | None:
-    """Derive the Gemini model for THIS task. Order:
-      1. LIMEN_GEMINI_MODEL --- blanket operator pin, always wins;
-      2. LIMEN_GEMINI_TIER_SELECT != "1" -> None (bare invocation, old behaviour);
-      3. derive tier via _claude_tier_for(task) (same class->tier semantics);
-      4. LIMEN_GEMINI_MODEL_<TIER> per-tier env override -> _GEMINI_TIER_MODELS_DEFAULT[tier];
-      5. Record selection; return model.
-    Fail-open to None on any exception --- never block the lane."""
-    env = os.environ.get("LIMEN_GEMINI_MODEL")
-    if env:
-        _record_model_selection(
-            task,
-            profile={"tier": "override", "source": "gemini_override"},
-            selected_model=env,
-            source="gemini_override",
-        )
-        return env
-    if os.environ.get("LIMEN_GEMINI_TIER_SELECT", "1") != "1":
-        _record_model_selection(
-            task,
-            profile={"tier": None, "source": "gemini_tier_disabled"},
-            selected_model=None,
-            source="gemini_tier_disabled",
-        )
-        return None
-    try:
-        tier = _claude_tier_for(task)
-        per_tier_env = f"LIMEN_GEMINI_MODEL_{tier.upper()}"
-        model = os.environ.get(per_tier_env) or _GEMINI_TIER_MODELS_DEFAULT.get(tier)
-        _record_model_selection(
-            task,
-            profile={"tier": tier, "source": "gemini_tier_derived"},
-            selected_model=model,
-            source="gemini_tier_derived",
-        )
-        return model
-    except Exception:
-        return None
-
-
-# ─── Claude-lane earned-tier ladder (haiku-first-with-cheap-verify) ──────────
-# The claude lane invoked `claude -p` with NO -m, so the account picked the tier. Now the
-# tier is DERIVED per task: a coding task's failure is cheaply detectable (CI/PR/auto-merge/
-# reconcile), so verifiable classes start at HAIKU and rely on the EXISTING _LANE_CASCADE +
-# chronic escalation as the escalate rung — only UNDETECTABLE-failure classes get a higher
-# tier up front. No new escalation machinery. Mirrors _codex_model/_opencode_model: env pin
-# wins, derive at call-time, fail-open. ([[model-tiering-policy]], [[value-is-discovered-never-assumed]])
-#
-# The shared VOCABULARY this ladder sorts with — _CLAUDE_TIER_ORDER, reserved class sets,
-# acceptance gates, and _resolve_claude_model() — lives in model_selection.py (imported at the
-# top) so the NON-BYPASSABLE `claude` shim sorts with the EXACT same vocabulary. One source of
-# truth: this file owns the per-TASK sort; the shim owns the per-SPAWN floor.
-# ([[fleet-model-floor-bleed]])
-
-
-def _claude_tier_overrides() -> dict[str, list[str]]:
-    """Optional operator OVERRIDE map logs/model-tiers.json → the claude lane's {tier: [classes]}.
-    Fail-open to {} (→ the ledger-DISCOVERED default). Demoted to an override: the default
-    pre-assign set is discovered from the ledger, not pinned. Same read pattern as _ledger_lanes()."""
-    try:
-        root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
-        return json.loads((root / "logs" / "model-tiers.json").read_text()).get("claude") or {}
-    except Exception:
-        return {}
-
-
-def _earned_fable_tier() -> str:
-    """A Fable selection that already cleared the acceptance receipt, resolved against the LIVE
-    weekly cap (`logs/fable-allotment.json`): 'fable' when the cap still allows it, else the
-    fallback tier (Opus). This is the runtime backstop the receipt gate alone cannot provide —
-    it enforces the 40% deliberate / 50% hard ladder against actual tokens burned this week."""
-    capped = _fable_capped_tier(_fable_reserve_receipt_present())
-    return capped if capped is not None else "fable"
-
-
-def _claude_tier_for(task: Task | None) -> str:
-    """DERIVE the Claude tier for a task. Default = haiku (verifiable → escalate via the existing
-    cascade). Pre-assign a higher tier ONLY where failure is undetectable:
-      • fable — the narrow reserved top tier plus a written acceptance receipt/command;
-      • opus  — the reserved principled set (_claude_opus_classes) or an explicit override;
-      • sonnet— classes the ledger has DISCOVERED this lane wastes on (waste_classes): work that
-                shipped low-value yet passed whatever gate exists ⇒ failure not caught cheaply here.
-    A per-task `claude_tier` pin and an optional logs/model-tiers.json override layer on top.
-    Fable is additionally gated by the LIVE weekly cap (`_earned_fable_tier`): a valid receipt is
-    necessary-not-sufficient once the week's Fable spend is at/over cap. Fail-open → haiku."""
-    if task is None:
-        return "haiku"
-    pin = task.claude_tier
-    if pin in _CLAUDE_TIER_ORDER:
-        if pin == "fable" and not _claude_fable_acceptance_present():
-            return _fable_fallback_tier()
-        if pin == "fable":
-            return _earned_fable_tier()
-        return str(pin)
-    classes = _task_classes(task)
-    override = _claude_tier_overrides()
-    if classes & (_claude_fable_classes() | set(override.get("fable") or [])):
-        return _earned_fable_tier() if _claude_fable_acceptance_present() else _fable_fallback_tier()
-    if classes & (_claude_opus_classes() | set(override.get("opus") or [])):
-        return "opus"
-    lane_data = _ledger_lanes().get("claude") or {}
-    waste = set(lane_data.get("waste_classes") or [])
-    if classes & (waste | set(override.get("sonnet") or [])):
-        return "sonnet"
-    return "haiku"
-
-
-def _bump_tier(tier: str, task: Task | None) -> str:
-    """Escalate-on-failed-cheap-check, in-tier: if THIS task already failed on the claude lane
-    (carries the cascade's own 'tried:claude' breadcrumb), the cheap verify failed once here, so
-    step up one rung (capped at opus unless LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE=1 and a Fable
-    acceptance is present). State lives in the EXISTING label — no new retry counter, no schema
-    change. Env-gated LIMEN_CLAUDE_RETRY_BUMP (default on)."""
-    if task is None or os.environ.get("LIMEN_CLAUDE_RETRY_BUMP", "1") != "1":
-        return tier
-    if "tried:claude" not in (getattr(task, "labels", None) or []):
-        return tier
-    i = _CLAUDE_TIER_ORDER.index(tier)
-    bumped = _CLAUDE_TIER_ORDER[min(i + 1, len(_CLAUDE_TIER_ORDER) - 1)]
-    if bumped == "fable" and not (
-        os.environ.get("LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE") == "1" and _claude_fable_acceptance_present()
-    ):
-        return "opus"
-    return bumped
+    selected = validate_model_override(catalog, override)
+    _record_model_selection(
+        task,
+        profile=profile.as_dict(),
+        selected_model=selected,
+        source=f"{agent}_override" if selected else f"{agent}_override_unvalidated",
+        fingerprint=model_id_catalog_hash(catalog),
+    )
+    if selected:
+        return selected
+    if catalog:
+        raise ProviderModelSelectionBlocked(f"{agent} model override is absent from the live provider catalog")
+    raise ProviderModelSelectionBlocked(
+        f"{agent} model override cannot be validated because the live provider catalog is unavailable"
+    )
 
 
 def _claude_model(task: Task | None = None) -> str | None:
-    """Lazily pick the Claude tier for THIS task, resolved only when the claude lane runs (names
-    are outputs). Order mirrors _codex_model:
-      1. explicit LIMEN_CLAUDE_MODEL — a manual pin always wins;
-      2. feature flag LIMEN_CLAUDE_TIER_SELECT (default on; off → None = today's bare invocation);
-      3. derive the tier (class-based), bump it if the task already failed here, resolve to a model.
-    Fail-open to None everywhere → bare `claude -p` (account default), never a blocked lane."""
-    env = os.environ.get("LIMEN_CLAUDE_MODEL")
-    if env:
-        return _guard_fable_model_pin(env)
-    if os.environ.get("LIMEN_CLAUDE_TIER_SELECT", "1") != "1":
-        return None
-    try:
-        return _resolve_claude_model(_bump_tier(_claude_tier_for(task), task))
-    except Exception:
-        return None  # never block the lane on a tier-selection hiccup
+    return _provider_model_override("claude", task)
+
+
+def _codex_model(task: Task | None = None) -> str | None:
+    return _provider_model_override("codex", task)
+
+
+def _gemini_model(task: Task | None = None) -> str | None:
+    return _provider_model_override("gemini", task)
 
 
 def _select_parallel_reservations(
@@ -5133,6 +5072,7 @@ def dispatch_parallel(
 
     def run_one(at: tuple[str, str]) -> tuple[str, str, bool | str]:
         agent, tid = at
+        _capture_attempt_launch(id2task[tid], agent)
         try:
             res = call_agent_dispatch(agent, id2task[tid], dry_run=False)
         except Exception as e:  # never let one task kill the pool
@@ -5160,6 +5100,8 @@ def dispatch_parallel(
                 f"── PARALLEL: queue busy — {len(results)} result(s) NOT committed this round; "
                 "harvest reconciles from PR state (self-corrects next beat)"
             )
+            for _agent, tid, _result in results:
+                _ATTEMPT_LAUNCH_RECEIPTS.pop(tid, None)
             return
         fresh = load_limen_file(tasks_path)
         fid = {t.id: t for t in fresh.tasks}
@@ -5169,6 +5111,7 @@ def dispatch_parallel(
             if ft is not None:
                 _apply_result(ft, agent, res, now, ftrack)
                 _REMOTE_SUBMISSION_RECEIPTS.pop(tid, None)
+                _ATTEMPT_LAUNCH_RECEIPTS.pop(tid, None)
             if res == _RATELIMIT:
                 n_rl += 1
             elif res == _NOOP:

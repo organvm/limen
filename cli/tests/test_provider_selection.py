@@ -1,20 +1,28 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import date
 from pathlib import Path
 
+import limen.provider_selection as provider_selection
 from limen.models import DispatchLogEntry, Task
 from limen.provider_selection import (
     ExecutionProfile,
     ModelCapability,
     catalog_hash,
+    discover_claude_models,
+    discover_codex_models,
+    discover_gemini_models,
     effective_profile,
     execution_profile_for,
+    model_id_catalog_hash,
     paid_service_block_reason,
+    parse_model_id_catalog,
     parse_opencode_catalog,
     parse_warp_catalog,
     select_opencode_model,
+    validate_model_override,
     validate_warp_override,
 )
 
@@ -180,6 +188,86 @@ def test_catalog_hash_is_order_independent_and_changes_with_capability() -> None
     second = model("p/b")
     assert catalog_hash([first, second]) == catalog_hash([second, first])
     assert catalog_hash([first]) != catalog_hash([model("p/a", reasoning=True)])
+
+
+def test_identifier_catalog_tracks_renamed_add_remove_and_reorder_without_code_changes() -> None:
+    first = parse_model_id_catalog(json.dumps({"models": [{"slug": "shape-z"}, {"slug": "shape-a"}]}))
+    reordered = parse_model_id_catalog(json.dumps({"models": [{"slug": "shape-a"}, {"slug": "shape-z"}]}))
+    expanded = parse_model_id_catalog(
+        json.dumps({"models": [{"slug": "shape-m"}, {"slug": "shape-z"}, {"slug": "shape-a"}]})
+    )
+
+    assert first == reordered == ["shape-a", "shape-z"]
+    assert model_id_catalog_hash(first) == model_id_catalog_hash(reordered)
+    assert model_id_catalog_hash(expanded) != model_id_catalog_hash(first)
+    assert validate_model_override(expanded, "shape-m") == "shape-m"
+    assert validate_model_override(first, "shape-m") is None
+
+
+def test_cli_catalog_discovery_preserves_provider_ids_without_substitution(monkeypatch) -> None:
+    observed: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        observed.append(command)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            json.dumps({"models": [{"slug": "shape-q"}, {"slug": "shape-r"}]}),
+            "",
+        )
+
+    monkeypatch.setattr(provider_selection.subprocess, "run", fake_run)
+
+    assert discover_claude_models("claude-fixture") == ["shape-q", "shape-r"]
+    assert discover_codex_models("codex-fixture") == ["shape-q", "shape-r"]
+    assert observed == [
+        ["claude-fixture", "models", "--output-format", "json"],
+        ["codex-fixture", "debug", "models"],
+    ]
+
+
+def test_gemini_catalog_discovery_keeps_credential_out_of_url_and_follows_pagination(monkeypatch) -> None:
+    observed_urls: list[str] = []
+    observed_headers: list[dict[str, str]] = []
+    pages = [
+        {"models": [{"name": "models/shape-z"}], "nextPageToken": "provider page 2"},
+        {"models": [{"name": "models/shape-a"}]},
+    ]
+
+    class Response:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps(self.payload).encode()
+
+    def fake_urlopen(request, *, timeout):
+        assert timeout == 7
+        observed_urls.append(request.full_url)
+        observed_headers.append(dict(request.header_items()))
+        return Response(pages[len(observed_urls) - 1])
+
+    monkeypatch.setattr(provider_selection.urlrequest, "urlopen", fake_urlopen)
+
+    assert discover_gemini_models(api_key="fixture-secret", timeout=7) == [
+        "models/shape-a",
+        "models/shape-z",
+    ]
+    assert observed_urls == [
+        "https://generativelanguage.googleapis.com/v1beta/models",
+        "https://generativelanguage.googleapis.com/v1beta/models?pageToken=provider+page+2",
+    ]
+    assert all("fixture-secret" not in url for url in observed_urls)
+    assert observed_headers == [
+        {"X-goog-api-key": "fixture-secret"},
+        {"X-goog-api-key": "fixture-secret"},
+    ]
 
 
 def test_warp_defaults_to_provider_auto_and_only_validates_explicit_override() -> None:

@@ -22,9 +22,15 @@ from the execution-profile schema instead of a label-name table. Provider adapte
 current reachable catalog by hard capabilities, rank the survivors from metadata and current
 pressure, and record the profile, catalog hash, selection source, and selected model when exposed.
 
-OpenCode is selected from `opencode models --verbose`. Empty, malformed, stale, or capability-poor
-results produce `failed_blocked`; there is no built-in model fallback and no name heuristic such as
-`free`, `code`, or a vendor family name.
+OpenCode is selected from `opencode models --verbose` when that catalog exposes complete capability
+metadata. An unavailable catalog leaves the invocation on provider Auto. A reachable catalog with no
+candidate satisfying the execution profile fails blocked.
+
+Claude, Codex, and Gemini default to provider Auto because their reachable discovery surfaces may
+provide identifiers without enough capability/cost metadata to rank a default honestly. An explicit
+`LIMEN_<PROVIDER>_MODEL` override is accepted only when its exact identifier is present in the live
+provider catalog; a missing or unreachable catalog fails the override before a worktree or provider
+side effect. The Claude fleet shim never injects a floor or trusts an environment pin on its own.
 
 Warp/Oz normally receives the execution profile with the Action's `model` input blank. Warp Auto owns
 the changing underlying catalog because Oz exposes model IDs but not enough capability/cost metadata
@@ -54,3 +60,21 @@ test that depends on a real model name is itself a regression. The implementatio
 
 Legacy production paths outside this dispatch integration are inventoried under owner issue #940;
 they are not precedent for adding another named default.
+
+## Execution trajectory
+
+`limen.execution_trajectory.v1` freezes one execution attempt at launch: task classification,
+executor, provider route, profile, repository, session, and start time. A later board edit cannot
+reassign that attempt. Exact duplicate attempts count once; divergent rows for one attempt identity
+are excluded.
+
+The board is transport, not value authority. Success motion earns zero unless the predicate and
+owner receipt both bind the exact commit and a fresh owner adapter independently verifies the
+receipt. Credit belongs to `executing_keeper`, never to the provider route or the observer that
+later reconciled the row.
+
+Publication has no local-shadow default. `publish_bounded` requires an owner adapter with atomic
+compare-and-set publication, rejects divergent existing attempts, and enforces finite record and
+byte bounds before the owner write. The GitHub adapter publishes the whole batch through one
+fast-forward commit/ref update; a lost compare-and-set can leave unreachable blobs but exposes no
+partial trajectory paths.

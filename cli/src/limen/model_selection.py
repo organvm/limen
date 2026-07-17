@@ -1,19 +1,8 @@
-"""Single source of truth for the Claude-lane model vocabulary + the non-bypassable shim's
-per-spawn floor sort.
+"""Legacy Claude acceptance helpers plus the provider-Auto shim contract.
 
-Two callers share this ONE module so the model decision never drifts across copies:
-
-  * ``dispatch.py``'s per-TASK earned-tier ladder (``_claude_tier_for`` / ``_bump_tier`` /
-    ``_claude_model``) imports the shared primitives below — it owns the rich sort, keyed on a
-    task's classes/labels, and passes ``--model`` explicitly.
-  * ``scripts/shims/claude`` — the non-bypassable chokepoint prepended onto the FLEET PATH —
-    calls :func:`model_for_argv` to decide what ``--model`` to inject when a fleet spawn carries
-    NONE. It owns the per-SPAWN floor: nothing escapes the sort to the account default (Opus 4.8 +
-    auto-1M context, which drove the 2026-06-25 usage bleed) WITHOUT a declaration.
-
-Design note — this module is PURE stdlib (only ``os``) and imports nothing from the ``limen``
-package, so the shim can ``importlib``-load it by file path without triggering ``limen``'s package
-``__init__`` or depending on ``PYTHONPATH``. ([[fleet-model-floor-bleed]] [[derive-never-pin-hardcodes]])
+The fleet shim must not invent a catalog or infer capability from a model name.
+Dispatch validates an explicit override against live provider state and passes it
+as ``--model``; every undeclared spawn remains provider Auto.
 """
 
 from __future__ import annotations
@@ -300,28 +289,15 @@ def _shim_floor_tier() -> str:
 
 
 def model_for_argv(args: list[str]) -> str | None:
-    """The ``--model`` value to INJECT for a fleet ``claude`` invocation, or None to leave the
-    spawn untouched.
+    """Leave model selection untouched.
 
-    ``args`` is argv WITHOUT the program name (i.e. ``sys.argv[1:]``). Returns a model string to
-    splice in as ``--model <value>``, or None when the spawn must not be touched: it already
-    carries --model (a declaration site sorted it), it is not a print/headless run, tiering is
-    deliberately gated off, or anything errors (fail-open). Mirrors the precedence of
-    ``dispatch._claude_model``: explicit pin > feature gate > derived floor.
+    A model already present in ``args`` was validated at the dispatch boundary.
+    Without one, the provider owns selection. The unused argument is retained so
+    the shim API stays stable for external callers.
     """
-    try:
-        if any(arg == "--model" or arg.startswith("--model=") for arg in args):
-            return None  # the declaration site already sorted this spawn — respect it
-        if not ("-p" in args or "--print" in args):
-            return None  # interactive / `claude mcp …` / any non-print — never re-tier
-        pin = os.environ.get("LIMEN_CLAUDE_MODEL")
-        if pin:
-            return _guard_claude_model_pin(pin)  # a manual pin wins only inside the expensive gates
-        if os.environ.get("LIMEN_CLAUDE_TIER_SELECT", "1") != "1":
-            return None  # tiering deliberately disabled → bare invocation (account default)
-        return _resolve_claude_model(_shim_floor_tier())
-    except Exception:
-        return None  # never block a spawn on a sort hiccup
+
+    del args
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:

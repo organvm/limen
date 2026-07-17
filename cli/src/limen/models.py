@@ -30,6 +30,11 @@ class DispatchLogEntry(BaseModel):
     # those rows, while every new writer emits a canonical status plus route_to and
     # heal-board appends a corrective head without rewriting history.
     route_to: str | None = None
+    # Immutable attempt identity and launch facts. The board transports these to
+    # the owner-native trajectory adapter; it never grants value itself.
+    attempt_id: str | None = None
+    attempt_classification: dict[str, Any] | None = None
+    attempt_repository: str | None = None
     execution_profile: dict[str, Any] | None = None
     selected_model: str | None = None
     selection_source: str | None = None
@@ -50,6 +55,12 @@ class DispatchLogEntry(BaseModel):
     remote_state: str | None = None
     remote_request_id: str | None = None
     remote_receipt: str | None = None
+    actual_spend: dict[str, Any] | None = None
+    trajectory_exact_commit: str | None = None
+    trajectory_pull_request: str | None = None
+    trajectory_outcome: str | None = None
+    trajectory_predicate: dict[str, Any] | None = None
+    trajectory_owner_receipt: dict[str, Any] | None = None
     output: str | None = None
 
     @field_validator("status")

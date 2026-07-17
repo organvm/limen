@@ -136,7 +136,7 @@ parameters:
     env: LIMEN_LOCAL_FLOOR_CLASSES
     self_update: "per-class: add only on parity-gate pass; ledger waste_classes auto-rolls a class back at runtime"
     owner: dispatch
-    note: "Job classes the unmetered ollama floor may absorb (capacity.local_floor_classes). Reserved opus/fable classes are excluded in code regardless of this list."
+    note: "Job classes the unmetered ollama floor may absorb (capacity.local_floor_classes). Provider-neutral profiles requiring deep reasoning, attachments, or planning are excluded in code regardless of this list."
 
   # --- VITALS: the missing executive's thresholds (build order #1) --------------
   # These are the published 'reaction function' the heartbeat will enact. Seeds —
@@ -1847,12 +1847,6 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "Path to the current-week written Fable acceptance receipt emitted by scripts/fable-allotment.py accept. Empty, stale, malformed, or arbitrary paths make Fable selections fall back to Opus; value `1` is accepted only under pytest."
-  LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE:
-    default: "0"
-    env: LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE
-    self_update: none
-    owner: arms-agents
-    note: "Opt-in gate for tried:claude retry escalation from Opus to Fable. Requires LIMEN_FABLE_ACCEPTANCE as well; default caps retry bumping at Opus so Fable is never reached by inherited escalation."
   LIMEN_ALLOW_FABLE_FANOUT:
     default: "0"
     env: LIMEN_ALLOW_FABLE_FANOUT
@@ -2885,30 +2879,48 @@ parameters:
     self_update: none
     owner: dispatch
     note: "Optional operator override. It is usable only when the exact value is present and code-capable in the current `opencode models --verbose` catalog; blank derives from live capabilities."
-  LIMEN_CODEX_TIER_SELECT:
-    default: "1"
-    env: LIMEN_CODEX_TIER_SELECT
+  LIMEN_CLAUDE_MODEL:
+    default: ""
+    env: LIMEN_CLAUDE_MODEL
     self_update: none
     owner: dispatch
-    note: "Enable per-task tier derivation for the Codex lane. 1 (default) derives haiku->o4-mini, opus/fable->o3 via _claude_tier_for; 0 disables derivation (provider Auto, prior behaviour). Per-tier overrides via LIMEN_CODEX_MODEL_<TIER>."
+    note: "Optional Claude override. Blank delegates to provider Auto. Nonblank must match an exact identifier in the current Claude CLI catalog before any worktree or provider side effect."
+  LIMEN_CODEX_MODEL:
+    default: ""
+    env: LIMEN_CODEX_MODEL
+    self_update: none
+    owner: dispatch
+    note: "Optional Codex override. Blank delegates to provider Auto. Nonblank must match an exact identifier in the current Codex CLI catalog before any worktree or provider side effect."
   LIMEN_GEMINI_MODEL:
     default: ""
     env: LIMEN_GEMINI_MODEL
     self_update: none
     owner: dispatch
-    note: "Blanket operator override for the Gemini agent model. Nonblank wins over all per-task tier derivation. Blank enables tier derivation (see LIMEN_GEMINI_TIER_SELECT)."
-  LIMEN_GEMINI_TIER_SELECT:
-    default: "1"
-    env: LIMEN_GEMINI_TIER_SELECT
+    note: "Optional Gemini override. Blank delegates to provider Auto. Nonblank must match an exact identifier in the current Gemini API catalog before any worktree or provider side effect."
+  LIMEN_CLAUDE_CATALOG_TIMEOUT:
+    default: 30
+    env: LIMEN_CLAUDE_CATALOG_TIMEOUT
     self_update: none
     owner: dispatch
-    note: "Enable per-task tier derivation for the Gemini lane. 1 (default) derives haiku/sonnet->gemini-2.5-flash, opus/fable->gemini-2.5-pro via _claude_tier_for; 0 disables derivation (bare invocation, prior behaviour). Per-tier overrides via LIMEN_GEMINI_MODEL_<TIER>."
+    note: "Seconds allowed to validate an explicit Claude override. Provider-Auto dispatch performs no catalog lookup."
+  LIMEN_CODEX_CATALOG_TIMEOUT:
+    default: 30
+    env: LIMEN_CODEX_CATALOG_TIMEOUT
+    self_update: none
+    owner: dispatch
+    note: "Seconds allowed to validate an explicit Codex override. Provider-Auto dispatch performs no catalog lookup."
+  LIMEN_GEMINI_CATALOG_TIMEOUT:
+    default: 30
+    env: LIMEN_GEMINI_CATALOG_TIMEOUT
+    self_update: none
+    owner: dispatch
+    note: "Seconds allowed to validate an explicit Gemini override. Provider-Auto dispatch performs no catalog lookup."
   LIMEN_OPENCODE_CATALOG_TIMEOUT:
     default: 30
     env: LIMEN_OPENCODE_CATALOG_TIMEOUT
     self_update: none
     owner: dispatch
-    note: "Seconds allowed for live OpenCode capability discovery before the affected task records failed_blocked. No named fallback is synthesized."
+    note: "Seconds allowed for rich OpenCode capability discovery. An unavailable catalog delegates to provider Auto; a reachable catalog with no capable model fails blocked."
   LIMEN_WARP_MODEL_OVERRIDE:
     default: ""
     env: LIMEN_WARP_MODEL_OVERRIDE
