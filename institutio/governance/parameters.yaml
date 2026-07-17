@@ -605,11 +605,11 @@ parameters:
     owner: continuity
     note: "DATA_ONLY push guard (issue #872 / PREC-2026-07-10-direct-push-lane-rots-main). When on (default), the autonomic direct-push lanes (scripts/capture.sh, scripts/continuation-beat.py) refuse to stage SOURCE (code/config that belongs behind pr-gate) onto a repo's `main` when that repo has .github/workflows/pr-gate.yml — so no uncommitted .py in the live checkout ever reaches protected main un-CI'd. Refused source is left on disk (reversible) and surfaced; route it via PR. `off` disables the guard. Non-main branches and ungated repos are unaffected either way."
   LIMEN_RECLAIM:
-    default: "1"
+    default: "0"
     env: LIMEN_RECLAIM
     self_update: none
     owner: continuity
-    note: "Master live-enable switch for the heartbeat worktree reaper. Worktree admission requires the registered live value 1; disabling reclaim blocks new local worktree creation while remote lanes continue."
+    note: "Master live-enable switch for the heartbeat worktree reaper. Defaults 0 during reacceptance containment. Worktree admission requires the registered live value 1; disabling reclaim blocks new local worktree creation while remote lanes continue."
   LIMEN_RECLAIM_MAX:
     default: 50
     env: LIMEN_RECLAIM_MAX
@@ -2338,11 +2338,11 @@ parameters:
     owner: limen-daemon
     note: "ON — before deleting a reap candidate, git ls-remote confirms origin STILL holds HEAD (guards the deleted/renamed-origin case where the local clone is the only copy). Fail-safe: unreachable/offline → skip, never reap. Set 0 to trust local remote-tracking refs without the network round-trip."
   LIMEN_RECLAIM_APPLY:
-    default: "1"               # ON — default beat removes only clean+content-preserved+idle roots
+    default: "0"               # OFF — explicit authorization is required for physical removal
     env: LIMEN_RECLAIM_APPLY
     self_update: none
     owner: limen-daemon
-    note: "When 1, scripts/drain.sh passes --apply to reclaim-worktrees.py. The reaper still refuses dirty, unique-unpushed, unmerged, active, or live/self roots. Set 0 for preview-only operation."
+    note: "When explicitly set to 1, scripts/drain.sh passes --apply to reclaim-worktrees.py. Defaults 0 for preview-only containment; the reaper also refuses dirty, unique-unpushed, unmerged, active, or live/self roots."
   LIMEN_WORKTREE_DEBT_GATE:
     default: "1"               # ON — per-candidate worktree custody admission active
     env: LIMEN_WORKTREE_DEBT_GATE
