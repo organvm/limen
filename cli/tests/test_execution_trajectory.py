@@ -18,6 +18,8 @@ from limen.execution_trajectory import (
     OwnerTrajectorySnapshot,
     TrajectoryPublicationError,
     build_corpus,
+    launch_attempt_id,
+    launch_identity_digest,
     publish_bounded,
     record_digest,
     trajectory_from_log_entries,
@@ -30,6 +32,7 @@ HEAD = "d47a" * 10
 OTHER_HEAD = "e58b" * 10
 RECEIPT_DIGEST = "sha256:" + "a" * 64
 PREDICATE_DIGEST = "sha256:" + "b" * 64
+CONTRACT_HASH = "c" * 64
 FRESH_NOW = datetime(2026, 7, 16, 18, 21, tzinfo=timezone.utc)
 
 
@@ -46,22 +49,43 @@ def trajectory(
     task_id: str = "TASK-amber-4",
     repository: str = "signal-garden/orbit-index",
     predicate_digest: str = PREDICATE_DIGEST,
+    execution_profile: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    return {
-        "schema": "limen.execution_trajectory.v1",
-        "attempt_id": attempt_id,
+    classification = {
+        "task_type": "analysis",
+        "labels": ["receipt-audit"],
+        "workstream": "reacceptance",
+    }
+    execution_profile = execution_profile or {"reasoning_depth": 0.8, "mode": "bounded"}
+    started_at = datetime(2026, 7, 16, 18, 0, tzinfo=timezone.utc)
+    executing_session = f"session-{attempt_id}"
+    route_selection_source = "dispatch_target_agent"
+    launch_facts = {
         "task_id": task_id,
-        "classification": {
-            "task_type": "analysis",
-            "labels": ["receipt-audit"],
-            "workstream": "reacceptance",
-        },
+        "contract_hash": CONTRACT_HASH,
+        "classification": classification,
+        "repository": repository,
+        "execution_profile": execution_profile,
         "executing_keeper": keeper,
-        "executing_session": "session-mauve-82",
+        "executing_session": executing_session,
         "provider_route": route,
-        "execution_profile": {"reasoning_depth": 0.8, "mode": "bounded"},
+        "route_selection_source": route_selection_source,
+        "started_at": started_at,
+    }
+    bound_attempt_id = launch_attempt_id(**launch_facts)
+    row: dict[str, object] = {
+        "schema": "limen.execution_trajectory.v2",
+        "attempt_id": bound_attempt_id,
+        "task_id": task_id,
+        "classification": classification,
+        "executing_keeper": keeper,
+        "executing_session": executing_session,
+        "provider_route": route,
+        "route_selection_source": route_selection_source,
+        "attempt_contract_hash": CONTRACT_HASH,
+        "execution_profile": execution_profile,
         "spend": {"amount": 3.5, "unit": "token-k"},
-        "started_at": "2026-07-16T18:00:00Z",
+        "started_at": started_at,
         "ended_at": "2026-07-16T18:20:00Z",
         "outcome": outcome,
         "repository": repository,
@@ -78,12 +102,17 @@ def trajectory(
             "reference": "https://github.com/signal-garden/orbit-index/pull/731",
             "digest": RECEIPT_DIGEST,
             "head_sha": receipt_head,
-            "attempt_id": attempt_id,
+            "attempt_id": bound_attempt_id,
             "task_id": task_id,
             "repository": repository,
             "predicate_digest": predicate_digest,
         },
     }
+    row["attempt_identity_digest"] = launch_identity_digest(
+        attempt_id=bound_attempt_id,
+        **launch_facts,
+    )
+    return row
 
 
 class Authority:
@@ -247,6 +276,23 @@ def test_owner_snapshot_must_be_fresh_and_postdate_the_predicate() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("checked_at", "expected"),
+    [
+        ("2026-07-16T17:59:59Z", 0),
+        ("2026-07-16T18:00:00Z", 1),
+        ("2026-07-16T18:20:00Z", 1),
+        ("2026-07-16T18:20:01Z", 0),
+    ],
+)
+def test_predicate_must_be_checked_within_attempt_interval(checked_at: str, expected: int) -> None:
+    row = trajectory()
+    row["terminal_predicate"]["checked_at"] = checked_at
+    record = ExecutionTrajectory.model_validate(row)
+
+    assert verified_value_credit(record, authority=Authority(verified_at=FRESH_NOW), now=FRESH_NOW) == expected
+
+
 def test_receipt_claim_binding_and_predicate_digest_fail_closed() -> None:
     mismatched = trajectory()
     mismatched["owner_receipt"]["attempt_id"] = "attempt-other"
@@ -261,9 +307,10 @@ def test_receipt_claim_binding_and_predicate_digest_fail_closed() -> None:
 
 
 def test_conflicting_duplicate_attempt_is_excluded_fail_closed() -> None:
-    corpus = build_corpus([trajectory(), trajectory(outcome="failed")])
+    first = trajectory()
+    corpus = build_corpus([first, trajectory(outcome="failed")])
     assert corpus.records == ()
-    assert corpus.conflicting_attempt_ids == ("attempt-orchid-17",)
+    assert corpus.conflicting_attempt_ids == (first["attempt_id"],)
 
 
 class AtomicOwner:
@@ -304,14 +351,15 @@ class AtomicOwner:
 def test_owner_publication_is_atomic_bounded_and_idempotent() -> None:
     owner = AtomicOwner()
     rows = [trajectory(attempt_id="attempt-a"), trajectory(attempt_id="attempt-b")]
+    attempt_ids = tuple(sorted(str(row["attempt_id"]) for row in rows))
 
     first = publish_bounded(rows, owner, max_records=2, max_bytes=10_000)
     second = publish_bounded(reversed(rows), owner, max_records=2, max_bytes=10_000)
 
-    assert [item.attempt_id for item in first.published] == ["attempt-a", "attempt-b"]
+    assert [item.attempt_id for item in first.published] == list(attempt_ids)
     assert second.published == ()
-    assert second.already_present == ("attempt-a", "attempt-b")
-    assert set(owner.records) == {"attempt-a", "attempt-b"}
+    assert second.already_present == attempt_ids
+    assert set(owner.records) == set(attempt_ids)
 
 
 def test_parallel_publication_never_creates_duplicate_attempts() -> None:
@@ -360,30 +408,41 @@ def test_publication_stops_at_record_and_raw_input_bounds_without_draining() -> 
 
     consumed.clear()
 
-    def duplicate_stream():
+    def exactly_bounded_stream():
+        for index in range(3):
+            consumed.append(str(index))
+            yield trajectory(attempt_id=f"attempt-exact-{index}")
+
+    exact = build_corpus(exactly_bounded_stream(), max_input_rows=3)
+    assert len(exact.records) == 3
+    assert consumed == ["0", "1", "2"]
+
+    consumed.clear()
+
+    def one_over_stream():
         for index in range(10):
             consumed.append(str(index))
             yield trajectory(attempt_id="attempt-duplicate")
-        raise AssertionError("publisher drained unbounded duplicate input")
+            if index == 3:
+                raise AssertionError("publisher drained input beyond the N+1 overflow row")
 
     with pytest.raises(TrajectoryPublicationError, match="input row bound"):
         publish_bounded(
-            duplicate_stream(),
+            one_over_stream(),
             owner,
             max_records=1,
             max_input_rows=3,
         )
-    assert consumed == ["0", "1", "2"]
+    assert consumed == ["0", "1", "2", "3"]
     assert owner.records == {}
 
 
 def test_execution_profile_is_deeply_immutable_and_canonical_json() -> None:
-    row = trajectory()
     mutable_profile = {
         "nested": {"z": [3, {"a": True}], "a": None},
         "mode": "bounded",
     }
-    row["execution_profile"] = mutable_profile
+    row = trajectory(execution_profile=mutable_profile)
     record = ExecutionTrajectory.model_validate(row)
     digest = record_digest(record)
 
@@ -399,11 +458,12 @@ def test_execution_profile_is_deeply_immutable_and_canonical_json() -> None:
     with pytest.raises(TypeError):
         record.execution_profile["nested"]["z"][1]["a"] = False
 
-    reordered = trajectory()
-    reordered["execution_profile"] = {
-        "mode": "bounded",
-        "nested": {"a": None, "z": [3, {"a": True}]},
-    }
+    reordered = trajectory(
+        execution_profile={
+            "mode": "bounded",
+            "nested": {"a": None, "z": [3, {"a": True}]},
+        }
+    )
     assert record_digest(ExecutionTrajectory.model_validate(reordered)) == digest
 
     non_json = trajectory()
@@ -412,52 +472,153 @@ def test_execution_profile_is_deeply_immutable_and_canonical_json() -> None:
         ExecutionTrajectory.model_validate(non_json)
 
 
+def test_attempt_identifier_binds_every_launch_attribution() -> None:
+    facts = {
+        "task_id": "TASK-bound",
+        "contract_hash": CONTRACT_HASH,
+        "classification": {"task_type": "verification", "labels": ["receipt-audit"]},
+        "repository": "signal-garden/orbit-index",
+        "execution_profile": {"reasoning_depth": 0.8},
+        "executing_keeper": "keeper-cerulean",
+        "executing_session": "launch-session",
+        "provider_route": "provider-lane",
+        "route_selection_source": "dispatch_target_agent",
+        "started_at": datetime(2026, 7, 16, 18, 0, tzinfo=timezone.utc),
+    }
+    original = launch_attempt_id(**facts)
+
+    for field, replacement in (
+        ("executing_keeper", "keeper-mutated"),
+        ("executing_session", "session-mutated"),
+        ("provider_route", "provider-mutated"),
+        ("route_selection_source", "source-mutated"),
+    ):
+        assert launch_attempt_id(**{**facts, field: replacement}) != original
+
+
+def test_recomputed_digest_cannot_authorize_an_arbitrary_attempt_identifier() -> None:
+    row = trajectory()
+    forged_attempt_id = "attempt-forged"
+    row["attempt_id"] = forged_attempt_id
+    row["owner_receipt"]["attempt_id"] = forged_attempt_id
+    row["attempt_identity_digest"] = launch_identity_digest(
+        attempt_id=forged_attempt_id,
+        task_id=row["task_id"],
+        contract_hash=row["attempt_contract_hash"],
+        classification=row["classification"],
+        repository=row["repository"],
+        execution_profile=row["execution_profile"],
+        executing_keeper=row["executing_keeper"],
+        executing_session=row["executing_session"],
+        provider_route=row["provider_route"],
+        route_selection_source=row["route_selection_source"],
+        started_at=row["started_at"],
+    )
+
+    with pytest.raises(ValidationError, match="attempt identifier"):
+        ExecutionTrajectory.model_validate(row)
+
+
 def test_log_conversion_freezes_launch_executor_session_and_provider_route() -> None:
+    started_at = datetime(2026, 7, 16, 18, 0, tzinfo=timezone.utc)
+    classification = {"task_type": "verification", "labels": ["receipt-audit"]}
+    profile = {"reasoning_depth": 0.8}
+    launch_facts = {
+        "task_id": "TASK-runtime",
+        "contract_hash": CONTRACT_HASH,
+        "classification": classification,
+        "repository": "signal-garden/orbit-index",
+        "execution_profile": profile,
+        "executing_keeper": "keeper-cerulean",
+        "executing_session": "launch-session",
+        "provider_route": "provider-lane",
+        "route_selection_source": "dispatch_target_agent",
+        "started_at": started_at,
+    }
+    attempt_id = launch_attempt_id(**launch_facts)
     launch = DispatchLogEntry(
-        timestamp="2026-07-16T18:00:00Z",
+        timestamp=started_at,
         agent="reservation-observer",
         session_id="reservation-row",
         status="dispatched",
-        attempt_id="attempt-runtime",
-        attempt_classification={"task_type": "verification", "labels": ["receipt-audit"]},
+        attempt_id=attempt_id,
+        attempt_classification=classification,
         attempt_repository="signal-garden/orbit-index",
-        execution_profile={"reasoning_depth": 0.8},
+        attempt_contract_hash=CONTRACT_HASH,
+        attempt_identity_digest=launch_identity_digest(attempt_id=attempt_id, **launch_facts),
+        execution_profile=profile,
         executing_keeper="keeper-cerulean",
         executing_session="launch-session",
         provider_route="provider-lane",
+        route_selection_source="dispatch_target_agent",
     )
-    terminal = DispatchLogEntry(
-        timestamp="2026-07-16T18:05:00Z",
-        agent="different-observer",
-        session_id="provider-session",
-        status="done",
-        attempt_id="attempt-runtime",
-        selected_model="provider/model-x",
-        trajectory_exact_commit=HEAD,
-        trajectory_pull_request="https://github.com/signal-garden/orbit-index/pull/731",
-        trajectory_predicate={
-            "command_digest": PREDICATE_DIGEST,
-            "passed": True,
-            "checked_at": "2026-07-16T18:04:00Z",
-            "head_sha": HEAD,
-        },
-        trajectory_owner_receipt={
-            "owner": "github",
-            "reference": "https://github.com/signal-garden/orbit-index/pull/731",
-            "digest": RECEIPT_DIGEST,
-            "head_sha": HEAD,
-            "attempt_id": "attempt-runtime",
-            "task_id": "TASK-runtime",
-            "repository": "signal-garden/orbit-index",
-            "predicate_digest": PREDICATE_DIGEST,
-        },
+    terminal = launch.model_copy(
+        update={
+            "timestamp": "2026-07-16T18:05:00Z",
+            "agent": "different-observer",
+            "session_id": "provider-session",
+            "status": "done",
+            "selected_model": "provider/model-x",
+            "trajectory_exact_commit": HEAD,
+            "trajectory_pull_request": "https://github.com/signal-garden/orbit-index/pull/731",
+            "trajectory_predicate": {
+                "command_digest": PREDICATE_DIGEST,
+                "passed": True,
+                "checked_at": "2026-07-16T18:04:00Z",
+                "head_sha": HEAD,
+            },
+            "trajectory_owner_receipt": {
+                "owner": "github",
+                "reference": "https://github.com/signal-garden/orbit-index/pull/731",
+                "digest": RECEIPT_DIGEST,
+                "head_sha": HEAD,
+                "attempt_id": attempt_id,
+                "task_id": "TASK-runtime",
+                "repository": "signal-garden/orbit-index",
+                "predicate_digest": PREDICATE_DIGEST,
+            },
+        }
     )
 
     record = trajectory_from_log_entries(task_id="TASK-runtime", launch=launch, terminal=terminal)
 
     assert record.executing_keeper == "keeper-cerulean"
     assert record.executing_session == "launch-session"
-    assert record.provider_route == "provider/model-x"
+    assert record.provider_route == "provider-lane"
+    assert record.route_selection_source == "dispatch_target_agent"
+
+    with pytest.raises(ValueError, match="persisted identity"):
+        trajectory_from_log_entries(task_id="TASK-other", launch=launch, terminal=terminal)
+
+    for field, mutation in (
+        ("executing_keeper", "post-launch-mutator"),
+        ("executing_session", "post-launch-session"),
+        ("provider_route", "post-launch-provider"),
+        ("route_selection_source", "post-launch-source"),
+    ):
+        mutated_launch = launch.model_copy(update={field: mutation})
+        with pytest.raises(ValueError, match="persisted identity"):
+            trajectory_from_log_entries(task_id="TASK-runtime", launch=mutated_launch, terminal=terminal)
+
+    for field in (
+        "attempt_classification",
+        "attempt_repository",
+        "attempt_contract_hash",
+        "attempt_identity_digest",
+        "execution_profile",
+        "executing_keeper",
+        "executing_session",
+        "provider_route",
+        "route_selection_source",
+    ):
+        missing_terminal_field = terminal.model_copy(update={field: None})
+        with pytest.raises(ValueError, match=f"terminal {field} diverges"):
+            trajectory_from_log_entries(
+                task_id="TASK-runtime",
+                launch=launch,
+                terminal=missing_terminal_field,
+            )
+
     terminal.attempt_id = "attempt-other"
     with pytest.raises(ValueError, match="does not match"):
         trajectory_from_log_entries(task_id="TASK-runtime", launch=launch, terminal=terminal)

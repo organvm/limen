@@ -63,10 +63,14 @@ they are not precedent for adding another named default.
 
 ## Execution trajectory
 
-`limen.execution_trajectory.v1` freezes one execution attempt at launch: task classification,
-executor, provider route, profile, repository, session, and start time. A later board edit cannot
-reassign that attempt. Exact duplicate attempts count once; divergent rows for one attempt identity
-are excluded.
+`limen.execution_trajectory.v2` freezes one execution attempt at launch: task classification,
+executor, provider route and its selection source, profile, repository, session, contract, and start
+time. The deterministic attempt ID and launch-receipt digest bind those facts, so a later board edit
+cannot reassign that attempt. Exact duplicate attempts count once; divergent rows for one attempt
+identity are excluded.
+
+Pre-v2 board rows remain lifecycle-readable, but they are not backfilled and cannot be converted
+into value-bearing trajectory receipts.
 
 The board is transport, not value authority. Success motion earns zero unless the predicate and
 owner receipt both bind the exact commit and a fresh owner adapter independently verifies the

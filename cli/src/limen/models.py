@@ -35,11 +35,14 @@ class DispatchLogEntry(BaseModel):
     attempt_id: str | None = None
     attempt_classification: dict[str, Any] | None = None
     attempt_repository: str | None = None
+    attempt_contract_hash: str | None = None
+    attempt_identity_digest: str | None = None
     execution_profile: dict[str, Any] | None = None
     selected_model: str | None = None
     selection_source: str | None = None
     catalog_hash: str | None = None
     provider_route: str | None = None
+    route_selection_source: str | None = None
     executing_keeper: str | None = None
     executing_session: str | None = None
     # Provider-neutral remote lifecycle.  Submission is only ``dispatched``; these fields make the

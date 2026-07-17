@@ -33,6 +33,7 @@ from limen.capacity import (
 )
 from limen.dispatch_ownership import ACTIVE_OWNER_STATUSES
 from limen.execution_contract import execution_contract_hash
+from limen.execution_trajectory import launch_attempt_id, launch_identity_digest
 from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
 from limen.intake import IntakeContractError, normalize_selected_legacy_task, validate_intake_contract
 from limen.jules_remote import (
@@ -1499,24 +1500,30 @@ _PROVIDER_CATALOG_TIMEOUT_ENV = {
 
 def _attempt_id(
     task: Task,
-    agent: str,
-    reservation_session: str,
+    *,
+    classification: dict[str, object],
+    profile: dict[str, object],
+    contract_hash: str,
+    provider_route: str,
+    route_selection_source: str,
+    executing_keeper: str,
+    executing_session: str,
     started_at: datetime,
 ) -> str:
     """Derive one stable identity from facts persisted in the reservation row."""
 
-    if started_at.tzinfo is None:
-        raise ValueError("attempt reservation timestamp must be timezone-aware")
-    payload = {
-        "schema": "limen.execution_attempt_identity.v1",
-        "task_id": task.id,
-        "execution_contract_hash": execution_contract_hash(task),
-        "agent": agent,
-        "reservation_session": reservation_session,
-        "started_at": started_at.astimezone(timezone.utc).isoformat(),
-    }
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    return "attempt-" + hashlib.sha256(encoded).hexdigest()
+    return launch_attempt_id(
+        task_id=task.id,
+        contract_hash=contract_hash,
+        classification=classification,
+        repository=task.repo,
+        execution_profile=profile,
+        executing_keeper=executing_keeper,
+        executing_session=executing_session,
+        provider_route=provider_route,
+        route_selection_source=route_selection_source,
+        started_at=started_at,
+    )
 
 
 def _dispatch_execution_profile(task: Task | None):
@@ -1541,22 +1548,54 @@ def _attempt_launch_entry(
     """Freeze launch facts in the owner board before any provider can execute."""
 
     profile = _dispatch_execution_profile(task).as_dict()
+    classification = {
+        "task_type": task.type,
+        "labels": sorted({str(label) for label in task.labels}),
+        "workstream": task.workstream,
+    }
+    contract_hash = execution_contract_hash(task)
+    provider_route = f"provider:{agent}"
+    route_selection_source = "dispatch_target_agent"
+    executing_keeper = agent
+    executing_session = reservation_session
+    attempt_id = _attempt_id(
+        task,
+        classification=classification,
+        profile=profile,
+        contract_hash=contract_hash,
+        provider_route=provider_route,
+        route_selection_source=route_selection_source,
+        executing_keeper=executing_keeper,
+        executing_session=executing_session,
+        started_at=started_at,
+    )
     return DispatchLogEntry(
         timestamp=started_at,
         agent=agent,
         session_id=reservation_session,
         status=status,
-        attempt_id=_attempt_id(task, agent, reservation_session, started_at),
-        attempt_classification={
-            "task_type": task.type,
-            "labels": sorted({str(label) for label in task.labels}),
-            "workstream": task.workstream,
-        },
+        attempt_id=attempt_id,
+        attempt_classification=classification,
         attempt_repository=task.repo,
+        attempt_contract_hash=contract_hash,
+        attempt_identity_digest=launch_identity_digest(
+            attempt_id=attempt_id,
+            task_id=task.id,
+            contract_hash=contract_hash,
+            classification=classification,
+            repository=task.repo,
+            execution_profile=profile,
+            executing_keeper=executing_keeper,
+            executing_session=executing_session,
+            provider_route=provider_route,
+            route_selection_source=route_selection_source,
+            started_at=started_at,
+        ),
         execution_profile=profile,
-        provider_route=f"provider:{agent}",
-        executing_keeper=agent,
-        executing_session=reservation_session,
+        provider_route=provider_route,
+        route_selection_source=route_selection_source,
+        executing_keeper=executing_keeper,
+        executing_session=executing_session,
         output=output,
     )
 
@@ -4873,8 +4912,11 @@ def _apply_result(
         entry.attempt_id = launch.attempt_id
         entry.attempt_classification = launch.attempt_classification
         entry.attempt_repository = launch.attempt_repository
+        entry.attempt_contract_hash = launch.attempt_contract_hash
+        entry.attempt_identity_digest = launch.attempt_identity_digest
         entry.execution_profile = launch.execution_profile
         entry.provider_route = launch.provider_route
+        entry.route_selection_source = launch.route_selection_source
         entry.executing_keeper = launch.executing_keeper or launch.agent
         entry.executing_session = launch.executing_session or launch.session_id
     selection = model_selection_receipt

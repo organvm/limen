@@ -29,7 +29,7 @@ from pydantic import (
 )
 
 
-SCHEMA = "limen.execution_trajectory.v1"
+SCHEMA = "limen.execution_trajectory.v2"
 RECEIPT_VERIFICATION_MAX_AGE = timedelta(minutes=5)
 RECEIPT_VERIFICATION_FUTURE_SKEW = timedelta(seconds=30)
 _TERMINAL_OUTCOMES = frozenset({"succeeded", "failed", "blocked", "superseded"})
@@ -40,6 +40,8 @@ _STATUS_OUTCOME = {
     "needs_human": "blocked",
 }
 _SHA256_PATTERN = r"^sha256:[0-9a-f]{64}$"
+_HEX_DIGEST_PATTERN = r"^[0-9a-f]{64}$"
+_ATTEMPT_IDENTITY_SCHEMA = "limen.execution_attempt_identity.v2"
 
 
 def _is_sha(value: str | None) -> bool:
@@ -157,6 +159,78 @@ class FrozenTaskClassification(BaseModel):
         return tuple(sorted({str(item).strip() for item in value if str(item).strip()}))
 
 
+def _launch_identity_payload(
+    *,
+    task_id: str,
+    contract_hash: str,
+    classification: Mapping[str, object] | FrozenTaskClassification,
+    repository: str | None,
+    execution_profile: Mapping[str, object] | FrozenJsonObject,
+    executing_keeper: str,
+    executing_session: str,
+    provider_route: str,
+    route_selection_source: str,
+    started_at: datetime,
+) -> dict[str, object]:
+    """Canonical owner-board launch facts used by both reservation and conversion."""
+
+    if len(contract_hash) != 64 or any(character not in "0123456789abcdef" for character in contract_hash):
+        raise ValueError("attempt contract hash must be 64 lowercase hex characters")
+    if started_at.tzinfo is None:
+        raise ValueError("attempt start timestamp must include a timezone")
+    for name, value in (
+        ("task_id", task_id),
+        ("executing_keeper", executing_keeper),
+        ("executing_session", executing_session),
+        ("provider_route", provider_route),
+        ("route_selection_source", route_selection_source),
+    ):
+        if not isinstance(value, str) or not value:
+            raise ValueError(f"{name} must be non-empty")
+    if repository is not None and not _is_repository(repository):
+        raise ValueError("attempt repository must be exact OWNER/NAME")
+    frozen_classification = (
+        classification
+        if isinstance(classification, FrozenTaskClassification)
+        else FrozenTaskClassification.model_validate(classification)
+    )
+    frozen_profile = _freeze_json(execution_profile)
+    if not isinstance(frozen_profile, FrozenJsonObject):
+        raise ValueError("attempt execution profile must be a JSON object")
+    return {
+        "schema": _ATTEMPT_IDENTITY_SCHEMA,
+        "task_id": task_id,
+        "execution_contract_hash": contract_hash,
+        "classification": frozen_classification.model_dump(mode="json"),
+        "repository": repository,
+        "execution_profile": _thaw_json(frozen_profile),
+        "executing_keeper": executing_keeper,
+        "executing_session": executing_session,
+        "provider_route": provider_route,
+        "route_selection_source": route_selection_source,
+        "started_at": started_at.astimezone(timezone.utc).isoformat(),
+    }
+
+
+def launch_attempt_id(**launch_facts: object) -> str:
+    """Bind the durable attempt identifier to every immutable launch attribution."""
+
+    payload = _launch_identity_payload(**launch_facts)  # type: ignore[arg-type]
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    return "attempt-" + hashlib.sha256(encoded).hexdigest()
+
+
+def launch_identity_digest(*, attempt_id: str, **launch_facts: object) -> str:
+    """Digest the persisted launch receipt, including its deterministic attempt ID."""
+
+    if not attempt_id:
+        raise ValueError("attempt_id must be non-empty")
+    payload = _launch_identity_payload(**launch_facts)  # type: ignore[arg-type]
+    payload["attempt_id"] = attempt_id
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
 class ExecutionSpend(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -256,8 +330,8 @@ class ExecutionTrajectory(BaseModel):
         populate_by_name=True,
     )
 
-    schema_version: Literal["limen.execution_trajectory.v1"] = Field(
-        default="limen.execution_trajectory.v1",
+    schema_version: Literal["limen.execution_trajectory.v2"] = Field(
+        default="limen.execution_trajectory.v2",
         alias="schema",
         serialization_alias="schema",
     )
@@ -267,6 +341,9 @@ class ExecutionTrajectory(BaseModel):
     executing_keeper: str = Field(min_length=1, max_length=128)
     executing_session: str = Field(min_length=1, max_length=256)
     provider_route: str = Field(min_length=1, max_length=256)
+    route_selection_source: str = Field(min_length=1, max_length=128)
+    attempt_contract_hash: str = Field(pattern=_HEX_DIGEST_PATTERN)
+    attempt_identity_digest: str = Field(pattern=_SHA256_PATTERN)
     execution_profile: FrozenJsonObject = Field(default_factory=FrozenJsonObject)
     spend: ExecutionSpend = Field(default_factory=ExecutionSpend)
     started_at: datetime
@@ -326,6 +403,35 @@ class ExecutionTrajectory(BaseModel):
             )
             if binding != expected_binding:
                 raise ValueError("owner receipt binding does not match trajectory identity")
+        expected_identity_digest = launch_identity_digest(
+            attempt_id=self.attempt_id,
+            task_id=self.task_id,
+            contract_hash=self.attempt_contract_hash,
+            classification=self.classification,
+            repository=self.repository,
+            execution_profile=self.execution_profile,
+            executing_keeper=self.executing_keeper,
+            executing_session=self.executing_session,
+            provider_route=self.provider_route,
+            route_selection_source=self.route_selection_source,
+            started_at=self.started_at,
+        )
+        expected_attempt_id = launch_attempt_id(
+            task_id=self.task_id,
+            contract_hash=self.attempt_contract_hash,
+            classification=self.classification,
+            repository=self.repository,
+            execution_profile=self.execution_profile,
+            executing_keeper=self.executing_keeper,
+            executing_session=self.executing_session,
+            provider_route=self.provider_route,
+            route_selection_source=self.route_selection_source,
+            started_at=self.started_at,
+        )
+        if self.attempt_id != expected_attempt_id:
+            raise ValueError("attempt identifier does not match immutable launch attribution")
+        if self.attempt_identity_digest != expected_identity_digest:
+            raise ValueError("attempt launch attribution does not match its immutable identity digest")
         return self
 
 
@@ -360,6 +466,8 @@ def verified_value_credit(
         or repository is None
         or predicate is None
         or not predicate.passed
+        or predicate.checked_at < trajectory.started_at
+        or predicate.checked_at > trajectory.ended_at
         or predicate.head_sha != commit
         or claim is None
         or claim.head_sha != commit
@@ -451,6 +559,10 @@ def build_corpus(
     while True:
         if max_input_rows is not None and row_number >= max_input_rows:
             if known_input_rows is not None:
+                break
+            try:
+                next(iterator)
+            except StopIteration:
                 break
             raise TrajectoryPublicationError("trajectory publication exceeds input row bound")
         try:
@@ -616,15 +728,14 @@ def trajectory_from_log_entries(
     terminal_attempt = str(getattr(terminal, "attempt_id", "") or "")
     classification = getattr(launch, "attempt_classification", None)
     profile = getattr(launch, "execution_profile", None)
-    executing_keeper = getattr(launch, "executing_keeper", None) or getattr(launch, "agent", None)
-    executing_session = getattr(launch, "executing_session", None) or getattr(launch, "session_id", None)
-    provider_route = (
-        getattr(launch, "selected_model", None)
-        or getattr(terminal, "selected_model", None)
-        or getattr(launch, "selection_source", None)
-        or getattr(terminal, "selection_source", None)
-        or getattr(launch, "provider_route", None)
-    )
+    contract_hash = str(getattr(launch, "attempt_contract_hash", "") or "")
+    identity_digest = str(getattr(launch, "attempt_identity_digest", "") or "")
+    executing_keeper = getattr(launch, "executing_keeper", None)
+    executing_session = getattr(launch, "executing_session", None)
+    provider_route = getattr(launch, "provider_route", None)
+    route_selection_source = getattr(launch, "route_selection_source", None)
+    repository = getattr(launch, "attempt_repository", None)
+    started_at = getattr(launch, "timestamp", None)
     status = str(getattr(terminal, "status", "") or "")
     explicit_outcome = str(getattr(terminal, "trajectory_outcome", "") or "")
     outcome = explicit_outcome or _STATUS_OUTCOME.get(status, "")
@@ -634,8 +745,40 @@ def trajectory_from_log_entries(
         raise ValueError("attempt launch lacks frozen classification or execution profile")
     if not executing_keeper or not executing_session:
         raise ValueError("attempt launch lacks frozen executor identity")
-    if not provider_route:
+    if not provider_route or not route_selection_source:
         raise ValueError("attempt launch lacks independent provider-route evidence")
+    if not contract_hash or not identity_digest:
+        raise ValueError("attempt launch lacks its immutable identity receipt")
+    launch_facts = {
+        "task_id": task_id,
+        "contract_hash": contract_hash,
+        "classification": classification,
+        "repository": repository,
+        "execution_profile": profile,
+        "executing_keeper": executing_keeper,
+        "executing_session": executing_session,
+        "provider_route": provider_route,
+        "route_selection_source": route_selection_source,
+        "started_at": started_at,
+    }
+    if launch_attempt_id(**launch_facts) != launch_attempt:
+        raise ValueError("attempt launch attribution does not match its persisted identity")
+    if launch_identity_digest(attempt_id=launch_attempt, **launch_facts) != identity_digest:
+        raise ValueError("attempt launch receipt digest does not match its persisted identity")
+    for field in (
+        "attempt_classification",
+        "attempt_repository",
+        "attempt_contract_hash",
+        "attempt_identity_digest",
+        "execution_profile",
+        "executing_keeper",
+        "executing_session",
+        "provider_route",
+        "route_selection_source",
+    ):
+        terminal_value = getattr(terminal, field, None)
+        if terminal_value != getattr(launch, field, None):
+            raise ValueError(f"terminal {field} diverges from immutable launch attribution")
     if outcome not in _TERMINAL_OUTCOMES:
         raise ValueError("dispatch row is not a terminal attempt outcome")
     spend = getattr(terminal, "actual_spend", None) or getattr(launch, "actual_spend", None)
@@ -648,12 +791,15 @@ def trajectory_from_log_entries(
             "executing_keeper": executing_keeper,
             "executing_session": executing_session,
             "provider_route": provider_route,
+            "route_selection_source": route_selection_source,
+            "attempt_contract_hash": contract_hash,
+            "attempt_identity_digest": identity_digest,
             "execution_profile": profile,
             "spend": spend or {"amount": None, "unit": "unreported"},
-            "started_at": getattr(launch, "timestamp", None),
+            "started_at": started_at,
             "ended_at": getattr(terminal, "timestamp", None),
             "outcome": outcome,
-            "repository": getattr(launch, "attempt_repository", None),
+            "repository": repository,
             "exact_commit": getattr(terminal, "trajectory_exact_commit", None),
             "pull_request": getattr(terminal, "trajectory_pull_request", None),
             "terminal_predicate": getattr(terminal, "trajectory_predicate", None),
