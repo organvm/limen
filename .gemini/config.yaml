@@ -1,0 +1,12 @@
+# Gemini Code Assist configuration (estate.yaml integrations.gemini-code-assist).
+# The conductor root copy is the live config AND the fan-out template (the .coderabbit.yaml
+# pattern) — scripts/sync-marketplace-config.py distributes it per-repo.
+have_fun: false
+code_review:
+  disable: false
+  comment_severity_threshold: MEDIUM
+  max_review_comments: -1
+  pull_request_opened:
+    help: false
+    summary: true
+    code_review: true
