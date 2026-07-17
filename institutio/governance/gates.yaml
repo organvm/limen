@@ -290,7 +290,7 @@ gates:
     command: "python3 scripts/task-writer-audit.py --check"
     paths: ["scripts/**", "cli/src/**", "mcp/src/**", "institutio/governance/task-writer-baseline.txt"]
     owner: tabularius
-    note: "single-writer board invariant: no NEW direct tasks.yaml writer; 17-writer legacy debt is the ratchet baseline (docs/tabularius-writer-audit.md), burn down never up"
+    note: "single-writer board invariant: no NEW direct tasks.yaml writer; baseline is 17 unique writer-file paths (the actual scan count — the original spec cited 24 which referred to call-site count, not unique files); burn down never up (docs/tabularius-writer-audit.md)"
   worktree-debt:
     command: "python3 scripts/worktree-debt.py --fail-on-debt --fail-reapable-over-cap"
     paths: ["scripts/worktree-debt.py", "cli/src/limen/worktree_debt.py", "cli/src/limen/worktree_roots.py", "scripts/reclaim-worktrees.py"]

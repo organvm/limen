@@ -23,7 +23,10 @@ ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 SEARCH_ROOTS = (ROOT / "scripts", ROOT / "cli" / "src", ROOT / "mcp" / "src")
 OUT = ROOT / "logs" / "task-writer-audit.json"
 DOC_OUT = ROOT / "docs" / "tabularius-writer-audit.md"
-BASELINE = ROOT / "institutio" / "governance" / "task-writer-baseline.txt"
+# Baseline is anchored to the script's own repo, not to ROOT/LIMEN_ROOT, so that a developer
+# with LIMEN_ROOT pointing to the live checkout (not this worktree) never causes a spurious
+# gate failure. CI does not set LIMEN_ROOT and would pass, but a local dev would get a false 1.
+BASELINE = Path(__file__).resolve().parents[1] / "institutio" / "governance" / "task-writer-baseline.txt"
 
 ALLOWED_DIRECT_WRITERS = {
     "scripts/tabularius-organ.py",
@@ -253,9 +256,14 @@ def python_files() -> list[Path]:
     return sorted(files)
 
 
-def load_baseline() -> set[str]:
+def load_baseline() -> set[str] | None:
+    """Return the baseline set, or None if the baseline file is absent.
+
+    Absent baseline → fail-open (exit 0 with diagnostic) so the gate is bootstrappable
+    on a fresh clone before the baseline file has been committed.
+    """
     if not BASELINE.exists():
-        return set()
+        return None
     return {
         ln.strip()
         for ln in BASELINE.read_text(encoding="utf-8").splitlines()
@@ -271,6 +279,9 @@ def check_mode() -> int:
     If the current set is a strict subset, exit 0 but suggest shrinking the baseline.
     """
     baseline = load_baseline()
+    if baseline is None:
+        print("task-writer-audit --check: baseline absent — skipping ratchet check (run without --check to generate)")
+        return 0
     current: set[str] = set()
     for path in python_files():
         r = rel(path)
