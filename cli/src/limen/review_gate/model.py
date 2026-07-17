@@ -182,12 +182,105 @@ def _enabled(value: Any) -> bool | None:
     return None
 
 
-def _accepted_protection_authority(value: Any, *, app_id: int) -> bool:
+def _normalized_required_checks(value: Any) -> list[dict[str, Any]] | None:
+    """Normalize exact context/App requirements without inventing App custody."""
+
+    if not isinstance(value, list) or not value:
+        return None
+    normalized: list[dict[str, Any]] = []
+    seen: set[tuple[str, int | None]] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            return None
+        context = item.get("context")
+        app_id = item.get("app_id")
+        if app_id == -1:
+            app_id = None
+        if (
+            not isinstance(context, str)
+            or not context
+            or (app_id is not None and (not isinstance(app_id, int) or isinstance(app_id, bool) or app_id <= 0))
+        ):
+            return None
+        key = (context, app_id)
+        if key in seen:
+            return None
+        seen.add(key)
+        normalized.append({"context": context, "app_id": app_id})
+    return normalized
+
+
+def _receipt_bound_app_slug(node: dict[str, Any], *, app_id: int) -> str | None:
+    """Read the App slug asserted inside a validly digested receipt envelope."""
+
+    output = node.get("output")
+    summary = output.get("summary") if isinstance(output, dict) else None
+    envelope = _parse_check_receipt_summary(summary)
+    if envelope is None:
+        return None
+    authority = envelope["receipt"].get("last_push_authority")
+    review_gate = authority.get("review_gate") if isinstance(authority, dict) else None
+    if not isinstance(review_gate, dict) or review_gate.get("context") != SCHEMA or review_gate.get("app_id") != app_id:
+        return None
+    raw_slug = review_gate.get("app_slug")
+    try:
+        slug = configured_review_gate_app_slug(raw_slug if isinstance(raw_slug, str) else None)
+    except GateError:
+        return None
+    if slug is None or _check_app_slug(node) != slug:
+        return None
+    return slug
+
+
+def _review_gate_app_identity(
+    pr: dict[str, Any],
+    *,
+    app_id: int,
+) -> tuple[dict[str, Any] | None, list[dict[str, str]]]:
+    """Derive one dedicated slug/ID pair from live installation or receipt evidence."""
+
+    identities: set[tuple[str, int]] = set()
+    installation = pr.get("reviewGateAppInstallation")
+    if isinstance(installation, dict) and installation.get("app_id") == app_id:
+        raw_slug = installation.get("app_slug")
+        try:
+            slug = configured_review_gate_app_slug(raw_slug if isinstance(raw_slug, str) else None)
+        except GateError:
+            slug = None
+        if slug is not None:
+            identities.add((slug, app_id))
+
+    rollup = pr.get("statusCheckRollup")
+    nodes, complete = _connection(rollup, "contexts")
+    if complete:
+        for node in nodes:
+            if node.get("__typename") != "CheckRun" or node.get("name") != SCHEMA or _check_app_id(node) != app_id:
+                continue
+            slug = _receipt_bound_app_slug(node, app_id=app_id)
+            if slug is not None:
+                identities.add((slug, app_id))
+
+    if len(identities) != 1:
+        return (
+            None,
+            [
+                {
+                    "code": "review_gate_app_identity_unavailable",
+                    "message": "one dedicated App slug/ID pair could not be derived from live installation or receipt evidence",
+                }
+            ],
+        )
+    slug, stable_id = next(iter(identities))
+    return {"app_slug": slug, "app_id": stable_id}, []
+
+
+def _accepted_protection_authority(value: Any, *, app_id: int, app_slug: str) -> bool:
     """Return whether bounded live protection evidence owns this App gate."""
 
     if not isinstance(value, dict):
         return False
     review_gate = value.get("review_gate")
+    required_checks = _normalized_required_checks(value.get("required_project_checks"))
     return bool(
         value.get("source") == "github_live_base_branch_protection"
         and isinstance(value.get("branch"), str)
@@ -203,7 +296,10 @@ def _accepted_protection_authority(value: Any, *, app_id: int) -> bool:
         == {
             "context": SCHEMA,
             "app_id": app_id,
+            "app_slug": app_slug,
         }
+        and required_checks is not None
+        and all(requirement["context"] != SCHEMA for requirement in required_checks)
     )
 
 
@@ -224,10 +320,14 @@ def _protection_authority(
     checks = status.get("checks") if isinstance(status, dict) else None
     if not isinstance(checks, list) or any(not isinstance(item, dict) for item in checks):
         return None, [error]
-    gate_checks = [item for item in checks if item.get("context") == SCHEMA]
+    normalized_checks = _normalized_required_checks(checks)
+    if normalized_checks is None:
+        return None, [error]
+    gate_checks = [item for item in normalized_checks if item["context"] == SCHEMA]
     if len(gate_checks) != 1:
         return None, [error]
-    app_id = gate_checks[0].get("app_id")
+    app_id = gate_checks[0]["app_id"]
+    project_checks = [item for item in normalized_checks if item["context"] != SCHEMA]
     reviews = value.get("required_pull_request_reviews")
     if (
         not isinstance(app_id, int)
@@ -240,13 +340,22 @@ def _protection_authority(
         or reviews.get("required_approving_review_count") != 1
         or _enabled(value.get("required_conversation_resolution")) is not True
         or _enabled(value.get("enforce_admins")) is not True
+        or not project_checks
     ):
         return None, [error]
+    review_gate_identity, identity_errors = _review_gate_app_identity(pr, app_id=app_id)
+    if review_gate_identity is None:
+        return None, identity_errors
     return (
         {
             "source": "github_live_base_branch_protection",
             "branch": branch,
-            "review_gate": {"context": SCHEMA, "app_id": app_id},
+            "review_gate": {
+                "context": SCHEMA,
+                "app_id": app_id,
+                "app_slug": review_gate_identity["app_slug"],
+            },
+            "required_project_checks": project_checks,
             "require_last_push_approval": True,
             "dismiss_stale_reviews": True,
             "required_conversation_resolution": True,
@@ -358,6 +467,28 @@ def validate_check_run_receipt(
         reviewer = receipt.get("reviewer_receipt")
         threads = receipt.get("review_threads")
         identities = receipt.get("execution_identities")
+        authority = receipt.get("last_push_authority")
+        required_checks = (
+            _normalized_required_checks(authority.get("required_project_checks"))
+            if isinstance(authority, dict)
+            else None
+        )
+        check_crosswalk = checks.get("required") if isinstance(checks, dict) else None
+        crosswalk_matches = bool(
+            required_checks is not None
+            and isinstance(check_crosswalk, list)
+            and len(check_crosswalk) == len(required_checks)
+            and all(
+                isinstance(row, dict)
+                and {"context": row.get("context"), "app_id": row.get("app_id")} == requirement
+                and isinstance(row.get("matched_count"), int)
+                and row["matched_count"] > 0
+                and isinstance(row.get("successful_count"), int)
+                and row["successful_count"] > 0
+                and row.get("satisfied") is True
+                for row, requirement in zip(check_crosswalk, required_checks, strict=True)
+            )
+        )
         identity_principals = (
             {
                 str(value).casefold()
@@ -378,6 +509,9 @@ def validate_check_run_receipt(
             or checks.get("total", 0) <= 0
             or checks.get("successful", 0) <= 0
             or any(checks.get(field) != 0 for field in ("pending", "failed", "unknown"))
+            or checks.get("required_total") != len(required_checks or [])
+            or checks.get("required_satisfied") != len(required_checks or [])
+            or not crosswalk_matches
             or not isinstance(threads, dict)
             or threads.get("unresolved_current") != 0
             or not isinstance(reviewer, dict)
@@ -397,7 +531,11 @@ def validate_check_run_receipt(
                 "head_commit_author_and_committer",
                 "head_commit_author_with_generic_committer",
             }
-            or not _accepted_protection_authority(receipt.get("last_push_authority"), app_id=app_id)
+            or not _accepted_protection_authority(
+                receipt.get("last_push_authority"),
+                app_id=app_id,
+                app_slug=observed_slug,
+            )
         ):
             return False, "accepted review-gate App receipt contains failing acceptance evidence"
     expected_external_id = f"{CHECK_RECEIPT_SCHEMA}:{envelope['digest']}"
@@ -418,10 +556,12 @@ def _published_result(
     repo: str,
     number: int,
     head: str,
-    app_id: int | None,
+    app_identity: dict[str, Any] | None,
     required: bool,
 ) -> tuple[dict[str, Any], list[dict[str, str]]]:
     errors: list[dict[str, str]] = []
+    app_id = app_identity.get("app_id") if isinstance(app_identity, dict) else None
+    app_slug = app_identity.get("app_slug") if isinstance(app_identity, dict) else None
     authenticated = [
         node
         for node in nodes
@@ -429,7 +569,7 @@ def _published_result(
         and node.get("name") == SCHEMA
         and app_id is not None
         and _check_app_id(node) == app_id
-        and _check_app_slug(node) != GENERIC_ACTIONS_APP_SLUG
+        and _check_app_slug(node) == app_slug
     ]
     authenticated.sort(
         key=lambda node: (
@@ -448,6 +588,7 @@ def _published_result(
             number=number,
             head=head,
             app_id=app_id,
+            app_slug=app_slug,
             require_success=True,
         )
         output = latest.get("output")
@@ -474,7 +615,7 @@ def _published_result(
     return (
         {
             "required": required,
-            "app_slug": _check_app_slug(latest) if latest else None,
+            "app_slug": app_slug,
             "app_id": app_id,
             "authenticated_count": len(authenticated),
             "valid_success": valid,
@@ -491,7 +632,8 @@ def _check_summary(
     repo: str,
     number: int,
     head: str,
-    review_gate_app_id: int | None,
+    review_gate_app: dict[str, Any] | None,
+    required_project_checks: list[dict[str, Any]],
     require_published_result: bool,
 ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, str]]]:
     errors: list[dict[str, str]] = []
@@ -505,11 +647,13 @@ def _check_summary(
         repo=repo,
         number=number,
         head=head,
-        app_id=review_gate_app_id,
+        app_identity=review_gate_app,
         required=require_published_result,
     )
     errors.extend(published_errors)
-    rows: list[dict[str, str]] = []
+    review_gate_app_id = review_gate_app.get("app_id") if isinstance(review_gate_app, dict) else None
+    review_gate_app_slug = review_gate_app.get("app_slug") if isinstance(review_gate_app, dict) else None
+    rows: list[dict[str, Any]] = []
     successful = nonpassing = pending = failed = unknown = ignored_untrusted_gate_markers = 0
     for node in nodes:
         kind = str(node.get("__typename") or "")
@@ -517,7 +661,12 @@ def _check_summary(
         if name == SCHEMA:
             # Authenticate before counting or parsing. Lookalike contexts cannot create a
             # pre-authentication resource or liveness denial.
-            if kind == "CheckRun" and review_gate_app_id is not None and _check_app_id(node) == review_gate_app_id:
+            if (
+                kind == "CheckRun"
+                and review_gate_app_id is not None
+                and _check_app_id(node) == review_gate_app_id
+                and _check_app_slug(node) == review_gate_app_slug
+            ):
                 continue
             ignored_untrusted_gate_markers += 1
             continue
@@ -550,6 +699,8 @@ def _check_summary(
                     "status": status,
                     "conclusion": conclusion,
                     "classification": classification,
+                    "app_id": _check_app_id(node),
+                    "app_slug": _check_app_slug(node) or None,
                 }
             )
         elif kind == "StatusContext":
@@ -572,11 +723,63 @@ def _check_summary(
                     "name": name,
                     "state": state,
                     "classification": classification,
+                    "app_id": None,
+                    "app_slug": None,
                 }
             )
         else:
             unknown += 1
-            rows.append({"kind": "unknown", "name": name, "classification": "unknown"})
+            rows.append(
+                {
+                    "kind": "unknown",
+                    "name": name,
+                    "classification": "unknown",
+                    "app_id": None,
+                    "app_slug": None,
+                }
+            )
+
+    required_crosswalk: list[dict[str, Any]] = []
+    for requirement in required_project_checks:
+        matching = [
+            row
+            for row in rows
+            if row["name"] == requirement["context"]
+            and (
+                requirement["app_id"] is None or (row["kind"] == "check_run" and row["app_id"] == requirement["app_id"])
+            )
+        ]
+        successful_matches = [row for row in matching if row["classification"] == "successful"]
+        satisfied = bool(successful_matches)
+        required_crosswalk.append(
+            {
+                "context": requirement["context"],
+                "app_id": requirement["app_id"],
+                "matched_count": len(matching),
+                "successful_count": len(successful_matches),
+                "satisfied": satisfied,
+            }
+        )
+        if not matching:
+            errors.append(
+                {
+                    "code": "required_project_check_missing",
+                    "message": (
+                        f"protection-required current-head check {requirement['context']!r} "
+                        f"with App id {requirement['app_id']!r} is missing"
+                    ),
+                }
+            )
+        elif not satisfied:
+            errors.append(
+                {
+                    "code": "required_project_check_not_successful",
+                    "message": (
+                        f"protection-required current-head check {requirement['context']!r} "
+                        f"with App id {requirement['app_id']!r} has no successful result"
+                    ),
+                }
+            )
 
     if complete and not rows:
         errors.append({"code": "checks_missing", "message": "no project checks exist on the current head"})
@@ -603,6 +806,9 @@ def _check_summary(
             "failed": failed,
             "unknown": unknown,
             "ignored_untrusted_gate_markers": ignored_untrusted_gate_markers,
+            "required_total": len(required_crosswalk),
+            "required_satisfied": sum(1 for row in required_crosswalk if row["satisfied"]),
+            "required": required_crosswalk,
             "contexts_digest": contexts_digest,
             "contexts": rows[:MAX_REPORT_CHECK_CONTEXTS],
             "contexts_truncated": max(0, len(rows) - MAX_REPORT_CHECK_CONTEXTS),
@@ -866,13 +1072,17 @@ def evaluate(
         )
     protection_authority, protection_errors = _protection_authority(pr)
     reasons.extend(protection_errors)
-    review_gate_app_id = protection_authority["review_gate"]["app_id"] if protection_authority is not None else None
+    review_gate_app = protection_authority["review_gate"] if protection_authority is not None else None
+    required_project_checks = (
+        protection_authority["required_project_checks"] if protection_authority is not None else []
+    )
     checks, published, check_errors = _check_summary(
         pr,
         repo=repo,
         number=number,
         head=head,
-        review_gate_app_id=review_gate_app_id,
+        review_gate_app=review_gate_app,
+        required_project_checks=required_project_checks,
         require_published_result=require_published_result,
     )
     threads, thread_errors = _thread_summary(pr)

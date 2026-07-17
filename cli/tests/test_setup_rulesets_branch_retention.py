@@ -23,6 +23,17 @@ def load_setup_rulesets() -> ModuleType:
     return module
 
 
+def _project_requirement(context: str, app_id: int | None = 1) -> dict:
+    return {"context": context, "app_id": app_id}
+
+
+def _live_project_requirements() -> list[dict]:
+    return [
+        _project_requirement("pr-gate", 1),
+        _project_requirement("python", 1),
+    ]
+
+
 def test_setup_rulesets_preserves_source_branches() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
     report = REPORT.read_text(encoding="utf-8")
@@ -39,26 +50,38 @@ def test_setup_rulesets_preserves_source_branches() -> None:
     assert "--contain apply" in report
 
 
-def test_setup_rulesets_requires_review_gate_even_with_forced_ci_contexts() -> None:
+def test_setup_rulesets_requires_review_gate_beside_live_app_bound_project_ci() -> None:
     module = load_setup_rulesets()
 
-    assert module.required_contexts(["python", "limen.pr_review_gate.v1", "web", "python"]) == [
-        "python",
-        "web",
-        "limen.pr_review_gate.v1",
+    assert module.required_checks(
+        [
+            _project_requirement("python", 1),
+            _project_requirement("web", None),
+            _project_requirement("python", 1),
+        ],
+        424242,
+    ) == [
+        {"context": "python", "app_id": 1},
+        {"context": "web", "app_id": None},
+        {"context": "limen.pr_review_gate.v1", "app_id": 424242},
     ]
-    assert module.required_contexts([]) == ["limen.pr_review_gate.v1"]
 
 
 def test_setup_rulesets_protection_is_exact_head_and_review_fail_closed() -> None:
     module = load_setup_rulesets()
-    body = module.protection_body(["pr-gate", "limen.pr_review_gate.v1", "python"], 424242)
+    body = module.protection_body(
+        [
+            _project_requirement("pr-gate", 1),
+            _project_requirement("python", None),
+        ],
+        424242,
+    )
 
     assert body["required_status_checks"] == {
         "strict": True,
         "checks": [
-            {"context": "pr-gate"},
-            {"context": "python"},
+            {"context": "pr-gate", "app_id": 1},
+            {"context": "python", "app_id": -1},
             {"context": "limen.pr_review_gate.v1", "app_id": 424242},
         ],
     }
@@ -72,6 +95,129 @@ def test_setup_rulesets_protection_is_exact_head_and_review_fail_closed() -> Non
     }
 
 
+def test_caller_context_override_is_rejected_before_any_remote_access(monkeypatch) -> None:
+    module = load_setup_rulesets()
+    monkeypatch.setattr(
+        module,
+        "ARGUMENT_ERROR",
+        module._context_override_error(["setup-rulesets.py", "--contexts", "attacker-green"]),
+    )
+    monkeypatch.setattr(
+        module,
+        "gh",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("remote access attempted")),
+    )
+    monkeypatch.setattr(
+        module,
+        "gh_json",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("remote access attempted")),
+    )
+
+    assert module.main() == 2
+
+
+def test_live_ci_discovery_preserves_checkrun_app_ids_and_unbound_statuses(monkeypatch) -> None:
+    module = load_setup_rulesets()
+    head = "a" * 40
+    monkeypatch.setattr(
+        module,
+        "gh_json",
+        lambda *_args, **_kwargs: [{"head": {"sha": head}}],
+    )
+
+    def pages(path, **_kwargs):
+        if path.endswith("/check-runs"):
+            return (
+                [
+                    {
+                        "name": "pr-gate",
+                        "head_sha": head,
+                        "app": {"id": 15368, "slug": "github-actions"},
+                    },
+                    {
+                        "name": "security-scan",
+                        "head_sha": head,
+                        "app": {"id": 999, "slug": "scanner"},
+                    },
+                ],
+                "",
+            )
+        if path.endswith("/statuses"):
+            return ([{"context": "legacy-test", "sha": head}], "")
+        raise AssertionError(path)
+
+    monkeypatch.setattr(module, "_paged_rest_rows", pages)
+
+    checks, error = module.detect_checks("owner/repository")
+
+    assert error == ""
+    assert checks == [
+        {"context": "pr-gate", "app_id": 15368},
+        {"context": "legacy-test", "app_id": None},
+    ]
+    body = module.protection_body(checks, 424242)
+    assert body["required_status_checks"]["checks"] == [
+        {"context": "pr-gate", "app_id": 15368},
+        {"context": "legacy-test", "app_id": -1},
+        {"context": module.REVIEW_GATE_CONTEXT, "app_id": 424242},
+    ]
+
+
+def test_live_ci_discovery_fails_closed_when_checkrun_app_id_is_missing(monkeypatch) -> None:
+    module = load_setup_rulesets()
+    head = "a" * 40
+    monkeypatch.setattr(
+        module,
+        "gh_json",
+        lambda *_args, **_kwargs: [{"head": {"sha": head}}],
+    )
+    monkeypatch.setattr(
+        module,
+        "_paged_rest_rows",
+        lambda path, **_kwargs: (
+            ([{"name": "pr-gate", "head_sha": head, "app": None}], "") if path.endswith("/check-runs") else ([], "")
+        ),
+    )
+
+    checks, error = module.detect_checks("owner/repository")
+
+    assert checks == []
+    assert "omitted its stable GitHub App id" in error
+
+
+def test_live_ci_discovery_rejects_stale_checkrun_head(monkeypatch) -> None:
+    module = load_setup_rulesets()
+    head = "a" * 40
+    monkeypatch.setattr(
+        module,
+        "gh_json",
+        lambda *_args, **_kwargs: [{"head": {"sha": head}}],
+    )
+    monkeypatch.setattr(
+        module,
+        "_paged_rest_rows",
+        lambda path, **_kwargs: (
+            (
+                [
+                    {
+                        "name": "pr-gate",
+                        "head_sha": "b" * 40,
+                        "app": {"id": 1, "slug": "github-actions"},
+                    }
+                ],
+                "",
+            )
+            if path.endswith("/check-runs")
+            else ([], "")
+        ),
+    )
+
+    checks, error = module.detect_checks("owner/repository")
+
+    assert checks == []
+    assert "not bound to the discovered current head" in error
+
+
 def test_setup_rulesets_apply_refuses_when_project_ci_is_not_discoverable(monkeypatch) -> None:
     module = load_setup_rulesets()
     monkeypatch.setattr(module, "APPLY", True)
@@ -81,7 +227,7 @@ def test_setup_rulesets_apply_refuses_when_project_ci_is_not_discoverable(monkey
         "gh_json",
         lambda *_args, **_kwargs: {"defaultBranchRef": {"name": "main"}},
     )
-    monkeypatch.setattr(module, "detect_checks", lambda _repo: [])
+    monkeypatch.setattr(module, "detect_checks", lambda _repo: ([], "pagination denied"))
     monkeypatch.setattr(module, "_protection_readback_state", lambda *_args: ("missing", "not protected"))
     monkeypatch.setattr(
         module,
@@ -101,7 +247,11 @@ def test_setup_rulesets_apply_refuses_without_executable_app_receipt(monkeypatch
         "gh_json",
         lambda *_args, **_kwargs: {"defaultBranchRef": {"name": "main"}},
     )
-    monkeypatch.setattr(module, "detect_checks", lambda _repo: ["pr-gate"])
+    monkeypatch.setattr(
+        module,
+        "detect_checks",
+        lambda _repo: ([_project_requirement("pr-gate")], ""),
+    )
     monkeypatch.setattr(module, "_protection_readback_state", lambda *_args: ("missing", "not protected"))
     monkeypatch.setattr(
         module,
@@ -172,7 +322,11 @@ def test_default_protection_scope_is_the_complete_seven_repo_cohort() -> None:
 def test_apply_requires_and_reads_back_protection_for_all_seven_repositories(monkeypatch) -> None:
     module = load_setup_rulesets()
     monkeypatch.setattr(module, "APPLY", True)
-    monkeypatch.setattr(module, "detect_checks", lambda _repo: ["pr-gate"])
+    monkeypatch.setattr(
+        module,
+        "detect_checks",
+        lambda _repo: ([_project_requirement("pr-gate")], ""),
+    )
     monkeypatch.setattr(module, "gh_json", lambda *_args, **_kwargs: {"defaultBranchRef": {"name": "main"}})
     monkeypatch.setattr(module, "_protection_readback_state", lambda *_args: ("missing", "not protected"))
     monkeypatch.setattr(
@@ -291,7 +445,11 @@ def _ready_apply(module, monkeypatch) -> None:
         "gh_json",
         lambda *_args, **_kwargs: {"defaultBranchRef": {"name": "trunk"}},
     )
-    monkeypatch.setattr(module, "detect_checks", lambda _repo: ["pr-gate", "python"])
+    monkeypatch.setattr(
+        module,
+        "detect_checks",
+        lambda _repo: (_live_project_requirements(), ""),
+    )
     monkeypatch.setattr(module, "_protection_readback_state", lambda *_args: ("missing", "not protected"))
     monkeypatch.setattr(
         module,
@@ -303,7 +461,7 @@ def _ready_apply(module, monkeypatch) -> None:
 def _success_steps(module, *, final_settings=None, final_protection=None):
     repo_path = "repos/owner/repository"
     protection_path = "repos/owner/repository/branches/trunk/protection"
-    body = module.protection_body(["pr-gate", "python"], 987654)
+    body = module.protection_body(_live_project_requirements(), 987654)
     return [
         ("GET", repo_path, _result(_live_settings())),
         ("PUT", protection_path, _result({})),
@@ -330,10 +488,29 @@ def test_protection_apply_requires_containment_then_verifies_live_state_without_
     ]
     assert all(call["method"] != "PATCH" for call in spy.calls)
     put_body = json.loads(spy.calls[1]["input"])
+    assert put_body["required_status_checks"]["checks"][:2] == [
+        {"context": "pr-gate", "app_id": 1},
+        {"context": "python", "app_id": 1},
+    ]
     assert put_body["required_status_checks"]["checks"][-1] == {
         "context": "limen.pr_review_gate.v1",
         "app_id": 987654,
     }
+
+
+def test_protection_readback_treats_api_null_and_explicit_minus_one_as_unbound() -> None:
+    module = load_setup_rulesets()
+    expected = module.protection_body(
+        [
+            _project_requirement("pr-gate", 1),
+            _project_requirement("legacy-test", None),
+        ],
+        987654,
+    )
+    live = _live_protection(expected)
+    live["required_status_checks"]["checks"][1]["app_id"] = None
+
+    assert module.protection_matches(live, expected) == (True, "")
 
 
 @pytest.mark.parametrize(
@@ -415,7 +592,7 @@ def test_apply_aggregates_final_settings_read_failure_with_protection_read(monke
 
 
 def _mutated_protection(module, field: str):
-    body = module.protection_body(["pr-gate", "python"], 987654)
+    body = module.protection_body(_live_project_requirements(), 987654)
     value = _live_protection(body)
     if field == "checks":
         value["required_status_checks"]["checks"][-1]["app_id"] = 111111
@@ -504,7 +681,7 @@ def test_apply_aggregates_failures_and_continues_other_repository_transactions(m
     module = load_setup_rulesets()
     _ready_apply(module, monkeypatch)
     monkeypatch.setattr(module, "target_repos", lambda: ["owner/one", "owner/two"])
-    body = module.protection_body(["pr-gate", "python"], 987654)
+    body = module.protection_body(_live_project_requirements(), 987654)
     spy = ApiSpy(
         [
             (

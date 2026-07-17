@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
-from .github import fetch_pull_request, publish_status, resolve_repo, split_repo
+from .github import app_preflight, fetch_pull_request, publish_status, resolve_repo, split_repo
 from .model import (
     DIAGNOSTIC_SCHEMA,
     HEAD_SHA,
@@ -118,6 +118,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             final_head = str(final.get("headRefOid") or "")
             if HEAD_SHA.fullmatch(final_head):
                 publication_head = final_head
+            if args.publish_status:
+                app_slug, app_id = app_preflight()
+                final["reviewGateAppInstallation"] = {
+                    "app_slug": app_slug,
+                    "app_id": app_id,
+                }
             report = evaluate(
                 final,
                 repo=repo,

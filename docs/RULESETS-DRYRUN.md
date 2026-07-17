@@ -58,16 +58,22 @@ python3 scripts/setup-rulesets.py --apply \
 Before protection is installed, the selected repository must already have:
 
 - confirmed containment settings;
-- current project CI contexts;
+- current project CI context/App pairs derived from complete live current-head CheckRun/status
+  inventories;
 - a uniquely identifiable dedicated review-gate GitHub App; and
 - a recent complete executable `limen.pr_review_gate.v1` receipt published by that App.
 
 This preflight is central-App evidence, not a per-repository workflow-file test. Generic
 `github-actions`, same-named statuses, incomplete receipts, invalid receipt digests, and ambiguous
 App slug/ID pairs are rejected. The App identity is derived from live receipts, never CLI input.
+Project CI is likewise derived from live owner evidence: CheckRun requirements retain their
+GitHub App IDs, legacy commit statuses use GitHub's explicit `app_id: -1` unbound form rather than
+an omitted auto-selection, and `--contexts` is rejected rather than treated as protection authority.
 Protection readback is probed first; a plan/permission 403 is reported as a blocker rather than an
 eligible dry-run. For an eligible repository, protection requires strict current-head project
-CI plus the App-bound gate, one native approval, approval by someone other than the last pusher,
+CI plus the App-bound gate. Acceptance crosswalks every exact protection-required context/App pair;
+an unrelated green check cannot substitute. Protection also requires one native approval,
+approval by someone other than the last pusher,
 stale-review dismissal, resolved conversations, and administrator enforcement. The script reads
 repository settings and protection back and requires the full contract on every selected
 repository. With no `--repo`, that means all seven recovery-cohort repositories.

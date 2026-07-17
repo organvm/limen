@@ -369,10 +369,14 @@ def list_check_runs(repo: str, head: str) -> list[dict[str, Any]]:
     return _rest_pages(f"repos/{repo}/commits/{head}/check-runs", key="check_runs")
 
 
-def app_preflight(expected_app_id: int | str | None = None) -> tuple[str, int]:
+def app_preflight(
+    expected_app_id: int | str | None = None,
+    expected_app_slug: str | None = None,
+) -> tuple[str, int]:
     """Derive the live App identity and optionally bind it to branch protection."""
 
     app_id = configured_review_gate_app_id(expected_app_id)
+    expected_slug = configured_review_gate_app_slug(expected_app_slug)
     value = run_gh(["api", "-H", "Accept: application/vnd.github+json", "installation"])
     live_app_id = value.get("app_id") if isinstance(value, dict) else None
     live_slug = value.get("app_slug") if isinstance(value, dict) else None
@@ -381,6 +385,8 @@ def app_preflight(expected_app_id: int | str | None = None) -> tuple[str, int]:
         raise GateError("current credentials do not expose a dedicated App installation identity")
     if app_id is not None and live_app_id != app_id:
         raise GateError(f"current credentials are not installation credentials for protected App id {app_id}")
+    if expected_slug is not None and slug != expected_slug:
+        raise GateError(f"current credentials are not installation credentials for protected App slug {expected_slug}")
     return slug, live_app_id
 
 
@@ -470,10 +476,11 @@ def publish_status(
     authority = report.get("last_push_authority")
     review_gate = authority.get("review_gate") if isinstance(authority, dict) else None
     protected_app_id = review_gate.get("app_id") if isinstance(review_gate, dict) else None
+    protected_app_slug = review_gate.get("app_slug") if isinstance(review_gate, dict) else None
     # A rejected bootstrap receipt may be published before protection exists so
     # setup-rulesets can discover the installed App.  An accepted report always
     # carries live protection and therefore pins this preflight to its App id.
-    app_slug, app_id = app_preflight(protected_app_id)
+    app_slug, app_id = app_preflight(protected_app_id, protected_app_slug)
     authenticated = _authoritative_runs(list_check_runs(repo, head), app_slug=app_slug, app_id=app_id)
     authenticated.sort(key=lambda run: (str(run.get("updated_at") or ""), int(run.get("id") or 0)))
     current = authenticated[-1] if authenticated else None

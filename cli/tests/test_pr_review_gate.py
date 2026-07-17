@@ -67,7 +67,7 @@ def _review(*, login="keeper-umber", head=HEAD, state="APPROVED", submitted="202
     }
 
 
-def _project_check(name="verify", *, conclusion="SUCCESS"):
+def _project_check(name="verify", *, conclusion="SUCCESS", app_id=1, app_slug="github-actions"):
     return {
         "__typename": "CheckRun",
         "databaseId": 10,
@@ -79,7 +79,16 @@ def _project_check(name="verify", *, conclusion="SUCCESS"):
         "startedAt": "2026-07-17T00:58:00Z",
         "completedAt": "2026-07-17T00:59:00Z",
         "output": {"title": name, "summary": ""},
-        "checkSuite": {"app": {"id": 1, "slug": "github-actions"}, "workflowRun": None},
+        "checkSuite": {"app": {"id": app_id, "slug": app_slug}, "workflowRun": None},
+    }
+
+
+def _status_context(context="legacy-test", *, state="SUCCESS"):
+    return {
+        "__typename": "StatusContext",
+        "context": context,
+        "state": state,
+        "targetUrl": "https://example.invalid/status",
     }
 
 
@@ -92,6 +101,10 @@ def _pr():
         "headRefOid": HEAD,
         "baseRefName": "main",
         "baseBranchProtection": _protection(),
+        "reviewGateAppInstallation": {
+            "app_id": APP_ID,
+            "app_slug": APP_SLUG,
+        },
         "author": {"login": "proposal-author"},
         "headCommitIdentity": {
             "oid": HEAD,
@@ -162,7 +175,12 @@ def test_accepts_native_exact_head_peer_distinct_from_head_commit_executor():
     assert report["last_push_authority"] == {
         "source": "github_live_base_branch_protection",
         "branch": "main",
-        "review_gate": {"context": model.SCHEMA, "app_id": APP_ID},
+        "review_gate": {
+            "context": model.SCHEMA,
+            "app_id": APP_ID,
+            "app_slug": APP_SLUG,
+        },
+        "required_project_checks": [{"context": "verify", "app_id": 1}],
         "require_last_push_approval": True,
         "dismiss_stale_reviews": True,
         "required_conversation_resolution": True,
@@ -173,6 +191,7 @@ def test_accepts_native_exact_head_peer_distinct_from_head_commit_executor():
     assert report["reviewing_keeper"] == "keeper-umber"
     assert report["reviewed_sha"] == HEAD
     assert report["checks"]["successful"] == 1
+    assert report["checks"]["required_satisfied"] == 1
     assert report["files"]["count"] == 1
     assert report["comments"]["count"] == 1
 
@@ -236,6 +255,52 @@ def test_neutral_or_skipped_only_ci_is_not_green(conclusion):
     assert report["checks"]["successful"] == 0
 
 
+def test_unrelated_green_cannot_replace_protection_required_project_check():
+    pr = _pr()
+    pr["statusCheckRollup"]["contexts"]["nodes"] = [
+        _project_check("attacker-green", app_id=999, app_slug="attacker-app")
+    ]
+
+    report = _evaluate(pr)
+
+    assert report["status"] == "rejected"
+    assert "required_project_check_missing" in report["reason_codes"]
+    assert report["checks"]["successful"] == 1
+    assert report["checks"]["required_satisfied"] == 0
+
+
+def test_required_project_check_preserves_protection_app_binding():
+    pr = _pr()
+    pr["statusCheckRollup"]["contexts"]["nodes"] = [_project_check("verify", app_id=999, app_slug="lookalike-ci")]
+
+    report = _evaluate(pr)
+
+    assert report["status"] == "rejected"
+    assert "required_project_check_missing" in report["reason_codes"]
+    assert report["checks"]["required"][0] == {
+        "context": "verify",
+        "app_id": 1,
+        "matched_count": 0,
+        "successful_count": 0,
+        "satisfied": False,
+    }
+
+
+def test_explicitly_unbound_protection_status_crosswalks_without_inventing_app_id():
+    pr = _pr()
+    pr["baseBranchProtection"]["required_status_checks"]["checks"] = [
+        {"context": "legacy-test", "app_id": -1},
+        {"context": model.SCHEMA, "app_id": APP_ID},
+    ]
+    pr["statusCheckRollup"]["contexts"]["nodes"] = [_status_context()]
+
+    report = _evaluate(pr)
+
+    assert report["status"] == "accepted"
+    assert report["last_push_authority"]["required_project_checks"] == [{"context": "legacy-test", "app_id": None}]
+    assert report["checks"]["required_satisfied"] == 1
+
+
 def test_missing_or_untrusted_live_protection_fails_closed():
     missing = _pr()
     missing.pop("baseBranchProtection")
@@ -256,6 +321,24 @@ def test_published_receipt_must_match_protected_app_id_not_only_slug():
     pr["statusCheckRollup"]["contexts"]["nodes"].append(_app_check(accepted, app_slug=APP_SLUG, app_id=APP_ID + 1))
     report = _evaluate(pr, require_published_result=True)
     assert "published_review_gate_missing" in report["reason_codes"]
+
+
+def test_published_receipt_rejects_slug_substitution_even_with_protected_app_id():
+    accepted = _evaluate()
+    pr = _pr()
+    pr.pop("reviewGateAppInstallation")
+    pr["statusCheckRollup"]["contexts"]["nodes"].append(
+        _app_check(
+            accepted,
+            app_slug="substituted-review-gate",
+            app_id=APP_ID,
+        )
+    )
+
+    report = _evaluate(pr, require_published_result=True)
+
+    assert report["status"] == "rejected"
+    assert "review_gate_app_identity_unavailable" in report["reason_codes"]
 
 
 def test_local_signed_fallback_is_blocked_without_reading_caller_path(tmp_path):
@@ -292,6 +375,7 @@ def test_app_evaluator_excludes_own_result_but_consumer_requires_valid_success()
     initial = _evaluate(review_gate_app_slug=APP_SLUG)
     pr = _pr()
     pr["statusCheckRollup"]["contexts"]["nodes"].append(_app_check(initial))
+    pr.pop("reviewGateAppInstallation")
 
     evaluator = _evaluate(pr, review_gate_app_slug=APP_SLUG)
     consumer = _evaluate(
@@ -646,6 +730,51 @@ def test_authoritative_publication_requires_live_dedicated_app_credentials_befor
     with pytest.raises(model.GateError, match="dedicated App installation identity"):
         github.publish_status(report)
     assert calls == [["api", "-H", "Accept: application/vnd.github+json", "installation"]]
+
+
+def test_app_preflight_rejects_slug_substitution_for_protected_app_id(monkeypatch):
+    monkeypatch.setattr(
+        github,
+        "run_gh",
+        lambda *_args, **_kwargs: {
+            "app_id": APP_ID,
+            "app_slug": "substituted-review-gate",
+        },
+    )
+
+    with pytest.raises(model.GateError, match="protected App slug"):
+        github.app_preflight(APP_ID, APP_SLUG)
+
+
+def test_publish_cli_injects_live_app_identity_before_acceptance(monkeypatch):
+    live_pull = _pr()
+    live_pull.pop("reviewGateAppInstallation")
+    observed = {}
+    monkeypatch.setattr(gate_cli, "fetch_pull_request", lambda *_args: deepcopy(live_pull))
+    monkeypatch.setattr(gate_cli, "app_preflight", lambda: (APP_SLUG, APP_ID))
+
+    def capture_evaluate(pull, **kwargs):
+        observed.update(pull.get("reviewGateAppInstallation") or {})
+        return model.evaluate(pull, **kwargs)
+
+    monkeypatch.setattr(gate_cli, "evaluate", capture_evaluate)
+    monkeypatch.setattr(gate_cli, "publish_status", lambda report, **_kwargs: report)
+
+    assert (
+        gate_cli.main(
+            [
+                str(PR),
+                "--repo",
+                REPO,
+                "--expected-head",
+                HEAD,
+                "--publish-status",
+                "--quiet",
+            ]
+        )
+        == 0
+    )
+    assert observed == {"app_slug": APP_SLUG, "app_id": APP_ID}
 
 
 def test_fixture_cli_is_read_only(tmp_path):

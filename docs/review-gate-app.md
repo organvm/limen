@@ -13,6 +13,8 @@ normalized evidence between snapshots rejects. Acceptance requires:
 
 - at least one `SUCCESS` non-gate project check and no pending, failed, or unknown project check
   (`NEUTRAL`/`SKIPPED`-only CI is not green);
+- one successful exact current-head result for every project context/App pair required by live
+  base-branch protection; unrelated green checks never substitute;
 - no unresolved current review thread;
 - one active native `APPROVED` review on the exact head from a repository collaborator, member, or
   owner distinct from every GitHub author/committer principal on the head commit; and
@@ -22,8 +24,10 @@ The report preserves both head-commit author and committer evidence. Generic `we
 cannot manufacture peer separation: when it is the committer, the author remains the conservative
 executor identity. The evaluator reads the live base-branch protection endpoint and accepts only
 when it proves last-push approval, stale-review dismissal, conversation resolution, administrator
-enforcement, and exactly one App-ID-bound `limen.pr_review_gate.v1` required check. A 403, missing
-protection, or incomplete readback fails closed.
+enforcement, every required project context/App pair, and exactly one App-ID-bound
+`limen.pr_review_gate.v1` required check. The dedicated App slug is bound inside the receipt and
+must match the live App identity as well as the stable protected App ID. A 403, missing protection,
+slug substitution, or incomplete readback fails closed.
 
 ## CheckRun publication
 

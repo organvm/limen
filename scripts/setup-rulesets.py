@@ -22,9 +22,8 @@ SAFE: both operations preview by default and execute NOTHING. Mutations are expl
   python3 scripts/setup-rulesets.py --contain          # containment preview (read-only)
   python3 scripts/setup-rulesets.py --contain apply    # ⚠ cancel auto-merge + lock settings
   python3 scripts/setup-rulesets.py                    # protection preview (read-only)
-  python3 scripts/setup-rulesets.py --apply                  # ⚠ install protection
+  python3 scripts/setup-rulesets.py --apply             # ⚠ install protection
   python3 scripts/setup-rulesets.py --repo owner/name [...]   # limit to specific repos
-  python3 scripts/setup-rulesets.py --contexts pr-gate,python,web   # force CI names; review gate remains
 """
 
 import json
@@ -84,16 +83,25 @@ def _parse_repositories(argv):
     return repositories, "; ".join(errors)
 
 
+def _context_override_error(argv) -> str:
+    if any(argument == "--contexts" or argument.startswith("--contexts=") for argument in argv):
+        return "--contexts is forbidden; required CI is derived from live current-head owner evidence"
+    return ""
+
+
 APPLY = "--apply" in sys.argv
 CONTAIN_MODE, CONTAIN_ARGUMENT_ERROR = _parse_contain_mode(sys.argv)
 EXPLICIT, REPOSITORY_ARGUMENT_ERROR = _parse_repositories(sys.argv)
-ARGUMENT_ERROR = "; ".join(error for error in (CONTAIN_ARGUMENT_ERROR, REPOSITORY_ARGUMENT_ERROR) if error)
-# --contexts a,b,c overrides auto-detection entirely — the explicit fallback for any repo whose job
-# names the heuristic can't classify. Applied to every targeted repo.
-FORCED = next(
-    (sys.argv[i + 1].split(",") for i, a in enumerate(sys.argv) if a == "--contexts" and i + 1 < len(sys.argv)), None
+CONTEXT_ARGUMENT_ERROR = _context_override_error(sys.argv)
+ARGUMENT_ERROR = "; ".join(
+    error
+    for error in (
+        CONTAIN_ARGUMENT_ERROR,
+        REPOSITORY_ARGUMENT_ERROR,
+        CONTEXT_ARGUMENT_ERROR,
+    )
+    if error
 )
-FORCED = [c.strip() for c in FORCED if c.strip()] if FORCED else None
 REVIEW_GATE_CONTEXT = "limen.pr_review_gate.v1"
 RECOVERY_COHORT_REPOS = (
     "organvm/limen",
@@ -334,19 +342,18 @@ def is_real_gate(name):
 
 
 def detect_checks(repo):
-    """Genuine CI names from complete current-head CheckRun/status pages."""
-    if FORCED:
-        return list(FORCED)
+    """Exact CI context/App requirements from complete current-head owner evidence."""
+
     pulls = gh_json(
         ["api", f"repos/{repo}/pulls?state=open&sort=updated&direction=desc&per_page=1"],
         default=None,
     )
     if not isinstance(pulls, list) or len(pulls) != 1 or not isinstance(pulls[0], dict):
-        return []
+        return [], "one current open pull request could not be read for CI discovery"
     head = pulls[0].get("head")
     sha = str(head.get("sha") or "") if isinstance(head, dict) else ""
     if not re.fullmatch(r"[0-9a-fA-F]{40}", sha):
-        return []
+        return [], "current pull-request head SHA is unavailable"
     runs, runs_error = _paged_rest_rows(
         f"repos/{repo}/commits/{sha}/check-runs",
         key="check_runs",
@@ -358,13 +365,37 @@ def detect_checks(repo):
         max_pages=MAX_CHECK_RUN_PAGES,
     )
     if runs_error or statuses_error:
-        return []
-    names = []
-    for item in [*runs, *statuses]:
-        name = item.get("name") or item.get("context")
-        if isinstance(name, str) and name not in names and is_real_gate(name):
-            names.append(name)
-    return names
+        return [], "; ".join(error for error in (runs_error, statuses_error) if error)
+
+    requirements = []
+    seen = set()
+    for run in runs:
+        name = run.get("name")
+        if not isinstance(name, str) or not is_real_gate(name) or name == REVIEW_GATE_CONTEXT:
+            continue
+        if run.get("head_sha") != sha:
+            return [], f"CheckRun {name!r} is not bound to the discovered current head"
+        app = run.get("app")
+        app_id = app.get("id") if isinstance(app, dict) else None
+        if not isinstance(app_id, int) or isinstance(app_id, bool) or app_id <= 0:
+            return [], f"current-head CheckRun {name!r} omitted its stable GitHub App id"
+        key = (name, app_id)
+        if key not in seen:
+            seen.add(key)
+            requirements.append({"context": name, "app_id": app_id})
+    for status in statuses:
+        context = status.get("context")
+        if not isinstance(context, str) or not is_real_gate(context) or context == REVIEW_GATE_CONTEXT:
+            continue
+        if status.get("sha") != sha:
+            return [], f"commit status {context!r} is not bound to the discovered current head"
+        key = (context, None)
+        if key not in seen:
+            seen.add(key)
+            requirements.append({"context": context, "app_id": None})
+    if not requirements:
+        return [], "no genuine project CI context exists on the current head"
+    return requirements, ""
 
 
 def _paged_rest_rows(path: str, *, key: str | None, max_pages: int):
@@ -477,16 +508,39 @@ def review_gate_app_id(repo: str, _expected_slug: str | None = None) -> int | No
     return identity["id"] if identity is not None else None
 
 
-def project_contexts(detected_checks):
-    """Keep project CI separate from the one dedicated-App-bound acceptance context."""
+def project_checks(detected_checks):
+    """Validate and deduplicate owner-derived context/App requirements."""
 
-    return [context for context in OrderedDict.fromkeys(detected_checks) if context != REVIEW_GATE_CONTEXT]
+    if not isinstance(detected_checks, list):
+        raise ValueError("detected_checks must be a list of live context/App requirements")
+    requirements = []
+    seen = set()
+    for item in detected_checks:
+        if not isinstance(item, dict):
+            raise ValueError("each project check must preserve live context/App evidence")
+        context = item.get("context")
+        app_id = item.get("app_id")
+        if (
+            not isinstance(context, str)
+            or not context
+            or context == REVIEW_GATE_CONTEXT
+            or (app_id is not None and (not isinstance(app_id, int) or isinstance(app_id, bool) or app_id <= 0))
+        ):
+            raise ValueError("project check context/App evidence is invalid")
+        key = (context, app_id)
+        if key not in seen:
+            seen.add(key)
+            requirements.append({"context": context, "app_id": app_id})
+    return requirements
 
 
-def required_contexts(detected_checks):
-    """Return stable project CI contexts with exactly one review receipt gate."""
+def required_checks(detected_checks, review_app_id: int):
+    """Return project requirements plus exactly one App-bound review receipt."""
 
-    return [*project_contexts(detected_checks), REVIEW_GATE_CONTEXT]
+    return [
+        *project_checks(detected_checks),
+        {"context": REVIEW_GATE_CONTEXT, "app_id": review_app_id},
+    ]
 
 
 def protection_body(detected_checks, review_app_id: int):
@@ -497,7 +551,13 @@ def protection_body(detected_checks, review_app_id: int):
         "required_status_checks": {
             "strict": True,
             "checks": [
-                *({"context": context} for context in project_contexts(detected_checks)),
+                *(
+                    {
+                        "context": requirement["context"],
+                        "app_id": requirement["app_id"] if requirement["app_id"] is not None else -1,
+                    }
+                    for requirement in project_checks(detected_checks)
+                ),
                 {"context": REVIEW_GATE_CONTEXT, "app_id": review_app_id},
             ],
         },
@@ -555,6 +615,8 @@ def _normalized_checks(value):
         if not isinstance(item, dict) or not isinstance(item.get("context"), str):
             return None
         app_id = item.get("app_id")
+        if app_id == -1:
+            app_id = None
         if app_id is not None and (not isinstance(app_id, int) or isinstance(app_id, bool) or app_id <= 0):
             return None
         normalized.append((item["context"], app_id))
@@ -896,8 +958,6 @@ def containment_main(*, apply: bool) -> int:
 def protection_main():
     repos = target_repos()
     print(f"=== ruleset plan — {len(repos)} repos with open PRs ({'APPLY' if APPLY else 'DRY-RUN'}) ===")
-    if FORCED:
-        print(f"    contexts forced (detection skipped): {FORCED}")
     print()
     no_project_ci = []
     no_review_app = []
@@ -924,14 +984,16 @@ def protection_main():
             if APPLY:
                 failed += 1
             continue
-        detected_checks = project_contexts(detect_checks(repo))
+        detected_checks, checks_error = detect_checks(repo)
         review_app, review_app_detail = review_gate_app_evidence(repo)
-        checks = required_contexts(detected_checks)
+        checks = (
+            required_checks(detected_checks, review_app["id"]) if detected_checks and review_app is not None else []
+        )
         if not detected_checks:
             no_project_ci.append(repo)
             print(
-                f"  {repo}@{branch}: BLOCKED — no project CI checks detected; refusing a review-only "
-                "protection contract"
+                f"  {repo}@{branch}: BLOCKED — project CI discovery is incomplete; refusing a review-only "
+                f"protection contract: {checks_error}"
             )
         elif review_app is None:
             no_review_app.append(repo)
@@ -941,8 +1003,9 @@ def protection_main():
                 f"{review_app_detail}"
             )
         else:
+            check_labels = [f"{item['context']}@{item['app_id'] or 'unbound-status'}" for item in checks[:4]]
             print(
-                f"  {repo}@{branch}: require {len(checks)} check(s) {checks[:4]}"
+                f"  {repo}@{branch}: require {len(checks)} check(s) {check_labels}"
                 f"{'…' if len(checks) > 4 else ''} · strict current-head · native exact-head "
                 f"peer receipt · dedicated_app={review_app['slug']}:{review_app['id']} · "
                 "last-push approval · stale dismissal · "
@@ -983,7 +1046,7 @@ def protection_main():
         print("Run --contain apply first; --apply never changes repository merge settings.")
     elif failed:
         print(f"\nFAILED — {failed} repo transaction(s) were blocked or not verified.", file=sys.stderr)
-    return 1 if (APPLY and failed) or no_protection_readback else 0
+    return 1 if (APPLY and failed) or no_protection_readback or no_project_ci else 0
 
 
 def main():
