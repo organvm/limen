@@ -2773,6 +2773,31 @@ parameters:
     owner: tabularius
     note: "Throttle window (seconds) for check-main-green.py's `gh run list` call. Within the window the cached verdict (logs/main-green.json) is reused so a RED trunk still surfaces every beat without re-querying GitHub each tick. Also settable via --throttle. Default 1800 (30 min)."
 
+  LIMEN_CI_JAM_RERUN:
+    default: "1"               # ARMED (organ-tended precedent): jam recovery reruns fire by default
+    env: LIMEN_CI_JAM_RERUN
+    self_update: none
+    owner: tabularius
+    note: "Recovery valve for the CI-jam class (2026-07-17 billing outage: every job dies in 3-4 s with zero steps — the runner never started). When a RED main classifies as ci-jam-billing/ci-jam-infra, check-main-green.py attempts one bounded `gh run rerun --failed` per jammed run (main + fresh jammed PR heads) per beat with per-run exponential backoff, so the first beat after the outage ends re-greens CI with zero hands and merge-drain lands the green PRs. 0 = classify + notify only, never rerun."
+  LIMEN_CI_JAM_BACKOFF_S:
+    default: "1800"            # base backoff between rerun attempts on one run id (~one per beat)
+    env: LIMEN_CI_JAM_BACKOFF_S
+    self_update: none
+    owner: tabularius
+    note: "Base of the per-run exponential rerun backoff in check-main-green.py's jam recovery: attempt N waits min(BACKOFF_S * 2^(N-1), BACKOFF_MAX_S) after attempt N-1. Deliberately no hard attempt cap — recovery must still fire if the outage ends days later; the growing delay keeps API spam logarithmic while it persists."
+  LIMEN_CI_JAM_BACKOFF_MAX_S:
+    default: "14400"           # backoff ceiling (4 h): worst-case recovery lag after a long outage
+    env: LIMEN_CI_JAM_BACKOFF_MAX_S
+    self_update: none
+    owner: tabularius
+    note: "Ceiling of the jam-recovery rerun backoff. 4 h bounds the worst-case lag between billing being restored and the rerun that re-greens CI, at ~6 attempts/day/run during a persistent outage."
+  LIMEN_CI_JAM_RERUN_CAP:
+    default: "6"               # max distinct run ids rerun per beat (the trunk run + jammed PR heads)
+    env: LIMEN_CI_JAM_RERUN_CAP
+    self_update: none
+    owner: tabularius
+    note: "Per-beat bound on how many distinct jammed runs check-main-green.py will attempt to rerun (the red main run first, then fresh jammed PR-head runs from the wedge scan). Keeps a fleet-wide jam from turning one beat into an API storm; the rotating freshness window covers the rest over subsequent beats."
+
   LIMEN_MAIN_GREEN_WORKFLOW:
     default: "ci.yml"          # the workflow that runs on push:[main] and mirrors pr-gate's suite
     env: LIMEN_MAIN_GREEN_WORKFLOW

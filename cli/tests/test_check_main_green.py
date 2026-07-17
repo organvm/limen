@@ -270,3 +270,155 @@ def test_remote_main_head_reads_owner_ref_not_cached_tracking_ref(monkeypatch):
 
     monkeypatch.setattr(m.subprocess, "run", fake_run)
     assert m._remote_main_head() == current
+
+
+# --- CI-jam class (2026-07-17 billing outage) --------------------------------------------------
+# Fingerprint from the real incident (run 29581455210): every job "fails" in 3-4 s with ZERO steps
+# and the check-run annotation reads "...recent account payments have failed or your spending limit
+# needs to be increased...". A real failure always has executed steps.
+
+BILLING_ANNOTATION = (
+    "The job was not started because recent account payments have failed or "
+    "your spending limit needs to be increased. Please check the 'Billing & plans' section"
+)
+
+
+def _jobs(*, steps: int, conclusion="failure", n=2):
+    return {"jobs": [{"id": 100 + i, "conclusion": conclusion, "steps": [{"name": "s"}] * steps} for i in range(n)]}
+
+
+def _classify_with(monkeypatch, m, jobs, annotations):
+    calls = []
+
+    def fake_gh_json(args, default):
+        calls.append(args)
+        if "/jobs" in args[1]:
+            return jobs
+        if "/annotations" in args[1]:
+            return annotations
+        return default
+
+    monkeypatch.setattr(m, "_gh_json", fake_gh_json)
+    return m.classify_red_run(29581455210)
+
+
+def test_classify_jam_billing_from_zero_steps_and_annotation(monkeypatch):
+    m = _load()
+    klass, detail = _classify_with(monkeypatch, m, _jobs(steps=0), [{"message": BILLING_ANNOTATION}])
+    assert klass == "ci-jam-billing"
+    assert "payments have failed" in detail
+
+
+def test_classify_jam_infra_when_annotation_is_not_billing(monkeypatch):
+    m = _load()
+    klass, _ = _classify_with(monkeypatch, m, _jobs(steps=0), [{"message": "runner exploded"}])
+    assert klass == "ci-jam-infra"
+
+
+def test_classify_real_failure_when_steps_executed(monkeypatch):
+    m = _load()
+    klass, _ = _classify_with(monkeypatch, m, _jobs(steps=3), [{"message": BILLING_ANNOTATION}])
+    assert klass == "ci-fail"  # steps ran — a real failure even if annotation text were misleading
+
+
+def test_classify_fails_open_to_ci_fail(monkeypatch):
+    m = _load()
+    monkeypatch.setattr(m, "_gh_json", lambda args, default: default)  # API unavailable
+    assert m.classify_red_run(123) == ("ci-fail", "")
+    assert m.classify_red_run(0) == ("ci-fail", "")  # cached stamp without run_id
+
+
+def test_jammed_pr_run_ids_extracts_filters_and_dedups():
+    m = _load()
+    url = "https://github.com/organvm/limen/actions/runs/{}/job/9"
+
+    def pr(number, name, concl, run, draft=False, updated="2026-07-17T00:00:00Z"):
+        return {
+            "number": number,
+            "isDraft": draft,
+            "updatedAt": updated,
+            "statusCheckRollup": [{"name": name, "conclusion": concl, "detailsUrl": url.format(run)}],
+        }
+
+    prs = [
+        pr(1, "pr-gate", "FAILURE", 111),
+        pr(2, "pr-gate", "FAILURE", 111),  # same run id — dedup
+        pr(3, "python", "FAILURE", 222),  # not a required check — ignored
+        pr(4, "pr-gate", "SUCCESS", 333),  # green — ignored
+        pr(5, "pr-gate", "FAILURE", 444, draft=True),  # draft — ignored
+        pr(6, "pr-gate", "FAILURE", 555, updated="2026-01-01T00:00:00Z"),  # stale — ignored
+        pr(7, "pr-gate", "FAILURE", 666),
+    ]
+    assert m.jammed_pr_run_ids(prs, {"pr-gate"}, "2026-07-16T00:00:00Z") == [111, 666]
+
+
+def test_attempt_reruns_backoff_cap_and_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    m = _load()  # JAM_STATE now under tmp_path
+    reran = []
+
+    def fake_run(args, **kwargs):
+        assert args[:3] == ["gh", "run", "rerun"]
+        reran.append(int(args[3]))
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(m.subprocess, "run", fake_run)
+    ids = [111, 222, 333, 444, 555, 666, 777, 888]  # 8 targets, cap is 6
+    r1 = m.attempt_reruns(ids, now=1000.0)
+    assert [x["action"] for x in r1] == ["rerun"] * 6 and reran == ids[:6]
+    # immediately again — everything inside base backoff
+    r2 = m.attempt_reruns(ids, now=1001.0)
+    assert [x["action"] for x in r2] == ["backoff"] * 6 and len(reran) == 6
+    # past base backoff — attempt 2 fires; next delay doubles
+    r3 = m.attempt_reruns(ids[:1], now=1000.0 + 1801)
+    assert r3[0]["action"] == "rerun"
+    state = json.loads((tmp_path / "logs" / "vigilia" / "ci-jam-state.json").read_text())
+    assert state["111"]["attempts"] == 2
+    # 2nd->3rd attempt needs 2*base; base alone is now inside the window
+    r4 = m.attempt_reruns(ids[:1], now=1000.0 + 1801 + 1801)
+    assert r4[0]["action"] == "backoff"
+
+
+def test_jam_red_path_notifies_reruns_and_skips_heal_task(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setenv("LIMEN_NOTIFY", "0")  # bookkeeping only — hermetic runs never pop notifications
+    monkeypatch.setenv("LIMEN_MAIN_GREEN_THROTTLE", "100000")
+    monkeypatch.setenv("LIMEN_MAIN_GREEN_APPLY", "1")  # armed — and the jam class must STILL not emit
+    m = _load()
+    _seed(tmp_path, "failure")
+    stamp = json.loads((tmp_path / "logs" / "main-green.json").read_text())
+    stamp["run_id"] = 29581455210
+    (tmp_path / "logs" / "main-green.json").write_text(json.dumps(stamp), encoding="utf-8")
+
+    monkeypatch.setattr(m, "classify_red_run", lambda rid: ("ci-jam-billing", "payments have failed"))
+    monkeypatch.setattr(m, "_fetch_open_prs", lambda: [])
+    seen = {}
+    monkeypatch.setattr(m, "attempt_reruns", lambda ids, now=None: seen.setdefault("ids", ids) and [])
+    monkeypatch.setattr(
+        m, "_emit_heal_task", lambda *a, **k: (_ for _ in ()).throw(AssertionError("heal emitted for jam"))
+    )
+
+    assert m.main([]) == 1
+    out = capsys.readouterr().out
+    assert "[ci-jam-billing]" in out and "jam recovery" in out
+    assert seen["ids"] == [29581455210]  # the trunk run is the first rerun target
+    relief = json.loads((tmp_path / "logs" / "vigilia" / "relief-state.json").read_text())
+    assert "ci-jam-billing" in relief  # onset recorded (dedup) even with notifications killed
+
+
+def test_green_clears_jam_state_and_notification(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setenv("LIMEN_NOTIFY", "0")
+    monkeypatch.setenv("LIMEN_MAIN_GREEN_THROTTLE", "100000")
+    m = _load()
+    _seed(tmp_path, "success")
+    jam = tmp_path / "logs" / "vigilia"
+    jam.mkdir(parents=True, exist_ok=True)
+    (jam / "ci-jam-state.json").write_text('{"111": {"attempts": 3, "last": 1.0}}')
+    (jam / "relief-state.json").write_text('{"ci-jam-billing": {"first_seen": 1.0}}')
+    monkeypatch.setattr(m, "_fetch_open_prs", lambda: [])
+
+    assert m.main([]) == 0
+    assert "GREEN" in capsys.readouterr().out
+    assert not (jam / "ci-jam-state.json").exists()  # backoff history reset
+    assert "ci-jam-billing" not in json.loads((jam / "relief-state.json").read_text())  # re-arms

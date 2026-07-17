@@ -26,6 +26,18 @@ trunk-health proxy for pr-gate. This sensor reads it (`gh run list --workflow ci
   that persists when ci.yml looks green — a required check diverging from ci.yml / branch-protection
   drift — which the trunk-only read cannot see. Only FRESH PRs count (chronic stale backlog excluded).
 
+- **CI-JAM CLASS (2026-07-17):** a RED whose failed jobs all have ZERO steps is not a broken tree —
+  the runner never started (billing hold / infra outage; every job "fails" in 3-4 s with no logs).
+  Emitting a HEAL-mainred repair task for that is the WRONG effector, so the RED path first
+  classifies: ``ci-fail`` (real — heal path unchanged) vs ``ci-jam-billing``/``ci-jam-infra``
+  (never-started; billing detected from the check-run annotation text). A jam instead (a) notifies
+  ONCE per onset via scripts/_notify.py — the billing message names the filed lever
+  ``L-CARD-FRAUD-HOLD``, never a chore list — and (b) behind ``LIMEN_CI_JAM_RERUN`` (default armed,
+  the organ-tended precedent) attempts a bounded ``gh run rerun --failed`` per jammed run with
+  per-run exponential backoff, so the FIRST beat after billing is restored re-greens main and the
+  jammed PR-head runs with zero hands (merge-drain then lands the green PRs). Backoff state:
+  ``logs/vigilia/ci-jam-state.json``; both it and the notification clear when trunk is green again.
+
 Fail-open: no ``gh`` / offline / parse error → exit 0 (never breaks the beat).
 
   python3 scripts/check-main-green.py             # detect + surface (+ emit if APPLY=1)
@@ -38,13 +50,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
+import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling scripts/ for _notify
+import _notify  # noqa: E402
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.intake import IntakeContractError, contract_fields, github_main_green_contract  # noqa: E402
 from limen.models import Task  # noqa: E402
@@ -62,6 +78,17 @@ RED = {"failure", "cancelled", "timed_out", "startup_failure"}
 WEDGE_K = int(os.environ.get("LIMEN_MAIN_GREEN_WEDGE_K", "5"))
 FRESH_HOURS = int(os.environ.get("LIMEN_MAIN_GREEN_FRESH_HOURS", "36"))
 BAD_CHECK = {"FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "STARTUP_FAILURE"}
+# CI-jam recovery (2026-07-17 billing outage): rerun valve + per-run exponential backoff bounds.
+# Backoff caps at hours, never a hard attempt cap — recovery must still fire if billing is fixed
+# days later, while API spam stays logarithmic during the outage.
+JAM_RERUN = os.environ.get("LIMEN_CI_JAM_RERUN", "1").strip() == "1"
+JAM_BACKOFF_S = int(os.environ.get("LIMEN_CI_JAM_BACKOFF_S", "1800"))
+JAM_BACKOFF_MAX_S = int(os.environ.get("LIMEN_CI_JAM_BACKOFF_MAX_S", "14400"))
+JAM_RERUN_CAP = int(os.environ.get("LIMEN_CI_JAM_RERUN_CAP", "6"))
+JAM_STATE = ROOT / "logs" / "vigilia" / "ci-jam-state.json"
+JAM_KEY = "ci-jam-billing"
+_BILLING_RE = re.compile(r"payments? have failed|spending limit", re.IGNORECASE)
+_RUN_ID_RE = re.compile(r"/actions/runs/(\d+)")
 # Mirrors limen.dispatch._ACTIVE_SUPERSEDER_STATUSES (parity asserted in test_check_main_green.py so a
 # drift is a red test, not silent). A HEAL-mainred singleton in one of these states is already being
 # worked → converge on it. Any OTHER state (done/archived/failed) is a PRIOR red episode that healed;
@@ -240,8 +267,8 @@ def wedge_impact(prs: list[dict], required: set[str], fresh_since: str | None, k
     }
 
 
-def open_pr_impact(fresh_hours: int = FRESH_HOURS, k: int = WEDGE_K) -> dict:
-    """Live: fetch open PRs + their check rollup, return the wedge impact. Fail-open to empty."""
+def _fetch_open_prs() -> list[dict]:
+    """Open PRs + check rollup (one fetch shared by wedge impact and jam recovery). Fail-open to []."""
     prs = _gh_json(
         [
             "pr",
@@ -257,10 +284,128 @@ def open_pr_impact(fresh_hours: int = FRESH_HOURS, k: int = WEDGE_K) -> dict:
         ],
         [],
     )
-    if not isinstance(prs, list):
+    return prs if isinstance(prs, list) else []
+
+
+def _fresh_since(fresh_hours: int = FRESH_HOURS) -> str:
+    return (_now() - timedelta(hours=fresh_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def open_pr_impact(
+    fresh_hours: int = FRESH_HOURS,
+    k: int = WEDGE_K,
+    prs: list[dict] | None = None,
+    required: set[str] | None = None,
+) -> dict:
+    """Live: fetch open PRs + their check rollup, return the wedge impact. Fail-open to empty.
+
+    ``prs``/``required`` may be passed in when the caller already fetched them (main() shares one
+    fetch between this and the jam-recovery run-id scan) — defaults keep the standalone behavior.
+    """
+    if prs is None:
+        prs = _fetch_open_prs()
+    if not prs:
         return {"considered": 0, "wedged_checks": {}, "wedged_prs": 0}
-    fresh_since = (_now() - timedelta(hours=fresh_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    return wedge_impact(prs, required_checks(), fresh_since, k)
+    return wedge_impact(prs, required if required is not None else required_checks(), _fresh_since(fresh_hours), k)
+
+
+def classify_red_run(run_id: int | str) -> tuple[str, str]:
+    """Classify a RED run: ``ci-fail`` (real test failure) vs ``ci-jam-billing``/``ci-jam-infra``.
+
+    Jam fingerprint: every failed job has ZERO steps — the runner never started the work (the
+    2026-07-17 billing outage: each job "fails" in 3-4 s, ``gh run view --log-failed`` says
+    "log not found"). A real failure always has executed steps. Billing is confirmed from the
+    check-run annotation text (job id == check-run id). Fail-open to ``ci-fail`` so an API outage
+    never suppresses the real-failure heal path. Returns ``(klass, detail)``.
+    """
+    if not run_id:
+        return "ci-fail", ""
+    data = _gh_json(["api", f"repos/{REPO}/actions/runs/{run_id}/jobs"], None)
+    jobs = data.get("jobs") if isinstance(data, dict) else None
+    if not isinstance(jobs, list) or not jobs:
+        return "ci-fail", ""
+    failed = [j for j in jobs if isinstance(j, dict) and (j.get("conclusion") or "") in ("failure", "startup_failure")]
+    if not failed or any(j.get("steps") for j in failed):
+        return "ci-fail", ""
+    ann = _gh_json(["api", f"repos/{REPO}/check-runs/{failed[0].get('id')}/annotations"], [])
+    msgs = " ".join(str(a.get("message", "")) for a in ann if isinstance(a, dict)) if isinstance(ann, list) else ""
+    if _BILLING_RE.search(msgs):
+        return "ci-jam-billing", msgs[:200]
+    return "ci-jam-infra", "failed jobs have zero steps (runner never started)"
+
+
+def jammed_pr_run_ids(prs: list[dict], required: set[str], fresh_since: str | None) -> list[int]:
+    """Pure: run ids behind FAILING required checks on fresh non-draft open PRs (jam-recovery targets).
+
+    Same freshness/draft filter as ``wedge_impact`` — the chronic stale backlog is not rerun fodder.
+    Ids come from each check's ``detailsUrl`` (…/actions/runs/<id>/job/<jid>), so no extra API calls.
+    """
+    ids: set[int] = set()
+    for pr in prs:
+        if pr.get("isDraft"):
+            continue
+        if fresh_since and str(pr.get("updatedAt", "")) < fresh_since:
+            continue
+        for c in pr.get("statusCheckRollup") or []:
+            name = c.get("name") or c.get("context") or ""
+            concl = (c.get("conclusion") or c.get("state") or "").upper()
+            if name in required and concl in BAD_CHECK:
+                m = _RUN_ID_RE.search(str(c.get("detailsUrl") or ""))
+                if m:
+                    ids.add(int(m.group(1)))
+    return sorted(ids)
+
+
+def attempt_reruns(run_ids: list[int], now: float | None = None) -> list[dict]:
+    """Bounded ``gh run rerun --failed`` per jammed run, per-run exponential backoff, state-tracked.
+
+    No hard attempt cap — backoff doubles from JAM_BACKOFF_S to JAM_BACKOFF_MAX_S so recovery still
+    fires if billing is fixed days later, while attempts during the outage stay ~a handful per day.
+    While the jam persists a rerun is accepted and instantly re-fails (same run id) — harmless, free,
+    and the attempt is recorded. State clears wholesale when trunk goes green.
+    """
+    if not JAM_RERUN or not run_ids:
+        return []
+    now = time.time() if now is None else now
+    try:
+        state = json.loads(JAM_STATE.read_text())
+        state = state if isinstance(state, dict) else {}
+    except (OSError, ValueError):
+        state = {}
+    results: list[dict] = []
+    for rid in run_ids[:JAM_RERUN_CAP]:
+        rec = state.get(str(rid)) or {"attempts": 0, "last": 0.0}
+        delay = min(JAM_BACKOFF_S * (2 ** max(int(rec.get("attempts", 0)) - 1, 0)), JAM_BACKOFF_MAX_S)
+        if rec.get("attempts") and (now - float(rec.get("last", 0.0))) < delay:
+            results.append({"run": rid, "action": "backoff"})
+            continue
+        try:
+            r = subprocess.run(
+                ["gh", "run", "rerun", str(rid), "--repo", REPO, "--failed"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            ok = r.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            ok = False
+        state[str(rid)] = {"attempts": int(rec.get("attempts", 0)) + 1, "last": now}
+        results.append({"run": rid, "action": "rerun", "ok": ok})
+    try:
+        JAM_STATE.parent.mkdir(parents=True, exist_ok=True)
+        JAM_STATE.write_text(json.dumps(state, indent=1, sort_keys=True))
+    except OSError:
+        pass
+    return results
+
+
+def _clear_jam() -> None:
+    """Trunk is green — end the jam condition: notification re-arms, backoff state resets."""
+    _notify.clear_condition(ROOT, JAM_KEY)
+    try:
+        JAM_STATE.unlink()
+    except OSError:
+        pass
 
 
 def _read_stamp() -> dict:
@@ -301,6 +446,7 @@ def verdict(throttle: int) -> dict:
         "conclusion": run.get("conclusion") or "unknown",
         "head_sha": run.get("headSha") or "",
         "url": run.get("url") or "",
+        "run_id": run.get("databaseId") or 0,
     }
     _write_stamp(payload)
     return {**payload, "source": "gh"}
@@ -423,8 +569,11 @@ def main(argv=None) -> int:
     url = v.get("url", "")
 
     # Blast-radius / queue-wedge (integrated from #882): quantify how many FRESH PRs are actually
-    # blocked, and catch a wedge that persists even when trunk ci.yml is green.
-    impact = open_pr_impact()
+    # blocked, and catch a wedge that persists even when trunk ci.yml is green. One PR fetch is
+    # shared with the jam-recovery run-id scan below.
+    prs = _fetch_open_prs()
+    required = required_checks() if prs else set()
+    impact = open_pr_impact(prs=prs, required=required)
     wp = impact.get("wedged_prs", 0)
     wc = ", ".join(sorted(impact.get("wedged_checks") or {})) or "?"
     blast = f" — blocking {wp} fresh PR(s) on {wc}" if wp else ""
@@ -436,6 +585,7 @@ def main(argv=None) -> int:
         print(f"check-main-green: SKIP — main CI status unavailable ({v.get('source')}); failing open")
         return 0
     if conclusion not in RED:
+        _clear_jam()  # trunk green — the jam condition (if any) has ended; notification re-arms
         if wp:
             # trunk's own ci.yml is green, yet a required check is wedged across the queue — a divergence
             # the ci.yml-on-main read alone cannot see. Surface it; heal the base.
@@ -446,8 +596,29 @@ def main(argv=None) -> int:
         print(f"check-main-green: GREEN — main {WORKFLOW} {conclusion} @ {head} ({v.get('source')})")
         return 0
 
-    # RED
-    print(f"check-main-green: RED — main {WORKFLOW} {conclusion} @ {head}{blast} ({url})")
+    # RED — first split the class: a never-started jam (billing/infra) is not a broken tree, so the
+    # HEAL-mainred repair task would be the wrong effector for it (nothing in the tree to fix).
+    klass, detail = classify_red_run(v.get("run_id") or 0)
+    tag = f" [{klass}]" if klass != "ci-fail" else ""
+    print(f"check-main-green: RED{tag} — main {WORKFLOW} {conclusion} @ {head}{blast} ({url})")
+
+    if klass != "ci-fail":
+        if klass == "ci-jam-billing":
+            msg = (
+                "GitHub Actions cannot start jobs — account billing/payment failure. "
+                "The atom is the filed lever L-CARD-FRAUD-HOLD; recovery reruns are armed and "
+                "will re-green CI on the first beat after billing is restored."
+            )
+        else:
+            msg = "GitHub Actions runs fail before any step executes (infra jam); bounded reruns armed."
+        _notify.notify_once(ROOT, JAM_KEY, msg, title="LIMEN trunk CI")
+        run_ids = [int(v.get("run_id") or 0)] + jammed_pr_run_ids(prs, required, _fresh_since())
+        results = attempt_reruns([rid for rid in run_ids if rid])
+        rerun = sum(1 for r in results if r.get("action") == "rerun")
+        backoff = sum(1 for r in results if r.get("action") == "backoff")
+        print(f"  → jam recovery ({detail or klass}): rerun={rerun} backoff={backoff} of {len(results)} target(s)")
+        return 1
+
     apply_on = os.environ.get("LIMEN_MAIN_GREEN_APPLY", "0").strip() == "1"
     if apply_on and not args.dry_run:
         impact_note = f" It is blocking {wp} fresh PR(s) on {wc}." if wp else ""
