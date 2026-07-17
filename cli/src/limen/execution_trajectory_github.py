@@ -10,12 +10,16 @@ import re
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Mapping, Sequence
+from pathlib import Path
+from typing import Callable, Mapping, Sequence
 from urllib.parse import quote
 
 from limen.execution_trajectory import (
     OwnerPublication,
+    OwnerReceiptClaim,
+    OwnerReceiptSnapshot,
     OwnerTrajectorySnapshot,
+    ReceiptAuthority,
     TrajectoryPublicationError,
 )
 
@@ -24,6 +28,8 @@ _REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 _REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$")
 _PATH = re.compile(r"^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$")
 _SHA = re.compile(r"^[0-9a-f]{40}$")
+_AUTHORITY_OWNER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+_AUTHORITY_SCHEMA = "limen.receipt_authorities.v1"
 
 
 @dataclass(frozen=True)
@@ -219,3 +225,193 @@ class GitHubTrajectoryAdapter:
             )
             for attempt_id, payload in payloads.items()
         }
+
+
+class GitHubReceiptAuthority:
+    """Authenticate value evidence from one fixed GitHub owner ref.
+
+    The claim may select only the exact attempt-derived path under the
+    configured root, and that reference must name the ref's live exact head.
+    """
+
+    def __init__(
+        self,
+        *,
+        owner: str,
+        repository: str,
+        ref: str,
+        root: str,
+        runner: GitHubCommandRunner | None = None,
+        gh: str = "gh",
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        if not _AUTHORITY_OWNER.fullmatch(owner):
+            raise ValueError("receipt authority owner is invalid")
+        # Reuse the publication adapter's strict repository/ref/root validation
+        # and read primitives without granting publication capability here.
+        adapter = GitHubTrajectoryAdapter(
+            repository=repository,
+            ref=ref,
+            root=root,
+            runner=runner,
+            gh=gh,
+        )
+        self.owner = owner
+        self.repository = adapter.repository
+        self.ref = adapter.ref
+        self.root = adapter.root
+        self.runner = adapter.runner
+        self.gh = adapter.gh
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
+
+    @staticmethod
+    def _filename(attempt_id: str) -> str:
+        return hashlib.sha256(attempt_id.encode()).hexdigest() + ".json"
+
+    def _path(self, attempt_id: str) -> str:
+        return f"{self.root}/{self._filename(attempt_id)}"
+
+    def _api(self, endpoint: str) -> dict[str, object]:
+        result = self.runner.run([self.gh, "api", endpoint], timeout=60)
+        if result.returncode != 0:
+            raise TrajectoryPublicationError(
+                f"GitHub receipt authority failed for {endpoint}: {result.stderr.strip()[:240]}"
+            )
+        try:
+            decoded = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise TrajectoryPublicationError("GitHub receipt authority returned invalid JSON") from exc
+        if not isinstance(decoded, dict):
+            raise TrajectoryPublicationError("GitHub receipt authority returned non-object JSON")
+        return decoded
+
+    def _ref_head(self) -> str:
+        response = self._api(f"repos/{self.repository}/git/ref/heads/{quote(self.ref, safe='')}")
+        obj = response.get("object")
+        sha = str(obj.get("sha") or "") if isinstance(obj, dict) else ""
+        if not _SHA.fullmatch(sha):
+            raise TrajectoryPublicationError("GitHub receipt authority ref lacks an exact head")
+        return sha
+
+    def matches(self, claim: OwnerReceiptClaim) -> bool:
+        return claim.owner == self.owner and claim.reference.startswith(f"https://github.com/{self.repository}/blob/")
+
+    def verify(
+        self,
+        claim: OwnerReceiptClaim,
+        *,
+        attempt_id: str,
+        task_id: str,
+        repository: str,
+        predicate_digest: str,
+    ) -> OwnerReceiptSnapshot | None:
+        if not self.matches(claim) or claim.attempt_id != attempt_id:
+            return None
+        prefix = f"https://github.com/{self.repository}/blob/"
+        reference_tail = claim.reference.removeprefix(prefix)
+        head, separator, path = reference_tail.partition("/")
+        if not separator or not _SHA.fullmatch(head) or path != self._path(attempt_id):
+            return None
+        live_head = self._ref_head()
+        if head != live_head:
+            return None
+        response = self._api(f"repos/{self.repository}/contents/{quote(path, safe='/')}?ref={live_head}")
+        encoded = response.get("content")
+        if not isinstance(encoded, str) or response.get("encoding") != "base64":
+            return None
+        try:
+            payload = base64.b64decode("".join(encoded.split()), validate=True)
+            snapshot = OwnerReceiptSnapshot.model_validate_json(payload)
+        except (ValueError, binascii.Error):
+            return None
+        if (
+            snapshot.owner != claim.owner
+            or snapshot.reference != claim.reference
+            or snapshot.digest != claim.digest
+            or snapshot.head_sha != claim.head_sha
+            or snapshot.attempt_id != attempt_id
+            or snapshot.task_id != task_id
+            or snapshot.repository != repository
+            or snapshot.predicate_digest != predicate_digest
+            or snapshot.reconciliation_digest != claim.reconciliation_digest
+        ):
+            return None
+        verified_at = self._clock()
+        if verified_at.tzinfo is None:
+            return None
+        return snapshot.model_copy(update={"verified_at": verified_at})
+
+
+class ConfiguredReceiptAuthority:
+    """Finite fixed registry; a claim cannot provide or redirect a verifier."""
+
+    def __init__(self, authorities: Sequence[GitHubReceiptAuthority]) -> None:
+        if not authorities or len(authorities) > 32:
+            raise ValueError("receipt authority registry must contain 1..32 owners")
+        self.authorities = tuple(authorities)
+
+    def verify(
+        self,
+        claim: OwnerReceiptClaim,
+        *,
+        attempt_id: str,
+        task_id: str,
+        repository: str,
+        predicate_digest: str,
+    ) -> OwnerReceiptSnapshot | None:
+        candidates = [authority for authority in self.authorities if authority.matches(claim)]
+        if len(candidates) != 1:
+            return None
+        return candidates[0].verify(
+            claim,
+            attempt_id=attempt_id,
+            task_id=task_id,
+            repository=repository,
+            predicate_digest=predicate_digest,
+        )
+
+
+def load_configured_receipt_authority(
+    path: Path,
+    *,
+    runner: GitHubCommandRunner | None = None,
+    gh: str = "gh",
+    clock: Callable[[], datetime] | None = None,
+) -> ReceiptAuthority | None:
+    """Load a strict tracked registry. An empty shipped registry is unprovisioned."""
+
+    try:
+        payload = json.loads(path.read_bytes())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("receipt authority registry is unreadable") from exc
+    if not isinstance(payload, dict) or set(payload) != {"schema", "authorities"}:
+        raise ValueError("receipt authority registry shape is invalid")
+    rows = payload.get("authorities")
+    if payload.get("schema") != _AUTHORITY_SCHEMA or not isinstance(rows, list) or len(rows) > 32:
+        raise ValueError("receipt authority registry schema is invalid")
+    if not rows:
+        return None
+    authorities: list[GitHubReceiptAuthority] = []
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != {
+            "kind",
+            "owner",
+            "repository",
+            "ref",
+            "root",
+        }:
+            raise ValueError("receipt authority entry shape is invalid")
+        if row.get("kind") != "github":
+            raise ValueError("receipt authority kind is unsupported")
+        authorities.append(
+            GitHubReceiptAuthority(
+                owner=str(row["owner"]),
+                repository=str(row["repository"]),
+                ref=str(row["ref"]),
+                root=str(row["root"]),
+                runner=runner,
+                gh=gh,
+                clock=clock,
+            )
+        )
+    return ConfiguredReceiptAuthority(authorities)

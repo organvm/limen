@@ -129,6 +129,7 @@ def _remote_harvest_fixture(tmp_path):
     computed_packet_digest = compute_packet_digest(
         provider="github_actions",
         task_id=task.id,
+        attempt_id=str(launch.attempt_id),
         repo=str(task.repo),
         base_sha="a" * 40,
         control_repo="organvm/limen",
@@ -150,6 +151,7 @@ def _remote_harvest_fixture(tmp_path):
     metadata: dict[str, object] = {
         "provider": "github_actions",
         "task_id": task.id,
+        "attempt_id": launch.attempt_id,
         "repo": task.repo,
         "provider_run_id": "42",
         "provider_url": "https://github.com/organvm/limen/actions/runs/42",
@@ -169,6 +171,7 @@ def _remote_harvest_fixture(tmp_path):
     request = {
         "provider": metadata["provider"],
         "task_id": metadata["task_id"],
+        "attempt_id": metadata["attempt_id"],
         "repo": metadata["repo"],
         "base_sha": metadata["base_sha"],
         "control_repo": metadata["control_repo"],
@@ -951,6 +954,7 @@ def test_malformed_remote_task_id_does_not_starve_later_valid_result(tmp_path):
     [
         "provider",
         "task_id",
+        "attempt_id",
         "repo",
         "provider_run_id",
         "provider_url",
@@ -983,6 +987,7 @@ def test_remote_harvest_rejects_each_incomplete_identity_without_board_mutation(
     [
         ("provider", "renamed-actions"),
         ("task_id", "OTHER"),
+        ("attempt_id", "attempt-" + "3" * 64),
         ("repo", "other/repo"),
         ("provider_run_id", "43"),
         ("provider_url", "https://github.com/organvm/limen/actions/runs/43"),
@@ -1018,6 +1023,7 @@ def test_remote_harvest_rejects_each_contradictory_identity_without_board_mutati
     ("section", "field", "contradiction"),
     [
         ("request", "control_ref", "other"),
+        ("request", "attempt_id", "attempt-" + "4" * 64),
         ("request", "verification_context_digest", f"sha256:{'4' * 64}"),
         ("run", "provider_run_id", "43"),
         ("run", "control_ref_kind", "tag"),

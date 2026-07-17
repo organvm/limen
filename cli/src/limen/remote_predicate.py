@@ -25,9 +25,10 @@ from typing import Callable, Mapping, Sequence
 from urllib.parse import urlparse
 
 
-SCHEMA_VERSION = "limen.remote-execution.v3"
+SCHEMA_VERSION = "limen.remote-execution.v4"
 SHA_RE = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+ATTEMPT_ID_RE = re.compile(r"^attempt-[0-9a-f]{64}$")
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SAFE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 PROVIDER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
@@ -275,6 +276,7 @@ def packet_payload(
     *,
     provider: str,
     task_id: str,
+    attempt_id: str,
     repo: str,
     base_sha: str,
     control_repo: str,
@@ -296,6 +298,7 @@ def packet_payload(
         "schema_version": SCHEMA_VERSION,
         "provider": provider,
         "task_id": task_id,
+        "attempt_id": attempt_id,
         "repo": repo,
         "base_sha": base_sha,
         "control_repo": control_repo,
@@ -319,6 +322,7 @@ def packet_digest(
     *,
     provider: str,
     task_id: str,
+    attempt_id: str,
     repo: str,
     base_sha: str,
     control_repo: str,
@@ -341,6 +345,7 @@ def packet_digest(
             packet_payload(
                 provider=provider,
                 task_id=task_id,
+                attempt_id=attempt_id,
                 repo=repo,
                 base_sha=base_sha,
                 control_repo=control_repo,
@@ -683,6 +688,8 @@ def execute_attested(
         raise PredicateContractError("central worker receipt target must bind control repo and task ID")
     if not re.fullmatch(r"[0-9a-f]{32}", args.request_id):
         raise PredicateContractError("request ID is invalid")
+    if not ATTEMPT_ID_RE.fullmatch(args.attempt_id):
+        raise PredicateContractError("attempt ID is invalid")
     if not REPO_RE.fullmatch(args.repo) or not REPO_RE.fullmatch(args.control_repo):
         raise PredicateContractError("repo is invalid")
     validate_control_ref(args.control_ref, args.control_ref_kind)
@@ -717,6 +724,7 @@ def execute_attested(
     expected_packet = packet_digest(
         provider=args.provider,
         task_id=args.task_id,
+        attempt_id=args.attempt_id,
         repo=args.repo,
         base_sha=args.base_sha,
         control_repo=args.control_repo,
@@ -789,6 +797,7 @@ def execute_attested(
         "request_id": args.request_id,
         "provider": args.provider,
         "task_id": args.task_id,
+        "attempt_id": args.attempt_id,
         "repo": args.repo,
         "base_sha": args.base_sha,
         "observed_sha": observed_sha,
@@ -833,6 +842,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--request-id", required=True)
     parser.add_argument("--provider", required=True)
     parser.add_argument("--task-id", required=True)
+    parser.add_argument("--attempt-id", required=True)
     parser.add_argument("--repo", required=True)
     parser.add_argument("--control-repo", required=True)
     parser.add_argument("--control-ref", required=True)

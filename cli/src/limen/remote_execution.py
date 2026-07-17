@@ -25,6 +25,7 @@ from urllib.parse import quote
 
 from limen import census
 from limen.remote_predicate import (
+    ATTEMPT_ID_RE,
     DIGEST_RE,
     REPO_RE,
     SAFE_ID_RE,
@@ -226,6 +227,7 @@ class ContentReference:
 class RemoteRequest:
     provider: str
     task_id: str
+    attempt_id: str
     repo: str
     base_sha: str
     control_repo: str
@@ -245,8 +247,8 @@ class RemoteRequest:
     _execution_profile_json: bytes = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
-        if not self.provider or not SAFE_ID_RE.fullmatch(self.task_id):
-            raise ValueError("provider and task_id are required")
+        if not self.provider or not SAFE_ID_RE.fullmatch(self.task_id) or not ATTEMPT_ID_RE.fullmatch(self.attempt_id):
+            raise ValueError("provider, task_id, and exact attempt_id are required")
         if not PROVIDER_RE.fullmatch(self.provider):
             raise ValueError("provider identity is invalid")
         if (
@@ -312,6 +314,7 @@ class RemoteRequest:
         return packet_digest(
             provider=self.provider,
             task_id=self.task_id,
+            attempt_id=self.attempt_id,
             repo=self.repo,
             base_sha=self.base_sha,
             control_repo=self.control_repo,
@@ -334,6 +337,7 @@ class RemoteRequest:
         return {
             "provider": self.provider,
             "task_id": self.task_id,
+            "attempt_id": self.attempt_id,
             "repo": self.repo,
             "base_sha": self.base_sha,
             "control_repo": self.control_repo,
@@ -357,8 +361,8 @@ class RemoteRequest:
     def request_id(self) -> str:
         """Stable attempt identity persisted before the provider mutation.
 
-        A changed SHA, predicate, target, input, profile, or instruction produces a new attempt;
-        retrying the same packet adopts the existing attempt instead of creating another run.
+        A changed Limen attempt, SHA, predicate, target, input, profile, or instruction produces
+        a new request; retrying the same packet adopts the existing run instead of creating one.
         """
 
         return self.packet_digest.removeprefix("sha256:")[:32]
@@ -730,6 +734,7 @@ _REMOTE_SUBMISSION_STRING_FIELDS = frozenset(
     {
         "provider",
         "task_id",
+        "attempt_id",
         "repo",
         "provider_run_id",
         "provider_url",
@@ -751,6 +756,7 @@ _REMOTE_REQUEST_FIELDS = frozenset(
     {
         "provider",
         "task_id",
+        "attempt_id",
         "repo",
         "base_sha",
         "control_repo",
@@ -813,6 +819,7 @@ def validate_remote_submission_harvest(
     agent: object,
     expected_agent: str | None,
     expected_request_contract: Mapping[str, object],
+    expected_attempt_id: str,
     task_id: str,
     task_repo: str | None,
     root: Path,
@@ -826,6 +833,8 @@ def validate_remote_submission_harvest(
 
     if not isinstance(submission, Mapping):
         raise RemoteExecutionError("remote submission metadata is missing")
+    if not ATTEMPT_ID_RE.fullmatch(expected_attempt_id):
+        raise RemoteExecutionError("authoritative remote attempt identity is invalid")
     metadata = dict(submission)
     missing = (_REMOTE_SUBMISSION_STRING_FIELDS | {"workflow_id"}) - metadata.keys()
     if missing:
@@ -841,8 +850,13 @@ def validate_remote_submission_harvest(
         raise RemoteExecutionError("async result agent does not match remote submission provider")
     if expected_agent is not None and agent != expected_agent:
         raise RemoteExecutionError("async result agent does not match reserved remote lane")
-    if task_repo is None or metadata["task_id"] != task_id or metadata["repo"] != task_repo:
-        raise RemoteExecutionError("remote submission task/repository does not match the authoritative board")
+    if (
+        task_repo is None
+        or metadata["task_id"] != task_id
+        or metadata["attempt_id"] != expected_attempt_id
+        or metadata["repo"] != task_repo
+    ):
+        raise RemoteExecutionError("remote submission task/attempt/repository does not match the authoritative board")
 
     configured_root = receipt_root.expanduser().resolve()
     task_root = ReceiptStore(configured_root).task_root(task_id)
@@ -878,6 +892,7 @@ def validate_remote_submission_harvest(
     if _REMOTE_REQUEST_FIELDS - request.keys() or _REMOTE_RUN_FIELDS - run.keys():
         raise RemoteExecutionError("remote receipt request/run metadata is incomplete")
     required_current_contract_fields = {
+        "attempt_id",
         "predicate_digest",
         "instruction_digest",
         "receipt_target",
@@ -914,6 +929,7 @@ def validate_remote_submission_harvest(
     request_identity = {
         "provider": "provider",
         "task_id": "task_id",
+        "attempt_id": "attempt_id",
         "repo": "repo",
         "base_sha": "base_sha",
         "control_repo": "control_repo",
@@ -953,6 +969,7 @@ def validate_remote_submission_harvest(
         expected_packet = packet_digest(
             provider=str(request["provider"]),
             task_id=str(request["task_id"]),
+            attempt_id=str(request["attempt_id"]),
             repo=str(request["repo"]),
             base_sha=str(request["base_sha"]),
             control_repo=str(request["control_repo"]),
@@ -1342,6 +1359,8 @@ class GitHubWorkflowAdapter:
                 "-f",
                 f"task_id={request.task_id}",
                 "-f",
+                f"attempt_id={request.attempt_id}",
+                "-f",
                 f"target_repo={request.repo}",
                 "-f",
                 f"base_sha={request.base_sha}",
@@ -1634,6 +1653,7 @@ def remote_request_from_task(
     task: object,
     provider: str,
     *,
+    attempt_id: str,
     base_sha: str,
     control_repo: str,
     control_ref: str,
@@ -1649,6 +1669,7 @@ def remote_request_from_task(
     return RemoteRequest(
         provider=provider,
         task_id=str(getattr(task, "id", "") or ""),
+        attempt_id=attempt_id,
         repo=repo or str(getattr(task, "repo", "") or ""),
         base_sha=base_sha,
         control_repo=control_repo,
@@ -1684,6 +1705,7 @@ def _receipt_from_workflow_payload(
         "request_id": run.request_id,
         "provider": request.provider,
         "task_id": request.task_id,
+        "attempt_id": request.attempt_id,
         "repo": request.repo,
         "base_sha": request.base_sha,
         "observed_sha": request.base_sha,

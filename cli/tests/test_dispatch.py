@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import os
 import subprocess
@@ -2075,6 +2076,92 @@ def test_busy_commit_keeps_exact_result_pending_then_reconciles_without_reexecut
     assert list((tmp_path / "logs" / "dispatch-results" / "archive" / "reconciled").glob("*.json"))
 
 
+def test_pending_result_archive_failure_is_idempotent_for_spend_and_result(tmp_path: Path, monkeypatch) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    board = LimenFile(tasks=[task])
+    board.portal.budget.track = BudgetTrack(date="2026-07-17")
+    save_limen_file(tasks_path, board)
+    result = "https://github.com/example/repository/pull/82"
+    pending = D._persist_pending_dispatch_result(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        attempt_id=str(launch.attempt_id),
+        attempt_contract_hash=str(launch.attempt_contract_hash),
+        result=result,
+    )
+
+    def fail_archive(_path: Path, _reason: str) -> None:
+        raise OSError("adversarial archive failure")
+
+    monkeypatch.setattr(D, "_archive_pending_dispatch_result", fail_archive)
+    for _ in range(2):
+        D._commit_dispatch_results(
+            tasks_path,
+            load_limen_file(tasks_path),
+            [],
+            datetime.now(timezone.utc),
+        )
+
+    committed = load_limen_file(tasks_path)
+    result_rows = [entry for entry in committed.tasks[0].dispatch_log if entry.result_receipt_digest is not None]
+    assert pending.exists()
+    assert committed.portal.budget.track.spent == 1
+    assert committed.portal.budget.track.per_agent == {"codex": 1}
+    assert len(result_rows) == 1
+    assert result_rows[0].session_id == result
+
+
+def test_malformed_pending_result_is_terminally_owner_routed_and_replay_safe(tmp_path: Path, monkeypatch) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    board = LimenFile(tasks=[task])
+    board.portal.budget.track = BudgetTrack(date="2026-07-17")
+    save_limen_file(tasks_path, board)
+    pending = D._pending_dispatch_result_path(tasks_path, task.id, str(launch.attempt_id))
+    pending.parent.mkdir(parents=True)
+    malformed = b'{"schema":"limen.pending_dispatch_result.v1","truncated":'
+    pending.write_bytes(malformed)
+    real_quarantine = D._quarantine_pending_dispatch_result
+
+    def fail_quarantine(_path: Path, _reason: str) -> None:
+        raise OSError("adversarial quarantine failure")
+
+    monkeypatch.setattr(D, "_quarantine_pending_dispatch_result", fail_quarantine)
+    for _ in range(2):
+        D._commit_dispatch_results(
+            tasks_path,
+            load_limen_file(tasks_path),
+            [],
+            datetime.now(timezone.utc),
+        )
+
+    committed = load_limen_file(tasks_path)
+    owner = committed.tasks[0]
+    result_rows = [entry for entry in owner.dispatch_log if entry.result_receipt_digest is not None]
+    assert pending.exists()
+    assert owner.status == "failed_blocked"
+    assert committed.portal.budget.track.spent == 0
+    assert len(result_rows) == 1
+    assert result_rows[0].result_receipt_digest == f"sha256:{hashlib.sha256(malformed).hexdigest()}"
+    assert "malformed pending provider custody owner-routed" in str(result_rows[0].output)
+
+    monkeypatch.setattr(D, "_quarantine_pending_dispatch_result", real_quarantine)
+    D._commit_dispatch_results(
+        tasks_path,
+        load_limen_file(tasks_path),
+        [],
+        datetime.now(timezone.utc),
+    )
+    assert not pending.exists()
+    assert list((tmp_path / "logs" / "dispatch-results" / "quarantine" / "malformed-owner-routed").glob("*.json"))
+
+
 def test_release_stale_routes_pending_result_to_harvest_instead_of_reexecution(
     tmp_path: Path,
 ) -> None:
@@ -2611,6 +2698,81 @@ def test_dispatch_parallel_records_blocked_without_counting_failure(tmp_path: Pa
     assert task["dispatch_log"][-1]["status"] == "failed_blocked"
     assert "1 blocked" in output
     assert "0 failed" in output
+
+
+def test_dispatch_parallel_result_replay_does_not_double_charge_after_archive_failure(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "PARALLEL-REPLAY",
+                "title": "parallel exact result replay",
+                "repo": "someorg/dispatch-lab",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-07-17",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        D,
+        "call_agent_dispatch",
+        lambda _agent, _task, dry_run=False: "https://github.com/organvm/limen/pull/82",
+    )
+    monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+    snapshot = D.WorktreeAdmissionSnapshot(
+        active=False,
+        block_new_local=False,
+        reason="",
+        resource_blocked=False,
+        vitals_shed=False,
+        reaper_blocked=False,
+        free_gib=None,
+        floor_gib=None,
+        reserved_gib=0.0,
+        room_gib=None,
+        targets_present=None,
+        debt=None,
+        vitals_action="ok",
+    )
+    monkeypatch.setattr(D, "_worktree_admission_snapshot", lambda: snapshot.copy())
+    monkeypatch.setattr(
+        D,
+        "_snapshot_with_machine_reservations",
+        lambda _snapshot=None: (snapshot.copy(), 0),
+    )
+
+    def fail_archive(_path: Path, _reason: str) -> None:
+        raise OSError("adversarial archive failure")
+
+    monkeypatch.setattr(D, "_archive_pending_dispatch_result", fail_archive)
+
+    dispatch_parallel(
+        load_limen_file(tasks_path),
+        tasks_path,
+        agents=["codex"],
+        per_agent_limit=1,
+        max_workers=1,
+    )
+    D._commit_dispatch_results(
+        tasks_path,
+        load_limen_file(tasks_path),
+        [],
+        datetime.now(timezone.utc),
+    )
+
+    committed = load_limen_file(tasks_path)
+    result_rows = [entry for entry in committed.tasks[0].dispatch_log if entry.result_receipt_digest is not None]
+    assert committed.portal.budget.track.spent == 1
+    assert committed.portal.budget.track.per_agent["codex"] == 1
+    assert len(result_rows) == 1
 
 
 def test_failed_result_skips_down_lane_in_default_cascade(tmp_path: Path, monkeypatch) -> None:

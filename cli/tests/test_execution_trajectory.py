@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from pydantic import ValidationError
 
+import limen.execution_trajectory as trajectory_module
 from limen.execution_trajectory import (
     ExecutionTrajectory,
     OwnerPublication,
@@ -187,17 +188,24 @@ class Authority:
         )
 
 
-def test_one_attempt_counts_once_and_credit_belongs_to_executor_not_route() -> None:
+def install_authority(monkeypatch: pytest.MonkeyPatch, authority: object) -> None:
+    monkeypatch.setattr(trajectory_module, "_configured_receipt_authority", lambda: authority)
+
+
+def test_one_attempt_counts_once_and_credit_belongs_to_executor_not_route(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     row = trajectory()
     corpus = build_corpus([row, deepcopy(row)])
+    install_authority(monkeypatch, Authority())
 
     assert len(corpus.records) == 1
     assert corpus.duplicate_rows == 1
     record = corpus.records[0]
     assert record.executing_keeper == "keeper-cerulean"
     assert record.provider_route == "provider-quartz-auto"
-    assert corpus.value_by_executor(authority=Authority()) == {"keeper-cerulean": 1}
-    assert "provider-quartz-auto" not in corpus.value_by_executor(authority=Authority())
+    assert corpus.value_by_executor() == {"keeper-cerulean": 1}
+    assert "provider-quartz-auto" not in corpus.value_by_executor()
 
 
 @pytest.mark.parametrize(
@@ -210,9 +218,13 @@ def test_one_attempt_counts_once_and_credit_belongs_to_executor_not_route() -> N
         {"receipt_head": OTHER_HEAD},
     ],
 )
-def test_motion_or_non_exact_evidence_earns_zero(changes: dict[str, object]) -> None:
+def test_motion_or_non_exact_evidence_earns_zero(
+    changes: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     record = ExecutionTrajectory.model_validate(trajectory(**changes))
-    assert verified_value_credit(record, authority=Authority()) == 0
+    install_authority(monkeypatch, Authority())
+    assert verified_value_credit(record) == 0
 
 
 @pytest.mark.parametrize(
@@ -223,7 +235,10 @@ def test_motion_or_non_exact_evidence_earns_zero(changes: dict[str, object]) -> 
         lambda row: row.update(side_effects_reconciled=False),
     ],
 )
-def test_value_requires_spend_output_and_side_effect_reconciliation(mutation) -> None:
+def test_value_requires_spend_output_and_side_effect_reconciliation(
+    mutation,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     row = trajectory()
     mutation(row)
     row["owner_receipt"]["reconciliation_digest"] = reconciliation_digest(  # type: ignore[index]
@@ -235,10 +250,11 @@ def test_value_requires_spend_output_and_side_effect_reconciliation(mutation) ->
     )
     record = ExecutionTrajectory.model_validate(row)
 
-    assert verified_value_credit(record, authority=Authority()) == 0
+    install_authority(monkeypatch, Authority())
+    assert verified_value_credit(record) == 0
 
 
-def test_empty_self_attested_outputs_never_earn_value() -> None:
+def test_empty_self_attested_outputs_never_earn_value(monkeypatch: pytest.MonkeyPatch) -> None:
     row = trajectory()
     row["outputs"] = []
     row["owner_receipt"]["reconciliation_digest"] = reconciliation_digest(  # type: ignore[index]
@@ -252,10 +268,13 @@ def test_empty_self_attested_outputs_never_earn_value() -> None:
     record = ExecutionTrajectory.model_validate(row)
 
     assert record.outputs_reconciled is True
-    assert verified_value_credit(record, authority=Authority()) == 0
+    install_authority(monkeypatch, Authority())
+    assert verified_value_credit(record) == 0
 
 
-def test_reconciliation_requires_fresh_owner_authenticated_digest() -> None:
+def test_reconciliation_requires_fresh_owner_authenticated_digest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     row = trajectory()
     row["owner_receipt"].pop("reconciliation_digest")  # type: ignore[union-attr]
     record = ExecutionTrajectory.model_validate(row)
@@ -263,7 +282,8 @@ def test_reconciliation_requires_fresh_owner_authenticated_digest() -> None:
     assert record.spend.reconciled is True
     assert record.outputs_reconciled is True
     assert record.side_effects_reconciled is True
-    assert verified_value_credit(record, authority=Authority()) == 0
+    install_authority(monkeypatch, Authority())
+    assert verified_value_credit(record) == 0
 
 
 def test_reconciliation_fields_are_required_bounded_and_finite() -> None:
@@ -283,12 +303,21 @@ def test_reconciliation_fields_are_required_bounded_and_finite() -> None:
         ExecutionTrajectory.model_validate(oversized)
 
 
-def test_owner_claim_is_not_self_verifying() -> None:
+def test_owner_claim_is_not_self_verifying(monkeypatch: pytest.MonkeyPatch) -> None:
     record = ExecutionTrajectory.model_validate(trajectory())
     assert verified_value_credit(record) == 0
-    assert verified_value_credit(record, authority=Authority(head=OTHER_HEAD)) == 0
-    assert verified_value_credit(record, authority=Authority(terminal=False)) == 0
-    assert verified_value_credit(record, authority=Authority(predicate_passed=False)) == 0
+    install_authority(monkeypatch, Authority(head=OTHER_HEAD))
+    assert verified_value_credit(record) == 0
+    install_authority(monkeypatch, Authority(terminal=False))
+    assert verified_value_credit(record) == 0
+    install_authority(monkeypatch, Authority(predicate_passed=False))
+    assert verified_value_credit(record) == 0
+
+
+def test_value_api_rejects_caller_supplied_verifier() -> None:
+    record = ExecutionTrajectory.model_validate(trajectory())
+    with pytest.raises(TypeError, match="authority"):
+        verified_value_credit(record, authority=Authority())  # type: ignore[call-arg]
 
 
 @pytest.mark.parametrize(
@@ -300,11 +329,16 @@ def test_owner_claim_is_not_self_verifying() -> None:
         ("predicate_digest", "sha256:" + "c" * 64),
     ],
 )
-def test_owner_authority_must_bind_every_attempt_identity(binding: str, other: str) -> None:
+def test_owner_authority_must_bind_every_attempt_identity(
+    binding: str,
+    other: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     record = ExecutionTrajectory.model_validate(trajectory())
     authority = Authority(binding_overrides={binding: other})
+    install_authority(monkeypatch, authority)
 
-    assert verified_value_credit(record, authority=authority) == 0
+    assert verified_value_credit(record) == 0
     assert authority.requests == [
         {
             "attempt_id": record.attempt_id,
@@ -315,7 +349,9 @@ def test_owner_authority_must_bind_every_attempt_identity(binding: str, other: s
     ]
 
 
-def test_owner_receipt_cannot_be_replayed_for_another_attempt() -> None:
+def test_owner_receipt_cannot_be_replayed_for_another_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     original = ExecutionTrajectory.model_validate(trajectory(attempt_id="attempt-original"))
     replayed = ExecutionTrajectory.model_validate(trajectory(attempt_id="attempt-replayed"))
     original_snapshot = Authority(verified_at=FRESH_NOW).verify(
@@ -331,37 +367,25 @@ def test_owner_receipt_cannot_be_replayed_for_another_attempt() -> None:
             return original_snapshot
 
     authority = ReplayAuthority()
-    assert verified_value_credit(original, authority=authority, now=FRESH_NOW) == 1
-    assert verified_value_credit(replayed, authority=authority, now=FRESH_NOW) == 0
+    install_authority(monkeypatch, authority)
+    assert verified_value_credit(original, now=FRESH_NOW) == 1
+    assert verified_value_credit(replayed, now=FRESH_NOW) == 0
 
 
-def test_owner_snapshot_must_be_fresh_and_postdate_the_predicate() -> None:
+def test_owner_snapshot_must_be_fresh_and_postdate_the_predicate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     record = ExecutionTrajectory.model_validate(trajectory())
 
-    assert (
-        verified_value_credit(
-            record,
-            authority=Authority(verified_at=FRESH_NOW - timedelta(minutes=6)),
-            now=FRESH_NOW,
-        )
-        == 0
+    install_authority(monkeypatch, Authority(verified_at=FRESH_NOW - timedelta(minutes=6)))
+    assert verified_value_credit(record, now=FRESH_NOW) == 0
+    install_authority(
+        monkeypatch,
+        Authority(verified_at=datetime(2026, 7, 16, 18, 18, tzinfo=timezone.utc)),
     )
-    assert (
-        verified_value_credit(
-            record,
-            authority=Authority(verified_at=datetime(2026, 7, 16, 18, 18, tzinfo=timezone.utc)),
-            now=FRESH_NOW,
-        )
-        == 0
-    )
-    assert (
-        verified_value_credit(
-            record,
-            authority=Authority(verified_at=FRESH_NOW),
-            now=FRESH_NOW,
-        )
-        == 1
-    )
+    assert verified_value_credit(record, now=FRESH_NOW) == 0
+    install_authority(monkeypatch, Authority(verified_at=FRESH_NOW))
+    assert verified_value_credit(record, now=FRESH_NOW) == 1
 
 
 @pytest.mark.parametrize(
@@ -373,12 +397,17 @@ def test_owner_snapshot_must_be_fresh_and_postdate_the_predicate() -> None:
         ("2026-07-16T18:20:01Z", 0),
     ],
 )
-def test_predicate_must_be_checked_within_attempt_interval(checked_at: str, expected: int) -> None:
+def test_predicate_must_be_checked_within_attempt_interval(
+    checked_at: str,
+    expected: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     row = trajectory()
     row["terminal_predicate"]["checked_at"] = checked_at
     record = ExecutionTrajectory.model_validate(row)
 
-    assert verified_value_credit(record, authority=Authority(verified_at=FRESH_NOW), now=FRESH_NOW) == expected
+    install_authority(monkeypatch, Authority(verified_at=FRESH_NOW))
+    assert verified_value_credit(record, now=FRESH_NOW) == expected
 
 
 def test_receipt_claim_binding_and_predicate_digest_fail_closed() -> None:

@@ -15,6 +15,7 @@ import uuid
 from collections.abc import Sized
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import MappingProxyType
 from typing import Iterable, Literal, Mapping, Protocol, Sequence
 
@@ -42,6 +43,9 @@ _STATUS_OUTCOME = {
 _SHA256_PATTERN = r"^sha256:[0-9a-f]{64}$"
 _HEX_DIGEST_PATTERN = r"^[0-9a-f]{64}$"
 _ATTEMPT_IDENTITY_SCHEMA = "limen.execution_attempt_identity.v2"
+_RECEIPT_AUTHORITY_CONFIG = (
+    Path(__file__).resolve().parents[3] / "institutio" / "governance" / "execution-receipt-authorities.json"
+)
 
 
 def _is_sha(value: str | None) -> bool:
@@ -515,10 +519,25 @@ class ReceiptAuthority(Protocol):
     ) -> OwnerReceiptSnapshot | None: ...
 
 
+def _configured_receipt_authority() -> ReceiptAuthority | None:
+    """Resolve the sole production trust root from the tracked fixed path.
+
+    The caller cannot supply a verifier or redirect the registry through an
+    environment variable. Missing, invalid, or unprovisioned authority is an
+    intentional fail-closed zero-value state.
+    """
+
+    try:
+        from limen.execution_trajectory_github import load_configured_receipt_authority
+
+        return load_configured_receipt_authority(_RECEIPT_AUTHORITY_CONFIG)
+    except Exception:
+        return None
+
+
 def verified_value_credit(
     trajectory: ExecutionTrajectory,
     *,
-    authority: ReceiptAuthority | None = None,
     now: datetime | None = None,
     max_receipt_age: timedelta = RECEIPT_VERIFICATION_MAX_AGE,
 ) -> int:
@@ -535,6 +554,7 @@ def verified_value_credit(
         outputs_reconciled=trajectory.outputs_reconciled,
         side_effects_reconciled=trajectory.side_effects_reconciled,
     )
+    authority = _configured_receipt_authority()
     if (
         trajectory.outcome != "succeeded"
         or not trajectory.spend.reconciled
@@ -600,12 +620,11 @@ class TrajectoryCorpus:
     def value_by_executor(
         self,
         *,
-        authority: ReceiptAuthority | None = None,
         now: datetime | None = None,
     ) -> dict[str, int]:
         credit: dict[str, int] = {}
         for record in self.records:
-            value = verified_value_credit(record, authority=authority, now=now)
+            value = verified_value_credit(record, now=now)
             credit[record.executing_keeper] = credit.get(record.executing_keeper, 0) + value
         return credit
 

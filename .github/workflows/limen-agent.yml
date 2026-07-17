@@ -16,6 +16,10 @@ on:
         description: Limen task ID
         required: true
         type: string
+      attempt_id:
+        description: Exact immutable Limen execution attempt ID
+        required: true
+        type: string
       target_repo:
         description: GitHub owner/name to verify
         required: true
@@ -92,6 +96,7 @@ jobs:
       LIMEN_REQUEST_ID: ${{ inputs.request_id }}
       LIMEN_PROVIDER: ${{ inputs.provider }}
       LIMEN_TASK_ID: ${{ inputs.task_id }}
+      LIMEN_ATTEMPT_ID: ${{ inputs.attempt_id }}
       LIMEN_TARGET_REPO: ${{ inputs.target_repo }}
       LIMEN_BASE_SHA: ${{ inputs.base_sha }}
       LIMEN_CONTROL_REPO: ${{ inputs.control_repo }}
@@ -150,6 +155,7 @@ jobs:
             --request-id "$LIMEN_REQUEST_ID" \
             --provider "$LIMEN_PROVIDER" \
             --task-id "$LIMEN_TASK_ID" \
+            --attempt-id "$LIMEN_ATTEMPT_ID" \
             --repo "$LIMEN_TARGET_REPO" \
             --control-repo "$LIMEN_CONTROL_REPO" \
             --control-ref "$LIMEN_CONTROL_REF" \

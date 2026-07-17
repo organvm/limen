@@ -689,6 +689,7 @@ def harvest() -> int:
                     if not execution_profile:
                         raise RemoteExecutionError("registered attempt lacks a frozen execution profile")
                     expected_request_contract = {
+                        "attempt_id": attempt_id,
                         "predicate_digest": digest_text(t.predicate.strip()),
                         "instruction_digest": digest_text(
                             f"Verify completed implementation for task {t.id}; do not modify code: {t.title}"
@@ -706,6 +707,7 @@ def harvest() -> int:
                         agent=agent,
                         expected_agent=last.agent,
                         expected_request_contract=expected_request_contract,
+                        expected_attempt_id=attempt_id,
                         task_id=t.id,
                         task_repo=t.repo,
                         root=ROOT,

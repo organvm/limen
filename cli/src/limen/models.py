@@ -38,6 +38,10 @@ class DispatchLogEntry(BaseModel):
     attempt_contract_hash: str | None = None
     current_contract_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     attempt_identity_digest: str | None = None
+    # Content identity of the durable provider-result artifact consumed by this
+    # event. Persisting it in the same board write as lifecycle/spend changes
+    # makes an archive failure safe to replay.
+    result_receipt_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
     execution_profile: dict[str, Any] | None = None
     selected_model: str | None = None
     selection_source: str | None = None

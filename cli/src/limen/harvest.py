@@ -351,7 +351,7 @@ def _adopt_orphan_remote_entry(
     for manifest, path in store.manifests_for_task(task.id):
         provider = str(manifest.get("provider") or "")
         base_sha = str(manifest.get("base_sha") or "")
-        if provider != task.target_agent:
+        if provider != task.target_agent or manifest.get("attempt_id") != attempt_id:
             continue
         try:
             raw_workflow_id = manifest.get("workflow_id")
@@ -361,6 +361,7 @@ def _adopt_orphan_remote_entry(
             request = remote_request_from_task(
                 task,
                 provider,
+                attempt_id=attempt_id,
                 base_sha=base_sha,
                 control_repo=str(manifest.get("control_repo") or ""),
                 control_ref=str(manifest.get("control_ref") or ""),
@@ -649,6 +650,7 @@ def check_remote_harvest(
             request = remote_request_from_task(
                 task,
                 provider,
+                attempt_id=str(entry.attempt_id),
                 base_sha=str(entry.base_sha),
                 control_repo=str(entry.control_repo),
                 control_ref=str(entry.control_ref),

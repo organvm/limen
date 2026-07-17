@@ -1783,9 +1783,17 @@ def _call_remote_adapter(agent: str, task: Task, dry_run: bool) -> bool | str:
     instruction = f"Verify completed implementation for task {remote_task.id}; do not modify code: {remote_task.title}"
     if dry_run:
         try:
+            preview_launch = _attempt_launch_entry(
+                remote_task,
+                agent,
+                reservation_session="remote-preview",
+                started_at=datetime.now(timezone.utc),
+                output="remote preview packet identity; not persisted or executable",
+            )
             preview = remote_request_from_task(
                 remote_task,
                 agent,
+                attempt_id=str(preview_launch.attempt_id),
                 base_sha="0" * 40,
                 control_repo=adapter.control_repo,
                 control_ref=adapter.control_ref,
@@ -1809,6 +1817,15 @@ def _call_remote_adapter(agent: str, task: Task, dry_run: bool) -> bool | str:
         )
         return True
     try:
+        attempt_id = _current_attempt_id(remote_task)
+        launch = _attempt_launch_for(remote_task, attempt_id)
+        if (
+            not attempt_id
+            or launch is None
+            or remote_task.status not in {"dispatched", "in_progress"}
+            or not _attempt_contract_is_current(remote_task, launch)
+        ):
+            raise RemoteExecutionError("remote submission lacks an active exact registered attempt")
         base_ref = os.environ.get("LIMEN_REMOTE_BASE_REF", "HEAD")
         base_sha = resolve_pushed_sha(
             repo,
@@ -1818,6 +1835,7 @@ def _call_remote_adapter(agent: str, task: Task, dry_run: bool) -> bool | str:
         request = remote_request_from_task(
             remote_task,
             agent,
+            attempt_id=attempt_id,
             base_sha=base_sha,
             control_repo=adapter.control_repo,
             control_ref=adapter.control_ref,
@@ -1838,6 +1856,7 @@ def _call_remote_adapter(agent: str, task: Task, dry_run: bool) -> bool | str:
     _REMOTE_SUBMISSION_RECEIPTS[task.id] = {
         "provider": request.provider,
         "task_id": request.task_id,
+        "attempt_id": request.attempt_id,
         "repo": request.repo,
         "provider_run_id": run.provider_run_id,
         "provider_url": run.url,
@@ -3352,15 +3371,33 @@ def _persist_pending_dispatch_result(
     return destination
 
 
-def _load_pending_dispatch_results(tasks_path: Path) -> list[tuple[Path, dict[str, Any]]]:
-    loaded: list[tuple[Path, dict[str, Any]]] = []
+def _load_pending_dispatch_results(
+    tasks_path: Path,
+) -> list[tuple[Path, dict[str, Any] | None, str, str | None]]:
+    loaded: list[tuple[Path, dict[str, Any] | None, str, str | None]] = []
     for path in _pending_dispatch_result_files(tasks_path):
+        digest = f"sha256:{hashlib.sha256(f'unreadable:{path.name}'.encode()).hexdigest()}"
         try:
-            raw = path.read_bytes()
+            hasher = hashlib.sha256()
+            chunks: list[bytes] = []
+            total = 0
+            with path.open("rb") as handle:
+                while chunk := handle.read(64 * 1024):
+                    hasher.update(chunk)
+                    total += len(chunk)
+                    if total <= _MAX_PENDING_DISPATCH_RESULT_BYTES:
+                        chunks.append(chunk)
+            digest = f"sha256:{hasher.hexdigest()}"
+            if total > _MAX_PENDING_DISPATCH_RESULT_BYTES:
+                loaded.append((path, None, digest, "oversized"))
+                continue
+            raw = b"".join(chunks)
             if len(raw) > _MAX_PENDING_DISPATCH_RESULT_BYTES:
+                loaded.append((path, None, digest, "oversized"))
                 continue
             payload = json.loads(raw)
             if not isinstance(payload, dict):
+                loaded.append((path, None, digest, "non-object"))
                 continue
             created_at = datetime.fromisoformat(str(payload.get("created_at") or ""))
             result = payload.get("result")
@@ -3379,10 +3416,16 @@ def _load_pending_dispatch_results(tasks_path: Path) -> list[tuple[Path, dict[st
                 and isinstance(payload.get("reconciliation"), dict)
                 and created_at.tzinfo is not None
             )
-        except (OSError, ValueError, TypeError):
+        except OSError:
+            loaded.append((path, None, digest, "unreadable"))
+            continue
+        except (ValueError, TypeError):
+            loaded.append((path, None, digest, "invalid-json-or-fields"))
             continue
         if valid:
-            loaded.append((path, payload))
+            loaded.append((path, payload, digest, None))
+        else:
+            loaded.append((path, None, digest, "invalid-schema-or-fields"))
     return loaded
 
 
@@ -3393,6 +3436,28 @@ def _archive_pending_dispatch_result(path: Path, reason: str) -> None:
     if destination.exists():
         destination = archive / f"{path.stem}-{time.time_ns()}.json"
     os.replace(path, destination)
+
+
+def _quarantine_pending_dispatch_result(path: Path, reason: str) -> None:
+    quarantine = path.parent.parent / "quarantine" / re.sub(r"[^a-z0-9-]+", "-", reason.lower()).strip("-")
+    quarantine.mkdir(parents=True, exist_ok=True)
+    destination = quarantine / path.name
+    if destination.exists():
+        destination = quarantine / f"{path.stem}-{time.time_ns()}.json"
+    os.replace(path, destination)
+
+
+def _consumed_result_receipt_digest(task: Task, attempt_id: str | None) -> str | None:
+    if not attempt_id:
+        return None
+    return next(
+        (
+            entry.result_receipt_digest
+            for entry in reversed(task.dispatch_log)
+            if entry.attempt_id == attempt_id and entry.result_receipt_digest
+        ),
+        None,
+    )
 
 
 def _task_has_pending_dispatch_result(tasks_path: Path, task: Task) -> bool:
@@ -4749,21 +4814,25 @@ def _commit_dispatch_results(
     model_selection_receipts: dict[str, dict[str, Any]] | None = None,
     remote_submission_receipts: dict[str, dict[str, Any]] | None = None,
     reconciliation_receipts: dict[str, dict[str, Any]] | None = None,
-) -> None:
+) -> bool:
     """COMMIT for the serial path, mirroring dispatch_parallel's commit: reload FRESH under the
     queue lock and re-apply each result by id. The caller's snapshot is minutes stale by the time
     agents finish — saving it whole erases every concurrent write made meanwhile (keeper folds,
     route stamps, status transitions): the lost-update board wipe. A task completed elsewhere in
     the interim keeps its terminal status (_apply_result's lifecycle guards); a task removed from
     the fresh board is skipped."""
-    pending_rows = _load_pending_dispatch_results(tasks_path)
+    pending_count = len(_pending_dispatch_result_files(tasks_path))
     with _queue_lock(tasks_path) as got:
         if not got:
             print(
-                f"── dispatch: queue busy — {len(results) + len(pending_rows)} exact-attempt "
+                f"── dispatch: queue busy — {len(results) + pending_count} exact-attempt "
                 "result(s) remain in durable pending custody"
             )
-            return
+            return False
+        # Load artifacts only after acquiring the same queue lock that guards
+        # their board consumption. This prevents a replaced file from being
+        # archived under an earlier digest.
+        pending_rows = _load_pending_dispatch_results(tasks_path)
         fresh = load_limen_file(tasks_path) if tasks_path.exists() else limen
         _reset_budget_if_needed(fresh, now)
         fid = {t.id: t for t in fresh.tasks}
@@ -4773,7 +4842,11 @@ def _commit_dispatch_results(
         ftrack = fresh.portal.budget.track
         records: dict[tuple[str, str], dict[str, Any]] = {}
         pending_paths: dict[tuple[str, str], Path] = {}
-        for path, payload in pending_rows:
+        malformed_rows: list[tuple[Path, str, str]] = []
+        for path, payload, receipt_digest, malformed_reason in pending_rows:
+            if payload is None:
+                malformed_rows.append((path, receipt_digest, malformed_reason or "invalid"))
+                continue
             tid = str(payload["task_id"])
             attempt_id = str(payload["attempt_id"])
             key = (tid, attempt_id)
@@ -4786,11 +4859,17 @@ def _commit_dispatch_results(
                 "model_selection": dict(payload["model_selection"]),
                 "remote_submission": dict(payload["remote_submission"]),
                 "reconciliation": dict(payload["reconciliation"]),
+                "result_receipt_digest": receipt_digest,
             }
             pending_paths[key] = path
         for index, (agent, tid, res) in enumerate(results):
             attempt_id = (attempt_ids or {}).get(tid)
             key = (tid, attempt_id or f"unbound-direct-{index}")
+            # The durable artifact is authoritative for a result already
+            # persisted before admission was released. Do not replace its
+            # identity or bounded receipts with the in-memory duplicate.
+            if key in records:
+                continue
             records[key] = {
                 "agent": agent,
                 "task_id": tid,
@@ -4800,8 +4879,10 @@ def _commit_dispatch_results(
                 "model_selection": (model_selection_receipts or {}).get(tid),
                 "remote_submission": (remote_submission_receipts or {}).get(tid),
                 "reconciliation": (reconciliation_receipts or {}).get(tid),
+                "result_receipt_digest": None,
             }
         archive_reasons: dict[Path, str] = {}
+        quarantine_reasons: dict[Path, str] = {}
         for key, record in records.items():
             agent = str(record["agent"])
             tid = str(record["task_id"])
@@ -4809,6 +4890,14 @@ def _commit_dispatch_results(
             attempt_id = record.get("attempt_id")
             ft = fid.get(tid)
             if ft is not None:
+                result_receipt_digest = record.get("result_receipt_digest")
+                consumed_digest = _consumed_result_receipt_digest(ft, attempt_id)
+                if consumed_digest is not None:
+                    if key in pending_paths:
+                        archive_reasons[pending_paths[key]] = (
+                            "duplicate-consumed" if consumed_digest == result_receipt_digest else "conflicting-consumed"
+                        )
+                    continue
                 contract = selected_contracts.get(tid)
                 # Backfill normalization only when the fresh task is still fully
                 # legacy. A concurrent keeper/owner update to either field wins;
@@ -4836,6 +4925,7 @@ def _commit_dispatch_results(
                         model_selection_receipt=record.get("model_selection"),
                         remote_submission_receipt=record.get("remote_submission"),
                         reconciliation_receipt=record.get("reconciliation"),
+                        result_receipt_digest=result_receipt_digest,
                     )
                 except (TypeError, ValueError):
                     if key not in pending_paths:
@@ -4847,12 +4937,37 @@ def _commit_dispatch_results(
                         now,
                         ftrack,
                         expected_attempt_id=attempt_id,
+                        result_receipt_digest=result_receipt_digest,
                     )
                 _REMOTE_SUBMISSION_RECEIPTS.pop(tid, None)
                 if key in pending_paths:
                     archive_reasons[pending_paths[key]] = "reconciled"
             elif key in pending_paths:
                 archive_reasons[pending_paths[key]] = "owner-row-missing"
+        for path, receipt_digest, malformed_reason in malformed_rows:
+            owner: Task | None = None
+            owner_attempt_id: str | None = None
+            for candidate in fresh.tasks:
+                candidate_attempt_id = _current_attempt_id(candidate)
+                if candidate_attempt_id and (
+                    _pending_dispatch_result_path(tasks_path, candidate.id, candidate_attempt_id).name == path.name
+                ):
+                    owner = candidate
+                    owner_attempt_id = candidate_attempt_id
+                    break
+            if owner is not None and _consumed_result_receipt_digest(owner, owner_attempt_id) is None:
+                _apply_result(
+                    owner,
+                    "limen",
+                    _blocked_result(
+                        f"malformed pending provider custody owner-routed ({malformed_reason}; {receipt_digest})"
+                    ),
+                    now,
+                    ftrack,
+                    expected_attempt_id=owner_attempt_id,
+                    result_receipt_digest=receipt_digest,
+                )
+            quarantine_reasons[path] = "malformed-owner-routed" if owner is not None else "malformed-owner-missing"
         save_limen_file(tasks_path, fresh)
         for path, reason in archive_reasons.items():
             try:
@@ -4861,6 +4976,14 @@ def _commit_dispatch_results(
                 # The board is already terminal/fenced. Keeping the original
                 # pending receipt is safer than deleting custody on archive IO.
                 pass
+        for path, reason in quarantine_reasons.items():
+            try:
+                _quarantine_pending_dispatch_result(path, reason)
+            except OSError:
+                # An owner-bound malformed result is already terminal and
+                # digest-fenced in the board. A replay is therefore inert.
+                pass
+    return True
 
 
 def dispatch_tasks(
@@ -5100,9 +5223,19 @@ def _apply_result(
     model_selection_receipt: dict[str, Any] | None = None,
     remote_submission_receipt: dict[str, Any] | None = None,
     reconciliation_receipt: dict[str, Any] | None = None,
+    result_receipt_digest: str | None = None,
 ) -> bool:
     """Apply one dispatch result to a task (same semantics as the serial path):
     success → dispatched + spend; no-op/fail → recoverable failed; rate-limit → cascade."""
+    if result_receipt_digest is not None and not re.fullmatch(
+        r"sha256:[0-9a-f]{64}",
+        result_receipt_digest,
+    ):
+        raise ValueError("provider result receipt digest is invalid")
+    if result_receipt_digest is not None and not expected_attempt_id:
+        raise ValueError("provider result receipt digest lacks an exact attempt")
+    if _consumed_result_receipt_digest(task, expected_attempt_id) is not None:
+        return False
     if expected_attempt_id is not None and _current_attempt_id(task) != expected_attempt_id:
         return False
     active_attempt_id = expected_attempt_id or _current_attempt_id(task)
@@ -5130,7 +5263,7 @@ def _apply_result(
                 )
             except ValueError:
                 pass
-        _close_changed_contract_attempt(
+        closed = _close_changed_contract_attempt(
             task,
             launch,
             now=now,
@@ -5145,6 +5278,18 @@ def _apply_result(
             ),
             reconciliation=reconciliation_receipt,
         )
+        if closed and result_receipt_digest:
+            terminal = next(
+                (
+                    entry
+                    for entry in reversed(task.dispatch_log)
+                    if entry.attempt_id == launch.attempt_id
+                    and entry.status in {"done", "failed", "failed_blocked", "needs_human"}
+                ),
+                None,
+            )
+            if terminal is not None:
+                terminal.result_receipt_digest = result_receipt_digest
         return False
     if result in {_NOOP, False} and _restore_pr_open_status(
         task,
@@ -5168,6 +5313,7 @@ def _apply_result(
     reconciliation_updates = reconciliation_custody_updates(reconciliation_receipt)
 
     entry = DispatchLogEntry(timestamp=now, agent=agent, session_id=session_id(), status="dispatched")
+    entry.result_receipt_digest = result_receipt_digest
     if result == _NOOP:
         entry.status = "failed"
         entry.output = "No-op result; failed for recovery instead of archived."
@@ -5754,55 +5900,35 @@ def dispatch_parallel(
         if res == _RATELIMIT:
             cooled.add(agent)
 
-    # ── COMMIT: reload FRESH under the lock so writes a supervisor (seed/heal/verify) made
-    # during the unlocked run aren't clobbered; re-apply each result to the fresh task by id.
-    # This is the #11 keystone — without the reload, this save would silently overwrite seeds.
     n_pr = n_noop = n_fail = n_rl = n_to = n_blocked = 0
-    with _queue_lock(tasks_path) as got:
-        if not got:
-            print(f"── PARALLEL: queue busy — {len(results)} exact-attempt result(s) remain in durable pending custody")
-            return
-        fresh = load_limen_file(tasks_path)
-        fid = {t.id: t for t in fresh.tasks}
-        ftrack = fresh.portal.budget.track
-        for agent, tid, res in results:
-            ft = fid.get(tid)
-            if ft is not None:
-                _apply_result(
-                    ft,
-                    agent,
-                    res,
-                    datetime.now(timezone.utc),
-                    ftrack,
-                    expected_attempt_id=attempt_ids.get(tid),
-                    model_selection_receipt=model_selection_receipts.get(tid),
-                    remote_submission_receipt=remote_submission_receipts.get(tid),
-                    reconciliation_receipt=reconciliation_receipts.get(tid),
-                )
-                _REMOTE_SUBMISSION_RECEIPTS.pop(tid, None)
-            if res == _RATELIMIT:
-                n_rl += 1
-            elif res == _NOOP:
-                n_noop += 1
-            elif res == _TIMEOUT:
-                n_to += 1
-            elif _is_blocked_result(res):
-                n_blocked += 1
-            elif res and not _is_blocked_result(res):
-                n_pr += 1
-            else:
-                n_fail += 1
-        save_limen_file(tasks_path, fresh)
-        for _agent, tid, _res in results:
-            attempt_id = attempt_ids.get(tid)
-            if not attempt_id:
-                continue
-            pending = _pending_dispatch_result_path(tasks_path, tid, attempt_id)
-            if pending.exists():
-                try:
-                    _archive_pending_dispatch_result(pending, "reconciled")
-                except OSError:
-                    pass
+    for _agent, _tid, res in results:
+        if res == _RATELIMIT:
+            n_rl += 1
+        elif res == _NOOP:
+            n_noop += 1
+        elif res == _TIMEOUT:
+            n_to += 1
+        elif _is_blocked_result(res):
+            n_blocked += 1
+        elif res and not _is_blocked_result(res):
+            n_pr += 1
+        else:
+            n_fail += 1
+    # One commit implementation owns serial and parallel replay semantics. The
+    # pending artifact is loaded under the queue lock, and its digest is saved
+    # atomically with lifecycle and spend before archival is attempted.
+    committed = _commit_dispatch_results(
+        tasks_path,
+        limen,
+        results,
+        datetime.now(timezone.utc),
+        attempt_ids=attempt_ids,
+        model_selection_receipts=model_selection_receipts,
+        remote_submission_receipts=remote_submission_receipts,
+        reconciliation_receipts=reconciliation_receipts,
+    )
+    if not committed:
+        return
     print(
         f"── PARALLEL done: {len(results)} ran · {n_pr} dispatched/PR · {n_noop} no-op · "
         f"{n_fail} failed→cascade · {n_blocked} blocked · {n_rl} rate-limited · {n_to} timeout→jules"
