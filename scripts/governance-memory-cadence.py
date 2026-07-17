@@ -35,10 +35,29 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-import yaml
-import rfc8785
-from jsonschema import Draft202012Validator, FormatChecker
-from jsonschema.exceptions import SchemaError
+try:
+    import yaml
+    import rfc8785
+    from jsonschema import Draft202012Validator, FormatChecker
+    from jsonschema.exceptions import SchemaError
+except ModuleNotFoundError:
+    owned_python = (
+        Path(__file__).resolve().parents[1] / "cli" / ".venv" / "bin" / "python"
+    )
+    if (
+        __name__ == "__main__"
+        and os.environ.get("LIMEN_GOV_RUNTIME_BOOTSTRAPPED") != "1"
+        and owned_python.is_file()
+        and Path(sys.executable).resolve() != owned_python.resolve()
+    ):
+        environment = dict(os.environ)
+        environment["LIMEN_GOV_RUNTIME_BOOTSTRAPPED"] = "1"
+        os.execve(
+            owned_python,
+            [str(owned_python), str(Path(__file__).resolve()), *sys.argv[1:]],
+            environment,
+        )
+    raise
 
 try:
     import resource
