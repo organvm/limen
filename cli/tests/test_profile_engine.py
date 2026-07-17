@@ -56,6 +56,7 @@ def synthetic_facts():
 
 # --- technique detection + harvest -----------------------------------------
 
+
 def test_detect_techniques_finds_widgets_and_native():
     readme = (
         "![typing](https://readme-typing-svg.demolab.com/?lines=hi)\n"
@@ -79,7 +80,7 @@ def test_harvest_ranks_by_adoption_and_flags_self_host():
     assert digest["following_scanned"] == 4
     assert digest["profiles_with_readme"] == 3
     techs = {t["technique"]: t for t in digest["techniques"]}
-    assert techs["shields_badges"]["count"] == 2            # a + b
+    assert techs["shields_badges"]["count"] == 2  # a + b
     assert techs["shields_badges"]["rendered_asset"] == "badges.svg"
     assert techs["shields_badges"]["we_self_host"] is True
     # ranked by count desc
@@ -87,6 +88,7 @@ def test_harvest_ranks_by_adoption_and_flags_self_host():
 
 
 # --- streak -----------------------------------------------------------------
+
 
 def test_current_streak_counts_trailing_active_days():
     f = synthetic_facts()
@@ -105,6 +107,7 @@ def test_current_streak_holds_when_today_empty_but_yesterday_active():
 
 # --- provability predicate --------------------------------------------------
 
+
 def test_readme_number_tokens_ignores_dates_but_catches_stats():
     text = "Generated 2026-07-17T21:45:39Z with 29,696 contributions and 3399 tests and 5 formats."
     toks = P.readme_number_tokens(text)
@@ -122,10 +125,7 @@ def test_verify_readme_clean_passes():
 def test_verify_readme_flags_all_violations():
     f = synthetic_facts()
     manifest = f.manifest()
-    bad = (
-        "Top-tier creative technologist. 987654 stars. "
-        "![](https://github-readme-stats.vercel.app/api?username=x)"
-    )
+    bad = "Top-tier creative technologist. 987654 stars. ![](https://github-readme-stats.vercel.app/api?username=x)"
     problems = P.verify_readme(bad, manifest)
     joined = " ".join(problems)
     assert "nothing-phrase" in joined
@@ -135,11 +135,17 @@ def test_verify_readme_flags_all_violations():
 
 # --- rendering (well-formed SVG) -------------------------------------------
 
+
 def test_all_renderers_emit_wellformed_svg():
     f = synthetic_facts()
     renderers = [
-        P.render_stats_card, P.render_languages, P.render_heatmap, P.render_streak,
-        P.render_trophies, P.render_badges, P.render_snake,
+        P.render_stats_card,
+        P.render_languages,
+        P.render_heatmap,
+        P.render_streak,
+        P.render_trophies,
+        P.render_badges,
+        P.render_snake,
     ]
     for render in renderers:
         svg = render(f)
@@ -160,5 +166,5 @@ def test_manifest_shape_and_attest_tags():
 
 
 def test_text_on_contrast_picks_dark_for_light():
-    assert P._text_on("#f1e05a") == "#0d1117"   # JavaScript yellow -> dark text
-    assert P._text_on("#3572A5") == "#ffffff"   # Python blue -> light text
+    assert P._text_on("#f1e05a") == "#0d1117"  # JavaScript yellow -> dark text
+    assert P._text_on("#3572A5") == "#ffffff"  # Python blue -> light text
