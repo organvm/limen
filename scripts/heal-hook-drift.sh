@@ -23,6 +23,7 @@ HOOKS="allow-trusted-cd-git.sh insights-capture.sh"
 
 ARMED=0
 [ "${LIMEN_HOOK_DRIFT_HEAL:-0}" = 1 ] && ARMED=1
+[ "${1:-}" = "--apply" ] && ARMED=1   # the sensor-injected arm (args_when on the dialogs-silenced valve)
 
 sha() { shasum -a 256 < "$1" 2>/dev/null | cut -d' ' -f1; }
 

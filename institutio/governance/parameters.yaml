@@ -2758,6 +2758,26 @@ parameters:
     owner: tabularius
     note: "The effector for the recurring Gatekeeper 'claude is an app downloaded from the Internet' dialog (scripts/heal-claude-cask.sh, sensed by dialogs-silenced.sh class 4, beat-wired on the heartbeat hygiene cadence). A duplicate Homebrew *cask* install of claude-code is re-quarantined on every brew upgrade (casks stamp com.apple.quarantine), silently defeating DISABLE_AUTOUPDATER (which only stops the native updater). Dry-run by default. When 1, the beat runs 'brew uninstall --cask claude-code' ONLY when the cask is present and verifies the native ~/.local/bin/claude (the one sanctioned install) survives; it never touches the native install. macOS-only; fails OPEN off-darwin or without brew. Arm once in ~/.limen.env. Set 0 to silence."
 
+  # --- dialogs-silenced sensor (0g8b): the agent-curable dialog estate, self-healed + verified on the beat ---
+  LIMEN_DIALOGS_SILENCED:
+    default: "1"               # ON — the sensor gate; each cadence tick runs the heal pass + --agent-curable-only verify.
+    env: LIMEN_DIALOGS_SILENCED
+    self_update: none
+    owner: tabularius
+    note: "Gate for the dialogs-silenced sensor (sensors.yaml 0g8b) in the heartbeat scheduled derive lane. When 1, each cadence tick runs the three agent-curable dialog effectors (heal-hook-drift / heal-claude-cask / heal-claude-lsregister, each armed individually via its own LIMEN_*_HEAL deliverable valve) then verifies with 'dialogs-silenced.sh --agent-curable-only'. This ONE registry-derived sensor replaced three hand-wired hygiene hooks in heartbeat-loop.sh (adding a new dialog effector is now one sensors.yaml step). Set 0 to silence the whole pass. The human-gated dialog classes (settings.json self-mod, firewall sudo) stay levers, not sensor steps."
+  LIMEN_BEAT_DIALOGS:
+    default: 8
+    env: LIMEN_BEAT_DIALOGS
+    self_update: none
+    owner: tabularius
+    note: "Cadence (every N beats) of the dialogs-silenced sensor (sensors.yaml 0g8b) in the heartbeat's scheduled derive lane. 8 preserves the hygiene cadence (C_HYGIENE) the three dialog effectors rode as hand-wired hooks before they became registry-derived sensor steps. The generic scheduled runner resolves this override; heartbeat-loop.sh contains no sensor-specific cadence constant."
+  LIMEN_DIALOGS_TIMEOUT:
+    default: 120
+    env: LIMEN_DIALOGS_TIMEOUT
+    self_update: none
+    owner: tabularius
+    note: "Per-run timeout (seconds) resolved by the generic sensor runner for the dialogs-silenced pass (three idempotent shell effectors + a read-only --agent-curable-only predicate). 120 is ample on a clean host; the runner kills the command group on overrun and the beat continues fail-open."
+
   LIMEN_BEAT_LAUNCHAGENT_LIVENESS:
     default: 4
     env: LIMEN_BEAT_LAUNCHAGENT_LIVENESS
