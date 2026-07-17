@@ -249,16 +249,11 @@ def handle(
             permission_mode=permission_mode,
         )
         conflict = bool(turn_decision is not None and not turn_decision["allowed"])
-        conflict_note = (
-            " A conflicting execution lease is active; do not proceed with this child."
-            if conflict
-            else ""
-        )
+        conflict_note = " A conflicting execution lease is active; do not proceed with this child." if conflict else ""
         return {
             "systemMessage": (
                 "Limen subagent bounds: the parent execution family owns this turn; "
-                "max_threads=3, max_depth=1, and heavy entrypoints require the shared host lease."
-                + conflict_note
+                "max_threads=3, max_depth=1, and heavy entrypoints require the shared host lease." + conflict_note
             ),
             "hookSpecificOutput": {
                 "hookEventName": "SubagentStart",

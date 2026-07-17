@@ -776,17 +776,13 @@ class AdmissionController:
                 (
                     item
                     for item in state["leases"]
-                    if item["kind"] == kind
-                    and item["owner"] == owner
-                    and int(item["pid"]) == pid
+                    if item["kind"] == kind and item["owner"] == owner and int(item["pid"]) == pid
                 ),
                 None,
             )
             exact = bool(lease and identity is not None and lease["process_identity"] == identity)
             if lease is not None and exact:
-                state["leases"] = [
-                    item for item in state["leases"] if item["lease_id"] != lease["lease_id"]
-                ]
+                state["leases"] = [item for item in state["leases"] if item["lease_id"] != lease["lease_id"]]
             reaped = self._cleanup(state, now)
             self._write(state)
             if lease is not None and not exact:
