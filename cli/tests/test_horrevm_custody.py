@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -35,12 +36,6 @@ def custody(monkeypatch, tmp_path: Path):
     kernel_source = tmp_path / "kernel inputs" / "flame-zeta.md"
     kernel_source.parent.mkdir(parents=True)
     kernel_source.write_text("continuity-zeta\n", encoding="utf-8")
-    arca = tmp_path / "tools" / "arca arbitrary.sh"
-    arca.parent.mkdir(parents=True)
-    arca.write_text("cmd_seal() { :; }\n", encoding="utf-8")
-    config = tmp_path / "config with spaces" / "rclone.conf"
-    config.parent.mkdir(parents=True)
-    config.write_text("[rail-zeta-73]\ntype = memory\n", encoding="utf-8")
     signing_key = tmp_path / "domus horrevm test authority"
     subprocess.run(
         [ssh_keygen, "-q", "-t", "ed25519", "-N", "", "-f", str(signing_key)],
@@ -48,33 +43,82 @@ def custody(monkeypatch, tmp_path: Path):
         capture_output=True,
     )
     public_key = signing_key.with_suffix(".pub").read_text(encoding="utf-8").split()
-    allowed_signers = tmp_path / "domus owned allowed-signers"
+    authority_root = tmp_path / "domus authority"
+    trust_dir = authority_root / "trust"
+    consumed_dir = authority_root / "consumed" / "horrevm"
+    state_dir = authority_root / "state"
+    arca = authority_root / "bin" / "arca"
+    rclone = authority_root / "bin" / "rclone"
+    config = authority_root / "config" / "rclone.conf"
+    apply_tmp = authority_root / "tmp" / "horrevm"
+    workdir = authority_root / "run"
+    trust_dir.mkdir(parents=True)
+    consumed_dir.mkdir(parents=True)
+    state_dir.mkdir(parents=True)
+    arca.parent.mkdir(parents=True)
+    config.parent.mkdir(parents=True)
+    apply_tmp.mkdir(parents=True)
+    workdir.mkdir(parents=True)
+    arca.write_text("cmd_seal() { :; }\n", encoding="utf-8")
+    rclone.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    config.write_text("[rail-zeta-73]\ntype = memory\n", encoding="utf-8")
+    allowed_signers = trust_dir / "horrevm-apply.allowed-signers"
     allowed_signers.write_text(
         f"keeper-citrine {public_key[0]} {public_key[1]}\n",
         encoding="utf-8",
     )
 
     monkeypatch.setattr(mod, "ROOT", tmp_path)
-    monkeypatch.setattr(mod, "LOG", tmp_path / "state" / "horrevm.json")
+    monkeypatch.setattr(mod, "LOG", state_dir / "horrevm.json")
     monkeypatch.setattr(mod, "ARCA", arca)
+    monkeypatch.setattr(mod, "RCLONE", rclone)
     monkeypatch.setattr(mod, "RCLONE_CONF", config)
+    monkeypatch.setattr(mod, "OWNER_APPLY_TMP", apply_tmp)
+    monkeypatch.setattr(mod, "OWNER_WORKDIR", workdir)
     monkeypatch.setattr(
         mod,
         "PAYLOADS",
         {
             remote: [
-                {"name": "vault-zeta", "type": "dir-mirror", "src": str(source)},
+                {"name": "vault-zeta", "type": "seal", "src": str(source)},
                 {"name": "kernel", "type": "kernel"},
             ]
         },
     )
     monkeypatch.setattr(mod, "KERNEL_CANDIDATES", [str(kernel_source)])
-    monkeypatch.setattr(mod, "BUDGET_GB", {remote: 1.0})
     monkeypatch.setattr(mod, "STATE_RAIL_IDS", {})
+    monkeypatch.setattr(mod, "DOMUS_AUTHORITY_ROOT", authority_root)
+    monkeypatch.setattr(mod, "OWNER_PATH_ANCHOR", authority_root)
     monkeypatch.setattr(mod, "OWNER_ALLOWED_SIGNERS", allowed_signers)
+    monkeypatch.setattr(mod, "OWNER_CONSUMED_DIR", consumed_dir)
+    monkeypatch.setattr(mod, "OWNER_UID", os.geteuid())
+    monkeypatch.setattr(mod, "_require_domus_installed_effector", lambda: None)
     monkeypatch.setattr(mod, "now", lambda: FIXED_NOW)
     monkeypatch.setattr(mod, "_TEST_SIGNING_KEY", signing_key, raising=False)
     monkeypatch.setattr(mod, "_TEST_ALLOWED_SIGNERS", allowed_signers, raising=False)
+    config_hash = "sha256:" + "c" * 64
+    rail_id = "sha256:" + "d" * 64
+    tool_hashes = {
+        "rclone": mod._trusted_file_hash(rclone, "test rclone"),
+        "rclone_config": mod._trusted_file_hash(config, "test rclone config"),
+        "arca": mod._trusted_file_hash(arca, "test arca"),
+    }
+    monkeypatch.setattr(
+        mod,
+        "ACTIVE_CONFIG",
+        {
+            "schema": mod.CONFIG_SCHEMA,
+            "config_hash": config_hash,
+            "max_age_days": 7,
+            "rails": {remote: {"rail_id": rail_id, "budget_bytes": 10**9}},
+            "sources": {
+                "arca-vault": str(source),
+                "corpus-inventory": str(source),
+                "kernel": [str(kernel_source)],
+            },
+            "tool_hashes": tool_hashes,
+        },
+    )
     monkeypatch.setenv("LIMEN_HORREVM_APPLY", "1")
     return mod, remote, tmp_path
 
@@ -83,6 +127,35 @@ def _snapshot(root: Path) -> tuple[tuple[str, ...], dict[str, bytes]]:
     paths = tuple(sorted(path.relative_to(root).as_posix() for path in root.rglob("*")))
     files = {path.relative_to(root).as_posix(): path.read_bytes() for path in root.rglob("*") if path.is_file()}
     return paths, files
+
+
+def test_checkout_copy_cannot_enter_apply_path(monkeypatch, tmp_path, capsys):
+    mod = _load()
+    receipt = tmp_path / "receipt.json"
+    signature = tmp_path / "receipt.json.sig"
+    receipt.write_text("{}\n", encoding="utf-8")
+    signature.write_text("not-a-signature\n", encoding="utf-8")
+    monkeypatch.setenv("LIMEN_HORREVM_APPLY", "1")
+    monkeypatch.setattr(
+        mod,
+        "run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("command ran")),
+    )
+
+    assert (
+        mod.main(
+            [
+                "--probe",
+                "--apply",
+                "--receipt",
+                str(receipt),
+                "--signature",
+                str(signature),
+            ]
+        )
+        == 2
+    )
+    assert "fixed Domus-installed effector" in capsys.readouterr().out
 
 
 def _write_receipt(
@@ -111,6 +184,11 @@ def _write_receipt(
         "source_manifest_hash": source_manifest_hash or plan["source_manifest_hash"],
         "content_hashes": content_hashes if content_hashes is not None else plan["content_hashes"],
         "payload_hash": payload_hash or plan["payload_hash"],
+        "config_hash": plan["config_hash"],
+        "rail_id": plan["rail_id"],
+        "tool_hashes": plan["tool_hashes"],
+        "root_bindings": plan["root_bindings"],
+        "object_set": plan["object_set"],
         "issued_at": mod._iso(issued_at),
         "expires_at": mod._iso(expires_at or (FIXED_NOW + timedelta(hours=2))),
         "attempt_id": attempt_id,
@@ -164,12 +242,12 @@ def _resign_receipt(mod, path: Path, value: dict, *, namespace: str | None = Non
 def _remote_final_writes(commands: list[list[str]], remote: str) -> list[list[str]]:
     writes = []
     prefix = f"{remote}:limen-custody/"
-    probe_prefix = f"{remote}:limen-custody/.probe/"
     for command in commands:
-        if command[:2] != ["rclone", "copy"] and command[:2] != ["rclone", "copyto"]:
+        names = [Path(value).name if index == 0 else value for index, value in enumerate(command)]
+        if "copyto" not in names:
             continue
-        for argument in command[2:]:
-            if argument.startswith(prefix) and not argument.startswith(probe_prefix):
+        for argument in command:
+            if argument.startswith(prefix) and "/objects/" in argument:
                 writes.append(command)
     return writes
 
@@ -183,24 +261,37 @@ class CommandSpy:
         self.final_copy_fails = final_copy_fails
         self.commands: list[list[str]] = []
         self.remote_objects: dict[str, bytes] = {}
+        self.sealed_sources: dict[bytes, Path] = {}
 
     def __call__(self, command: list[str], timeout: int = 120):
         self.commands.append(list(command))
-        if command[0] == "bash":
+        if Path(command[0]).name == "bash":
             verb = command[2]
             if verb == "seal":
-                Path(command[4]).write_bytes(b"sealed-kernel-zeta")
+                source = Path(command[3])
+                ciphertext = b"Salted__" + os.urandom(8) + source.name.encode("utf-8")
+                Path(command[4]).write_bytes(ciphertext)
+                self.sealed_sources[ciphertext] = source
                 return 0, ""
             if verb == "unseal":
+                ciphertext = Path(command[3]).read_bytes()
+                source = self.sealed_sources.get(ciphertext)
+                if source is None:
+                    return 1, "unknown ciphertext"
                 output = Path(command[4])
-                output.mkdir(parents=True)
-                (output / "restored-zeta.txt").write_text("restored\n", encoding="utf-8")
+                output.mkdir(parents=True, exist_ok=True)
+                destination = output / source.name
+                if source.is_dir():
+                    shutil.copytree(source, destination)
+                else:
+                    shutil.copy2(source, destination)
                 return 0, ""
             raise AssertionError(f"unexpected local command: {command!r}")
 
-        assert command[0] == "rclone"
-        verb = command[1]
-        args = command[2:]
+        assert Path(command[0]).name == "rclone"
+        assert command[1] == "--config"
+        verb = command[3]
+        args = command[4:]
         if verb == "listremotes":
             return 0, "rail-zeta-73:\n"
         if verb == "about":
@@ -208,11 +299,11 @@ class CommandSpy:
         if verb == "copyto":
             source, target = args[:2]
             if ":" in target:
-                if self.final_copy_fails and "/.probe/" not in target:
+                if self.final_copy_fails and "/probes/" not in target:
                     return 1, "copy refused"
                 self.remote_objects[target] = Path(source).read_bytes()
                 return 0, ""
-            if self.restore_pull_fails and source.endswith("-kernel.tar.enc"):
+            if self.restore_pull_fails and source.endswith("/probes/kernel.tar.enc"):
                 return 1, "restore refused"
             Path(target).write_bytes(self.remote_objects[source])
             return 0, ""
@@ -249,7 +340,7 @@ class CommandSpy:
 def test_every_non_apply_mode_is_zero_write(custody, monkeypatch, argv):
     mod, remote, root = custody
     monkeypatch.setenv("LIMEN_HORREVM_APPLY", "0")
-    mod.LOG.parent.mkdir(parents=True)
+    mod.LOG.parent.mkdir(parents=True, exist_ok=True)
     mod.LOG.write_text(
         json.dumps({"rails": {remote: {"last_push_attempt": "unchanged-dry-run-marker"}}}),
         encoding="utf-8",
@@ -265,10 +356,81 @@ def test_every_non_apply_mode_is_zero_write(custody, monkeypatch, argv):
 
     monkeypatch.setattr(mod, "run", read_only_spy)
 
-    assert mod.main(argv) == 0
+    expected = 1 if argv == ["--status"] else 0
+    assert mod.main(argv) == expected
     assert _snapshot(root) == before
     assert all(command[1] not in mod.REMOTE_WRITE_VERBS for command in commands)
     assert not any(command[0] in {"b2", "backblaze", "launchctl", "mv", "rsync", "sendmail"} for command in commands)
+
+
+def test_checkout_forged_freshness_is_not_owner_evidence(custody, monkeypatch):
+    mod, remote, root = custody
+    checkout_log = root / "logs" / "horrevm.json"
+    checkout_log.parent.mkdir()
+    checkout_log.write_text(
+        json.dumps({"rails": {remote: {"last_verified_push": mod._iso(FIXED_NOW)}}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(mod, "run", lambda command, timeout=120: (0, f"{remote}:\n"))
+    monkeypatch.setenv("LIMEN_HORREVM_APPLY", "1")
+
+    assert mod.main(["--status"]) == 1
+    assert mod.LOG != checkout_log
+
+
+def test_owner_state_can_prove_freshness_while_apply_is_unarmed(custody, monkeypatch):
+    mod, remote, _root = custody
+    config = mod.ACTIVE_CONFIG
+    mod.LOG.write_text(
+        json.dumps(
+            {
+                "rails": {
+                    remote: {
+                        "last_verified_push": mod._iso(FIXED_NOW),
+                        "config_hash": config["config_hash"],
+                        "rail_id": config["rails"][remote]["rail_id"],
+                        "tool_hashes": config["tool_hashes"],
+                        "manifest_current_verified": True,
+                        "object_set": "limen-custody/sets/fixture",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    mod.LOG.chmod(0o600)
+    monkeypatch.setattr(mod, "run", lambda command, timeout=120: (0, f"{remote}:\n"))
+    monkeypatch.setenv("LIMEN_HORREVM_APPLY", "0")
+
+    assert mod.main(["--status"]) == 0
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "not-json",
+        "[]",
+        '{"total":-1,"free":0}',
+        '{"total":10,"free":11}',
+        '{"total":true,"free":1}',
+        '{"total":1e30,"free":1}',
+    ],
+)
+def test_unverifiable_quota_response_is_not_token_ok(custody, monkeypatch, payload):
+    mod, remote, _root = custody
+    monkeypatch.setattr(mod, "run", lambda command, timeout=120: (0, payload))
+
+    assert mod.gate_a(remote)["token_ok"] is False
+
+
+def test_production_payloads_seal_vault_instead_of_mirroring_plaintext_metadata(custody):
+    mod, remote, _root = custody
+    plan = mod.action_plan("push", remote, "sealed-vault-arbitrary-41")
+
+    assert all(row["type"] in {"seal", "kernel"} for row in plan["payloads"])
+    assert f"{remote}:{plan['object_set']}/objects/vault-zeta.tar.enc" in plan["destinations"]
+    assert plan["destinations"][-1] == f"{remote}:{plan['object_set']}/manifest-current.json"
+    assert f"{remote}:limen-custody/vault-zeta" not in plan["destinations"]
 
 
 def test_apply_without_valid_receipt_has_no_effects(custody, monkeypatch):
@@ -413,6 +575,7 @@ def test_symlinked_state_parent_cannot_redirect_apply_writes(custody, monkeypatc
     )
     outside = root.parent / f"{root.name}-outside-state"
     outside.mkdir()
+    mod.LOG.parent.rmdir()
     mod.LOG.parent.symlink_to(outside, target_is_directory=True)
     commands = []
     monkeypatch.setattr(mod, "run", lambda *args, **_kwargs: commands.append(args) or (0, ""))
@@ -504,7 +667,7 @@ def test_payload_change_invalidates_receipt_before_effects(custody, monkeypatch)
     assert not mod.LOG.exists()
 
 
-def test_final_egress_uses_receipt_bound_snapshot_not_mutable_live_source(custody, monkeypatch):
+def test_final_egress_seals_receipt_bound_snapshot_not_mutable_live_source(custody, monkeypatch):
     mod, remote, root = custody
     attempt = "snapshot-egress-arbitrary-73"
     receipt_path = _write_receipt(mod, root, action="push", remote=remote, attempt_id=attempt)
@@ -520,19 +683,26 @@ def test_final_egress_uses_receipt_bound_snapshot_not_mutable_live_source(custod
 
     staged, kernel = mod._stage_payloads(remote, workdir, receipt, plan)
     live_source = root / "payload source" / "ciphertext"
-    mirror = next(path for path, subpath in staged if subpath == "vault-zeta")
-    assert mirror != live_source
-    assert (mirror / "opaque-17.enc").read_bytes() == b"sealed-payload-17"
+    sealed = next(path for path, subpath in staged if subpath == "vault-zeta.tar.enc")
+    seal_command = next(
+        command
+        for command in spy.commands
+        if Path(command[0]).name == "bash" and command[1:3] == [str(mod.ARCA), "seal"] and command[4] == str(sealed)
+    )
+    snapshot = Path(seal_command[3])
+    assert snapshot != live_source
+    assert (snapshot / "opaque-17.enc").read_bytes() == b"sealed-payload-17"
     assert kernel is not None
 
     # A live writer may continue after staging; final rclone input remains the detached,
-    # manifest-verified snapshot that was bound by the apply receipt.
+    # sealed artifact produced from the manifest-verified, receipt-bound snapshot.
     (live_source / "opaque-17.enc").write_bytes(b"changed-after-staging")
+    mod._consume_receipt(receipt)
     assert mod._copy_payloads(remote, staged, receipt) is True
     final_writes = _remote_final_writes(spy.commands, remote)
-    assert any(str(mirror) in command for command in final_writes)
+    assert any(str(sealed) in command for command in final_writes)
     assert all(str(live_source) not in command for command in final_writes)
-    assert (mirror / "opaque-17.enc").read_bytes() == b"sealed-payload-17"
+    assert (snapshot / "opaque-17.enc").read_bytes() == b"sealed-payload-17"
 
 
 def test_receipt_preview_is_zero_write(custody, monkeypatch):
@@ -561,7 +731,7 @@ def test_failed_roundtrip_blocks_payload_copy_and_freshness(custody, monkeypatch
 
     assert mod.main(["--push", "--apply", *_signed_args(receipt)]) == 1
     assert _remote_final_writes(spy.commands, remote) == []
-    assert not any(command[0] == "bash" for command in spy.commands)
+    assert not any(Path(command[0]).name == "bash" for command in spy.commands)
     state = json.loads(mod.LOG.read_text(encoding="utf-8"))
     rail = state["rails"][remote]
     assert rail["probe_roundtrip_ok"] is False
@@ -580,10 +750,10 @@ def test_probe_mutation_requires_and_records_exact_receipt(custody, monkeypatch)
     assert mod.main(["--probe", "--apply", *_signed_args(receipt)]) == 0
     assert _remote_final_writes(spy.commands, remote) == []
     assert all(
-        "/.probe/" in argument
+        "/probes/" in argument
         for command in spy.commands
-        if command[:2] in (["rclone", "copyto"], ["rclone", "deletefile"])
-        for argument in command[2:]
+        if Path(command[0]).name == "rclone" and command[3] in {"copyto", "deletefile"}
+        for argument in command[4:]
         if argument.startswith(f"{remote}:")
     )
     state = json.loads(mod.LOG.read_text(encoding="utf-8"))
@@ -649,11 +819,11 @@ def test_verified_apply_stamps_exact_attempt_once(custody, monkeypatch):
     assert rail["last_attempt_id_hash"] == mod._attempt_key(attempt)
     assert state["attempts"][mod._attempt_key(attempt)]["status"] == "verified"
     assert attempt not in mod.LOG.read_text(encoding="utf-8")
-    assert all(command[1] != "delete" for command in spy.commands if command[0] == "rclone")
+    assert all(command[3] != "delete" for command in spy.commands if Path(command[0]).name == "rclone")
     assert all(
-        command[2].startswith(f"{remote}:limen-custody/.probe/")
+        command[4].startswith(f"{remote}:{mod._object_set(attempt)}/probes/")
         for command in spy.commands
-        if command[:2] == ["rclone", "deletefile"]
+        if Path(command[0]).name == "rclone" and command[3] == "deletefile"
     )
 
     command_count = len(spy.commands)
@@ -661,7 +831,7 @@ def test_verified_apply_stamps_exact_attempt_once(custody, monkeypatch):
     assert len(spy.commands) == command_count
 
 
-def test_owner_adjacent_marker_blocks_replay_after_state_loss(custody, monkeypatch):
+def test_domus_registry_blocks_replay_after_state_loss(custody, monkeypatch):
     mod, remote, root = custody
     attempt = "external-replay-arbitrary-811"
     receipt = _write_receipt(mod, root, action="probe", remote=remote, attempt_id=attempt)
@@ -669,13 +839,30 @@ def test_owner_adjacent_marker_blocks_replay_after_state_loss(custody, monkeypat
     monkeypatch.setattr(mod, "run", spy)
 
     assert mod.main(["--probe", "--apply", *_signed_args(receipt)]) == 0
-    markers = list(root.glob(f".{receipt.name}.*.consumed"))
+    markers = list(mod.OWNER_CONSUMED_DIR.glob("*.json"))
     assert len(markers) == 1
     mod.LOG.unlink()
     command_count = len(spy.commands)
 
     assert mod.main(["--probe", "--apply", *_signed_args(receipt)]) == 2
     assert len(spy.commands) == command_count
+
+
+def test_receipt_consumption_requires_distinct_domus_execution_identity(custody, monkeypatch):
+    mod, remote, root = custody
+    receipt_path = _write_receipt(
+        mod,
+        root,
+        action="probe",
+        remote=remote,
+        attempt_id="owner-identity-arbitrary-901",
+    )
+    receipt, _plan = mod.load_apply_receipt(receipt_path, _signature(receipt_path), "probe")
+    monkeypatch.setattr(mod, "OWNER_UID", os.geteuid() + 1)
+
+    with pytest.raises(mod.ReceiptError, match="Domus authority execution identity"):
+        mod._consume_receipt(receipt)
+    assert not list(mod.OWNER_CONSUMED_DIR.glob("*.json"))
 
 
 def test_mutating_boundaries_refuse_missing_receipt(custody):
@@ -713,7 +900,7 @@ def test_mutating_rclone_boundary_enforces_signed_operation_and_destination(cust
         "run",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("rclone command ran")),
     )
-    final_destination = next(value for value in receipt.destinations if "/.probe/" not in value)
+    final_destination = next(value for value in receipt.destinations if "/objects/" in value)
 
     with pytest.raises(mod.EffectRefused, match="not an authorized HORREVM operation"):
         mod.rclone(["sync", str(root), final_destination], receipt=receipt)
@@ -784,3 +971,173 @@ def test_gdrive_state_uses_registry_rail_id():
     row["token_ok"] = True
 
     assert state["rails"] == {"googledrive": {"token_ok": True}}
+
+
+def test_distinct_signed_receipt_cannot_replay_same_attempt(custody):
+    mod, remote, root = custody
+    attempt = "same-attempt-distinct-receipts"
+    first_dir = root / "first receipt"
+    second_dir = root / "second receipt"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    first_path = _write_receipt(
+        mod,
+        first_dir,
+        action="probe",
+        remote=remote,
+        attempt_id=attempt,
+        expires_at=FIXED_NOW + timedelta(hours=1),
+    )
+    second_path = _write_receipt(
+        mod,
+        second_dir,
+        action="probe",
+        remote=remote,
+        attempt_id=attempt,
+        expires_at=FIXED_NOW + timedelta(hours=2),
+    )
+    first, _ = mod.load_apply_receipt(first_path, _signature(first_path), "probe")
+    second, _ = mod.load_apply_receipt(second_path, _signature(second_path), "probe")
+    assert first.receipt_hash != second.receipt_hash
+    mod._consume_receipt(first)
+    with pytest.raises(mod.ReceiptError, match="attempt_id was already consumed"):
+        mod._consume_receipt(second)
+
+
+def test_required_source_missing_fails_preview_without_subprocess(custody, monkeypatch, capsys):
+    mod, _remote, root = custody
+    shutil.rmtree(root / "payload source")
+    monkeypatch.setattr(
+        mod,
+        "run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("subprocess ran")),
+    )
+    assert mod.main(["--push", "--attempt-id", "missing-required-source"]) == 1
+    output = json.loads(capsys.readouterr().out)
+    problems = [problem for binding in output["bindings"] for problem in binding["problems"]]
+    assert any("required payload source is missing" in problem for problem in problems)
+
+
+def test_malicious_arca_success_without_exact_unseal_manifest_is_refused(custody, monkeypatch):
+    mod, remote, root = custody
+    receipt_path = _write_receipt(
+        mod,
+        root,
+        action="push",
+        remote=remote,
+        attempt_id="malicious-arca",
+    )
+    receipt, _ = mod.load_apply_receipt(receipt_path, _signature(receipt_path), "push")
+    source = root / "kernel inputs" / "flame-zeta.md"
+    ciphertext = root / "malicious.enc"
+
+    def malicious(command, timeout=120):
+        del timeout
+        if command[2] == "seal":
+            Path(command[4]).write_bytes(b"Salted__" + b"x" * 16)
+            return 0, ""
+        if command[2] == "unseal":
+            destination = Path(command[4])
+            destination.mkdir(parents=True, exist_ok=True)
+            (destination / "wrong-root").write_text("attacker\n", encoding="utf-8")
+            return 0, ""
+        raise AssertionError(command)
+
+    monkeypatch.setattr(mod, "run", malicious)
+    assert mod.seal(source, ciphertext, receipt) is False
+    assert not ciphertext.exists()
+
+
+def test_hermetic_rclone_ignores_hostile_process_environment(custody, monkeypatch):
+    mod, remote, _root = custody
+    for key, value in {
+        "PATH": "/attacker",
+        "HOME": "/attacker-home",
+        "TMPDIR": "/attacker-tmp",
+        "RCLONE_CONFIG": "/attacker.conf",
+    }.items():
+        monkeypatch.setenv(key, value)
+    captured = {}
+
+    def subprocess_spy(command, **kwargs):
+        captured.update({"command": command, **kwargs})
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            json.dumps({"total": 100, "free": 90}),
+            "",
+        )
+
+    monkeypatch.setattr(mod.subprocess, "run", subprocess_spy)
+    assert mod.gate_a(remote)["token_ok"] is True
+    assert captured["command"][:4] == [
+        str(mod.RCLONE),
+        "--config",
+        str(mod.RCLONE_CONF),
+        "about",
+    ]
+    assert captured["cwd"] == str(mod.OWNER_WORKDIR)
+    assert captured["env"]["HOME"] == "/var/empty"
+    assert captured["env"]["TMPDIR"] == str(mod.OWNER_APPLY_TMP)
+    assert "RCLONE_CONFIG" not in captured["env"]
+
+
+def test_partial_remote_effect_is_journaled_without_current_manifest(custody, monkeypatch):
+    mod, remote, root = custody
+    receipt_path = _write_receipt(
+        mod,
+        root,
+        action="push",
+        remote=remote,
+        attempt_id="partial-object-set",
+    )
+    receipt, plan = mod.load_apply_receipt(receipt_path, _signature(receipt_path), "push")
+    spy = CommandSpy()
+    object_copies = 0
+
+    def fail_second_object(command, timeout=120):
+        nonlocal object_copies
+        if (
+            Path(command[0]).name == "rclone"
+            and command[3] == "copyto"
+            and ":" in command[5]
+            and "/objects/" in command[5]
+        ):
+            object_copies += 1
+            if object_copies == 2:
+                spy.commands.append(list(command))
+                return 1, "synthetic partial set"
+        return spy(command, timeout)
+
+    monkeypatch.setattr(mod, "run", fail_second_object)
+    workdir = root / "partial workdir"
+    workdir.mkdir()
+    staged, _kernel = mod._stage_payloads(remote, workdir, receipt, plan)
+    mod._consume_receipt(receipt)
+    assert mod._copy_payloads(remote, staged, receipt) is False
+    assert any("/objects/" in key for key in spy.remote_objects)
+    assert not any(key.endswith("/manifest-current.json") for key in spy.remote_objects)
+    journal = mod.OWNER_CONSUMED_DIR / mod._attempt_journal_name(receipt)
+    events = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+    assert any(event.get("phase") == "verified" for event in events)
+    assert any(event.get("phase") == "unverified" for event in events)
+    assert not any(event.get("phase") == "manifest-current-verified" for event in events)
+
+
+def test_recovery_card_exposes_only_hashed_attempt(custody):
+    mod, _remote, _root = custody
+    raw_attempt = "private-human-readable-attempt"
+    card = mod._recovery_card(raw_attempt, ["kernel"])
+    assert raw_attempt not in card
+    assert mod._attempt_key(raw_attempt) in card
+
+
+def test_deployed_doctor_fails_closed_when_owner_contract_is_unprovisioned():
+    result = subprocess.run(
+        [str(SCRIPT), "--doctor"],
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", "HOME": "/var/empty"},
+    )
+    assert result.returncode == 2
+    assert "REFUSED" in result.stdout

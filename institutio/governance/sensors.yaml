@@ -420,7 +420,7 @@ sensors:
 
   disk-capacity:
     section: "0g8"
-    title: "disk capacity — /System/Volumes/Data must stay below threshold; heal-probe artifacts + heartbeat err log reaped when armed"
+    title: "disk capacity — owner-configured /System/Volumes/Data threshold observation only"
     gate: LIMEN_DISK_CAPACITY
     default: "1"
     source: [metabolize]
@@ -433,14 +433,8 @@ sensors:
       default: 30
     steps:
       - command: "python3 scripts/disk-capacity.py --check"
-        args_when:
-          - env: LIMEN_DISK_CAPACITY_APPLY
-            default: "1"
-            equals: "1"
-            args: ["--apply"]
-            armed_valve_type: safety
         severity: advisory
-        escalation: "disk capacity BREACHED — arm LIMEN_DISK_CAPACITY_APPLY=1 so the beat removes gitignored probes and truncates the heartbeat error log"
+        escalation: "disk capacity BREACHED or owner configuration unavailable — inspect the separate Domus-installed receipt-bound reclaimer"
     omega_eligible:
       - label: "disk capacity below threshold"
         tier: det
@@ -643,11 +637,8 @@ sensors:
     default: "1"
     source: [heartbeat]
     owner: horrevm
-    # Seal-then-ship rides the heartbeat (arca seals every metabolize beat; custody self-throttles
-    # to >=20h between pushes, so <=1-beat vault staleness is accepted by design). Dry-run until the
-    # operator arms LIMEN_HORREVM_APPLY=1 via the lever — the ONLY egress consent switch. A 240s
-    # bound may truncate the FIRST bulk push; rclone copy is incremental per file, so successive
-    # beats converge — fail-open, never wedged.
+    # The heartbeat renders a zero-subprocess preview and a pure owner-state freshness check.
+    # It never appends --apply. Egress is a separate, owner-installed, signed-receipt invocation.
     cadence:
       env: LIMEN_BEAT_HORREVM
       default: 4
@@ -656,14 +647,8 @@ sensors:
       default: 240
     steps:
       - command: "python3 scripts/horrevm-custody.py --push"
-        args_when:
-          - env: LIMEN_HORREVM_APPLY
-            default: "0"
-            equals: "1"
-            args: ["--apply"]
-            armed_valve_type: safety
         severity: silent
-        escalation: "HORREVM custody push skipped or exceeded its bound"
+        escalation: "HORREVM custody preview is unsafe or owner configuration is unavailable"
       - command: "python3 scripts/horrevm-custody.py --status"
         severity: advisory
         escalation: "custody rail unproven or stale (logs/horrevm.json) — pull L-CLOUD-EGRESS-CONSENT (issue #1109) to consent + arm, or re-consent a dead token via the same lever; NEVER install a File Provider desktop app"

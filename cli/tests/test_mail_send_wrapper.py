@@ -1,238 +1,265 @@
-"""The Limen mail shim discovers UMA without executing credential files."""
+"""Authority-bound tests for the Limen-to-UMA mail wrapper."""
 
 from __future__ import annotations
 
+import importlib.machinery
+import importlib.util
 import os
 import subprocess
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
 WRAPPER = ROOT / "scripts" / "mail-send"
 
 
-def _python_stub(path: Path) -> Path:
-    stub = path / "python3"
-    stub.write_text(
-        "#!/bin/sh\n"
-        'if [ "${1:-}" = "-c" ]; then exit "${MODULE_DISCOVERY_RC:-1}"; fi\n'
-        'if [ "${1:-}" = "--help" ] || [ "${2:-}" = "--help" ] || [ "${3:-}" = "--help" ]; then '
-        "printf '%s\\n' \"${MAIL_SEND_HELP:-}\"; exit 0; fi\n"
-        'printf \'%s\\n\' "$@" > "$MAIL_SEND_ARGV_LOG"\n',
-        encoding="utf-8",
-    )
-    stub.chmod(0o755)
-    return stub
+def _load():
+    loader = importlib.machinery.SourceFileLoader("mail_send_wrapper_uut", str(WRAPPER))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
 
 
-def test_wrapper_prefers_registered_uma_root_and_never_sources_credentials(tmp_path: Path) -> None:
+@pytest.fixture
+def wrapper(monkeypatch, tmp_path: Path):
+    module = _load()
+    owner_root = tmp_path / "domus mail owner"
+    delegate = owner_root / "bin" / "mail-send"
+    delegate.parent.mkdir(parents=True)
+    delegate.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    delegate.chmod(0o700)
+    credential = owner_root / "credentials" / "mail.env"
+    credential.parent.mkdir(parents=True)
+    credential.write_text("GMAIL_USER=fixture@example.invalid\n", encoding="utf-8")
+    credential.chmod(0o600)
+    attempt_store = owner_root / "state" / "mail-attempts"
+    owner_home = owner_root / "home"
+    owner_tmp = owner_root / "tmp"
+    owner_workdir = owner_root / "run"
+    for directory in (attempt_store, owner_home, owner_tmp, owner_workdir):
+        directory.mkdir(parents=True)
+    monkeypatch.setattr(module, "DOMUS_MAIL_ROOT", owner_root)
+    monkeypatch.setattr(module, "DOMUS_MAIL_DELEGATE", delegate)
+    monkeypatch.setattr(module, "OWNER_CREDENTIALS", credential)
+    monkeypatch.setattr(module, "OWNER_ATTEMPT_STORE", attempt_store)
+    monkeypatch.setattr(module, "OWNER_HOME", owner_home)
+    monkeypatch.setattr(module, "OWNER_TMPDIR", owner_tmp)
+    monkeypatch.setattr(module, "OWNER_WORKDIR", owner_workdir)
+    monkeypatch.setattr(module, "OWNER_PATH_ANCHOR", owner_root)
+    monkeypatch.setattr(module, "OWNER_UID", os.geteuid())
+    return module, owner_root, delegate
+
+
+def test_preview_uses_only_fixed_delegate_with_dry_run_and_no_credentials(wrapper, tmp_path: Path) -> None:
+    module, _owner_root, delegate = wrapper
     home = tmp_path / "home"
-    config = home / ".config" / "mail_automation"
-    config.mkdir(parents=True)
-    marker = tmp_path / "credential-file-executed"
-    credential_file = config / "credentials.env"
-    credential_file.write_text(
-        f"GMAIL_USER=me@example.com\nGMAIL_APP_PASSWORD=$(touch {marker})\ntouch {marker}\n",
-        encoding="utf-8",
-    )
-    registered = tmp_path / "registered-uma"
-    legacy = tmp_path / "legacy-uma"
-    registered.mkdir()
-    legacy.mkdir()
-    (registered / "mail_send.py").write_text("# fixture\n", encoding="utf-8")
-    (legacy / "mail_send.py").write_text("# wrong fixture\n", encoding="utf-8")
-    binary_dir = tmp_path / "bin"
-    binary_dir.mkdir()
-    _python_stub(binary_dir)
-    argv_log = tmp_path / "argv.log"
+    credential = home / ".config" / "mail_automation" / "credentials.env"
+    credential.parent.mkdir(parents=True)
+    credential.write_text("GMAIL_APP_PASSWORD=$(touch should-never-run)\n", encoding="utf-8")
+    credential.chmod(0o600)
+    module._credential_file = lambda *_args: (_ for _ in ()).throw(AssertionError("preview resolved credentials"))
 
-    proc = subprocess.run(
-        [str(WRAPPER), "--self-test", "--attempt-id", "attempt-fixture-001"],
-        capture_output=True,
-        text=True,
-        env={
-            **os.environ,
+    invocation, environment = module.build_invocation(
+        ["--self-test", "--attempt-id", "attempt-fixture-001"],
+        {
             "HOME": str(home),
-            "PATH": f"{binary_dir}:{os.environ['PATH']}",
-            "LIMEN_UMA_ROOT": str(registered),
-            "UMA_ROOT": str(legacy),
-            "MAIL_SEND_ARGV_LOG": str(argv_log),
+            "PATH": str(tmp_path / "attacker-bin"),
+            "PYTHONPATH": str(tmp_path / "attacker-modules"),
+            "LIMEN_UMA_ROOT": str(tmp_path / "attacker-uma"),
+            "UMA_ROOT": str(tmp_path / "legacy-attacker-uma"),
+            "GMAIL_APP_PASSWORD": "must-not-propagate",
         },
-        check=True,
     )
 
-    assert proc.stdout == ""
-    assert argv_log.read_text(encoding="utf-8").splitlines() == [
-        str(registered / "mail_send.py"),
-        "--credentials-file",
-        str(credential_file),
+    assert invocation == [
+        str(delegate),
         "--dry-run",
         "--self-test",
         "--attempt-id",
         "attempt-fixture-001",
     ]
-    assert not marker.exists()
+    assert str(credential) not in invocation
+    assert environment == {
+        "HOME": str(module.OWNER_HOME),
+        "TMPDIR": str(module.OWNER_TMPDIR),
+        "PATH": module.SAFE_PATH,
+        "PYTHONNOUSERSITE": "1",
+        "PYTHONSAFEPATH": "1",
+        "LC_ALL": "C",
+    }
 
 
-def test_wrapper_falls_back_to_installed_module_without_inventing_apply(tmp_path: Path) -> None:
+def test_explicit_preview_remains_credential_free(wrapper, tmp_path: Path) -> None:
+    module, _owner_root, delegate = wrapper
     home = tmp_path / "home"
     home.mkdir()
-    binary_dir = tmp_path / "bin"
-    binary_dir.mkdir()
-    _python_stub(binary_dir)
-    argv_log = tmp_path / "argv.log"
 
-    subprocess.run(
-        [str(WRAPPER), "--attempt-id", "attempt-fixture-002", "--self-test"],
-        capture_output=True,
-        text=True,
-        env={
-            **os.environ,
-            "HOME": str(home),
-            "PATH": f"{binary_dir}:{os.environ['PATH']}",
-            "LIMEN_UMA_ROOT": str(tmp_path / "absent-uma"),
-            "MAIL_SEND_ARGV_LOG": str(argv_log),
-            "MODULE_DISCOVERY_RC": "0",
-        },
-        check=True,
+    invocation, _environment = module.build_invocation(
+        ["--dry-run", "--attempt-id", "attempt-fixture-002", "--self-test"],
+        {"HOME": str(home)},
     )
 
-    args = argv_log.read_text(encoding="utf-8").splitlines()
-    assert args == ["-m", "mail_send", "--dry-run", "--attempt-id", "attempt-fixture-002", "--self-test"]
-    assert "--apply" not in args
-
-
-def test_wrapper_refuses_apply_when_deployed_delegate_lacks_receipt_contract(tmp_path: Path) -> None:
-    home = tmp_path / "home"
-    home.mkdir()
-    uma = tmp_path / "uma"
-    uma.mkdir()
-    (uma / "mail_send.py").write_text("# legacy fixture\n", encoding="utf-8")
-    binary_dir = tmp_path / "bin"
-    binary_dir.mkdir()
-    _python_stub(binary_dir)
-    argv_log = tmp_path / "argv.log"
-
-    proc = subprocess.run(
-        [
-            str(WRAPPER),
-            "--apply",
-            "--attempt-id",
-            "attempt-fixture-003",
-            "--authorization-receipt",
-            str(tmp_path / "receipt.json"),
-        ],
-        capture_output=True,
-        text=True,
-        env={
-            **os.environ,
-            "HOME": str(home),
-            "PATH": f"{binary_dir}:{os.environ['PATH']}",
-            "LIMEN_UMA_ROOT": str(uma),
-            "MAIL_SEND_ARGV_LOG": str(argv_log),
-            "MAIL_SEND_HELP": "--self-test --dry-run",
-        },
-    )
-
-    assert proc.returncode == 4
-    assert "lacks required contract flag --apply" in proc.stderr
-    assert not argv_log.exists()
-
-
-def test_wrapper_refuses_caller_selected_hmac_key_contract(tmp_path: Path) -> None:
-    home = tmp_path / "home"
-    home.mkdir()
-    uma = tmp_path / "uma"
-    uma.mkdir()
-    (uma / "mail_send.py").write_text("# receipt-bound fixture\n", encoding="utf-8")
-    binary_dir = tmp_path / "bin"
-    binary_dir.mkdir()
-    _python_stub(binary_dir)
-    argv_log = tmp_path / "argv.log"
-    receipt = tmp_path / "receipt.json"
-    key = tmp_path / "authorization.key"
-
-    proc = subprocess.run(
-        [
-            str(WRAPPER),
-            "--apply",
-            "--attempt-id",
-            "attempt-fixture-004",
-            "--authorization-receipt",
-            str(receipt),
-            "--authorization-key-file",
-            str(key),
-            "--self-test",
-        ],
-        capture_output=True,
-        text=True,
-        env={
-            **os.environ,
-            "HOME": str(home),
-            "PATH": f"{binary_dir}:{os.environ['PATH']}",
-            "LIMEN_UMA_ROOT": str(uma),
-            "MAIL_SEND_ARGV_LOG": str(argv_log),
-            "MAIL_SEND_HELP": (
-                "--apply --attempt-id --authorization-receipt --authorization-key-file --credentials-file"
-            ),
-        },
-    )
-
-    assert proc.returncode == 4
-    assert "caller-selected authorization key" in proc.stderr
-    assert not argv_log.exists()
-
-
-def test_wrapper_passes_apply_only_after_pinned_signature_contract_probe(tmp_path: Path) -> None:
-    home = tmp_path / "home"
-    home.mkdir()
-    uma = tmp_path / "uma"
-    uma.mkdir()
-    (uma / "mail_send.py").write_text("# owner-signature fixture\n", encoding="utf-8")
-    binary_dir = tmp_path / "bin"
-    binary_dir.mkdir()
-    _python_stub(binary_dir)
-    argv_log = tmp_path / "argv.log"
-    receipt = tmp_path / "receipt.json"
-    signature = tmp_path / "receipt.json.sig"
-
-    subprocess.run(
-        [
-            str(WRAPPER),
-            "--apply",
-            "--attempt-id",
-            "attempt-fixture-005",
-            "--authorization-receipt",
-            str(receipt),
-            "--authorization-signature",
-            str(signature),
-            "--self-test",
-        ],
-        capture_output=True,
-        text=True,
-        env={
-            **os.environ,
-            "HOME": str(home),
-            "PATH": f"{binary_dir}:{os.environ['PATH']}",
-            "LIMEN_UMA_ROOT": str(uma),
-            "MAIL_SEND_ARGV_LOG": str(argv_log),
-            "MAIL_SEND_HELP": (
-                "--apply --attempt-id --authorization-receipt --authorization-signature --credentials-file"
-            ),
-        },
-        check=True,
-    )
-
-    args = argv_log.read_text(encoding="utf-8").splitlines()
-    assert args == [
-        str(uma / "mail_send.py"),
-        "--apply",
+    assert invocation == [
+        str(delegate),
+        "--dry-run",
         "--attempt-id",
-        "attempt-fixture-005",
-        "--authorization-receipt",
-        str(receipt),
-        "--authorization-signature",
-        str(signature),
+        "attempt-fixture-002",
         "--self-test",
     ]
-    assert "--dry-run" not in args
+    assert "--credentials-file" not in invocation
+
+
+def test_apply_passes_fixed_private_credential_only_after_complete_receipt_shape(
+    wrapper,
+    tmp_path: Path,
+) -> None:
+    module, _owner_root, delegate = wrapper
+    args = [
+        "--apply",
+        "--attempt-id",
+        "attempt-fixture-003",
+        "--authorization-receipt",
+        str(tmp_path / "receipt.json"),
+        "--authorization-signature",
+        str(tmp_path / "receipt.json.sig"),
+        "--self-test",
+    ]
+
+    invocation, environment = module.build_invocation(args, {"HOME": "/attacker", "SECRET": "drop-me"})
+
+    assert invocation == [
+        str(delegate),
+        "--credentials-file",
+        str(module.OWNER_CREDENTIALS),
+        "--attempt-store",
+        str(module.OWNER_ATTEMPT_STORE),
+        *args,
+    ]
+    assert "--dry-run" not in invocation
+    assert "SECRET" not in environment
+
+
+@pytest.mark.parametrize(
+    "flag",
+    [
+        "--credentials-file",
+        "--credentials-file=/tmp/attacker",
+        "--authorization-key-file",
+        "--authorization-key-file=/tmp/attacker",
+        "--attempt-store",
+        "--attempt-store=/tmp/attacker",
+    ],
+)
+def test_caller_selected_authority_or_credentials_are_refused(wrapper, flag: str) -> None:
+    module, _owner_root, _delegate = wrapper
+    with pytest.raises(module.DelegateError, match="caller-selected"):
+        module.build_invocation(["--dry-run", flag], {"HOME": "/tmp"})
+
+
+def test_apply_requires_signature_before_delegate_or_credentials_are_read(wrapper, tmp_path: Path) -> None:
+    module, _owner_root, _delegate = wrapper
+    with pytest.raises(module.DelegateError, match="authorization-signature"):
+        module.build_invocation(
+            [
+                "--apply",
+                "--attempt-id",
+                "attempt-fixture-004",
+                "--authorization-receipt",
+                str(tmp_path / "receipt.json"),
+            ],
+            {"HOME": str(tmp_path / "home")},
+        )
+
+
+def test_missing_fixed_delegate_fails_closed_despite_caller_discovery_inputs(
+    wrapper,
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    module, _owner_root, delegate = wrapper
+    delegate.unlink()
+    monkeypatch.setenv("LIMEN_UMA_ROOT", str(tmp_path / "attacker"))
+    monkeypatch.setenv("UMA_ROOT", str(tmp_path / "attacker-legacy"))
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path / "attacker-modules"))
+
+    assert module.main(["--dry-run", "--self-test"]) == 4
+
+
+def test_group_writable_delegate_is_refused(wrapper) -> None:
+    module, _owner_root, delegate = wrapper
+    delegate.chmod(0o720)
+    with pytest.raises(module.DelegateError, match="group/world writable"):
+        module.build_invocation(["--dry-run"], {"HOME": "/tmp"})
+
+
+def test_insecure_credential_file_is_refused_on_apply(wrapper, tmp_path: Path) -> None:
+    module, _owner_root, _delegate = wrapper
+    module.OWNER_CREDENTIALS.chmod(0o644)
+
+    with pytest.raises(module.DelegateError, match="mode-0400/0600"):
+        module.build_invocation(
+            [
+                "--apply",
+                "--attempt-id",
+                "attempt-fixture-005",
+                "--authorization-receipt",
+                str(tmp_path / "receipt.json"),
+                "--authorization-signature",
+                str(tmp_path / "receipt.json.sig"),
+            ],
+            {"HOME": "/attacker"},
+        )
+
+
+def test_main_execs_exact_fixed_delegate_with_sanitized_environment(wrapper, monkeypatch, tmp_path: Path) -> None:
+    module, _owner_root, delegate = wrapper
+    captured = {}
+
+    def execve(path, argv, environment):
+        captured.update({"path": path, "argv": argv, "environment": environment})
+        raise RuntimeError("stop before replacement")
+
+    monkeypatch.setattr(module.os, "execve", execve)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path / "attacker"))
+
+    previous_cwd = Path.cwd()
+    try:
+        with pytest.raises(RuntimeError, match="stop before replacement"):
+            module.main(["--self-test", "--attempt-id", "attempt-fixture-006"])
+        assert Path.cwd() == module.OWNER_WORKDIR
+    finally:
+        os.chdir(previous_cwd)
+
+    assert captured["path"] == str(delegate)
+    assert captured["argv"][0] == str(delegate)
+    assert "--dry-run" in captured["argv"]
+    assert "PYTHONPATH" not in captured["environment"]
+    assert captured["environment"]["PYTHONSAFEPATH"] == "1"
+
+
+def test_unsafe_absolute_owner_ancestor_is_refused(wrapper):
+    module, owner_root, _delegate = wrapper
+    unsafe_parent = owner_root.parent
+    unsafe_parent.chmod(0o777)
+    module.OWNER_PATH_ANCHOR = unsafe_parent
+    try:
+        with pytest.raises(module.DelegateError, match="group/world writable"):
+            module.build_invocation(["--dry-run"], {})
+    finally:
+        unsafe_parent.chmod(0o700)
+
+
+def test_deployed_checkout_mail_wrapper_fails_closed_before_network():
+    result = subprocess.run(
+        [str(WRAPPER), "--dry-run", "--self-test"],
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", "HOME": "/var/empty"},
+    )
+    assert result.returncode == 4
+    assert "REFUSED" in result.stderr

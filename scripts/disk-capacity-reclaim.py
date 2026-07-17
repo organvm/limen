@@ -8,18 +8,19 @@ never reaches this file.
 The default/``--check``/``--dry-run`` path computes and prints an exact reclaim
 plan without writing anything. Mutation requires ``--apply``, a fresh
 ``limen.disk_capacity.apply_receipt.v1`` JSON receipt bound to the current plan,
-root, expiry, and non-replayable attempt id, plus an OpenSSH signature accepted by
-the repository-pinned owner trust root. The executing caller cannot substitute the
-trust root. A consumed-attempt result is reserved before the first effect and
-retained even if a later effect fails.
+owner-config hash, visible root binding, expiry, and non-replayable attempt id,
+plus an OpenSSH signature accepted by
+the fixed Domus owner trust root. The executing caller cannot substitute the trust
+root or replay registry. Domus atomically consumes the receipt before the first
+effect, and the result is retained even if a later effect fails.
 
 The bounded effect surface is deliberately narrow:
 
 * quarantine, verify, then unlink single-link regular, git-ignored
-  ``.heal-probe-*.yaml`` files under an opened ``LIMEN_ROOT``;
+  ``.heal-probe-*.yaml`` files under the owner-configured, descriptor-opened root;
 * truncate the single-link regular ``logs/heartbeat.err.log`` through no-follow
   directory descriptors only when its exact receipt-bound contents exceed
-  ``LIMEN_DISK_LOG_CAP_MB``.
+  the owner-configured log cap.
 
 Usage:
   python3 scripts/disk-capacity-reclaim.py --check
@@ -49,10 +50,16 @@ from pathlib import Path
 from typing import Any
 
 SCRIPT_ROOT = Path(__file__).resolve().parent.parent
-ROOT = Path(os.environ.get("LIMEN_ROOT", SCRIPT_ROOT))
+ROOT = SCRIPT_ROOT
 HEARTBEAT_ERR_LOG = ROOT / "logs" / "heartbeat.err.log"
-RESULTS_DIR = ROOT / "logs" / "disk-capacity-results"
+DOMUS_AUTHORITY_ROOT = Path("/Library/Application Support/org.organvm.domus/limen/authority")
+OWNER_PATH_ANCHOR = Path("/")
+OWNER_CONFIG = DOMUS_AUTHORITY_ROOT / "config" / "disk-capacity-reclaim.json"
+OWNER_RESULTS_DIR = DOMUS_AUTHORITY_ROOT / "results" / "disk-capacity"
+RESULTS_DIR = OWNER_RESULTS_DIR
 DEFAULT_LOG_CAP_MB = 50
+CONFIG_SCHEMA = "limen.disk_capacity.reclaim_owner_config.v1"
+MAX_CONFIG_BYTES = 16 * 1024
 MAX_RECEIPT_BYTES = 64 * 1024
 MAX_TRUST_FILE_BYTES = 64 * 1024
 MAX_PROBE_BYTES = 4 * 1024 * 1024
@@ -60,11 +67,17 @@ MAX_RECEIPT_LIFETIME = timedelta(minutes=15)
 PLAN_SCHEMA = "limen.disk_capacity.reclaim_plan.v1"
 RECEIPT_SCHEMA = "limen.disk_capacity.apply_receipt.v1"
 SIGNED_RECEIPT_NAMESPACE = RECEIPT_SCHEMA
-OWNER_ALLOWED_SIGNERS = SCRIPT_ROOT / "docs" / "keys" / "disk-capacity-apply.allowed-signers"
+OWNER_ALLOWED_SIGNERS = DOMUS_AUTHORITY_ROOT / "trust" / "disk-capacity-apply.allowed-signers"
+OWNER_CONSUMED_DIR = DOMUS_AUTHORITY_ROOT / "consumed" / "disk-capacity"
+OWNER_EFFECTOR = DOMUS_AUTHORITY_ROOT / "bin" / "disk-capacity-reclaim"
+OWNER_UID = 0
+SSH_KEYGEN = Path("/usr/bin/ssh-keygen")
+GIT = Path("/usr/bin/git")
 RESULT_SCHEMA = "limen.disk_capacity.apply_result.v1"
 ACTION = "reclaim_disk_capacity"
 HASH_RX = re.compile(r"sha256:[0-9a-f]{64}")
 AUTHORIZED_PRINCIPAL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._@:+-]{0,127}")
+ACTIVE_CONFIG: dict[str, Any] | None = None
 
 
 class ReceiptError(ValueError):
@@ -137,13 +150,87 @@ def _open_root_dir() -> int:
 
 
 def _root_id(root_fd: int) -> str:
+    return _sha256_bytes(_canonical_bytes(_root_binding(root_fd)))
+
+
+def _root_binding(root_fd: int) -> dict[str, Any]:
     opened = os.fstat(root_fd)
-    identity = {
+    return {
         "resolved_path": str(ROOT.resolve()),
         "device": opened.st_dev,
         "inode": opened.st_ino,
     }
-    return _sha256_bytes(_canonical_bytes(identity))
+
+
+def _load_owner_config() -> dict[str, Any]:
+    _assert_domus_owner_chain(OWNER_CONFIG, "Domus disk-capacity owner config")
+    fd, raw = _open_trusted_input(
+        OWNER_CONFIG,
+        "Domus disk-capacity owner config",
+        max_bytes=MAX_CONFIG_BYTES,
+        domus_custodied=True,
+    )
+    os.close(fd)
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise ReceiptError("Domus disk-capacity owner config is not valid JSON") from exc
+    if not isinstance(value, dict) or set(value) != {"schema", "root_path", "log_cap_mb"}:
+        raise ReceiptError("Domus disk-capacity owner config fields do not match the schema")
+    if value.get("schema") != CONFIG_SCHEMA:
+        raise ReceiptError(f"Domus disk-capacity owner config schema must be {CONFIG_SCHEMA}")
+    raw_root = value.get("root_path")
+    log_cap_mb = value.get("log_cap_mb")
+    if not isinstance(raw_root, str) or not raw_root.startswith("/"):
+        raise ReceiptError("Domus disk-capacity root_path must be absolute")
+    root_path = Path(raw_root)
+    if root_path != root_path.resolve():
+        raise ReceiptError("Domus disk-capacity root_path must be canonical")
+    if isinstance(log_cap_mb, bool) or not isinstance(log_cap_mb, int) or not 1 <= log_cap_mb <= 1024:
+        raise ReceiptError("Domus disk-capacity log_cap_mb must be an integer in 1..1024")
+    return {
+        "schema": CONFIG_SCHEMA,
+        "root_path": str(root_path),
+        "log_cap_mb": log_cap_mb,
+        "config_hash": _sha256_bytes(raw),
+    }
+
+
+def _activate_owner_config() -> dict[str, Any]:
+    global ROOT, HEARTBEAT_ERR_LOG, ACTIVE_CONFIG
+    config = _load_owner_config()
+    ROOT = Path(config["root_path"])
+    HEARTBEAT_ERR_LOG = ROOT / "logs" / "heartbeat.err.log"
+    ACTIVE_CONFIG = config
+    return config
+
+
+def _config_binding(log_cap_mb: int) -> dict[str, Any]:
+    if ACTIVE_CONFIG is not None:
+        if log_cap_mb != ACTIVE_CONFIG["log_cap_mb"]:
+            raise ReceiptError("log cap differs from the fixed Domus owner config")
+        return {
+            "schema": ACTIVE_CONFIG["schema"],
+            "config_hash": ACTIVE_CONFIG["config_hash"],
+            "root_path": ACTIVE_CONFIG["root_path"],
+            "log_cap_mb": ACTIVE_CONFIG["log_cap_mb"],
+        }
+    # Unit-level helpers explicitly monkeypatch ROOT and the owner binding.  The
+    # deployed main path always activates the fixed owner config before planning.
+    return {
+        "schema": CONFIG_SCHEMA,
+        "config_hash": _sha256_bytes(
+            _canonical_bytes(
+                {
+                    "schema": CONFIG_SCHEMA,
+                    "root_path": str(ROOT.resolve()),
+                    "log_cap_mb": log_cap_mb,
+                }
+            )
+        ),
+        "root_path": str(ROOT.resolve()),
+        "log_cap_mb": log_cap_mb,
+    }
 
 
 def _safe_relative(raw: str) -> Path | None:
@@ -244,19 +331,32 @@ def _ignored_heal_probes() -> tuple[list[str], list[str]]:
     # Git's read-only plumbing can still write trace files when the parent
     # process exports GIT_TRACE* variables.  A literal zero-write preview owns
     # the subprocess environment as well as this Python process.
-    git_env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_TRACE")}
-    git_env.update(
-        {
-            "GIT_OPTIONAL_LOCKS": "0",
-            "GIT_CONFIG_NOSYSTEM": "1",
-            "GIT_CONFIG_GLOBAL": os.devnull,
-            "GIT_ATTR_NOSYSTEM": "1",
-            "GIT_TERMINAL_PROMPT": "0",
-        }
-    )
+    git_env = {
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "HOME": "/var/empty",
+        "TMPDIR": "/tmp",
+        "LC_ALL": "C",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_ATTR_NOSYSTEM": "1",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_CEILING_DIRECTORIES": str(ROOT.parent),
+    }
     try:
         result = subprocess.run(
-            ["git", "ls-files", "--others", "--ignored", "--exclude-standard", "-z"],
+            [
+                str(GIT),
+                "-c",
+                "core.fsmonitor=false",
+                "-c",
+                "core.hooksPath=/dev/null",
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+                "-z",
+            ],
             cwd=str(ROOT),
             capture_output=True,
             text=True,
@@ -285,6 +385,7 @@ def _ignored_heal_probes() -> tuple[list[str], list[str]]:
 def build_plan(log_cap_mb: int) -> dict[str, Any]:
     """Compute the exact, deterministic mutation plan without writing anything."""
 
+    config = _config_binding(log_cap_mb)
     cap_bytes = log_cap_mb * 1024 * 1024
     targets: list[dict[str, Any]] = []
     try:
@@ -295,7 +396,8 @@ def build_plan(log_cap_mb: int) -> dict[str, Any]:
         root_id = _sha256_bytes(str(ROOT.absolute()).encode("utf-8"))
     else:
         problems = []
-        root_id = _root_id(root_fd)
+        root_binding = _root_binding(root_fd)
+        root_id = _sha256_bytes(_canonical_bytes(root_binding))
         try:
             candidates, discovery_problems = _ignored_heal_probes()
             problems.extend(discovery_problems)
@@ -335,6 +437,12 @@ def build_plan(log_cap_mb: int) -> dict[str, Any]:
     unsigned = {
         "schema": PLAN_SCHEMA,
         "action": ACTION,
+        "config": config,
+        "root_binding": root_binding if root_fd is not None else {
+            "resolved_path": str(ROOT.absolute()),
+            "device": None,
+            "inode": None,
+        },
         "root_id": root_id,
         "log_cap_bytes": cap_bytes,
         "targets": targets,
@@ -378,7 +486,48 @@ def _require_receipt_current(receipt: dict[str, Any]) -> None:
         raise ReceiptError("receipt expired before the next write boundary")
 
 
-def _open_trusted_input(path: Path, label: str, *, max_bytes: int) -> tuple[int, bytes]:
+def _assert_domus_owner_chain(path: Path, label: str, *, leaf_directory: bool = False) -> None:
+    """Require every absolute authority component to remain in owner-only custody."""
+
+    try:
+        relative = path.relative_to(OWNER_PATH_ANCHOR)
+    except ValueError as exc:
+        raise ReceiptError(f"{label} is outside the fixed absolute authority anchor") from exc
+    components = [
+        OWNER_PATH_ANCHOR,
+        *(
+            OWNER_PATH_ANCHOR.joinpath(*relative.parts[:index])
+            for index in range(1, len(relative.parts) + 1)
+        ),
+    ]
+    for index, candidate in enumerate(components):
+        try:
+            metadata = candidate.lstat()
+        except OSError as exc:
+            raise ReceiptError(f"{label} owner path is unavailable ({type(exc).__name__})") from exc
+        is_leaf = index == len(components) - 1
+        expected_directory = not is_leaf or leaf_directory
+        if stat.S_ISLNK(metadata.st_mode):
+            raise ReceiptError(f"{label} owner path must not contain symlinks")
+        if expected_directory and not stat.S_ISDIR(metadata.st_mode):
+            raise ReceiptError(f"{label} owner path component is not a directory")
+        if not expected_directory and not stat.S_ISREG(metadata.st_mode):
+            raise ReceiptError(f"{label} must be a regular file")
+        if metadata.st_uid != OWNER_UID:
+            raise ReceiptError(f"{label} must be owned by the Domus authority uid")
+        if metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            raise ReceiptError(f"{label} owner path must not be group/world writable")
+
+
+def _open_trusted_input(
+    path: Path,
+    label: str,
+    *,
+    max_bytes: int,
+    domus_custodied: bool = False,
+) -> tuple[int, bytes]:
+    if domus_custodied:
+        _assert_domus_owner_chain(path, label)
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
     try:
         fd = os.open(path, flags)
@@ -392,8 +541,12 @@ def _open_trusted_input(path: Path, label: str, *, max_bytes: int) -> tuple[int,
             raise ReceiptError(f"{label} must contain 1..{max_bytes} bytes")
         if metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
             raise ReceiptError(f"{label} must not be group/world writable")
-        if hasattr(os, "geteuid") and metadata.st_uid != os.geteuid():
-            raise ReceiptError(f"{label} must be owned by the effective user")
+        expected_uid = OWNER_UID if domus_custodied else (
+            os.geteuid() if hasattr(os, "geteuid") else metadata.st_uid
+        )
+        if metadata.st_uid != expected_uid:
+            custody = "Domus authority" if domus_custodied else "effective user"
+            raise ReceiptError(f"{label} must be owned by the {custody}")
         raw = os.pread(fd, max_bytes + 1, 0)
         if len(raw) != metadata.st_size:
             raise ReceiptError(f"{label} changed while it was read")
@@ -410,6 +563,7 @@ def _verify_authority_signature(receipt_raw: bytes, *, signer: str, signature_pa
         OWNER_ALLOWED_SIGNERS,
         "pinned allowed-signers owner",
         max_bytes=MAX_TRUST_FILE_BYTES,
+        domus_custodied=True,
     )
     signature_fd: int | None = None
     try:
@@ -429,7 +583,7 @@ def _verify_authority_signature(receipt_raw: bytes, *, signer: str, signature_pa
         try:
             verified = subprocess.run(
                 [
-                    "ssh-keygen",
+                    str(SSH_KEYGEN),
                     "-Y",
                     "verify",
                     "-f",
@@ -455,6 +609,13 @@ def _verify_authority_signature(receipt_raw: bytes, *, signer: str, signature_pa
         os.close(allowed_fd)
         if signature_fd is not None:
             os.close(signature_fd)
+
+
+def _require_domus_installed_effector() -> None:
+    actual = Path(__file__).resolve()
+    if actual != OWNER_EFFECTOR:
+        raise ReceiptError("apply is available only from the fixed Domus-installed effector")
+    _assert_domus_owner_chain(actual, "Domus disk-capacity effector")
 
 
 def load_receipt(path: Path, signature_path: Path, plan: dict[str, Any]) -> dict[str, Any]:
@@ -507,6 +668,8 @@ def load_receipt(path: Path, signature_path: Path, plan: dict[str, Any]) -> dict
         "action",
         "authorized",
         "authorized_by",
+        "config_hash",
+        "root_binding",
         "root_id",
         "plan_hash",
         "attempt_id",
@@ -522,6 +685,10 @@ def load_receipt(path: Path, signature_path: Path, plan: dict[str, Any]) -> dict
     )
     if value.get("root_id") != plan["root_id"]:
         raise ReceiptError("receipt root_id does not match this Limen root")
+    if value.get("config_hash") != plan["config"]["config_hash"]:
+        raise ReceiptError("receipt config_hash does not match the fixed Domus owner config")
+    if value.get("root_binding") != plan["root_binding"]:
+        raise ReceiptError("receipt root_binding does not match this exact Limen root")
     plan_hash = value.get("plan_hash")
     if not isinstance(plan_hash, str) or not HASH_RX.fullmatch(plan_hash):
         raise ReceiptError("receipt plan_hash must be sha256:<64 lowercase hex>")
@@ -543,41 +710,53 @@ def load_receipt(path: Path, signature_path: Path, plan: dict[str, Any]) -> dict
     }
 
 
-def _consume_receipt(receipt_path: Path, receipt: dict[str, Any], plan: dict[str, Any]) -> None:
-    """Publish an owner-adjacent one-shot marker before the first target effect."""
+def _consume_receipt(receipt: dict[str, Any], plan: dict[str, Any]) -> None:
+    """Reserve the signed receipt in fixed Domus custody before any target effect."""
 
     _require_receipt_current(receipt)
-    receipt_digest = str(receipt["receipt_hash"]).removeprefix("sha256:")
-    marker = receipt_path.with_name(f".{receipt_path.name}.{receipt_digest}.consumed")
+    if hasattr(os, "geteuid") and os.geteuid() != OWNER_UID:
+        raise ReceiptError("receipt consumption requires the Domus authority execution identity")
+    _assert_domus_owner_chain(
+        OWNER_CONSUMED_DIR,
+        "Domus receipt-consumption registry",
+        leaf_directory=True,
+    )
+    attempt_digest = hashlib.sha256(receipt["attempt_id"].encode("utf-8")).hexdigest()
+    marker_name = f"{attempt_digest}.json"
     payload = {
         "schema": "limen.disk_capacity.consumed_receipt.v1",
         "receipt_hash": receipt["receipt_hash"],
         "plan_hash": plan["plan_hash"],
         "attempt_id_hash": _sha256_bytes(receipt["attempt_id"].encode("utf-8")),
+        "config_hash": plan["config"]["config_hash"],
+        "root_binding": plan["root_binding"],
         "trust_root_hash": receipt["trust_root_hash"],
         "consumed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    directory_fd: int | None = None
+    marker_fd: int | None = None
     try:
-        fd = os.open(marker, flags, 0o600)
-    except FileExistsError as exc:
-        raise ReceiptError("exact apply receipt was already consumed") from exc
-    except OSError as exc:
-        raise ReceiptError(f"receipt replay marker could not be created ({type(exc).__name__})") from exc
-    try:
-        _write_fd(fd, payload)
-    except OSError as exc:
-        raise ReceiptError(f"receipt replay marker could not be made durable ({type(exc).__name__})") from exc
-    finally:
-        os.close(fd)
-    try:
-        parent_fd = os.open(marker.parent, _directory_flags())
         try:
-            os.fsync(parent_fd)
-        finally:
-            os.close(parent_fd)
-    except OSError as exc:
-        raise ReceiptError(f"receipt replay marker parent could not be made durable ({type(exc).__name__})") from exc
+            directory_fd = os.open(OWNER_CONSUMED_DIR, _directory_flags())
+            directory_metadata = os.fstat(directory_fd)
+            if directory_metadata.st_uid != OWNER_UID or directory_metadata.st_mode & (
+                stat.S_IWGRP | stat.S_IWOTH
+            ):
+                raise ReceiptError("Domus receipt-consumption registry lost owner custody")
+            marker_fd = os.open(marker_name, flags, 0o600, dir_fd=directory_fd)
+        except FileExistsError as exc:
+            raise ReceiptError("receipt attempt_id was already consumed") from exc
+        except OSError as exc:
+            raise ReceiptError(f"receipt replay marker could not be created ({type(exc).__name__})") from exc
+        try:
+            _write_fd(marker_fd, payload)
+            os.fsync(directory_fd)
+        except OSError as exc:
+            raise ReceiptError(f"receipt replay marker could not be made durable ({type(exc).__name__})") from exc
+    finally:
+        _close_quietly(marker_fd)
+        _close_quietly(directory_fd)
 
 
 def _result_path(attempt_id: str) -> Path:
@@ -636,13 +815,27 @@ def _reserve_attempt(
     _require_receipt_current(receipt)
     if _root_id(root_fd) != plan["root_id"]:
         raise ReceiptError("LIMEN_ROOT changed after receipt validation")
-    logs_fd = _open_or_create_child_dir(root_fd, "logs", mode=0o700, private=False)
+    _assert_domus_owner_chain(
+        OWNER_RESULTS_DIR,
+        "Domus disk-capacity result registry",
+        leaf_directory=True,
+    )
+    results_fd = os.open(OWNER_RESULTS_DIR, _directory_flags())
     try:
-        results_fd = _open_or_create_child_dir(logs_fd, "disk-capacity-results", mode=0o700, private=True)
-    finally:
-        os.close(logs_fd)
-    try:
-        quarantine_fd = _open_or_create_child_dir(results_fd, ".quarantine", mode=0o700, private=True)
+        metadata = os.fstat(results_fd)
+        if (
+            metadata.st_uid != OWNER_UID
+            or metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO)
+        ):
+            raise ReceiptError("Domus disk-capacity result registry lost private owner custody")
+        quarantine_fd = os.open(".quarantine", _directory_flags(), dir_fd=results_fd)
+        quarantine_metadata = os.fstat(quarantine_fd)
+        if (
+            quarantine_metadata.st_uid != OWNER_UID
+            or quarantine_metadata.st_mode & (stat.S_IRWXG | stat.S_IRWXO)
+        ):
+            os.close(quarantine_fd)
+            raise ReceiptError("Domus disk-capacity quarantine lost private owner custody")
         path = _result_path(receipt["attempt_id"])
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
         try:
@@ -659,6 +852,8 @@ def _reserve_attempt(
             "attempt_id_hash": _sha256_bytes(receipt["attempt_id"].encode("utf-8")),
             "receipt_hash": receipt["receipt_hash"],
             "plan_hash": plan["plan_hash"],
+            "config_hash": plan["config"]["config_hash"],
+            "root_binding": plan["root_binding"],
             "root_id": plan["root_id"],
             "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "effects": [],
@@ -734,7 +929,7 @@ def _quarantine_effect(
         "deleted": False,
         "restored": restored,
         "quarantine_retained": quarantine_retained,
-        "quarantine_path": f"logs/disk-capacity-results/.quarantine/{quarantine_name}",
+        "quarantine_path": f"owner:results/disk-capacity/.quarantine/{quarantine_name}",
         "detail": detail,
     }
 
@@ -884,6 +1079,11 @@ def _truncate_exact(target: dict[str, Any], root_fd: int, receipt: dict[str, Any
 
 
 def apply(receipt_path: Path, signature_path: Path, log_cap_mb: int) -> int:
+    try:
+        _require_domus_installed_effector()
+    except ReceiptError as exc:
+        print(f"disk-capacity reclaim REFUSED: {exc}")
+        return 2
     plan = build_plan(log_cap_mb)
     if plan["problems"]:
         print("disk-capacity reclaim REFUSED: unsafe plan: " + "; ".join(plan["problems"]))
@@ -894,7 +1094,7 @@ def apply(receipt_path: Path, signature_path: Path, log_cap_mb: int) -> int:
     try:
         receipt = load_receipt(receipt_path, signature_path, plan)
         root_fd = _open_root_dir()
-        _consume_receipt(receipt_path, receipt, plan)
+        _consume_receipt(receipt, plan)
         result_fd, result_path, quarantine_fd = _reserve_attempt(receipt, plan, root_fd)
     except ReceiptError as exc:
         _close_quietly(root_fd)
@@ -934,6 +1134,8 @@ def apply(receipt_path: Path, signature_path: Path, log_cap_mb: int) -> int:
         "authorized_by": receipt["authorized_by"],
         "trust_root_hash": receipt["trust_root_hash"],
         "plan_hash": plan["plan_hash"],
+        "config_hash": plan["config"]["config_hash"],
+        "root_binding": plan["root_binding"],
         "root_id": plan["root_id"],
         "completed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "effects": effects,
@@ -952,19 +1154,19 @@ def apply(receipt_path: Path, signature_path: Path, log_cap_mb: int) -> int:
         _close_quietly(quarantine_fd)
         _close_quietly(root_fd)
 
-    relative_result = result_path.relative_to(ROOT)
+    result_reference = f"owner:results/disk-capacity/{result_path.name}"
     if publication_error:
         emergency = {
             **result,
             "status": "result_publication_failed_after_effects"
             if effects
             else "result_publication_failed_before_effects",
-            "result_path": str(relative_result),
+            "result_path": result_reference,
             "publication_error": publication_error,
         }
         print("disk-capacity reclaim RESULT PUBLICATION FAILED: " + json.dumps(emergency, sort_keys=True))
         return 1
-    print(f"disk-capacity reclaim: {status}; effects={len(effects)}; result={relative_result}")
+    print(f"disk-capacity reclaim: {status}; effects={len(effects)}; result={result_reference}")
     return 0 if status == "applied" else 1
 
 
@@ -982,6 +1184,8 @@ def preview(
         receipt_status = {
             "schema": RECEIPT_SCHEMA,
             "action": ACTION,
+            "config_hash": plan["config"]["config_hash"],
+            "root_binding": plan["root_binding"],
             "root_id": plan["root_id"],
             "plan_hash": plan["plan_hash"],
             "attempt_id": chosen,
@@ -1039,15 +1243,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--receipt", type=Path, help=f"{RECEIPT_SCHEMA} JSON receipt")
     ap.add_argument("--signature", type=Path, help="detached OpenSSH signature over the exact receipt bytes")
     ap.add_argument("--attempt-id", help="choose a receipt-template attempt id for preview")
-    ap.add_argument(
-        "--log-cap-mb",
-        type=int,
-        default=int(os.environ.get("LIMEN_DISK_LOG_CAP_MB", DEFAULT_LOG_CAP_MB)),
-        help=f"truncate heartbeat.err.log above this many MiB (default {DEFAULT_LOG_CAP_MB})",
-    )
     args = ap.parse_args(argv)
-    if args.log_cap_mb <= 0:
-        ap.error("--log-cap-mb must be positive")
     if args.apply and args.dry_run:
         ap.error("--apply and --dry-run are mutually exclusive")
     if args.apply and args.attempt_id:
@@ -1055,15 +1251,27 @@ def main(argv: list[str] | None = None) -> int:
     if args.signature is not None and args.receipt is None:
         ap.error("--signature requires --receipt")
     if args.apply:
+        try:
+            _require_domus_installed_effector()
+        except ReceiptError as exc:
+            print(f"disk-capacity reclaim REFUSED: {exc}")
+            return 2
+    try:
+        config = ACTIVE_CONFIG or _activate_owner_config()
+    except ReceiptError as exc:
+        print(f"disk-capacity reclaim REFUSED: {exc}")
+        return 2
+    log_cap_mb = int(config["log_cap_mb"])
+    if args.apply:
         if args.receipt is None:
             print("disk-capacity reclaim REFUSED: --apply requires --receipt PATH")
             return 2
         if args.signature is None:
             print("disk-capacity reclaim REFUSED: --apply requires --signature PATH")
             return 2
-        return apply(args.receipt, args.signature, args.log_cap_mb)
+        return apply(args.receipt, args.signature, log_cap_mb)
     return preview(
-        args.log_cap_mb,
+        log_cap_mb,
         attempt_id=args.attempt_id,
         receipt_path=args.receipt,
         signature_path=args.signature,

@@ -29,6 +29,15 @@ def _install_test_authority(module, directory: Path) -> None:
     ssh_keygen = shutil.which("ssh-keygen")
     if not ssh_keygen:
         pytest.skip("ssh-keygen is required for signed receipt fixtures")
+    authority_root = directory / f"{module.__name__}-domus-authority"
+    trust_dir = authority_root / "trust"
+    consumed_dir = authority_root / "consumed" / "disk-capacity"
+    results_dir = authority_root / "results" / "disk-capacity"
+    trust_dir.mkdir(parents=True)
+    consumed_dir.mkdir(parents=True)
+    (results_dir / ".quarantine").mkdir(parents=True)
+    results_dir.chmod(0o700)
+    (results_dir / ".quarantine").chmod(0o700)
     signing_key = directory / f"{module.__name__}-authority"
     subprocess.run(
         [ssh_keygen, "-q", "-t", "ed25519", "-N", "", "-f", str(signing_key)],
@@ -36,12 +45,19 @@ def _install_test_authority(module, directory: Path) -> None:
         capture_output=True,
     )
     public_key = signing_key.with_suffix(".pub").read_text(encoding="utf-8").split()
-    allowed_signers = directory / f"{module.__name__}-allowed-signers"
+    allowed_signers = trust_dir / "disk-capacity-apply.allowed-signers"
     allowed_signers.write_text(
         f"human:test-authority {public_key[0]} {public_key[1]}\n",
         encoding="utf-8",
     )
+    module.DOMUS_AUTHORITY_ROOT = authority_root
+    module.OWNER_PATH_ANCHOR = authority_root
     module.OWNER_ALLOWED_SIGNERS = allowed_signers
+    module.OWNER_CONSUMED_DIR = consumed_dir
+    module.OWNER_RESULTS_DIR = results_dir
+    module.RESULTS_DIR = results_dir
+    module.OWNER_UID = os.geteuid()
+    module._require_domus_installed_effector = lambda: None
     module._TEST_SIGNING_KEY = signing_key
 
 
@@ -53,10 +69,22 @@ def _repo(tmp_path: Path, monkeypatch):
     log = tmp_path / "logs" / "heartbeat.err.log"
     log.parent.mkdir(parents=True)
     log.write_bytes(b"x" * (1024 * 1024 + 1))
-    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
     module = _load(EFFECTOR, f"disk_capacity_reclaim_{tmp_path.name}")
     _install_test_authority(module, tmp_path.parent)
+    _configure_test_root(module, tmp_path, log_cap_mb=1)
     return module, probe, log
+
+
+def _configure_test_root(module, root: Path, *, log_cap_mb: int) -> None:
+    log = root / "logs" / "heartbeat.err.log"
+    module.ROOT = root
+    module.HEARTBEAT_ERR_LOG = log
+    module.ACTIVE_CONFIG = {
+        "schema": module.CONFIG_SCHEMA,
+        "root_path": str(root.resolve()),
+        "log_cap_mb": log_cap_mb,
+        "config_hash": "sha256:" + "a" * 64,
+    }
 
 
 def _receipt(module, path: Path, plan: dict, *, attempt_id: str = "attempt-one") -> Path:
@@ -66,6 +94,8 @@ def _receipt(module, path: Path, plan: dict, *, attempt_id: str = "attempt-one")
         "action": module.ACTION,
         "authorized": True,
         "authorized_by": "human:test-authority",
+        "config_hash": plan["config"]["config_hash"],
+        "root_binding": plan["root_binding"],
         "root_id": plan["root_id"],
         "plan_hash": plan["plan_hash"],
         "attempt_id": attempt_id,
@@ -105,17 +135,48 @@ def _resign(module, path: Path) -> None:
 
 
 def test_deployed_sensor_is_observation_only(monkeypatch, tmp_path, capsys):
-    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
     module = _load(SENSOR, "disk_capacity_sensor_observation_only")
     monkeypatch.setattr(module, "_capacity_pct", lambda: 91.0)
+    monkeypatch.setattr(module, "_load_threshold", lambda: 80)
 
-    assert module.main(["--check", "--threshold", "80"]) == 1
+    assert module.main(["--check"]) == 1
     assert "separate explicit receipt-bound action" in capsys.readouterr().out
     assert not hasattr(module, "apply")
     with pytest.raises(SystemExit) as exc:
         module.main(["--check", "--apply"])
     assert exc.value.code == 2
     assert list(tmp_path.iterdir()) == []
+
+
+def test_checkout_copy_cannot_enter_apply_path(tmp_path, capsys):
+    module = _load(EFFECTOR, "disk_capacity_checkout_apply_refused")
+    receipt = tmp_path / "receipt.json"
+    signature = tmp_path / "receipt.json.sig"
+    receipt.write_text("{}\n", encoding="utf-8")
+    signature.write_text("not-a-signature\n", encoding="utf-8")
+
+    assert module.main(["--apply", "--receipt", str(receipt), "--signature", str(signature)]) == 2
+    assert "fixed Domus-installed effector" in capsys.readouterr().out
+
+
+def test_deployed_sensor_does_not_report_unknown_macos_volume_as_green(monkeypatch, capsys):
+    module = _load(SENSOR, "disk_capacity_sensor_unknown_volume")
+    monkeypatch.setattr(module, "_capacity_pct", lambda: None)
+    monkeypatch.setattr(module, "_load_threshold", lambda: 80)
+    monkeypatch.setattr(module.platform, "system", lambda: "Darwin")
+
+    assert module.main(["--check"]) == 2
+    assert "UNKNOWN" in capsys.readouterr().out
+
+
+def test_non_macos_host_is_explicitly_not_applicable(monkeypatch, capsys):
+    module = _load(SENSOR, "disk_capacity_sensor_unsupported_host")
+    monkeypatch.setattr(module, "_capacity_pct", lambda: None)
+    monkeypatch.setattr(module, "_load_threshold", lambda: 80)
+    monkeypatch.setattr(module.platform, "system", lambda: "Linux")
+
+    assert module.main(["--check"]) == 0
+    assert "not applicable" in capsys.readouterr().out
 
 
 def test_reclaim_preview_is_literal_zero_write(tmp_path, monkeypatch, capsys):
@@ -125,15 +186,17 @@ def test_reclaim_preview_is_literal_zero_write(tmp_path, monkeypatch, capsys):
     trace_path = tmp_path.parent / f"{tmp_path.name}-git-trace.json"
     monkeypatch.setenv("GIT_TRACE2_EVENT", str(trace_path))
     commands: list[list[str]] = []
+    command_envs: list[dict[str, str]] = []
     real_run = module.subprocess.run
 
     def command_spy(command, *args, **kwargs):
         commands.append(list(command))
+        command_envs.append(dict(kwargs["env"]))
         return real_run(command, *args, **kwargs)
 
     monkeypatch.setattr(module.subprocess, "run", command_spy)
 
-    assert module.main(["--check", "--log-cap-mb", "1", "--attempt-id", "preview-one"]) == 0
+    assert module.main(["--check", "--attempt-id", "preview-one"]) == 0
     output = json.loads(capsys.readouterr().out)
 
     assert output["mode"] == "preview"
@@ -142,9 +205,31 @@ def test_reclaim_preview_is_literal_zero_write(tmp_path, monkeypatch, capsys):
     assert {row["kind"] for row in output["plan"]["targets"]} == {"unlink", "truncate"}
     assert probe.read_bytes() == before_probe
     assert log.read_bytes() == before_log
-    assert not module.RESULTS_DIR.exists()
+    assert not list(module.RESULTS_DIR.glob("*.json"))
     assert not trace_path.exists()
-    assert commands and all(command[:2] == ["git", "ls-files"] for command in commands)
+    assert commands and all(
+        Path(command[0]).name == "git"
+        and "core.fsmonitor=false" in command
+        and "core.hooksPath=/dev/null" in command
+        and "ls-files" in command
+        for command in commands
+    )
+    assert all(
+        set(environment)
+        == {
+            "PATH",
+            "HOME",
+            "TMPDIR",
+            "LC_ALL",
+            "GIT_OPTIONAL_LOCKS",
+            "GIT_CONFIG_NOSYSTEM",
+            "GIT_CONFIG_GLOBAL",
+            "GIT_ATTR_NOSYSTEM",
+            "GIT_TERMINAL_PROMPT",
+            "GIT_CEILING_DIRECTORIES",
+        }
+        for environment in command_envs
+    )
     assert not any(
         command[0] in {"b2", "backblaze", "launchctl", "mv", "rclone", "rsync", "sendmail"} for command in commands
     )
@@ -159,7 +244,7 @@ def test_receipt_requires_explicit_authority_and_bounded_freshness(tmp_path, mon
     value["authorized"] = False
     path.write_text(json.dumps(value), encoding="utf-8")
     _resign(module, path)
-    assert module.main(["--apply", *_signed_args(path), "--log-cap-mb", "1"]) == 2
+    assert module.main(["--apply", *_signed_args(path)]) == 2
     assert probe.exists() and log.stat().st_size > 0
 
     value["authorized"] = True
@@ -167,7 +252,7 @@ def test_receipt_requires_explicit_authority_and_bounded_freshness(tmp_path, mon
     value["expires_at"] = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
     path.write_text(json.dumps(value), encoding="utf-8")
     _resign(module, path)
-    assert module.main(["--apply", *_signed_args(path), "--log-cap-mb", "1"]) == 2
+    assert module.main(["--apply", *_signed_args(path)]) == 2
     assert probe.exists() and log.stat().st_size > 0
 
 
@@ -198,9 +283,9 @@ def test_caller_cannot_substitute_an_untrusted_signer(tmp_path, monkeypatch):
     )
     before = (probe.read_bytes(), log.read_bytes())
 
-    assert module.main(["--apply", *_signed_args(receipt), "--log-cap-mb", "1"]) == 2
+    assert module.main(["--apply", *_signed_args(receipt)]) == 2
     assert (probe.read_bytes(), log.read_bytes()) == before
-    assert not module.RESULTS_DIR.exists()
+    assert not list(module.RESULTS_DIR.glob("*.json"))
 
 
 def test_missing_pinned_trust_root_ignores_caller_env(tmp_path, monkeypatch):
@@ -212,38 +297,52 @@ def test_missing_pinned_trust_root_ignores_caller_env(tmp_path, monkeypatch):
     monkeypatch.setenv("LIMEN_DISK_CAPACITY_ALLOWED_SIGNERS", str(valid_but_caller_selected))
     before = (probe.read_bytes(), log.read_bytes())
 
-    assert module.main(["--apply", *_signed_args(receipt), "--log-cap-mb", "1"]) == 2
+    assert module.main(["--apply", *_signed_args(receipt)]) == 2
     assert (probe.read_bytes(), log.read_bytes()) == before
-    assert not module.RESULTS_DIR.exists()
+    assert not list(module.RESULTS_DIR.glob("*.json"))
 
 
-def test_owner_adjacent_marker_blocks_replay_after_local_result_loss(tmp_path, monkeypatch):
+def test_domus_registry_blocks_replay_after_local_result_loss(tmp_path, monkeypatch):
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     (tmp_path / ".gitignore").write_text("logs/\n", encoding="utf-8")
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
     module = _load(EFFECTOR, "disk_capacity_external_replay")
     _install_test_authority(module, tmp_path.parent)
+    _configure_test_root(module, tmp_path, log_cap_mb=10)
     plan = module.build_plan(10)
     receipt = _receipt(module, tmp_path / "empty-plan-receipt.json", plan, attempt_id="external-replay")
 
-    assert module.main(["--apply", *_signed_args(receipt), "--log-cap-mb", "10"]) == 0
-    markers = list(tmp_path.glob(".empty-plan-receipt.json.*.consumed"))
+    assert module.main(["--apply", *_signed_args(receipt)]) == 0
+    markers = list(module.OWNER_CONSUMED_DIR.glob("*.json"))
     assert len(markers) == 1
     shutil.rmtree(module.RESULTS_DIR)
 
-    assert module.main(["--apply", *_signed_args(receipt), "--log-cap-mb", "10"]) == 2
-    assert len(list(tmp_path.glob(".empty-plan-receipt.json.*.consumed"))) == 1
+    assert module.main(["--apply", *_signed_args(receipt)]) == 2
+    assert len(list(module.OWNER_CONSUMED_DIR.glob("*.json"))) == 1
+
+
+def test_receipt_consumption_requires_distinct_domus_execution_identity(tmp_path, monkeypatch):
+    module, probe, log = _repo(tmp_path, monkeypatch)
+    plan = module.build_plan(1)
+    path = _receipt(module, tmp_path / "identity-bound.json", plan, attempt_id="identity-bound")
+    receipt = module.load_receipt(path, _signature(path), plan)
+    monkeypatch.setattr(module, "OWNER_UID", os.geteuid() + 1)
+
+    with pytest.raises(module.ReceiptError, match="Domus authority execution identity"):
+        module._consume_receipt(receipt, plan)
+    assert probe.exists() and log.stat().st_size > 0
+    assert not list(module.OWNER_CONSUMED_DIR.glob("*.json"))
 
 
 def test_apply_without_receipt_refuses_without_writes(tmp_path, monkeypatch, capsys):
     module, probe, log = _repo(tmp_path, monkeypatch)
     before = (probe.read_bytes(), log.read_bytes())
 
-    assert module.main(["--apply", "--log-cap-mb", "1"]) == 2
+    assert module.main(["--apply"]) == 2
 
     assert "requires --receipt" in capsys.readouterr().out
     assert (probe.read_bytes(), log.read_bytes()) == before
-    assert not module.RESULTS_DIR.exists()
+    assert not list(module.RESULTS_DIR.glob("*.json"))
 
 
 def test_exact_receipt_applies_once_and_publishes_result(tmp_path, monkeypatch):
@@ -251,7 +350,7 @@ def test_exact_receipt_applies_once_and_publishes_result(tmp_path, monkeypatch):
     plan = module.build_plan(1)
     receipt = _receipt(module, tmp_path / "apply-receipt.json", plan)
 
-    assert module.main(["--apply", *_signed_args(receipt), "--log-cap-mb", "1"]) == 0
+    assert module.main(["--apply", *_signed_args(receipt)]) == 0
 
     assert not probe.exists()
     assert log.read_bytes() == b""
@@ -263,7 +362,7 @@ def test_exact_receipt_applies_once_and_publishes_result(tmp_path, monkeypatch):
     assert {row["kind"] for row in result["effects"]} == {"unlink", "truncate"}
 
     # The same exact receipt cannot authorize the now-different plan or a second result.
-    assert module.main(["--apply", *_signed_args(receipt), "--log-cap-mb", "1"]) == 2
+    assert module.main(["--apply", *_signed_args(receipt)]) == 2
     assert len(list(module.RESULTS_DIR.glob("*.json"))) == 1
 
 
@@ -274,10 +373,10 @@ def test_changed_target_invalidates_receipt_before_any_effect(tmp_path, monkeypa
     probe.write_text("changed after receipt\n", encoding="utf-8")
     before = (probe.read_bytes(), log.read_bytes())
 
-    assert module.main(["--apply", *_signed_args(receipt), "--log-cap-mb", "1"]) == 2
+    assert module.main(["--apply", *_signed_args(receipt)]) == 2
 
     assert (probe.read_bytes(), log.read_bytes()) == before
-    assert not module.RESULTS_DIR.exists()
+    assert not list(module.RESULTS_DIR.glob("*.json"))
 
 
 def test_expired_receipt_and_receipt_preview_are_zero_write(tmp_path, monkeypatch, capsys):
@@ -291,14 +390,14 @@ def test_expired_receipt_and_receipt_preview_are_zero_write(tmp_path, monkeypatc
     _resign(module, receipt)
     before = (probe.read_bytes(), log.read_bytes())
 
-    assert module.main(["--check", *_signed_args(receipt), "--log-cap-mb", "1"]) == 2
+    assert module.main(["--check", *_signed_args(receipt)]) == 2
 
     output = json.loads(capsys.readouterr().out)
     assert output["zero_write"] is True
     assert output["receipt_valid"] is False
     assert "expired" in output["error"]
     assert (probe.read_bytes(), log.read_bytes()) == before
-    assert not module.RESULTS_DIR.exists()
+    assert not list(module.RESULTS_DIR.glob("*.json"))
 
 
 def test_receipt_expiry_between_reservation_and_effect_refuses_target_writes(tmp_path, monkeypatch):
@@ -318,7 +417,7 @@ def test_receipt_expiry_between_reservation_and_effect_refuses_target_writes(tmp
 
     monkeypatch.setattr(module, "_require_receipt_current", expire_after_reservation)
 
-    assert module.main(["--apply", *_signed_args(receipt), "--log-cap-mb", "1"]) == 1
+    assert module.main(["--apply", *_signed_args(receipt)]) == 1
 
     assert checks == 3
     assert (probe.read_bytes(), log.read_bytes()) == before
@@ -340,12 +439,20 @@ def test_hard_linked_truncate_target_is_rejected_without_effect(tmp_path, monkey
     os.link(outside, logs / "heartbeat.err.log")
     monkeypatch.setenv("LIMEN_ROOT", str(root))
     module = _load(EFFECTOR, "disk_capacity_hard_link")
+    module.ROOT = root
+    module.HEARTBEAT_ERR_LOG = logs / "heartbeat.err.log"
+    module.ACTIVE_CONFIG = {
+        "schema": module.CONFIG_SCHEMA,
+        "root_path": str(root.resolve()),
+        "log_cap_mb": 1,
+        "config_hash": "sha256:" + "a" * 64,
+    }
 
     plan = module.build_plan(1)
 
     assert "target must have exactly one hard link" in "; ".join(plan["problems"])
     assert outside.stat().st_size == 1024 * 1024 + 1
-    assert not module.RESULTS_DIR.exists()
+    assert not list(module.RESULTS_DIR.glob("*.json"))
 
 
 def test_parent_symlink_replacement_cannot_redirect_truncate(tmp_path, monkeypatch):
@@ -364,6 +471,7 @@ def test_parent_symlink_replacement_cannot_redirect_truncate(tmp_path, monkeypat
     monkeypatch.setenv("LIMEN_ROOT", str(root))
     module = _load(EFFECTOR, "disk_capacity_parent_replacement")
     _install_test_authority(module, tmp_path)
+    _configure_test_root(module, root, log_cap_mb=1)
     plan = module.build_plan(1)
     receipt = _receipt(module, tmp_path / "parent-replacement.json", plan, attempt_id="parent-replacement")
     reserve = module._reserve_attempt
@@ -376,17 +484,18 @@ def test_parent_symlink_replacement_cannot_redirect_truncate(tmp_path, monkeypat
 
     monkeypatch.setattr(module, "_reserve_attempt", reserve_then_replace_parent)
 
-    assert module.main(["--apply", *_signed_args(receipt), "--log-cap-mb", "1"]) == 1
+    assert module.main(["--apply", *_signed_args(receipt)]) == 1
 
     assert (root / "logs-authorized" / "heartbeat.err.log").stat().st_size == 1024 * 1024 + 1
     assert escaped_log.stat().st_size == 1024 * 1024 + 1
-    result = json.loads(next((root / "logs-authorized" / "disk-capacity-results").glob("*.json")).read_text())
+    result = json.loads(next(module.RESULTS_DIR.glob("*.json")).read_text())
     assert result["status"] == "failed_before_effects"
     assert result["effects"] == []
 
 
 def test_replaced_unlink_candidate_is_restored_from_quarantine(tmp_path, monkeypatch):
     module, probe, _log = _repo(tmp_path, monkeypatch)
+    module.ACTIVE_CONFIG["log_cap_mb"] = 10
     replacement = tmp_path / "valuable-replacement.txt"
     replacement.write_text("must survive\n", encoding="utf-8")
     plan = module.build_plan(10)
@@ -404,7 +513,7 @@ def test_replaced_unlink_candidate_is_restored_from_quarantine(tmp_path, monkeyp
 
     monkeypatch.setattr(module.os, "rename", replace_before_quarantine)
 
-    assert module.main(["--apply", *_signed_args(receipt), "--log-cap-mb", "10"]) == 1
+    assert module.main(["--apply", *_signed_args(receipt)]) == 1
 
     assert probe.read_text(encoding="utf-8") == "must survive\n"
     assert not replacement.exists()
@@ -426,6 +535,7 @@ def test_post_truncate_fsync_failure_reports_the_effect(tmp_path, monkeypatch):
     monkeypatch.setenv("LIMEN_ROOT", str(root))
     module = _load(EFFECTOR, "disk_capacity_post_truncate")
     _install_test_authority(module, tmp_path)
+    _configure_test_root(module, root, log_cap_mb=1)
     plan = module.build_plan(1)
     receipt = _receipt(module, tmp_path / "post-truncate.json", plan, attempt_id="post-truncate")
     target_identity = (log.stat().st_dev, log.stat().st_ino)
@@ -442,7 +552,7 @@ def test_post_truncate_fsync_failure_reports_the_effect(tmp_path, monkeypatch):
 
     monkeypatch.setattr(module.os, "fsync", fail_target_fsync)
 
-    assert module.main(["--apply", *_signed_args(receipt), "--log-cap-mb", "1"]) == 1
+    assert module.main(["--apply", *_signed_args(receipt)]) == 1
 
     assert log.stat().st_size == 0
     result = json.loads(next(module.RESULTS_DIR.glob("*.json")).read_text(encoding="utf-8"))
@@ -461,6 +571,7 @@ def test_post_truncate_fsync_failure_reports_the_effect(tmp_path, monkeypatch):
 
 def test_result_finalization_failure_reports_completed_effects(tmp_path, monkeypatch, capsys):
     module, probe, _log = _repo(tmp_path, monkeypatch)
+    module.ACTIVE_CONFIG["log_cap_mb"] = 10
     plan = module.build_plan(10)
     receipt = _receipt(module, tmp_path / "result-failure.json", plan, attempt_id="result-failure")
     real_write = module._write_fd
@@ -472,7 +583,7 @@ def test_result_finalization_failure_reports_completed_effects(tmp_path, monkeyp
 
     monkeypatch.setattr(module, "_write_fd", fail_final_write)
 
-    assert module.main(["--apply", *_signed_args(receipt), "--log-cap-mb", "10"]) == 1
+    assert module.main(["--apply", *_signed_args(receipt)]) == 1
 
     assert not probe.exists()
     output = capsys.readouterr().out
@@ -483,3 +594,101 @@ def test_result_finalization_failure_reports_completed_effects(tmp_path, monkeyp
     assert emergency["effects"][0]["mutation_observed"] is True
     reserved = json.loads(next(module.RESULTS_DIR.glob("*.json")).read_text(encoding="utf-8"))
     assert reserved["status"] == "reserved"
+
+
+def test_distinct_signed_receipt_cannot_replay_same_attempt_id(tmp_path, monkeypatch):
+    module, _probe, _log = _repo(tmp_path, monkeypatch)
+    plan = module.build_plan(1)
+    first = _receipt(module, tmp_path / "first.json", plan, attempt_id="same-owner-attempt")
+    second = _receipt(module, tmp_path / "second.json", plan, attempt_id="same-owner-attempt")
+    second_value = json.loads(second.read_text(encoding="utf-8"))
+    second_value["expires_at"] = (datetime.now(timezone.utc) + timedelta(minutes=9)).isoformat()
+    second.write_text(json.dumps(second_value), encoding="utf-8")
+    _resign(module, second)
+    first_receipt = module.load_receipt(first, _signature(first), plan)
+    second_receipt = module.load_receipt(second, _signature(second), plan)
+    assert first_receipt["receipt_hash"] != second_receipt["receipt_hash"]
+
+    module._consume_receipt(first_receipt, plan)
+    with pytest.raises(module.ReceiptError, match="attempt_id was already consumed"):
+        module._consume_receipt(second_receipt, plan)
+
+
+def test_truncate_hardlink_added_after_fingerprint_is_refused(tmp_path, monkeypatch):
+    module, probe, log = _repo(tmp_path, monkeypatch)
+    probe.unlink()
+    plan = module.build_plan(1)
+    receipt = _receipt(module, tmp_path / "link-race.json", plan, attempt_id="link-race")
+    original = log.read_bytes()
+    target_identity = (log.stat().st_dev, log.stat().st_ino)
+    real_fstat = module.os.fstat
+    target_reads = 0
+
+    def add_link_at_final_boundary(fd):
+        nonlocal target_reads
+        metadata = real_fstat(fd)
+        if (metadata.st_dev, metadata.st_ino) == target_identity:
+            target_reads += 1
+            if target_reads >= 3:
+                values = list(metadata)
+                values[3] = 2
+                return os.stat_result(values)
+        return metadata
+
+    monkeypatch.setattr(module.os, "fstat", add_link_at_final_boundary)
+    assert module.main(["--apply", *_signed_args(receipt)]) == 1
+    assert log.read_bytes() == original
+    result = json.loads(next(module.RESULTS_DIR.glob("*.json")).read_text(encoding="utf-8"))
+    assert result["status"] == "failed_before_effects"
+    assert "link identity changed" in result["error"]
+
+
+def test_sensor_threshold_is_owner_only_bounded_and_df_is_hermetic(tmp_path, monkeypatch):
+    module = _load(SENSOR, "disk_capacity_owner_threshold")
+    owner = tmp_path / "authority"
+    config = owner / "config" / "disk-capacity.json"
+    config.parent.mkdir(parents=True)
+    module.OWNER_CONFIG = config
+    module.OWNER_PATH_ANCHOR = owner
+    module.OWNER_UID = os.geteuid()
+    monkeypatch.setenv("LIMEN_DISK_CAPACITY_THRESHOLD", "1")
+    for invalid in (0, 101, True):
+        config.write_text(
+            json.dumps({"schema": module.CONFIG_SCHEMA, "threshold_percent": invalid}),
+            encoding="utf-8",
+        )
+        with pytest.raises(module.SensorConfigError, match="1..100"):
+            module._load_threshold()
+
+    config.write_text(
+        json.dumps({"schema": module.CONFIG_SCHEMA, "threshold_percent": 83}),
+        encoding="utf-8",
+    )
+    assert module._load_threshold() == 83
+    captured = {}
+
+    def run(command, **kwargs):
+        captured.update({"command": command, **kwargs})
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            "Filesystem 512-blocks Used Available Capacity Mounted on\nfs 1 1 1 42% /data\n",
+            "",
+        )
+
+    monkeypatch.setattr(module.subprocess, "run", run)
+    assert module._capacity_pct() == 42.0
+    assert captured["command"] == ["/bin/df", "-P", module.VOLUME]
+    assert captured["env"]["HOME"] == "/var/empty"
+    assert "LIMEN_DISK_CAPACITY_THRESHOLD" not in captured["env"]
+
+
+def test_deployed_checkout_effectors_fail_closed_without_owner_installation():
+    result = subprocess.run(
+        [str(EFFECTOR), "--apply", "--receipt", "/nonexistent", "--signature", "/nonexistent"],
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin"},
+    )
+    assert result.returncode == 2
+    assert "fixed Domus-installed effector" in result.stdout

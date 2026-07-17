@@ -1,76 +1,159 @@
-#!/usr/bin/env bash
-# mail-send — limen shim into the UMA interactive send lane (mail_send.py).
-#
-# THE headless CLI email sender. Distinct from the autonomic send_drafts.py lane,
-# which stays tier-locked and disarmed. Invocation is not authorization: the UMA
-# command is zero-write by default, and a send requires explicit --apply plus an
-# exact, unexpired uma.mail_send_authorization.v1 receipt. Every applied send is
-# server-verified against [Gmail]/Sent Mail (non-zero exit if unverified).
-#
-# Usage: scripts/mail-send --self-test --attempt-id ID
-#        scripts/mail-send --attempt-id ID --to a@b.c --subject "…" --body-file body.txt
-# Apply additionally requires a UMA owner-signed receipt contract whose trust root is
-# pinned by UMA. Caller-selected HMAC key files are refused.
-# Full docs: universal-mail--automation/CLAUDE.md § Sending mail.
-set -euo pipefail
+#!/usr/bin/python3
+"""Fixed-owner shim into UMA's receipt-bound mail sender.
 
-UMA="${LIMEN_UMA_ROOT:-${UMA_ROOT:-$HOME/Workspace/universal-mail--automation}}"
-launcher=()
-if [ -f "$UMA/mail_send.py" ]; then
-  launcher=(python3 "$UMA/mail_send.py")
-elif python3 -c 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("mail_send") else 1)' >/dev/null 2>&1; then
-  launcher=(python3 -m mail_send)
-else
-  echo "mail-send: no UMA mail_send interface (checked LIMEN_UMA_ROOT=$UMA and installed module)" >&2
-  exit 3
-fi
+Preview never receives credentials. Apply delegates only to the Domus-installed,
+root-owned UMA entrypoint; repository paths, Python modules, PATH, and caller
+environment variables cannot select executable code.
+"""
 
-apply=0
-explicit_dry_run=0
-for arg in "$@"; do
-  case "$arg" in
-    --apply) apply=1 ;;
-    --dry-run) explicit_dry_run=1 ;;
-  esac
-done
+import os
+import stat
+import sys
+from pathlib import Path
 
-if [ "$apply" -eq 1 ]; then
-  # The deployed UMA owner may lag this wrapper. Never discover that after handing a
-  # send-shaped argv to a legacy invocation-is-authorization entrypoint.
-  if ! help_text="$("${launcher[@]}" --help 2>&1)"; then
-    echo "mail-send: UMA delegate cannot prove the receipt-bound apply contract" >&2
-    exit 4
-  fi
-  case "$help_text" in
-    *"--authorization-key-file"*)
-      echo "mail-send: UMA delegate exposes a caller-selected authorization key; refusing apply" >&2
-      exit 4
-      ;;
-  esac
-  for required in --apply --attempt-id --authorization-receipt --authorization-signature --credentials-file; do
-    case "$help_text" in
-      *"$required"*) ;;
-      *)
-        echo "mail-send: UMA delegate lacks required contract flag $required; refusing apply" >&2
-        exit 4
-        ;;
-    esac
-  done
-fi
 
-# Credential files are passed to UMA's literal data parser. Never source or eval them.
-credential_args=()
-if [ -f "$HOME/.config/mail_automation/credentials.env" ]; then
-  credential_args=(--credentials-file "$HOME/.config/mail_automation/credentials.env")
-elif [ -f "$HOME/.limen.env" ]; then
-  credential_args=(--credentials-file "$HOME/.limen.env")
-fi
+DOMUS_MAIL_ROOT = Path("/Library/Application Support/org.organvm.domus/limen/uma")
+DOMUS_MAIL_DELEGATE = DOMUS_MAIL_ROOT / "bin" / "mail-send"
+OWNER_CREDENTIALS = DOMUS_MAIL_ROOT / "credentials" / "mail.env"
+OWNER_ATTEMPT_STORE = DOMUS_MAIL_ROOT / "state" / "mail-attempts"
+OWNER_HOME = DOMUS_MAIL_ROOT / "home"
+OWNER_TMPDIR = DOMUS_MAIL_ROOT / "tmp"
+OWNER_WORKDIR = DOMUS_MAIL_ROOT / "run"
+OWNER_PATH_ANCHOR = Path("/")
+OWNER_UID = 0
+SAFE_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
+REFUSED_CALLER_FLAGS = (
+    "--authorization-key-file",
+    "--credentials-file",
+    "--attempt-store",
+)
 
-mode_args=()
-if [ "$apply" -eq 0 ] && [ "$explicit_dry_run" -eq 0 ]; then
-  # Legacy UMA sends on invocation. Force its existing zero-write mode even while the
-  # owner PR that makes preview the native default remains unaccepted.
-  mode_args=(--dry-run)
-fi
 
-exec "${launcher[@]}" "${credential_args[@]+"${credential_args[@]}"}" "${mode_args[@]+"${mode_args[@]}"}" "$@"
+class DelegateError(ValueError):
+    """The fixed UMA delegate or invocation is not safe to execute."""
+
+
+def _assert_owner_chain(path: Path, *, leaf_directory: bool = False) -> None:
+    try:
+        relative = path.relative_to(OWNER_PATH_ANCHOR)
+    except ValueError as exc:
+        raise DelegateError("UMA owner path escaped the fixed absolute authority anchor") from exc
+    components = [
+        OWNER_PATH_ANCHOR,
+        *(
+            OWNER_PATH_ANCHOR.joinpath(*relative.parts[:index])
+            for index in range(1, len(relative.parts) + 1)
+        ),
+    ]
+    for index, candidate in enumerate(components):
+        try:
+            metadata = candidate.lstat()
+        except OSError as exc:
+            raise DelegateError(f"UMA owner path is unavailable ({type(exc).__name__})") from exc
+        is_leaf = index == len(components) - 1
+        expected_directory = not is_leaf or leaf_directory
+        if stat.S_ISLNK(metadata.st_mode):
+            raise DelegateError("UMA owner path must not contain symlinks")
+        if expected_directory and not stat.S_ISDIR(metadata.st_mode):
+            raise DelegateError("UMA owner path component is not a directory")
+        if not expected_directory and not stat.S_ISREG(metadata.st_mode):
+            raise DelegateError("UMA delegate is not a regular file")
+        if metadata.st_uid != OWNER_UID:
+            raise DelegateError("UMA owner path is not owned by the Domus authority uid")
+        if metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            raise DelegateError("UMA owner path is group/world writable")
+
+
+def _validate_delegate() -> None:
+    _assert_owner_chain(DOMUS_MAIL_DELEGATE)
+    metadata = DOMUS_MAIL_DELEGATE.stat()
+    if metadata.st_nlink != 1:
+        raise DelegateError("UMA delegate must have exactly one hard link")
+    if not metadata.st_mode & stat.S_IXUSR:
+        raise DelegateError("UMA delegate is not owner-executable")
+
+
+def _flag_present(args, flag):
+    return any(value == flag or value.startswith(flag + "=") for value in args)
+
+
+def _validate_args(args):
+    for flag in REFUSED_CALLER_FLAGS:
+        if _flag_present(args, flag):
+            raise DelegateError(f"caller-selected {flag} is refused")
+    apply = _flag_present(args, "--apply")
+    dry_run = _flag_present(args, "--dry-run")
+    if apply and dry_run:
+        raise DelegateError("--apply and --dry-run are mutually exclusive")
+    if apply:
+        for required in ("--attempt-id", "--authorization-receipt", "--authorization-signature"):
+            if not _flag_present(args, required):
+                raise DelegateError(f"apply requires {required}")
+    return apply
+
+
+def _credential_file(home: Path) -> Path:
+    del home
+    _assert_owner_chain(OWNER_CREDENTIALS)
+    metadata = OWNER_CREDENTIALS.stat()
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or stat.S_ISLNK(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or metadata.st_uid != OWNER_UID
+        or stat.S_IMODE(metadata.st_mode) not in {0o400, 0o600}
+    ):
+        raise DelegateError("credential file must remain an owner-custodied mode-0400/0600 regular file")
+    return OWNER_CREDENTIALS
+
+
+def _validate_owner_directories(*, apply: bool) -> None:
+    for directory in (OWNER_HOME, OWNER_TMPDIR, OWNER_WORKDIR):
+        _assert_owner_chain(directory, leaf_directory=True)
+    if apply:
+        _assert_owner_chain(OWNER_ATTEMPT_STORE, leaf_directory=True)
+
+
+def build_invocation(args, environ=None):
+    del environ
+    apply = _validate_args(args)
+    _validate_delegate()
+    _validate_owner_directories(apply=apply)
+    delegate_args = [str(DOMUS_MAIL_DELEGATE)]
+    if apply:
+        delegate_args.extend(
+            [
+                "--credentials-file",
+                str(_credential_file(OWNER_HOME)),
+                "--attempt-store",
+                str(OWNER_ATTEMPT_STORE),
+            ]
+        )
+    elif not _flag_present(args, "--dry-run"):
+        delegate_args.append("--dry-run")
+    delegate_args.extend(args)
+    clean_environment = {
+        "HOME": str(OWNER_HOME),
+        "TMPDIR": str(OWNER_TMPDIR),
+        "PATH": SAFE_PATH,
+        "PYTHONNOUSERSITE": "1",
+        "PYTHONSAFEPATH": "1",
+        "LC_ALL": "C",
+    }
+    return delegate_args, clean_environment
+
+
+def main(argv=None):
+    args = list(sys.argv[1:] if argv is None else argv)
+    try:
+        invocation, clean_environment = build_invocation(args)
+    except DelegateError as exc:
+        print(f"mail-send: REFUSED: {exc}", file=sys.stderr)
+        return 4
+    os.chdir(OWNER_WORKDIR)
+    os.execve(str(DOMUS_MAIL_DELEGATE), invocation, clean_environment)
+    return 127
+
+
+if __name__ == "__main__":
+    sys.exit(main())

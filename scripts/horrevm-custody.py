@@ -3,11 +3,12 @@
 
 The strategic-use half of HORREVM (the doctor is scripts/cloud-storage-doctor.py). Drives rclone
 in HEADLESS API mode (no File Provider desktop apps — the pre-2026-06-15 breakage vector) against
-two remotes whose entire rclone.conf is one op:// item hydrated by the credential organ:
+two remotes whose binary, config, rail identities, budgets, and source roots are
+fixed by root-owned Domus configuration:
 
-  gdrive:   second-vendor offsite for crown-jewel CIPHERTEXT — the ~/.arca-vault mirror (already
-            AES-256-CBC sealed by arca.sh), a sealed session-corpus inventory, and the sealed
-            continuity kernel. Covers the "GitHub lost AND Mac lost" correlated failure.
+  gdrive:   second-vendor offsite for a newly sealed snapshot of ~/.arca-vault,
+            a sealed session-corpus inventory, and the sealed continuity kernel.
+            Covers the "GitHub lost AND Mac lost" correlated failure.
   dropbox:  break-glass grab bag — RECOVERY-CARD.md (plaintext, ZERO secrets) + the sealed kernel,
             reachable from any borrowed browser.
 
@@ -15,19 +16,21 @@ Egress law: ONLY ciphertext plus the one non-secret recovery card ever leaves th
 (L-CLOUD-EGRESS-CONSENT). Every remote or local mutation requires explicit ``--apply``, the
 ``LIMEN_HORREVM_APPLY=1`` safety valve, and a fresh OpenSSH-signed
 ``limen.horrevm.apply_receipt.v1`` receipt. The signature is verified under a dedicated namespace
-against the repository-pinned Domus owner trust root. The executing caller cannot substitute that
-trust root through an argument or environment variable. The signed payload binds one
+against the fixed Domus owner trust root and replay registry. The executing caller cannot substitute
+those surfaces through an argument, environment variable, or checkout edit. The signed payload binds one
 action, exact source-manifest and content hashes, exact remote destinations, one expiry, and one
 non-replayable attempt id. A flag or self-asserted JSON document is never authorization by itself.
-Remote deletion is restricted to the exact receipt-attempt object below ``limen-custody/.probe/``.
-All other modes are literal zero-write previews.
+Objects land in one immutable, attempt-hashed set. Probe deletion is restricted
+to that set, every remote effect is journaled in owner custody, and
+``manifest-current.json`` is copied only after every payload object verifies.
+Preview and status spawn no subprocess.
 
 Verbs:
   --push             zero-write push plan; apply requires receipt and owner signature
   --probe            zero-write probe plan; apply requires receipt and owner signature
   --check/default    zero-write push plan with receipt-ready hashes
   --status           zero-write freshness predicate
-  --doctor           deterministic config parity (paths, payload spec, arca verbs) — no rclone
+  --doctor           deployed owner-config and cryptographic-tool hash parity — no rclone
 """
 
 from __future__ import annotations
@@ -51,39 +54,47 @@ from pathlib import Path, PurePosixPath
 from typing import Any, NamedTuple
 
 ROOT = Path(__file__).resolve().parents[1]
-LOG = ROOT / "logs" / "horrevm.json"
-ARCA = ROOT / "scripts" / "arca.sh"
-RCLONE_CONF = Path.home() / ".config" / "rclone" / "rclone.conf"
+DOMUS_AUTHORITY_ROOT = Path("/Library/Application Support/org.organvm.domus/limen/authority")
+OWNER_PATH_ANCHOR = Path("/")
+LOG = DOMUS_AUTHORITY_ROOT / "state" / "horrevm.json"
+ARCA = DOMUS_AUTHORITY_ROOT / "bin" / "arca"
+RCLONE = DOMUS_AUTHORITY_ROOT / "bin" / "rclone"
+RCLONE_CONF = DOMUS_AUTHORITY_ROOT / "config" / "rclone.conf"
+OWNER_CONFIG = DOMUS_AUTHORITY_ROOT / "config" / "horrevm.json"
+OWNER_APPLY_TMP = DOMUS_AUTHORITY_ROOT / "tmp" / "horrevm"
+OWNER_WORKDIR = DOMUS_AUTHORITY_ROOT / "run"
 CUSTODY_DIR = "limen-custody"
-PROBE_NS = f"{CUSTODY_DIR}/.probe"
 LEVER = "L-CLOUD-EGRESS-CONSENT"
 MIN_PUSH_INTERVAL_H = 20  # MAT-pattern self-throttle: probes every beat, pushes ~daily
 RECEIPT_SCHEMA = "limen.horrevm.apply_receipt.v1"
 SIGNED_RECEIPT_NAMESPACE = RECEIPT_SCHEMA
-OWNER_ALLOWED_SIGNERS = ROOT / "docs" / "keys" / "horrevm-apply.allowed-signers"
+OWNER_ALLOWED_SIGNERS = DOMUS_AUTHORITY_ROOT / "trust" / "horrevm-apply.allowed-signers"
+OWNER_CONSUMED_DIR = DOMUS_AUTHORITY_ROOT / "consumed" / "horrevm"
+OWNER_EFFECTOR = DOMUS_AUTHORITY_ROOT / "bin" / "horrevm-custody"
+OWNER_UID = 0
+SSH_KEYGEN = Path("/usr/bin/ssh-keygen")
 PLAN_SCHEMA = "limen.horrevm.payload_plan.v1"
 STATE_SCHEMA = "limen.horrevm.state.v2"
+CONFIG_SCHEMA = "limen.horrevm.owner_config.v1"
 REMOTE_WRITE_VERBS = frozenset({"copy", "copyto", "delete", "deletefile", "move", "moveto", "sync"})
 STATE_RAIL_IDS = {"gdrive": "googledrive", "dropbox": "dropbox"}
 MAX_RECEIPT_BYTES = 64 * 1024
 MAX_TRUST_FILE_BYTES = 64 * 1024
 MAX_STATE_BYTES = 4 * 1024 * 1024
+MAX_CONFIG_BYTES = 64 * 1024
 MAX_RECEIPT_LIFETIME = timedelta(hours=4)
 AUTHORIZED_PRINCIPAL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._@:+-]{0,127}")
-
-MAX_AGE_DAYS = int(os.environ.get("LIMEN_HORREVM_MAX_AGE_DAYS", "7"))
-BUDGET_GB = {
-    "gdrive": float(os.environ.get("LIMEN_HORREVM_DRIVE_BUDGET_GB", "5")),
-    "dropbox": float(os.environ.get("LIMEN_HORREVM_DROPBOX_BUDGET_GB", "1")),
-}
+ACTIVE_CONFIG: dict[str, Any] | None = None
+VERIFIED_CIPHERTEXT_MANIFESTS: dict[str, dict[str, Any]] = {}
 
 # The approved egress list (mirrors the lever text; edit BOTH or neither).
-# type dir-mirror: source is ALREADY ciphertext — copied as-is.
-# type seal:       tarred + sealed via `arca.sh seal` (one envelope, one Keychain key) first.
-# type kernel:     the continuity kernel — sealed bundle of the files below + RECOVERY-CARD.md.
+# type seal:   snapshot, tar, and seal via `arca.sh seal` before egress.
+# type kernel: the continuity kernel — sealed bundle of the files below + RECOVERY-CARD.md.
 PAYLOADS: dict[str, list[dict]] = {
     "gdrive": [
-        {"name": "arca-vault", "type": "dir-mirror", "src": "~/.arca-vault"},
+        # The vault also contains a plaintext manifest and Git metadata; seal the whole
+        # snapshot again instead of trusting a directory name as a ciphertext proof.
+        {"name": "arca-vault", "type": "seal", "src": "~/.arca-vault"},
         {"name": "corpus-inventory", "type": "seal", "src": "~/.limen-private/session-corpus/inventory"},
         {"name": "kernel", "type": "kernel"},
     ],
@@ -91,13 +102,7 @@ PAYLOADS: dict[str, list[dict]] = {
         {"name": "kernel", "type": "kernel"},
     ],
 }
-KERNEL_CANDIDATES = [
-    "~/Workspace/limen/FLAME.md",
-    "~/Workspace/limen/his-hand-levers.json",
-    "~/Workspace/limen/cloud-routines.json",
-    "~/Workspace/limen/logs/obligations-ledger.json",
-    "~/.arca-vault/manifest.json",
-]
+KERNEL_CANDIDATES: list[str] = []
 
 
 def now() -> datetime:
@@ -119,8 +124,24 @@ def say(msg: str) -> None:
 
 
 def run(cmd: list[str], timeout: int = 120) -> tuple[int | None, str]:
+    if not cmd or not Path(cmd[0]).is_absolute():
+        raise EffectRefused("apply subprocess executable must be an absolute owner-selected path")
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env={
+                "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+                "HOME": "/var/empty",
+                "TMPDIR": str(OWNER_APPLY_TMP),
+                "LC_ALL": "C",
+                "PYTHONNOUSERSITE": "1",
+                "PYTHONSAFEPATH": "1",
+            },
+            cwd=str(OWNER_WORKDIR),
+        )
         return p.returncode, (p.stdout or "") + (p.stderr or "")
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return None, ""
@@ -147,6 +168,11 @@ class ApplyReceipt(NamedTuple):
     signer: str
     trust_root_hash: str
     remote: str
+    config_hash: str
+    rail_id: str
+    tool_hashes: dict[str, str]
+    root_bindings: dict[str, Any]
+    object_set: str
 
 
 def _require_apply_valve(effect: str) -> None:
@@ -170,7 +196,7 @@ def rclone(args: list[str], *, receipt: ApplyReceipt | None = None, timeout: int
         raise ValueError("rclone command is empty")
     if args[0] in REMOTE_WRITE_VERBS:
         receipt = _require_receipt(receipt, f"rclone {args[0]}")
-        if args[0] not in {"copy", "copyto", "deletefile"}:
+        if args[0] not in {"copyto", "deletefile"}:
             raise EffectRefused(f"rclone {args[0]} is not an authorized HORREVM operation")
         remote_arguments = [value for value in args[1:] if isinstance(value, str) and ":" in value]
         if len(remote_arguments) != 1:
@@ -179,58 +205,41 @@ def rclone(args: list[str], *, receipt: ApplyReceipt | None = None, timeout: int
         if refused:
             raise EffectRefused(f"rclone {args[0]} destination is outside the signed receipt")
         if args[0] == "deletefile" and any(
-            not value.startswith(f"{receipt.remote}:{PROBE_NS}/") for value in remote_arguments
+            not value.startswith(f"{receipt.remote}:{receipt.object_set}/probes/")
+            for value in remote_arguments
         ):
             raise EffectRefused("rclone deletefile is restricted to the signed probe object")
-    return run(["rclone", *args], timeout)
+    return run([str(RCLONE), "--config", str(RCLONE_CONF), *args], timeout)
 
 
 def _state_parent_fd(*, create: bool) -> tuple[int, str]:
-    """Open the state parent beneath the real Limen root without following links."""
+    """Open the pre-provisioned Domus state parent without following links."""
 
+    del create  # Authority directories are installed by Domus, never by this effector.
     try:
-        relative = LOG.relative_to(ROOT)
+        relative = LOG.relative_to(DOMUS_AUTHORITY_ROOT)
     except ValueError as exc:
-        raise ReceiptError("custody state path escapes the Limen root") from exc
-    if not relative.parts or any(part in {"", ".", ".."} for part in relative.parts):
+        raise ReceiptError("custody state path escapes the fixed Domus authority root") from exc
+    if len(relative.parts) < 2 or any(part in {"", ".", ".."} for part in relative.parts):
         raise ReceiptError("custody state path is unsafe")
-
-    flags = (
-        os.O_RDONLY
-        | getattr(os, "O_DIRECTORY", 0)
-        | getattr(os, "O_NOFOLLOW", 0)
-        | getattr(os, "O_CLOEXEC", 0)
+    parent = LOG.parent
+    _assert_domus_owner_chain(parent, "Domus custody-state registry", leaf_directory=True)
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(
+        os, "O_CLOEXEC", 0
     )
     try:
-        root_meta = ROOT.lstat()
-        if not stat.S_ISDIR(root_meta.st_mode) or stat.S_ISLNK(root_meta.st_mode):
-            raise ReceiptError("Limen root must be a real directory")
-        current = os.open(ROOT, flags)
-    except ReceiptError:
-        raise
+        current = os.open(parent, flags)
     except OSError as exc:
-        raise ReceiptError(f"Limen root is unsafe: {type(exc).__name__}") from exc
-
+        raise ReceiptError(f"Domus custody-state registry is unsafe: {type(exc).__name__}") from exc
     try:
-        opened_root = os.fstat(current)
-        if (opened_root.st_dev, opened_root.st_ino) != (root_meta.st_dev, root_meta.st_ino):
-            raise ReceiptError("Limen root changed while opening custody state")
-        for component in relative.parts[:-1]:
-            try:
-                child = os.open(component, flags, dir_fd=current)
-            except FileNotFoundError:
-                if not create:
-                    raise
-                os.mkdir(component, 0o700, dir_fd=current)
-                os.fsync(current)
-                child = os.open(component, flags, dir_fd=current)
-            metadata = os.fstat(child)
-            if not stat.S_ISDIR(metadata.st_mode) or metadata.st_dev != opened_root.st_dev:
-                os.close(child)
-                raise ReceiptError("custody state parent escapes the Limen root filesystem")
-            os.close(current)
-            current = child
-        return current, relative.name
+        metadata = os.fstat(current)
+        if (
+            not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != OWNER_UID
+            or metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+        ):
+            raise ReceiptError("Domus custody-state registry lost owner custody")
+        return current, LOG.name
     except Exception:
         os.close(current)
         raise
@@ -244,8 +253,13 @@ def load_state() -> dict:
         flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
         state_fd = os.open(name, flags, dir_fd=parent_fd)
         metadata = os.fstat(state_fd)
-        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
-            raise ReceiptError("custody state must be a single-link regular file")
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or metadata.st_uid != OWNER_UID
+            or metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+        ):
+            raise ReceiptError("custody state must remain an owner-custodied single-link regular file")
         if metadata.st_size > MAX_STATE_BYTES:
             raise ReceiptError("custody state exceeds its bounded size")
         chunks: list[bytes] = []
@@ -348,11 +362,9 @@ def _rail(state: dict, remote: str, *, create: bool = False) -> dict:
 
 
 def parked() -> bool:
-    if not RCLONE_CONF.exists():
-        return True
-    rc, out = rclone(["listremotes"], timeout=15)
-    configured = {f"{remote}:" for remote in PAYLOADS}
-    return rc != 0 or not configured & set(out.split())
+    """Pure owner-config predicate; status/preview must never spawn rclone."""
+
+    return ACTIVE_CONFIG is None
 
 
 def gate_a(remote: str) -> dict:
@@ -362,9 +374,21 @@ def gate_a(remote: str) -> dict:
         return {"token_ok": False}
     try:
         about = json.loads(out)
-        return {"token_ok": True, "quota_total": about.get("total"), "quota_free": about.get("free")}
     except ValueError:
-        return {"token_ok": True}
+        return {"token_ok": False, "reason": "quota response was not valid JSON"}
+    if not isinstance(about, dict):
+        return {"token_ok": False, "reason": "quota response was not an object"}
+    total = about.get("total")
+    free = about.get("free")
+    if (
+        isinstance(total, bool)
+        or isinstance(free, bool)
+        or not isinstance(total, (int, float))
+        or not isinstance(free, (int, float))
+        or not 0 <= free <= total <= 10**18
+    ):
+        return {"token_ok": False, "reason": "quota values were outside 0 <= free <= total <= 1e18"}
+    return {"token_ok": True, "quota_total": total, "quota_free": free}
 
 
 def _attempt_slug(attempt_id: str) -> str:
@@ -379,10 +403,14 @@ def _target(remote: str) -> str:
     return f"{remote}:{CUSTODY_DIR}"
 
 
+def _object_set(attempt_id: str) -> str:
+    return f"{CUSTODY_DIR}/sets/{_attempt_slug(attempt_id)}"
+
+
 def _probe_payload(remote: str, attempt_id: str) -> bytes:
     value = {
         "schema": "limen.horrevm.probe_payload.v1",
-        "attempt_id": attempt_id,
+        "attempt_id_hash": _attempt_key(attempt_id),
         "target": _target(remote),
     }
     return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
@@ -397,17 +425,30 @@ def gate_b(remote: str, workdir: Path, receipt: ApplyReceipt) -> bool:
     payload = _probe_payload(remote, receipt.attempt_id)
     local = workdir / "roundtrip-probe.txt"
     local.write_bytes(payload)
-    probe_path = f"{remote}:{PROBE_NS}/{_attempt_slug(receipt.attempt_id)}-roundtrip.txt"
-    if not probe_path.startswith(f"{remote}:{PROBE_NS}/"):
+    probe_path = f"{remote}:{receipt.object_set}/probes/roundtrip.txt"
+    if not probe_path.startswith(f"{remote}:{receipt.object_set}/probes/"):
         raise EffectRefused("probe escaped the approved namespace")
 
+    _append_effect_journal(receipt, {"phase": "probe-copy-planned", "object": probe_path})
     rc, _ = rclone(["copyto", str(local), probe_path], receipt=receipt, timeout=90)
+    _append_effect_journal(
+        receipt,
+        {"phase": "probe-copy-returned", "object": probe_path, "command_rc": rc},
+    )
     if rc != 0:
         # A failed copy may still have materialized a partial object. Cleanup remains exact-target.
-        rclone(["deletefile", probe_path], receipt=receipt, timeout=60)
+        delete_rc, _ = rclone(["deletefile", probe_path], receipt=receipt, timeout=60)
+        _append_effect_journal(
+            receipt,
+            {"phase": "probe-cleanup-returned", "object": probe_path, "command_rc": delete_rc},
+        )
         return False
     rc, out = rclone(["cat", probe_path], timeout=60)
     delete_rc, _ = rclone(["deletefile", probe_path], receipt=receipt, timeout=60)
+    _append_effect_journal(
+        receipt,
+        {"phase": "probe-cleanup-returned", "object": probe_path, "command_rc": delete_rc},
+    )
     return rc == 0 and out.encode("utf-8") == payload and delete_rc == 0
 
 
@@ -445,26 +486,26 @@ def _content_hash_bindings(value: Any, *, prefix: str = "source") -> dict[str, s
 
 
 def _plan_destinations(action: str, remote: str, attempt_id: str, payloads: list[dict[str, Any]]) -> list[str]:
-    destinations = [f"{remote}:{PROBE_NS}/{_attempt_slug(attempt_id)}-roundtrip.txt"]
+    object_set = _object_set(attempt_id)
+    destinations = [f"{remote}:{object_set}/probes/roundtrip.txt"]
     if action == "probe":
         return destinations
-    destinations.append(f"{remote}:{PROBE_NS}/{_attempt_slug(attempt_id)}-kernel.tar.enc")
+    destinations.append(f"{remote}:{object_set}/probes/kernel.tar.enc")
     for payload in payloads:
         name = payload.get("name")
         payload_type = payload.get("type")
         if not isinstance(name, str) or not name:
             continue
-        if payload_type == "dir-mirror":
-            destinations.append(f"{remote}:{CUSTODY_DIR}/{name}")
-        elif payload_type == "seal":
-            destinations.append(f"{remote}:{CUSTODY_DIR}/{name}.tar.enc")
+        if payload_type == "seal":
+            destinations.append(f"{remote}:{object_set}/objects/{name}.tar.enc")
         elif payload_type == "kernel":
             destinations.extend(
                 [
-                    f"{remote}:{CUSTODY_DIR}/kernel.tar.enc",
-                    f"{remote}:{CUSTODY_DIR}/RECOVERY-CARD.md",
+                    f"{remote}:{object_set}/objects/kernel.tar.enc",
+                    f"{remote}:{object_set}/objects/RECOVERY-CARD.md",
                 ]
             )
+    destinations.append(f"{remote}:{object_set}/manifest-current.json")
     return list(dict.fromkeys(destinations))
 
 
@@ -494,8 +535,14 @@ def _copy_bound_file(source: Path, destination: Path, expected: dict[str, Any], 
     size = 0
     try:
         source_stat = os.fstat(source_fd)
-        if not stat.S_ISREG(source_stat.st_mode):
-            raise EffectRefused("receipt-bound source is no longer a regular file")
+        if not stat.S_ISREG(source_stat.st_mode) or source_stat.st_nlink != 1:
+            raise EffectRefused("receipt-bound source is no longer a single-link regular file")
+        if (
+            expected.get("device"),
+            expected.get("inode"),
+            expected.get("link_count"),
+        ) != (source_stat.st_dev, source_stat.st_ino, source_stat.st_nlink):
+            raise EffectRefused("receipt-bound source identity changed")
         destination_fd = os.open(destination, destination_flags, 0o400)
         while True:
             chunk = os.read(source_fd, 1024 * 1024)
@@ -521,6 +568,10 @@ def _copy_bound_file(source: Path, destination: Path, expected: dict[str, Any], 
     if expected.get("kind") != "file" or expected.get("size") != size or expected.get("sha256") != actual_digest:
         destination.unlink(missing_ok=True)
         raise EffectRefused("staged source bytes do not match the apply receipt manifest")
+    staged_meta = destination.lstat()
+    if not stat.S_ISREG(staged_meta.st_mode) or staged_meta.st_nlink != 1:
+        destination.unlink(missing_ok=True)
+        raise EffectRefused("private staging is not a single-link regular file")
 
 
 def _safe_manifest_relative(value: Any) -> PurePosixPath:
@@ -530,6 +581,27 @@ def _safe_manifest_relative(value: Any) -> PurePosixPath:
     if relative.is_absolute() or ".." in relative.parts or "." in relative.parts:
         raise EffectRefused("receipt manifest relative path escaped private staging")
     return relative
+
+
+def _content_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+    kind = manifest.get("kind")
+    if kind == "file":
+        return {
+            "kind": "file",
+            "size": manifest.get("size"),
+            "sha256": manifest.get("sha256"),
+        }
+    if kind == "dir":
+        rows = []
+        for entry in manifest.get("entries", []):
+            if not isinstance(entry, dict):
+                raise EffectRefused("manifest contains a malformed entry")
+            row = {"path": entry.get("path"), "kind": entry.get("kind")}
+            if entry.get("kind") == "file":
+                row.update({"size": entry.get("size"), "sha256": entry.get("sha256")})
+            rows.append(row)
+        return {"kind": "dir", "entries": rows}
+    return {"kind": kind}
 
 
 def _snapshot_manifest_source(
@@ -576,12 +648,8 @@ def _snapshot_manifest_source(
     staged_manifest, staged_problems = _path_manifest(destination)
     if staged_problems:
         raise EffectRefused("private staging produced an unsafe payload")
-    if kind == "file":
-        expected_content = {key: manifest.get(key) for key in ("kind", "size", "sha256")}
-        staged_content = {key: staged_manifest.get(key) for key in ("kind", "size", "sha256")}
-    else:
-        expected_content = {"kind": "dir", "entries": manifest.get("entries")}
-        staged_content = {"kind": staged_manifest.get("kind"), "entries": staged_manifest.get("entries")}
+    expected_content = _content_manifest(manifest)
+    staged_content = _content_manifest(staged_manifest)
     if staged_content != expected_content:
         raise EffectRefused("private staging does not match the apply receipt manifest")
     return destination
@@ -593,7 +661,8 @@ def _path_manifest(path: Path) -> tuple[dict[str, Any], list[str]]:
     problems: list[str] = []
     display = str(path)
     try:
-        mode = path.lstat().st_mode
+        metadata = path.lstat()
+        mode = metadata.st_mode
     except FileNotFoundError:
         return {"path": display, "kind": "missing"}, problems
     except OSError as exc:
@@ -602,12 +671,23 @@ def _path_manifest(path: Path) -> tuple[dict[str, Any], list[str]]:
     if stat.S_ISLNK(mode):
         return {"path": display, "kind": "symlink"}, [f"{display}: symlink sources are refused"]
     if stat.S_ISREG(mode):
+        if metadata.st_nlink != 1:
+            return {
+                "path": display,
+                "kind": "hardlink",
+                "device": metadata.st_dev,
+                "inode": metadata.st_ino,
+                "link_count": metadata.st_nlink,
+            }, [f"{display}: source must have exactly one hard link"]
         try:
             return {
                 "path": display,
                 "kind": "file",
-                "size": path.stat().st_size,
+                "size": metadata.st_size,
                 "sha256": _file_hash(path),
+                "device": metadata.st_dev,
+                "inode": metadata.st_ino,
+                "link_count": metadata.st_nlink,
             }, problems
         except OSError as exc:
             return {"path": display, "kind": "unreadable"}, [f"{display}: {type(exc).__name__}"]
@@ -627,14 +707,35 @@ def _path_manifest(path: Path) -> tuple[dict[str, Any], list[str]]:
                 entries.append({"path": relative, "kind": "symlink"})
                 problems.append(f"{display}/{relative}: symlink sources are refused")
             elif stat.S_ISDIR(child_mode):
-                entries.append({"path": relative, "kind": "dir"})
+                entries.append(
+                    {
+                        "path": relative,
+                        "kind": "dir",
+                        "device": child.lstat().st_dev,
+                        "inode": child.lstat().st_ino,
+                    }
+                )
             elif stat.S_ISREG(child_mode):
+                child_meta = child.lstat()
+                if child_meta.st_nlink != 1:
+                    entries.append(
+                        {
+                            "path": relative,
+                            "kind": "hardlink",
+                            "link_count": child_meta.st_nlink,
+                        }
+                    )
+                    problems.append(f"{display}/{relative}: source must have exactly one hard link")
+                    continue
                 entries.append(
                     {
                         "path": relative,
                         "kind": "file",
-                        "size": child.stat().st_size,
+                        "size": child_meta.st_size,
                         "sha256": _file_hash(child),
+                        "device": child_meta.st_dev,
+                        "inode": child_meta.st_ino,
+                        "link_count": child_meta.st_nlink,
                     }
                 )
             else:
@@ -643,7 +744,13 @@ def _path_manifest(path: Path) -> tuple[dict[str, Any], list[str]]:
         except OSError as exc:
             entries.append({"path": relative, "kind": "unreadable"})
             problems.append(f"{display}/{relative}: {type(exc).__name__}")
-    return {"path": display, "kind": "dir", "entries": entries}, problems
+    return {
+        "path": display,
+        "kind": "dir",
+        "device": metadata.st_dev,
+        "inode": metadata.st_ino,
+        "entries": entries,
+    }, problems
 
 
 def _kernel_sources() -> tuple[list[dict[str, Any]], list[str], list[str]]:
@@ -657,24 +764,27 @@ def _kernel_sources() -> tuple[list[dict[str, Any]], list[str], list[str]]:
         problems.extend(found)
         if manifest.get("kind") == "file":
             included.append(path.name)
+        elif manifest.get("kind") == "missing":
+            problems.append(f"{path}: required kernel source is missing")
     return manifests, included, problems
 
 
 def _recovery_card(attempt_id: str, included: list[str]) -> str:
     return _mask(
         "# LIMEN Recovery Card (plaintext by design — contains ZERO secrets)\n\n"
-        f"Custody attempt: `{attempt_id}`. Generated deterministically by scripts/horrevm-custody.py.\n\n"
+        f"Custody attempt digest: `{_attempt_key(attempt_id)}`. "
+        "Generated deterministically by the owner-installed HORREVM effector.\n\n"
         "## What exists where\n"
         "- GitHub org `organvm` — all repos incl. private `organvm/arca` (sealed private estate).\n"
         "- Backblaze — offsite backup of the Mac `/` and `/Volumes/Archive4T`.\n"
         "- Archive4T + T7Recovery — local archive SSOT + second copy.\n"
-        "- Google Drive `limen-custody/` — arca-vault mirror + sealed inventories + this kernel.\n"
+        "- Google Drive `limen-custody/` — sealed arca-vault snapshot + sealed inventories + this kernel.\n"
         "- Dropbox `limen-custody/` — this kernel + this card.\n\n"
         "## Restore order\n"
         "1. New machine: sign into GitHub; clone organvm/limen; read CLAUDE.md + his-hand-levers.json.\n"
         "2. ARCA key: macOS Keychain item `limen-arca-vault` (escrow per lever L-ARCA-KEY-ESCROW).\n"
         "3. `bash scripts/arca.sh unseal kernel.tar.enc <dest>` recovers this kernel's bundle.\n"
-        "4. Backblaze restore for bulk; Drive `limen-custody/arca-vault/` for the sealed private estate.\n\n"
+        "4. Backblaze restore for bulk; Drive `limen-custody/arca-vault.tar.enc` for the sealed private estate.\n\n"
         "## Kernel bundle contents\n- " + "\n- ".join(included or ["(none present at build time)"]) + "\n"
     )
 
@@ -682,8 +792,16 @@ def _recovery_card(attempt_id: str, included: list[str]) -> str:
 def action_plan(action: str, remote: str, attempt_id: str) -> dict[str, Any]:
     """Create the deterministic, receipt-bindable plan without writing local or remote state."""
 
+    config = _owner_config()
     if remote not in PAYLOADS:
         raise ReceiptError(f"unknown custody remote: {remote}")
+    rail = config["rails"][remote]
+    common = {
+        "config_hash": config["config_hash"],
+        "rail_id": rail["rail_id"],
+        "tool_hashes": dict(config["tool_hashes"]),
+        "object_set": _object_set(attempt_id),
+    }
     if action == "probe":
         payload = _probe_payload(remote, attempt_id)
         source_manifest = {
@@ -698,6 +816,8 @@ def action_plan(action: str, remote: str, attempt_id: str) -> dict[str, Any]:
             "destination": _target(remote),
             "destinations": _plan_destinations(action, remote, attempt_id, []),
             "attempt_id": attempt_id,
+            **common,
+            "root_bindings": {},
             "payload_hash": _sha256_bytes(payload),
             "source_manifest_hash": _canonical_hash(source_manifest),
             "content_hashes": _content_hash_bindings(source_manifest),
@@ -709,11 +829,9 @@ def action_plan(action: str, remote: str, attempt_id: str) -> dict[str, Any]:
 
     payloads: list[dict[str, Any]] = []
     problems: list[str] = []
-    if remote not in BUDGET_GB:
-        problems.append(f"no payload budget is configured for {remote}")
     for spec in PAYLOADS[remote]:
         row: dict[str, Any] = {"name": spec.get("name"), "type": spec.get("type")}
-        if spec.get("type") in {"dir-mirror", "seal"}:
+        if spec.get("type") == "seal":
             source_value = spec.get("src")
             if not isinstance(source_value, str) or not source_value:
                 problems.append(f"payload source is missing: {spec!r}")
@@ -721,6 +839,8 @@ def action_plan(action: str, remote: str, attempt_id: str) -> dict[str, Any]:
                 source, found = _path_manifest(Path(os.path.expanduser(source_value)))
                 row["source"] = source
                 problems.extend(found)
+                if source.get("kind") == "missing":
+                    problems.append(f"required payload source is missing: {spec['name']}")
         elif spec.get("type") == "kernel":
             sources, included, found = _kernel_sources()
             card = _recovery_card(attempt_id, included).encode("utf-8")
@@ -743,8 +863,16 @@ def action_plan(action: str, remote: str, attempt_id: str) -> dict[str, Any]:
         "probe": {"kind": "generated-probe", "sha256": _sha256_bytes(probe_payload), "size": len(probe_payload)},
         "payloads": payloads,
     }
+    root_bindings = {
+        str(row.get("name")): row.get("source")
+        if row.get("type") == "seal"
+        else row.get("sources")
+        for row in payloads
+    }
     return {
         **manifest,
+        **common,
+        "root_bindings": root_bindings,
         "destination": _target(remote),
         "destinations": _plan_destinations(action, remote, attempt_id, payloads),
         "payload_hash": _canonical_hash(manifest),
@@ -782,9 +910,50 @@ def _validate_receipt_window(value: dict[str, Any]) -> tuple[datetime, datetime]
     return issued_at, expires_at
 
 
-def _open_trusted_input(path: Path, label: str, *, max_bytes: int) -> tuple[int, bytes]:
+def _assert_domus_owner_chain(path: Path, label: str, *, leaf_directory: bool = False) -> None:
+    """Require every absolute authority component to remain in owner-only custody."""
+
+    try:
+        relative = path.relative_to(OWNER_PATH_ANCHOR)
+    except ValueError as exc:
+        raise ReceiptError(f"{label} is outside the fixed absolute authority anchor") from exc
+    components = [
+        OWNER_PATH_ANCHOR,
+        *(
+            OWNER_PATH_ANCHOR.joinpath(*relative.parts[:index])
+            for index in range(1, len(relative.parts) + 1)
+        ),
+    ]
+    for index, candidate in enumerate(components):
+        try:
+            metadata = candidate.lstat()
+        except OSError as exc:
+            raise ReceiptError(f"{label} owner path is unavailable: {type(exc).__name__}") from exc
+        is_leaf = index == len(components) - 1
+        expected_directory = not is_leaf or leaf_directory
+        if stat.S_ISLNK(metadata.st_mode):
+            raise ReceiptError(f"{label} owner path must not contain symlinks")
+        if expected_directory and not stat.S_ISDIR(metadata.st_mode):
+            raise ReceiptError(f"{label} owner path component is not a directory")
+        if not expected_directory and not stat.S_ISREG(metadata.st_mode):
+            raise ReceiptError(f"{label} must be a regular file")
+        if metadata.st_uid != OWNER_UID:
+            raise ReceiptError(f"{label} must be owned by the Domus authority uid")
+        if metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            raise ReceiptError(f"{label} owner path must not be group/world writable")
+
+
+def _open_trusted_input(
+    path: Path,
+    label: str,
+    *,
+    max_bytes: int,
+    domus_custodied: bool = False,
+) -> tuple[int, bytes]:
     """Open one authority input without following links and retain the fd across verification."""
 
+    if domus_custodied:
+        _assert_domus_owner_chain(path, label)
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
     try:
         fd = os.open(path, flags)
@@ -798,8 +967,12 @@ def _open_trusted_input(path: Path, label: str, *, max_bytes: int) -> tuple[int,
             raise ReceiptError(f"{label} must contain 1..{max_bytes} bytes")
         if metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
             raise ReceiptError(f"{label} must not be group/world writable")
-        if hasattr(os, "geteuid") and metadata.st_uid != os.geteuid():
-            raise ReceiptError(f"{label} must be owned by the effective user")
+        expected_uid = OWNER_UID if domus_custodied else (
+            os.geteuid() if hasattr(os, "geteuid") else metadata.st_uid
+        )
+        if metadata.st_uid != expected_uid:
+            custody = "Domus authority" if domus_custodied else "effective user"
+            raise ReceiptError(f"{label} must be owned by the {custody}")
         raw = os.pread(fd, max_bytes + 1, 0)
         if len(raw) != metadata.st_size:
             raise ReceiptError(f"{label} changed while it was read")
@@ -807,6 +980,143 @@ def _open_trusted_input(path: Path, label: str, *, max_bytes: int) -> tuple[int,
     except Exception:
         os.close(fd)
         raise
+
+
+def _trusted_file_hash(path: Path, label: str, *, max_bytes: int = 128 * 1024 * 1024) -> str:
+    _assert_domus_owner_chain(path, label)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise ReceiptError(f"{label} is unreadable: {type(exc).__name__}") from exc
+    try:
+        metadata = os.fstat(fd)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise ReceiptError(f"{label} must be a single-link regular file")
+        if not 1 <= metadata.st_size <= max_bytes:
+            raise ReceiptError(f"{label} size is outside the owner bound")
+        digest = hashlib.sha256()
+        remaining = max_bytes + 1
+        while remaining:
+            chunk = os.read(fd, min(remaining, 1024 * 1024))
+            if not chunk:
+                break
+            digest.update(chunk)
+            remaining -= len(chunk)
+        if remaining == 0:
+            raise ReceiptError(f"{label} exceeds its owner size bound")
+        return "sha256:" + digest.hexdigest()
+    finally:
+        os.close(fd)
+
+
+def _load_owner_config() -> dict[str, Any]:
+    fd, raw = _open_trusted_input(
+        OWNER_CONFIG,
+        "Domus HORREVM owner config",
+        max_bytes=MAX_CONFIG_BYTES,
+        domus_custodied=True,
+    )
+    os.close(fd)
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise ReceiptError("Domus HORREVM owner config is not valid JSON") from exc
+    expected = {
+        "schema",
+        "rclone_binary",
+        "rclone_config",
+        "arca_binary",
+        "max_age_days",
+        "rails",
+        "sources",
+    }
+    if not isinstance(value, dict) or set(value) != expected:
+        raise ReceiptError("Domus HORREVM owner config fields do not match the schema")
+    if value.get("schema") != CONFIG_SCHEMA:
+        raise ReceiptError(f"Domus HORREVM owner config schema must be {CONFIG_SCHEMA}")
+
+    for field, fixed in (
+        ("rclone_binary", RCLONE),
+        ("rclone_config", RCLONE_CONF),
+        ("arca_binary", ARCA),
+    ):
+        raw_path = value.get(field)
+        if not isinstance(raw_path, str) or Path(raw_path) != fixed:
+            raise ReceiptError(f"Domus HORREVM {field} must equal the fixed deployed path")
+    max_age = value.get("max_age_days")
+    if isinstance(max_age, bool) or not isinstance(max_age, int) or not 1 <= max_age <= 365:
+        raise ReceiptError("Domus HORREVM max_age_days must be an integer in 1..365")
+    rails = value.get("rails")
+    if not isinstance(rails, dict) or set(rails) != set(PAYLOADS):
+        raise ReceiptError("Domus HORREVM owner config must define every and only the fixed custody rails")
+    normalized_rails: dict[str, dict[str, Any]] = {}
+    for remote in sorted(PAYLOADS):
+        row = rails.get(remote)
+        if not isinstance(row, dict) or set(row) != {"rail_id", "budget_bytes"}:
+            raise ReceiptError(f"Domus HORREVM rail {remote} fields are invalid")
+        rail_id = row.get("rail_id")
+        budget = row.get("budget_bytes")
+        if not isinstance(rail_id, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", rail_id):
+            raise ReceiptError(f"Domus HORREVM rail {remote} rail_id must be a sha256 identity")
+        if isinstance(budget, bool) or not isinstance(budget, int) or not 1 <= budget <= 100 * 10**9:
+            raise ReceiptError(f"Domus HORREVM rail {remote} budget_bytes is outside 1..100GB")
+        normalized_rails[remote] = {"rail_id": rail_id, "budget_bytes": budget}
+    sources = value.get("sources")
+    if not isinstance(sources, dict) or set(sources) != {"arca-vault", "corpus-inventory", "kernel"}:
+        raise ReceiptError("Domus HORREVM sources must define arca-vault, corpus-inventory, and kernel")
+    normalized_sources: dict[str, Any] = {}
+    for name in ("arca-vault", "corpus-inventory"):
+        raw_path = sources.get(name)
+        if not isinstance(raw_path, str) or not raw_path.startswith("/"):
+            raise ReceiptError(f"Domus HORREVM source {name} must be an absolute path")
+        path = Path(raw_path)
+        if path != path.resolve():
+            raise ReceiptError(f"Domus HORREVM source {name} must be canonical")
+        normalized_sources[name] = str(path)
+    kernel = sources.get("kernel")
+    if not isinstance(kernel, list) or not kernel:
+        raise ReceiptError("Domus HORREVM kernel sources must be a non-empty list")
+    normalized_kernel: list[str] = []
+    for raw_path in kernel:
+        if not isinstance(raw_path, str) or not raw_path.startswith("/"):
+            raise ReceiptError("Domus HORREVM kernel source paths must be absolute")
+        path = Path(raw_path)
+        if path != path.resolve():
+            raise ReceiptError("Domus HORREVM kernel source paths must be canonical")
+        normalized_kernel.append(str(path))
+    if len(normalized_kernel) != len(set(normalized_kernel)):
+        raise ReceiptError("Domus HORREVM kernel source paths must be unique")
+    normalized_sources["kernel"] = normalized_kernel
+    return {
+        "schema": CONFIG_SCHEMA,
+        "config_hash": _sha256_bytes(raw),
+        "max_age_days": max_age,
+        "rails": normalized_rails,
+        "sources": normalized_sources,
+        "tool_hashes": {
+            "rclone": _trusted_file_hash(RCLONE, "Domus rclone binary"),
+            "rclone_config": _trusted_file_hash(RCLONE_CONF, "Domus rclone config", max_bytes=MAX_CONFIG_BYTES),
+            "arca": _trusted_file_hash(ARCA, "Domus ARCA effector"),
+        },
+    }
+
+
+def _activate_owner_config() -> dict[str, Any]:
+    global ACTIVE_CONFIG, KERNEL_CANDIDATES
+    ACTIVE_CONFIG = _load_owner_config()
+    KERNEL_CANDIDATES = list(ACTIVE_CONFIG["sources"]["kernel"])
+    for remote, payloads in PAYLOADS.items():
+        for spec in payloads:
+            if spec.get("type") == "seal":
+                spec["src"] = ACTIVE_CONFIG["sources"][spec["name"]]
+    return ACTIVE_CONFIG
+
+
+def _owner_config() -> dict[str, Any]:
+    if ACTIVE_CONFIG is None:
+        raise ReceiptError("fixed Domus HORREVM owner config is not activated")
+    return ACTIVE_CONFIG
 
 
 def _verify_authority_signature(
@@ -820,7 +1130,10 @@ def _verify_authority_signature(
     if not AUTHORIZED_PRINCIPAL.fullmatch(signer):
         raise ReceiptError("receipt authorized_by is not a safe OpenSSH principal")
     allowed_fd, allowed_raw = _open_trusted_input(
-        OWNER_ALLOWED_SIGNERS, "pinned allowed-signers owner", max_bytes=MAX_TRUST_FILE_BYTES
+        OWNER_ALLOWED_SIGNERS,
+        "pinned allowed-signers owner",
+        max_bytes=MAX_TRUST_FILE_BYTES,
+        domus_custodied=True,
     )
     signature_fd: int | None = None
     try:
@@ -838,7 +1151,7 @@ def _verify_authority_signature(
         try:
             verified = subprocess.run(
                 [
-                    "ssh-keygen",
+                    str(SSH_KEYGEN),
                     "-Y",
                     "verify",
                     "-f",
@@ -925,6 +1238,11 @@ def load_apply_receipt(
         "source_manifest_hash",
         "content_hashes",
         "payload_hash",
+        "config_hash",
+        "rail_id",
+        "tool_hashes",
+        "root_bindings",
+        "object_set",
         "issued_at",
         "expires_at",
         "attempt_id",
@@ -943,6 +1261,11 @@ def load_apply_receipt(
     source_manifest_hash = value.get("source_manifest_hash")
     content_hashes = value.get("content_hashes")
     payload_hash = value.get("payload_hash")
+    config_hash = value.get("config_hash")
+    rail_id = value.get("rail_id")
+    tool_hashes = value.get("tool_hashes")
+    root_bindings = value.get("root_bindings")
+    object_set = value.get("object_set")
     attempt_id = value.get("attempt_id")
     if action != expected_action:
         raise ReceiptError(f"receipt action {action!r} does not match {expected_action!r}")
@@ -967,6 +1290,21 @@ def load_apply_receipt(
         for name, digest in content_hashes.items()
     ):
         raise ReceiptError("receipt content_hashes must map logical names to sha256 digests")
+    if not isinstance(config_hash, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", config_hash):
+        raise ReceiptError("receipt config_hash must be a sha256 digest")
+    if not isinstance(rail_id, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", rail_id):
+        raise ReceiptError("receipt rail_id must be a sha256 identity")
+    if not isinstance(tool_hashes, dict) or not all(
+        isinstance(name, str)
+        and isinstance(digest, str)
+        and re.fullmatch(r"sha256:[0-9a-f]{64}", digest)
+        for name, digest in tool_hashes.items()
+    ):
+        raise ReceiptError("receipt tool_hashes must bind every deployed tool")
+    if not isinstance(root_bindings, dict):
+        raise ReceiptError("receipt root_bindings must be an object")
+    if not isinstance(object_set, str) or object_set != _object_set(attempt_id):
+        raise ReceiptError("receipt object_set must be the immutable attempt-scoped set")
     if (
         not isinstance(destinations, list)
         or not destinations
@@ -986,6 +1324,15 @@ def load_apply_receipt(
         raise ReceiptError("receipt content_hashes do not match the current source bytes")
     if destinations != plan["destinations"]:
         raise ReceiptError("receipt destinations do not match the exact custody objects")
+    for field, supplied in (
+        ("config_hash", config_hash),
+        ("rail_id", rail_id),
+        ("tool_hashes", tool_hashes),
+        ("root_bindings", root_bindings),
+        ("object_set", object_set),
+    ):
+        if supplied != plan[field]:
+            raise ReceiptError(f"receipt {field} does not match fixed owner evidence")
     receipt = ApplyReceipt(
         action=action,
         target=target,
@@ -999,16 +1346,35 @@ def load_apply_receipt(
         signer=authorized_by,
         trust_root_hash=trust_root_hash,
         remote=remote,
+        config_hash=config_hash,
+        rail_id=rail_id,
+        tool_hashes=dict(tool_hashes),
+        root_bindings=dict(root_bindings),
+        object_set=object_set,
     )
     return receipt, plan
 
 
-def _consume_receipt(path: Path, receipt: ApplyReceipt) -> None:
-    """Persist an owner-adjacent one-shot marker before any apply subprocess."""
+def _require_domus_installed_effector() -> None:
+    actual = Path(__file__).resolve()
+    if actual != OWNER_EFFECTOR:
+        raise ReceiptError("apply is available only from the fixed Domus-installed effector")
+    _assert_domus_owner_chain(actual, "Domus HORREVM effector")
+
+
+def _consume_receipt(receipt: ApplyReceipt) -> None:
+    """Reserve the signed receipt in fixed Domus custody before any apply subprocess."""
 
     _require_receipt(receipt, "receipt consumption")
-    digest = receipt.receipt_hash.removeprefix("sha256:")
-    marker = path.with_name(f".{path.name}.{digest}.consumed")
+    if hasattr(os, "geteuid") and os.geteuid() != OWNER_UID:
+        raise ReceiptError("receipt consumption requires the Domus authority execution identity")
+    _assert_domus_owner_chain(
+        OWNER_CONSUMED_DIR,
+        "Domus receipt-consumption registry",
+        leaf_directory=True,
+    )
+    digest = _attempt_key(receipt.attempt_id).removeprefix("sha256:")
+    marker_name = f"{digest}.json"
     payload = {
         "schema": "limen.horrevm.consumed_receipt.v1",
         "receipt_hash": receipt.receipt_hash,
@@ -1017,38 +1383,141 @@ def _consume_receipt(path: Path, receipt: ApplyReceipt) -> None:
         "target": receipt.target,
         "payload_hash": receipt.payload_hash,
         "source_manifest_hash": receipt.source_manifest_hash,
+        "config_hash": receipt.config_hash,
+        "rail_id": receipt.rail_id,
+        "tool_hashes": receipt.tool_hashes,
+        "root_bindings_hash": _canonical_hash(receipt.root_bindings),
+        "object_set": receipt.object_set,
         "trust_root_hash": receipt.trust_root_hash,
         "consumed_at": _iso(now()),
     }
-    encoded = json.dumps(payload, sort_keys=True, indent=2).encode("utf-8") + b"\n"
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    directory_fd: int | None = None
+    marker_fd: int | None = None
     try:
-        fd = os.open(marker, flags, 0o600)
-    except FileExistsError as exc:
-        raise ReceiptError("exact apply receipt was already consumed") from exc
-    except OSError as exc:
-        raise ReceiptError(f"receipt replay marker could not be created: {type(exc).__name__}") from exc
+        try:
+            directory_flags = (
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_CLOEXEC", 0)
+            )
+            directory_fd = os.open(OWNER_CONSUMED_DIR, directory_flags)
+            directory_metadata = os.fstat(directory_fd)
+            if directory_metadata.st_uid != OWNER_UID or directory_metadata.st_mode & (
+                stat.S_IWGRP | stat.S_IWOTH
+            ):
+                raise ReceiptError("Domus receipt-consumption registry lost owner custody")
+            marker_fd = os.open(marker_name, flags, 0o600, dir_fd=directory_fd)
+        except FileExistsError as exc:
+            raise ReceiptError("receipt attempt_id was already consumed") from exc
+        except OSError as exc:
+            raise ReceiptError(f"receipt replay marker could not be created: {type(exc).__name__}") from exc
+        try:
+            view = memoryview(encoded)
+            while view:
+                written = os.write(marker_fd, view)
+                view = view[written:]
+            os.fsync(marker_fd)
+            os.fsync(directory_fd)
+        except OSError as exc:
+            raise ReceiptError(f"receipt replay marker could not be made durable: {type(exc).__name__}") from exc
+    finally:
+        if marker_fd is not None:
+            os.close(marker_fd)
+        if directory_fd is not None:
+            os.close(directory_fd)
+
+
+def _attempt_journal_name(receipt: ApplyReceipt) -> str:
+    return _attempt_key(receipt.attempt_id).removeprefix("sha256:") + ".json"
+
+
+def _append_effect_journal(receipt: ApplyReceipt, event: dict[str, Any]) -> None:
+    """Append one durable owner-custodied effect fact before/after every remote mutation."""
+
+    _require_receipt(receipt, "effect journal publication")
+    _assert_domus_owner_chain(
+        OWNER_CONSUMED_DIR,
+        "Domus HORREVM effect journal registry",
+        leaf_directory=True,
+    )
+    directory_fd = os.open(
+        OWNER_CONSUMED_DIR,
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0),
+    )
+    journal_fd: int | None = None
     try:
+        flags = os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+        journal_fd = os.open(_attempt_journal_name(receipt), flags, dir_fd=directory_fd)
+        metadata = os.fstat(journal_fd)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or metadata.st_uid != OWNER_UID
+            or metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+        ):
+            raise ReceiptError("HORREVM effect journal lost owner custody")
+        payload = {
+            "schema": "limen.horrevm.effect_event.v1",
+            "attempt_id_hash": _attempt_key(receipt.attempt_id),
+            "receipt_hash": receipt.receipt_hash,
+            "recorded_at": _iso(now()),
+            **event,
+        }
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
         view = memoryview(encoded)
         while view:
-            written = os.write(fd, view)
+            written = os.write(journal_fd, view)
+            if written <= 0:
+                raise OSError("short write to effect journal")
             view = view[written:]
-        os.fsync(fd)
-    except OSError as exc:
-        raise ReceiptError(f"receipt replay marker could not be made durable: {type(exc).__name__}") from exc
+        os.fsync(journal_fd)
+        os.fsync(directory_fd)
     finally:
-        os.close(fd)
-    directory_flags = (
-        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+        if journal_fd is not None:
+            os.close(journal_fd)
+        os.close(directory_fd)
+
+
+def _acquire_state_lock() -> tuple[int, int]:
+    """Serialize state publication across distinct owner-authorized attempts."""
+
+    _assert_domus_owner_chain(
+        OWNER_CONSUMED_DIR,
+        "Domus HORREVM apply lock registry",
+        leaf_directory=True,
     )
+    directory_fd = os.open(
+        OWNER_CONSUMED_DIR,
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0),
+    )
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
     try:
-        parent_fd = os.open(marker.parent, directory_flags)
-        try:
-            os.fsync(parent_fd)
-        finally:
-            os.close(parent_fd)
-    except OSError as exc:
-        raise ReceiptError(f"receipt replay marker parent is unsafe: {type(exc).__name__}") from exc
+        lock_fd = os.open(".active-apply.lock", flags, 0o600, dir_fd=directory_fd)
+    except FileExistsError as exc:
+        os.close(directory_fd)
+        raise ReceiptError("another HORREVM apply owns the durable state lock") from exc
+    os.write(lock_fd, f"{os.getpid()}\n".encode("ascii"))
+    os.fsync(lock_fd)
+    os.fsync(directory_fd)
+    return directory_fd, lock_fd
+
+
+def _release_state_lock(directory_fd: int, lock_fd: int) -> None:
+    os.close(lock_fd)
+    try:
+        os.unlink(".active-apply.lock", dir_fd=directory_fd)
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 def payload_bytes(paths: list[Path]) -> int:
@@ -1063,12 +1532,80 @@ def payload_bytes(paths: list[Path]) -> int:
     return total
 
 
+def _ciphertext_hash(path: Path) -> str:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise EffectRefused(f"ciphertext could not be opened safely: {type(exc).__name__}") from exc
+    try:
+        metadata = os.fstat(fd)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise EffectRefused("ciphertext must be a single-link regular non-symlink file")
+        if metadata.st_size < 16:
+            raise EffectRefused("ciphertext is too short to contain an ARCA envelope")
+        header = os.pread(fd, 8, 0)
+        if header != b"Salted__":
+            raise EffectRefused("ciphertext lacks the ARCA OpenSSL salted envelope header")
+        digest = hashlib.sha256()
+        while chunk := os.read(fd, 1024 * 1024):
+            digest.update(chunk)
+        return "sha256:" + digest.hexdigest()
+    finally:
+        os.close(fd)
+
+
+def _verify_unsealed_manifest(
+    ciphertext: Path,
+    *,
+    expected_name: str,
+    expected_manifest: dict[str, Any],
+    verification_root: Path,
+) -> None:
+    _ciphertext_hash(ciphertext)
+    verification_root.mkdir(mode=0o700)
+    rc, _ = run(
+        ["/bin/bash", str(ARCA), "unseal", str(ciphertext), str(verification_root)],
+        300,
+    )
+    if rc != 0:
+        raise EffectRefused("ARCA unseal verification failed")
+    children = list(verification_root.iterdir())
+    if [child.name for child in children] != [expected_name]:
+        raise EffectRefused("ARCA unseal produced an unexpected root set")
+    actual, problems = _path_manifest(verification_root / expected_name)
+    if problems or _content_manifest(actual) != _content_manifest(expected_manifest):
+        raise EffectRefused("ARCA unseal manifest does not match the receipt-bound plaintext")
+
+
 def seal(src: Path, out_enc: Path, receipt: ApplyReceipt | None = None) -> bool:
     _require_receipt(receipt, "local sealing")
-    rc, out = run(["bash", str(ARCA), "seal", str(src), str(out_enc)], 300)
+    _assert_domus_owner_chain(ARCA, "Domus ARCA effector")
+    source_manifest, source_problems = _path_manifest(src)
+    if source_problems or source_manifest.get("kind") not in {"file", "dir"}:
+        raise EffectRefused("receipt-bound plaintext became unsafe before sealing")
+    rc, output = run(["/bin/bash", str(ARCA), "seal", str(src), str(out_enc)], 300)
     if rc != 0:
-        say(f"  seal failed for {src.name}: {out.strip()[-120:]}")
-    return rc == 0
+        say(f"  seal failed for {src.name}: {output.strip()[-120:]}")
+        return False
+    verify_root = out_enc.parent / f".verify-{out_enc.name}-{uuid.uuid4().hex}"
+    try:
+        _verify_unsealed_manifest(
+            out_enc,
+            expected_name=src.name,
+            expected_manifest=source_manifest,
+            verification_root=verify_root,
+        )
+        VERIFIED_CIPHERTEXT_MANIFESTS[str(out_enc.resolve())] = {
+            "expected_name": src.name,
+            "manifest": _content_manifest(source_manifest),
+            "ciphertext_sha256": _ciphertext_hash(out_enc),
+        }
+        return True
+    except EffectRefused as exc:
+        out_enc.unlink(missing_ok=True)
+        say(f"  seal verification failed for {src.name}: {exc}")
+        return False
 
 
 def build_kernel(
@@ -1161,16 +1698,7 @@ def _stage_payloads(
             or planned.get("type") != spec.get("type")
         ):
             raise EffectRefused("payload staging plan no longer matches the configured payload")
-        if spec["type"] == "dir-mirror":
-            source_manifest = planned.get("source")
-            if not isinstance(source_manifest, dict):
-                raise EffectRefused("directory mirror omitted its receipt-bound source manifest")
-            snapshot = _snapshot_manifest_source(source_manifest, snapshots / spec["name"], receipt)
-            if snapshot is not None:
-                if not snapshot.is_dir():
-                    raise EffectRefused("directory mirror source is not a directory")
-                staged.append((snapshot, spec["name"]))
-        elif spec["type"] == "seal":
+        if spec["type"] == "seal":
             source_manifest = planned.get("source")
             if not isinstance(source_manifest, dict):
                 raise EffectRefused("sealed payload omitted its receipt-bound source manifest")
@@ -1206,8 +1734,8 @@ def restore_test(
     _require_receipt(receipt, "restore-proof staging")
     if not kernel or not kernel.is_file():
         return False
-    probe_path = f"{remote}:{PROBE_NS}/{_attempt_slug(receipt.attempt_id)}-kernel.tar.enc"
-    if not probe_path.startswith(f"{remote}:{PROBE_NS}/"):
+    probe_path = f"{remote}:{receipt.object_set}/probes/kernel.tar.enc"
+    if not probe_path.startswith(f"{remote}:{receipt.object_set}/probes/"):
         raise EffectRefused("restore probe escaped the approved namespace")
     pulled = workdir / "pulled-kernel.tar.enc"
     upload_attempted = False
@@ -1215,41 +1743,186 @@ def restore_test(
     copy_ok = unseal_ok = False
     delete_rc: int | None = None
     try:
+        _assert_domus_owner_chain(ARCA, "Domus ARCA effector")
         upload_attempted = True
+        _append_effect_journal(receipt, {"phase": "restore-probe-copy-planned", "object": probe_path})
         rc, _ = rclone(["copyto", str(kernel), probe_path], receipt=receipt, timeout=600)
+        _append_effect_journal(
+            receipt,
+            {"phase": "restore-probe-copy-returned", "object": probe_path, "command_rc": rc},
+        )
         uploaded = rc == 0
         if not uploaded:
             return False
         rc, _ = rclone(["copyto", probe_path, str(pulled)], receipt=receipt, timeout=600)
-        copy_ok = rc == 0 and pulled.is_file() and _file_hash(pulled) == _file_hash(kernel)
+        expected = VERIFIED_CIPHERTEXT_MANIFESTS.get(str(kernel.resolve()))
+        copy_ok = (
+            rc == 0
+            and expected is not None
+            and _ciphertext_hash(pulled) == expected["ciphertext_sha256"]
+        )
         if copy_ok:
             out_dir = workdir / "restore-check"
-            rc, _ = run(["bash", str(ARCA), "unseal", str(pulled), str(out_dir)], 300)
-            unseal_ok = rc == 0 and out_dir.exists() and any(out_dir.rglob("*"))
+            try:
+                _verify_unsealed_manifest(
+                    pulled,
+                    expected_name=str(expected["expected_name"]),
+                    expected_manifest=dict(expected["manifest"]),
+                    verification_root=out_dir,
+                )
+                unseal_ok = True
+            except EffectRefused:
+                unseal_ok = False
     finally:
         if upload_attempted:
             delete_rc, _ = rclone(["deletefile", probe_path], receipt=receipt, timeout=60)
+            _append_effect_journal(
+                receipt,
+                {"phase": "restore-probe-cleanup-returned", "object": probe_path, "command_rc": delete_rc},
+            )
     ok = copy_ok and unseal_ok and delete_rc == 0
     say(f"  {remote}: restore-proof {'PASSED' if ok else 'FAILED'}")
     return ok
 
 
+def _safe_regular_hash(path: Path) -> tuple[str, int]:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise EffectRefused(f"staged object could not be opened safely: {type(exc).__name__}") from exc
+    try:
+        metadata = os.fstat(fd)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise EffectRefused("staged object must be a single-link regular file")
+        digest = hashlib.sha256()
+        while chunk := os.read(fd, 1024 * 1024):
+            digest.update(chunk)
+        return "sha256:" + digest.hexdigest(), metadata.st_size
+    finally:
+        os.close(fd)
+
+
+def _write_exclusive_json(path: Path, value: dict[str, Any]) -> None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    fd = os.open(path, flags, 0o400)
+    try:
+        payload = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
+        view = memoryview(payload)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0:
+                raise OSError("short write")
+            view = view[written:]
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def _copy_payloads(remote: str, staged: list[tuple[Path, str]], receipt: ApplyReceipt) -> bool:
+    manifest_objects: list[dict[str, Any]] = []
     for local, subpath in staged:
-        destination = f"{remote}:{CUSTODY_DIR}/{subpath}"
-        verb = "copy" if local.is_dir() else "copyto"
-        rc, _ = rclone([verb, str(local), destination], receipt=receipt, timeout=1800)
+        if not local.is_file():
+            raise EffectRefused("HORREVM final objects must be materialized regular files")
+        if subpath.endswith(".enc"):
+            digest = _ciphertext_hash(local)
+            verified = VERIFIED_CIPHERTEXT_MANIFESTS.get(str(local.resolve()))
+            if verified is None or verified.get("ciphertext_sha256") != digest:
+                raise EffectRefused("ciphertext lacks an exact local unseal-manifest proof")
+            size = local.lstat().st_size
+        else:
+            digest, size = _safe_regular_hash(local)
+        destination = f"{remote}:{receipt.object_set}/objects/{subpath}"
+        if destination not in receipt.destinations:
+            raise EffectRefused("final object destination is outside the signed immutable set")
+        _append_effect_journal(
+            receipt,
+            {
+                "phase": "planned",
+                "object": destination,
+                "sha256": digest,
+                "size_bytes": size,
+            },
+        )
+        rc, _ = rclone(["copyto", str(local), destination], receipt=receipt, timeout=1800)
+        _append_effect_journal(
+            receipt,
+            {
+                "phase": "copy-returned",
+                "object": destination,
+                "sha256": digest,
+                "command_rc": rc,
+            },
+        )
         ok = rc == 0
         if ok:
             rc, _ = rclone(["check", str(local), destination, "--one-way"], timeout=600)
             ok = rc == 0
+        _append_effect_journal(
+            receipt,
+            {
+                "phase": "verified" if ok else "unverified",
+                "object": destination,
+                "sha256": digest,
+                "check_rc": rc,
+            },
+        )
         say(f"  {remote}: {local.name} {'shipped+verified' if ok else 'FAILED'}")
         if not ok:
             return False
-    return bool(staged)
+        manifest_objects.append(
+            {
+                "object": destination,
+                "sha256": digest,
+                "size_bytes": size,
+            }
+        )
+    if not manifest_objects:
+        return False
+
+    manifest_path = staged[0][0].parent / "manifest-current.json"
+    manifest = {
+        "schema": "limen.horrevm.immutable_object_set.v1",
+        "attempt_id_hash": _attempt_key(receipt.attempt_id),
+        "object_set": receipt.object_set,
+        "config_hash": receipt.config_hash,
+        "rail_id": receipt.rail_id,
+        "payload_hash": receipt.payload_hash,
+        "source_manifest_hash": receipt.source_manifest_hash,
+        "objects": manifest_objects,
+    }
+    _write_exclusive_json(manifest_path, manifest)
+    manifest_hash, manifest_size = _safe_regular_hash(manifest_path)
+    manifest_destination = f"{remote}:{receipt.object_set}/manifest-current.json"
+    if manifest_destination not in receipt.destinations:
+        raise EffectRefused("manifest-current destination is outside the signed immutable set")
+    _append_effect_journal(
+        receipt,
+        {
+            "phase": "manifest-planned",
+            "object": manifest_destination,
+            "sha256": manifest_hash,
+            "size_bytes": manifest_size,
+        },
+    )
+    rc, _ = rclone(["copyto", str(manifest_path), manifest_destination], receipt=receipt, timeout=600)
+    ok = rc == 0
+    if ok:
+        rc, _ = rclone(["check", str(manifest_path), manifest_destination, "--one-way"], timeout=600)
+        ok = rc == 0
+    _append_effect_journal(
+        receipt,
+        {
+            "phase": "manifest-current-verified" if ok else "manifest-current-unverified",
+            "object": manifest_destination,
+            "sha256": manifest_hash,
+            "check_rc": rc,
+        },
+    )
+    return ok
 
 
-def apply_action(
+def _apply_action_locked(
     action: str,
     receipt_path: Path,
     signature_path: Path,
@@ -1257,6 +1930,7 @@ def apply_action(
     expected_attempt_id: str | None = None,
 ) -> int:
     try:
+        _require_domus_installed_effector()
         _require_apply_valve("HORREVM apply")
         receipt, plan = load_apply_receipt(
             receipt_path,
@@ -1290,7 +1964,7 @@ def apply_action(
                 pass
 
     try:
-        _consume_receipt(receipt_path, receipt)
+        _consume_receipt(receipt)
     except (EffectRefused, ReceiptError) as exc:
         say(f"HORREVM custody REFUSED: {exc}")
         return 2
@@ -1308,7 +1982,8 @@ def apply_action(
         return 2
 
     try:
-        with tempfile.TemporaryDirectory(prefix="horrevm-") as td:
+        _assert_domus_owner_chain(OWNER_APPLY_TMP, "Domus HORREVM apply temp root", leaf_directory=True)
+        with tempfile.TemporaryDirectory(prefix="horrevm-", dir=str(OWNER_APPLY_TMP)) as td:
             workdir = Path(td)
             rail["probe_roundtrip_ok"] = gate_b(receipt.remote, workdir, receipt)
             if not rail["probe_roundtrip_ok"]:
@@ -1337,7 +2012,7 @@ def apply_action(
                 return 1
 
             size = payload_bytes([source for source, _ in staged])
-            cap = BUDGET_GB[receipt.remote] * 1e9
+            cap = _owner_config()["rails"][receipt.remote]["budget_bytes"]
             free = rail.get("quota_free")
             if size > cap or (isinstance(free, (int, float)) and free < 2 * size):
                 rail["verify_ok"] = False
@@ -1367,6 +2042,11 @@ def apply_action(
                     "last_verified_push": completed,
                     "last_restore_test": completed,
                     "last_attempt_id_hash": _attempt_key(receipt.attempt_id),
+                    "config_hash": receipt.config_hash,
+                    "rail_id": receipt.rail_id,
+                    "tool_hashes": receipt.tool_hashes,
+                    "object_set": receipt.object_set,
+                    "manifest_current_verified": True,
                 }
             )
             if not _finish_attempt(state, receipt, "verified"):
@@ -1379,6 +2059,29 @@ def apply_action(
 
     say(f"HORREVM custody verified for {receipt.target} ({receipt.attempt_id})")
     return 0
+
+
+def apply_action(
+    action: str,
+    receipt_path: Path,
+    signature_path: Path,
+    *,
+    expected_attempt_id: str | None = None,
+) -> int:
+    try:
+        directory_fd, lock_fd = _acquire_state_lock()
+    except ReceiptError as exc:
+        say(f"HORREVM custody REFUSED: {exc}")
+        return 2
+    try:
+        return _apply_action_locked(
+            action,
+            receipt_path,
+            signature_path,
+            expected_attempt_id=expected_attempt_id,
+        )
+    finally:
+        _release_state_lock(directory_fd, lock_fd)
 
 
 def preview(
@@ -1412,6 +2115,11 @@ def preview(
                 "source_manifest_hash": receipt.source_manifest_hash,
                 "content_hashes": receipt.content_hashes,
                 "destinations": list(receipt.destinations),
+                "config_hash": receipt.config_hash,
+                "rail_id": receipt.rail_id,
+                "tool_hashes": receipt.tool_hashes,
+                "root_bindings": receipt.root_bindings,
+                "object_set": receipt.object_set,
                 "attempt_id": receipt.attempt_id,
                 "expires_at": _iso(receipt.expires_at),
                 "receipt_valid": True,
@@ -1437,6 +2145,11 @@ def preview(
                         "source_manifest_hash": plan["source_manifest_hash"],
                         "content_hashes": plan["content_hashes"],
                         "payload_hash": plan["payload_hash"],
+                        "config_hash": plan["config_hash"],
+                        "rail_id": plan["rail_id"],
+                        "tool_hashes": plan["tool_hashes"],
+                        "root_bindings": plan["root_bindings"],
+                        "object_set": plan["object_set"],
                         "issued_at": "<ISO-8601 UTC issue time>",
                         "expires_at": "<ISO-8601 UTC expiry>",
                         "attempt_id": chosen,
@@ -1451,13 +2164,26 @@ def preview(
 
 def status() -> int:
     state = load_state()
+    if state.get("_state_error"):
+        say(f"status: UNPROVEN — {state['_state_error']}")
+        return 2
     if parked():
-        say(f"status: PARKED on {LEVER} (dark by design) — exit 0")
-        return 0
+        say(f"status: UNPROVEN — PARKED on {LEVER}; no current remote custody evidence")
+        return 2
     armed = os.environ.get("LIMEN_HORREVM_APPLY", "0") == "1"
     stale = []
     for remote in PAYLOADS:
         rail = _rail(state, remote)
+        config = _owner_config()
+        if (
+            rail.get("config_hash") != config["config_hash"]
+            or rail.get("rail_id") != config["rails"][remote]["rail_id"]
+            or rail.get("tool_hashes") != config["tool_hashes"]
+            or rail.get("manifest_current_verified") is not True
+            or not isinstance(rail.get("object_set"), str)
+        ):
+            stale.append(f"{remote}: owner bindings or immutable manifest proof are stale")
+            continue
         last = rail.get("last_verified_push")
         if not last:
             stale.append(f"{remote}: never verified")
@@ -1467,34 +2193,33 @@ def status() -> int:
             except ValueError:
                 stale.append(f"{remote}: invalid freshness receipt")
             else:
-                if now() - parsed > timedelta(days=MAX_AGE_DAYS):
+                if now() - parsed > timedelta(days=_owner_config()["max_age_days"]):
                     stale.append(f"{remote}: last verified {last}")
-    if not armed:
-        say(
-            f"status: consented-but-unarmed dry-run (set LIMEN_HORREVM_APPLY=1); {len(stale)} rail(s) unproven — exit 0"
-        )
-        return 0
     if stale:
         say("status: STALE — " + "; ".join(stale))
         return 1
+    if not armed:
+        say("status: fresh but apply is currently unarmed — existing owner evidence remains current")
+        return 0
     say("status: fresh — every custody rail verified within bounds")
     return 0
 
 
 def doctor() -> int:
-    problems = []
-    if not ARCA.exists():
-        problems.append("scripts/arca.sh missing")
-    elif "cmd_seal" not in ARCA.read_text(encoding="utf-8"):
-        problems.append("arca.sh lacks seal/unseal verbs")
-    for remote, payloads in PAYLOADS.items():
-        if remote not in BUDGET_GB:
-            problems.append(f"no budget for {remote}")
-        for spec in payloads:
-            if spec["type"] not in ("dir-mirror", "seal", "kernel"):
-                problems.append(f"unknown payload type {spec}")
-            if spec["type"] != "kernel" and "src" not in spec:
-                problems.append(f"payload missing src: {spec}")
+    problems: list[str] = []
+    try:
+        config = _owner_config()
+        _assert_domus_owner_chain(OWNER_APPLY_TMP, "Domus HORREVM apply temp root", leaf_directory=True)
+        _assert_domus_owner_chain(OWNER_WORKDIR, "Domus HORREVM workdir", leaf_directory=True)
+        for name, current in (
+            ("rclone", _trusted_file_hash(RCLONE, "Domus rclone binary")),
+            ("rclone_config", _trusted_file_hash(RCLONE_CONF, "Domus rclone config", max_bytes=MAX_CONFIG_BYTES)),
+            ("arca", _trusted_file_hash(ARCA, "Domus ARCA effector")),
+        ):
+            if current != config["tool_hashes"].get(name):
+                problems.append(f"deployed {name} hash differs from the owner config")
+    except ReceiptError as exc:
+        problems.append(str(exc))
     for p in problems:
         say(f"  DOCTOR: {p}")
     say(f"HORREVM custody --doctor: {'OK' if not problems else f'{len(problems)} problem(s)'}")
@@ -1502,7 +2227,6 @@ def doctor() -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    os.environ.setdefault("OS_ACTIVITY_MODE", "disable")  # fork/os_log SIGSEGV mitigation (#831)
     ap = argparse.ArgumentParser(description="HORREVM custody — ciphertext to the cloud rails")
     modes = ap.add_mutually_exclusive_group()
     modes.add_argument("--push", action="store_true")
@@ -1525,6 +2249,18 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--receipt is valid only for push/probe previews or applies")
     if args.signature and args.receipt is None:
         ap.error("--signature requires --receipt")
+    if args.apply:
+        try:
+            _require_domus_installed_effector()
+        except ReceiptError as exc:
+            say(f"HORREVM custody REFUSED: {exc}")
+            return 2
+    try:
+        if ACTIVE_CONFIG is None:
+            _activate_owner_config()
+    except ReceiptError as exc:
+        say(f"HORREVM custody REFUSED: {exc}")
+        return 2
     if args.doctor:
         return doctor()
     if args.status:
