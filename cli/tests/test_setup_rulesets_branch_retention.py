@@ -29,11 +29,14 @@ def test_setup_rulesets_preserves_source_branches() -> None:
 
     assert "allow_auto_merge=false" in text
     assert "allow_auto_merge=true" not in text
+    assert "allow_auto_merge=true" not in report
     assert "delete_branch_on_merge=false" in text
     assert "delete_branch_on_merge=true" not in text
-    assert "source branches remain after merge" in report
+    assert "source branches remain after merge" in report.lower()
     assert "receipt-backed reaping" in report
     assert "delete_branch_on_merge=true" not in report
+    assert "self-draining" not in report
+    assert "--contain apply" in report
 
 
 def test_setup_rulesets_requires_review_gate_even_with_forced_ci_contexts() -> None:
@@ -556,6 +559,44 @@ def test_containment_mode_is_preview_by_default_and_rejects_mixed_apply() -> Non
     assert module._parse_contain_mode(["setup-rulesets.py", "--contain", "apply", "--apply"])[1]
 
 
+def test_explicit_repository_parser_accepts_only_bounded_owner_name_values() -> None:
+    module = load_setup_rulesets()
+
+    assert module._parse_repositories(
+        [
+            "setup-rulesets.py",
+            "--repo",
+            "example/nebula",
+            "--repo=sample/aurora",
+        ]
+    ) == (["example/nebula", "sample/aurora"], "")
+
+    for argv in (
+        ["setup-rulesets.py", "--repo"],
+        ["setup-rulesets.py", "--repo", "--contain"],
+        ["setup-rulesets.py", "--repo", "missing-slash"],
+        ["setup-rulesets.py", "--repo=too/many/slashes"],
+        ["setup-rulesets.py", "--repo="],
+    ):
+        repositories, error = module._parse_repositories(argv)
+        assert repositories == []
+        assert error
+
+
+def test_malformed_repository_argument_stops_before_default_cohort_expansion(monkeypatch) -> None:
+    module = load_setup_rulesets()
+    _repositories, error = module._parse_repositories(["setup-rulesets.py", "--contain", "apply", "--repo"])
+    monkeypatch.setattr(module, "ARGUMENT_ERROR", error)
+    monkeypatch.setattr(module, "CONTAIN_MODE", "apply")
+    monkeypatch.setattr(
+        module,
+        "containment_main",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("default cohort expanded")),
+    )
+
+    assert module.main() == 2
+
+
 def test_containment_explicit_cohort_is_bounded_and_deduplicated(monkeypatch) -> None:
     module = load_setup_rulesets()
     monkeypatch.setattr(
@@ -595,8 +636,20 @@ def test_auto_merge_inventory_paginates_every_open_pr_page(monkeypatch) -> None:
     spy.assert_finished()
 
 
-def test_containment_preview_is_read_only_even_when_protection_prerequisites_fail(
+@pytest.mark.parametrize(
+    ("active", "settings", "expected"),
+    [
+        ([_pull_node(12, active=True)], _live_settings(), 1),
+        ([], _live_settings(auto_merge=True), 1),
+        ([], _live_settings(delete_branch=True), 1),
+        ([], _live_settings(), 0),
+    ],
+)
+def test_containment_preview_is_read_only_and_reports_drift_as_nonzero(
     monkeypatch,
+    active,
+    settings,
+    expected,
 ) -> None:
     module = load_setup_rulesets()
     monkeypatch.setattr(module, "CONTAIN_MODE", "preview")
@@ -611,17 +664,17 @@ def test_containment_preview_is_read_only_even_when_protection_prerequisites_fai
         [
             (
                 ("inventory", "example/nebula", None),
-                _result(_pull_page([_pull_node(12, active=True)])),
+                _result(_pull_page(active)),
             ),
             (
                 ("GET", "repos/example/nebula"),
-                _result(_live_settings(auto_merge=True, delete_branch=True)),
+                _result(settings),
             ),
         ]
     )
     monkeypatch.setattr(module, "gh", spy)
 
-    assert module.main() == 0
+    assert module.main() == expected
     spy.assert_finished()
     assert all(call["operation"][0] in {"inventory", "GET"} for call in spy.calls)
 
@@ -646,6 +699,8 @@ def test_containment_apply_paginates_cancels_locks_and_reads_back_without_protec
         )
     spy = ContainmentApiSpy(
         [
+            (("PATCH", "repos/example/nebula"), _result({})),
+            (("GET", "repos/example/nebula"), _result(_live_settings())),
             (
                 ("inventory", "example/nebula", None),
                 _result(
@@ -661,7 +716,11 @@ def test_containment_apply_paginates_cancels_locks_and_reads_back_without_protec
             ),
             (("cancel", "PR_node_7"), _result(_cancelled_pull(7))),
             (("cancel", "PR_node_109"), _result(_cancelled_pull(109))),
-            (("PATCH", "repos/example/nebula"), _result({})),
+            (("GET", "repos/example/nebula"), _result(_live_settings())),
+            (
+                ("inventory", "example/nebula", None),
+                _result(_pull_page([_pull_node(8, active=False)])),
+            ),
             (("GET", "repos/example/nebula"), _result(_live_settings())),
             (
                 ("inventory", "example/nebula", None),
@@ -676,23 +735,49 @@ def test_containment_apply_paginates_cancels_locks_and_reads_back_without_protec
     patch = next(call for call in spy.calls if call["operation"][0] == "PATCH")
     assert "allow_auto_merge=false" in patch["args"]
     assert "delete_branch_on_merge=false" in patch["args"]
+    assert [call["operation"][0] for call in spy.calls[:3]] == [
+        "PATCH",
+        "GET",
+        "inventory",
+    ]
+    first_cancel = next(index for index, call in enumerate(spy.calls) if call["operation"][0] == "cancel")
+    assert first_cancel > 1
     assert all(
         not (call["operation"][0] == "PUT" and call["operation"][1].endswith("/protection")) for call in spy.calls
     )
 
 
 @pytest.mark.parametrize(
-    ("settings", "remaining"),
+    "settings_result",
     [
-        (_live_settings(auto_merge=True), []),
-        (_live_settings(delete_branch=True), []),
-        (_live_settings(), [_pull_node(23, active=True)]),
+        _result(_live_settings(auto_merge=True)),
+        _result(_live_settings(delete_branch=True)),
+        _result(payload=None),
     ],
 )
-def test_containment_apply_fails_closed_on_readback_mismatch(
+def test_containment_apply_fails_before_inventory_on_initial_settings_mismatch(
     monkeypatch,
-    settings,
-    remaining,
+    settings_result,
+) -> None:
+    module = load_setup_rulesets()
+    monkeypatch.setattr(module, "CONTAIN_MODE", "apply")
+    monkeypatch.setattr(module, "ARGUMENT_ERROR", "")
+    monkeypatch.setattr(module, "containment_repos", lambda: ["sample/aurora"])
+    spy = ContainmentApiSpy(
+        [
+            (("PATCH", "repos/sample/aurora"), _result({})),
+            (("GET", "repos/sample/aurora"), settings_result),
+        ]
+    )
+    monkeypatch.setattr(module, "gh", spy)
+
+    assert module.main() == 1
+    spy.assert_finished()
+    assert all(call["operation"][0] not in {"inventory", "cancel"} for call in spy.calls)
+
+
+def test_containment_apply_fails_before_inventory_when_settings_patch_fails(
+    monkeypatch,
 ) -> None:
     module = load_setup_rulesets()
     monkeypatch.setattr(module, "CONTAIN_MODE", "apply")
@@ -701,14 +786,8 @@ def test_containment_apply_fails_closed_on_readback_mismatch(
     spy = ContainmentApiSpy(
         [
             (
-                ("inventory", "sample/aurora", None),
-                _result(_pull_page([])),
-            ),
-            (("PATCH", "repos/sample/aurora"), _result({})),
-            (("GET", "repos/sample/aurora"), _result(settings)),
-            (
-                ("inventory", "sample/aurora", None),
-                _result(_pull_page(remaining)),
+                ("PATCH", "repos/sample/aurora"),
+                _result(returncode=1, stderr="settings denied"),
             ),
         ]
     )
@@ -716,15 +795,19 @@ def test_containment_apply_fails_closed_on_readback_mismatch(
 
     assert module.main() == 1
     spy.assert_finished()
+    assert all(call["operation"][0] not in {"inventory", "cancel"} for call in spy.calls)
 
 
-def test_containment_apply_continues_settings_lock_after_cancel_failure(monkeypatch) -> None:
+def test_containment_apply_keeps_settings_locked_and_bounds_cancel_retries(monkeypatch) -> None:
     module = load_setup_rulesets()
     monkeypatch.setattr(module, "CONTAIN_MODE", "apply")
     monkeypatch.setattr(module, "ARGUMENT_ERROR", "")
+    monkeypatch.setattr(module, "MAX_CONTAINMENT_PASSES", 2)
     monkeypatch.setattr(module, "containment_repos", lambda: ["sample/aurora"])
     spy = ContainmentApiSpy(
         [
+            (("PATCH", "repos/sample/aurora"), _result({})),
+            (("GET", "repos/sample/aurora"), _result(_live_settings())),
             (
                 ("inventory", "sample/aurora", None),
                 _result(_pull_page([_pull_node(23, active=True)])),
@@ -733,11 +816,14 @@ def test_containment_apply_continues_settings_lock_after_cancel_failure(monkeypa
                 ("cancel", "PR_node_23"),
                 _result(returncode=1, stderr="mutation denied"),
             ),
-            (("PATCH", "repos/sample/aurora"), _result({})),
             (("GET", "repos/sample/aurora"), _result(_live_settings())),
             (
                 ("inventory", "sample/aurora", None),
                 _result(_pull_page([_pull_node(23, active=True)])),
+            ),
+            (
+                ("cancel", "PR_node_23"),
+                _result(returncode=1, stderr="mutation still denied"),
             ),
         ]
     )
@@ -745,7 +831,69 @@ def test_containment_apply_continues_settings_lock_after_cancel_failure(monkeypa
 
     assert module.main() == 1
     spy.assert_finished()
-    assert any(call["operation"][0] == "PATCH" for call in spy.calls)
+    assert [call["operation"][0] for call in spy.calls[:3]] == [
+        "PATCH",
+        "GET",
+        "inventory",
+    ]
+
+
+def test_containment_apply_fails_if_settings_drift_during_drain(monkeypatch) -> None:
+    module = load_setup_rulesets()
+    monkeypatch.setattr(module, "CONTAIN_MODE", "apply")
+    monkeypatch.setattr(module, "ARGUMENT_ERROR", "")
+    monkeypatch.setattr(module, "containment_repos", lambda: ["sample/aurora"])
+    spy = ContainmentApiSpy(
+        [
+            (("PATCH", "repos/sample/aurora"), _result({})),
+            (("GET", "repos/sample/aurora"), _result(_live_settings())),
+            (
+                ("inventory", "sample/aurora", None),
+                _result(_pull_page([_pull_node(23, active=True)])),
+            ),
+            (("cancel", "PR_node_23"), _result(_cancelled_pull(23))),
+            (
+                ("GET", "repos/sample/aurora"),
+                _result(_live_settings(auto_merge=True)),
+            ),
+        ]
+    )
+    monkeypatch.setattr(module, "gh", spy)
+
+    assert module.main() == 1
+    spy.assert_finished()
+    assert spy.calls[-1]["operation"] == ("GET", "repos/sample/aurora")
+
+
+def test_containment_apply_fails_when_new_requests_prevent_bounded_fixed_point(
+    monkeypatch,
+) -> None:
+    module = load_setup_rulesets()
+    monkeypatch.setattr(module, "CONTAIN_MODE", "apply")
+    monkeypatch.setattr(module, "ARGUMENT_ERROR", "")
+    monkeypatch.setattr(module, "MAX_CONTAINMENT_PASSES", 2)
+    monkeypatch.setattr(module, "containment_repos", lambda: ["sample/aurora"])
+    spy = ContainmentApiSpy(
+        [
+            (("PATCH", "repos/sample/aurora"), _result({})),
+            (("GET", "repos/sample/aurora"), _result(_live_settings())),
+            (
+                ("inventory", "sample/aurora", None),
+                _result(_pull_page([_pull_node(23, active=True)])),
+            ),
+            (("cancel", "PR_node_23"), _result(_cancelled_pull(23))),
+            (("GET", "repos/sample/aurora"), _result(_live_settings())),
+            (
+                ("inventory", "sample/aurora", None),
+                _result(_pull_page([_pull_node(24, active=True)])),
+            ),
+            (("cancel", "PR_node_24"), _result(_cancelled_pull(24))),
+        ]
+    )
+    monkeypatch.setattr(module, "gh", spy)
+
+    assert module.main() == 1
+    spy.assert_finished()
 
 
 def test_containment_apply_processes_every_repo_after_one_inventory_failure(monkeypatch) -> None:
@@ -759,21 +907,18 @@ def test_containment_apply_processes_every_repo_after_one_inventory_failure(monk
     )
     spy = ContainmentApiSpy(
         [
-            (
-                ("inventory", "sample/aurora", None),
-                _result(returncode=1, stderr="inventory unavailable"),
-            ),
             (("PATCH", "repos/sample/aurora"), _result({})),
             (("GET", "repos/sample/aurora"), _result(_live_settings())),
             (
                 ("inventory", "sample/aurora", None),
-                _result(_pull_page([])),
+                _result(returncode=1, stderr="inventory unavailable"),
             ),
+            (("PATCH", "repos/example/nebula"), _result({})),
+            (("GET", "repos/example/nebula"), _result(_live_settings())),
             (
                 ("inventory", "example/nebula", None),
                 _result(_pull_page([])),
             ),
-            (("PATCH", "repos/example/nebula"), _result({})),
             (("GET", "repos/example/nebula"), _result(_live_settings())),
             (
                 ("inventory", "example/nebula", None),

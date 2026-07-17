@@ -3,8 +3,9 @@
 
 Containment is deliberately independent from branch protection and its account/App prerequisites:
   • ``--contain`` previews every active auto-merge request and both repository merge settings
-  • ``--contain apply`` cancels every active auto-merge request, sets ``allow_auto_merge=false``
-    and ``delete_branch_on_merge=false``, then reads both surfaces back and fails on any mismatch
+  • ``--contain apply`` first sets and verifies ``allow_auto_merge=false`` plus
+    ``delete_branch_on_merge=false``, then drains every active request to a bounded stable-empty
+    fixed point
 
 After containment is verified, ``--apply`` installs protected rules only for repos that already
 publish the trusted review-gate workflow from their default branch:
@@ -50,9 +51,36 @@ def _parse_contain_mode(argv):
     return mode, ""
 
 
+_REPOSITORY_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$")
+
+
+def _parse_repositories(argv):
+    """Parse every explicit repo without letting malformed scope fall back to the cohort."""
+
+    repositories = []
+    errors = []
+    for index, argument in enumerate(argv):
+        value = None
+        if argument == "--repo":
+            if index + 1 >= len(argv) or argv[index + 1].startswith("-"):
+                errors.append("--repo requires an owner/name value")
+                continue
+            value = argv[index + 1]
+        elif argument.startswith("--repo="):
+            value = argument.removeprefix("--repo=")
+        if value is None:
+            continue
+        if not _REPOSITORY_NAME.fullmatch(value):
+            errors.append(f"--repo value must be owner/name, got {value!r}")
+            continue
+        repositories.append(value)
+    return repositories, "; ".join(errors)
+
+
 APPLY = "--apply" in sys.argv
-CONTAIN_MODE, ARGUMENT_ERROR = _parse_contain_mode(sys.argv)
-EXPLICIT = [sys.argv[i + 1] for i, a in enumerate(sys.argv) if a == "--repo" and i + 1 < len(sys.argv)]
+CONTAIN_MODE, CONTAIN_ARGUMENT_ERROR = _parse_contain_mode(sys.argv)
+EXPLICIT, REPOSITORY_ARGUMENT_ERROR = _parse_repositories(sys.argv)
+ARGUMENT_ERROR = "; ".join(error for error in (CONTAIN_ARGUMENT_ERROR, REPOSITORY_ARGUMENT_ERROR) if error)
 # --contexts a,b,c overrides auto-detection entirely — the explicit fallback for any repo whose job
 # names the heuristic can't classify. Applied to every targeted repo.
 FORCED = next(
@@ -79,6 +107,8 @@ RECOVERY_COHORT_REPOS = (
     "organvm/_agent",
 )
 MAX_PULL_REQUEST_PAGES = 1000
+MAX_CONTAINMENT_PASSES = 12
+REQUIRED_EMPTY_INVENTORIES = 2
 AUTO_MERGE_QUERY = """
 query RecoveryAutoMergeRequests($owner: String!, $name: String!, $cursor: String) {
   repository(owner: $owner, name: $name) {
@@ -603,22 +633,9 @@ def apply_protection_contract(repo: str, branch: str, body) -> tuple[bool, list[
 
 
 def apply_repository_containment(repo: str):
-    """Cancel current requests, lock both settings, and re-read every effect."""
+    """Lock settings before cancellation, then drain to a bounded stable-empty fixed point."""
 
     messages = []
-    initial_active, initial_error = list_active_auto_merges(repo)
-    initial_count = None if initial_active is None else len(initial_active)
-    cancelled = 0
-    if initial_error:
-        messages.append(initial_error)
-    else:
-        for pull in initial_active:
-            accepted, detail = cancel_auto_merge(pull)
-            if accepted:
-                cancelled += 1
-            else:
-                messages.append(f"PR #{pull['number']} auto-merge {detail}")
-
     settings = gh(
         [
             "api",
@@ -633,27 +650,94 @@ def apply_repository_containment(repo: str):
     )
     if settings.returncode != 0:
         detail = settings.stderr.strip() or f"gh exited {settings.returncode}"
-        messages.append(f"repository containment settings update failed: {detail}")
+        return (
+            False,
+            {
+                "initial_active": None,
+                "cancelled": 0,
+                "remaining": None,
+                "passes": 0,
+            },
+            [f"repository containment settings update failed before cancellation: {detail}"],
+        )
 
     settings_ok, settings_detail = _read_repository_settings(repo)
     if not settings_ok:
-        messages.append(f"repository containment settings not confirmed: {settings_detail}")
+        return (
+            False,
+            {
+                "initial_active": None,
+                "cancelled": 0,
+                "remaining": None,
+                "passes": 0,
+            },
+            [f"repository containment settings not confirmed before cancellation: {settings_detail}"],
+        )
 
-    remaining, remaining_error = list_active_auto_merges(repo)
-    remaining_count = None if remaining is None else len(remaining)
-    if remaining_error:
-        messages.append(f"post-containment {remaining_error}")
-    elif remaining:
-        numbers = ", ".join(f"#{pull['number']}" for pull in remaining[:10])
-        suffix = "…" if len(remaining) > 10 else ""
-        messages.append(f"active auto-merge requests remain: {numbers}{suffix}")
+    initial_count = None
+    remaining_count = None
+    cancelled_ids = set()
+    last_cancel_errors = {}
+    empty_inventories = 0
+    passes = 0
+    for pass_number in range(1, MAX_CONTAINMENT_PASSES + 1):
+        passes = pass_number
+        if pass_number > 1:
+            settings_ok, settings_detail = _read_repository_settings(repo)
+            if not settings_ok:
+                messages.append(f"repository containment settings changed during drain: {settings_detail}")
+                break
+
+        active, inventory_error = list_active_auto_merges(repo)
+        if inventory_error:
+            messages.append(inventory_error)
+            break
+        if initial_count is None:
+            initial_count = len(active)
+        remaining_count = len(active)
+
+        active_ids = {pull["id"] for pull in active}
+        last_cancel_errors = {
+            pull_id: detail for pull_id, detail in last_cancel_errors.items() if pull_id in active_ids
+        }
+        if not active:
+            empty_inventories += 1
+            if empty_inventories >= REQUIRED_EMPTY_INVENTORIES:
+                return (
+                    True,
+                    {
+                        "initial_active": initial_count,
+                        "cancelled": len(cancelled_ids),
+                        "remaining": 0,
+                        "passes": passes,
+                    },
+                    [],
+                )
+            continue
+
+        empty_inventories = 0
+        for pull in active:
+            accepted, detail = cancel_auto_merge(pull)
+            if accepted:
+                cancelled_ids.add(pull["id"])
+                last_cancel_errors.pop(pull["id"], None)
+            else:
+                last_cancel_errors[pull["id"]] = f"PR #{pull['number']} auto-merge {detail}"
+
+    messages.extend(last_cancel_errors.values())
+    if not messages:
+        messages.append(
+            f"containment did not reach {REQUIRED_EMPTY_INVENTORIES} consecutive empty "
+            f"inventories within {MAX_CONTAINMENT_PASSES} passes"
+        )
 
     return (
-        not messages,
+        False,
         {
             "initial_active": initial_count,
-            "cancelled": cancelled,
+            "cancelled": len(cancelled_ids),
             "remaining": remaining_count,
+            "passes": passes,
         },
         messages,
     )
@@ -675,14 +759,15 @@ def containment_main(*, apply: bool) -> int:
             if accepted:
                 print(
                     f"  {repo}: ✓ cancelled {summary['cancelled']} active request(s); "
-                    "allow_auto_merge=false; delete_branch_on_merge=false; readback verified"
+                    "allow_auto_merge=false; delete_branch_on_merge=false; "
+                    f"stable-empty fixed point verified in {summary['passes']} pass(es)"
                 )
             else:
                 failures += 1
                 print(
                     f"  {repo}: ✗ containment incomplete "
                     f"(seen={summary['initial_active']}, cancelled={summary['cancelled']}, "
-                    f"remaining={summary['remaining']})"
+                    f"remaining={summary['remaining']}, passes={summary['passes']})"
                 )
                 for message in messages:
                     print(f"      ✗ {message[:300]}")
@@ -699,11 +784,17 @@ def containment_main(*, apply: bool) -> int:
                 print(f"      ✗ {settings_error[:300]}")
             continue
         total_active += len(active)
-        print(
-            f"  {repo}: {len(active)} active auto-merge request(s); "
-            f"allow_auto_merge={str(settings['allow_auto_merge']).lower()}; "
-            f"delete_branch_on_merge={str(settings['delete_branch_on_merge']).lower()}"
-        )
+        settings_ok, settings_detail = repository_settings_match(settings)
+        if active or not settings_ok:
+            failures += 1
+            details = []
+            if active:
+                details.append(f"{len(active)} active auto-merge request(s)")
+            if not settings_ok:
+                details.append(settings_detail)
+            print(f"  {repo}: DRIFT — {'; '.join(details)}")
+        else:
+            print(f"  {repo}: ✓ no active auto-merge requests; allow_auto_merge=false; delete_branch_on_merge=false")
 
     if apply:
         print(
@@ -713,7 +804,8 @@ def containment_main(*, apply: bool) -> int:
     else:
         print(
             f"\nPREVIEW — observed {total_active} active request(s); nothing changed. "
-            "Re-run with --contain apply to cancel requests and lock repository settings."
+            f"{failures} repo(s) require containment or have incomplete evidence. "
+            "Re-run with --contain apply to lock settings and drain requests."
         )
     return 1 if failures else 0
 
