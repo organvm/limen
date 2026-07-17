@@ -326,13 +326,21 @@ def collect_pressure() -> dict[str, Any]:
 
 def _thresholds() -> dict[str, float]:
     return {
-        "backblaze_cpu_percent": float(params.get("LIMEN_HOST_ADMISSION_BACKBLAZE_CPU_PERCENT", 50, cast=float)),
+        "backblaze_cpu_percent": params.get(
+            "LIMEN_HOST_ADMISSION_BACKBLAZE_CPU_PERCENT",
+            50.0,
+            cast=float,
+        ),
         "backblaze_rss_bytes": float(params.get("LIMEN_HOST_ADMISSION_BACKBLAZE_RSS_BYTES", 1024**3, cast=int)),
         "swap_fraction": float(params.get("LIMEN_HOST_ADMISSION_SWAP_FRACTION", 0.25, cast=float)),
         "swap_growth_bytes_per_minute": float(
             params.get("LIMEN_HOST_ADMISSION_SWAP_GROWTH_BYTES_PER_MINUTE", 512 * 1024**2, cast=int)
         ),
-        "disk_mib_per_second": float(params.get("LIMEN_HOST_ADMISSION_DISK_MIB_PER_SECOND", 100, cast=float)),
+        "disk_mib_per_second": params.get(
+            "LIMEN_HOST_ADMISSION_DISK_MIB_PER_SECOND",
+            100.0,
+            cast=float,
+        ),
     }
 
 
@@ -421,14 +429,18 @@ class AdmissionController:
     def _valid_lease(lease: object) -> bool:
         if not isinstance(lease, dict):
             return False
+        pid = lease.get("pid")
+        expires_epoch = lease.get("expires_epoch")
+        if pid is None or expires_epoch is None:
+            return False
         try:
             return bool(
                 lease.get("lease_id")
                 and lease.get("kind") in LEASE_KINDS
                 and lease.get("owner")
                 and lease.get("surface")
-                and int(lease.get("pid")) > 0
-                and float(lease.get("expires_epoch")) > 0
+                and int(pid) > 0
+                and float(expires_epoch) > 0
                 and lease.get("process_identity")
             )
         except (TypeError, ValueError):
@@ -494,7 +506,7 @@ class AdmissionController:
         used = pressure.get("swap_used_bytes")
         memory = pressure.get("memory_bytes")
         pressure["swap_fraction"] = (
-            float(used) / float(memory) if used is not None and memory not in (None, 0) else None
+            float(used) / float(memory) if used is not None and memory is not None and memory != 0 else None
         )
         growth = None
         if previous and used is not None and previous.get("swap_used_bytes") is not None:
@@ -685,14 +697,13 @@ class AdmissionController:
             state = self._load()
             reaped = self._cleanup(state, now)
             lease = next((item for item in state["leases"] if item["lease_id"] == lease_id), None)
-            exact = bool(
-                lease
-                and lease["owner"] == owner
-                and int(lease["pid"]) == pid
-                and identity is not None
-                and lease["process_identity"] == identity
-            )
-            if not exact:
+            if (
+                lease is None
+                or lease["owner"] != owner
+                or int(lease["pid"]) != pid
+                or identity is None
+                or lease["process_identity"] != identity
+            ):
                 self._write(state)
                 return self._decision(
                     "refresh",
