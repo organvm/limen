@@ -50,7 +50,25 @@ jobs:
         with:
           fetch-depth: 2
 
+      # Dormant-not-red: skip cleanly until ANTHROPIC_API_KEY is hydrated (org secret via
+      # creds-hydrate DEFAULT_MAP). Without this the action errors on an empty key and reds
+      # `review` on every PR, jamming merge-policy — same "dormant lane" pattern the ollama/copilot
+      # dispatch lanes use (live only once the credential/seat exists). (secrets are unavailable in
+      # job-level `if:`, so the gate is a step output.)
+      - name: Gate on ANTHROPIC_API_KEY presence
+        id: key
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ANTHROPIC_API_KEY not set — Claude review lane dormant (skipping, not failing)."
+          fi
+
       - uses: anthropics/claude-code-action@v1
+        if: steps.key.outputs.ready == 'true'
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # On pull_request events run the automation review prompt; on @claude mention events the
