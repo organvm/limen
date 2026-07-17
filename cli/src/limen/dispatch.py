@@ -51,6 +51,7 @@ from limen.jules_remote import (
     task_jules_session_id,
 )
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
+from limen.owner_authority import require_sealed_runtime
 from limen.runtime_requirements import task_execution_ready
 from limen.doctor import stale_tasks
 from limen.provider_selection import (
@@ -78,6 +79,7 @@ from limen.model_selection import (  # the shared model vocabulary — also used
     _claude_opus_classes,
     _fable_authorization_status,
     _guard_fable_model_pin,
+    load_selection_receipt,
     selected_model_for_profile,
 )
 from limen.worktree_debt import (
@@ -1490,6 +1492,7 @@ _GIT_PLUMBING_LOCK = threading.Lock()
 _MODEL_SELECTION_RECEIPTS: dict[str, dict[str, Any]] = {}
 _FABLE_PACKET_RECEIPTS: dict[str, dict[str, Any]] = {}
 _FABLE_PACKET_CUSTODY_VERIFIED: set[str] = set()
+_FABLE_IMPLEMENTATION_RECEIPTS: dict[str, dict[str, Any]] = {}
 _REMOTE_SUBMISSION_RECEIPTS: dict[str, dict[str, Any]] = {}
 _LANE_ROUTING_RECEIPTS: dict[str, dict[str, Any]] = {}
 
@@ -1501,6 +1504,7 @@ def _record_model_selection(
     selected_model: str | None,
     source: str,
     fingerprint: str | None = None,
+    receipt: dict[str, Any] | None = None,
 ) -> None:
     if task is None:
         return
@@ -1509,6 +1513,7 @@ def _record_model_selection(
         "selected_model": selected_model,
         "selection_source": source,
         "catalog_hash": fingerprint,
+        "receipt": dict(receipt) if receipt is not None else None,
     }
 
 
@@ -2151,6 +2156,36 @@ class ClaudeLaunchContractError(RuntimeError):
     """The internal Claude argv could wait for unavailable operator input."""
 
 
+def _fable_preservation_command(
+    task: Task,
+    binary: str,
+    agent_args: list[str],
+    prompt: str,
+) -> list[str]:
+    """Route Fable only through the sealed, attempt-bound Domus orchestrator."""
+
+    selection = _MODEL_SELECTION_RECEIPTS.get(task.id)
+    receipt = selection.get("receipt") if isinstance(selection, dict) else None
+    attempt_id = receipt.get("attempt_id") if isinstance(receipt, dict) else None
+    if not isinstance(attempt_id, str) or not attempt_id.strip():
+        raise ClaudeLaunchContractError("Fable preservation launch lacks an owner-bound attempt identity")
+    try:
+        orchestrator = require_sealed_runtime("limen-preservation-dispatch")
+    except Exception as exc:
+        raise ClaudeLaunchContractError(f"Fable preservation orchestrator is unprovisioned: {exc}") from exc
+    return [
+        str(orchestrator),
+        "--attempt-id",
+        attempt_id,
+        "--task-id",
+        task.id,
+        "--",
+        binary,
+        *agent_args,
+        prompt,
+    ]
+
+
 def _option_values(argv: list[str], *names: str) -> list[str]:
     """Return values supplied as either ``--flag value`` or ``--flag=value``."""
 
@@ -2414,6 +2449,13 @@ def _local_floor_allowed_for_task(task: Task) -> bool:
         if not local_floor_enabled():
             return False
         if not task.repo:
+            return False
+        profile = _fable_execution_profile_for_task(task)
+        if isinstance(profile, dict) and (
+            profile.get("execution_role") == "fable-planner"
+            or profile.get("planning_only") is True
+            or profile.get("build_allowed") is False
+        ):
             return False
         classes = _task_classes(task)
         if not classes & local_floor_classes():
@@ -3055,6 +3097,19 @@ def _agent_timed_out_on_task(agent: str, task: Task) -> bool:
 def agent_can_run_task(agent: str, task: Task) -> bool:
     agent = canonical_agent(agent)
     if _agent_timed_out_on_task(agent, task):
+        return False
+    profile = _fable_execution_profile_for_task(task)
+    if (
+        isinstance(profile, dict)
+        and (
+            profile.get("execution_role") == "fable-planner"
+            or profile.get("planning_only") is True
+            or profile.get("build_allowed") is False
+        )
+        and agent != "claude"
+    ):
+        # A planning attempt cannot cascade onto a build-capable or local-floor
+        # lane.  Its provider-Auto builder is a separate execution profile.
         return False
     if agent == "github_actions" and not (
         str(task.type or "").lower() == "verification"
@@ -4003,6 +4058,162 @@ def _finalize_fable_packet_receipt(task: Task, wt: Path, pull_request: str) -> N
     _FABLE_PACKET_CUSTODY_VERIFIED.add(task.id)
 
 
+def _fable_builder_handoff(task: Task) -> dict[str, Any] | None:
+    value = getattr(task, "builder_handoff_receipt", None)
+    return dict(value) if isinstance(value, dict) else None
+
+
+def _run_fable_builder_predicate(task: Task, wt: Path) -> None:
+    """Prove an implementation child before it may publish a completion claim."""
+
+    handoff = _fable_builder_handoff(task)
+    if handoff is None:
+        return
+    predicate = str(task.predicate or "").strip()
+    if not predicate or not task.receipt_target or not _is_narrow_verification(predicate):
+        raise ValueError("Fable builder child lacks a scoped implementation predicate and receipt target")
+    head = _git(["rev-parse", "HEAD"], wt)
+    if head.returncode != 0 or not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", head.stdout.strip()):
+        raise ValueError("Fable builder implementation could not be bound to an exact HEAD")
+    try:
+        run = subprocess.run(
+            ["/bin/zsh", "-lc", predicate],
+            cwd=wt,
+            text=True,
+            capture_output=True,
+            timeout=max(1, _env_int("LIMEN_BUILDER_PREDICATE_TIMEOUT", 900)),
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError("Fable builder implementation predicate could not run") from exc
+    combined = ((run.stdout or "") + "\n" + (run.stderr or "")).encode()
+    if run.returncode != 0:
+        summary = combined.decode(errors="replace").strip()[:300]
+        raise ValueError(f"Fable builder implementation predicate failed: {summary}")
+    selection = _MODEL_SELECTION_RECEIPTS.get(task.id)
+    _FABLE_IMPLEMENTATION_RECEIPTS[task.id] = {
+        "schema": "limen.fable_builder_implementation.v1",
+        "parent_attempt_id": handoff["parent_attempt_id"],
+        "attempt_id": handoff["child_attempt_id"],
+        "provider_selection": "auto",
+        "execution_profile": dict(getattr(task, "execution_profile", {}) or {}),
+        "plan_pull_request": handoff["plan_pull_request"],
+        "plan_commit_sha": handoff["plan_commit_sha"],
+        "plan_path": handoff["plan_path"],
+        "commit_sha": head.stdout.strip(),
+        "predicate": predicate,
+        "predicate_sha256": hashlib.sha256(predicate.encode()).hexdigest(),
+        "predicate_output_sha256": hashlib.sha256(combined).hexdigest(),
+        "predicate_exit_code": 0,
+        "receipt_target": task.receipt_target,
+        "model_selection_receipt": (
+            dict(selection["receipt"])
+            if isinstance(selection, dict) and isinstance(selection.get("receipt"), dict)
+            else None
+        ),
+    }
+
+
+def _finalize_fable_builder_receipt(task: Task, pull_request: str) -> None:
+    receipt = _FABLE_IMPLEMENTATION_RECEIPTS.get(task.id)
+    if receipt is None:
+        return
+    try:
+        run = _run_capture(
+            ["gh", "pr", "view", pull_request, "--json", "headRefOid,state"],
+            timeout=max(1, _env_int("LIMEN_PR_CONTEXT_TIMEOUT", 20)),
+        )
+        payload = json.loads(run.stdout or "{}")
+    except Exception as exc:
+        raise ValueError("Fable builder PR exact head could not be verified") from exc
+    if (
+        run.returncode != 0
+        or not isinstance(payload, dict)
+        or str(payload.get("state") or "").upper() != "OPEN"
+        or payload.get("headRefOid") != receipt.get("commit_sha")
+    ):
+        raise ValueError("Fable builder PR does not expose the verified implementation HEAD")
+    receipt["pull_request"] = pull_request
+    receipt["verified_at"] = datetime.now(timezone.utc).isoformat()
+
+
+def _open_fable_builder_child(
+    task: Task,
+    *,
+    packet: dict[str, Any],
+    selection: dict[str, Any] | None,
+    pull_request: str,
+    now: datetime,
+) -> dict[str, Any]:
+    """Rebind a preserved plan to one provider-Auto implementation attempt."""
+
+    owner_selection = selection.get("receipt") if isinstance(selection, dict) else None
+    parent_attempt_id = owner_selection.get("attempt_id") if isinstance(owner_selection, dict) else None
+    if not isinstance(parent_attempt_id, str) or not parent_attempt_id.strip():
+        raise ValueError("Fable plan has no owner-bound parent attempt")
+    if not task.predicate or not task.receipt_target or not _is_narrow_verification(task.predicate):
+        raise ValueError("Fable plan has no scoped implementation predicate or durable receipt target")
+    seed = "\0".join(
+        [
+            task.id,
+            parent_attempt_id,
+            str(packet["commit_sha"]),
+            str(packet["content_sha256"]),
+        ]
+    )
+    child_attempt_id = f"{task.id}/builder/{hashlib.sha256(seed.encode()).hexdigest()[:20]}"
+    handoff = {
+        "schema": "limen.fable_builder_handoff_receipt.v1",
+        "created_at": now.astimezone(timezone.utc).isoformat(),
+        "parent_attempt_id": parent_attempt_id,
+        "child_attempt_id": child_attempt_id,
+        "provider_selection": "auto",
+        "execution_profile": {
+            "execution_role": "implementation-builder",
+            "planning_only": False,
+            "build_allowed": True,
+            "fable_allowed": False,
+        },
+        "plan_pull_request": pull_request,
+        "plan_commit_sha": packet["commit_sha"],
+        "plan_content_sha256": packet["content_sha256"],
+        "plan_path": packet["path"],
+        "implementation_predicate": task.predicate,
+        "receipt_target": task.receipt_target,
+        "status": "open",
+    }
+    labels = [
+        label
+        for label in (task.labels or [])
+        if str(label).lower()
+        not in {
+            "mode:plan-only",
+            "execution-role:fable-planner",
+            "execution_role:fable-planner",
+        }
+    ]
+    for label in ("execution-role:implementation-builder", "fable-builder-child"):
+        if label not in labels:
+            labels.append(label)
+    task.labels = labels
+    task.target_agent = "any"
+    task.status = "open"
+    task.claude_tier = None
+    task.execution_profile = dict(handoff["execution_profile"])
+    task.builder_handoff_receipt = dict(handoff)
+    task.parent_attempt_id = parent_attempt_id
+    task.active_attempt_id = child_attempt_id
+    if pull_request not in task.urls:
+        task.urls.append(pull_request)
+    context_line = (
+        f"Fable planning is complete. As the distinct provider-Auto implementation child "
+        f"{child_attempt_id}, read and implement `{packet['path']}` from {pull_request} "
+        f"at {packet['commit_sha']}; then pass `{task.predicate}`. Do not return another plan."
+    )
+    task.context = f"{task.context}\n\n{context_line}".strip() if task.context else context_line
+    return handoff
+
+
 def _run_isolated_agent(
     agent: str,
     task: Task,
@@ -4365,6 +4576,8 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
             "$LIMEN_LIVE_ROOT, and do not edit tasks.yaml; the dispatcher records task state."
         )
     agent_cmd = [binary, *agent_args, prompt]
+    if fable_plan_only:
+        agent_cmd = _fable_preservation_command(task, binary, agent_args, prompt)
     # 1800s (was 900): local lanes have ABUNDANT budget headroom (codex/claude/opencode ~60-92 left
     # per window) while jules is scarce (≈100/day). At 900s, big tasks — incl. the revenue/deploy
     # tasks (BLD2-*-deploy, REV-*) — timed out locally then bled to jules, exhausting the scarce lane
@@ -4444,10 +4657,18 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
             except ValueError as exc:
                 print(f"  FAILED Fable packet receipt {task.id}: {exc}")
                 return False
+        current_head_result = _git(["rev-parse", "HEAD"], wt)
+        current_head = current_head_result.stdout.strip() if current_head_result.returncode == 0 else ""
+        agent_committed = bool(start_head and current_head and current_head != start_head)
+        if _fable_builder_handoff(task) is not None:
+            if commit_result is not True and not (commit_result == _NOOP and agent_committed):
+                return commit_result
+            try:
+                _run_fable_builder_predicate(task, wt)
+            except ValueError as exc:
+                print(f"  FAILED Fable builder predicate {task.id}: {exc}")
+                return False
         if pr_head:
-            current_head_result = _git(["rev-parse", "HEAD"], wt)
-            current_head = current_head_result.stdout.strip() if current_head_result.returncode == 0 else ""
-            agent_committed = bool(start_head and current_head and current_head != start_head)
             if commit_result == _NOOP and not agent_committed:
                 return commit_result
             if commit_result is not True and not (commit_result == _NOOP and agent_committed):
@@ -4462,7 +4683,13 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
             except ValueError as exc:
                 print(f"  FAILED Fable PR custody {task.id}: {exc}")
                 return False
-            _arm_auto_merge(task, wt, url)
+            try:
+                _finalize_fable_builder_receipt(task, url)
+            except ValueError as exc:
+                print(f"  FAILED Fable builder PR custody {task.id}: {exc}")
+                return False
+            if not fable_plan_only and _fable_builder_handoff(task) is None:
+                _arm_auto_merge(task, wt, url)
             return url
 
         if commit_result is not True:
@@ -4481,6 +4708,11 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
             except ValueError as exc:
                 print(f"  FAILED Fable PR custody {task.id}: {exc}")
                 return False
+        try:
+            _finalize_fable_builder_receipt(task, result)
+        except ValueError as exc:
+            print(f"  FAILED Fable builder PR custody {task.id}: {exc}")
+            return False
         return result
     finally:
         # leave the user's checkout pristine: drop the worktree, and the local
@@ -4776,7 +5008,17 @@ def dispatch_tasks(
         if not dry_run:
             # In-memory apply keeps this loop's bookkeeping consistent; persistence happens
             # once at commit, re-applied onto a FRESH board (never this stale snapshot).
-            _apply_result(task, agent_filter, result, now, track)
+            # This first application updates only the caller's stale in-memory
+            # bookkeeping. Preserve transient evidence until the fresh-board
+            # commit applies and serializes the same result under the queue lock.
+            _apply_result(
+                task,
+                agent_filter,
+                result,
+                now,
+                track,
+                consume_transient_receipts=False,
+            )
             results.append((agent_filter, task.id, result))
             if result == _RATELIMIT:
                 _commit_dispatch_results(tasks_path, limen, results, now)
@@ -4801,6 +5043,7 @@ def _apply_result(
     track: BudgetTrack,
     *,
     charge_budget: bool = True,
+    consume_transient_receipts: bool = True,
 ) -> None:
     """Apply one dispatch result to a task (same semantics as the serial path):
     success → dispatched + spend; no-op/fail → recoverable failed; rate-limit → cascade."""
@@ -4878,21 +5121,68 @@ def _apply_result(
         else:
             entry.status = "failed"
             task.status = "failed"
-    if selection := _MODEL_SELECTION_RECEIPTS.pop(task.id, None):
+    selection = (
+        _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+        if consume_transient_receipts
+        else _MODEL_SELECTION_RECEIPTS.get(task.id)
+    )
+    if selection:
         entry.execution_profile = selection.get("execution_profile")
         entry.selected_model = selection.get("selected_model")
         entry.selection_source = selection.get("selection_source")
         entry.catalog_hash = selection.get("catalog_hash")
-    if fable_packet := _FABLE_PACKET_RECEIPTS.pop(task.id, None):
+        if isinstance(selection.get("receipt"), dict):
+            entry.model_selection_receipt = dict(selection["receipt"])
+    fable_packet = (
+        _FABLE_PACKET_RECEIPTS.pop(task.id, None) if consume_transient_receipts else _FABLE_PACKET_RECEIPTS.get(task.id)
+    )
+    if fable_packet:
         verified = task.id in _FABLE_PACKET_CUSTODY_VERIFIED
-        _FABLE_PACKET_CUSTODY_VERIFIED.discard(task.id)
+        if consume_transient_receipts:
+            _FABLE_PACKET_CUSTODY_VERIFIED.discard(task.id)
         pull_request = result if isinstance(result, str) and _GITHUB_PULL_REQUEST_URL_RE.fullmatch(result) else None
         if verified and fable_packet.get("commit_sha") and fable_packet.get("pull_request") == pull_request:
             entry.fable_packet_receipt = dict(fable_packet)
+            try:
+                handoff = _open_fable_builder_child(
+                    task,
+                    packet=fable_packet,
+                    selection=selection,
+                    pull_request=str(pull_request),
+                    now=now,
+                )
+                entry.builder_handoff_receipt = handoff
+                entry.status = "open"
+                entry.route_to = "any"
+                entry.output = (
+                    f"Fable plan preserved at {pull_request}; provider-Auto builder child "
+                    f"{handoff['child_attempt_id']} opened"
+                )
+            except ValueError as exc:
+                task.status = "failed_blocked"
+                entry.status = "failed_blocked"
+                entry.output = f"Fable plan preserved but builder handoff is blocked: {exc}"
         elif entry.output:
             entry.output += "; Fable packet has no durable PR receipt and remains unpublished"
         else:
             entry.output = "Fable packet has no durable PR receipt and remains unpublished"
+    implementation = (
+        _FABLE_IMPLEMENTATION_RECEIPTS.pop(task.id, None)
+        if consume_transient_receipts
+        else _FABLE_IMPLEMENTATION_RECEIPTS.get(task.id)
+    )
+    if implementation:
+        pull_request = result if isinstance(result, str) and _GITHUB_PULL_REQUEST_URL_RE.fullmatch(result) else None
+        if (
+            implementation.get("predicate_exit_code") == 0
+            and implementation.get("pull_request") == pull_request
+            and implementation.get("commit_sha")
+        ):
+            entry.implementation_receipt = dict(implementation)
+        else:
+            task.status = "failed_blocked"
+            entry.status = "failed_blocked"
+            entry.output = "Fable builder implementation lacks an exact-head verified predicate receipt"
     if remote := _REMOTE_SUBMISSION_RECEIPTS.get(task.id):
         entry.provider_run_id = remote.get("provider_run_id")
         entry.provider_url = remote.get("provider_url")
@@ -5241,16 +5531,44 @@ def _claude_launch_selection(task: Task | None = None) -> tuple[str | None, bool
     profile = _fable_execution_profile_for_task(task)
     env = os.environ.get("LIMEN_CLAUDE_MODEL")
     if _task_requests_fable(task):
+        if task is None or not task.predicate or not task.receipt_target or not _is_narrow_verification(task.predicate):
+            raise ClaudeLaunchContractError(
+                "Fable planning requires a task-bound scoped implementation predicate and durable receipt target"
+            )
         authority, reason = _fable_authority_for_task(task)
         if authority is None:
             raise ClaudeLaunchContractError(f"Fable planner authority is closed: {reason}")
         try:
-            return selected_model_for_profile(profile, explicit_model=env), True
+            receipt = load_selection_receipt()
+            if receipt.get("task_id") != task.id:
+                raise ClaudeLaunchContractError("Claude selection receipt is bound to a different task")
+            model = selected_model_for_profile(profile, explicit_model=env)
+            _record_model_selection(
+                task,
+                profile=dict(profile or {}),
+                selected_model=model,
+                source=str(receipt["selection_source"]),
+                fingerprint=str(receipt["catalog_hash"]),
+                receipt=receipt,
+            )
+            return model, True
         except Exception as exc:
             raise ClaudeLaunchContractError(str(exc)) from exc
     if env:
         try:
-            return _guard_fable_model_pin(env, profile), False
+            receipt = load_selection_receipt()
+            if task is not None and receipt.get("task_id") != task.id:
+                raise ClaudeLaunchContractError("Claude selection receipt is bound to a different task")
+            model = _guard_fable_model_pin(env, profile)
+            _record_model_selection(
+                task,
+                profile=dict(receipt["execution_profile"]),
+                selected_model=model,
+                source=str(receipt["selection_source"]),
+                fingerprint=str(receipt["catalog_hash"]),
+                receipt=receipt,
+            )
+            return model, False
         except Exception as exc:
             raise ClaudeLaunchContractError(str(exc)) from exc
     return None, False

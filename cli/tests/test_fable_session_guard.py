@@ -140,7 +140,7 @@ def test_explicit_fable_role_does_not_depend_on_a_model_id(tmp_path):
     assert "CONTRACT RED" in proc.stderr
 
 
-def test_live_catalog_role_identifies_opaque_fable_model(tmp_path):
+def test_unsigned_caller_catalog_cannot_assert_opaque_fable_role(tmp_path):
     model = "opaque-catalog-bound-planner"
     selection = _selection(tmp_path, model)
     proc = _run(
@@ -151,7 +151,7 @@ def test_live_catalog_role_identifies_opaque_fable_model(tmp_path):
         },
     )
     assert proc.returncode == 0
-    assert "CONTRACT RED" in proc.stderr
+    assert proc.stderr.strip() == ""
 
 
 def test_fable_over_cap_reports_without_controlling_the_session(tmp_path):
@@ -177,10 +177,10 @@ def test_fable_no_receipt_reports_even_under_cap(tmp_path):
     )
     assert proc.returncode == 0
     assert "CONTRACT RED" in proc.stderr
-    assert "acceptance" in proc.stderr
+    assert "selection receipt" in proc.stderr
 
 
-def test_fable_under_cap_with_receipt_is_clean(tmp_path):
+def test_fable_under_cap_caller_receipts_still_fail_closed(tmp_path):
     balance = tmp_path / "fable-allotment.json"
     balance.write_text(json.dumps(_balance(5.0)))
     receipt = tmp_path / "accept.json"
@@ -190,7 +190,8 @@ def test_fable_under_cap_with_receipt_is_clean(tmp_path):
         {"LIMEN_FABLE_BALANCE_PATH": str(balance), "LIMEN_FABLE_ACCEPTANCE": str(receipt)},
     )
     assert proc.returncode == 0, proc.stderr
-    assert "CONTRACT RED" not in proc.stderr
+    assert "CONTRACT RED" in proc.stderr
+    assert "selection receipt" in proc.stderr
 
 
 def test_fable_stale_balance_fails_closed_without_session_control(tmp_path):
@@ -205,7 +206,7 @@ def test_fable_stale_balance_fails_closed_without_session_control(tmp_path):
         {"LIMEN_FABLE_BALANCE_PATH": str(balance), "LIMEN_FABLE_ACCEPTANCE": str(receipt)},
     )
     assert proc.returncode == 0
-    assert "balance-stale-observation" in proc.stderr
+    assert "selection receipt" in proc.stderr
     assert "/model" not in proc.stderr
 
 
@@ -234,4 +235,4 @@ def test_fable_wrong_role_or_build_profile_reports_red(tmp_path):
             env,
         )
         assert proc.returncode == 0
-        assert "fable-execution-profile-invalid" in proc.stderr
+        assert "selection receipt" in proc.stderr

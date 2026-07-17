@@ -1810,25 +1810,13 @@ parameters:
     env: LIMEN_CLAUDE_MODEL
     self_update: none
     owner: arms-agents
-    note: "Optional opaque Claude model override. Bare fleet invocations use provider Auto. A non-empty override is blocked unless LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT freshly binds the exact live catalog identity and execution profile."
-  LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT:
-    default: ""
-    env: LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT
-    self_update: none
-    owner: arms-agents
-    note: "Path to a fresh limen.claude_model_selection.v1 owner receipt containing an attempt ID, execution profile, opaque selected model, normalized live catalog rows with explicit execution roles, and matching catalog hash. Required for every explicit Claude override; Fable rows additionally require current Fable authority and the exact read-only launch surface."
-  LIMEN_CLAUDE_MODEL_SELECTION_MAX_AGE_SECONDS:
-    default: 300
-    env: LIMEN_CLAUDE_MODEL_SELECTION_MAX_AGE_SECONDS
-    self_update: none
-    owner: arms-agents
-    note: "Positive freshness ceiling for the owner-issued Claude live-catalog selection receipt. Stale, future-dated, missing, symlinked, hash-drifted, removed, or profile-mismatched selections fail blocked."
+    note: "Optional opaque Claude model override. Bare fleet invocations use provider Auto. A non-empty override is blocked unless the fixed sealed Domus authority root contains a fresh owner-signed live-catalog selection receipt binding the exact task, attempt, identity, and execution profile. Caller-selected receipt paths and freshness overrides are prohibited."
   LIMEN_FABLE_ACCEPTANCE:
     default: ""
     env: LIMEN_FABLE_ACCEPTANCE
     self_update: none
     owner: arms-agents
-    note: "Path to the current-week written Fable acceptance receipt emitted by scripts/fable-allotment.py accept. The receipt binds a plan-only continuation-capsule, a provider-neutral Auto builder handoff with Fable forbidden, source lineage, verification, and the motion deadline. Empty, stale, malformed, or arbitrary paths close the Fable planner role."
+    note: "Deprecated caller-path marker retained only for audit detection and adversarial regression tests. It never supplies launch authority. scripts/fable-allotment.py accept emits an unsigned proposal; production accepts only the separately owner-signed receipt in the fixed sealed Domus authority root."
   LIMEN_MAX_FABLE_SESSION_TOKENS:
     default: "1000000"
     env: LIMEN_MAX_FABLE_SESSION_TOKENS
@@ -1864,13 +1852,13 @@ parameters:
     env: LIMEN_FABLE_BALANCE_PATH
     self_update: none
     owner: arms-agents
-    note: "Override path to the live limen.fable_balance.v1 receipt (default $LIMEN_ROOT/logs/fable-allotment.json). The shared contract validator requires a current week, fresh observation, ready source, finite reconciled spend, coherent caps, and exact over-cap state."
+    note: "Optional read-only input for the vendor-cancel advisor and audit fixtures. It never supplies Fable launch authority. Production authorization reads only the owner-signed fable-balance.json in the fixed sealed Domus authority root."
   LIMEN_FABLE_BALANCE_MAX_AGE_SECONDS:
     default: "900"
     env: LIMEN_FABLE_BALANCE_MAX_AGE_SECONDS
     self_update: none
     owner: arms-agents
-    note: "Maximum age of a limen.fable_balance.v1 observation that may authorize a Fable planner. Missing, malformed, future-dated, source-dark, or older observations fail closed."
+    note: "Freshness threshold used only while constructing or auditing unsigned balance proposals and owner usage-meter inputs. Production launch authorization uses the fixed compiled threshold and rejects caller freshness overrides."
   LIMEN_LATEST_SESSION_JSONL:
     default: ""
     env: LIMEN_LATEST_SESSION_JSONL
@@ -2939,6 +2927,12 @@ parameters:
     self_update: none
     owner: dispatch
     note: "Async-dispatch variant of the value-gate subprocess timeout (seconds); also the fallback for LIMEN_VALUE_GATE_TIMEOUT."
+  LIMEN_BUILDER_PREDICATE_TIMEOUT:
+    default: 900
+    env: LIMEN_BUILDER_PREDICATE_TIMEOUT
+    self_update: none
+    owner: dispatch
+    note: "Hard timeout in seconds for the scoped task predicate run after a provider-Auto child implements a Fable plan. Clamped to at least one second; a timeout blocks publication of the exact-head implementation receipt."
   LIMEN_REQUIRE_NEXT_ACTION_SOURCE:
     default: "1"               # ON — admission requires a sourced next_action
     env: LIMEN_REQUIRE_NEXT_ACTION_SOURCE

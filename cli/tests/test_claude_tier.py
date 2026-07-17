@@ -54,15 +54,27 @@ def _selection(
     normalized = MS._normalized_models(models)
     receipt = {
         "schema": MS.CLAUDE_MODEL_SELECTION_SCHEMA,
+        "authority_status": "owner-signed",
         "observed_at": (observed_at or datetime.now(timezone.utc)).isoformat(),
         "source": "test-live-owner-adapter",
         "attempt_id": "attempt-arbitrarily-renamed",
+        "task_id": "CLAUDE-DYNAMIC",
         "selection_source": "provider_live_catalog",
         "selected_model": selected,
         "execution_profile": profile,
         "models": models,
         "catalog_hash": MS._catalog_hash(normalized),
     }
+    if profile.get("execution_role") == "fable-planner":
+        receipt["launch_contract"] = {
+            "schema": "limen.fable_preservation_launch.v1",
+            "orchestrator": "limen.preservation-orchestrator",
+            "attempt_id": receipt["attempt_id"],
+            "mode": "noninteractive-print",
+            "resume_allowed": False,
+            "direct_launch_allowed": False,
+        }
+        receipt["fable_authority"] = {"fixture": True}
     path = root / "claude-model-selection.json"
     path.write_text(json.dumps(receipt), encoding="utf-8")
     return path
@@ -129,6 +141,7 @@ def _balance(root: Path, *, spent_pct: float = 5) -> Path:
 
 @pytest.fixture(autouse=True)
 def _clear(monkeypatch) -> None:
+    original_selection_path = MS._selection_path
     for name in (
         "LIMEN_CLAUDE_MODEL",
         "LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT",
@@ -137,6 +150,16 @@ def _clear(monkeypatch) -> None:
         "LIMEN_FABLE_BALANCE_PATH",
     ):
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(
+        MS,
+        "_selection_path",
+        lambda raw=None: (
+            Path(__import__("os").environ["LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT"])
+            if __import__("os").environ.get("LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT")
+            else original_selection_path(raw)
+        ),
+    )
+    monkeypatch.setattr(MS, "_verify_owner_selection", lambda _value: None)
 
 
 def test_provider_auto_ignores_legacy_tiers_and_name_shapes() -> None:
@@ -150,7 +173,7 @@ def test_provider_auto_ignores_legacy_tiers_and_name_shapes() -> None:
 def test_explicit_override_requires_fresh_exact_live_selection(tmp_path, monkeypatch) -> None:
     model = "shape-z-with-no-semantic-name"
     monkeypatch.setenv("LIMEN_CLAUDE_MODEL", model)
-    with pytest.raises(D.ClaudeLaunchContractError, match="no live selection receipt"):
+    with pytest.raises(D.ClaudeLaunchContractError, match="unavailable|unprovisioned"):
         D._claude_launch_selection(_task())
 
     receipt = _selection(
@@ -205,6 +228,7 @@ def test_stale_or_profile_mismatched_selection_fails_closed(tmp_path, monkeypatc
         tmp_path,
         selected=model,
         profile={"execution_role": "different-owner-profile"},
+        rows=[{"id": model, "active": True, "execution_roles": ["different-owner-profile"]}],
         observed_at=datetime.now(timezone.utc) - timedelta(minutes=6),
     )
     monkeypatch.setenv("LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT", str(receipt))
@@ -216,6 +240,7 @@ def test_stale_or_profile_mismatched_selection_fails_closed(tmp_path, monkeypatc
         tmp_path,
         selected=model,
         profile={"execution_role": "different-owner-profile"},
+        rows=[{"id": model, "active": True, "execution_roles": ["different-owner-profile"]}],
     )
     with pytest.raises(D.ClaudeLaunchContractError, match="profile does not match"):
         D._claude_launch_selection(_task())
@@ -232,12 +257,19 @@ def test_fable_identity_requires_role_authority_and_read_only_launch(tmp_path, m
     monkeypatch.setenv("LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT", str(receipt))
     monkeypatch.setenv("LIMEN_CLAUDE_MODEL", model)
     task = _task(labels=["execution-role:fable-planner", "mode:plan-only"])
+    task.predicate = "pytest cli/tests/test_claude_tier.py"
+    task.receipt_target = "https://github.com/organvm/limen/pull/9999"
 
-    with pytest.raises(D.ClaudeLaunchContractError, match="acceptance-missing"):
+    with pytest.raises(D.ClaudeLaunchContractError, match="authority|signature|status"):
         D._agent_argv("claude", task)
 
-    monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(_acceptance(tmp_path)))
-    monkeypatch.setenv("LIMEN_FABLE_BALANCE_PATH", str(_balance(tmp_path)))
+    class FakeContract:
+        @staticmethod
+        def validate_authority_bundle(value, **_kwargs):
+            return value
+
+    monkeypatch.setattr(MS, "_fable_contract", lambda: FakeContract)
+    monkeypatch.setattr(D, "_fable_authority_for_task", lambda _task: ({"fixture": True}, "ok"))
     argv = D._agent_argv("claude", task)
     assert argv[argv.index("--model") + 1] == model
     assert set(argv[argv.index("--tools") + 1].split(",")) == {"Glob", "Grep", "Read"}
@@ -288,6 +320,9 @@ def test_fable_hard_cap_closes_live_selection(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(_acceptance(tmp_path)))
     monkeypatch.setenv("LIMEN_FABLE_BALANCE_PATH", str(_balance(tmp_path, spent_pct=50)))
     task = _task(labels=["execution-role:fable-planner", "mode:plan-only"])
+    task.predicate = "pytest cli/tests/test_claude_tier.py"
+    task.receipt_target = "https://github.com/organvm/limen/pull/9999"
+    monkeypatch.setattr(D, "_fable_authority_for_task", lambda _task: (None, "hard-cap"))
     with pytest.raises(D.ClaudeLaunchContractError, match="hard-cap"):
         D._claude_launch_selection(task)
 

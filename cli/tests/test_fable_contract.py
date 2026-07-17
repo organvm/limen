@@ -19,6 +19,8 @@ def _acceptance(now: datetime | None = None, *, category: str = "governance") ->
     now = now or _now()
     return {
         "schema": contract.ACCEPTANCE_SCHEMA,
+        "authority_status": "owner-signed",
+        "authorized": True,
         "created_at": now.isoformat(),
         "week": contract.current_week(now),
         "category": category,
@@ -38,6 +40,8 @@ def _balance(now: datetime | None = None, *, spent_pct: float = 5) -> dict:
     now = now or _now()
     return {
         "schema": contract.BALANCE_SCHEMA,
+        "authority_status": "owner-signed",
+        "authorized": True,
         "observed_at": now.isoformat(),
         "week": contract.current_week(now),
         "spent_tokens": 50,
@@ -89,7 +93,8 @@ def _commit_packet(root: Path, packet: dict, *, repository: str = "organvm/limen
     ).stdout.strip()
 
 
-def test_provider_neutral_acceptance_and_packet_have_no_model_or_tier(tmp_path) -> None:
+def test_provider_neutral_acceptance_and_packet_have_no_model_or_tier(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(contract, "_verify_owner_receipt", lambda receipt, _namespace: receipt)
     receipt = contract.validate_acceptance_receipt(_acceptance())
     encoded = json.dumps(receipt, sort_keys=True)
     assert "model" not in encoded
@@ -97,6 +102,19 @@ def test_provider_neutral_acceptance_and_packet_have_no_model_or_tier(tmp_path) 
 
     packet = _packet(tmp_path)
     assert contract.validate_packet_metadata(packet, root=tmp_path) == packet
+
+
+def test_unsigned_proposal_fields_cannot_survive_owner_adjudication(monkeypatch) -> None:
+    monkeypatch.setattr(contract, "_verify_owner_receipt", lambda receipt, _namespace: receipt)
+    acceptance = _acceptance()
+    acceptance["authorized"] = False
+    with pytest.raises(contract.ContractError, match="acceptance-owner-authority-status-invalid"):
+        contract.validate_acceptance_receipt(acceptance)
+
+    balance = _balance()
+    balance["authorized"] = False
+    with pytest.raises(contract.ContractError, match="balance-owner-authority-status-invalid"):
+        contract.validate_balance_receipt(balance)
 
 
 @pytest.mark.parametrize(
@@ -164,8 +182,12 @@ def test_authorization_fails_closed_and_reserve_band_is_exact(tmp_path, monkeypa
     now = _now()
     acceptance_path = tmp_path / "acceptance.json"
     balance_path = tmp_path / "balance.json"
-    monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(acceptance_path))
-    monkeypatch.setenv("LIMEN_FABLE_BALANCE_PATH", str(balance_path))
+    monkeypatch.setattr(
+        contract,
+        "_owner_receipt_path",
+        lambda name: acceptance_path if name == "fable-acceptance.json" else balance_path,
+    )
+    monkeypatch.setattr(contract, "_verify_owner_receipt", lambda receipt, _namespace: receipt)
 
     acceptance_path.write_text(json.dumps(_acceptance(now)))
     balance_path.write_text(json.dumps(_balance(now, spent_pct=45)))

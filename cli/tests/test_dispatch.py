@@ -2028,14 +2028,57 @@ def test_dispatch_event_records_dynamic_selection_receipt() -> None:
     assert event.catalog_hash == "abc123"
 
 
+def test_fable_launch_is_wrapped_by_attempt_bound_sealed_orchestrator(tmp_path, monkeypatch) -> None:
+    task = Task(
+        id="FABLE-SEALED-LAUNCH",
+        title="plan under owner orchestration",
+        target_agent="claude",
+        created=date(2026, 7, 17),
+    )
+    D._MODEL_SELECTION_RECEIPTS[task.id] = {
+        "receipt": {
+            "attempt_id": "owner-attempt-17",
+            "task_id": task.id,
+        }
+    }
+    orchestrator = tmp_path / "limen-preservation-dispatch"
+    monkeypatch.setattr(D, "require_sealed_runtime", lambda name: orchestrator)
+
+    command = D._fable_preservation_command(
+        task,
+        "claude",
+        ["-p", "--model", "provider/opaque-plan"],
+        "bounded prompt",
+    )
+
+    assert command == [
+        str(orchestrator),
+        "--attempt-id",
+        "owner-attempt-17",
+        "--task-id",
+        task.id,
+        "--",
+        "claude",
+        "-p",
+        "--model",
+        "provider/opaque-plan",
+        "bounded prompt",
+    ]
+    D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+
+
 def test_dispatch_event_records_only_pr_preserved_fable_packet_receipt() -> None:
     import datetime
 
     task = Task(
         id="FABLE-RECEIPT",
         title="packet receipt",
+        repo="organvm/limen",
         target_agent="claude",
         status="open",
+        labels=["execution-role:fable-planner", "mode:plan-only"],
+        predicate="scripts/verify-scoped.sh cli/src/limen/dispatch.py",
+        receipt_target="https://github.com/organvm/limen/pull/9999",
         created=date(2026, 7, 17),
     )
     receipt = {
@@ -2047,6 +2090,22 @@ def test_dispatch_event_records_only_pr_preserved_fable_packet_receipt() -> None
     }
     D._FABLE_PACKET_RECEIPTS[task.id] = receipt
     D._FABLE_PACKET_CUSTODY_VERIFIED.add(task.id)
+    D._MODEL_SELECTION_RECEIPTS[task.id] = {
+        "execution_profile": {
+            "execution_role": "fable-planner",
+            "planning_only": True,
+            "build_allowed": False,
+            "fanout_allowed": False,
+        },
+        "selected_model": "provider/opaque-plan",
+        "selection_source": "claude_live_catalog",
+        "catalog_hash": "a" * 64,
+        "receipt": {
+            "attempt_id": "fable-parent-attempt",
+            "task_id": task.id,
+            "selection_source": "claude_live_catalog",
+        },
+    }
     pull_request = "https://github.com/organvm/limen/pull/9999"
 
     D._apply_result(
@@ -2059,8 +2118,142 @@ def test_dispatch_event_records_only_pr_preserved_fable_packet_receipt() -> None
 
     event = task.dispatch_log[-1]
     assert event.fable_packet_receipt == receipt
+    assert event.builder_handoff_receipt["provider_selection"] == "auto"
+    assert event.builder_handoff_receipt["parent_attempt_id"] == "fable-parent-attempt"
+    assert task.status == "open"
+    assert task.target_agent == "any"
+    assert task.execution_profile["execution_role"] == "implementation-builder"
+    assert "mode:plan-only" not in task.labels
+    assert pull_request in task.urls
     assert task.id not in D._FABLE_PACKET_RECEIPTS
     assert task.id not in D._FABLE_PACKET_CUSTODY_VERIFIED
+
+
+def test_serial_fresh_board_commit_preserves_fable_handoff_receipts(tmp_path: Path) -> None:
+    """The stale bookkeeping pass must not consume evidence before the locked commit."""
+
+    import datetime
+
+    task_id = "FABLE-SERIAL-RECEIPT"
+    pull_request = "https://github.com/organvm/limen/pull/9999"
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": task_id,
+                "title": "preserve plan then build",
+                "repo": "organvm/limen",
+                "target_agent": "claude",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "labels": ["execution-role:fable-planner", "mode:plan-only"],
+                "predicate": "scripts/verify-scoped.sh cli/src/limen/dispatch.py",
+                "receipt_target": pull_request,
+                "created": "2026-07-17",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    stale = load_limen_file(tasks_path)
+    packet = {
+        "schema": "limen.fable_packet_receipt.v1",
+        "path": "docs/continuations/fable/fable-serial-receipt.md",
+        "content_sha256": "b" * 64,
+        "commit_sha": "c" * 40,
+        "pull_request": pull_request,
+    }
+    selection_receipt = {
+        "attempt_id": "fable-parent-serial",
+        "task_id": task_id,
+        "selection_source": "claude_live_catalog",
+    }
+    D._FABLE_PACKET_RECEIPTS[task_id] = packet
+    D._FABLE_PACKET_CUSTODY_VERIFIED.add(task_id)
+    D._MODEL_SELECTION_RECEIPTS[task_id] = {
+        "execution_profile": {
+            "execution_role": "fable-planner",
+            "planning_only": True,
+            "build_allowed": False,
+            "fanout_allowed": False,
+        },
+        "selected_model": "provider/opaque-plan",
+        "selection_source": "claude_live_catalog",
+        "catalog_hash": "a" * 64,
+        "receipt": selection_receipt,
+    }
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    D._apply_result(
+        stale.tasks[0],
+        "claude",
+        pull_request,
+        now,
+        stale.portal.budget.track,
+        consume_transient_receipts=False,
+    )
+    assert task_id in D._FABLE_PACKET_RECEIPTS
+    assert task_id in D._MODEL_SELECTION_RECEIPTS
+
+    D._commit_dispatch_results(
+        tasks_path,
+        stale,
+        [("claude", task_id, pull_request)],
+        now,
+    )
+
+    persisted = read_board(tasks_path)["tasks"][0]
+    event = persisted["dispatch_log"][-1]
+    assert persisted["status"] == "open"
+    assert persisted["target_agent"] == "any"
+    assert persisted["builder_handoff_receipt"]["parent_attempt_id"] == "fable-parent-serial"
+    assert event["model_selection_receipt"] == selection_receipt
+    assert event["fable_packet_receipt"] == packet
+    assert event["builder_handoff_receipt"]["provider_selection"] == "auto"
+    assert task_id not in D._FABLE_PACKET_RECEIPTS
+    assert task_id not in D._MODEL_SELECTION_RECEIPTS
+    assert task_id not in D._FABLE_PACKET_CUSTODY_VERIFIED
+
+
+def test_fable_builder_result_requires_exact_head_predicate_receipt() -> None:
+    import datetime
+
+    task = Task(
+        id="FABLE-BUILDER-RECEIPT",
+        title="implement packet",
+        repo="organvm/limen",
+        target_agent="any",
+        status="open",
+        labels=["execution-role:implementation-builder", "fable-builder-child"],
+        predicate="bash scripts/verify-fable-gate.sh",
+        receipt_target="https://github.com/organvm/limen/pull/9999",
+        created=date(2026, 7, 17),
+        builder_handoff_receipt={
+            "schema": "limen.fable_builder_handoff_receipt.v1",
+            "parent_attempt_id": "parent",
+            "child_attempt_id": "child",
+        },
+    )
+    pull_request = "https://github.com/organvm/limen/pull/9999"
+    implementation = {
+        "schema": "limen.fable_builder_implementation.v1",
+        "parent_attempt_id": "parent",
+        "attempt_id": "child",
+        "commit_sha": "d" * 40,
+        "predicate_exit_code": 0,
+        "pull_request": pull_request,
+    }
+    D._FABLE_IMPLEMENTATION_RECEIPTS[task.id] = implementation
+    D._apply_result(
+        task,
+        "codex",
+        pull_request,
+        datetime.datetime.now(datetime.timezone.utc),
+        BudgetTrack(date="2026-07-17"),
+    )
+    assert task.status == "dispatched"
+    assert task.dispatch_log[-1].implementation_receipt == implementation
 
 
 @pytest.mark.parametrize("result", [False, "limen/fable-packet-pushed-but-no-pr"])

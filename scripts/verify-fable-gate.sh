@@ -39,6 +39,8 @@ now = dt.datetime.now(dt.timezone.utc)
 def acceptance(category="governance"):
     return {
         "schema": C.ACCEPTANCE_SCHEMA,
+        "authority_status": "owner-signed",
+        "authorized": True,
         "created_at": now.isoformat(),
         "week": C.current_week(now),
         "category": category,
@@ -56,6 +58,8 @@ def acceptance(category="governance"):
 def balance(spent_pct):
     return {
         "schema": C.BALANCE_SCHEMA,
+        "authority_status": "owner-signed",
+        "authorized": True,
         "observed_at": now.isoformat(),
         "week": C.current_week(now),
         "spent_tokens": int(spent_pct),
@@ -90,18 +94,25 @@ authority, reason = C.authorization_status(
     balance_path=root / "fable-band.json",
     execution_profile_value=C.execution_profile(),
 )
+assert authority is None and reason == "caller-authority-path-prohibited", (authority, reason)
+
+# Structural cap semantics are exercised with a hermetic owner adapter.  The
+# cryptographic seam itself is covered by test_owner_authority.py below.
+paths = {
+    "fable-acceptance.json": root / "fable-acceptance.json",
+    "fable-balance.json": root / "fable-band.json",
+}
+C._owner_receipt_path = lambda name: paths[name]
+C._verify_owner_receipt = lambda receipt, namespace: receipt
+authority, reason = C.authorization_status(
+    execution_profile_value=C.execution_profile(),
+)
 assert authority is None and reason == "reserve-required", (authority, reason)
-authority, reason = C.authorization_status(
-    acceptance_path=root / "fable-reserve.json",
-    balance_path=root / "fable-band.json",
-    execution_profile_value=C.execution_profile(),
-)
+paths["fable-acceptance.json"] = root / "fable-reserve.json"
+authority, reason = C.authorization_status(execution_profile_value=C.execution_profile())
 assert authority is not None and reason == "ok", (authority, reason)
-authority, reason = C.authorization_status(
-    acceptance_path=root / "fable-reserve.json",
-    balance_path=root / "fable-over.json",
-    execution_profile_value=C.execution_profile(),
-)
+paths["fable-balance.json"] = root / "fable-over.json"
+authority, reason = C.authorization_status(execution_profile_value=C.execution_profile())
 assert authority is None and reason == "hard-cap", (authority, reason)
 PYEOF
 pass "ordinary acceptance closes in reserve band; exact reserve opens; hard cap closes"
@@ -121,7 +132,7 @@ if grep -Eq '/model|kill|signal|terminate|retune' <<<"$REPORT"; then
 fi
 pass "current invocation is observed without model or peer-session control"
 
-echo "── 3. workflow receipt is plan-only and provider-neutral ──"
+echo "── 3. caller-path workflow authority fails closed ──"
 TMP="$TMP" "${PY[@]}" - <<'PYEOF'
 import json
 import hashlib
@@ -156,14 +167,19 @@ workflow = {
 }
 (root / "workflow.json").write_text(json.dumps(workflow))
 PYEOF
-LIMEN_ROOT="$TMP" LIMEN_FABLE_BALANCE_PATH="$TMP/fable-open.json" \
+if LIMEN_ROOT="$TMP" LIMEN_FABLE_BALANCE_PATH="$TMP/fable-open.json" \
   "${PY[@]}" scripts/claude-workflow-guard.py audit-workflow "$TMP/workflow.json" \
-  >/dev/null || fail "valid plan-only workflow was rejected"
-pass "workflow profile and build packet contain no model/tier pin"
+  >"$TMP/workflow-report.json"; then
+  fail "unsigned caller-path workflow was accepted"
+fi
+grep -q "prelaunch signed selection/authority evidence" "$TMP/workflow-report.json" \
+  || fail "workflow rejection did not name missing prelaunch authority"
+pass "workflow cannot acquire authority retroactively from caller paths"
 
 echo "── 4. focused contract tests ──"
 "${PY[@]}" -m pytest \
   cli/tests/test_fable_contract.py \
+  cli/tests/test_owner_authority.py \
   cli/tests/test_fable_allotment.py \
   cli/tests/test_fable_session_guard.py \
   cli/tests/test_model_chokepoint.py \

@@ -73,11 +73,11 @@ def receipt_data(category: str, percent: float) -> dict:
     }
 
 
-def test_accept_writes_receipt_and_env_export(tmp_path):
+def test_accept_writes_unsigned_owner_proposal_not_runtime_authority(tmp_path):
     receipts_dir = tmp_path / "receipts"
     proc = run_fable(*base_accept_args(receipts_dir))
     assert proc.returncode == 0, proc.stderr
-    payload = json.loads("\n".join(proc.stdout.splitlines()[:-1]))
+    payload = json.loads(proc.stdout)
     receipt = Path(payload["receipt"])
     assert receipt.exists()
     data = json.loads(receipt.read_text())
@@ -90,7 +90,9 @@ def test_accept_writes_receipt_and_env_export(tmp_path):
     assert "model" not in json.dumps(data["builder_handoff"])
     assert "tier" not in json.dumps(data["builder_handoff"])
     assert receipt.stat().st_mode & 0o077 == 0
-    assert "export LIMEN_FABLE_ACCEPTANCE=" in proc.stdout
+    assert payload["authorized"] is False
+    assert payload["authority_status"] == "unsigned-proposal"
+    assert "export LIMEN_FABLE_ACCEPTANCE=" not in proc.stdout
 
 
 def test_category_cap_and_reserve_lock_are_enforced(tmp_path):

@@ -34,7 +34,10 @@ class DispatchLogEntry(BaseModel):
     selected_model: str | None = None
     selection_source: str | None = None
     catalog_hash: str | None = None
+    model_selection_receipt: dict[str, Any] | None = None
     fable_packet_receipt: dict[str, Any] | None = None
+    builder_handoff_receipt: dict[str, Any] | None = None
+    implementation_receipt: dict[str, Any] | None = None
     # Provider-neutral remote lifecycle.  Submission is only ``dispatched``; these fields make the
     # exact off-box run recoverable without interpreting a provider-shaped session string.
     provider_run_id: str | None = None

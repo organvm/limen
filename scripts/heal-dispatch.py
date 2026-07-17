@@ -131,6 +131,80 @@ def last_session(t):
     return str(log[-1].session_id) if log else ""
 
 
+def fable_implementation_ready(task: Task) -> bool:
+    """A plan PR is motion; only the bound builder predicate is completion."""
+
+    handoff = getattr(task, "builder_handoff_receipt", None)
+    if not isinstance(handoff, dict):
+        profile = getattr(task, "execution_profile", None)
+        labels = {str(item).strip().lower() for item in (task.labels or [])}
+        plan_only = (
+            isinstance(profile, dict)
+            and (
+                profile.get("execution_role") == "fable-planner"
+                or profile.get("planning_only") is True
+                or profile.get("build_allowed") is False
+            )
+        ) or bool(
+            labels
+            & {
+                "execution-role:fable-planner",
+                "execution_role:fable-planner",
+                "mode:plan-only",
+            }
+        )
+        packet_motion = any(
+            isinstance(getattr(event, "fable_packet_receipt", None), dict) for event in (task.dispatch_log or [])
+        )
+        return not (plan_only or packet_motion)
+    child_attempt = handoff.get("child_attempt_id")
+    parent_attempt = handoff.get("parent_attempt_id")
+    plan_pull_request = handoff.get("plan_pull_request")
+    plan_commit_sha = handoff.get("plan_commit_sha")
+    plan_path = handoff.get("plan_path")
+    expected_profile = {
+        "execution_role": "implementation-builder",
+        "planning_only": False,
+        "build_allowed": True,
+        "fable_allowed": False,
+    }
+    for event in reversed(task.dispatch_log or []):
+        receipt = getattr(event, "implementation_receipt", None)
+        if not isinstance(receipt, dict):
+            continue
+        try:
+            verified_at = datetime.datetime.fromisoformat(str(receipt.get("verified_at") or "").replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        exit_code = receipt.get("predicate_exit_code")
+        return (
+            receipt.get("schema") == "limen.fable_builder_implementation.v1"
+            and receipt.get("parent_attempt_id") == parent_attempt
+            and receipt.get("attempt_id") == child_attempt
+            and receipt.get("provider_selection") == "auto"
+            and receipt.get("execution_profile") == expected_profile
+            and receipt.get("plan_pull_request") == plan_pull_request
+            and receipt.get("plan_commit_sha") == plan_commit_sha
+            and receipt.get("plan_path") == plan_path
+            and isinstance(plan_path, str)
+            and plan_path.startswith("docs/continuations/fable/")
+            and ".." not in Path(plan_path).parts
+            and receipt.get("pull_request") == plan_pull_request
+            and isinstance(plan_pull_request, str)
+            and PR_RE.fullmatch(plan_pull_request.removeprefix("https://"))
+            and isinstance(exit_code, int)
+            and not isinstance(exit_code, bool)
+            and exit_code == 0
+            and receipt.get("predicate") == task.predicate
+            and receipt.get("receipt_target") == task.receipt_target
+            and re.fullmatch(r"[0-9a-f]{64}", str(receipt.get("predicate_sha256") or ""))
+            and re.fullmatch(r"[0-9a-f]{64}", str(receipt.get("predicate_output_sha256") or ""))
+            and re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", str(receipt.get("commit_sha") or ""))
+            and verified_at.tzinfo is not None
+        )
+    return False
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true")
@@ -223,6 +297,8 @@ def main():
             if t.status != "dispatched":  # re-check fresh state under lock
                 continue
             if t.id in merged_ids:
+                if not fable_implementation_ready(t):
+                    continue
                 t.status = "done"
                 t.updated = now
                 t.dispatch_log.append(
@@ -236,6 +312,8 @@ def main():
                 )
                 merged_done.append(t.id)
             elif t.id in open_pr_ids:
+                if not fable_implementation_ready(t):
+                    continue
                 # work produced an OPEN PR (awaiting merge) — mark done at the dispatch level
                 # so it leaves the loop and is NOT recycled into a DUPLICATE PR. The merge
                 # itself is tracked separately (PR-close backlog), gated on CI/billing.

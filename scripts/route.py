@@ -528,6 +528,30 @@ def _local_floor_lane(task: dict, health: dict[str, bool]) -> str | None:
             return None
         if not task.get("repo") or not health.get("ollama"):
             return None  # the isolated run needs a worktree; the lane must be up
+        profile = task.get("execution_profile") or task.get("executionProfile") or {}
+        labels = {str(item).strip().lower() for item in (task.get("labels") or [])}
+        role = (
+            profile.get("execution_role")
+            if isinstance(profile, dict)
+            else None
+        ) or task.get("execution_role")
+        if not role:
+            role = next(
+                (
+                    label.split(":", 1)[1]
+                    for label in labels
+                    if label.startswith(("execution-role:", "execution_role:"))
+                ),
+                None,
+            )
+        planning_only = (
+            profile.get("planning_only") is True
+            if isinstance(profile, dict)
+            else False
+        ) or "mode:plan-only" in labels
+        build_allowed = profile.get("build_allowed") if isinstance(profile, dict) else None
+        if role == "fable-planner" or planning_only or build_allowed is False:
+            return None
         classes = _task_classes(task)
         if not classes & local_floor_classes():
             return None

@@ -51,15 +51,27 @@ def _selection(
     ]
     value = {
         "schema": MS.CLAUDE_MODEL_SELECTION_SCHEMA,
+        "authority_status": "owner-signed",
         "observed_at": datetime.now(timezone.utc).isoformat(),
         "source": "test-live-owner-adapter",
         "attempt_id": "attempt-shim-adversarial",
+        "task_id": "task-shim-adversarial",
         "selection_source": "provider_live_catalog",
         "selected_model": model,
         "execution_profile": _profile(fable=fable),
         "models": models,
         "catalog_hash": MS._catalog_hash(MS._normalized_models(models)),
     }
+    if fable:
+        value["launch_contract"] = {
+            "schema": "limen.fable_preservation_launch.v1",
+            "orchestrator": "limen.preservation-orchestrator",
+            "attempt_id": value["attempt_id"],
+            "mode": "noninteractive-print",
+            "resume_allowed": False,
+            "direct_launch_allowed": False,
+        }
+        value["fable_authority"] = {"fixture": True}
     path = root / "selection.json"
     path.write_text(json.dumps(value), encoding="utf-8")
     return path
@@ -152,11 +164,12 @@ def test_bare_spawn_stays_on_provider_auto() -> None:
 
 def test_direct_explicit_override_requires_exact_live_receipt(tmp_path, monkeypatch) -> None:
     model = "arbitrarily-renamed-ordinary-model"
-    with pytest.raises(MS.ModelSelectionBlocked, match="no live selection receipt"):
+    with pytest.raises(MS.ModelSelectionBlocked, match="unavailable|unprovisioned"):
         MS.model_for_argv(["-p", "--model", model, "hello"])
 
     receipt = _selection(tmp_path, model)
-    monkeypatch.setenv("LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT", str(receipt))
+    monkeypatch.setattr(MS, "_selection_path", lambda raw=None: receipt)
+    monkeypatch.setattr(MS, "_verify_owner_selection", lambda _value: None)
     assert MS.model_for_argv(["-p", "--model", model, "hello"]) is None
     with pytest.raises(MS.ModelSelectionBlocked, match="differs from the owner selection"):
         MS.model_for_argv(["-p", "--model", "renamed-but-not-selected", "hello"])
@@ -171,20 +184,55 @@ def test_direct_explicit_override_requires_exact_live_receipt(tmp_path, monkeypa
 def test_fable_metadata_blocks_ordinary_mutation_path(tmp_path, monkeypatch) -> None:
     model = "opaque-plan-identity"
     receipt = _selection(tmp_path, model, fable=True)
-    acceptance, balance = _fable_authority(tmp_path)
-    monkeypatch.setenv("LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT", str(receipt))
-    monkeypatch.setenv("LIMEN_FABLE_ACCEPTANCE", str(acceptance))
-    monkeypatch.setenv("LIMEN_FABLE_BALANCE_PATH", str(balance))
+    monkeypatch.setattr(MS, "_selection_path", lambda raw=None: receipt)
+    monkeypatch.setattr(MS, "_verify_owner_selection", lambda _value: None)
+
+    class FakeContract:
+        FABLE_READ_ONLY_TOOLS = frozenset({"Read", "Glob", "Grep", "WebFetch", "WebSearch"})
+
+        @staticmethod
+        def validate_authority_bundle(value, **_kwargs):
+            assert value == {"fixture": True}
+            return value
+
+    monkeypatch.setattr(MS, "_fable_contract", lambda: FakeContract)
+    monkeypatch.setattr(MS, "_require_fable_orchestrator", lambda: None)
 
     with pytest.raises(MS.ModelSelectionBlocked, match="plan-only read-only"):
         MS.model_for_argv(["-p", "--model", model, "--allowedTools", "Edit,Write", "build"])
     assert MS.model_for_argv(_fable_args(model)) is None
+    for resume_args in (
+        [*_fable_args(model), "--resume", "session-id"],
+        [*_fable_args(model), "--continue"],
+        [*_fable_args(model), "-c"],
+    ):
+        with pytest.raises(MS.ModelSelectionBlocked, match="plan-only read-only"):
+            MS.model_for_argv(resume_args)
+
+
+def test_fable_direct_route_is_rejected_even_with_valid_receipt(tmp_path, monkeypatch) -> None:
+    model = "opaque-direct-plan"
+    receipt = _selection(tmp_path, model, fable=True)
+    monkeypatch.setattr(MS, "_selection_path", lambda raw=None: receipt)
+    monkeypatch.setattr(MS, "_verify_owner_selection", lambda _value: None)
+
+    class FakeContract:
+        FABLE_READ_ONLY_TOOLS = frozenset({"Read", "Glob", "Grep", "WebFetch", "WebSearch"})
+
+        @staticmethod
+        def validate_authority_bundle(value, **_kwargs):
+            return value
+
+    monkeypatch.setattr(MS, "_fable_contract", lambda: FakeContract)
+    with pytest.raises(MS.ModelSelectionBlocked, match="direct launch is prohibited"):
+        MS.model_for_argv(_fable_args(model))
 
 
 def test_fable_name_text_without_role_metadata_is_ordinary(tmp_path, monkeypatch) -> None:
     model = "vendor/fable-looking-arbitrary-rename"
     receipt = _selection(tmp_path, model, fable=False)
-    monkeypatch.setenv("LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT", str(receipt))
+    monkeypatch.setattr(MS, "_selection_path", lambda raw=None: receipt)
+    monkeypatch.setattr(MS, "_verify_owner_selection", lambda _value: None)
     assert MS.model_for_argv(["-p", "--model", model, "ordinary"]) is None
 
 
@@ -229,7 +277,7 @@ def test_shim_blocks_every_unvalidated_environment_override(stub_claude, name) -
     assert "BLOCKED:" in proc.stderr
 
 
-def test_shim_allows_exact_ordinary_override(stub_claude, tmp_path) -> None:
+def test_shim_rejects_caller_path_even_for_exact_ordinary_override(stub_claude, tmp_path) -> None:
     model = "opaque-live-builder"
     receipt = _selection(tmp_path, model)
     args = ["-p", "--model", model, "build"]
@@ -238,8 +286,8 @@ def test_shim_allows_exact_ordinary_override(stub_claude, tmp_path) -> None:
         args,
         LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT=str(receipt),
     )
-    assert proc.returncode == 0
-    assert proc.stdout.splitlines() == args
+    assert proc.returncode == 78
+    assert "owner validator is unprovisioned" in proc.stderr
 
 
 def test_shim_blocks_fable_identity_with_build_tools(stub_claude, tmp_path) -> None:
@@ -254,10 +302,10 @@ def test_shim_blocks_fable_identity_with_build_tools(stub_claude, tmp_path) -> N
         LIMEN_FABLE_BALANCE_PATH=str(balance),
     )
     assert proc.returncode == 78
-    assert "plan-only read-only" in proc.stderr
+    assert "owner validator is unprovisioned" in proc.stderr
 
 
-def test_shim_allows_exact_authorized_fable_surface(stub_claude, tmp_path) -> None:
+def test_shim_rejects_caller_authority_even_for_exact_fable_surface(stub_claude, tmp_path) -> None:
     model = "opaque-live-planner-renamed"
     receipt = _selection(tmp_path, model, fable=True)
     acceptance, balance = _fable_authority(tmp_path)
@@ -269,8 +317,8 @@ def test_shim_allows_exact_authorized_fable_surface(stub_claude, tmp_path) -> No
         LIMEN_FABLE_ACCEPTANCE=str(acceptance),
         LIMEN_FABLE_BALANCE_PATH=str(balance),
     )
-    assert proc.returncode == 0
-    assert proc.stdout.splitlines() == args
+    assert proc.returncode == 78
+    assert "owner validator is unprovisioned" in proc.stderr
 
 
 def test_shim_blocks_override_when_validator_is_unavailable(stub_claude, tmp_path) -> None:
@@ -280,7 +328,26 @@ def test_shim_blocks_override_when_validator_is_unavailable(stub_claude, tmp_pat
         LIMEN_ROOT=str(tmp_path / "missing"),
     )
     assert proc.returncode == 78
-    assert "validator is unavailable" in proc.stderr
+    assert "owner validator is unprovisioned" in proc.stderr
+
+
+def test_malicious_worktree_cannot_inject_validator(stub_claude, tmp_path) -> None:
+    marker = tmp_path / "injected"
+    injected = tmp_path / "cli" / "src" / "limen"
+    injected.mkdir(parents=True)
+    (injected / "model_selection.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('ran')\n"
+        "def model_for_argv(args): return 'attacker-model'\n"
+    )
+    proc = _run_shim(
+        stub_claude,
+        ["-p", "--model", "attacker-model", "build"],
+        LIMEN_ROOT=str(tmp_path),
+        LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT=str(tmp_path / "forged.json"),
+    )
+    assert proc.returncode == 78
+    assert "owner validator is unprovisioned" in proc.stderr
+    assert not marker.exists()
 
 
 def test_shim_keeps_provider_auto_available_when_validator_is_unavailable(stub_claude, tmp_path) -> None:

@@ -31,10 +31,6 @@ from typing import Any
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 BAD_TARGET_RE = re.compile(r"\bundefined#undefined\b|repo[=:]\\?\"?undefined|number[=:]\\?\"?undefined")
 FAILED_LOG_RE = re.compile(r"\bfailed:|agent died|monthly spend limit|rate[_ -]?limit", re.IGNORECASE)
-FABLE_ACCEPTANCE_RE = re.compile(
-    r"fable-allotment\.py\s+accept|LIMEN_FABLE_ACCEPTANCE|fableAcceptance|fable-acceptance",
-    re.IGNORECASE,
-)
 
 # pytest at command position, in any of its shapes (mirrors scripts/hooks/pytest-scope-guard.sh).
 _PYTEST_CMD_RE = re.compile(
@@ -104,7 +100,7 @@ def _fable_contract() -> Any:
     try:
         import importlib.util
 
-        root = Path(os.environ.get("LIMEN_ROOT") or Path(__file__).resolve().parents[1])
+        root = Path(__file__).resolve().parents[1]
         path = root / "cli" / "src" / "limen" / "fable_contract.py"
         if not path.exists():
             path = Path(__file__).resolve().parents[1] / "cli" / "src" / "limen" / "fable_contract.py"
@@ -119,6 +115,21 @@ def _fable_contract() -> Any:
 
 
 _FABLE_ROLE = "fable-planner"
+
+
+def _model_selection() -> Any:
+    try:
+        import importlib.util
+
+        path = Path(__file__).resolve().parents[1] / "cli" / "src" / "limen" / "model_selection.py"
+        spec = importlib.util.spec_from_file_location("_limen_fable_workflow_selection", path)
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        return None
 
 
 def _read_text(path: str | None) -> str:
@@ -161,51 +172,40 @@ def _execution_role(value: Any) -> str:
     return ""
 
 
-def _current_fable_acceptance_receipt() -> dict[str, Any] | None:
-    mod = _fable_contract()
+def _aware_moment(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
     try:
-        if mod is None:
-            return None
-        receipt, _reason = mod.acceptance_status()
-        return receipt
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
+def _structured_fable_authority(
+    value: Any,
+    profile: Any,
+    *,
+    moment: datetime | None = None,
+) -> dict[str, Any] | None:
+    """Validate evidence at its execution time, never against current live authority."""
+
+    selector = _model_selection()
+    contract = _fable_contract()
+    if selector is None or contract is None or not isinstance(profile, dict):
+        return None
+    try:
+        evidence_moment = moment
+        if evidence_moment is None and isinstance(value, dict):
+            evidence_moment = _aware_moment(value.get("observed_at"))
+        selection = selector.validate_selection_receipt(value, moment=evidence_moment)
+        return contract.validate_authority_bundle(
+            selection.get("fable_authority"),
+            execution_profile_value=profile,
+            moment=evidence_moment,
+        )
     except Exception:
         return None
-
-
-def _structured_fable_acceptance(value: Any) -> dict[str, Any] | None:
-    """Validate a receipt path; policy mentions and path-shaped strings are not authority."""
-
-    text = _as_text(value).strip()
-    if not text or not FABLE_ACCEPTANCE_RE.search(text):
-        return None
-    candidates = [text]
-    match = re.search(r"LIMEN_FABLE_ACCEPTANCE=([^\s]+)", text)
-    if match:
-        candidates.insert(0, match.group(1).strip("'\""))
-    mod = _fable_contract()
-    if mod is None:
-        return None
-    for candidate in candidates:
-        path = Path(candidate).expanduser()
-        if not path.is_absolute():
-            path = Path(os.environ.get("LIMEN_ROOT") or Path(__file__).resolve().parents[1]) / path
-        try:
-            receipt, _reason = mod.acceptance_status(path)
-            if receipt is not None:
-                return receipt
-        except Exception:
-            continue
-    return None
-
-
-def _fable_balance_contract() -> tuple[dict[str, Any] | None, str]:
-    mod = _fable_contract()
-    if mod is None:
-        return None, "balance-validator-unavailable"
-    try:
-        return mod.balance_status()
-    except Exception:
-        return None, "balance-validator-failed"
 
 
 def _fable_cap_closed(balance: dict[str, Any], acceptance: dict[str, Any]) -> bool:
@@ -321,14 +321,30 @@ def _workflow_violations(
                 ]
             )
     scan = "\n".join(_as_text(x) for x in scan_parts)
-    fable_acceptance = _structured_fable_acceptance(wf.get("fableAcceptance"))
-    if fable_workflow and fable_acceptance is None:
-        violations.append(f"{name}: Fable run lacks written acceptance command")
+    workflow_moment = next(
+        (
+            parsed
+            for parsed in (
+                _aware_moment(wf.get("startedAt")),
+                _aware_moment(wf.get("started_at")),
+                _aware_moment(wf.get("createdAt")),
+                _aware_moment(wf.get("created_at")),
+            )
+            if parsed is not None
+        ),
+        None,
+    )
+    authority = _structured_fable_authority(
+        wf.get("modelSelectionReceipt"),
+        wf.get("executionProfile"),
+        moment=workflow_moment,
+    )
+    fable_acceptance = authority.get("acceptance") if authority is not None else None
+    if fable_workflow and authority is None:
+        violations.append(f"{name}: Fable run lacks prelaunch signed selection/authority evidence")
     if fable_workflow:
-        balance, balance_reason = _fable_balance_contract()
-        if balance is None:
-            violations.append(f"{name}: Fable balance contract is red ({balance_reason})")
-        elif fable_acceptance is not None and _fable_cap_closed(balance, fable_acceptance):
+        balance = authority.get("balance") if authority is not None else None
+        if balance is not None and fable_acceptance is not None and _fable_cap_closed(balance, fable_acceptance):
             violations.append(f"{name}: Fable balance/cap contract is closed")
         if not _fable_execution_profile_valid(wf.get("executionProfile")):
             violations.append(f"{name}: Fable workflow is not bound to a plan-only execution profile")
@@ -485,8 +501,10 @@ def audit_transcript(
     fable_last_ts: datetime | None = None
     models: dict[str, int] = {}
     fable_subagent_files: set[str] = set()
-    fable_acceptance = _current_fable_acceptance_receipt()
-    fable_acceptance_seen = fable_acceptance is not None
+    fable_acceptance = None
+    fable_balance = None
+    fable_acceptance_seen = False
+    fable_prelaunch_missing = False
 
     unbounded_re = re.compile(
         r"\b(no stopping|indefinite|indefinitely|until ideal form|keep going until ideal form)\b",
@@ -496,11 +514,23 @@ def audit_transcript(
     for path in files:
         for line_no, row in _iter_jsonl(path):
             msg = row.get("message") or {}
-            row_acceptance = _structured_fable_acceptance(row.get("fableAcceptance"))
-            if row_acceptance is None and isinstance(msg, dict):
-                row_acceptance = _structured_fable_acceptance(msg.get("fableAcceptance"))
-            if row_acceptance is not None:
-                fable_acceptance = row_acceptance
+            row_profile = (
+                row.get("execution_profile")
+                or row.get("executionProfile")
+                or (msg.get("execution_profile") if isinstance(msg, dict) else None)
+                or (msg.get("executionProfile") if isinstance(msg, dict) else None)
+            )
+            row_selection = row.get("modelSelectionReceipt") or (
+                msg.get("modelSelectionReceipt") if isinstance(msg, dict) else None
+            )
+            row_authority = _structured_fable_authority(
+                row_selection,
+                row_profile,
+                moment=_aware_moment(row.get("timestamp")),
+            )
+            if row_authority is not None:
+                fable_acceptance = row_authority["acceptance"]
+                fable_balance = row_authority["balance"]
                 fable_acceptance_seen = True
             receipt = row.get("fableReceipt") or (msg.get("fableReceipt") if isinstance(msg, dict) else None)
             if _fable_packet_receipt_valid(receipt):
@@ -518,6 +548,8 @@ def audit_transcript(
                     )
             if row.get("type") != "assistant":
                 continue
+            if _execution_role(row) == _FABLE_ROLE and not fable_acceptance_seen:
+                fable_prelaunch_missing = True
             model = str(msg.get("model") or "unknown")
             fable_turn = _execution_role(row) == _FABLE_ROLE
             if fable_turn:
@@ -570,13 +602,14 @@ def audit_transcript(
         violations.append(
             f"Fable subagent fanout ({fable_subagents} subagents in role {_FABLE_ROLE}; max {max_fable_agents})"
         )
-    if fable_billable and not fable_acceptance_seen:
-        violations.append("Fable run lacks written acceptance command")
+    if fable_billable and (not fable_acceptance_seen or fable_prelaunch_missing):
+        violations.append("Fable run lacks prelaunch signed selection/authority evidence")
     if fable_billable:
-        balance, balance_reason = _fable_balance_contract()
-        if balance is None:
-            violations.append(f"Fable balance contract is red ({balance_reason})")
-        elif fable_acceptance is not None and _fable_cap_closed(balance, fable_acceptance):
+        if (
+            fable_balance is not None
+            and fable_acceptance is not None
+            and _fable_cap_closed(fable_balance, fable_acceptance)
+        ):
             violations.append("Fable balance/cap contract is closed")
         if fable_tool_violations:
             violations.append(

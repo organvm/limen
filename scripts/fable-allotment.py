@@ -131,7 +131,7 @@ def _validate_receipt(
     include_existing: bool = True,
 ) -> None:
     try:
-        CONTRACT.validate_acceptance_receipt(receipt, require_current_week=False)
+        CONTRACT.validate_acceptance_proposal(receipt, require_current_week=False)
     except CONTRACT.ContractError as exc:
         if str(exc) == "acceptance-reserve-locked":
             raise PolicyError("reserve spend requires --reserve-unlock") from exc
@@ -190,6 +190,8 @@ def _receipt_from_args(args: argparse.Namespace) -> dict[str, Any]:
     slug = _slug(args.slug)
     receipt = {
         "schema": "limen.fable_acceptance.v1",
+        "authority_status": "unsigned-proposal",
+        "authorized": False,
         "created_at": created.isoformat().replace("+00:00", "Z"),
         "week": _week_key(created),
         "category": args.category,
@@ -240,8 +242,18 @@ def cmd_accept(args: argparse.Namespace) -> int:
     stamp = receipt["created_at"].replace(":", "").replace("-", "")
     out = Path(args.out) if args.out else receipts_dir / f"{stamp}-{receipt['slug']}.json"
     _atomic_json_write(out, receipt)
-    print(json.dumps({"ok": True, "receipt": str(out)}, indent=2))
-    print(f"export LIMEN_FABLE_ACCEPTANCE={out}")
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "authorized": False,
+                "authority_status": "unsigned-proposal",
+                "receipt": str(out),
+                "next_owner": "Domus owner signer must adjudicate and install the signed fixed-root receipt",
+            },
+            indent=2,
+        )
+    )
     return 0
 
 
@@ -442,6 +454,8 @@ def compute_balance() -> dict[str, Any]:
         }
     return {
         "schema": CONTRACT.BALANCE_SCHEMA,
+        "authority_status": "unsigned-proposal",
+        "authorized": False,
         "observed_at": observed.isoformat().replace("+00:00", "Z"),
         "week": week,
         "spent_tokens": spent_tokens,

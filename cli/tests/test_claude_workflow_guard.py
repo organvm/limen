@@ -207,7 +207,7 @@ def test_audit_workflow_blocks_unaccepted_fable(tmp_path):
     proc = run_guard("audit-workflow", str(p))
     assert proc.returncode == 2
     violations = "\n".join(json.loads(proc.stdout)["reports"][0]["violations"])
-    assert "Fable run lacks written acceptance command" in violations
+    assert "prelaunch signed selection/authority evidence" in violations
 
 
 def test_audit_workflow_role_binding_cannot_hide_behind_empty_progress(tmp_path):
@@ -227,10 +227,10 @@ def test_audit_workflow_role_binding_cannot_hide_behind_empty_progress(tmp_path)
     proc = run_guard("audit-workflow", str(path))
     assert proc.returncode == 2
     violations = "\n".join(json.loads(proc.stdout)["reports"][0]["violations"])
-    assert "Fable run lacks written acceptance command" in violations
+    assert "prelaunch signed selection/authority evidence" in violations
 
 
-def test_audit_workflow_allows_accepted_single_fable(tmp_path):
+def test_audit_workflow_rejects_retroactive_caller_path_acceptance(tmp_path):
     receipt = write_fable_receipt(tmp_path)
     balance = write_fable_balance(tmp_path)
     wf = {
@@ -264,8 +264,9 @@ def test_audit_workflow_allows_accepted_single_fable(tmp_path):
             "LIMEN_ROOT": str(tmp_path),
         },
     )
-    assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert json.loads(proc.stdout)["ok"] is True
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    violations = "\n".join(json.loads(proc.stdout)["reports"][0]["violations"])
+    assert "prelaunch signed selection/authority evidence" in violations
 
 
 def test_audit_workflow_rejects_static_builder_model_or_tier(tmp_path):
@@ -602,7 +603,7 @@ def test_audit_transcript_blocks_unaccepted_fable(tmp_path):
     assert proc.returncode == 2
     report = json.loads(proc.stdout)
     assert report["fableBillableTokens"] == 10
-    assert "Fable run lacks written acceptance command" in "\n".join(report["violations"])
+    assert "prelaunch signed selection/authority evidence" in "\n".join(report["violations"])
 
 
 def test_audit_transcript_policy_mentions_do_not_accept_fable(tmp_path):
@@ -633,10 +634,10 @@ def test_audit_transcript_policy_mentions_do_not_accept_fable(tmp_path):
     )
     proc = run_guard("audit-transcript", str(transcript), "--max-billable-tokens", "1000000")
     assert proc.returncode == 2
-    assert "Fable run lacks written acceptance command" in "\n".join(json.loads(proc.stdout)["violations"])
+    assert "prelaunch signed selection/authority evidence" in "\n".join(json.loads(proc.stdout)["violations"])
 
 
-def test_audit_transcript_allows_current_receipt_env(tmp_path):
+def test_audit_transcript_rejects_retroactive_current_receipt_env(tmp_path):
     packet_receipt = fable_packet_receipt(tmp_path)
     transcript = tmp_path / "session.jsonl"
     transcript.write_text(
@@ -674,8 +675,10 @@ def test_audit_transcript_allows_current_receipt_env(tmp_path):
             **fable_pr_env(tmp_path),
         },
     )
-    assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert json.loads(proc.stdout)["fableAcceptanceSeen"] is True
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    report = json.loads(proc.stdout)
+    assert report["fableAcceptanceSeen"] is False
+    assert "prelaunch signed selection/authority evidence" in "\n".join(report["violations"])
 
 
 def test_audit_transcript_rejects_fable_implementation_tools(tmp_path):

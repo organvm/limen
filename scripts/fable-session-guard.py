@@ -21,14 +21,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _contract() -> Any | None:
     try:
         path = ROOT / "cli" / "src" / "limen" / "fable_contract.py"
-        if not path.exists():
-            path = Path(__file__).resolve().parents[1] / "cli" / "src" / "limen" / "fable_contract.py"
         spec = importlib.util.spec_from_file_location("_limen_fable_session_contract", path)
         if spec is None or spec.loader is None:
             return None
@@ -42,8 +40,6 @@ def _contract() -> Any | None:
 def _model_selection() -> Any | None:
     try:
         path = ROOT / "cli" / "src" / "limen" / "model_selection.py"
-        if not path.exists():
-            path = Path(__file__).resolve().parents[1] / "cli" / "src" / "limen" / "model_selection.py"
         spec = importlib.util.spec_from_file_location("_limen_fable_session_model_selection", path)
         if spec is None or spec.loader is None:
             return None
@@ -105,7 +101,8 @@ def _is_fable_context(payload: dict[str, Any], model: str) -> bool:
     try:
         if selector is None or not model:
             return False
-        receipt = selector.load_selection_receipt()
+        receipt = payload.get("model_selection_receipt")
+        receipt = selector.validate_selection_receipt(receipt)
         if receipt.get("selected_model") != model:
             return False
         row = next(item for item in receipt["models"] if item["id"] == model)
@@ -146,10 +143,22 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    authority, reason = contract.authorization_status(execution_profile_value=_execution_profile(payload))
+    selector = _model_selection()
+    try:
+        if selector is None:
+            raise ValueError("selection-validator-unavailable")
+        selection = selector.validate_selection_receipt(payload.get("model_selection_receipt"))
+        if model and selection.get("selected_model") != model:
+            raise ValueError("selection-model-mismatch")
+        authority = contract.validate_authority_bundle(
+            selection.get("fable_authority"),
+            execution_profile_value=_execution_profile(payload),
+        )
+        reason = "ok"
+    except Exception as exc:
+        authority = None
+        reason = str(exc) or "prelaunch-authority-evidence-missing"
     balance = authority.get("balance") if authority is not None else None
-    if balance is None:
-        balance, _balance_reason = contract.balance_status()
     if balance is not None:
         print(
             f"[fable-session-guard] Current Fable planning context ({model or 'role-bound'}). "

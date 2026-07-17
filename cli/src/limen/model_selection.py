@@ -26,6 +26,9 @@ DEFAULT_SELECTION_MAX_AGE_SECONDS = 300
 FUTURE_SKEW_SECONDS = 60
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _FABLE_ROLE = "fable-planner"
+_SELECTION_NAMESPACE = "limen-claude-model-selection"
+_FABLE_LAUNCH_SCHEMA = "limen.fable_preservation_launch.v1"
+_FABLE_ORCHESTRATOR = "limen.preservation-orchestrator"
 _FABLE_REQUIRED_DENIALS = frozenset(
     {
         "Agent",
@@ -44,8 +47,22 @@ class ModelSelectionBlocked(RuntimeError):
     """The requested provider override lacks current owner evidence."""
 
 
-def _root() -> Path:
-    return Path(os.environ.get("LIMEN_ROOT") or Path(__file__).resolve().parents[3])
+def _owner_authority() -> Any | None:
+    try:
+        from limen import owner_authority
+
+        return owner_authority
+    except Exception:
+        try:
+            path = Path(__file__).with_name("owner_authority.py")
+            spec = importlib.util.spec_from_file_location("_limen_model_selection_owner_authority", path)
+            if spec is None or spec.loader is None:
+                return None
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
+        except Exception:
+            return None
 
 
 def _fable_contract() -> Any | None:
@@ -68,9 +85,16 @@ def _fable_authorization_status(
     if contract is None:
         return None, "fable-contract-validator-unavailable"
     try:
-        return contract.authorization_status(execution_profile_value=execution_profile_value)
-    except Exception:
-        return None, "fable-contract-validator-failed"
+        receipt = load_selection_receipt()
+        if receipt.get("execution_profile") != execution_profile_value:
+            return None, "fable-authority-profile-mismatch"
+        authority = contract.validate_authority_bundle(
+            receipt.get("fable_authority"),
+            execution_profile_value=execution_profile_value,
+        )
+        return authority, "ok"
+    except Exception as exc:
+        return None, str(exc) or "fable-contract-validator-failed"
 
 
 def _timestamp(value: Any) -> dt.datetime:
@@ -89,16 +113,7 @@ def _timestamp(value: Any) -> dt.datetime:
 
 
 def _selection_age_limit() -> int:
-    raw = os.environ.get("LIMEN_CLAUDE_MODEL_SELECTION_MAX_AGE_SECONDS")
-    if raw is None:
-        return DEFAULT_SELECTION_MAX_AGE_SECONDS
-    try:
-        value = int(raw)
-    except ValueError as exc:
-        raise ModelSelectionBlocked("Claude model selection age limit is invalid") from exc
-    if value <= 0:
-        raise ModelSelectionBlocked("Claude model selection age limit is invalid")
-    return value
+    return DEFAULT_SELECTION_MAX_AGE_SECONDS
 
 
 def _normalized_models(value: Any) -> list[dict[str, Any]]:
@@ -140,11 +155,48 @@ def _catalog_hash(models: list[dict[str, Any]]) -> str:
 
 
 def _selection_path(raw: str | os.PathLike[str] | None = None) -> Path:
-    configured = raw if raw is not None else os.environ.get("LIMEN_CLAUDE_MODEL_SELECTION_RECEIPT")
-    if configured is None or not os.fspath(configured).strip():
-        raise ModelSelectionBlocked("explicit Claude model override has no live selection receipt")
-    path = Path(os.fspath(configured).strip()).expanduser()
-    return path if path.is_absolute() else _root() / path
+    if raw is not None:
+        raise ModelSelectionBlocked("caller-selected Claude selection receipt paths are prohibited")
+    authority = _owner_authority()
+    if authority is None:
+        raise ModelSelectionBlocked("Claude owner authority is unprovisioned")
+    try:
+        return authority.receipt_path("claude-model-selection.json")
+    except Exception as exc:
+        raise ModelSelectionBlocked("Claude owner authority is unprovisioned") from exc
+
+
+def _validate_launch_contract(value: Any, *, attempt_id: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or value != {
+        "schema": _FABLE_LAUNCH_SCHEMA,
+        "orchestrator": _FABLE_ORCHESTRATOR,
+        "attempt_id": attempt_id,
+        "mode": "noninteractive-print",
+        "resume_allowed": False,
+        "direct_launch_allowed": False,
+    }:
+        raise ModelSelectionBlocked("Fable selection lacks the canonical preservation-orchestrator launch contract")
+    return dict(value)
+
+
+def _verify_owner_selection(value: Any) -> None:
+    authority = _owner_authority()
+    if authority is None:
+        raise ModelSelectionBlocked("Claude owner authority is unprovisioned")
+    try:
+        authority.verify_receipt(value, namespace=_SELECTION_NAMESPACE)
+    except Exception as exc:
+        raise ModelSelectionBlocked(f"Claude owner attestation is invalid: {str(exc) or 'invalid'}") from exc
+
+
+def _require_fable_orchestrator() -> None:
+    authority = _owner_authority()
+    if authority is None:
+        raise ModelSelectionBlocked("Fable preservation orchestrator is unprovisioned")
+    try:
+        authority.require_canonical_orchestrator_parent()
+    except Exception as exc:
+        raise ModelSelectionBlocked(f"Fable direct launch is prohibited: {str(exc) or 'invalid'}") from exc
 
 
 def validate_selection_receipt(
@@ -154,6 +206,8 @@ def validate_selection_receipt(
 ) -> dict[str, Any]:
     if not isinstance(value, dict) or value.get("schema") != CLAUDE_MODEL_SELECTION_SCHEMA:
         raise ModelSelectionBlocked("Claude model selection receipt schema is invalid")
+    if value.get("authority_status") != "owner-signed":
+        raise ModelSelectionBlocked("Claude model selection receipt is not owner-signed authority")
     observed_at = _timestamp(value.get("observed_at"))
     now = (moment or dt.datetime.now(dt.timezone.utc)).astimezone(dt.timezone.utc)
     age = (now - observed_at).total_seconds()
@@ -165,6 +219,8 @@ def validate_selection_receipt(
         raise ModelSelectionBlocked("Claude model selection receipt lacks an owner source")
     if not isinstance(value.get("attempt_id"), str) or not value["attempt_id"].strip():
         raise ModelSelectionBlocked("Claude model selection receipt lacks an attempt identity")
+    if not isinstance(value.get("task_id"), str) or not value["task_id"].strip():
+        raise ModelSelectionBlocked("Claude model selection receipt lacks a task identity")
     if not isinstance(value.get("selection_source"), str) or not value["selection_source"].strip().endswith(
         "_live_catalog"
     ):
@@ -182,6 +238,27 @@ def validate_selection_receipt(
     profile = value.get("execution_profile")
     if not isinstance(profile, dict):
         raise ModelSelectionBlocked("Claude model selection receipt lacks an execution profile")
+    role = profile.get("execution_role")
+    selected_row = matching[0]
+    if role is not None:
+        if not isinstance(role, str) or not role.strip() or role.strip() not in selected_row["execution_roles"]:
+            raise ModelSelectionBlocked("Claude execution role is absent from the selected live-catalog row")
+    if role == _FABLE_ROLE:
+        _validate_launch_contract(value.get("launch_contract"), attempt_id=value["attempt_id"])
+        contract = _fable_contract()
+        if contract is None:
+            raise ModelSelectionBlocked("Fable contract validator is unavailable")
+        try:
+            contract.validate_authority_bundle(
+                value.get("fable_authority"),
+                execution_profile_value=profile,
+                moment=now,
+            )
+        except Exception as exc:
+            raise ModelSelectionBlocked(f"Fable planner authority is closed: {str(exc) or 'invalid'}") from exc
+    elif value.get("fable_authority") is not None or value.get("launch_contract") is not None:
+        raise ModelSelectionBlocked("non-Fable Claude selection carries Fable-only authority")
+    _verify_owner_selection(value)
     return {**value, "selected_model": selected.strip(), "models": models}
 
 
@@ -226,6 +303,15 @@ def _validate_fable_argv(args: list[str]) -> None:
     allowed = _tool_rules(_option_values(args, "--allowedTools", "--allowed-tools"))
     disallowed = _tool_rules(_option_values(args, "--disallowedTools", "--disallowed-tools"))
     permission_modes = _option_values(args, "--permission-mode")
+    print_flags = [arg for arg in args if arg in {"-p", "--print"}]
+    resume_flags = {
+        "-c",
+        "--continue",
+        "--resume",
+        "--session-id",
+        "--fork-session",
+        "--teleport",
+    }
     if (
         not tools
         or tools != allowed
@@ -234,6 +320,11 @@ def _validate_fable_argv(args: list[str]) -> None:
         or permission_modes != ["dontAsk"]
         or "--no-chrome" not in args
         or "--dangerously-skip-permissions" in args
+        or len(print_flags) != 1
+        or any(
+            arg in resume_flags or any(arg.startswith(f"{flag}=") for flag in resume_flags if flag.startswith("--"))
+            for arg in args
+        )
     ):
         raise ModelSelectionBlocked(
             "Fable model identity cannot run outside the exact plan-only read-only tool surface"
@@ -265,10 +356,8 @@ def validate_claude_model_override(
     if _FABLE_ROLE in roles or role == _FABLE_ROLE:
         if _FABLE_ROLE not in roles or role != _FABLE_ROLE:
             raise ModelSelectionBlocked("Fable model identity and execution role are not mutually bound")
-        authority, reason = _fable_authorization_status(receipt_profile)
-        if authority is None:
-            raise ModelSelectionBlocked(f"Fable planner authority is closed: {reason}")
         if args is not None:
+            _require_fable_orchestrator()
             _validate_fable_argv(args)
     return model
 

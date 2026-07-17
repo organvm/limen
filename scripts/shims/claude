@@ -10,7 +10,12 @@ A bare launch stays on provider Auto. Every explicit ``--model`` or
 validator before the real provider process is executed. Validator failure therefore
 blocks only the override-bearing invocation; it never retunes or stops peer sessions.
 """
+
 import os
+import json
+import pwd
+import stat
+import subprocess
 import sys
 
 
@@ -47,20 +52,50 @@ def _has_override(args) -> bool:
 
 
 def _model_decision(args):
-    """Return ``(model_to_inject, blocked_reason)`` from the shared stdlib validator."""
-    try:
-        import importlib.util
+    """Return a decision from the sealed Domus-installed owner validator.
 
-        root = os.environ.get("LIMEN_ROOT", os.path.expanduser("~/Workspace/limen"))
-        path = os.path.join(root, "cli", "src", "limen", "model_selection.py")
-        if not os.path.isfile(path):
-            return None, "Claude model selection validator is unavailable"
-        spec = importlib.util.spec_from_file_location("_limen_model_selection_shim", path)
-        if spec is None or spec.loader is None:
-            return None, "Claude model selection validator is unavailable"
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        return mod.model_for_argv(list(args)), None
+    ``LIMEN_ROOT`` is intentionally irrelevant here: dispatch rebinds it to the
+    task worktree, and a task checkout must never supply its own authority code.
+    """
+    try:
+        account_home = pwd.getpwuid(os.getuid()).pw_dir
+        path = os.path.join(
+            account_home,
+            "Library",
+            "Application Support",
+            "org.organvm.limen",
+            "authority",
+            "runtime",
+            "claude-model-validator",
+        )
+        metadata = os.lstat(path)
+        if (
+            stat.S_ISLNK(metadata.st_mode)
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+            or metadata.st_uid != 0
+            or not metadata.st_mode & stat.S_IXUSR
+        ):
+            return None, "Claude owner validator is unsealed"
+        run = subprocess.run(
+            [path, "validate-claude-argv"],
+            input=json.dumps(list(args), separators=(",", ":")),
+            text=True,
+            capture_output=True,
+            timeout=20,
+            check=False,
+        )
+        if run.returncode != 0:
+            return None, (run.stderr or run.stdout).strip() or "Claude model selection validation failed"
+        value = json.loads(run.stdout)
+        if not isinstance(value, dict) or set(value) != {"model"}:
+            return None, "Claude owner validator returned a malformed decision"
+        model = value.get("model")
+        if model is not None and (not isinstance(model, str) or not model.strip()):
+            return None, "Claude owner validator returned a malformed decision"
+        return model, None
+    except FileNotFoundError:
+        return None, "Claude owner validator is unprovisioned"
     except Exception as exc:
         return None, str(exc) or "Claude model selection validation failed"
 

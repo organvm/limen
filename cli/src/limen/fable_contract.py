@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -36,6 +37,37 @@ _PULL_REQUEST_RE = re.compile(
     r"https://github\.com/(?P<owner>[A-Za-z0-9_.-]+)/"
     r"(?P<repo>[A-Za-z0-9_.-]+)/pull/(?P<number>[1-9][0-9]*)"
 )
+_ACCEPTANCE_NAMESPACE = "limen-fable-acceptance"
+_BALANCE_NAMESPACE = "limen-fable-balance"
+
+
+def _owner_authority() -> Any:
+    """Load the sibling verifier without consulting a task or environment root."""
+
+    try:
+        from limen import owner_authority
+
+        return owner_authority
+    except Exception:
+        path = Path(__file__).resolve().with_name("owner_authority.py")
+        spec = importlib.util.spec_from_file_location("_limen_fable_owner_authority", path)
+        if spec is None or spec.loader is None:
+            raise ContractError("owner-authority-validator-unavailable")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+
+def _owner_receipt_path(name: str) -> Path:
+    return _owner_authority().receipt_path(name)
+
+
+def _verify_owner_receipt(receipt: Any, namespace: str) -> dict[str, Any]:
+    try:
+        return _owner_authority().verify_receipt(receipt, namespace=namespace)
+    except Exception as exc:
+        reason = str(exc) or "invalid"
+        raise ContractError(f"owner-authority-{reason}") from exc
 
 
 class ContractError(ValueError):
@@ -122,7 +154,7 @@ def _validate_builder_handoff(value: Any) -> None:
         raise ContractError("builder-requirements-invalid")
 
 
-def validate_acceptance_receipt(
+def validate_acceptance_proposal(
     receipt: Any,
     *,
     moment: dt.datetime | None = None,
@@ -171,6 +203,23 @@ def validate_acceptance_receipt(
     return receipt
 
 
+def validate_acceptance_receipt(
+    receipt: Any,
+    *,
+    moment: dt.datetime | None = None,
+    require_current_week: bool = True,
+) -> dict[str, Any]:
+    validate_acceptance_proposal(
+        receipt,
+        moment=moment,
+        require_current_week=require_current_week,
+    )
+    if receipt.get("authority_status") != "owner-signed" or receipt.get("authorized") is not True:
+        raise ContractError("acceptance-owner-authority-status-invalid")
+    _verify_owner_receipt(receipt, _ACCEPTANCE_NAMESPACE)
+    return receipt
+
+
 def _root() -> Path:
     return Path(os.environ.get("LIMEN_ROOT") or Path(__file__).resolve().parents[3])
 
@@ -189,28 +238,15 @@ def _read_object(path: Path, label: str) -> dict[str, Any]:
     return payload
 
 
-def _receipt_path(raw: str | os.PathLike[str] | None, *, default: Path | None = None) -> Path:
-    if raw is None:
-        if default is None:
-            raise ContractError("receipt-path-missing")
-        return default
-    text = os.fspath(raw).strip()
-    if not text or text == "1":
-        raise ContractError("receipt-path-missing")
-    path = Path(text).expanduser()
-    return path if path.is_absolute() else _root() / path
-
-
 def acceptance_status(
     raw: str | os.PathLike[str] | None = None,
     *,
     moment: dt.datetime | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
     try:
-        configured = raw if raw is not None else os.environ.get("LIMEN_FABLE_ACCEPTANCE")
-        if configured is None or not os.fspath(configured).strip() or os.fspath(configured).strip() == "1":
-            raise ContractError("acceptance-missing")
-        path = _receipt_path(configured)
+        if raw is not None:
+            raise ContractError("acceptance-caller-path-prohibited")
+        path = _owner_receipt_path("fable-acceptance.json")
         receipt = _read_object(path, "acceptance")
         validate_acceptance_receipt(receipt, moment=moment)
         return receipt, "ok"
@@ -228,16 +264,7 @@ def acceptance_present(
 
 
 def _positive_age_limit() -> int:
-    raw = os.environ.get("LIMEN_FABLE_BALANCE_MAX_AGE_SECONDS")
-    if raw is None:
-        return DEFAULT_BALANCE_MAX_AGE_SECONDS
-    try:
-        value = int(raw)
-    except ValueError as exc:
-        raise ContractError("balance-max-age-invalid") from exc
-    if value <= 0:
-        raise ContractError("balance-max-age-invalid")
-    return value
+    return DEFAULT_BALANCE_MAX_AGE_SECONDS
 
 
 def validate_balance_receipt(
@@ -310,6 +337,9 @@ def validate_balance_receipt(
     expected_over_cap = spent_pct >= hard
     if receipt.get("over_cap") is not expected_over_cap:
         raise ContractError("balance-over-cap-incoherent")
+    if receipt.get("authority_status") != "owner-signed" or receipt.get("authorized") is not True:
+        raise ContractError("balance-owner-authority-status-invalid")
+    _verify_owner_receipt(receipt, _BALANCE_NAMESPACE)
     return receipt
 
 
@@ -319,9 +349,9 @@ def balance_status(
     moment: dt.datetime | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
     try:
-        default = _root() / "logs" / "fable-allotment.json"
-        configured = raw if raw is not None else os.environ.get("LIMEN_FABLE_BALANCE_PATH")
-        path = _receipt_path(configured, default=default)
+        if raw is not None:
+            raise ContractError("balance-caller-path-prohibited")
+        path = _owner_receipt_path("fable-balance.json")
         receipt = _read_object(path, "balance")
         validate_balance_receipt(receipt, moment=moment)
         return receipt, "ok"
@@ -352,14 +382,16 @@ def authorization_status(
     execution_profile_value: Any = None,
     moment: dt.datetime | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
+    if acceptance_path is not None or balance_path is not None:
+        return None, "caller-authority-path-prohibited"
     try:
         validate_execution_profile(execution_profile_value)
     except ContractError as exc:
         return None, str(exc)
-    acceptance, acceptance_reason = acceptance_status(acceptance_path, moment=moment)
+    acceptance, acceptance_reason = acceptance_status(moment=moment)
     if acceptance is None:
         return None, acceptance_reason
-    balance, balance_reason = balance_status(balance_path, moment=moment)
+    balance, balance_reason = balance_status(moment=moment)
     if balance is None:
         return None, balance_reason
     closed, reason = cap_status(balance, acceptance)
@@ -369,7 +401,49 @@ def authorization_status(
         "acceptance": acceptance,
         "balance": balance,
         "execution_profile": dict(execution_profile_value),
+        "evidence_digest": hashlib.sha256(
+            json.dumps(
+                {"acceptance": acceptance, "balance": balance},
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest(),
     }, "ok"
+
+
+def validate_authority_bundle(
+    value: Any,
+    *,
+    execution_profile_value: Any,
+    moment: dt.datetime | None = None,
+) -> dict[str, Any]:
+    """Validate authority frozen before launch, never retroactive live state."""
+
+    if not isinstance(value, dict) or set(value) != {
+        "acceptance",
+        "balance",
+        "execution_profile",
+        "evidence_digest",
+    }:
+        raise ContractError("fable-authority-bundle-invalid")
+    validate_execution_profile(execution_profile_value)
+    if value.get("execution_profile") != execution_profile_value:
+        raise ContractError("fable-authority-profile-mismatch")
+    acceptance = validate_acceptance_receipt(value.get("acceptance"), moment=moment)
+    balance = validate_balance_receipt(value.get("balance"), moment=moment)
+    closed, reason = cap_status(balance, acceptance)
+    if closed:
+        raise ContractError(reason)
+    expected = hashlib.sha256(
+        json.dumps(
+            {"acceptance": acceptance, "balance": balance},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    if value.get("evidence_digest") != expected:
+        raise ContractError("fable-authority-evidence-digest-invalid")
+    return dict(value)
 
 
 def validate_execution_profile(value: Any) -> None:

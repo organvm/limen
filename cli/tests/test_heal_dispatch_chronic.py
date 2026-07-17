@@ -226,3 +226,78 @@ def test_chronic_active_receipt_owner_is_not_parked(tmp_path):
     assert out["past-comet"]["status"] == "failed", "active receipt owner protects the failed attempt"
     assert out["owner-lantern"]["status"] == "open", "owner task is left untouched"
     assert "0 chronic→parked" in result.stdout
+
+
+def test_plan_only_pr_cannot_terminalize_without_builder_predicate_receipt(tmp_path):
+    task = _task(
+        "FABLE-PLAN",
+        "dispatched",
+        labels=["fable-builder-child", "execution-role:implementation-builder"],
+        log=[
+            {
+                **_entry("open", "provider-Auto builder child opened"),
+                "builder_handoff_receipt": {
+                    "schema": "limen.fable_builder_handoff_receipt.v1",
+                    "parent_attempt_id": "parent",
+                    "child_attempt_id": "child",
+                    "plan_pull_request": "https://github.com/x/y/pull/1",
+                    "plan_commit_sha": "b" * 40,
+                    "plan_path": "docs/continuations/fable/plan.md",
+                },
+            },
+            _entry("dispatched"),
+        ],
+    )
+    task["builder_handoff_receipt"] = {
+        "schema": "limen.fable_builder_handoff_receipt.v1",
+        "parent_attempt_id": "parent",
+        "child_attempt_id": "child",
+        "plan_pull_request": "https://github.com/x/y/pull/1",
+        "plan_commit_sha": "b" * 40,
+        "plan_path": "docs/continuations/fable/plan.md",
+    }
+    task["predicate"] = "scripts/verify-scoped.sh cli/src/limen/dispatch.py"
+    task["receipt_target"] = "https://github.com/x/y/pull/1"
+    detail = {"PR_OPEN": [{"id": "FABLE-PLAN"}]}
+    out = _run(tmp_path, [task], detail=detail)
+    assert out["FABLE-PLAN"]["status"] == "dispatched"
+
+    task["dispatch_log"][-1]["implementation_receipt"] = {
+        "schema": "limen.fable_builder_implementation.v1",
+        "parent_attempt_id": "parent",
+        "attempt_id": "child",
+        "provider_selection": "auto",
+        "execution_profile": {
+            "execution_role": "implementation-builder",
+            "planning_only": False,
+            "build_allowed": True,
+            "fable_allowed": False,
+        },
+        "plan_pull_request": "https://github.com/x/y/pull/1",
+        "plan_commit_sha": "b" * 40,
+        "plan_path": "docs/continuations/fable/plan.md",
+        "commit_sha": "a" * 40,
+        "predicate": task["predicate"],
+        "predicate_sha256": "c" * 64,
+        "predicate_output_sha256": "d" * 64,
+        "predicate_exit_code": 0,
+        "receipt_target": task["receipt_target"],
+        "pull_request": "https://github.com/x/y/pull/1",
+        "verified_at": "2026-07-17T12:00:00+00:00",
+    }
+    out = _run(tmp_path, [task], detail=detail)
+    assert out["FABLE-PLAN"]["status"] == "done"
+
+
+def test_unpersisted_fable_plan_pr_cannot_bypass_builder_handoff(tmp_path):
+    task = _task(
+        "FABLE-PLAN-NO-HANDOFF",
+        "dispatched",
+        labels=["execution-role:fable-planner", "mode:plan-only"],
+        log=[_entry("dispatched")],
+    )
+    detail = {"PR_OPEN": [{"id": "FABLE-PLAN-NO-HANDOFF"}]}
+
+    out = _run(tmp_path, [task], detail=detail)
+
+    assert out["FABLE-PLAN-NO-HANDOFF"]["status"] == "dispatched"
