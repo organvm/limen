@@ -4,10 +4,14 @@
 Tabularius is the board record-keeper. During migration there are legacy direct writers, but they
 must stay explicit and counted. This script prevents new "one more writer" regressions and gives
 the heartbeat/operator a precise list to burn down.
+
+  python3 scripts/task-writer-audit.py          # advisory: writes logs/ + docs/ receipts
+  python3 scripts/task-writer-audit.py --check  # gate (CI): read-only; exit 0 iff no NEW writer
 """
 
 from __future__ import annotations
 
+import argparse
 import ast
 import json
 import os
@@ -19,6 +23,7 @@ ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 SEARCH_ROOTS = (ROOT / "scripts", ROOT / "cli" / "src", ROOT / "mcp" / "src")
 OUT = ROOT / "logs" / "task-writer-audit.json"
 DOC_OUT = ROOT / "docs" / "tabularius-writer-audit.md"
+BASELINE = ROOT / "institutio" / "governance" / "task-writer-baseline.txt"
 
 ALLOWED_DIRECT_WRITERS = {
     "scripts/tabularius-organ.py",
@@ -248,7 +253,59 @@ def python_files() -> list[Path]:
     return sorted(files)
 
 
-def main() -> int:
+def load_baseline() -> set[str]:
+    if not BASELINE.exists():
+        return set()
+    return {
+        ln.strip()
+        for ln in BASELINE.read_text(encoding="utf-8").splitlines()
+        if ln.strip() and not ln.startswith("#")
+    }
+
+
+def check_mode() -> int:
+    """Gate mode (CI): read-only; compares current writer paths against the baseline set.
+
+    Exit 0 iff every current writer path is already in the baseline (no NEW writer).
+    A swap that adds a new path while removing an old one is still a failure.
+    If the current set is a strict subset, exit 0 but suggest shrinking the baseline.
+    """
+    baseline = load_baseline()
+    current: set[str] = set()
+    for path in python_files():
+        r = rel(path)
+        if r in ALLOWED_DIRECT_WRITERS:
+            continue
+        for row in direct_writer_calls(path):
+            current.add(str(row["path"]))
+
+    new_writers = current - baseline
+    if new_writers:
+        print("TASK-WRITER-AUDIT GATE: new direct tasks.yaml writer(s) — convert to TABVLARIVS ticket producers")
+        print("  (see docs/tabularius-record-keeper.md)")
+        for w in sorted(new_writers):
+            print(f"  ✗ {w}")
+        return 1
+
+    removed = baseline - current
+    if removed:
+        print(
+            "ratchet: baseline can shrink — update institutio/governance/task-writer-baseline.txt"
+            f" (remove: {', '.join(sorted(removed))})"
+        )
+    else:
+        print(f"task-writer-audit --check: OK — {len(current)} legacy writer(s), none new vs baseline")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="audit direct tasks.yaml writers")
+    ap.add_argument("--check", action="store_true", help="gate mode: read-only, exit 1 on any NEW writer vs baseline")
+    args = ap.parse_args(argv)
+
+    if args.check:
+        return check_mode()
+
     rows: list[dict[str, object]] = []
     for path in python_files():
         r = rel(path)
