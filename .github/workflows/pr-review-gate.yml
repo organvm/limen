@@ -1,0 +1,126 @@
+name: Exact-head PR review gate
+
+# Base-controlled diagnostic producer. It never checks out or executes PR code: every trigger reads
+# the workflow and gate implementation from the repository's default branch, evaluates GitHub's
+# current PR metadata, then publishes a clearly non-authoritative exact-head diagnostic. The
+# required limen.pr_review_gate.v1 CheckRun is reserved for the separately custodied dedicated App.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+  issue_comment:
+    # Issue comments are part of the complete evidence digest. They are never parsed as
+    # caller-supplied signer authority.
+    types: [created, edited, deleted]
+  schedule:
+    # GitHub Actions has no workflow trigger for resolving/unresolving a review thread. This bounded
+    # refresh makes a resolved final conversation converge without requiring an unsafe merge retry.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to re-evaluate
+        required: false
+        type: string
+      expected_head:
+        description: Optional exact PR head (fails closed if stale)
+        required: false
+        type: string
+
+permissions:
+  checks: write
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  event:
+    name: limen review-gate diagnostic publisher
+    if: github.event_name != 'schedule' && (github.event_name != 'issue_comment' || github.event.issue.pull_request)
+    concurrency:
+      group: pr-review-gate-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number || github.run_id }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out trusted default-branch gate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Evaluate and publish exact-head review diagnostic
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || inputs.expected_head }}
+        run: |
+          test -n "$PR_NUMBER" || { echo "pr-review-gate: PR number is required" >&2; exit 2; }
+          args=("$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --publish-diagnostic)
+          if [ -n "$EXPECTED_HEAD" ]; then
+            args+=(--expected-head "$EXPECTED_HEAD")
+          fi
+          python3 scripts/pr-review-gate.py "${args[@]}"
+
+  enumerate-open:
+    name: enumerate open PRs for review-gate refresh
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.open.outputs.matrix }}
+    steps:
+      - name: Check out trusted default-branch gate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Enumerate every open PR or fail visibly
+        id: open
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pages="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100")"
+          matrix="$(printf '%s' "$pages" | jq -c \
+            '{include: [.[][] | {number: (.number | tostring), head: .head.sha}]}')"
+          printf 'matrix=%s\n' "$matrix" >> "$GITHUB_OUTPUT"
+
+  refresh-open:
+    name: limen review-gate diagnostic publisher
+    needs: enumerate-open
+    if: github.event_name == 'schedule' && needs.enumerate-open.outputs.matrix != '{"include":[]}'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.enumerate-open.outputs.matrix) }}
+    concurrency:
+      group: pr-review-gate-${{ matrix.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out trusted default-branch gate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Refresh one exact-head review diagnostic
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ matrix.number }}
+          EXPECTED_HEAD: ${{ matrix.head }}
+        run: |
+          set -euo pipefail
+          set +e
+          python3 scripts/pr-review-gate.py "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --expected-head "$EXPECTED_HEAD" \
+            --publish-diagnostic
+          rc=$?
+          set -e
+          case "$rc" in
+            0|1) exit 0 ;; # accepted or rejected; both published a current diagnostic result
+            *) exit "$rc" ;; # operational/publication failure must fail the workflow visibly
+          esac

@@ -1,88 +1,103 @@
 #!/usr/bin/env bash
-# merge-ready.sh — ship the fleet's CLEAN PRs in priority order, the moment merging is authorized.
+# merge-ready.sh — compatibility front door for the receipt-bound merge organs.
 #
-# The fleet builds ~hundreds of PRs; ~half are CLEAN (green CI, no conflicts) but mass cross-org
-# merge is auto-mode-classifier-GATED. This is the prepared one-command crossing: it queries the
-# user's open PRs LIVE (so the CLEAN set is always current as CIFIX greens more), filters to
-# mergeStateStatus=CLEAN, EXCLUDES known junk/dup (test fixtures + obvious re-dispatch dups),
-# orders revenue-first (the a-i-chat--exporter chain ships first), and merges.
+# Default invocation is a zero-write preview produced by merge-ready.py.  An apply invocation is
+# delegated intact to merge-drain.py, whose only targets come from short-lived exact-head
+# limen.merge_authorization.v1 receipts.  merge-drain re-runs both merge-policy.sh and the live
+# limen.pr_review_gate.v1 predicate immediately before a head-pinned squash merge.
 #
-# SAFE: dry-run by DEFAULT (prints the plan). --apply actually merges. Even with --apply this is
-# the user's authorized action — run it yourself, or grant `Bash(gh pr merge:*)` so the agent may.
-# Per-PR --squash keeps history clean; branch cleanup is a separate accepted reap. A failed merge is
-# logged and skipped (never aborts the run).
+# This wrapper never manufactures a self-comment review, never interprets mergeStateStatus=CLEAN as
+# acceptance, and never invokes the GitHub merge effect itself. Source-branch cleanup remains a separate
+# receipt-backed accepted reap.
 #
-# Usage:  bash scripts/merge-ready.sh            # dry-run plan
-#         bash scripts/merge-ready.sh --apply    # actually merge the clean set
-#         bash scripts/merge-ready.sh --apply --limit 8   # ship just the first N (e.g. exporter)
+# Usage:
+#   bash scripts/merge-ready.sh
+#   bash scripts/merge-ready.sh --scan 80
+#   bash scripts/merge-ready.sh --apply \
+#     --authorization-receipt /private/path/merge-organvm-limen-123.json
 set -euo pipefail
-APPLY=0; LIMIT=0
-for a in "$@"; do
-  case "$a" in
-    --apply) APPLY=1 ;;
-    --limit) shift; ;;            # handled below
-    --limit=*) LIMIT="${a#*=}" ;;
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+APPLY=0
+APPLY_SEEN=0
+DRY_SEEN=0
+SCAN=80
+LIMIT="${LIMEN_MERGE_LIMIT:-10}"
+receipts=()
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --apply)
+      APPLY=1
+      APPLY_SEEN=1
+      shift
+      ;;
+    --dry-run)
+      APPLY=0
+      DRY_SEEN=1
+      shift
+      ;;
+    --scan)
+      [ "$#" -ge 2 ] || { echo "merge-ready: --scan requires a value" >&2; exit 2; }
+      SCAN="$2"
+      shift 2
+      ;;
+    --scan=*)
+      SCAN="${1#*=}"
+      shift
+      ;;
+    --limit)
+      [ "$#" -ge 2 ] || { echo "merge-ready: --limit requires a value" >&2; exit 2; }
+      LIMIT="$2"
+      shift 2
+      ;;
+    --limit=*)
+      LIMIT="${1#*=}"
+      shift
+      ;;
+    --authorization-receipt)
+      [ "$#" -ge 2 ] || {
+        echo "merge-ready: --authorization-receipt requires a path" >&2
+        exit 2
+      }
+      receipts+=("$2")
+      shift 2
+      ;;
+    --authorization-receipt=*)
+      receipts+=("${1#*=}")
+      shift
+      ;;
+    -h|--help)
+      sed -n '2,18p' "$0"
+      exit 0
+      ;;
+    *)
+      echo "merge-ready: unknown argument: $1" >&2
+      exit 2
+      ;;
   esac
 done
-# allow "--limit N" form
-prev=""; for a in "$@"; do [ "$prev" = "--limit" ] && LIMIT="$a"; prev="$a"; done
 
-# Revenue repos merge FIRST (ship dollars before archives). Extend freely.
-PRIORITY_REPOS="a-organvm/a-i-chat--exporter a-organvm/public-record-data-scrapper a-organvm/mirror-mirror 4444J99/domus-genoma"
+if [ "$APPLY_SEEN" -eq 1 ] && [ "$DRY_SEEN" -eq 1 ]; then
+  echo "merge-ready: --apply and --dry-run are mutually exclusive" >&2
+  exit 2
+fi
 
-# Record the adjudication as a PR review BEFORE merging. The merge decision IS a code review —
-# merge-ready verified CLEAN state + non-junk — but until now it was never recorded in the medium
-# GitHub counts, so the profile radar showed 1% code review against 76% commits. GitHub forbids
-# approving your OWN PR, so self-authored PRs get a --comment review (still a recorded
-# adjudication); PRs authored by another identity (bots, the limen App) get a real --approve.
-# Fail-open: a refused review never blocks the merge.
-VIEWER="$(gh api user -q .login 2>/dev/null || echo "")"
-record_review() { # $1=repo $2=num
-  local author verb
-  author="$(gh pr view "$2" --repo "$1" --json author -q .author.login 2>/dev/null || echo "")"
-  verb="--approve"; [ "$author" = "$VIEWER" ] && verb="--comment"
-  gh pr review "$2" --repo "$1" "$verb" --body \
-    "Adjudicated by merge-ready: mergeStateStatus=CLEAN (green required checks, no conflicts), non-junk, revenue-first order. Squash-merge per the standing grant (CLAUDE.md § Merge & Branch Protocol)." \
-    >/dev/null 2>&1 || true
-}
-# Title patterns that mark junk/dup (never merge these) — test fixtures + the known leak.
-JUNK_RE='Open Codex task (one|two|three)'
-
-tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
-echo "→ querying your open PRs + merge state (live)…" >&2
-# paginated: gh search caps at 100, so use the search API
-gh api -X GET search/issues --paginate -f q="is:pr is:open author:@me" \
-  --jq '.items[] | [(.repository_url|sub(".*/repos/";"")), .number, .title] | @tsv' 2>/dev/null \
-  | while IFS=$'\t' read -r repo num title; do
-      [ -z "$repo" ] && continue
-      echo "$title" | grep -qE "$JUNK_RE" && continue   # skip junk
-      read -r state head < <(gh pr view "$num" --repo "$repo" --json mergeStateStatus,headRefOid \
-        -q '[.mergeStateStatus,.headRefOid] | @tsv' 2>/dev/null || printf '?\t?\n')
-      [ "$state" = "CLEAN" ] && printf '%s\t%s\t%s\t%s\n' "$repo" "$num" "$head" "$title" >> "$tmp"
-    done
-
-# order: priority repos first (in listed order), then the rest
-order_file="$(mktemp)"; trap 'rm -f "$tmp" "$order_file"' EXIT
-for r in $PRIORITY_REPOS; do grep -P "^${r}\t" "$tmp" 2>/dev/null >> "$order_file" || true; done
-for r in $PRIORITY_REPOS; do grep -vP "^${r}\t" "$tmp" > "${tmp}.x" 2>/dev/null && mv "${tmp}.x" "$tmp" || true; done
-cat "$tmp" >> "$order_file"
-
-total=$(wc -l < "$order_file" | tr -d ' ')
-echo "→ $total CLEAN, non-junk PRs ready to merge (revenue-first order):" >&2
-n=0
-while IFS=$'\t' read -r repo num head title; do
-  [ -z "$repo" ] && continue
-  n=$((n+1))
-  [ "$LIMIT" -gt 0 ] && [ "$n" -gt "$LIMIT" ] && { echo "  …(stopped at --limit $LIMIT)"; break; }
-  if [ "$APPLY" = 1 ]; then
-    record_review "$repo" "$num"
-    if gh pr merge "$num" --repo "$repo" --squash --match-head-commit "$head" >/dev/null 2>&1; then
-      echo "  ✓ merged  $repo#$num  $title"
-    else
-      echo "  ✗ FAILED  $repo#$num (skipped — check manually)"
-    fi
-  else
-    echo "  would merge  $repo#$num  $title"
+if [ "$APPLY" -eq 0 ]; then
+  if [ "${#receipts[@]}" -gt 0 ]; then
+    echo "merge-ready: --authorization-receipt requires --apply" >&2
+    exit 2
   fi
-done < "$order_file"
-[ "$APPLY" = 0 ] && echo "→ dry-run. Re-run with --apply to merge (or grant Bash(gh pr merge:*))." >&2
+  exec python3 "$ROOT/scripts/merge-ready.py" --scan "$SCAN"
+fi
+
+if [ "${#receipts[@]}" -eq 0 ]; then
+  echo "merge-ready: REFUSED — --apply requires --authorization-receipt for each exact target" >&2
+  exit 2
+fi
+
+args=(--apply --limit "$LIMIT")
+for receipt in "${receipts[@]}"; do
+  args+=(--authorization-receipt "$receipt")
+done
+exec python3 "$ROOT/scripts/merge-drain.py" "${args[@]}"

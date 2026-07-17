@@ -244,7 +244,7 @@ gates:
     command: "python3 -m pytest cli/tests/test_autonomy_governor.py -q"
     paths: ["scripts/autonomy-governor.py", "cli/tests/test_autonomy_governor.py"]
     owner: vigilia
-    note: "Pause-release completion stays fail-closed: operator markers (merge-prohibiting / owner_surface-only) are never merged or cleared; PR-owned markers complete via merge-policy CLEARED -> head-pinned squash; every ambiguity keeps the estate paused."
+    note: "Pause-release observation stays fail-closed: the governor never executes a merge; operator markers (merge-prohibiting / owner_surface-only) are never cleared, and eligible PR-owned markers clear only after GitHub reports the receipt-bound effector already merged the named PR."
 
   # ── session/docs/board predicates ───────────────────────────────────────────
   session-orient:

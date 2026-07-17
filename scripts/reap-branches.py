@@ -2,7 +2,7 @@
 """reap-branches.py — the BRANCH-REAP organ (ref hygiene; the lifecycle's ref sibling).
 
 reclaim-worktrees.py reaps dead *worktrees* and reap-clones.py reaps pure-mirror *clones*, but
-neither reaps the local *branch ref* left behind. `git worktree remove` and `gh pr merge
+neither reaps the local *branch ref* left behind. `git worktree remove` and GitHub's PR merge
 --delete-branch` both drop the worktree and delete the *remote* branch, yet the *local* head ref
 survives forever — so after every squash-merge a branch lingers showing "1 ahead / N behind" and
 gets hand-waved as "housekeeping" each session. That per-session judgment IS the recurring bug;

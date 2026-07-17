@@ -119,7 +119,12 @@ Do **not** declare work "done" or "fully done" until verified end-to-end:
 - **Prefer minimal in-place edits**, especially during closeouts and cleanups. **Do not create new files unless asked** or genuinely required by the task.
 - **Case-insensitive filesystem (macOS):** never let near-identical filenames (`Foo.md` vs `foo.md`) silently overwrite each other or drop a file from a commit — check before writing.
 - **Confine edits to your worktree + branch.** Stage explicitly with `git add <path>` — **never `git add -A`** in a live checkout. Do not hand-merge contended `main` or edit daemon-contended runtime files.
-- **Merge is a standing grant — Claude merges its own green PRs into `main` without asking** (the routine-merge human-gate is lifted; see [Merge & Branch Protocol](#merge--branch-protocol)). Deploy is *automatic* on merge to `main` for deploy-trigger paths, so the **one guardrail** is the live website: never merge a change that breaks the deployed site/API — a website-sensitive PR requires green CI first. Mass cross-org/fleet merges, sends, wipes, and large spends stay human-gated levers.
+- **Merge authorization is exact-target and receipt-bound.** Green CI alone is not merge authority.
+  Every merge runs only through `scripts/merge-drain.py --apply` with a short-lived signed
+  authorization for the exact repository, PR, and head, after native peer acceptance and the
+  dedicated App receipt pass. Deploy is automatic for deploy-trigger paths, so those predicates
+  remain additional requirements. Mass fleet merges, sends, wipes, and large spends stay
+  human-gated levers.
 
 ## Credentials Are Organ-Owned (Never Recited in Chat)
 
@@ -226,9 +231,9 @@ automatic delete. `main` is the trunk **and** the live deploy source.
 one-file docs appends (the `docs: review … run` class, which was landing as direct `main` commits —
 35 of 40 at its worst). Ship those with **`scripts/ship-docs.sh <slug> "<msg>" <file…>`**: it stages
 only the named files onto a fresh branch cut from `origin/main` in an isolated reclaim-tracked
-worktree (your checkout is never touched), opens the PR, and self-merges the moment
-`merge-policy.sh` clears while retaining the branch/root for later accepted cleanup — one command,
-so the PR path is never harder than the side door. The system's own findings are
+worktree (your checkout is never touched), opens the PR, and leaves it at the native-peer/App gate
+for the receipt-bound merge effector while retaining the branch/root for accepted cleanup. The
+system's own findings are
 githubbed the same way: **`scripts/sync-censor-issues.py`** (beat-wired, dry-run until
 `LIMEN_CENSOR_ISSUES_APPLY=1` arms it) mirrors live censor residuals to public `censor`-labelled
 issues and auto-closes them when the lineage clears — so insight→correction work arrives as an
@@ -236,21 +241,28 @@ issue and leaves as a PR that cites it. Machine board writes (`tasks.yaml` via t
 are the one sanctioned direct-push lane; blanket branch protection stays a lever (#257) for exactly
 that reason.
 
-**Merge authority (standing grant).** Claude merges its own PRs into `main` *without asking*, the moment they are green and mergeable. Do not defer routine merges to the human operator. The grant has exactly one guardrail.
+**Merge authority.** The normal engineering lifecycle proceeds without asking the operator to
+choose mechanics, but acceptance and effect authority remain separate. A native reviewer distinct
+from every known head-commit author/committer identity approves the exact head; the dedicated App publishes the
+complete `limen.pr_review_gate.v1` receipt; and `merge-drain.py` consumes a short-lived,
+exact-target `limen.merge_authorization.v1` receipt against the fixed Domus-installed root-owned
+signer registry. No caller-selected root, gate, policy, or signer path is authoritative, and no
+other script executes a merge.
 
 **The website guardrail.** A merge to `main` **auto-deploys** the live public site/API — but *only* when the diff touches a deploy-trigger path. The trigger paths are **declared once** in the `deploy_triggers` block of [`institutio/governance/gates.yaml`](institutio/governance/gates.yaml) (dashboard → `deploy.yml` → Cloudflare Pages, Firebase step dormant; API → `deploy-api.yml` → Cloud Run / Worker); `merge-policy.sh` derives its classification from that registry, and `check-gates.py` holds the registry in exact parity with the workflows on every PR — do not restate the path list here or anywhere else.
 
-For a **website-sensitive** PR, merging *is* the deploy — so it requires **green CI first** (plus a local `web/app` build for dashboard changes). Never blind-merge a live deploy. For every **other** PR (docs, corpus, mcp, ianva, memory, `web/worker`, most of `scripts/**`), merge freely once CLEAN. (`web/worker` is the live runtime but deploys on-demand via wrangler, not on merge — so its merges don't auto-deploy.)
+For a **website-sensitive** PR, merging *is* the deploy — so it requires **green CI first** (plus a local `web/app` build for dashboard changes). Never blind-merge a live deploy. Non-deploy PRs still require exact-head peer/App acceptance and receipt-bound effect authorization.
 
 **The predicate decides — not your memory.** Run `scripts/merge-policy.sh <PR#>` (or no arg for the current branch):
 
-- exit **0 CLEARED** → `gh pr merge <PR#> --squash`. Do it; don't ask. Branch cleanup is
-  receipt-backed and separate from the merge.
+- exit **0 CLEARED** → acceptance inputs are currently eligible. Invoke only the receipt-bound
+  `merge-drain.py --apply` path with exact-target authorization. Branch cleanup remains separate.
 - exit **2 HOLD** → website-sensitive with CI not yet green+complete, a draft, or non-deploy checks still running. Wait for green, then merge.
 - exit **3 BLOCKED** → GitHub itself refuses the merge: conflicts (DIRTY), stale base (BEHIND), or a branch-protection gate unsatisfied (BLOCKED — e.g. the required `pr-gate` check never ran on a PR opened before that check existed). Rebase onto current `main` first (the PR#111 silent-revert guard; a rebase also retriggers the required checks), then re-run. If BLOCKED persists after a clean green rebase, a required review or admin merge is needed — surface it, don't force it.
 
 The script **derives** its deploy classification from the GATES registry at run time and fails *toward caution*: if derivation is impossible (broken python/PyYAML/registry), it forces website-sensitive, so a broken environment can only HOLD, never blind-deploy. There is no path list to keep in lockstep — `check-gates.py` enforces registry↔workflow parity on every PR.
 
-**Waiting on a gate.** Never hand-roll a background poll loop on a PR gate (`for … gh pr … sleep … done` is banned — the 2026-07-15 endless-watcher incident: bespoke pollers, silent on FAIL, outliving their sessions). The one sanctioned synchronous waiter is **`scripts/await-pr.sh <PR#> [--merge]`** — hard deadline, loud CLEARED/FAILED/TIMEOUT verdicts, single instance per PR, and it refuses to start under a merge-prohibiting pause marker. Anything longer than its deadline is the beat's job: the merge rung (`scripts/merge-drain.py` via `scripts/drain.sh`) lands green PRs every drain beat — hand off and end. And before arming any watcher or merging, read `logs/AUTONOMY_PAUSED`: its `prohibitions:` bind interactive sessions too — a marker that prohibits merges means no watcher and no merge until the operator releases it.
+**Waiting on a gate.** Never hand-roll a background poll loop on a PR gate (`for … gh pr … sleep … done` is banned — the 2026-07-15 endless-watcher incident: bespoke pollers, silent on FAIL, outliving their sessions). The one sanctioned synchronous waiter is **`scripts/await-pr.sh <PR#>`**. Its optional `--merge` delegates to `merge-drain.py` and requires both the exact-target authorization receipt and the owner signer registry. Anything longer than its deadline belongs to the bounded merge rung. A merge-prohibiting pause marker binds every session.
 
-**Still human-gated levers** (unchanged): mass cross-org/fleet merges, anything that **sends** (email) or **wipes/deletes**, and **large spends**. Those stay human-gated; routine code merges do not.
+**Still human-gated levers** (unchanged): mass cross-org/fleet merges, account/App installation,
+anything that **sends** (email) or **wipes/deletes**, and **large spends**.

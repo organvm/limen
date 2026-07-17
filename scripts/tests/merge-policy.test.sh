@@ -12,12 +12,19 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-policy="$here/../merge-policy.sh"
-[ -f "$policy" ] || { echo "FAIL: cannot find merge-policy.sh at $policy" >&2; exit 1; }
+source_policy="$here/../merge-policy.sh"
+[ -f "$source_policy" ] || { echo "FAIL: cannot find merge-policy.sh at $source_policy" >&2; exit 1; }
 
 # --- stub `gh` so the predicate reads our fixture instead of the network ---
 stubdir="$(mktemp -d)"
 fixture="$stubdir/pr.json"
+testroot="$stubdir/root"
+mkdir -p "$testroot/scripts"
+cp "$source_policy" "$testroot/scripts/merge-policy.sh"
+policy="$testroot/scripts/merge-policy.sh"
+review_gate="$testroot/scripts/pr-review-gate.py"
+review_log="$stubdir/review.log"
+gate_override='LIMEN_'"PR_REVIEW_GATE"
 trap 'rm -rf "$stubdir"' EXIT
 cat > "$stubdir/gh" <<STUB
 #!/usr/bin/env bash
@@ -30,6 +37,17 @@ case "\$*" in
 esac
 STUB
 chmod +x "$stubdir/gh"
+cat > "$review_gate" <<'PY'
+import os
+import sys
+
+with open(os.environ["REVIEW_LOG"], "a", encoding="utf-8") as handle:
+    handle.write(" ".join(sys.argv[1:]) + "\n")
+raise SystemExit(int(os.environ.get("REVIEW_GATE_RC", "0")))
+PY
+cat > "$testroot/scripts/verify.py" <<'PY'
+print(r"^(web/|api/)")
+PY
 
 GREEN='[{"name":"python","status":"COMPLETED","conclusion":"SUCCESS"},{"name":"web","status":"COMPLETED","conclusion":"SUCCESS"}]'
 FAILING='[{"name":"python","status":"COMPLETED","conclusion":"FAILURE"}]'
@@ -48,7 +66,8 @@ check() { # name expected_exit [extra policy args...]  (fixture already written)
   local name="$1" want="$2" got
   shift 2
   set +e
-  PATH="$stubdir:$PATH" bash "$policy" 1 --repo o/r "$@" >/dev/null 2>&1
+  PATH="$stubdir:$PATH" REVIEW_LOG="$review_log" REVIEW_GATE_RC="${REVIEW_GATE_RC:-0}" \
+    env "$gate_override=$stubdir/attacker-review.py" bash "$policy" 1 --repo o/r "$@" >/dev/null 2>&1
   got=$?
   set -e
   if [ "$got" = "$want" ]; then
@@ -62,8 +81,28 @@ echo "merge-policy.sh verdict matrix:"
 
 # CLEARED (exit 0) — only genuinely-mergeable, policy-safe states
 mkjson OPEN false CLEAN "$DOC_FILES" "$GREEN";  check "clean non-deploy + green"        0
+if ! grep -q -- "1 --repo o/r --expected-head aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --require-published-result --quiet" "$review_log"; then
+  echo "  FAIL exact-head review gate invocation missing"; fail=$((fail+1))
+fi
+# Without an explicit --repo, the predicate must pin the gate to the canonical repository in the
+# PR URL rather than relying on ambient cwd for the second query.
+mkjson OPEN false CLEAN "$DOC_FILES" "$GREEN"
+jq '.url = "https://github.com/o/r/pull/1"' "$fixture" > "$fixture.tmp" && mv "$fixture.tmp" "$fixture"
+: > "$review_log"
+set +e
+PATH="$stubdir:$PATH" REVIEW_LOG="$review_log" \
+  env "$gate_override=$stubdir/attacker-review.py" bash "$policy" 1 >/dev/null 2>&1
+got=$?
+set -e
+if [ "$got" = 0 ] && grep -q -- "1 --repo o/r --expected-head aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --require-published-result --quiet" "$review_log"; then
+  printf '  ok   %-34s exit=%s\n' "derive repo from canonical URL" "$got"; pass=$((pass+1))
+else
+  printf '  FAIL %-34s want=0+repo-pin got=%s\n' "derive repo from canonical URL" "$got"; fail=$((fail+1))
+fi
 mkjson OPEN false CLEAN "$WEB_FILES" "$GREEN";  check "clean website-sensitive + green" 0
 mkjson OPEN false HAS_HOOKS "$DOC_FILES" "$GREEN"; check "has_hooks non-deploy + green" 0
+REVIEW_GATE_RC=1; mkjson OPEN false CLEAN "$DOC_FILES" "$GREEN"; check "review gate not accepted" 2
+REVIEW_GATE_RC=0
 
 # BLOCKED (exit 3) — GitHub itself refuses the merge
 mkjson OPEN false DIRTY   "$DOC_FILES" "$GREEN"; check "DIRTY (conflicts)"              3

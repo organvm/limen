@@ -1364,10 +1364,38 @@ def test_pr_repair_prompt_forbids_assumed_limen_workflow() -> None:
     assert "Limen-owned workflow file" in prompt
 
 
+def test_create_isolated_pr_opens_without_arming_auto_merge(tmp_path: Path, monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(args, **_kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(
+            args,
+            0,
+            "https://github.com/organvm/domus-genoma/pull/175\n",
+            "",
+        )
+
+    monkeypatch.setattr(D.subprocess, "run", fake_run)
+    task = Task(
+        id="HEAL-175",
+        title="fix failing CI on organvm/domus-genoma#175",
+        repo="organvm/domus-genoma",
+        target_agent="codex",
+        created=date(2026, 6, 27),
+    )
+
+    result = D._create_isolated_pr(task, tmp_path, "master", "limen/fix-ci-175")
+
+    assert result == "https://github.com/organvm/domus-genoma/pull/175"
+    assert len(calls) == 1
+    assert calls[0][:3] == ["gh", "pr", "create"]
+    assert "merge" not in calls[0]
+
+
 def test_isolated_local_run_updates_same_repo_pr_head(tmp_path: Path, monkeypatch) -> None:
     git_calls: list[list[str]] = []
     pushed_pr_heads: list[tuple[str, Path]] = []
-    auto_merge_urls: list[str] = []
     cleanups: list[tuple[str, bool]] = []
 
     def fake_git_plumbing(args, cwd, timeout=120):
@@ -1403,11 +1431,6 @@ def test_isolated_local_run_updates_same_repo_pr_head(tmp_path: Path, monkeypatc
     )
     monkeypatch.setattr(
         D,
-        "_arm_auto_merge",
-        lambda task, wt, url: auto_merge_urls.append(url),
-    )
-    monkeypatch.setattr(
-        D,
         "_cleanup_isolated_worktree",
         lambda repo_dir, wt, branch, base_ref, pushed, task=None: cleanups.append((base_ref, pushed)),
     )
@@ -1440,7 +1463,6 @@ def test_isolated_local_run_updates_same_repo_pr_head(tmp_path: Path, monkeypatc
     assert pushed_pr_heads == [
         ("limen/fix-ci-175", tmp_path / "worktrees" / "heal-cifix-organvm-domus-genoma-175-abcd")
     ]
-    assert auto_merge_urls == ["https://github.com/organvm/domus-genoma/pull/175"]
     assert cleanups == [("origin/limen/fix-ci-175", True)]
 
 
@@ -1475,7 +1497,6 @@ def test_isolated_local_run_treats_agent_committed_pr_head_as_work(tmp_path: Pat
         "_push_existing_pr_head",
         lambda task, wt, pr_head: pushed_pr_heads.append(pr_head["head_ref"]) or True,
     )
-    monkeypatch.setattr(D, "_arm_auto_merge", lambda *args: None)
     monkeypatch.setattr(D, "_cleanup_isolated_worktree", lambda *args, **kwargs: None)
     monkeypatch.setattr(D.secrets, "token_hex", lambda _n: "abcd")
     monkeypatch.setattr(D, "_isolation_root", lambda: tmp_path / "worktrees")

@@ -1,68 +1,340 @@
 #!/usr/bin/env python3
-"""setup-rulesets — make the merge gate self-draining (the principled fix, NOT a bypass).
+"""setup-rulesets — contain merge effects, then install exact-head acceptance.
 
-For each repo that currently has open author PRs, configure the default branch so that:
-  • required_status_checks = the repo's actual CI checks (strict: branch must be up to date)
-  • required_pull_request_reviews = NONE  (there is no human reviewer team — requiring one is the
-    faulty old element that forced the admin-bypass; we gate on CI instead)
-  • allow_auto_merge = true  (so a PR armed with --auto merges itself the instant CI is green)
-  • delete_branch_on_merge = false  (source branches are retained for receipt-backed reaping)
+Containment is deliberately independent from branch protection and its account/App prerequisites:
+  • ``--contain`` previews every active auto-merge request and both repository merge settings
+  • ``--contain apply`` first sets and verifies ``allow_auto_merge=false`` plus
+    ``delete_branch_on_merge=false``, then drains every active request to a bounded stable-empty
+    fixed point
 
-Then `gh pr merge <n> --auto --squash` on every green PR → the gate drains itself continuously,
-matching the fleet's PR output, with zero bypass and zero babysitting.
+After containment is verified, ``--apply`` installs protected rules only for repos where the
+central review-gate App has already published a complete authenticated receipt:
+  • required_status_checks = current-head CI plus an app-bound ``limen.pr_review_gate.v1``
+  • required_pull_request_reviews = one native approval, last-push approval, stale dismissal
+  • required_conversation_resolution = true
+  • enforce_admins = true
 
-SAFE: dry-run by default — prints the exact per-repo plan and executes NOTHING. Reversible:
-branch protection can be removed. `--apply` is GATED on the user.
+The protected gate identifies its live GitHub App producer dynamically; an actor-agnostic status with
+the same name cannot satisfy it. Administrator actions are subject to the same acceptance boundary.
 
-  python3 scripts/setup-rulesets.py            # dry-run plan (read-only)
-  python3 scripts/setup-rulesets.py --apply     # ⚠ GATED: configure protection + auto-merge
+SAFE: both operations preview by default and execute NOTHING. Mutations are explicit and separate.
+
+  python3 scripts/setup-rulesets.py --contain          # containment preview (read-only)
+  python3 scripts/setup-rulesets.py --contain apply    # ⚠ cancel auto-merge + lock settings
+  python3 scripts/setup-rulesets.py                    # protection preview (read-only)
+  python3 scripts/setup-rulesets.py --apply             # ⚠ install protection
   python3 scripts/setup-rulesets.py --repo owner/name [...]   # limit to specific repos
-  python3 scripts/setup-rulesets.py --contexts pr-gate,python,web   # force these check names (skip detection)
 """
+
 import json
+import re
 import subprocess
 import sys
 from collections import OrderedDict
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "cli" / "src"))
+
+from limen.review_gate import validate_check_run_receipt  # noqa: E402
+
+
+def _parse_contain_mode(argv):
+    positions = [index for index, value in enumerate(argv) if value == "--contain"]
+    if not positions:
+        return None, ""
+    if len(positions) != 1:
+        return None, "--contain may be supplied only once"
+    if "--apply" in argv:
+        return None, "--contain and --apply are separate operations"
+    index = positions[0]
+    mode = "preview"
+    if index + 1 < len(argv) and not argv[index + 1].startswith("-"):
+        mode = argv[index + 1]
+    if mode not in {"preview", "apply"}:
+        return None, "--contain accepts only 'preview' or 'apply'"
+    return mode, ""
+
+
+_REPOSITORY_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$")
+
+
+def _parse_repositories(argv):
+    """Parse every explicit repo without letting malformed scope fall back to the cohort."""
+
+    repositories = []
+    errors = []
+    for index, argument in enumerate(argv):
+        value = None
+        if argument == "--repo":
+            if index + 1 >= len(argv) or argv[index + 1].startswith("-"):
+                errors.append("--repo requires an owner/name value")
+                continue
+            value = argv[index + 1]
+        elif argument.startswith("--repo="):
+            value = argument.removeprefix("--repo=")
+        if value is None:
+            continue
+        if not _REPOSITORY_NAME.fullmatch(value):
+            errors.append(f"--repo value must be owner/name, got {value!r}")
+            continue
+        repositories.append(value)
+    return repositories, "; ".join(errors)
+
+
+def _context_override_error(argv) -> str:
+    if any(argument == "--contexts" or argument.startswith("--contexts=") for argument in argv):
+        return "--contexts is forbidden; required CI is derived from live current-head owner evidence"
+    return ""
+
 
 APPLY = "--apply" in sys.argv
-EXPLICIT = [sys.argv[i + 1] for i, a in enumerate(sys.argv) if a == "--repo" and i + 1 < len(sys.argv)]
-# --contexts a,b,c overrides auto-detection entirely — the explicit fallback for any repo whose job
-# names the heuristic can't classify. Applied to every targeted repo.
-FORCED = next((sys.argv[i + 1].split(",") for i, a in enumerate(sys.argv)
-               if a == "--contexts" and i + 1 < len(sys.argv)), None)
-FORCED = [c.strip() for c in FORCED if c.strip()] if FORCED else None
+CONTAIN_MODE, CONTAIN_ARGUMENT_ERROR = _parse_contain_mode(sys.argv)
+EXPLICIT, REPOSITORY_ARGUMENT_ERROR = _parse_repositories(sys.argv)
+CONTEXT_ARGUMENT_ERROR = _context_override_error(sys.argv)
+ARGUMENT_ERROR = "; ".join(
+    error
+    for error in (
+        CONTAIN_ARGUMENT_ERROR,
+        REPOSITORY_ARGUMENT_ERROR,
+        CONTEXT_ARGUMENT_ERROR,
+    )
+    if error
+)
+REVIEW_GATE_CONTEXT = "limen.pr_review_gate.v1"
+RECOVERY_COHORT_REPOS = (
+    "organvm/limen",
+    "organvm/domus-genoma",
+    "organvm/universal-mail--automation",
+    "organvm/daily-engine",
+    "organvm/application-pipeline",
+    "organvm/public-record-data-scrapper",
+    "organvm/_agent",
+)
+MAX_PULL_REQUEST_PAGES = 1000
+MAX_CHECK_RUN_PAGES = 100
+MAX_APP_PREFLIGHT_PULLS = 20
+MAX_CONTAINMENT_PASSES = 12
+REQUIRED_EMPTY_INVENTORIES = 2
+AUTO_MERGE_QUERY = """
+query RecoveryAutoMergeRequests($owner: String!, $name: String!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(states: OPEN, first: 100, after: $cursor, orderBy: {field: CREATED_AT, direction: ASC}) {
+      nodes {
+        id
+        number
+        url
+        autoMergeRequest {
+          enabledAt
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+"""
+DISABLE_AUTO_MERGE_MUTATION = """
+mutation DisableRecoveryAutoMerge($pullRequestId: ID!) {
+  disablePullRequestAutoMerge(input: {pullRequestId: $pullRequestId}) {
+    pullRequest {
+      id
+      number
+      autoMergeRequest {
+        enabledAt
+      }
+    }
+  }
+}
+"""
 
 
-def gh(args, t=45):
-    return subprocess.run(["gh"] + args, capture_output=True, text=True, timeout=t)
+def gh(args, t=45, *, input_text=None):
+    return subprocess.run(
+        ["gh"] + args,
+        capture_output=True,
+        input=input_text,
+        text=True,
+        timeout=t,
+    )
 
 
 def gh_json(args, t=45, default=None):
+    result = gh(args, t)
+    if result.returncode != 0:
+        return default
     try:
-        return json.loads(gh(args, t).stdout or "null") or default
+        return json.loads(result.stdout or "null") or default
     except json.JSONDecodeError:
         return default
+
+
+def checked_gh_json(args, t=45):
+    """Read one API object without turning transport or JSON failures into false state."""
+
+    result = gh(args, t)
+    if result.returncode != 0:
+        detail = result.stderr.strip() or f"gh exited {result.returncode}"
+        return None, detail
+    try:
+        return json.loads(result.stdout or "null"), ""
+    except json.JSONDecodeError as exc:
+        return None, f"invalid JSON response: {exc.msg}"
 
 
 def target_repos():
     if EXPLICIT:
         return EXPLICIT
-    prs = gh_json(["search", "prs", "--author", "@me", "--state", "open", "--limit", "200",
-                   "--json", "repository"], default=[]) or []
-    seen = OrderedDict()
-    for p in prs:
-        seen[p["repository"]["nameWithOwner"]] = True
-    return list(seen.keys())
+    return list(RECOVERY_COHORT_REPOS)
 
 
-import re
+def containment_repos():
+    """Return the frozen recovery cohort unless an explicit bounded cohort is supplied."""
+
+    return list(OrderedDict.fromkeys(EXPLICIT or RECOVERY_COHORT_REPOS))
+
+
+def _repository_parts(repo: str):
+    owner, separator, name = repo.partition("/")
+    if not separator or not owner or not name or "/" in name:
+        return None
+    return owner, name
+
+
+def _graphql_error(value) -> str:
+    if not isinstance(value, dict):
+        return "GraphQL response is not an object"
+    errors = value.get("errors")
+    if errors:
+        return f"GraphQL returned errors: {json.dumps(errors, sort_keys=True)[:300]}"
+    return ""
+
+
+def list_active_auto_merges(repo: str):
+    """Read every open PR page and return only current auto-merge requests."""
+
+    parts = _repository_parts(repo)
+    if parts is None:
+        return None, f"invalid repository name: {repo!r}"
+    owner, name = parts
+    cursor = None
+    seen_cursors = set()
+    seen_pull_ids = set()
+    active = []
+    for _page in range(1, MAX_PULL_REQUEST_PAGES + 1):
+        args = [
+            "api",
+            "graphql",
+            "-f",
+            f"query={AUTO_MERGE_QUERY}",
+            "-f",
+            f"owner={owner}",
+            "-f",
+            f"name={name}",
+        ]
+        if cursor is not None:
+            args.extend(["-f", f"cursor={cursor}"])
+        value, error = checked_gh_json(args)
+        if error:
+            return None, f"auto-merge inventory failed: {error}"
+        graphql_error = _graphql_error(value)
+        if graphql_error:
+            return None, graphql_error
+        data = value.get("data")
+        repository = data.get("repository") if isinstance(data, dict) else None
+        pulls = repository.get("pullRequests") if isinstance(repository, dict) else None
+        if not isinstance(pulls, dict):
+            return None, "GraphQL response omitted repository pull requests"
+        nodes = pulls.get("nodes")
+        page_info = pulls.get("pageInfo")
+        if not isinstance(nodes, list) or not isinstance(page_info, dict):
+            return None, "GraphQL response omitted pull-request nodes or page information"
+        for node in nodes:
+            if not isinstance(node, dict):
+                return None, "GraphQL pull-request node is not an object"
+            if node.get("autoMergeRequest") is None:
+                continue
+            pull_id = node.get("id")
+            number = node.get("number")
+            if (
+                not isinstance(pull_id, str)
+                or not pull_id
+                or pull_id in seen_pull_ids
+                or not isinstance(number, int)
+                or isinstance(number, bool)
+                or number <= 0
+            ):
+                return None, "GraphQL returned an invalid or duplicate active pull request"
+            seen_pull_ids.add(pull_id)
+            active.append(
+                {
+                    "id": pull_id,
+                    "number": number,
+                    "url": node.get("url") if isinstance(node.get("url"), str) else "",
+                }
+            )
+        has_next_page = page_info.get("hasNextPage")
+        if not isinstance(has_next_page, bool):
+            return None, "GraphQL pageInfo.hasNextPage is not boolean"
+        if not has_next_page:
+            return active, ""
+        next_cursor = page_info.get("endCursor")
+        if not isinstance(next_cursor, str) or not next_cursor or next_cursor in seen_cursors:
+            return None, "GraphQL pagination cursor is missing or did not advance"
+        seen_cursors.add(next_cursor)
+        cursor = next_cursor
+    return None, f"auto-merge inventory exceeded {MAX_PULL_REQUEST_PAGES} pages"
+
+
+def cancel_auto_merge(pull):
+    """Cancel one active request and verify the mutation response is fail closed."""
+
+    pull_id = pull.get("id") if isinstance(pull, dict) else None
+    if not isinstance(pull_id, str) or not pull_id:
+        return False, "active auto-merge request has no pull-request node id"
+    value, error = checked_gh_json(
+        [
+            "api",
+            "graphql",
+            "-f",
+            f"query={DISABLE_AUTO_MERGE_MUTATION}",
+            "-f",
+            f"pullRequestId={pull_id}",
+        ]
+    )
+    if error:
+        return False, f"cancel failed: {error}"
+    graphql_error = _graphql_error(value)
+    if graphql_error:
+        return False, graphql_error
+    data = value.get("data")
+    disabled = data.get("disablePullRequestAutoMerge") if isinstance(data, dict) else None
+    returned_pull = disabled.get("pullRequest") if isinstance(disabled, dict) else None
+    if (
+        not isinstance(returned_pull, dict)
+        or returned_pull.get("id") != pull_id
+        or returned_pull.get("autoMergeRequest") is not None
+    ):
+        return False, "cancel response did not confirm autoMergeRequest=null for the exact pull request"
+    return True, ""
+
+
 # A genuine merge gate is the test/build/lint suite — NOT bots, scanners, release-drafters, or CLA.
 # Requiring the latter (strict) would permanently block merges (they never reliably "pass" per-PR).
 # The token list includes this estate's own CI job names (derived from .github/workflows): the
 # always-on `pr-gate` workflow (matched by `gate`, the `-` is a word boundary) plus ci.yml's
 # `python` / `web` / `worker` jobs — without these the limen-style repos report "no checks detected".
-_GATE = re.compile(r"\b(test|build|lint|typecheck|type-check|e2e|tox|matrix|smoke|unit|compile|gate|gates|pytest|jest|vitest|doctor|python|web|worker)\b", re.I)
-_NOISE = re.compile(r"(cla|dependabot|release[_-]?draft|sourcery|coderabbit|gitguardian|semgrep|secret|codeql|analyze|advisory|scan|pr title|pr comment|^release$)", re.I)
+_GATE = re.compile(
+    r"\b(test|build|lint|typecheck|type-check|e2e|tox|matrix|smoke|unit|compile|gate|gates|pytest|jest|vitest|doctor|python|web|worker)\b",
+    re.I,
+)
+_NOISE = re.compile(
+    r"(cla|dependabot|release[_-]?draft|sourcery|coderabbit|gitguardian|semgrep|secret|codeql|analyze|advisory|scan|pr title|pr comment|^release$)",
+    re.I,
+)
 
 
 def is_real_gate(name):
@@ -70,73 +342,721 @@ def is_real_gate(name):
 
 
 def detect_checks(repo):
-    """genuine CI gate names from the newest open PR's rollup (filtered: real test/build/lint only)."""
-    if FORCED:
-        return list(FORCED)
-    prs = gh_json(["pr", "list", "--repo", repo, "--state", "open", "--limit", "1",
-                   "--json", "number"], default=[]) or []
-    if not prs:
-        return []
-    d = gh_json(["pr", "view", str(prs[0]["number"]), "--repo", repo,
-                 "--json", "statusCheckRollup"], default={}) or {}
-    names = []
-    for c in d.get("statusCheckRollup") or []:
-        n = c.get("name") or c.get("context")
-        if n and n not in names and is_real_gate(n):
-            names.append(n)
-    return names
+    """Exact CI context/App requirements from complete current-head owner evidence."""
+
+    pulls = gh_json(
+        ["api", f"repos/{repo}/pulls?state=open&sort=updated&direction=desc&per_page=1"],
+        default=None,
+    )
+    if not isinstance(pulls, list) or len(pulls) != 1 or not isinstance(pulls[0], dict):
+        return [], "one current open pull request could not be read for CI discovery"
+    head = pulls[0].get("head")
+    sha = str(head.get("sha") or "") if isinstance(head, dict) else ""
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", sha):
+        return [], "current pull-request head SHA is unavailable"
+    runs, runs_error = _paged_rest_rows(
+        f"repos/{repo}/commits/{sha}/check-runs",
+        key="check_runs",
+        max_pages=MAX_CHECK_RUN_PAGES,
+    )
+    statuses, statuses_error = _paged_rest_rows(
+        f"repos/{repo}/commits/{sha}/statuses",
+        key=None,
+        max_pages=MAX_CHECK_RUN_PAGES,
+    )
+    if runs_error or statuses_error:
+        return [], "; ".join(error for error in (runs_error, statuses_error) if error)
+
+    requirements = []
+    seen = set()
+    for run in runs:
+        name = run.get("name")
+        if not isinstance(name, str) or not is_real_gate(name) or name == REVIEW_GATE_CONTEXT:
+            continue
+        if run.get("head_sha") != sha:
+            return [], f"CheckRun {name!r} is not bound to the discovered current head"
+        app = run.get("app")
+        app_id = app.get("id") if isinstance(app, dict) else None
+        if not isinstance(app_id, int) or isinstance(app_id, bool) or app_id <= 0:
+            return [], f"current-head CheckRun {name!r} omitted its stable GitHub App id"
+        key = (name, app_id)
+        if key not in seen:
+            seen.add(key)
+            requirements.append({"context": name, "app_id": app_id})
+    for status in statuses:
+        context = status.get("context")
+        if not isinstance(context, str) or not is_real_gate(context) or context == REVIEW_GATE_CONTEXT:
+            continue
+        if status.get("sha") != sha:
+            return [], f"commit status {context!r} is not bound to the discovered current head"
+        key = (context, None)
+        if key not in seen:
+            seen.add(key)
+            requirements.append({"context": context, "app_id": None})
+    if not requirements:
+        return [], "no genuine project CI context exists on the current head"
+    return requirements, ""
 
 
-def main():
+def _paged_rest_rows(path: str, *, key: str | None, max_pages: int):
+    rows = []
+    separator = "&" if "?" in path else "?"
+    for page in range(1, max_pages + 1):
+        value = gh_json(
+            ["api", f"{path}{separator}per_page=100&page={page}"],
+            default=None,
+        )
+        page_rows = value.get(key) if key is not None and isinstance(value, dict) else value
+        if not isinstance(page_rows, list) or any(not isinstance(row, dict) for row in page_rows):
+            return None, f"invalid paginated {key or 'rows'} response"
+        rows.extend(page_rows)
+        if len(page_rows) < 100:
+            return rows, ""
+    return None, f"{key or 'rows'} exceeded {max_pages} pages"
+
+
+def review_gate_app_evidence(repo: str) -> tuple[dict | None, str]:
+    """Derive one App slug/id pair from complete executable CheckRun receipts.
+
+    This is deliberately independent of per-repository workflow files. The
+    producer is the centrally installed App. A rejected bootstrap receipt is
+    sufficient to prove executable publication before protection exists; only
+    live branch protection can later turn that receipt into acceptance.
+    """
+
+    pulls = gh_json(
+        [
+            "api",
+            f"repos/{repo}/pulls?state=all&sort=updated&direction=desc&per_page={MAX_APP_PREFLIGHT_PULLS}",
+        ],
+        default=None,
+    )
+    if not isinstance(pulls, list) or any(not isinstance(pull, dict) for pull in pulls):
+        return None, "invalid recent pull-request evidence response"
+    app_identities: set[tuple[str, int]] = set()
+    authenticated = 0
+    invalid_receipts = 0
+    seen_heads: set[tuple[int, str]] = set()
+    for pull in pulls:
+        head = pull.get("head")
+        sha = str(head.get("sha") or "") if isinstance(head, dict) else ""
+        number = pull.get("number")
+        if (
+            not re.fullmatch(r"[0-9a-fA-F]{40}", sha)
+            or not isinstance(number, int)
+            or isinstance(number, bool)
+            or number <= 0
+            or (number, sha) in seen_heads
+        ):
+            continue
+        seen_heads.add((number, sha))
+        runs, runs_error = _paged_rest_rows(
+            f"repos/{repo}/commits/{sha}/check-runs",
+            key="check_runs",
+            max_pages=MAX_CHECK_RUN_PAGES,
+        )
+        if runs_error:
+            return None, runs_error
+        for run in runs:
+            app = run.get("app")
+            slug = str(app.get("slug") or "") if isinstance(app, dict) else ""
+            app_id = app.get("id") if isinstance(app, dict) else None
+            if (
+                run.get("name") != REVIEW_GATE_CONTEXT
+                or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?", slug)
+                or slug == "github-actions"
+                or not isinstance(app_id, int)
+                or isinstance(app_id, bool)
+                or app_id <= 0
+            ):
+                continue
+            authenticated += 1
+            run_for_validation = {
+                **run,
+                "__typename": "CheckRun",
+                "headSha": run.get("head_sha"),
+                "externalId": run.get("external_id"),
+            }
+            valid, _detail = validate_check_run_receipt(
+                run_for_validation,
+                repo=repo,
+                number=number,
+                head=sha,
+                app_id=app_id,
+                app_slug=slug,
+                require_success=False,
+            )
+            if not valid:
+                invalid_receipts += 1
+                continue
+            app_identities.add((slug, app_id))
+    if len(app_identities) != 1:
+        detail = (
+            "no authenticated executable App receipt"
+            if authenticated == 0
+            else f"App receipt ids are non-unique or invalid (authenticated={authenticated}, invalid={invalid_receipts})"
+        )
+        return None, detail
+    slug, app_id = next(iter(app_identities))
+    return {"slug": slug, "id": app_id}, ""
+
+
+def review_gate_app_id(repo: str, _expected_slug: str | None = None) -> int | None:
+    """Compatibility wrapper around the receipt-authenticated preflight."""
+
+    identity, _detail = review_gate_app_evidence(repo)
+    return identity["id"] if identity is not None else None
+
+
+def project_checks(detected_checks):
+    """Validate and deduplicate owner-derived context/App requirements."""
+
+    if not isinstance(detected_checks, list):
+        raise ValueError("detected_checks must be a list of live context/App requirements")
+    requirements = []
+    seen = set()
+    for item in detected_checks:
+        if not isinstance(item, dict):
+            raise ValueError("each project check must preserve live context/App evidence")
+        context = item.get("context")
+        app_id = item.get("app_id")
+        if (
+            not isinstance(context, str)
+            or not context
+            or context == REVIEW_GATE_CONTEXT
+            or (app_id is not None and (not isinstance(app_id, int) or isinstance(app_id, bool) or app_id <= 0))
+        ):
+            raise ValueError("project check context/App evidence is invalid")
+        key = (context, app_id)
+        if key not in seen:
+            seen.add(key)
+            requirements.append({"context": context, "app_id": app_id})
+    return requirements
+
+
+def required_checks(detected_checks, review_app_id: int):
+    """Return project requirements plus exactly one App-bound review receipt."""
+
+    return [
+        *project_checks(detected_checks),
+        {"context": REVIEW_GATE_CONTEXT, "app_id": review_app_id},
+    ]
+
+
+def protection_body(detected_checks, review_app_id: int):
+    """Build the fail-closed branch-protection contract for one default branch."""
+    if not isinstance(review_app_id, int) or isinstance(review_app_id, bool) or review_app_id <= 0:
+        raise ValueError("review_app_id must be a positive live GitHub App id")
+    return {
+        "required_status_checks": {
+            "strict": True,
+            "checks": [
+                *(
+                    {
+                        "context": requirement["context"],
+                        "app_id": requirement["app_id"] if requirement["app_id"] is not None else -1,
+                    }
+                    for requirement in project_checks(detected_checks)
+                ),
+                {"context": REVIEW_GATE_CONTEXT, "app_id": review_app_id},
+            ],
+        },
+        "enforce_admins": True,
+        "required_pull_request_reviews": {
+            "dismiss_stale_reviews": True,
+            "require_code_owner_reviews": False,
+            "required_approving_review_count": 1,
+            "require_last_push_approval": True,
+        },
+        "required_conversation_resolution": True,
+        "restrictions": None,
+    }
+
+
+def _enabled(value):
+    """Normalize GitHub's boolean and ``{"enabled": bool}`` response shapes."""
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, dict) and isinstance(value.get("enabled"), bool):
+        return value["enabled"]
+    return None
+
+
+def repository_settings_match(value) -> tuple[bool, str]:
+    if not isinstance(value, dict):
+        return False, "repository settings response is not an object"
+    mismatches = []
+    if value.get("allow_auto_merge") is not False:
+        mismatches.append("allow_auto_merge is not false")
+    if value.get("delete_branch_on_merge") is not False:
+        mismatches.append("delete_branch_on_merge is not false")
+    return not mismatches, "; ".join(mismatches)
+
+
+def repository_settings_state(value):
+    if not isinstance(value, dict):
+        return None, "repository settings response is not an object"
+    allow_auto_merge = value.get("allow_auto_merge")
+    delete_branch_on_merge = value.get("delete_branch_on_merge")
+    if not isinstance(allow_auto_merge, bool) or not isinstance(delete_branch_on_merge, bool):
+        return None, "repository settings response omitted boolean merge settings"
+    return {
+        "allow_auto_merge": allow_auto_merge,
+        "delete_branch_on_merge": delete_branch_on_merge,
+    }, ""
+
+
+def _normalized_checks(value):
+    if not isinstance(value, list):
+        return None
+    normalized = []
+    for item in value:
+        if not isinstance(item, dict) or not isinstance(item.get("context"), str):
+            return None
+        app_id = item.get("app_id")
+        if app_id == -1:
+            app_id = None
+        if app_id is not None and (not isinstance(app_id, int) or isinstance(app_id, bool) or app_id <= 0):
+            return None
+        normalized.append((item["context"], app_id))
+    return sorted(normalized, key=lambda pair: (pair[0], pair[1] or 0))
+
+
+def protection_matches(value, expected) -> tuple[bool, str]:
+    """Verify the material live branch-protection contract after GitHub accepted the PUT."""
+
+    if not isinstance(value, dict):
+        return False, "branch protection response is not an object"
+    mismatches = []
+    actual_status = value.get("required_status_checks")
+    expected_status = expected["required_status_checks"]
+    if not isinstance(actual_status, dict):
+        mismatches.append("required_status_checks missing")
+    else:
+        if actual_status.get("strict") is not True:
+            mismatches.append("strict current-head checks are not enabled")
+        actual_checks = _normalized_checks(actual_status.get("checks"))
+        expected_checks = _normalized_checks(expected_status.get("checks"))
+        if actual_checks is None or actual_checks != expected_checks:
+            mismatches.append("required checks or App bindings differ")
+
+    if _enabled(value.get("enforce_admins")) is not True:
+        mismatches.append("administrator enforcement is not enabled")
+    if _enabled(value.get("required_conversation_resolution")) is not True:
+        mismatches.append("conversation resolution is not required")
+
+    actual_reviews = value.get("required_pull_request_reviews")
+    expected_reviews = expected["required_pull_request_reviews"]
+    if not isinstance(actual_reviews, dict):
+        mismatches.append("pull-request review policy missing")
+    else:
+        for field, expected_value in expected_reviews.items():
+            if actual_reviews.get(field) != expected_value:
+                mismatches.append(f"review policy {field} differs")
+
+    if value.get("restrictions", object()) is not None:
+        mismatches.append("push restrictions differ")
+    return not mismatches, "; ".join(mismatches)
+
+
+def _current_repository_settings(repo: str):
+    value, error = checked_gh_json(["api", "--method", "GET", f"repos/{repo}"])
+    if error:
+        return None, f"repository settings read failed: {error}"
+    state, state_error = repository_settings_state(value)
+    if state_error:
+        return None, state_error
+    return state, ""
+
+
+def _read_repository_settings(repo: str) -> tuple[bool, str]:
+    value, error = _current_repository_settings(repo)
+    if error:
+        return False, error
+    return repository_settings_match(value)
+
+
+def _read_protection(repo: str, branch: str, expected) -> tuple[bool, str]:
+    value, error = checked_gh_json(["api", "--method", "GET", f"repos/{repo}/branches/{branch}/protection"])
+    if error:
+        return False, f"branch protection read failed: {error}"
+    return protection_matches(value, expected)
+
+
+def _protection_readback_state(repo: str, branch: str) -> tuple[str, str]:
+    """Distinguish an unprotected branch from an unreadable/plan-blocked API."""
+
+    result = gh(
+        [
+            "api",
+            "--method",
+            "GET",
+            f"repos/{repo}/branches/{branch}/protection",
+        ]
+    )
+    if result.returncode == 0:
+        try:
+            value = json.loads(result.stdout or "null")
+        except json.JSONDecodeError as exc:
+            return "blocked", f"invalid JSON response: {exc.msg}"
+        if not isinstance(value, dict):
+            return "blocked", "branch protection response is not an object"
+        return "readable", ""
+    detail = result.stderr.strip() or result.stdout.strip() or f"gh exited {result.returncode}"
+    if "404" in detail or "Branch not protected" in detail:
+        return "missing", detail
+    return "blocked", detail
+
+
+def apply_protection_contract(repo: str, branch: str, body) -> tuple[bool, list[str]]:
+    """Install protection only after the independent containment state is live."""
+
+    messages = []
+    settings_ok, settings_detail = _read_repository_settings(repo)
+    if not settings_ok:
+        return False, [
+            f"repository containment prerequisite not confirmed: {settings_detail}; run --contain apply first"
+        ]
+
+    protection = gh(
+        [
+            "api",
+            "--method",
+            "PUT",
+            f"repos/{repo}/branches/{branch}/protection",
+            "--input",
+            "-",
+        ],
+        input_text=json.dumps(body),
+    )
+    if protection.returncode != 0:
+        detail = protection.stderr.strip() or f"gh exited {protection.returncode}"
+        return False, [f"branch protection update failed with auto-merge off: {detail}"]
+
+    # Re-read both surfaces after the protection mutation. This catches API normalization,
+    # insufficient permissions, and a concurrent settings flip. Run both reads so a partial remote
+    # transaction returns every observable mismatch while remaining fail closed.
+    final_settings_ok, final_settings_detail = _read_repository_settings(repo)
+    if not final_settings_ok:
+        messages.append(f"repository fail-closed settings changed: {final_settings_detail}")
+    protection_ok, protection_detail = _read_protection(repo, branch, body)
+    if not protection_ok:
+        messages.append(f"branch protection not confirmed: {protection_detail}")
+    return not messages, messages
+
+
+def apply_repository_containment(repo: str):
+    """Lock settings before cancellation, then drain to a bounded stable-empty fixed point."""
+
+    messages = []
+    settings = gh(
+        [
+            "api",
+            "--method",
+            "PATCH",
+            f"repos/{repo}",
+            "--input",
+            "-",
+        ],
+        input_text=json.dumps(
+            {
+                "allow_auto_merge": False,
+                "delete_branch_on_merge": False,
+            }
+        ),
+    )
+    if settings.returncode != 0:
+        detail = settings.stderr.strip() or f"gh exited {settings.returncode}"
+        return (
+            False,
+            {
+                "initial_active": None,
+                "cancelled": 0,
+                "remaining": None,
+                "passes": 0,
+            },
+            [f"repository containment settings update failed before cancellation: {detail}"],
+        )
+    try:
+        settings_response = json.loads(settings.stdout or "null")
+    except json.JSONDecodeError as exc:
+        settings_response = None
+        response_detail = f"invalid JSON response: {exc.msg}"
+    else:
+        _response_ok, response_detail = repository_settings_match(settings_response)
+    if settings_response is None or response_detail:
+        return (
+            False,
+            {
+                "initial_active": None,
+                "cancelled": 0,
+                "remaining": None,
+                "passes": 0,
+            },
+            [
+                "repository containment PATCH response did not confirm both settings: "
+                f"{response_detail or 'response is not an object'}"
+            ],
+        )
+
+    settings_ok, settings_detail = _read_repository_settings(repo)
+    if not settings_ok:
+        return (
+            False,
+            {
+                "initial_active": None,
+                "cancelled": 0,
+                "remaining": None,
+                "passes": 0,
+            },
+            [f"repository containment settings not confirmed before cancellation: {settings_detail}"],
+        )
+
+    initial_count = None
+    remaining_count = None
+    cancelled_ids = set()
+    last_cancel_errors = {}
+    empty_inventories = 0
+    passes = 0
+    for pass_number in range(1, MAX_CONTAINMENT_PASSES + 1):
+        passes = pass_number
+        if pass_number > 1:
+            settings_ok, settings_detail = _read_repository_settings(repo)
+            if not settings_ok:
+                messages.append(f"repository containment settings changed during drain: {settings_detail}")
+                break
+
+        active, inventory_error = list_active_auto_merges(repo)
+        if inventory_error:
+            messages.append(inventory_error)
+            break
+        if initial_count is None:
+            initial_count = len(active)
+        remaining_count = len(active)
+
+        active_ids = {pull["id"] for pull in active}
+        last_cancel_errors = {
+            pull_id: detail for pull_id, detail in last_cancel_errors.items() if pull_id in active_ids
+        }
+        if not active:
+            empty_inventories += 1
+            if empty_inventories >= REQUIRED_EMPTY_INVENTORIES:
+                final_settings_ok, final_settings_detail = _read_repository_settings(repo)
+                if not final_settings_ok:
+                    messages.append(
+                        f"repository settings drifted after stable-empty inventory: {final_settings_detail}"
+                    )
+                    break
+                return (
+                    True,
+                    {
+                        "initial_active": initial_count,
+                        "cancelled": len(cancelled_ids),
+                        "remaining": 0,
+                        "passes": passes,
+                    },
+                    [],
+                )
+            continue
+
+        empty_inventories = 0
+        for pull in active:
+            accepted, detail = cancel_auto_merge(pull)
+            if accepted:
+                cancelled_ids.add(pull["id"])
+                last_cancel_errors.pop(pull["id"], None)
+            else:
+                last_cancel_errors[pull["id"]] = f"PR #{pull['number']} auto-merge {detail}"
+
+    messages.extend(last_cancel_errors.values())
+    if not messages:
+        messages.append(
+            f"containment did not reach {REQUIRED_EMPTY_INVENTORIES} consecutive empty "
+            f"inventories within {MAX_CONTAINMENT_PASSES} passes"
+        )
+
+    return (
+        False,
+        {
+            "initial_active": initial_count,
+            "cancelled": len(cancelled_ids),
+            "remaining": remaining_count,
+            "passes": passes,
+        },
+        messages,
+    )
+
+
+def containment_main(*, apply: bool) -> int:
+    repos = containment_repos()
+    mode = "APPLY" if apply else "PREVIEW"
+    print(f"=== recovery containment — {len(repos)} cohort repo(s) ({mode}) ===")
+    failures = 0
+    total_active = 0
+    total_cancelled = 0
+    for repo in repos:
+        if apply:
+            accepted, summary, messages = apply_repository_containment(repo)
+            if summary["initial_active"] is not None:
+                total_active += summary["initial_active"]
+            total_cancelled += summary["cancelled"]
+            if accepted:
+                print(
+                    f"  {repo}: ✓ cancelled {summary['cancelled']} active request(s); "
+                    "allow_auto_merge=false; delete_branch_on_merge=false; "
+                    f"stable-empty fixed point verified in {summary['passes']} pass(es)"
+                )
+            else:
+                failures += 1
+                print(
+                    f"  {repo}: ✗ containment incomplete "
+                    f"(seen={summary['initial_active']}, cancelled={summary['cancelled']}, "
+                    f"remaining={summary['remaining']}, passes={summary['passes']})"
+                )
+                for message in messages:
+                    print(f"      ✗ {message[:300]}")
+            continue
+
+        active, active_error = list_active_auto_merges(repo)
+        settings, settings_error = _current_repository_settings(repo)
+        if active_error or settings_error:
+            failures += 1
+            print(f"  {repo}: BLOCKED — containment evidence incomplete")
+            if active_error:
+                print(f"      ✗ {active_error[:300]}")
+            if settings_error:
+                print(f"      ✗ {settings_error[:300]}")
+            continue
+        total_active += len(active)
+        settings_ok, settings_detail = repository_settings_match(settings)
+        if active or not settings_ok:
+            failures += 1
+            details = []
+            if active:
+                details.append(f"{len(active)} active auto-merge request(s)")
+            if not settings_ok:
+                details.append(settings_detail)
+            print(f"  {repo}: DRIFT — {'; '.join(details)}")
+        else:
+            print(f"  {repo}: ✓ no active auto-merge requests; allow_auto_merge=false; delete_branch_on_merge=false")
+
+    if apply:
+        print(
+            f"\nContainment apply: observed {total_active} active request(s), "
+            f"confirmed {total_cancelled} cancellation(s), {failures} repo failure(s)."
+        )
+    else:
+        print(
+            f"\nPREVIEW — observed {total_active} active request(s); nothing changed. "
+            f"{failures} repo(s) require containment or have incomplete evidence. "
+            "Re-run with --contain apply to lock settings and drain requests."
+        )
+    return 1 if failures else 0
+
+
+def protection_main():
     repos = target_repos()
-    print(f"=== ruleset plan — {len(repos)} repos with open PRs "
-          f"({'APPLY' if APPLY else 'DRY-RUN'}) ===")
-    if FORCED:
-        print(f"    contexts forced (detection skipped): {FORCED}")
+    print(f"=== ruleset plan — {len(repos)} repos with open PRs ({'APPLY' if APPLY else 'DRY-RUN'}) ===")
     print()
-    no_ci = []
+    no_project_ci = []
+    no_review_app = []
+    no_default_branch = []
+    no_protection_readback = []
+    configured = 0
+    failed = 0
     for repo in repos:
         info = gh_json(["repo", "view", repo, "--json", "defaultBranchRef"], default={}) or {}
-        branch = (info.get("defaultBranchRef") or {}).get("name") or "main"
-        checks = detect_checks(repo)
-        if not checks:
-            no_ci.append(repo)
-            print(f"  {repo}@{branch}: ⚠ no CI checks detected → auto-merge N/A (PRs merge immediately); "
-                  f"would only set allow_auto_merge")
+        branch = (info.get("defaultBranchRef") or {}).get("name")
+        if not isinstance(branch, str) or not branch:
+            no_default_branch.append(repo)
+            print(f"  {repo}: BLOCKED — live default branch could not be read")
+            if APPLY:
+                failed += 1
+            continue
+        readback_state, readback_detail = _protection_readback_state(repo, branch)
+        if readback_state == "blocked":
+            no_protection_readback.append(repo)
+            print(
+                f"  {repo}@{branch}: BLOCKED — branch-protection readback unavailable "
+                f"(account plan or permission gate): {readback_detail[:240]}"
+            )
+            if APPLY:
+                failed += 1
+            continue
+        detected_checks, checks_error = detect_checks(repo)
+        review_app, review_app_detail = review_gate_app_evidence(repo)
+        checks = (
+            required_checks(detected_checks, review_app["id"]) if detected_checks and review_app is not None else []
+        )
+        if not detected_checks:
+            no_project_ci.append(repo)
+            print(
+                f"  {repo}@{branch}: BLOCKED — project CI discovery is incomplete; refusing a review-only "
+                f"protection contract: {checks_error}"
+            )
+        elif review_app is None:
+            no_review_app.append(repo)
+            print(
+                f"  {repo}@{branch}: BLOCKED — no executable receipt from the "
+                f"dedicated App exists for {REVIEW_GATE_CONTEXT}: "
+                f"{review_app_detail}"
+            )
         else:
-            print(f"  {repo}@{branch}: require {len(checks)} check(s) {checks[:4]}"
-                  f"{'…' if len(checks) > 4 else ''} · no human review · allow_auto_merge=true")
+            check_labels = [f"{item['context']}@{item['app_id'] or 'unbound-status'}" for item in checks[:4]]
+            print(
+                f"  {repo}@{branch}: require {len(checks)} check(s) {check_labels}"
+                f"{'…' if len(checks) > 4 else ''} · strict current-head · native exact-head "
+                f"peer receipt · dedicated_app={review_app['slug']}:{review_app['id']} · "
+                "last-push approval · stale dismissal · "
+                "resolved conversations · admins enforced"
+            )
         if not APPLY:
             continue
         # --- APPLY ---
-        gh(["api", "-X", "PATCH", f"/repos/{repo}", "-F", "allow_auto_merge=true",
-            "-F", "delete_branch_on_merge=false"])
-        if checks:
-            body = {
-                # strict:false — gate on checks passing, NOT on branch-up-to-date, else auto-merge
-                # deadlocks (nothing auto-updates behind branches) and we're back on the treadmill.
-                "required_status_checks": {"strict": False, "contexts": checks},
-                "enforce_admins": False,
-                "required_pull_request_reviews": None,
-                "restrictions": None,
-            }
-            r = gh(["api", "-X", "PUT", f"/repos/{repo}/branches/{branch}/protection",
-                    "--input", "-"], t=45)
-            # pass JSON via stdin
-            r = subprocess.run(["gh", "api", "-X", "PUT",
-                                f"/repos/{repo}/branches/{branch}/protection", "--input", "-"],
-                               input=json.dumps(body), capture_output=True, text=True, timeout=45)
-            ok = r.returncode == 0
-            print(f"      {'✓ protected + auto-merge on' if ok else '✗ ' + r.stderr.strip()[:70]}")
+        if not detected_checks or review_app is None:
+            reason = (
+                "strict current-head project CI could not be derived"
+                if not detected_checks
+                else "review-gate GitHub App executable receipt could not be authenticated"
+            )
+            print(f"      ✗ unchanged: {reason}")
+            failed += 1
+            continue
+        body = protection_body(detected_checks, review_app["id"])
+        accepted, messages = apply_protection_contract(repo, branch, body)
+        if accepted:
+            configured += 1
+            print("      ✓ dedicated-app protection installed; independent containment remains verified live")
         else:
-            print("      ✓ allow_auto_merge set (no protection — no CI to gate on)")
+            failed += 1
+            for message in messages:
+                print(f"      ✗ {message[:200]}")
 
-    print(f"\n{len(repos)-len(no_ci)} repos gateable via CI; {len(no_ci)} have no CI "
-          f"(auto-merge moot — they merge on creation).")
+    print(
+        f"\n{configured if APPLY else len(repos) - len(no_project_ci) - len(no_review_app) - len(no_default_branch) - len(no_protection_readback)} "
+        f"repo(s) are eligible for project CI beside {REVIEW_GATE_CONTEXT}; "
+        f"{len(no_project_ci)} blocked for missing project CI; "
+        f"{len(no_review_app)} blocked for missing unique dedicated App identity; "
+        f"{len(no_default_branch)} blocked for unreadable default branch; "
+        f"{len(no_protection_readback)} blocked for unreadable protection due plan/permissions."
+    )
     if not APPLY:
         print("\nDRY-RUN — nothing changed. Re-run with --apply (GATED) to configure.")
-        print("After --apply: `gh pr merge <n> --auto --squash` on green PRs → self-draining gate.")
+        print("Run --contain apply first; --apply never changes repository merge settings.")
+    elif failed:
+        print(f"\nFAILED — {failed} repo transaction(s) were blocked or not verified.", file=sys.stderr)
+    return 1 if (APPLY and failed) or no_protection_readback or no_project_ci else 0
+
+
+def main():
+    if ARGUMENT_ERROR:
+        print(f"argument error: {ARGUMENT_ERROR}", file=sys.stderr)
+        return 2
+    if CONTAIN_MODE is not None:
+        return containment_main(apply=CONTAIN_MODE == "apply")
+    return protection_main()
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

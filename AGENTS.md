@@ -115,6 +115,22 @@ state it exactly once (`BLOCKED: <atom>`), file the atom in its registry owner, 
 every other reversible lane to its verified end. Never loop on, poll, or re-surface a filed gate.
 The litmus: am I destroying, sending, spending, or irreversibly leaking? If no, proceed.
 
+## Merge Acceptance and Effect Authority
+
+Green CI is necessary but is not merge authority. The current head must have one native approval
+from a reviewer distinct from every known head-commit author/committer identity, no unresolved current conversation, and a
+complete successful `limen.pr_review_gate.v1` receipt from the dedicated GitHub App. Branch
+protection additionally requires last-push approval, stale-review dismissal, strict current-head
+checks, resolved conversations, and administrator enforcement.
+
+Merge mutation exists only in `scripts/merge-drain.py --apply`, which also requires one short-lived
+signed `limen.merge_authorization.v1` receipt bound to the exact repository, PR, and head.
+The signer registry is a fixed Domus-installed root-owned path outside the checkout; caller
+root, gate, policy, and signer-path overrides are forbidden. `await-pr.sh --merge` delegates to
+that effector and requires the same owner custody; other agents,
+scripts, governors, and workflows must not invoke a generic merge mutation. App provisioning,
+installation, billing/plan changes, and reviewer credentials remain external owner gates.
+
 ## Prompt Corpus as the Control Plane
 
 The human's prompt history is durable operating input, not disposable conversation context. Before
