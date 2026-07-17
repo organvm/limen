@@ -136,7 +136,7 @@
   "branches": {
     "conductor_by_reason": {
       "checked-out": 133,
-      "inflight": 61,
+      "inflight": 56,
       "landed-ancestor": 4,
       "livework": 272,
       "pr-merged-but-advanced": 6,
@@ -175,15 +175,15 @@
       "conductor": 1,
       "contrib_fork": 29,
       "frozen": 11,
-      "governed_public": 155,
+      "governed_public": 156,
       "operation_private": 59,
       "portal_public": 11,
-      "private_unreviewed": 4,
+      "private_unreviewed": 3,
       "vault_private": 38
     },
     "by_visibility": {
-      "private": 105,
-      "public": 203
+      "private": 103,
+      "public": 205
     },
     "complete": true,
     "forks": 29,
@@ -192,11 +192,6 @@
   "schema": "limen.github_estate.v1",
   "secrets": {
     "homed": true
-  },
-  "seo": {
-    "audited": 166,
-    "failing": 160,
-    "passing": 6
   },
   "usage": {
     "rate_limit_headroom_pct": 100
