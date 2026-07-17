@@ -93,6 +93,8 @@ Limen code.
 - `scratch_authority.root` must contain `--run-root`. Its receipt must be an exact
   `domus-non-backed-scratch-receipt.v1` record owned by `repo:organvm/domus-genoma`, binding the
   resolved root, live mount point and device, and verified backup exclusion. Symlinked roots fail.
+  The Domus observation must be current, timezone-aware, unexpired, and valid for no more than 24
+  hours; an old receipt cannot survive a later Backblaze selection change indefinitely.
 - `final_receipt_promotion.root` is a distinct durable Archive4T destination with a public-safe
   owner reference. It must already exist; the cadence never manufactures a missing mount.
 

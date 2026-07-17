@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -237,6 +238,7 @@ def _execution_policy(module, tmp_path: Path) -> dict[str, object]:
     mount_point = scratch_root
     while not module.os.path.ismount(mount_point):
         mount_point = mount_point.parent
+    observed_at = datetime.now(timezone.utc).replace(microsecond=0)
     receipt_payload = {
         "contract_name": module.SCRATCH_RECEIPT_CONTRACT,
         "contract_version": 1,
@@ -248,6 +250,8 @@ def _execution_policy(module, tmp_path: Path) -> dict[str, object]:
         "backup_status": "excluded",
         "verification_status": "verified",
         "verification_predicate": "predicate:domus-non-backed-scratch",
+        "observed_at": observed_at.isoformat().replace("+00:00", "Z"),
+        "expires_at": (observed_at + timedelta(hours=24)).isoformat().replace("+00:00", "Z"),
     }
     receipt = {
         **receipt_payload,
@@ -1211,6 +1215,38 @@ def test_scratch_authority_must_be_live_and_backup_excluded(
     receipt_path = Path(document["execution_policy"]["scratch_authority"]["receipt"])
     receipt = json.loads(receipt_path.read_text())
     receipt["backup_status"] = "included"
+    payload = {key: value for key, value in receipt.items() if key != "receipt_digest"}
+    receipt["receipt_digest"] = module.digest_value(payload)
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+    with pytest.raises(module.CadenceError, match="backup-excluded"):
+        module.validate_only(
+            snapshot_id="snapshot-fixture",
+            snapshot_at="2026-07-16T00:00:00Z",
+            config_path=config,
+            run_root=tmp_path / "run",
+        )
+
+
+@pytest.mark.parametrize("freshness_case", ["expired", "future", "overlong"])
+def test_scratch_authority_rejects_invalid_freshness_window(
+    tmp_path: Path,
+    freshness_case: str,
+) -> None:
+    module = _load(f"governance_memory_cadence_scratch_freshness_{freshness_case}")
+    config = _config(module, tmp_path)
+    document = yaml.safe_load(config.read_text(encoding="utf-8"))
+    receipt_path = Path(document["execution_policy"]["scratch_authority"]["receipt"])
+    receipt = json.loads(receipt_path.read_text())
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    if freshness_case == "expired":
+        observed, expires = now - timedelta(hours=25), now - timedelta(hours=1)
+    elif freshness_case == "future":
+        observed, expires = now + timedelta(minutes=10), now + timedelta(hours=1)
+    else:
+        observed, expires = now, now + timedelta(hours=25)
+    receipt["observed_at"] = observed.isoformat().replace("+00:00", "Z")
+    receipt["expires_at"] = expires.isoformat().replace("+00:00", "Z")
     payload = {key: value for key, value in receipt.items() if key != "receipt_digest"}
     receipt["receipt_digest"] = module.digest_value(payload)
     receipt_path.write_text(json.dumps(receipt), encoding="utf-8")

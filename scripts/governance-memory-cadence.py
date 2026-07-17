@@ -34,7 +34,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -485,6 +485,26 @@ def validate_scratch_receipt(
         mount_point = mount_point.parent
     expected_mount_digest = digest_value({"mount_point": str(mount_point)})
     expected_device_id = scratch_root.stat().st_dev
+    try:
+        observed_at = datetime.fromisoformat(str(receipt.get("observed_at") or "").replace("Z", "+00:00"))
+        expires_at = datetime.fromisoformat(str(receipt.get("expires_at") or "").replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise CadenceError("scratch authority receipt requires ISO-8601 freshness bounds") from exc
+    if (
+        observed_at.tzinfo is None
+        or observed_at.utcoffset() is None
+        or expires_at.tzinfo is None
+        or expires_at.utcoffset() is None
+    ):
+        raise CadenceError("scratch authority receipt freshness bounds must be timezone-aware")
+    observed_at = observed_at.astimezone(timezone.utc)
+    expires_at = expires_at.astimezone(timezone.utc)
+    now = datetime.now(timezone.utc)
+    freshness_valid = (
+        observed_at <= now + timedelta(minutes=5)
+        and now < expires_at
+        and timedelta(0) < expires_at - observed_at <= timedelta(hours=24)
+    )
     if (
         receipt.get("contract_name") != SCRATCH_RECEIPT_CONTRACT
         or receipt.get("contract_version") != 1
@@ -496,6 +516,7 @@ def validate_scratch_receipt(
         or receipt.get("backup_status") != "excluded"
         or receipt.get("verification_status") != "verified"
         or receipt.get("verification_predicate") != "predicate:domus-non-backed-scratch"
+        or not freshness_valid
         or receipt.get("receipt_digest") != digest_value(payload)
     ):
         raise CadenceError("scratch authority receipt must be exact, Domus-owned, verified, and backup-excluded")
