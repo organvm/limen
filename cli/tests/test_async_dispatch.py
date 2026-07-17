@@ -2932,6 +2932,16 @@ def test_async_worker_revalidates_contract_before_provider_side_effects(tmp_path
     task, expected_hash, _stamp = _mark_async_dispatched(tmp_path)
     board = load_limen_file(tmp_path / "tasks.yaml")
     board.tasks[0].context = "changed after reservation"
+    board.tasks[0].dispatch_log[-1].actual_spend = {
+        "amount": 99,
+        "unit": "forged-preflight",
+        "reconciled": True,
+    }
+    board.tasks[0].dispatch_log[-1].provider_run_id = "must-not-survive-no-execution"
+    board.tasks[0].dispatch_log[-1].selected_model = "must-not-survive-no-execution"
+    board.tasks[0].dispatch_log[-1].effect_receipt = {"must_not_survive": True}
+    board.portal.budget.track.spent = board.tasks[0].budget_cost
+    board.portal.budget.track.per_agent["codex"] = board.tasks[0].budget_cost
     save_limen_file(tmp_path / "tasks.yaml", board)
     worker = _load_worker(tmp_path)
     monkeypatch.setattr(
@@ -2956,11 +2966,26 @@ def test_async_worker_revalidates_contract_before_provider_side_effects(tmp_path
     assert worker.main() == 10
     receipt = json.loads(worker._result_path(task.id).read_text(encoding="utf-8"))
     assert receipt["execution_started"] is False
-    assert receipt["result"] == "__notask__"
+    assert receipt["result"] == "__contract_drift_closed__"
+    assert receipt["contract_drift_closed"] is True
     assert receipt["validation_failure"]["id"] == "async-execution-contract-mismatch"
-    assert receipt["publication_failure"]["id"] == "async-result-publication-fenced"
+    assert receipt["publication_failure"]["id"] == "async-result-contract-drift-closed"
     assert receipt["execution_contract_hash"] == expected_hash
-    assert receipt["actual_execution_contract_hash"] == execution_contract_hash(_board(tmp_path)[task.id])
+    reopened = _board(tmp_path)[task.id]
+    assert receipt["actual_execution_contract_hash"] == execution_contract_hash(reopened)
+    assert reopened.status == "open"
+    terminal, requeue = reopened.dispatch_log[-2:]
+    assert terminal.status == "failed"
+    assert terminal.attempt_id == receipt["attempt_id"]
+    assert terminal.actual_spend is None
+    assert terminal.provider_run_id is None
+    assert terminal.selected_model is None
+    assert getattr(terminal, "effect_receipt", None) is None
+    assert requeue.status == "open"
+    assert requeue.attempt_id is None
+    refreshed = load_limen_file(tmp_path / "tasks.yaml")
+    assert refreshed.portal.budget.track.spent == 0
+    assert refreshed.portal.budget.track.per_agent["codex"] == 0
 
 
 @pytest.mark.parametrize(
@@ -3035,18 +3060,30 @@ def test_all_worker_validation_failures_are_publication_and_harvest_fenced(tmp_p
     assert worker.main() == 10
     receipt = json.loads(worker._result_path(task.id).read_text(encoding="utf-8"))
     assert receipt["execution_started"] is False
-    assert receipt["result"] == "__notask__"
+    closure_case = case in {"contract_invalid", "contract_mismatch"}
+    expected_result = "__contract_drift_closed__" if closure_case else "__notask__"
+    assert receipt["result"] == expected_result
     assert receipt["validation_failure"]["id"] == failure_id
-    assert receipt["publication_failure"]["id"] in {
-        "async-result-publication-fenced",
-        "async-result-board-unreadable",
-    }
+    if closure_case:
+        assert receipt["publication_failure"]["id"] == "async-result-contract-drift-closed"
+    else:
+        assert receipt["publication_failure"]["id"] in {
+            "async-result-publication-fenced",
+            "async-result-board-unreadable",
+        }
 
     assert da.harvest() == 0
-    assert (tmp_path / "tasks.yaml").read_bytes() == before
+    if closure_case:
+        reopened = _board(tmp_path)[task.id]
+        assert reopened.status == "open"
+        assert reopened.dispatch_log[-2].status == "failed"
+        assert reopened.dispatch_log[-1].attempt_id is None
+    else:
+        assert (tmp_path / "tasks.yaml").read_bytes() == before
     archives = list(da.RECEIPT_ARCHIVE.glob("*/*.result.json"))
     assert len(archives) == 1
-    assert json.loads(archives[0].read_text(encoding="utf-8"))["reason"] == "harvest-fenced"
+    expected_archive = "contract-drift-closed" if closure_case else "harvest-fenced"
+    assert json.loads(archives[0].read_text(encoding="utf-8"))["reason"] == expected_archive
 
 
 @pytest.mark.parametrize("case", ["task_missing", "status_reopened", "contract_changed", "owner_changed"])
@@ -3124,6 +3161,122 @@ def test_async_worker_fences_result_when_recovery_wins_publication_race(tmp_path
     assert receipt["result"] == "__notask__"
     assert receipt["publication_failure"]["id"] == "async-result-publication-fenced"
     assert _board(tmp_path)[task.id].status == "open"
+
+
+def test_async_contract_drift_after_execution_preserves_old_attempt_custody_once(tmp_path, monkeypatch):
+    da = _load(tmp_path, n_open=1)
+    reservation_id = f"async-reserve:{'e' * 32}"
+    task, expected_hash, stamp = _mark_async_dispatched(
+        tmp_path,
+        reservation_id=reservation_id,
+    )
+    board = load_limen_file(tmp_path / "tasks.yaml")
+    board.portal.budget.track.spent = task.budget_cost
+    board.portal.budget.track.per_agent["codex"] = task.budget_cost
+    save_limen_file(tmp_path / "tasks.yaml", board)
+    da._write_running_marker(
+        task.id,
+        "codex",
+        stamp,
+        999999,
+        0.0,
+        reservation_id,
+        task.dispatch_log[-1].attempt_id,
+    )
+    worker = _load_worker(tmp_path)
+    spend = {"amount": 4.0, "unit": "token-k", "reconciled": True}
+    outputs = [
+        {
+            "kind": "pull_request",
+            "reference": "https://github.com/x/y/pull/99",
+            "digest": "sha256:" + "1" * 64,
+        }
+    ]
+    effects = [
+        {
+            "kind": "filesystem",
+            "target": "isolated-worktree",
+            "mode": "applied",
+            "receipt_digest": "sha256:" + "2" * 64,
+        }
+    ]
+
+    def execute(agent, task_snapshot, dry_run=False):
+        assert agent == "codex"
+        assert dry_run is False
+        task_snapshot.dispatch_log[-1].actual_spend = spend
+        task_snapshot.dispatch_log[-1].trajectory_outputs = outputs
+        task_snapshot.dispatch_log[-1].trajectory_outputs_reconciled = True
+        task_snapshot.dispatch_log[-1].trajectory_side_effects = effects
+        task_snapshot.dispatch_log[-1].trajectory_side_effects_reconciled = True
+        monkeypatch.setitem(
+            dispatch_module._MODEL_SELECTION_RECEIPTS,
+            task.id,
+            {
+                "attempt_id": task_snapshot.dispatch_log[-1].attempt_id,
+                "execution_profile": dict(task_snapshot.dispatch_log[-1].execution_profile or {}),
+                "selected_model": "opaque/runtime-id",
+                "selection_source": "provider_live_catalog",
+                "catalog_hash": "3" * 64,
+            },
+        )
+        monkeypatch.setitem(
+            dispatch_module._REMOTE_SUBMISSION_RECEIPTS,
+            task.id,
+            {
+                "provider_run_id": "remote-99",
+                "provider_url": "https://github.com/organvm/limen/actions/runs/99",
+                "remote_receipt": "logs/remote-execution/receipt-99.json",
+            },
+        )
+        changed = load_limen_file(tmp_path / "tasks.yaml")
+        changed.tasks[0].context = "changed while provider executed"
+        save_limen_file(tmp_path / "tasks.yaml", changed)
+        return "https://github.com/x/y/pull/99"
+
+    monkeypatch.setattr(worker, "call_agent_dispatch", execute)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "async-run-one.py",
+            "--agent",
+            "codex",
+            "--task-id",
+            task.id,
+            "--reservation-id",
+            reservation_id,
+            "--execution-contract-hash",
+            expected_hash,
+        ],
+    )
+
+    assert worker.main() == 0
+    result_path = worker._result_path(task.id, reservation_id)
+    receipt = json.loads(result_path.read_text(encoding="utf-8"))
+    assert receipt["result"] == "__contract_drift_closed__"
+    reopened = _board(tmp_path)[task.id]
+    terminal, requeue = reopened.dispatch_log[-2:]
+    assert reopened.status == requeue.status == "open"
+    assert terminal.status == "failed"
+    assert terminal.actual_spend == spend
+    assert terminal.trajectory_outputs == outputs
+    assert terminal.trajectory_side_effects == effects
+    assert terminal.selected_model == "opaque/runtime-id"
+    assert terminal.provider_run_id == "remote-99"
+    assert requeue.attempt_id is None
+    budget = load_limen_file(tmp_path / "tasks.yaml").portal.budget.track
+    assert budget.spent == task.budget_cost
+    assert budget.per_agent["codex"] == task.budget_cost
+
+    event_count = len(reopened.dispatch_log)
+    assert da.harvest() == 0
+    assert not result_path.exists()
+    archive = list(da.RECEIPT_ARCHIVE.glob("*/*.result.json"))
+    assert len(archive) == 1
+    assert json.loads(archive[0].read_text(encoding="utf-8"))["reason"] == "contract-drift-closed"
+    assert da.harvest() == 0
+    assert len(_board(tmp_path)[task.id].dispatch_log) == event_count
 
 
 def test_duplicate_worker_executes_registered_attempt_once_without_second_spend_or_value(

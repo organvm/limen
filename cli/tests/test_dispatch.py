@@ -1965,6 +1965,111 @@ def test_mid_provider_contract_change_preserves_old_spend_without_current_credit
     assert track.spent == 0
 
 
+def test_serial_fresh_commit_persists_model_and_remote_receipts_on_exact_attempt(tmp_path: Path) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    board = LimenFile(tasks=[task])
+    board.portal.budget.track = BudgetTrack(date="2026-07-17")
+    save_limen_file(tasks_path, board)
+    selection = {
+        "attempt_id": launch.attempt_id,
+        "execution_profile": dict(launch.execution_profile or {}),
+        "selected_model": "opaque/runtime-selection",
+        "selection_source": "provider_live_catalog",
+        "catalog_hash": "4" * 64,
+    }
+    remote = {
+        "provider_run_id": "remote-run-17",
+        "provider_url": "https://github.com/example/repository/actions/runs/17",
+        "remote_receipt": "logs/remote-execution/receipt-17.json",
+    }
+    reconciliation = {
+        "actual_spend": {"amount": 1.5, "unit": "token-k", "reconciled": True},
+        "trajectory_outputs": [
+            {
+                "kind": "pull_request",
+                "reference": "https://github.com/example/repository/pull/17",
+                "digest": "sha256:" + "6" * 64,
+            }
+        ],
+        "trajectory_outputs_reconciled": True,
+        "trajectory_side_effects": [],
+        "trajectory_side_effects_reconciled": True,
+    }
+
+    D._commit_dispatch_results(
+        tasks_path,
+        board,
+        [("codex", task.id, "https://github.com/example/repository/pull/17")],
+        datetime(2026, 7, 17, 12, tzinfo=timezone.utc),
+        attempt_ids={task.id: str(launch.attempt_id)},
+        model_selection_receipts={task.id: selection},
+        remote_submission_receipts={task.id: remote},
+        reconciliation_receipts={task.id: reconciliation},
+    )
+
+    committed = load_limen_file(tasks_path)
+    terminal = committed.tasks[0].dispatch_log[-1]
+    assert terminal.attempt_id == launch.attempt_id
+    assert terminal.selected_model == "opaque/runtime-selection"
+    assert terminal.provider_run_id == "remote-run-17"
+    assert terminal.remote_receipt == "logs/remote-execution/receipt-17.json"
+    assert terminal.actual_spend == reconciliation["actual_spend"]
+    assert terminal.trajectory_outputs == reconciliation["trajectory_outputs"]
+    assert terminal.trajectory_outputs_reconciled is True
+    assert terminal.trajectory_side_effects == []
+    assert terminal.trajectory_side_effects_reconciled is True
+    assert committed.portal.budget.track.spent == task.budget_cost
+
+
+def test_serial_fresh_commit_binds_receipts_to_old_attempt_on_contract_drift(tmp_path: Path) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    snapshot = LimenFile(tasks=[task.model_copy(deep=True)])
+    task.context = "changed before the serial commit lock"
+    board = LimenFile(tasks=[task])
+    board.portal.budget.track = BudgetTrack(date="2026-07-17")
+    save_limen_file(tasks_path, board)
+    selection = {
+        "attempt_id": launch.attempt_id,
+        "execution_profile": dict(launch.execution_profile or {}),
+        "selected_model": "opaque/stale-selection",
+        "selection_source": "provider_live_catalog",
+        "catalog_hash": "5" * 64,
+    }
+    remote = {
+        "provider_run_id": "remote-stale-18",
+        "provider_url": "https://github.com/example/repository/actions/runs/18",
+        "remote_receipt": "logs/remote-execution/receipt-18.json",
+    }
+
+    D._commit_dispatch_results(
+        tasks_path,
+        snapshot,
+        [("codex", task.id, "https://github.com/example/repository/pull/18")],
+        datetime(2026, 7, 17, 13, tzinfo=timezone.utc),
+        attempt_ids={task.id: str(launch.attempt_id)},
+        model_selection_receipts={task.id: selection},
+        remote_submission_receipts={task.id: remote},
+    )
+
+    committed = load_limen_file(tasks_path)
+    reopened = committed.tasks[0]
+    terminal, requeue = reopened.dispatch_log[-2:]
+    assert reopened.status == requeue.status == "open"
+    assert terminal.status == "failed"
+    assert terminal.attempt_id == launch.attempt_id
+    assert terminal.selected_model == "opaque/stale-selection"
+    assert terminal.provider_run_id == "remote-stale-18"
+    assert terminal.remote_receipt == "logs/remote-execution/receipt-18.json"
+    assert requeue.attempt_id is None
+    assert committed.portal.budget.track.spent == 0
+
+
 def test_requeue_preserves_terminal_attempt_before_attempt_free_open_transition(monkeypatch) -> None:
     monkeypatch.setattr(D, "_next_lane", lambda _agent: "jules")
     task = Task(

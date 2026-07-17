@@ -530,6 +530,67 @@ def harvest() -> int:
                     else rf == _result_path(task_id)
                 )
             )
+            contract_drift_closed = False
+            if (
+                data.get("result") == "__contract_drift_closed__"
+                and data.get("contract_drift_closed") is True
+                and isinstance(task_id, str)
+                and isinstance(agent, str)
+                and isinstance(expected_hash, str)
+                and isinstance(attempt_id, str)
+                and isinstance(reservation_id, str)
+                and _is_async_reservation_id(reservation_id)
+                and result_path_matches
+                and t is not None
+                and t.status == "open"
+                and t.dispatch_log
+            ):
+                launch = next(
+                    (
+                        entry
+                        for entry in t.dispatch_log
+                        if entry.attempt_id == attempt_id
+                        and entry.attempt_classification is not None
+                        and entry.execution_profile is not None
+                    ),
+                    None,
+                )
+                terminal = next(
+                    (
+                        entry
+                        for entry in reversed(t.dispatch_log)
+                        if entry.attempt_id == attempt_id and entry.status == "failed"
+                    ),
+                    None,
+                )
+                head = t.dispatch_log[-1]
+                try:
+                    current_hash = execution_contract_hash(t)
+                except Exception:
+                    current_hash = None
+                contract_drift_closed = bool(
+                    launch is not None
+                    and launch.session_id == reservation_id
+                    and launch.agent == agent
+                    and launch.attempt_contract_hash == expected_hash
+                    and terminal is not None
+                    and terminal.session_id.startswith("contract-mismatch-")
+                    and head.status == "open"
+                    and head.attempt_id is None
+                    and head.current_contract_hash == current_hash
+                    and current_hash != expected_hash
+                )
+            if contract_drift_closed:
+                _clear_running_markers(task_id, reservation_id)
+                _archive_result_receipt(
+                    rf,
+                    raw,
+                    now,
+                    parsed=data,
+                    reason="contract-drift-closed",
+                )
+                rf.unlink(missing_ok=True)
+                continue
             custody_ok = (
                 isinstance(task_id, str)
                 and bool(task_id)
@@ -655,6 +716,17 @@ def harvest() -> int:
                             charge_budget=False,
                             expected_attempt_id=attempt_id,
                             model_selection_receipt=validated_model_selection,
+                            reconciliation_receipt={
+                                key: data[key]
+                                for key in (
+                                    "actual_spend",
+                                    "trajectory_outputs",
+                                    "trajectory_outputs_reconciled",
+                                    "trajectory_side_effects",
+                                    "trajectory_side_effects_reconciled",
+                                )
+                                if data.get(key) is not None
+                            },
                         )
                     finally:
                         _REMOTE_SUBMISSION_RECEIPTS.pop(task_id, None)

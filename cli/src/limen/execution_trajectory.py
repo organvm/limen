@@ -29,7 +29,7 @@ from pydantic import (
 )
 
 
-SCHEMA = "limen.execution_trajectory.v2"
+SCHEMA = "limen.execution_trajectory.v3"
 RECEIPT_VERIFICATION_MAX_AGE = timedelta(minutes=5)
 RECEIPT_VERIFICATION_FUTURE_SKEW = timedelta(seconds=30)
 _TERMINAL_OUTCOMES = frozenset({"succeeded", "failed", "blocked", "superseded"})
@@ -234,14 +234,34 @@ def launch_identity_digest(*, attempt_id: str, **launch_facts: object) -> str:
 class ExecutionSpend(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    amount: float | None = Field(default=None, ge=0)
+    amount: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     unit: str = Field(default="unreported", min_length=1, max_length=64)
+    reconciled: bool = False
 
     @model_validator(mode="after")
     def unknown_is_not_zero(self) -> "ExecutionSpend":
         if (self.amount is None) != (self.unit == "unreported"):
             raise ValueError("unknown spend uses amount=null and unit=unreported")
+        if self.reconciled and self.amount is None:
+            raise ValueError("reconciled spend requires a finite amount and explicit unit")
         return self
+
+
+class ExecutionOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: str = Field(min_length=1, max_length=64)
+    reference: str = Field(min_length=1, max_length=2048)
+    digest: str = Field(pattern=_SHA256_PATTERN)
+
+
+class ExecutionSideEffect(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: str = Field(min_length=1, max_length=64)
+    target: str = Field(min_length=1, max_length=2048)
+    mode: Literal["preview", "applied", "none"]
+    receipt_digest: str = Field(pattern=_SHA256_PATTERN)
 
 
 class PredicateVerification(BaseModel):
@@ -330,8 +350,8 @@ class ExecutionTrajectory(BaseModel):
         populate_by_name=True,
     )
 
-    schema_version: Literal["limen.execution_trajectory.v2"] = Field(
-        default="limen.execution_trajectory.v2",
+    schema_version: Literal["limen.execution_trajectory.v3"] = Field(
+        default="limen.execution_trajectory.v3",
         alias="schema",
         serialization_alias="schema",
     )
@@ -345,7 +365,11 @@ class ExecutionTrajectory(BaseModel):
     attempt_contract_hash: str = Field(pattern=_HEX_DIGEST_PATTERN)
     attempt_identity_digest: str = Field(pattern=_SHA256_PATTERN)
     execution_profile: FrozenJsonObject = Field(default_factory=FrozenJsonObject)
-    spend: ExecutionSpend = Field(default_factory=ExecutionSpend)
+    spend: ExecutionSpend
+    outputs: tuple[ExecutionOutput, ...] = Field(max_length=64)
+    outputs_reconciled: bool
+    side_effects: tuple[ExecutionSideEffect, ...] = Field(max_length=64)
+    side_effects_reconciled: bool
     started_at: datetime
     ended_at: datetime
     outcome: Literal["succeeded", "failed", "blocked", "superseded"]
@@ -462,6 +486,9 @@ def verified_value_credit(
     claim = trajectory.owner_receipt
     if (
         trajectory.outcome != "succeeded"
+        or not trajectory.spend.reconciled
+        or not trajectory.outputs_reconciled
+        or not trajectory.side_effects_reconciled
         or not commit
         or repository is None
         or predicate is None
@@ -797,7 +824,13 @@ def trajectory_from_log_entries(
             "attempt_contract_hash": contract_hash,
             "attempt_identity_digest": identity_digest,
             "execution_profile": profile,
-            "spend": spend or {"amount": None, "unit": "unreported"},
+            "spend": spend or {"amount": None, "unit": "unreported", "reconciled": False},
+            "outputs": getattr(terminal, "trajectory_outputs", None) or [],
+            "outputs_reconciled": bool(getattr(terminal, "trajectory_outputs_reconciled", False)),
+            "side_effects": getattr(terminal, "trajectory_side_effects", None) or [],
+            "side_effects_reconciled": bool(
+                getattr(terminal, "trajectory_side_effects_reconciled", False)
+            ),
             "started_at": started_at,
             "ended_at": getattr(terminal, "timestamp", None),
             "outcome": outcome,

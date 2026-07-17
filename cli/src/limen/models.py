@@ -63,6 +63,10 @@ class DispatchLogEntry(BaseModel):
     remote_request_id: str | None = None
     remote_receipt: str | None = None
     actual_spend: dict[str, Any] | None = None
+    trajectory_outputs: list[dict[str, Any]] | None = None
+    trajectory_outputs_reconciled: bool | None = None
+    trajectory_side_effects: list[dict[str, Any]] | None = None
+    trajectory_side_effects_reconciled: bool | None = None
     trajectory_exact_commit: str | None = None
     trajectory_pull_request: str | None = None
     trajectory_outcome: str | None = None

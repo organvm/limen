@@ -63,7 +63,7 @@ they are not precedent for adding another named default.
 
 ## Execution trajectory
 
-`limen.execution_trajectory.v2` freezes one execution attempt at launch: task classification,
+`limen.execution_trajectory.v3` freezes one execution attempt at launch: task classification,
 executor, provider route and its selection source, profile, repository, session, contract, and start
 time. The deterministic attempt ID and launch-receipt digest bind those facts, so a later board edit
 cannot reassign that attempt. Exact duplicate attempts count once; divergent rows for one attempt
@@ -75,12 +75,16 @@ that attempt ID. Terminal conversion derives outcome from the canonical lifecycl
 any conflicting asserted outcome. A routed retry therefore records the attempt's terminal event
 first, then a separate attempt-free `open` transition.
 
+Value credit additionally requires explicit, finite spend reconciliation plus bounded, typed output
+and side-effect reconciliation. Missing or unverifiable reconciliation remains structurally visible
+but earns zero; an empty output/effect list counts only when its owner explicitly reconciled it.
+
 Claim and result application both re-hash the current task contract against the launch receipt. If
 the contract changed, the provider cannot start or land against that attempt: the old attempt closes
 failed with its bounded output, effects, model receipt, and actual spend preserved for zero value,
 then an attempt-free `open` event binds the new current contract for a fresh reservation.
 
-Pre-v2 board rows remain lifecycle-readable, but they are not backfilled and cannot be converted
+Pre-v3 board rows remain lifecycle-readable, but they are not backfilled and cannot be converted
 into value-bearing trajectory receipts.
 
 The board is transport, not value authority. Success motion earns zero unless the predicate and

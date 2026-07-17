@@ -4,6 +4,12 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+from limen.attempt_custody import (
+    attempt_contract_is_current,
+    attempt_launch_for,
+    close_changed_contract_attempt,
+    current_attempt_id,
+)
 from limen.io import load_limen_file, queue_lock, save_limen_file
 from limen.models import DispatchLogEntry, LimenFile, Task
 from limen.provider_selection import execution_profile_for
@@ -149,6 +155,18 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
             if diff_file.exists():
                 now = datetime.now(timezone.utc)
                 result = diff_file.read_text().strip()
+                launch = attempt_launch_for(task, current_attempt_id(task))
+                if launch is not None and not attempt_contract_is_current(task, launch):
+                    close_changed_contract_attempt(
+                        task,
+                        launch,
+                        now=now,
+                        agent="jules",
+                        phase="jules-harvest",
+                        stale_result=result,
+                    )
+                    updated.append(task.id)
+                    continue
                 if not _diff_is_real(result):
                     # jules finished but produced nothing usable (empty/garbage
                     # diff). Do NOT mark done, and do NOT archive/cancel it:
@@ -190,6 +208,18 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
             result = (task_dir / "result.txt").read_text().strip()
             if not result:
                 # empty result file is not completion — don't false-done it.
+                continue
+            launch = attempt_launch_for(task, current_attempt_id(task))
+            if launch is not None and not attempt_contract_is_current(task, launch):
+                close_changed_contract_attempt(
+                    task,
+                    launch,
+                    now=now,
+                    agent="jules",
+                    phase="jules-harvest",
+                    stale_result=result,
+                )
+                updated.append(task.id)
                 continue
             task.status = "done"
             task.updated = now
@@ -359,6 +389,38 @@ def _record_remote_observation(
     output: str,
     trajectory_evidence: dict[str, object] | None = None,
 ) -> bool:
+    launch = (
+        attempt_launch_for(task, attempt_entry.attempt_id)
+        if attempt_entry is not None and attempt_entry.attempt_id
+        else None
+    )
+    if launch is not None and not attempt_contract_is_current(task, launch):
+        remote_submission = {
+            "provider_run_id": run.provider_run_id,
+            "provider_url": run.url,
+            "base_sha": run.base_sha,
+            "control_repo": run.control_repo,
+            "control_ref": run.control_ref,
+            "control_ref_kind": run.control_ref_kind,
+            "control_sha": run.control_sha,
+            "workflow_id": run.workflow_id,
+            "workflow_path": run.workflow_path,
+            "workflow_event": run.workflow_event,
+            "verification_context_digest": run.verification_context_digest,
+            "remote_state": remote_state,
+            "remote_request_id": run.request_id,
+            "remote_receipt": receipt_path,
+        }
+        return close_changed_contract_attempt(
+            task,
+            launch,
+            now=datetime.now(timezone.utc),
+            agent=provider,
+            phase="remote-harvest",
+            stale_result=output,
+            remote_submission=remote_submission,
+            reconciliation=trajectory_evidence,
+        )
     latest = (getattr(task, "dispatch_log", None) or [None])[-1]
     if (
         getattr(task, "status", None) == status
@@ -429,7 +491,25 @@ def _remote_trajectory_evidence(
     """Translate verified remote facts without granting authority from prose."""
 
     predicate = receipt.predicate
-    evidence: dict[str, object] = {}
+    bounded_outputs = [
+        {
+            "kind": item.kind,
+            "reference": item.uri,
+            "digest": item.digest,
+        }
+        for item in receipt.outputs[:64]
+        if item.digest is not None
+    ]
+    evidence: dict[str, object] = {
+        "trajectory_outputs": bounded_outputs,
+        "trajectory_outputs_reconciled": (
+            len(receipt.outputs) <= 64 and len(bounded_outputs) == len(receipt.outputs)
+        ),
+        # The remote receipt does not presently attest external effects. Keep
+        # that reconciliation visibly unknown instead of inferring zero.
+        "trajectory_side_effects": [],
+        "trajectory_side_effects_reconciled": False,
+    }
     if predicate is not None:
         evidence["trajectory_predicate"] = {
             "command_digest": predicate.command_digest,

@@ -23,10 +23,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.execution_contract import execution_contract_hash  # noqa: E402
+from limen.attempt_custody import (  # noqa: E402
+    attempt_launch_for,
+    close_changed_contract_attempt,
+    current_attempt_id,
+)
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.dispatch import (  # noqa: E402
     _MODEL_SELECTION_RECEIPTS,
     _REMOTE_SUBMISSION_RECEIPTS,
+    _validated_model_selection_receipt,
     _queue_lock,
     call_agent_dispatch,
 )
@@ -105,18 +111,12 @@ def _load_verified_task(
                 _failure("async-execution-task-missing", "reserved task disappeared before execution"),
                 "",
             )
+        contract_error = None
         try:
             actual_hash = execution_contract_hash(task)
         except Exception as exc:
-            return (
-                task,
-                False,
-                _failure(
-                    "async-execution-contract-invalid",
-                    f"fresh task cannot be canonically fingerprinted: {exc}",
-                ),
-                "",
-            )
+            actual_hash = ""
+            contract_error = exc
         if task.status != "dispatched":
             return (
                 task,
@@ -147,15 +147,38 @@ def _load_verified_task(
                 ),
                 actual_hash,
             )
-        if actual_hash != expected_hash:
+        if contract_error is not None or actual_hash != expected_hash:
+            closed_now = close_changed_contract_attempt(
+                task,
+                last,
+                now=datetime.datetime.now(datetime.timezone.utc),
+                agent=agent,
+                phase="async-preflight",
+                execution_started=False,
+            )
+            if closed_now:
+                cost = max(0, int(task.budget_cost or 0))
+                track = board.portal.budget.track
+                track.spent = max(0, track.spent - cost)
+                track.per_agent[agent] = max(0, track.per_agent.get(agent, 0) - cost)
+                save_limen_file(TASKS, board)
             return (
                 task,
                 False,
                 _failure(
-                    "async-execution-contract-mismatch",
-                    "task execution contract changed after reservation",
+                    (
+                        "async-execution-contract-invalid"
+                        if contract_error is not None
+                        else "async-execution-contract-mismatch"
+                    ),
+                    (
+                        f"fresh task cannot be canonically fingerprinted: {contract_error}"
+                        if contract_error is not None
+                        else "task execution contract changed after reservation"
+                    ),
                     expected_hash=expected_hash,
                     actual_hash=actual_hash,
+                    contract_drift_closed=closed_now,
                 ),
                 actual_hash,
             )
@@ -212,6 +235,7 @@ def _publish_result(
                 current_hash = ""
 
         last = current.dispatch_log[-1] if current is not None and current.dispatch_log else None
+        attempt_id = out.get("attempt_id")
         publication_safe = bool(
             board_error is None
             and current is not None
@@ -221,14 +245,105 @@ def _publish_result(
             and last.session_id == reservation_id
             and last.status == "in_progress"
             and last.agent == agent
-            and last.attempt_id == out.get("attempt_id")
+            and last.attempt_id == attempt_id
         )
         if publication_safe and not execution_started:
             # Another detached process already claimed this exact attempt. It owns
             # the canonical marker/result paths. The duplicate exits without
             # erasing or overwriting either artifact and without provider motion.
             return True
-        if not publication_safe:
+        closed_drift = False
+        already_closed_drift = False
+        launch = (
+            attempt_launch_for(current, attempt_id)
+            if current is not None and isinstance(attempt_id, str) and attempt_id
+            else None
+        )
+        latest_attempt = (
+            next(
+                (entry for entry in reversed(current.dispatch_log) if entry.attempt_id == attempt_id),
+                None,
+            )
+            if current is not None and isinstance(attempt_id, str)
+            else None
+        )
+        already_closed_drift = bool(
+            current is not None
+            and launch is not None
+            and current.status == "open"
+            and last is not None
+            and last.status == "open"
+            and last.attempt_id is None
+            and latest_attempt is not None
+            and latest_attempt.status == "failed"
+            and latest_attempt.session_id.startswith("contract-mismatch-")
+            and (not current_hash or last.current_contract_hash == current_hash)
+        )
+        active_attempt_owner = bool(
+            current is not None
+            and launch is not None
+            and current_attempt_id(current) == attempt_id
+            and current.status in {"dispatched", "in_progress"}
+            and latest_attempt is not None
+            and latest_attempt.status == current.status
+            and latest_attempt.session_id == reservation_id
+            and latest_attempt.agent == agent
+        )
+        if (
+            not publication_safe
+            and active_attempt_owner
+            and current_hash != expected_hash
+        ):
+            raw_selection = out.get("model_selection")
+            validated_selection = None
+            if isinstance(raw_selection, dict) and raw_selection:
+                try:
+                    validated_selection = _validated_model_selection_receipt(
+                        current,
+                        expected_attempt_id=str(attempt_id),
+                        value=raw_selection,
+                    )
+                except ValueError as exc:
+                    out["model_selection_failure"] = _failure(
+                        "async-result-model-selection-fenced",
+                        str(exc),
+                    )
+            reconciliation = {
+                key: out[key]
+                for key in (
+                    "actual_spend",
+                    "trajectory_outputs",
+                    "trajectory_outputs_reconciled",
+                    "trajectory_side_effects",
+                    "trajectory_side_effects_reconciled",
+                )
+                if out.get(key) is not None
+            }
+            closed_drift = close_changed_contract_attempt(
+                current,
+                launch,
+                now=datetime.datetime.now(datetime.timezone.utc),
+                agent=agent,
+                phase="async-result",
+                stale_result=out.get("result") if isinstance(out.get("result"), (bool, str)) else None,
+                model_selection=validated_selection,
+                remote_submission=(
+                    out.get("remote_submission") if isinstance(out.get("remote_submission"), dict) else None
+                ),
+                reconciliation=reconciliation,
+            )
+            if closed_drift:
+                save_limen_file(TASKS, board)
+        if closed_drift or already_closed_drift:
+            out["result"] = "__contract_drift_closed__"
+            out["contract_drift_closed"] = True
+            out["publication_failure"] = _failure(
+                "async-result-contract-drift-closed",
+                "old attempt closed terminal and changed contract reopened without applying stale output",
+                expected_hash=expected_hash,
+                actual_hash=current_hash,
+            )
+        elif not publication_safe:
             out["result"] = "__notask__"
             out["publication_failure"] = board_error or _failure(
                 "async-result-publication-fenced",
@@ -316,7 +431,7 @@ def main() -> int:
             a.execution_contract_hash,
         )
         if task is not None and task.dispatch_log:
-            attempt_id = task.dispatch_log[-1].attempt_id
+            attempt_id = current_attempt_id(task)
         if validation_failure is None and task is not None:
             execution_started = True
             result = call_agent_dispatch(a.agent, task, dry_run=False)
@@ -337,6 +452,22 @@ def main() -> int:
         "model_selection": dict(_MODEL_SELECTION_RECEIPTS.get(a.task_id, {})),
         "remote_submission": dict(_REMOTE_SUBMISSION_RECEIPTS.get(a.task_id, {})),
     }
+    if task is not None and attempt_id:
+        latest_attempt = next(
+            (entry for entry in reversed(task.dispatch_log) if entry.attempt_id == attempt_id),
+            None,
+        )
+        if latest_attempt is not None:
+            for field in (
+                "actual_spend",
+                "trajectory_outputs",
+                "trajectory_outputs_reconciled",
+                "trajectory_side_effects",
+                "trajectory_side_effects_reconciled",
+            ):
+                value = getattr(latest_attempt, field, None)
+                if value is not None:
+                    out[field] = value
     if validation_failure is not None:
         out["validation_failure"] = validation_failure
     if execution_started and task is not None and a.task_id.startswith("HEAL-"):

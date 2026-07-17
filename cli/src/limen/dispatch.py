@@ -20,6 +20,13 @@ from urllib.parse import quote, urlsplit
 import fcntl
 
 from limen import census
+from limen.attempt_custody import (
+    attempt_contract_is_current as _attempt_contract_is_current,
+    attempt_launch_for as _attempt_launch_for,
+    close_changed_contract_attempt as _close_changed_contract_attempt,
+    current_attempt_id as _current_attempt_id,
+    reconciliation_custody_updates,
+)
 from limen.capacity import (
     LOCAL_CHECKOUT_AGENTS,
     canonical_agent,
@@ -1608,108 +1615,6 @@ def _attempt_launch_entry(
         executing_session=executing_session,
         output=output,
     )
-
-
-def _attempt_launch_for(task: Task, attempt_id: str | None = None) -> DispatchLogEntry | None:
-    """Return persisted launch evidence; never synthesize it after execution."""
-
-    for entry in task.dispatch_log:
-        if (
-            entry.attempt_id
-            and (attempt_id is None or entry.attempt_id == attempt_id)
-            and entry.attempt_classification is not None
-            and entry.execution_profile is not None
-        ):
-            return entry
-    return None
-
-
-def _current_attempt_id(task: Task) -> str | None:
-    return next((entry.attempt_id for entry in reversed(task.dispatch_log) if entry.attempt_id), None)
-
-
-def _attempt_contract_is_current(task: Task, launch: DispatchLogEntry) -> bool:
-    """Prove the owner row still carries the exact contract frozen at launch."""
-
-    if not launch.attempt_contract_hash:
-        return False
-    try:
-        return execution_contract_hash(task) == launch.attempt_contract_hash
-    except (TypeError, ValueError):
-        return False
-
-
-def _close_changed_contract_attempt(
-    task: Task,
-    launch: DispatchLogEntry,
-    *,
-    now: datetime,
-    agent: str,
-    phase: str,
-    stale_result: bool | str | None = None,
-    model_selection: dict[str, Any] | None = None,
-) -> None:
-    """Close one stale attempt once, then expose the changed contract as open work."""
-
-    attempt_id = str(launch.attempt_id or "")
-    latest_attempt_event = next(
-        (entry for entry in reversed(task.dispatch_log) if entry.attempt_id == attempt_id),
-        None,
-    )
-    if latest_attempt_event is None or latest_attempt_event.status not in {
-        "done",
-        "failed",
-        "failed_blocked",
-        "needs_human",
-    }:
-        output = "execution contract changed after reservation; stale attempt closed without applying provider output"
-        if stale_result is not None:
-            output += f"; stale provider result preserved for old attempt only: {str(stale_result)[:300]}"
-        update: dict[str, Any] = {
-            "timestamp": now,
-            "agent": agent,
-            "session_id": f"contract-mismatch-{phase}",
-            "status": "failed",
-            "trajectory_outcome": "failed",
-            "output": output,
-        }
-        if model_selection is not None:
-            update.update(
-                {
-                    "selected_model": model_selection.get("selected_model"),
-                    "selection_source": model_selection.get("selection_source"),
-                    "catalog_hash": model_selection.get("catalog_hash"),
-                }
-            )
-        task.dispatch_log.append(
-            (latest_attempt_event or launch).model_copy(
-                update=update,
-            )
-        )
-    task.status = "open"
-    task.updated = now
-    head = task.dispatch_log[-1] if task.dispatch_log else None
-    try:
-        current_contract_hash = execution_contract_hash(task)
-    except (TypeError, ValueError):
-        current_contract_hash = None
-    if (
-        head is None
-        or head.status != "open"
-        or head.attempt_id is not None
-        or head.current_contract_hash != current_contract_hash
-    ):
-        task.dispatch_log.append(
-            DispatchLogEntry(
-                timestamp=now,
-                agent=agent,
-                session_id=f"contract-mismatch-{phase}-requeue",
-                status="open",
-                route_to=task.target_agent,
-                current_contract_hash=current_contract_hash,
-                output="dispatch: changed execution contract reopened for a fresh attempt",
-            )
-        )
 
 
 def _record_model_selection(
@@ -4706,6 +4611,9 @@ def _commit_dispatch_results(
     now: datetime,
     *,
     attempt_ids: dict[str, str] | None = None,
+    model_selection_receipts: dict[str, dict[str, Any]] | None = None,
+    remote_submission_receipts: dict[str, dict[str, Any]] | None = None,
+    reconciliation_receipts: dict[str, dict[str, Any]] | None = None,
 ) -> None:
     """COMMIT for the serial path, mirroring dispatch_parallel's commit: reload FRESH under the
     queue lock and re-apply each result by id. The caller's snapshot is minutes stale by the time
@@ -4744,6 +4652,9 @@ def _commit_dispatch_results(
                     now,
                     ftrack,
                     expected_attempt_id=(attempt_ids or {}).get(tid),
+                    model_selection_receipt=(model_selection_receipts or {}).get(tid),
+                    remote_submission_receipt=(remote_submission_receipts or {}).get(tid),
+                    reconciliation_receipt=(reconciliation_receipts or {}).get(tid),
                 )
                 _REMOTE_SUBMISSION_RECEIPTS.pop(tid, None)
         save_limen_file(tasks_path, fresh)
@@ -4845,6 +4756,9 @@ def dispatch_tasks(
     dispatched = 0
     results: list[tuple[str, str, bool | str]] = []
     attempt_ids: dict[str, str] = {}
+    model_selection_receipts: dict[str, dict[str, Any]] = {}
+    remote_submission_receipts: dict[str, dict[str, Any]] = {}
+    reconciliation_receipts: dict[str, dict[str, Any]] = {}
     for task in candidates:
         if limit is not None and dispatched >= max(0, limit):
             break
@@ -4897,16 +4811,30 @@ def dispatch_tasks(
             if not dry_run:
                 _release_machine_admission(task.id)
         if not dry_run:
-            # In-memory apply keeps this loop's bookkeeping consistent; persistence happens
-            # once at commit, re-applied onto a FRESH board (never this stale snapshot).
-            _apply_result(
-                run_task,
-                agent_filter,
-                result,
-                datetime.now(timezone.utc),
-                track,
-                expected_attempt_id=attempt_ids[task.id],
+            # Provider receipts belong to the immutable attempt. Carry them
+            # across the fresh-board COMMIT instead of consuming them on this
+            # ephemeral execution snapshot.
+            model_selection_receipts[task.id] = dict(_MODEL_SELECTION_RECEIPTS.get(task.id, {}))
+            remote_submission_receipts[task.id] = dict(_REMOTE_SUBMISSION_RECEIPTS.get(task.id, {}))
+            latest_attempt = next(
+                (
+                    entry
+                    for entry in reversed(run_task.dispatch_log)
+                    if entry.attempt_id == attempt_ids[task.id]
+                ),
+                None,
             )
+            reconciliation_receipts[task.id] = {
+                field: value
+                for field in (
+                    "actual_spend",
+                    "trajectory_outputs",
+                    "trajectory_outputs_reconciled",
+                    "trajectory_side_effects",
+                    "trajectory_side_effects_reconciled",
+                )
+                if latest_attempt is not None and (value := getattr(latest_attempt, field, None)) is not None
+            }
             results.append((agent_filter, task.id, result))
             if result == _RATELIMIT:
                 _commit_dispatch_results(
@@ -4915,6 +4843,9 @@ def dispatch_tasks(
                     results,
                     datetime.now(timezone.utc),
                     attempt_ids=attempt_ids,
+                    model_selection_receipts=model_selection_receipts,
+                    remote_submission_receipts=remote_submission_receipts,
+                    reconciliation_receipts=reconciliation_receipts,
                 )
                 print(f"── lane {agent_filter} rate-limited — cooling, {dispatched} dispatched this cycle")
                 return
@@ -4930,6 +4861,9 @@ def dispatch_tasks(
             results,
             datetime.now(timezone.utc),
             attempt_ids=attempt_ids,
+            model_selection_receipts=model_selection_receipts,
+            remote_submission_receipts=remote_submission_receipts,
+            reconciliation_receipts=reconciliation_receipts,
         )
 
     print(f"── {mode}: {dispatched} task(s)")
@@ -4945,6 +4879,8 @@ def _apply_result(
     charge_budget: bool = True,
     expected_attempt_id: str | None = None,
     model_selection_receipt: dict[str, Any] | None = None,
+    remote_submission_receipt: dict[str, Any] | None = None,
+    reconciliation_receipt: dict[str, Any] | None = None,
 ) -> bool:
     """Apply one dispatch result to a task (same semantics as the serial path):
     success → dispatched + spend; no-op/fail → recoverable failed; rate-limit → cascade."""
@@ -4983,6 +4919,12 @@ def _apply_result(
             phase="result",
             stale_result=result,
             model_selection=validated_stale_selection,
+            remote_submission=(
+                remote_submission_receipt
+                if remote_submission_receipt is not None
+                else _REMOTE_SUBMISSION_RECEIPTS.get(task.id)
+            ),
+            reconciliation=reconciliation_receipt,
         )
         return False
     if result in {_NOOP, False} and _restore_pr_open_status(
@@ -5084,7 +5026,12 @@ def _apply_result(
         entry.selected_model = selection.get("selected_model")
         entry.selection_source = selection.get("selection_source")
         entry.catalog_hash = selection.get("catalog_hash")
-    if remote := _REMOTE_SUBMISSION_RECEIPTS.get(task.id):
+    remote = (
+        remote_submission_receipt
+        if remote_submission_receipt is not None
+        else _REMOTE_SUBMISSION_RECEIPTS.get(task.id)
+    )
+    if remote:
         entry.provider_run_id = remote.get("provider_run_id")
         entry.provider_url = remote.get("provider_url")
         entry.base_sha = remote.get("base_sha")
@@ -5099,6 +5046,8 @@ def _apply_result(
         entry.remote_state = remote.get("remote_state")
         entry.remote_request_id = remote.get("remote_request_id")
         entry.remote_receipt = remote.get("remote_receipt")
+    for field, value in reconciliation_custody_updates(reconciliation_receipt).items():
+        setattr(entry, field, value)
     task.updated = now
     task.dispatch_log.append(entry)
     if task.status == "open" and entry.status != "open":
@@ -5521,6 +5470,8 @@ def dispatch_parallel(
     id2task = {t.id: t for t in limen.tasks}
     attempt_ids = {tid: str(_current_attempt_id(id2task[tid]) or "") for _agent, tid in picked}
     cooled: set[str] = set()  # lanes that hit their real rate-limit this round
+    reconciliation_receipts: dict[str, dict[str, Any]] = {}
+    reconciliation_lock = threading.Lock()
 
     def run_one(at: tuple[str, str]) -> tuple[str, str, bool | str]:
         agent, tid = at
@@ -5540,9 +5491,32 @@ def dispatch_parallel(
             res = False
         finally:
             _release_machine_admission(tid)
+        latest_attempt = next(
+            (entry for entry in reversed(run_task.dispatch_log) if entry.attempt_id == attempt_ids[tid]),
+            None,
+        )
+        reconciliation = {
+            field: value
+            for field in (
+                "actual_spend",
+                "trajectory_outputs",
+                "trajectory_outputs_reconciled",
+                "trajectory_side_effects",
+                "trajectory_side_effects_reconciled",
+            )
+            if latest_attempt is not None and (value := getattr(latest_attempt, field, None)) is not None
+        }
+        with reconciliation_lock:
+            reconciliation_receipts[tid] = reconciliation
         return (agent, tid, res)
 
     results = _run_parallel_batch(picked, run_one, max_workers)
+    model_selection_receipts = {
+        tid: dict(_MODEL_SELECTION_RECEIPTS.get(tid, {})) for _agent, tid, _res in results
+    }
+    remote_submission_receipts = {
+        tid: dict(_REMOTE_SUBMISSION_RECEIPTS.get(tid, {})) for _agent, tid, _res in results
+    }
     for agent, _tid, res in results:
         if res == _RATELIMIT:
             cooled.add(agent)
@@ -5574,6 +5548,9 @@ def dispatch_parallel(
                     datetime.now(timezone.utc),
                     ftrack,
                     expected_attempt_id=attempt_ids.get(tid),
+                    model_selection_receipt=model_selection_receipts.get(tid),
+                    remote_submission_receipt=remote_submission_receipts.get(tid),
+                    reconciliation_receipt=reconciliation_receipts.get(tid),
                 )
                 _REMOTE_SUBMISSION_RECEIPTS.pop(tid, None)
             if res == _RATELIMIT:

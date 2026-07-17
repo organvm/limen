@@ -74,7 +74,7 @@ def trajectory(
     }
     bound_attempt_id = launch_attempt_id(**launch_facts)
     row: dict[str, object] = {
-        "schema": "limen.execution_trajectory.v2",
+        "schema": "limen.execution_trajectory.v3",
         "attempt_id": bound_attempt_id,
         "task_id": task_id,
         "classification": classification,
@@ -84,7 +84,17 @@ def trajectory(
         "route_selection_source": route_selection_source,
         "attempt_contract_hash": CONTRACT_HASH,
         "execution_profile": execution_profile,
-        "spend": {"amount": 3.5, "unit": "token-k"},
+        "spend": {"amount": 3.5, "unit": "token-k", "reconciled": True},
+        "outputs": [
+            {
+                "kind": "pull_request",
+                "reference": f"https://github.com/{repository}/pull/731",
+                "digest": RECEIPT_DIGEST,
+            }
+        ],
+        "outputs_reconciled": True,
+        "side_effects": [],
+        "side_effects_reconciled": True,
         "started_at": started_at,
         "ended_at": "2026-07-16T18:20:00Z",
         "outcome": outcome,
@@ -193,6 +203,39 @@ def test_one_attempt_counts_once_and_credit_belongs_to_executor_not_route() -> N
 def test_motion_or_non_exact_evidence_earns_zero(changes: dict[str, object]) -> None:
     record = ExecutionTrajectory.model_validate(trajectory(**changes))
     assert verified_value_credit(record, authority=Authority()) == 0
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda row: row["spend"].update(reconciled=False),
+        lambda row: row.update(outputs_reconciled=False),
+        lambda row: row.update(side_effects_reconciled=False),
+    ],
+)
+def test_value_requires_spend_output_and_side_effect_reconciliation(mutation) -> None:
+    row = trajectory()
+    mutation(row)
+    record = ExecutionTrajectory.model_validate(row)
+
+    assert verified_value_credit(record, authority=Authority()) == 0
+
+
+def test_reconciliation_fields_are_required_bounded_and_finite() -> None:
+    missing = trajectory()
+    missing.pop("side_effects")
+    with pytest.raises(ValidationError, match="side_effects"):
+        ExecutionTrajectory.model_validate(missing)
+
+    nonfinite = trajectory()
+    nonfinite["spend"]["amount"] = float("inf")
+    with pytest.raises(ValidationError, match="finite"):
+        ExecutionTrajectory.model_validate(nonfinite)
+
+    oversized = trajectory()
+    oversized["outputs"] = oversized["outputs"] * 65
+    with pytest.raises(ValidationError, match="at most 64"):
+        ExecutionTrajectory.model_validate(oversized)
 
 
 def test_owner_claim_is_not_self_verifying() -> None:
