@@ -10,7 +10,7 @@ import subprocess
 import sys
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -34,6 +34,7 @@ from limen.capacity import (
 from limen.dispatch_ownership import ACTIVE_OWNER_STATUSES
 from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
 from limen.intake import IntakeContractError, normalize_selected_legacy_task, validate_intake_contract
+from limen.host_admission import AdmissionDenied, hold_lease
 from limen.jules_remote import (
     JulesRemoteSnapshot,
     classify_jules_claim,
@@ -1534,7 +1535,31 @@ def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str:
     if agent in _CONFIGURED_SERVICE_AGENTS:
         return _call_configured_paid_service(agent, task, dry_run)
     if agent in _LOCAL_AGENTS:
-        return _call_local_agent(agent, task, dry_run)
+        if dry_run:
+            return _call_local_agent(agent, task, dry_run)
+        task_key = hashlib.sha256(task.id.encode("utf-8")).hexdigest()[:16]
+        owner = f"limen-dispatch-{agent}-{task_key}-{os.getpid()}"
+        try:
+            with ExitStack() as leases:
+                if agent == "codex":
+                    leases.enter_context(
+                        hold_lease(
+                            "execution",
+                            owner=owner,
+                            surface="limen-codex-dispatch",
+                        )
+                    )
+                leases.enter_context(
+                    hold_lease(
+                        "heavy",
+                        owner=owner,
+                        surface=f"limen-{agent}-dispatch",
+                    )
+                )
+                return _call_local_agent(agent, task, dry_run)
+        except AdmissionDenied as exc:
+            reasons = ",".join(exc.decision.get("reasons") or ["host-admission-denied"])
+            return _blocked_result(f"host admission denied local {agent} execution: {reasons}")
     return _run_cmd(["agent-dispatch", agent, _build_prompt(task)], task, dry_run)
 
 

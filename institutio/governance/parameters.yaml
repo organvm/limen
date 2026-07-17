@@ -40,6 +40,12 @@ parameters:
     self_update: none
     owner: vigilia
     note: "When 1 (default), the governor COMPLETES a PR-owned pause release instead of merely checking it: a marker whose owner:/pr: names one identifiable PR, whose release_predicate declares the merge, and whose prohibitions do NOT mention merge gets merge-policy.sh run on that PR and, on CLEARED (exit 0), a head-pinned squash merge — so a pause can never deadly-embrace the paused beat that would have merged its own release (the 2026-07-15 endless-watcher incident: sessions babysat the pause-owner PR by hand because merge-drain lives inside the paused heartbeat). Operator pauses (merge in prohibitions, or owner_surface:-only identity) are structurally ineligible and never touched. 0 = check-only (pre-2026-07-15 behavior). Follows the LIMEN_AUTONOMY_MARKER_AUTOCLEAR / LIMEN_MERGE_DRAIN default-on precedent; the five-clause discriminator is the safety, and its worst failure mode is staying paused."
+  LIMEN_HEARTBEAT_PAUSED_SECONDS:
+    default: 300
+    env: LIMEN_HEARTBEAT_PAUSED_SECONDS
+    self_update: none
+    owner: vigilia
+    note: "Low-frequency sleep cadence while the autonomy governor is paused. The singleton stays alive and writes one byte-stable paused receipt instead of exiting into a launchd KeepAlive respawn loop."
 
   # --- the institution names ITSELF as the first parameter ---------------------
   INSTITVTIO_NOMEN:
@@ -171,6 +177,54 @@ parameters:
     self_update: none
     owner: vitals
     note: "FIND-005: one heavy AI surface at a time on a 16GB host."
+  LIMEN_HOST_ADMISSION_ROOT:
+    default: "auto"
+    env: LIMEN_HOST_ADMISSION_ROOT
+    self_update: none
+    owner: vitals
+    note: "Machine-wide, per-UID lease state. 'auto' derives a private directory under the host temp root so leases are shared by every Limen worktree but never promoted to backed-up governance output."
+  LIMEN_HOST_ADMISSION_LEASE_SECONDS:
+    default: 900
+    env: LIMEN_HOST_ADMISSION_LEASE_SECONDS
+    self_update: none
+    owner: vitals
+    note: "Finite lease TTL for execution and heavy-surface admission. Bounded entrypoints refresh live leases; dead PID, PID-start mismatch, and TTL cleanup never signal or restart peers."
+  LIMEN_HOST_ADMISSION_PROBE_TIMEOUT:
+    default: 5
+    env: LIMEN_HOST_ADMISSION_PROBE_TIMEOUT
+    self_update: none
+    owner: vitals
+    note: "Hard timeout in seconds for the two-interval iostat pressure observation used only when deciding whether to admit new heavy work."
+  LIMEN_HOST_ADMISSION_BACKBLAZE_CPU_PERCENT:
+    default: 50
+    env: LIMEN_HOST_ADMISSION_BACKBLAZE_CPU_PERCENT
+    self_update: none
+    owner: vitals
+    note: "Deny a new heavy lease when aggregate Backblaze client CPU is strictly above this percentage. Existing work is not killed or restarted."
+  LIMEN_HOST_ADMISSION_BACKBLAZE_RSS_BYTES:
+    default: 1073741824
+    env: LIMEN_HOST_ADMISSION_BACKBLAZE_RSS_BYTES
+    self_update: none
+    owner: vitals
+    note: "Deny a new heavy lease when aggregate Backblaze client RSS is strictly above one GiB."
+  LIMEN_HOST_ADMISSION_SWAP_FRACTION:
+    default: 0.25
+    env: LIMEN_HOST_ADMISSION_SWAP_FRACTION
+    self_update: none
+    owner: vitals
+    note: "Deny a new heavy lease when live swap use is strictly above this fraction of physical RAM."
+  LIMEN_HOST_ADMISSION_SWAP_GROWTH_BYTES_PER_MINUTE:
+    default: 536870912
+    env: LIMEN_HOST_ADMISSION_SWAP_GROWTH_BYTES_PER_MINUTE
+    self_update: none
+    owner: vitals
+    note: "Deny a new heavy lease when two bounded observations prove swap is growing strictly faster than 512 MiB per minute."
+  LIMEN_HOST_ADMISSION_DISK_MIB_PER_SECOND:
+    default: 100
+    env: LIMEN_HOST_ADMISSION_DISK_MIB_PER_SECOND
+    self_update: none
+    owner: vitals
+    note: "Deny a new heavy lease only when both post-baseline iostat samples are strictly above this aggregate MiB/s threshold."
   VITALS_SHED_OLLAMA:
     default: "1"
     env: LIMEN_VITALS_SHED_OLLAMA
