@@ -100,7 +100,9 @@ default delivery posture.
 diff. Never run the full test suite as a default local gate — scope it. Never hand-roll a
 background poll loop on a PR gate; the one sanctioned synchronous waiter is
 `scripts/await-pr.sh`. Polling non-required checks or running unimplicated gates is waste and
-masks genuine failures.
+masks genuine failures. Once an implicated predicate passes for an unchanged exact head, record and
+reuse that receipt; do not rerun suites merely to accumulate reassurance. A changed head or a
+specific observed failure is required before another test.
 
 **3. Durable homing — all state in git-tracked homes; no local orphan files.**
 Every work product, task, blocker, and human-gated atom must land in a git-tracked durable home
