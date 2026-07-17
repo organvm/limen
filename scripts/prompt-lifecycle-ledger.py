@@ -30,6 +30,7 @@ import yaml
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "cli" / "src"))
+from limen.prompt_corpus import parse_session_noise_frame  # noqa: E402
 from limen.runtime_config import RUNTIME_URL_ENV_ORDER, runtime_api_url  # noqa: E402
 
 # Doc artifacts belong to the repo this script lives in — never to the runtime root — so a
@@ -171,6 +172,9 @@ def maybe_decode_wrapped_string(text: str) -> str:
 
 
 def normalize_task_body(text: str) -> tuple[str, str]:
+    session_noise = parse_session_noise_frame(text)
+    if session_noise is not None:
+        return session_noise
     stripped = text.strip()
     if stripped.startswith("<session_context>"):
         return "", "session_context"

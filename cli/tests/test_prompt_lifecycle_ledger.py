@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "prompt-lifecycle-ledger.py"
@@ -22,6 +24,66 @@ def test_malformed_lane_timeout_uses_default_dispatch_grace(monkeypatch):
 
     assert pll.DISPATCH_GRACE_SECONDS == 1500
     assert pll.GH_RETRIES == 3
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        'session noise: "redacted transport record"',
+        r'session noise: "redacted \"quoted\" transport record"',
+        "session noise: 'redacted \\'quoted\\' transport record'",
+        'session noise: "redacted line one\nredacted line two";',
+        ' \tSeSsIoN   NoIsE :  "redacted transport record" ; \n',
+    ],
+)
+def test_session_noise_whole_frame_is_recognized_without_actionable_body(text: str):
+    pll = _load()
+
+    assert pll.parse_session_noise_frame(text) == ("", "session_noise")
+    assert pll.normalize_task_body(text) == ("", "session_noise")
+
+
+@pytest.mark.parametrize(
+    ("text", "residual"),
+    [
+        (
+            'session noise: "redacted transport record"\nImplement the residual parser.',
+            "Implement the residual parser.",
+        ),
+        (
+            "SESSION NOISE:'redacted \\'quoted\\' record';\n\nVerify only the residual request.",
+            "Verify only the residual request.",
+        ),
+        (
+            ' session  noise : "redacted line one\nredacted line two" \nPreserve the resulting receipt.',
+            "Preserve the resulting receipt.",
+        ),
+    ],
+)
+def test_session_noise_frame_separates_trailing_operator_request(text: str, residual: str):
+    pll = _load()
+
+    assert pll.parse_session_noise_frame(text) == (residual, "session_noise_with_task_body")
+    assert pll.normalize_task_body(text) == (residual, "session_noise_with_task_body")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        'session noise: "unterminated record\nImplement the parser.',
+        'session noisy: "redacted record"\nImplement the parser.',
+        "session noise: redacted record\nImplement the parser.",
+        'session noise: "redacted record"Implement the parser.',
+        'session noise: "redacted record";; Implement the parser.',
+        'Quoted specification: session noise: "redacted record". Implement support for it.',
+        'Implement the literal syntax session noise: "redacted record" in the parser.',
+    ],
+)
+def test_malformed_near_miss_and_quoted_session_noise_specs_remain_actionable(text: str):
+    pll = _load()
+
+    assert pll.parse_session_noise_frame(text) is None
+    assert pll.normalize_task_body(text) == (text.strip(), "direct")
 
 
 def test_cloud_receipts_uses_configured_runtime_fallback(tmp_path: Path, monkeypatch):

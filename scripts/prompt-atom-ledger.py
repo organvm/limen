@@ -37,6 +37,7 @@ from limen.prompt_corpus import (  # noqa: E402
     _json_bytes,
     _path_signature,
     LedgerPaths,
+    active_outcome_rows,
     atomic_write_bytes,
     attest_source_scan,
     build_snapshot,
@@ -45,11 +46,13 @@ from limen.prompt_corpus import (  # noqa: E402
     current_source_scanner_code_digest,
     digest,
     load_event_journal,
+    load_event_journal_state,
     load_json_strict,
     load_jsonl,
     load_jsonl_strict,
     load_policy,
     occurrence_from_event,
+    parse_session_noise_frame,
     private_marker,
     prompt_authority_seal,
     public_projection,
@@ -58,6 +61,7 @@ from limen.prompt_corpus import (  # noqa: E402
     structural_segments,
     update_ledger,
     validate_cursor_shape,
+    validate_outcome_journal_state,
     validate_raw_references,
     validate_source_adapter_cursor,
 )
@@ -290,9 +294,25 @@ def runtime_limits(policy: dict[str, Any]) -> ResourceLimits:
     )
 
 
+def _normalized_session_noise_event(event: dict[str, Any]) -> dict[str, Any]:
+    """Re-derive session-noise state rather than trusting caller-supplied labels."""
+
+    row = dict(event)
+    parsed = parse_session_noise_frame(str(row.get("text") or ""))
+    if parsed is not None:
+        row["task_body"], row["body_kind"] = parsed
+    elif str(row.get("body_kind") or "") in {"session_noise", "session_noise_with_task_body"}:
+        row["task_body"] = ""
+        row["body_kind"] = "direct"
+    return row
+
+
 def _classification_text(event: dict[str, Any]) -> str:
-    task_body = str(event.get("task_body") or "")
-    return task_body if task_body.strip() else str(event.get("text") or "")
+    normalized = _normalized_session_noise_event(event)
+    if normalized.get("body_kind") == "session_noise":
+        return ""
+    task_body = str(normalized.get("task_body") or "")
+    return task_body if task_body.strip() else str(normalized.get("text") or "")
 
 
 def _classifier_requests(
@@ -300,7 +320,10 @@ def _classifier_requests(
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], str | None]:
     requests: list[dict[str, Any]] = []
     by_occurrence: dict[str, dict[str, Any]] = {}
-    for event in events:
+    for source_event in events:
+        event = _normalized_session_noise_event(source_event)
+        if event.get("body_kind") == "session_noise":
+            continue
         reserved = str(event.get("existing_occurrence_id") or "")
         occurrence = occurrence_from_event(event)
         occurrence_id = reserved or str(occurrence["occurrence_id"])
@@ -458,8 +481,9 @@ def classify_events(
     core structural atomizer retains complete source coverage.
     """
 
-    fallback = [dict(event) for event in events]
-    if not command or not command.strip() or not fallback:
+    fallback = [_normalized_session_noise_event(event) for event in events]
+    classifiable = [event for event in fallback if event.get("body_kind") != "session_noise"]
+    if not command or not command.strip() or not classifiable:
         return ClassifierRun(events=fallback, attempted=False, classified_occurrences=0)
     try:
         argv = shlex.split(command)
@@ -479,7 +503,7 @@ def classify_events(
         )
 
     limits = runtime_limits(policy)
-    if len(fallback) > limits.max_classifier_occurrences:
+    if len(classifiable) > limits.max_classifier_occurrences:
         return ClassifierRun(
             events=fallback,
             attempted=True,
@@ -487,7 +511,7 @@ def classify_events(
             error="classifier input exceeds the bounded occurrence limit",
         )
     text_characters = 0
-    for event in fallback:
+    for event in classifiable:
         text_characters += len(_classification_text(event))
         if text_characters > limits.max_classifier_input_bytes:
             return ClassifierRun(
@@ -496,7 +520,7 @@ def classify_events(
                 classified_occurrences=0,
                 error="classifier input exceeds the bounded byte limit",
             )
-    requests, by_occurrence, request_error = _classifier_requests(fallback)
+    requests, by_occurrence, request_error = _classifier_requests(classifiable)
     if request_error:
         return ClassifierRun(
             events=fallback,
@@ -638,6 +662,9 @@ def classify_events(
 
     enriched: list[dict[str, Any]] = []
     for event in fallback:
+        if event.get("body_kind") == "session_noise":
+            enriched.append(dict(event))
+            continue
         occurrence_id = str(event.get("existing_occurrence_id") or occurrence_from_event(event)["occurrence_id"])
         row = dict(event)
         row["atoms"] = [
@@ -647,7 +674,7 @@ def classify_events(
     return ClassifierRun(
         events=enriched,
         attempted=True,
-        classified_occurrences=len(enriched),
+        classified_occurrences=len(classifiable),
     )
 
 
@@ -686,22 +713,24 @@ def existing_reclassification_events(
     for occurrence in eligible[: reclassification_limit(policy)]:
         raw = read_raw_object(paths, str(occurrence["raw_object"]))
         events.append(
-            {
-                # The writer must reserve this canonical identity. Session/event
-                # references are intentionally hash-only in the private journal.
-                "existing_occurrence_id": str(occurrence["occurrence_id"]),
-                "source": str(occurrence.get("source") or "unknown"),
-                "session_ref": str(occurrence.get("session_ref_hash") or "unknown"),
-                "event_ref": str(occurrence.get("event_ref_hash") or "unknown"),
-                "event_index": int(occurrence.get("event_index") or 0),
-                "text_index": int(occurrence.get("text_index") or 0),
-                "source_locator": occurrence.get("source_locator"),
-                "timestamp": occurrence.get("timestamp"),
-                "text": raw,
-                "body_kind": str(occurrence.get("body_kind") or "direct"),
-                "provenance": str(occurrence.get("provenance") or "unknown_user_input"),
-                "authority": str(occurrence.get("authority") or "unknown"),
-            }
+            _normalized_session_noise_event(
+                {
+                    # The writer must reserve this canonical identity. Session/event
+                    # references are intentionally hash-only in the private journal.
+                    "existing_occurrence_id": str(occurrence["occurrence_id"]),
+                    "source": str(occurrence.get("source") or "unknown"),
+                    "session_ref": str(occurrence.get("session_ref_hash") or "unknown"),
+                    "event_ref": str(occurrence.get("event_ref_hash") or "unknown"),
+                    "event_index": int(occurrence.get("event_index") or 0),
+                    "text_index": int(occurrence.get("text_index") or 0),
+                    "source_locator": occurrence.get("source_locator"),
+                    "timestamp": occurrence.get("timestamp"),
+                    "text": raw,
+                    "body_kind": str(occurrence.get("body_kind") or "direct"),
+                    "provenance": str(occurrence.get("provenance") or "unknown_user_input"),
+                    "authority": str(occurrence.get("authority") or "unknown"),
+                }
+            )
         )
     return events
 
@@ -3064,7 +3093,9 @@ def regular_file_events(
                     "source_locator": f"{path}#{event_index}:{text_index}",
                     "timestamp": event_timestamp(obj),
                     "text": text,
-                    "task_body": task_body if body_kind == "flame_with_task_body" else "",
+                    "task_body": (
+                        task_body if body_kind in {"flame_with_task_body", "session_noise_with_task_body"} else ""
+                    ),
                     "body_kind": body_kind,
                     "provenance": provenance,
                     "authority": authority,
@@ -3310,7 +3341,9 @@ def bounded_codex_attachment_parent_events_from_path(
                 "source_locator": f"{path}#{candidate['event_index']}:{candidate['text_index']}",
                 "timestamp": candidate["timestamp"],
                 "text": text,
-                "task_body": task_body if body_kind == "flame_with_task_body" else "",
+                "task_body": (
+                    task_body if body_kind in {"flame_with_task_body", "session_noise_with_task_body"} else ""
+                ),
                 "body_kind": body_kind,
                 "provenance": provenance,
                 "authority": authority,
@@ -3509,7 +3542,7 @@ def adapt_codex_attachment(
         "source_locator": f"{path}#0:0",
         "timestamp": parent.get("timestamp"),
         "text": text,
-        "task_body": task_body if body_kind == "flame_with_task_body" else "",
+        "task_body": (task_body if body_kind in {"flame_with_task_body", "session_noise_with_task_body"} else ""),
         "body_kind": body_kind,
         "provenance": str(parent["provenance"]),
         "authority": str(parent["authority"]),
@@ -4400,7 +4433,9 @@ def opencode_assistant_task_event(
             "source_segment": "state.input.prompt",
             "timestamp": lifecycle.iso_from_epoch_ms(part["time_created"]),
             "text": text,
-            "task_body": task_body if normalized_kind == "flame_with_task_body" else "",
+            "task_body": (
+                task_body if normalized_kind in {"flame_with_task_body", "session_noise_with_task_body"} else ""
+            ),
             "body_kind": "delegated_task_frame",
             "provenance": "delegated_task_frame",
             "authority": "derived",
@@ -4746,7 +4781,9 @@ def scan_opencode(
                         "source_locator": f"{path}#{message['id']}",
                         "timestamp": lifecycle.iso_from_epoch_ms(message["time_created"]),
                         "text": text,
-                        "task_body": task_body if body_kind == "flame_with_task_body" else "",
+                        "task_body": (
+                            task_body if body_kind in {"flame_with_task_body", "session_noise_with_task_body"} else ""
+                        ),
                         "body_kind": body_kind,
                         "provenance": provenance,
                         "authority": authority,
@@ -5561,7 +5598,9 @@ def scan_agy_conversations(
                     "source_segment": carrier_column,
                     "timestamp": lifecycle.iso_from_ts(source_mtime),
                     "text": text,
-                    "task_body": task_body if body_kind == "flame_with_task_body" else "",
+                    "task_body": (
+                        task_body if body_kind in {"flame_with_task_body", "session_noise_with_task_body"} else ""
+                    ),
                     "body_kind": body_kind,
                     "provenance": provenance,
                     "authority": authority,
@@ -6074,17 +6113,30 @@ def rebind_checkpoint(paths: LedgerPaths) -> list[str]:
         return ["invalid stored source cursor shape: " + "; ".join(shape_errors)]
 
     policy = load_policy(paths.policy)
-    occurrence_rows, atom_rows, event_errors = load_event_journal(paths.event_journal)
+    (
+        occurrence_rows,
+        atom_rows,
+        historical_atom_rows,
+        retired_atom_ids,
+        event_errors,
+    ) = load_event_journal_state(paths.event_journal)
     outcome_rows, outcome_errors = load_jsonl_strict(paths.outcome_journal)
     raw_errors = validate_raw_references(paths, occurrence_rows, verify_content=True)
-    all_journal_errors = [*event_errors, *outcome_errors, *raw_errors]
+    outcome_state_errors = validate_outcome_journal_state(
+        outcome_rows,
+        atom_rows,
+        historical_atom_rows,
+        retired_atom_ids,
+        evidence_root=paths.root,
+    )
+    all_journal_errors = [*event_errors, *outcome_errors, *raw_errors, *outcome_state_errors]
     if all_journal_errors:
         return ["journals contain errors; refusing to rebind: " + "; ".join(str(e) for e in all_journal_errors)]
 
     snapshot = build_snapshot(
         occurrence_rows,
         atom_rows,
-        outcome_rows,
+        active_outcome_rows(outcome_rows, atom_rows),
         policy,
         loaded_cursor,
         journal_errors=[],
