@@ -29,6 +29,14 @@ owner or predicate gets one attempt: any nonzero exit, invalid metrics, revision
 output mutation invalidates the cadence immediately. A later retry cannot restore bytes and erase
 the failed attempt.
 
+Every stage profile must set `max_attempts: 1`; there is no blind internal retry. The private
+attempt ledger permits at most two execution-mode full attempts for one snapshot/config digest.
+After the first failed full attempt, the second is refused until
+`repairs/<stage>.governance-stage-repair-receipt.v1.json` binds the exact snapshot, config, prior
+failure digest, failed stage, owner revision, and independently revision-pinned predicate. A third
+full attempt is always denied. A successful fixed point followed by the separate proof-only
+observation below does not consume another full-attempt slot.
+
 The run-two receipt is written only after that unchanged traversal proves:
 
 - zero new events;
@@ -71,8 +79,22 @@ invocation are proven.
 
 `LIMEN_GOV_CONFIG` is JSON or YAML with `contract_name: governance-cadence-config.v1`. Its root must
 contain a stable `cadence_id`, an `owner_reference`, the frozen `snapshot_digest`, a runtime
-`schema_catalog`, and exactly the nine stage keys. Provider names and model catalogs are runtime
-data; adding or renaming a source changes owner configuration rather than Limen code.
+`schema_catalog`, an `execution_policy`, and exactly the nine stage keys. Provider names and model
+catalogs are runtime data; adding or renaming a source changes owner configuration rather than
+Limen code.
+
+`execution_policy` is digest-bound and fail-closed:
+
+- `max_full_attempts` must equal `2`.
+- `aggregate_output_budget_bytes` must cover the declared four command/predicate log reservations
+  plus governed artifacts for all nine stages. The parent also measures every regular file under
+  the run root after each command and receipt write, so undeclared intermediates consume the same
+  ceiling.
+- `scratch_authority.root` must contain `--run-root`. Its receipt must be an exact
+  `domus-non-backed-scratch-receipt.v1` record owned by `repo:organvm/domus-genoma`, binding the
+  resolved root, live mount point and device, and verified backup exclusion. Symlinked roots fail.
+- `final_receipt_promotion.root` is a distinct durable Archive4T destination with a public-safe
+  owner reference. It must already exist; the cadence never manufactures a missing mount.
 
 `schema_catalog.root` is the runtime path to the available public catalog.
 `schema_catalog.contracts` maps contract names to schema files below that root and must include
@@ -94,7 +116,7 @@ Every stage requires:
 | `inputs[]` | Nonempty artifacts typed as exact `predecessor_output` or snapshot-bound `snapshot_anchor` |
 | `outputs[]` | Nonempty artifact references confined below `--run-root` |
 | `readiness_evidence` | Exactly one declared output whose standard readiness object is owner evidence |
-| `execution_profile` | Positive finite `max_items`, `timeout_seconds`, `max_attempts`, `max_log_bytes`, and `max_artifact_bytes` |
+| `execution_profile` | Positive finite `max_items`, `timeout_seconds`, `max_log_bytes`, and `max_artifact_bytes`; `max_attempts` must be exactly `1` |
 
 `discover` inputs are snapshot anchors and must repeat the exact configured snapshot ID and digest.
 Each later stage must consume every declared predecessor output exactly once, matching artifact ID,
@@ -129,6 +151,20 @@ The private run root contains capped logs, owner metrics, nine
 receipt excluded from governed-output byte counts. Each fixed-point record binds
 `previous_output_digest` (`null` for run one and the exact run-one output digest for run two).
 Public receipts contain references and digests, never configured local paths or source bodies.
+
+Intermediates stay on the verified non-backed scratch root. Only after the separate post-proof
+observation and final-bundle schema validation does the cadence atomically copy and hash-verify this
+fixed allowlist to Archive4T:
+
+- `governance-stage-receipts.v1.json`;
+- `governance-cadence-receipts.v1.json`;
+- `post-proof-idempotence.v1.json`;
+- `governance-snapshot-bundle.v1.json`.
+
+Logs, metrics, per-stage artifacts, attempt ledgers, and repair receipts are never promoted.
+Promotion failure leaves the validated scratch receipts intact and nonterminal; it does not erase
+or rewrite the proof. Existing historical Archive4T runs remain evidence and are not moved or
+deleted by this contract.
 
 `scripts/governance-memory-readiness.py --strict --write` validates these receipts against the
 installed public schema catalog and the exact frozen snapshot bundle. It does not search arbitrary

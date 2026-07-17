@@ -911,11 +911,29 @@ parameters:
     owner: continuity
     note: "Runtime JSON/YAML owner-command configuration for the nine-stage governance cadence. Provider and worktree additions or renames are configuration-only."
   LIMEN_GOV_RUN_ROOT:
-    default: "$LIMEN_PRIVATE_SESSION_CORPUS/governance-runs"
+    default: "$LIMEN_SCRATCH_ROOT/limen-private/governance-memory/runs"
     env: LIMEN_GOV_RUN_ROOT
     self_update: none
     owner: continuity
-    note: "Private root for bounded stage artifacts, capped logs, cursors, and receipts. The cadence appends the frozen snapshot ID; public receipts never expose this path."
+    note: "Private non-backed Scratch root for bounded stage artifacts, capped logs, cursors, and receipts. The cadence appends the frozen snapshot ID and verifies the config-bound Domus mount/device/backup-exclusion receipt; public receipts never expose this path."
+  LIMEN_GOV_SCRATCH_AUTHORITY_RECEIPT:
+    default: ""
+    env: LIMEN_GOV_SCRATCH_AUTHORITY_RECEIPT
+    self_update: none
+    owner: continuity
+    note: "Private path to the exact Domus-owned non-backed Scratch mount/device/backup-exclusion receipt. Governance config may expand this value; missing or stale authority fails closed."
+  LIMEN_GOV_FINAL_RECEIPT_ROOT:
+    default: "$LIMEN_ARCHIVE4T_ROOT/limen-private/governance-memory/final-receipts"
+    env: LIMEN_GOV_FINAL_RECEIPT_ROOT
+    self_update: none
+    owner: continuity
+    note: "Archive4T base for the four hash-verified final governance receipts. The config and wrappers append the frozen snapshot ID; intermediates, logs, metrics, and attempt ledgers never enter this root."
+  LIMEN_GOV_RUNTIME_BOOTSTRAPPED:
+    default: "0"
+    env: LIMEN_GOV_RUNTIME_BOOTSTRAPPED
+    self_update: none
+    owner: continuity
+    note: "Cadence-internal recursion guard set only while re-executing under Limen's owned Python runtime when system Python lacks the schema dependencies."
   LIMEN_GOV_STAGE:
     default: ""
     env: LIMEN_GOV_STAGE
@@ -927,7 +945,7 @@ parameters:
     env: LIMEN_GOV_STAGE_ATTEMPT
     self_update: none
     owner: continuity
-    note: "Cadence-internal one-based finite retry attempt injected into the current owner command."
+    note: "Cadence-internal compatibility field injected as 1. Stages never retry blindly; the snapshot-bound full-attempt ledger and verified repair receipt govern a second execution pass."
   LIMEN_GOV_STAGE_METRICS_OUT:
     default: ""
     env: LIMEN_GOV_STAGE_METRICS_OUT

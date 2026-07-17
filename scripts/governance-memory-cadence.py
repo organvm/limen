@@ -28,6 +28,7 @@ import json
 import os
 import re
 import signal
+import stat
 import subprocess
 import sys
 import threading
@@ -43,9 +44,7 @@ try:
     from jsonschema import Draft202012Validator, FormatChecker
     from jsonschema.exceptions import SchemaError
 except ModuleNotFoundError:
-    owned_python = (
-        Path(__file__).resolve().parents[1] / "cli" / ".venv" / "bin" / "python"
-    )
+    owned_python = Path(__file__).resolve().parents[1] / "cli" / ".venv" / "bin" / "python"
     if (
         __name__ == "__main__"
         and os.environ.get("LIMEN_GOV_RUNTIME_BOOTSTRAPPED") != "1"
@@ -135,10 +134,21 @@ REQUIRED_SCHEMA_CONTRACTS = {
     "governance-stage-receipt.v1",
     "governance-snapshot-bundle.v1",
 }
-MAX_ATTEMPTS = 5
+SCRATCH_RECEIPT_CONTRACT = "domus-non-backed-scratch-receipt.v1"
+SCRATCH_OWNER_REFERENCE = "repo:organvm/domus-genoma"
+ATTEMPT_LEDGER_CONTRACT = "governance-cadence-attempt-ledger.v1"
+REPAIR_RECEIPT_CONTRACT = "governance-stage-repair-receipt.v1"
+MAX_ATTEMPTS = 1
+MAX_FULL_ATTEMPTS = 2
 MAX_TIMEOUT_SECONDS = 86_400
 MAX_ITEMS = 10_000_000
 MAX_BYTES = 1 << 34
+FINAL_PROMOTION_FILENAMES: tuple[str, ...] = (
+    "governance-stage-receipts.v1.json",
+    "governance-cadence-receipts.v1.json",
+    "post-proof-idempotence.v1.json",
+    FINAL_BUNDLE_FILENAME,
+)
 RUNTIME_ENVIRONMENT = {
     "LANG": "C.UTF-8",
     "LC_ALL": "C.UTF-8",
@@ -217,6 +227,32 @@ class ExecutionProfile:
             "timeout_seconds": self.timeout_seconds,
             "max_retries": self.max_attempts - 1,
             "max_output_bytes": self.max_artifact_bytes,
+        }
+
+
+@dataclass(frozen=True)
+class CadencePolicy:
+    max_full_attempts: int
+    aggregate_output_budget_bytes: int
+    scratch_root: Path
+    scratch_receipt_path: Path
+    scratch_receipt_digest: str
+    archive_final_receipt_root: Path
+    archive_owner_reference: str
+
+    def public(self) -> dict[str, Any]:
+        return {
+            "max_full_attempts": self.max_full_attempts,
+            "aggregate_output_budget_bytes": self.aggregate_output_budget_bytes,
+            "scratch_authority": {
+                "contract_name": SCRATCH_RECEIPT_CONTRACT,
+                "owner_reference": SCRATCH_OWNER_REFERENCE,
+                "receipt_digest": self.scratch_receipt_digest,
+            },
+            "final_receipt_promotion": {
+                "owner_reference": self.archive_owner_reference,
+                "filenames": list(FINAL_PROMOTION_FILENAMES),
+            },
         }
 
 
@@ -405,6 +441,188 @@ def resolve_path(
         raise CadenceError("artifact path must be a nonempty string")
     expanded = Path(expand(raw, environment)).expanduser()
     return expanded.resolve() if expanded.is_absolute() else (base / expanded).resolve()
+
+
+def unresolved_path(
+    raw: Any,
+    *,
+    base: Path,
+    environment: Mapping[str, str],
+) -> Path:
+    if not isinstance(raw, str) or not raw.strip():
+        raise CadenceError("authority path must be a nonempty string")
+    expanded = Path(expand(raw, environment)).expanduser()
+    return expanded if expanded.is_absolute() else base / expanded
+
+
+def require_no_symlink_components(path: Path, *, field: str) -> None:
+    absolute = path.absolute()
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current /= part
+        try:
+            mode = os.lstat(current).st_mode
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise CadenceError(f"{field} cannot be inspected: {type(exc).__name__}") from exc
+        if stat.S_ISLNK(mode):
+            raise CadenceError(f"{field} cannot contain symlink components")
+
+
+def validate_scratch_receipt(
+    path: Path,
+    *,
+    scratch_root: Path,
+) -> str:
+    receipt = read_json_object(path)
+    payload = {key: value for key, value in receipt.items() if key != "receipt_digest"}
+    expected_root_digest = digest_value({"scratch_root": str(scratch_root)})
+    mount_point = scratch_root
+    while not os.path.ismount(mount_point):
+        if mount_point.parent == mount_point:
+            raise CadenceError("scratch authority root has no observable mount point")
+        mount_point = mount_point.parent
+    expected_mount_digest = digest_value({"mount_point": str(mount_point)})
+    expected_device_id = scratch_root.stat().st_dev
+    if (
+        receipt.get("contract_name") != SCRATCH_RECEIPT_CONTRACT
+        or receipt.get("contract_version") != 1
+        or receipt.get("owner_reference") != SCRATCH_OWNER_REFERENCE
+        or receipt.get("scratch_root_digest") != expected_root_digest
+        or receipt.get("mount_point_digest") != expected_mount_digest
+        or receipt.get("device_id") != expected_device_id
+        or receipt.get("mount_status") != "mounted"
+        or receipt.get("backup_status") != "excluded"
+        or receipt.get("verification_status") != "verified"
+        or receipt.get("verification_predicate") != "predicate:domus-non-backed-scratch"
+        or receipt.get("receipt_digest") != digest_value(payload)
+    ):
+        raise CadenceError("scratch authority receipt must be exact, Domus-owned, verified, and backup-excluded")
+    return str(receipt["receipt_digest"])
+
+
+def parse_cadence_policy(
+    raw: Any,
+    *,
+    config_dir: Path,
+    environment: Mapping[str, str],
+    run_root: Path,
+) -> CadencePolicy:
+    if not isinstance(raw, Mapping):
+        raise CadenceError("cadence config requires an execution_policy object")
+    max_full_attempts = positive_int(
+        raw.get("max_full_attempts"),
+        "execution_policy.max_full_attempts",
+        maximum=MAX_FULL_ATTEMPTS,
+    )
+    if max_full_attempts != MAX_FULL_ATTEMPTS:
+        raise CadenceError(f"execution_policy.max_full_attempts must be exactly {MAX_FULL_ATTEMPTS}")
+    aggregate_output_budget_bytes = positive_int(
+        raw.get("aggregate_output_budget_bytes"),
+        "execution_policy.aggregate_output_budget_bytes",
+        maximum=MAX_BYTES,
+    )
+    scratch = raw.get("scratch_authority")
+    if not isinstance(scratch, Mapping):
+        raise CadenceError("execution_policy.scratch_authority must be an object")
+    raw_scratch_root = unresolved_path(
+        scratch.get("root"),
+        base=config_dir,
+        environment=environment,
+    )
+    require_no_symlink_components(
+        raw_scratch_root,
+        field="execution_policy.scratch_authority.root",
+    )
+    scratch_root = raw_scratch_root.resolve()
+    if not scratch_root.is_dir():
+        raise CadenceError("execution_policy.scratch_authority.root must be an available directory")
+    scratch_receipt_path = resolve_path(
+        scratch.get("receipt"),
+        base=config_dir,
+        environment=environment,
+    )
+    scratch_receipt_digest = validate_scratch_receipt(
+        scratch_receipt_path,
+        scratch_root=scratch_root,
+    )
+    try:
+        run_root.relative_to(scratch_root)
+    except ValueError as exc:
+        raise CadenceError("--run-root must remain under the verified non-backed scratch root") from exc
+    require_no_symlink_components(run_root, field="--run-root")
+
+    promotion = raw.get("final_receipt_promotion")
+    if not isinstance(promotion, Mapping):
+        raise CadenceError("execution_policy.final_receipt_promotion must be an object")
+    archive_owner_reference = public_reference(
+        promotion.get("owner_reference"),
+        "execution_policy.final_receipt_promotion.owner_reference",
+    )
+    raw_archive_root = unresolved_path(
+        promotion.get("root"),
+        base=config_dir,
+        environment=environment,
+    )
+    require_no_symlink_components(
+        raw_archive_root,
+        field="execution_policy.final_receipt_promotion.root",
+    )
+    archive_final_receipt_root = raw_archive_root.resolve()
+    if not archive_final_receipt_root.is_dir():
+        raise CadenceError("execution_policy.final_receipt_promotion.root must be an available directory")
+    if archive_final_receipt_root == scratch_root:
+        raise CadenceError("final receipt promotion root must be distinct from scratch")
+    try:
+        archive_final_receipt_root.relative_to(scratch_root)
+    except ValueError:
+        pass
+    else:
+        raise CadenceError("final receipt promotion root cannot be inside scratch")
+    return CadencePolicy(
+        max_full_attempts=max_full_attempts,
+        aggregate_output_budget_bytes=aggregate_output_budget_bytes,
+        scratch_root=scratch_root,
+        scratch_receipt_path=scratch_receipt_path,
+        scratch_receipt_digest=scratch_receipt_digest,
+        archive_final_receipt_root=archive_final_receipt_root,
+        archive_owner_reference=archive_owner_reference,
+    )
+
+
+def load_policy_authority(
+    config_path: Path,
+    *,
+    snapshot_id: str,
+    snapshot_at: str,
+    run_root: Path,
+) -> tuple[CadencePolicy, str, str]:
+    document = load_document(config_path)
+    if not isinstance(document, Mapping):
+        raise CadenceError("cadence config root must be an object")
+    if document.get("contract_name") != "governance-cadence-config.v1":
+        raise CadenceError("cadence config contract_name must be governance-cadence-config.v1")
+    snapshot_digest = str(document.get("snapshot_digest") or "")
+    if not SHA256.fullmatch(snapshot_digest):
+        raise CadenceError("cadence config snapshot_digest must be sha256:<64 lowercase hex>")
+    config_dir = config_path.parent.resolve()
+    environment = dict(os.environ)
+    environment.update(
+        {
+            "LIMEN_GOV_SNAPSHOT_ID": snapshot_id,
+            "LIMEN_GOV_SNAPSHOT_AT": snapshot_at,
+            "LIMEN_GOV_RUN_ROOT": str(run_root),
+            "LIMEN_GOV_CONFIG": str(config_path),
+        }
+    )
+    policy = parse_cadence_policy(
+        document.get("execution_policy"),
+        config_dir=config_dir,
+        environment=environment,
+        run_root=run_root,
+    )
+    return policy, snapshot_digest, digest_file(config_path)[0]
 
 
 def command_result(
@@ -809,7 +1027,14 @@ def load_config(
     snapshot_id: str,
     snapshot_at: str,
     run_root: Path,
-) -> tuple[dict[str, Any], tuple[StageSpec, ...], str, str, str]:
+) -> tuple[
+    dict[str, Any],
+    tuple[StageSpec, ...],
+    str,
+    str,
+    str,
+    CadencePolicy,
+]:
     document = load_document(config_path)
     if not isinstance(document, Mapping):
         raise CadenceError("cadence config root must be an object")
@@ -836,6 +1061,12 @@ def load_config(
             "LIMEN_GOV_RUN_ROOT": str(run_root),
             "LIMEN_GOV_CONFIG": str(config_path),
         }
+    )
+    policy = parse_cadence_policy(
+        document.get("execution_policy"),
+        config_dir=config_dir,
+        environment=environment,
+        run_root=run_root,
     )
     schema_catalog = parse_schema_catalog(
         document.get("schema_catalog"),
@@ -898,11 +1129,21 @@ def load_config(
             "stage receipt must expose exactly one governance snapshot pre-proof "
             "bundle output as its readiness evidence"
         )
+    declared_stage_reservations = sum(
+        # One owner log and one independent predicate log are reserved for
+        # both the execution and proof traversals. Governed artifacts persist
+        # once; receipts and control ledgers consume the remaining headroom.
+        (4 * stage.profile.max_log_bytes) + stage.profile.max_artifact_bytes
+        for stage in stages
+    )
+    if declared_stage_reservations > policy.aggregate_output_budget_bytes:
+        raise CadenceError("declared stage output reservations exceed execution_policy.aggregate_output_budget_bytes")
     public_config = {
         "contract_name": "governance-cadence-config.v1",
         "cadence_id": cadence_id,
         "owner_reference": owner_reference,
         "snapshot_digest": snapshot_digest,
+        "execution_policy": policy.public(),
         "schema_catalog": {
             "contracts": dict(sorted(schema_catalog.digests.items())),
         },
@@ -951,7 +1192,14 @@ def load_config(
             for item in stages
         ],
     }
-    return public_config, stages, digest_value(public_config), snapshot_digest, owner_reference
+    return (
+        public_config,
+        stages,
+        digest_value(public_config),
+        snapshot_digest,
+        owner_reference,
+        policy,
+    )
 
 
 def artifact_observation(
@@ -1293,6 +1541,43 @@ def write_if_changed(path: Path, content: str) -> bool:
     return True
 
 
+def run_output_size_bytes(run_root: Path) -> int:
+    total = 0
+    if not run_root.exists():
+        return total
+    for path in run_root.rglob("*"):
+        try:
+            mode = path.lstat().st_mode
+        except OSError as exc:
+            raise CadenceError(f"cannot inspect cadence output for aggregate budget: {type(exc).__name__}") from exc
+        if stat.S_ISLNK(mode):
+            raise CadenceError("cadence output cannot contain symlinks")
+        if stat.S_ISREG(mode):
+            total += path.stat().st_size
+        elif not stat.S_ISDIR(mode):
+            raise CadenceError("cadence output can contain only regular files and directories")
+    return total
+
+
+def enforce_output_budget(run_root: Path, *, maximum: int) -> int:
+    observed = run_output_size_bytes(run_root)
+    if observed > maximum:
+        raise CadenceError(f"cadence aggregate output-byte budget exceeded: observed={observed}; maximum={maximum}")
+    return observed
+
+
+def write_if_changed_bounded(
+    path: Path,
+    content: str,
+    *,
+    run_root: Path,
+    output_budget_bytes: int,
+) -> bool:
+    changed = write_if_changed(path, content)
+    enforce_output_budget(run_root, maximum=output_budget_bytes)
+    return changed
+
+
 def bounded_command(
     command: Sequence[str],
     *,
@@ -1418,6 +1703,7 @@ def execute_once(
     predecessor_receipt_digest: str | None,
     metric_path: Path,
     prior_stage_receipt: Path | None,
+    output_budget_bytes: int,
 ) -> tuple[int, str, Mapping[str, str]]:
     metric_path.parent.mkdir(parents=True, exist_ok=True)
     metric_path.unlink(missing_ok=True)
@@ -1438,6 +1724,7 @@ def execute_once(
         environment=environment,
         log_path=run_root / "logs" / f"traversal-{traversal}" / f"{spec.stage}.attempt-{attempt}.log",
     )
+    enforce_output_budget(run_root, maximum=output_budget_bytes)
     return return_code, diagnostic, environment
 
 
@@ -1448,6 +1735,7 @@ def execute_predicate(
     traversal: int,
     run_root: Path,
     environment: Mapping[str, str],
+    output_budget_bytes: int,
 ) -> None:
     predicate_environment = {
         **environment,
@@ -1459,6 +1747,7 @@ def execute_predicate(
         environment=predicate_environment,
         log_path=run_root / "logs" / f"traversal-{traversal}" / f"{spec.stage}.predicate-{attempt}.log",
     )
+    enforce_output_budget(run_root, maximum=output_budget_bytes)
     if return_code != 0:
         raise CadenceError(f"stage {spec.stage} predicate failed: {diagnostic}")
 
@@ -1517,6 +1806,7 @@ def execute_stage(
     snapshot_at: str,
     config_digest: str,
     predecessor_receipt_digest: str | None,
+    output_budget_bytes: int,
 ) -> StageResult:
     input_digest, inputs = stage_input_digest(
         spec,
@@ -1567,6 +1857,7 @@ def execute_stage(
             predecessor_receipt_digest=predecessor_receipt_digest,
             metric_path=proof_metrics_path,
             prior_stage_receipt=target,
+            output_budget_bytes=output_budget_bytes,
         )
         outputs_after_owner = observe_artifacts(
             spec.outputs,
@@ -1588,6 +1879,7 @@ def execute_stage(
                 traversal=traversal,
                 run_root=run_root,
                 environment=environment,
+                output_budget_bytes=output_budget_bytes,
             )
         except CadenceError as exc:
             predicate_error = exc
@@ -1630,6 +1922,7 @@ def execute_stage(
             predecessor_receipt_digest=predecessor_receipt_digest,
             metric_path=metrics_path(run_root, spec.stage),
             prior_stage_receipt=None,
+            output_budget_bytes=output_budget_bytes,
         )
         last_diagnostic = diagnostic
         if return_code != 0:
@@ -1647,6 +1940,7 @@ def execute_stage(
                 traversal=traversal,
                 run_root=run_root,
                 environment=environment,
+                output_budget_bytes=output_budget_bytes,
             )
             verify_stage_revisions(spec)
             stage_owner_readiness(
@@ -1689,7 +1983,12 @@ def execute_stage(
             contract_name="governance-stage-receipt.v1",
             catalog=spec.schema_catalog,
         )
-        changed = write_if_changed(target, json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+        changed = write_if_changed_bounded(
+            target,
+            json.dumps(receipt, indent=2, sort_keys=True) + "\n",
+            run_root=run_root,
+            output_budget_bytes=output_budget_bytes,
+        )
         return StageResult(
             receipt=receipt,
             attempts=attempts_used,
@@ -1884,6 +2183,7 @@ def traverse_stages(
     snapshot_digest: str,
     snapshot_at: str,
     config_digest: str,
+    output_budget_bytes: int,
 ) -> tuple[list[dict[str, Any]], RunStats, int]:
     receipts: list[dict[str, Any]] = []
     invoked: list[str] = []
@@ -1895,17 +2195,21 @@ def traverse_stages(
     replayed_completed_children = 0
     predecessor: str | None = None
     for spec in stages:
-        result = execute_stage(
-            spec,
-            traversal=traversal,
-            run_root=run_root,
-            run_id=stage_run_id,
-            snapshot_id=snapshot_id,
-            snapshot_digest=snapshot_digest,
-            snapshot_at=snapshot_at,
-            config_digest=config_digest,
-            predecessor_receipt_digest=predecessor,
-        )
+        try:
+            result = execute_stage(
+                spec,
+                traversal=traversal,
+                run_root=run_root,
+                run_id=stage_run_id,
+                snapshot_id=snapshot_id,
+                snapshot_digest=snapshot_digest,
+                snapshot_at=snapshot_at,
+                config_digest=config_digest,
+                predecessor_receipt_digest=predecessor,
+                output_budget_bytes=output_budget_bytes,
+            )
+        except CadenceError as exc:
+            raise CadenceError(f"stage {spec.stage} failed: {exc}") from exc
         receipt = result.receipt
         receipts.append(receipt)
         predecessor = str(receipt["receipt_digest"])
@@ -1952,12 +2256,23 @@ def _run_cadence_unprotected(
     snapshot_at = parse_snapshot_at(snapshot_at)
     config_path = config_path.expanduser().resolve()
     run_root = run_root.expanduser().resolve()
-    run_root.mkdir(parents=True, exist_ok=True)
-    public_config, stages, config_digest, snapshot_digest, owner_reference = load_config(
+    (
+        public_config,
+        stages,
+        config_digest,
+        snapshot_digest,
+        owner_reference,
+        policy,
+    ) = load_config(
         config_path,
         snapshot_id=snapshot_id,
         snapshot_at=snapshot_at,
         run_root=run_root,
+    )
+    run_root.mkdir(parents=True, exist_ok=True)
+    enforce_output_budget(
+        run_root,
+        maximum=policy.aggregate_output_budget_bytes,
     )
     cadence_id = str(public_config["cadence_id"])
     stage_run_id = f"{cadence_id}:{snapshot_id}:stage-chain"
@@ -1972,11 +2287,14 @@ def _run_cadence_unprotected(
         snapshot_digest=snapshot_digest,
         snapshot_at=snapshot_at,
         config_digest=config_digest,
+        output_budget_bytes=policy.aggregate_output_budget_bytes,
     )
     aggregate_receipts_written += int(
-        write_if_changed(
+        write_if_changed_bounded(
             stage_receipts_collection_path(run_root),
             json.dumps(run_one_receipts, indent=2, sort_keys=True) + "\n",
+            run_root=run_root,
+            output_budget_bytes=policy.aggregate_output_budget_bytes,
         )
     )
     owner_readiness = aggregate_owner_readiness(
@@ -2012,7 +2330,12 @@ def _run_cadence_unprotected(
             owner_readiness=owner_readiness,
         )
         aggregate_receipts_written += int(
-            write_if_changed(run_one_path, json.dumps(run_one, indent=2, sort_keys=True) + "\n")
+            write_if_changed_bounded(
+                run_one_path,
+                json.dumps(run_one, indent=2, sort_keys=True) + "\n",
+                run_root=run_root,
+                output_budget_bytes=policy.aggregate_output_budget_bytes,
+            )
         )
 
     # The proof traversal happens immediately and revalidates the exact stage
@@ -2027,6 +2350,7 @@ def _run_cadence_unprotected(
         snapshot_digest=snapshot_digest,
         snapshot_at=snapshot_at,
         config_digest=config_digest,
+        output_budget_bytes=policy.aggregate_output_budget_bytes,
     )
     if run_two_receipts != run_one_receipts:
         raise CadenceError("proof traversal changed the full stage receipt collection")
@@ -2054,13 +2378,20 @@ def _run_cadence_unprotected(
     )
     run_two_path = cadence_receipt_path(run_root, 2)
     aggregate_receipts_written += int(
-        write_if_changed(run_two_path, json.dumps(run_two, indent=2, sort_keys=True) + "\n")
+        write_if_changed_bounded(
+            run_two_path,
+            json.dumps(run_two, indent=2, sort_keys=True) + "\n",
+            run_root=run_root,
+            output_budget_bytes=policy.aggregate_output_budget_bytes,
+        )
     )
     cadence_receipts = [run_one, run_two]
     aggregate_path = run_root / "governance-cadence-receipts.v1.json"
-    if write_if_changed(
+    if write_if_changed_bounded(
         aggregate_path,
         json.dumps(cadence_receipts, indent=2, sort_keys=True) + "\n",
+        run_root=run_root,
+        output_budget_bytes=policy.aggregate_output_budget_bytes,
     ):
         aggregate_receipts_written += 1
     return run_two, CadenceStats(
@@ -2150,6 +2481,274 @@ def invalidate_cadence(
     (run_root / FINAL_BUNDLE_FILENAME).unlink(missing_ok=True)
 
 
+def attempt_ledger_path(run_root: Path) -> Path:
+    return run_root / "governance-cadence-attempt-ledger.v1.json"
+
+
+def failure_stage(error: BaseException) -> str:
+    message = str(error)
+    for stage in STAGES:
+        if re.search(rf"\bstage {re.escape(stage)}\b", message):
+            return stage
+    return "receipt"
+
+
+def failure_digest(
+    *,
+    snapshot_id: str,
+    snapshot_digest: str,
+    config_digest: str,
+    stage: str,
+    diagnostic: str,
+) -> str:
+    return digest_value(
+        {
+            "snapshot_id": snapshot_id,
+            "snapshot_digest": snapshot_digest,
+            "config_digest": config_digest,
+            "stage": stage,
+            "diagnostic": diagnostic[:512],
+        }
+    )
+
+
+def load_attempt_ledger(
+    run_root: Path,
+    *,
+    snapshot_id: str,
+    snapshot_digest: str,
+    config_digest: str,
+) -> dict[str, Any]:
+    path = attempt_ledger_path(run_root)
+    if not path.is_file():
+        payload: dict[str, Any] = {
+            "contract_name": ATTEMPT_LEDGER_CONTRACT,
+            "contract_version": 1,
+            "snapshot_id": snapshot_id,
+            "snapshot_digest": snapshot_digest,
+            "config_digest": config_digest,
+            "max_full_attempts": MAX_FULL_ATTEMPTS,
+            "attempts": [],
+        }
+        return {**payload, "ledger_digest": digest_value(payload)}
+    ledger = read_json_object(path)
+    payload = {key: value for key, value in ledger.items() if key != "ledger_digest"}
+    attempts = ledger.get("attempts")
+    if (
+        ledger.get("contract_name") != ATTEMPT_LEDGER_CONTRACT
+        or ledger.get("contract_version") != 1
+        or ledger.get("snapshot_id") != snapshot_id
+        or ledger.get("snapshot_digest") != snapshot_digest
+        or ledger.get("config_digest") != config_digest
+        or ledger.get("max_full_attempts") != MAX_FULL_ATTEMPTS
+        or not isinstance(attempts, list)
+        or len(attempts) > MAX_FULL_ATTEMPTS
+        or ledger.get("ledger_digest") != digest_value(payload)
+    ):
+        raise CadenceError("cadence attempt ledger does not bind the exact frozen snapshot and config")
+    for index, attempt in enumerate(attempts, start=1):
+        if (
+            not isinstance(attempt, Mapping)
+            or attempt.get("attempt_number") != index
+            or attempt.get("status") not in {"started", "completed", "failed"}
+        ):
+            raise CadenceError("cadence attempt ledger contains an invalid attempt entry")
+    return ledger
+
+
+def write_attempt_ledger(
+    run_root: Path,
+    ledger: Mapping[str, Any],
+    *,
+    output_budget_bytes: int,
+) -> None:
+    payload = {key: value for key, value in ledger.items() if key != "ledger_digest"}
+    document = {**payload, "ledger_digest": digest_value(payload)}
+    write_if_changed_bounded(
+        attempt_ledger_path(run_root),
+        json.dumps(document, indent=2, sort_keys=True) + "\n",
+        run_root=run_root,
+        output_budget_bytes=output_budget_bytes,
+    )
+
+
+def repair_receipt_path(run_root: Path, stage: str) -> Path:
+    return run_root / "repairs" / f"{stage}.governance-stage-repair-receipt.v1.json"
+
+
+def validate_repair_receipt(
+    *,
+    run_root: Path,
+    stage: str,
+    prior_failure_digest: str,
+    snapshot_id: str,
+    snapshot_digest: str,
+    config_digest: str,
+    stages: Sequence[StageSpec],
+) -> str:
+    spec = next(item for item in stages if item.stage == stage)
+    path = repair_receipt_path(run_root, stage)
+    try:
+        receipt = read_json_object(path)
+    except CadenceError as exc:
+        raise CadenceError(f"second full attempt requires an exact verified repair receipt for stage {stage}") from exc
+    payload = {key: value for key, value in receipt.items() if key != "receipt_digest"}
+    if (
+        receipt.get("contract_name") != REPAIR_RECEIPT_CONTRACT
+        or receipt.get("contract_version") != 1
+        or receipt.get("snapshot_id") != snapshot_id
+        or receipt.get("snapshot_digest") != snapshot_digest
+        or receipt.get("config_digest") != config_digest
+        or receipt.get("stage") != stage
+        or receipt.get("owner_reference") != spec.owner_reference
+        or receipt.get("owner_revision") != spec.owner_revision.value
+        or receipt.get("predicate") != spec.predicate.public()
+        or receipt.get("predicate_revision") != spec.predicate.revision.value
+        or receipt.get("prior_failure_digest") != prior_failure_digest
+        or receipt.get("status") != "verified"
+        or receipt.get("receipt_digest") != digest_value(payload)
+    ):
+        raise CadenceError(f"second full attempt requires an exact verified repair receipt for stage {stage}")
+    return str(receipt["receipt_digest"])
+
+
+def begin_full_attempt(
+    *,
+    run_root: Path,
+    snapshot_id: str,
+    snapshot_digest: str,
+    config_digest: str,
+    stages: Sequence[StageSpec],
+    output_budget_bytes: int,
+) -> int:
+    ledger = load_attempt_ledger(
+        run_root,
+        snapshot_id=snapshot_id,
+        snapshot_digest=snapshot_digest,
+        config_digest=config_digest,
+    )
+    attempts = [dict(item) for item in ledger["attempts"]]
+    recovered_interruption = False
+    if attempts and attempts[-1]["status"] == "started":
+        stage = next(
+            (candidate for candidate in STAGES if not receipt_path(run_root, candidate).is_file()),
+            "receipt",
+        )
+        diagnostic = "prior full attempt ended without a terminal receipt"
+        attempts[-1] = {
+            **attempts[-1],
+            "status": "failed",
+            "failure_stage": stage,
+            "failure_digest": failure_digest(
+                snapshot_id=snapshot_id,
+                snapshot_digest=snapshot_digest,
+                config_digest=config_digest,
+                stage=stage,
+                diagnostic=diagnostic,
+            ),
+        }
+        recovered_interruption = True
+    if recovered_interruption:
+        write_attempt_ledger(
+            run_root,
+            {**ledger, "attempts": attempts},
+            output_budget_bytes=output_budget_bytes,
+        )
+    if len(attempts) >= MAX_FULL_ATTEMPTS:
+        raise CadenceError(f"frozen snapshot already consumed its {MAX_FULL_ATTEMPTS} full cadence attempts")
+    repair_digest: str | None = None
+    if attempts and attempts[-1]["status"] == "failed":
+        repair_digest = validate_repair_receipt(
+            run_root=run_root,
+            stage=str(attempts[-1]["failure_stage"]),
+            prior_failure_digest=str(attempts[-1]["failure_digest"]),
+            snapshot_id=snapshot_id,
+            snapshot_digest=snapshot_digest,
+            config_digest=config_digest,
+            stages=stages,
+        )
+    attempt_number = len(attempts) + 1
+    attempts.append(
+        {
+            "attempt_number": attempt_number,
+            "status": "started",
+            **({"repair_receipt_digest": repair_digest} if repair_digest else {}),
+        }
+    )
+    write_attempt_ledger(
+        run_root,
+        {**ledger, "attempts": attempts},
+        output_budget_bytes=output_budget_bytes,
+    )
+    return attempt_number
+
+
+def finish_full_attempt(
+    *,
+    run_root: Path,
+    snapshot_id: str,
+    snapshot_digest: str,
+    config_digest: str,
+    attempt_number: int,
+    output_budget_bytes: int,
+) -> None:
+    ledger = load_attempt_ledger(
+        run_root,
+        snapshot_id=snapshot_id,
+        snapshot_digest=snapshot_digest,
+        config_digest=config_digest,
+    )
+    attempts = [dict(item) for item in ledger["attempts"]]
+    if attempt_number != len(attempts) or attempts[-1].get("status") != "started":
+        raise CadenceError("cadence attempt ledger lost the active full attempt")
+    attempts[-1]["status"] = "completed"
+    write_attempt_ledger(
+        run_root,
+        {**ledger, "attempts": attempts},
+        output_budget_bytes=output_budget_bytes,
+    )
+
+
+def fail_full_attempt(
+    *,
+    run_root: Path,
+    snapshot_id: str,
+    snapshot_digest: str,
+    config_digest: str,
+    attempt_number: int,
+    error: BaseException,
+    output_budget_bytes: int,
+) -> None:
+    ledger = load_attempt_ledger(
+        run_root,
+        snapshot_id=snapshot_id,
+        snapshot_digest=snapshot_digest,
+        config_digest=config_digest,
+    )
+    attempts = [dict(item) for item in ledger["attempts"]]
+    if attempt_number != len(attempts) or attempts[-1].get("status") != "started":
+        return
+    stage = failure_stage(error)
+    attempts[-1].update(
+        {
+            "status": "failed",
+            "failure_stage": stage,
+            "failure_digest": failure_digest(
+                snapshot_id=snapshot_id,
+                snapshot_digest=snapshot_digest,
+                config_digest=config_digest,
+                stage=stage,
+                diagnostic=str(error),
+            ),
+        }
+    )
+    write_attempt_ledger(
+        run_root,
+        {**ledger, "attempts": attempts},
+        output_budget_bytes=output_budget_bytes,
+    )
+
+
 def run_cadence(
     *,
     snapshot_id: str,
@@ -2161,24 +2760,35 @@ def run_cadence(
     snapshot_at = parse_snapshot_at(snapshot_at)
     config_path = config_path.expanduser().resolve()
     run_root = run_root.expanduser().resolve()
-    run_root.mkdir(parents=True, exist_ok=True)
     active_path = run_root / "governance-cadence-active.v1.json"
     invalidated_path = run_root / "governance-cadence-invalidated.v1.json"
-    try:
-        config_source_digest = digest_file(config_path)[0]
-    except OSError:
-        config_source_digest = sha256_bytes(str(config_path).encode("utf-8"))
-    write_if_changed(
+    policy, declared_snapshot_digest, config_source_digest = load_policy_authority(
+        config_path,
+        snapshot_id=snapshot_id,
+        snapshot_at=snapshot_at,
+        run_root=run_root,
+    )
+    run_root.mkdir(parents=True, exist_ok=True)
+    write_if_changed_bounded(
         active_path,
         cadence_marker(
             contract_name="governance-cadence-active.v1",
             snapshot_id=snapshot_id,
-            snapshot_digest="unresolved",
+            snapshot_digest=declared_snapshot_digest,
             config_digest=config_source_digest,
         ),
+        run_root=run_root,
+        output_budget_bytes=policy.aggregate_output_budget_bytes,
     )
     try:
-        public_config, stages, config_digest, snapshot_digest, _owner_reference = load_config(
+        (
+            public_config,
+            stages,
+            config_digest,
+            snapshot_digest,
+            _owner_reference,
+            policy,
+        ) = load_config(
             config_path,
             snapshot_id=snapshot_id,
             snapshot_at=snapshot_at,
@@ -2188,12 +2798,12 @@ def run_cadence(
         invalidate_cadence(
             run_root=run_root,
             snapshot_id=snapshot_id,
-            snapshot_digest="unresolved",
+            snapshot_digest=declared_snapshot_digest,
             config_digest=config_source_digest,
         )
         active_path.unlink(missing_ok=True)
         raise
-    write_if_changed(
+    write_if_changed_bounded(
         active_path,
         cadence_marker(
             contract_name="governance-cadence-active.v1",
@@ -2201,6 +2811,8 @@ def run_cadence(
             snapshot_digest=snapshot_digest,
             config_digest=config_digest,
         ),
+        run_root=run_root,
+        output_budget_bytes=policy.aggregate_output_budget_bytes,
     )
     cadence_id = str(public_config["cadence_id"])
     already_complete = stage_chain_is_complete(
@@ -2219,14 +2831,43 @@ def run_cadence(
             snapshot_digest=snapshot_digest,
             config_digest=config_digest,
         )
+        enforce_output_budget(
+            run_root,
+            maximum=policy.aggregate_output_budget_bytes,
+        )
+    attempt_number: int | None = None
     try:
+        if not already_complete:
+            attempt_number = begin_full_attempt(
+                run_root=run_root,
+                snapshot_id=snapshot_id,
+                snapshot_digest=snapshot_digest,
+                config_digest=config_digest,
+                stages=stages,
+                output_budget_bytes=policy.aggregate_output_budget_bytes,
+            )
         receipt, stats = _run_cadence_unprotected(
             snapshot_id=snapshot_id,
             snapshot_at=snapshot_at,
             config_path=config_path,
             run_root=run_root,
         )
-    except Exception:
+    except Exception as exc:
+        if attempt_number is not None:
+            try:
+                fail_full_attempt(
+                    run_root=run_root,
+                    snapshot_id=snapshot_id,
+                    snapshot_digest=snapshot_digest,
+                    config_digest=config_digest,
+                    attempt_number=attempt_number,
+                    error=exc,
+                    output_budget_bytes=policy.aggregate_output_budget_bytes,
+                )
+            except CadenceError:
+                # Preserve the original bounded-work failure. A still-started
+                # entry is converted to a failed attempt on the next call.
+                pass
         invalidate_cadence(
             run_root=run_root,
             snapshot_id=snapshot_id,
@@ -2235,6 +2876,15 @@ def run_cadence(
         )
         active_path.unlink(missing_ok=True)
         raise
+    if attempt_number is not None:
+        finish_full_attempt(
+            run_root=run_root,
+            snapshot_id=snapshot_id,
+            snapshot_digest=snapshot_digest,
+            config_digest=config_digest,
+            attempt_number=attempt_number,
+            output_budget_bytes=policy.aggregate_output_budget_bytes,
+        )
     if stats.aggregate_receipts_written or not already_complete:
         (run_root / "post-proof-idempotence.v1.json").unlink(missing_ok=True)
         (run_root / FINAL_BUNDLE_FILENAME).unlink(missing_ok=True)
@@ -2252,7 +2902,14 @@ def validate_only(
 ) -> dict[str, Any]:
     snapshot_id = safe_id(snapshot_id, "snapshot_id")
     snapshot_at = parse_snapshot_at(snapshot_at)
-    public_config, stages, config_digest, snapshot_digest, _owner_reference = load_config(
+    (
+        public_config,
+        stages,
+        config_digest,
+        snapshot_digest,
+        _owner_reference,
+        _policy,
+    ) = load_config(
         config_path.expanduser().resolve(),
         snapshot_id=snapshot_id,
         snapshot_at=snapshot_at,
@@ -2362,7 +3019,14 @@ def seal_snapshot_bundle(
     final_cadence_receipt: Mapping[str, Any],
     post_proof: Mapping[str, Any],
 ) -> tuple[dict[str, Any], bool]:
-    public_config, stages, _config_digest, snapshot_digest, _owner_reference = load_config(
+    (
+        public_config,
+        stages,
+        _config_digest,
+        snapshot_digest,
+        _owner_reference,
+        policy,
+    ) = load_config(
         config_path.expanduser().resolve(),
         snapshot_id=snapshot_id,
         snapshot_at=snapshot_at,
@@ -2466,11 +3130,66 @@ def seal_snapshot_bundle(
         catalog=stages[-1].schema_catalog,
     )
     target = run_root / FINAL_BUNDLE_FILENAME
-    changed = write_if_changed(
+    changed = write_if_changed_bounded(
         target,
         json.dumps(bundle, indent=2, sort_keys=True) + "\n",
+        run_root=run_root.expanduser().resolve(),
+        output_budget_bytes=policy.aggregate_output_budget_bytes,
     )
     return bundle, changed
+
+
+def promote_final_receipts(
+    *,
+    run_root: Path,
+    policy: CadencePolicy,
+) -> list[dict[str, Any]]:
+    observations: list[dict[str, Any]] = []
+    for filename in FINAL_PROMOTION_FILENAMES:
+        source = run_root / filename
+        if source.is_symlink() or not source.is_file():
+            raise CadenceError(f"final receipt promotion source is missing or unsafe: {filename}")
+        source_digest, source_size = digest_file(source)
+        destination = policy.archive_final_receipt_root / filename
+        require_no_symlink_components(
+            destination,
+            field=f"final receipt promotion destination {filename}",
+        )
+        unchanged = False
+        if destination.is_file() and not destination.is_symlink():
+            unchanged = digest_file(destination) == (source_digest, source_size)
+        if not unchanged:
+            content = source.read_bytes()
+            temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+            try:
+                with temporary.open("xb") as stream:
+                    stream.write(content)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temporary, destination)
+                directory_fd = os.open(destination.parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
+            finally:
+                temporary.unlink(missing_ok=True)
+        if (
+            destination.is_symlink()
+            or not destination.is_file()
+            or digest_file(destination) != (source_digest, source_size)
+        ):
+            raise CadenceError(f"final receipt promotion verification failed: {filename}")
+        observations.append(
+            {
+                "filename": filename,
+                "digest": source_digest,
+                "size_bytes": source_size,
+                "status": "unchanged" if unchanged else "promoted",
+                "owner_reference": policy.archive_owner_reference,
+            }
+        )
+    return observations
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -2494,10 +3213,26 @@ def main(argv: list[str] | None = None) -> int:
             post_proof = post_proof_idempotence(receipt, stats)
             snapshot_bundle: dict[str, Any] | None = None
             snapshot_bundle_changed = False
+            final_receipt_promotion: list[dict[str, Any]] | None = None
             if post_proof is not None:
-                write_if_changed(
+                (
+                    _public_config,
+                    _stages,
+                    _config_digest,
+                    _snapshot_digest,
+                    _owner_reference,
+                    policy,
+                ) = load_config(
+                    args.config.expanduser().resolve(),
+                    snapshot_id=safe_id(args.snapshot_id, "snapshot_id"),
+                    snapshot_at=parse_snapshot_at(args.snapshot_at),
+                    run_root=args.run_root.expanduser().resolve(),
+                )
+                write_if_changed_bounded(
                     args.run_root.expanduser().resolve() / "post-proof-idempotence.v1.json",
                     json.dumps(post_proof, indent=2, sort_keys=True) + "\n",
+                    run_root=args.run_root.expanduser().resolve(),
+                    output_budget_bytes=policy.aggregate_output_budget_bytes,
                 )
                 try:
                     snapshot_bundle, snapshot_bundle_changed = seal_snapshot_bundle(
@@ -2516,12 +3251,21 @@ def main(argv: list[str] | None = None) -> int:
                         config_digest=digest_file(args.config.expanduser().resolve())[0],
                     )
                     raise
+                enforce_output_budget(
+                    args.run_root.expanduser().resolve(),
+                    maximum=policy.aggregate_output_budget_bytes,
+                )
+                final_receipt_promotion = promote_final_receipts(
+                    run_root=args.run_root.expanduser().resolve(),
+                    policy=policy,
+                )
             output = {
                 "receipt": receipt,
                 "run": stats.public(),
                 "post_proof_idempotence": post_proof,
                 "snapshot_bundle": snapshot_bundle,
                 "snapshot_bundle_changed": snapshot_bundle_changed,
+                "final_receipt_promotion": final_receipt_promotion,
                 "stage_receipts_path": str(stage_receipts_collection_path(args.run_root.expanduser().resolve())),
             }
             fixed_point = receipt.get("fixed_point", {})
@@ -2534,6 +3278,7 @@ def main(argv: list[str] | None = None) -> int:
                 or readiness.get("ready") is not True
                 or post_proof is None
                 or snapshot_bundle is None
+                or final_receipt_promotion is None
             ):
                 raise CadenceError("strict cadence requires a separate unchanged post-proof invocation")
         else:

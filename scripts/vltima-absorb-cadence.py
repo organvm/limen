@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1])).expanduser().resolve()
 PRIVATE_ROOT = Path(
@@ -136,14 +138,50 @@ def governance_memory_run_dir() -> Path | None:
     return Path(run_root).expanduser() / snapshot_id
 
 
+def governance_final_receipt_dir() -> Path | None:
+    snapshot_id = os.environ.get("LIMEN_GOV_SNAPSHOT_ID", "").strip()
+    final_root = os.environ.get("LIMEN_GOV_FINAL_RECEIPT_ROOT", "").strip()
+    if not snapshot_id or not final_root:
+        return None
+    candidate = Path(final_root).expanduser() / snapshot_id
+    required = {
+        *GOVERNANCE_RECEIPT_FILENAMES.values(),
+        "post-proof-idempotence.v1.json",
+    }
+    if all((candidate / filename).is_file() for filename in required):
+        return candidate
+    return None
+
+
 def governance_receipt_environment() -> dict[str, str]:
-    run_dir = governance_memory_run_dir()
-    if run_dir is None:
+    receipt_dir = governance_final_receipt_dir() or governance_memory_run_dir()
+    if receipt_dir is None:
         return {}
     return {
-        name: os.environ.get(name, "").strip() or str(run_dir / filename)
+        name: os.environ.get(name, "").strip() or str(receipt_dir / filename)
         for name, filename in GOVERNANCE_RECEIPT_FILENAMES.items()
     }
+
+
+def governance_memory_outer_timeout(default: int) -> int:
+    config_text = os.environ.get("LIMEN_GOV_CONFIG", "").strip()
+    if not config_text:
+        return default
+    try:
+        document = yaml.safe_load(Path(config_text).expanduser().read_text(encoding="utf-8"))
+        stages = document["stages"]
+        if not isinstance(stages, dict) or len(stages) != 9:
+            return default
+        stage_timeouts = [int(stage["execution_profile"]["timeout_seconds"]) for stage in stages.values()]
+        if any(value <= 0 or value > 86_400 for value in stage_timeouts):
+            return default
+    except (KeyError, OSError, TypeError, ValueError, yaml.YAMLError):
+        return default
+    # Each stage has one owner and one independent predicate command in both
+    # execution and proof traversal. The cadence enforces each inner timeout;
+    # this outer bound prevents VLTIMA's generic 900-second cap from killing a
+    # valid, internally bounded snapshot attempt.
+    return max(default, (4 * sum(stage_timeouts)) + 60)
 
 
 def governance_memory_cadence_step() -> CadenceStep | None:
@@ -170,7 +208,10 @@ def governance_memory_cadence_step() -> CadenceStep | None:
             "--strict",
             "--write",
         ),
-        reason="execute or resume the nine typed owner stages and prove the unchanged second run",
+        reason=(
+            "execute one repair-gated bounded snapshot attempt, prove the unchanged "
+            "owner traversal, and promote only final receipts"
+        ),
     )
 
 
@@ -192,6 +233,8 @@ def public_line(text: Any) -> str:
     configured_aliases = {
         "LIMEN_GOV_CONFIG": os.environ.get("LIMEN_GOV_CONFIG", "").strip(),
         "LIMEN_GOV_RUN_ROOT": os.environ.get("LIMEN_GOV_RUN_ROOT", "").strip(),
+        "LIMEN_GOV_SCRATCH_AUTHORITY_RECEIPT": os.environ.get("LIMEN_GOV_SCRATCH_AUTHORITY_RECEIPT", "").strip(),
+        "LIMEN_GOV_FINAL_RECEIPT_ROOT": os.environ.get("LIMEN_GOV_FINAL_RECEIPT_ROOT", "").strip(),
     }
     for name, value in configured_aliases.items():
         if value:
@@ -284,7 +327,10 @@ def build_receipt(
     results: list[dict[str, Any]] = []
     if execute:
         for step in steps:
-            result = run_step(step, timeout=timeout)
+            step_timeout = (
+                governance_memory_outer_timeout(timeout) if step.id == "governance-memory-cadence" else timeout
+            )
+            result = run_step(step, timeout=step_timeout)
             results.append(result)
             if stop_on_failure and result["status"] != "ok":
                 if step.id == "governance-memory-cadence":

@@ -15,8 +15,9 @@ At each boundary derive one state:
 - `continue`: a scoped predicate is false and safe dispatchable work exists;
 - `switch`: this lane is blocked but another authorized lane is safe;
 - `wait_relay`: no safe lane can run and every residual already has a durable owner;
-- `settled`: scoped predicates pass twice, the second pass is byte-identical/no-growth, and every
-  discovered leaf has terminal custody or a named external gate;
+- `settled`: scoped predicates pass twice, the second pass is byte-identical/no-growth, the four
+  Archive4T final receipts hash-match Scratch, and every discovered leaf has terminal custody or a
+  named owner-routed residual;
 - `invalid`: packet, base, contract, module, or sensor truth cannot be trusted.
 
 Reality determines the state. Never edit evidence, thresholds, or status records to manufacture an

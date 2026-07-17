@@ -35,6 +35,8 @@ stage = os.environ["LIMEN_GOV_STAGE"]
 if log_bytes := int(os.environ.get("FIXTURE_LOG_BYTES", "0")):
     print("x" * log_bytes, flush=True)
 run_root = Path(os.environ["LIMEN_GOV_RUN_ROOT"])
+if scratch_bytes := int(os.environ.get("FIXTURE_SCRATCH_BYTES", "0")):
+    (run_root / "intermediate.bin").write_bytes(b"x" * scratch_bytes)
 counter_path = run_root / "executions.json"
 counter = json.loads(counter_path.read_text()) if counter_path.exists() else {}
 counter[stage] = counter.get(stage, 0) + 1
@@ -230,6 +232,48 @@ def _schema_catalog(tmp_path: Path) -> dict[str, object]:
     return {"root": str(root), "contracts": contracts}
 
 
+def _execution_policy(module, tmp_path: Path) -> dict[str, object]:
+    scratch_root = tmp_path
+    mount_point = scratch_root
+    while not module.os.path.ismount(mount_point):
+        mount_point = mount_point.parent
+    receipt_payload = {
+        "contract_name": module.SCRATCH_RECEIPT_CONTRACT,
+        "contract_version": 1,
+        "owner_reference": module.SCRATCH_OWNER_REFERENCE,
+        "scratch_root_digest": module.digest_value({"scratch_root": str(scratch_root.resolve())}),
+        "mount_point_digest": module.digest_value({"mount_point": str(mount_point.resolve())}),
+        "device_id": scratch_root.stat().st_dev,
+        "mount_status": "mounted",
+        "backup_status": "excluded",
+        "verification_status": "verified",
+        "verification_predicate": "predicate:domus-non-backed-scratch",
+    }
+    receipt = {
+        **receipt_payload,
+        "receipt_digest": module.digest_value(receipt_payload),
+    }
+    receipt_path = tmp_path / "domus-scratch-receipt.json"
+    receipt_path.write_text(
+        json.dumps(receipt, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    archive_root = tmp_path.parent / f"{tmp_path.name}-archive-finals"
+    archive_root.mkdir(exist_ok=True)
+    return {
+        "max_full_attempts": 2,
+        "aggregate_output_budget_bytes": 10_000_000,
+        "scratch_authority": {
+            "root": str(scratch_root),
+            "receipt": str(receipt_path),
+        },
+        "final_receipt_promotion": {
+            "root": str(archive_root),
+            "owner_reference": "archive:governance-memory-final-receipts",
+        },
+    }
+
+
 def _config(module, tmp_path: Path, *, fail_stage: str | None = None) -> Path:
     worker = _worker(tmp_path)
     predicate_worker = _predicate_worker(tmp_path)
@@ -313,6 +357,7 @@ def _config(module, tmp_path: Path, *, fail_stage: str | None = None) -> Path:
                 "cadence_id": "fixture-cadence",
                 "owner_reference": "owner:governance-cadence",
                 "snapshot_digest": "sha256:" + "a" * 64,
+                "execution_policy": _execution_policy(module, tmp_path),
                 "schema_catalog": _schema_catalog(tmp_path),
                 "stages": stages,
             },
@@ -321,6 +366,51 @@ def _config(module, tmp_path: Path, *, fail_stage: str | None = None) -> Path:
         encoding="utf-8",
     )
     return path
+
+
+def _write_repair_receipt(
+    module,
+    *,
+    config: Path,
+    run_root: Path,
+) -> None:
+    (
+        _public_config,
+        stages,
+        config_digest,
+        snapshot_digest,
+        _owner_reference,
+        _policy,
+    ) = module.load_config(
+        config,
+        snapshot_id="snapshot-fixture",
+        snapshot_at="2026-07-16T00:00:00Z",
+        run_root=run_root,
+    )
+    ledger = json.loads(module.attempt_ledger_path(run_root).read_text())
+    failure = ledger["attempts"][-1]
+    spec = next(item for item in stages if item.stage == failure["failure_stage"])
+    payload = {
+        "contract_name": module.REPAIR_RECEIPT_CONTRACT,
+        "contract_version": 1,
+        "snapshot_id": "snapshot-fixture",
+        "snapshot_digest": snapshot_digest,
+        "config_digest": config_digest,
+        "stage": spec.stage,
+        "owner_reference": spec.owner_reference,
+        "owner_revision": spec.owner_revision.value,
+        "predicate": spec.predicate.public(),
+        "predicate_revision": spec.predicate.revision.value,
+        "prior_failure_digest": failure["failure_digest"],
+        "status": "verified",
+    }
+    receipt = {**payload, "receipt_digest": module.digest_value(payload)}
+    path = module.repair_receipt_path(run_root, spec.stage)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(receipt, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def test_complete_run_reaches_two_run_proof_then_byte_fixed_point(tmp_path: Path) -> None:
@@ -568,6 +658,18 @@ def test_resume_skips_completed_predecessors_after_interruption(tmp_path: Path) 
     assert first_counts == {"classify": 1, "discover": 1, "parse": 1, "snapshot": 1}
 
     (run_root / "allow-failed-stage").write_text("continue", encoding="utf-8")
+    with pytest.raises(module.CadenceError, match="verified repair receipt"):
+        module.run_cadence(
+            snapshot_id="snapshot-fixture",
+            snapshot_at="2026-07-16T00:00:00Z",
+            config_path=config,
+            run_root=run_root,
+        )
+    _write_repair_receipt(
+        module,
+        config=config,
+        run_root=run_root,
+    )
     _, stats = module.run_cadence(
         snapshot_id="snapshot-fixture",
         snapshot_at="2026-07-16T00:00:00Z",
@@ -713,36 +815,20 @@ def test_stale_proof_is_invalidated_when_second_owner_traversal_fails(tmp_path: 
     assert not (run_root / "governance-cadence-active.v1.json").exists()
 
 
-def test_mutating_failed_proof_attempt_invalidates_without_retry(tmp_path: Path) -> None:
-    module = _load("governance_memory_cadence_mutating_proof")
+def test_stage_retry_profile_above_one_fails_closed(tmp_path: Path) -> None:
+    module = _load("governance_memory_cadence_no_stage_retries")
     config = _config(module, tmp_path)
     document = yaml.safe_load(config.read_text(encoding="utf-8"))
     document["stages"]["reconcile"]["execution_profile"]["max_attempts"] = 3
     config.write_text(yaml.safe_dump(document), encoding="utf-8")
-    run_root = tmp_path / "run"
-    module.run_cadence(
-        snapshot_id="snapshot-fixture",
-        snapshot_at="2026-07-16T00:00:00Z",
-        config_path=config,
-        run_root=run_root,
-    )
-    before = json.loads((run_root / "executions.json").read_text())
-    assert before["reconcile"] == 2
-    (run_root / "mutate-fail-proof-stage").write_text("reconcile", encoding="utf-8")
 
-    with pytest.raises(module.CadenceError, match="proof attempt changed"):
-        module.run_cadence(
+    with pytest.raises(module.CadenceError, match="max_attempts"):
+        module.validate_only(
             snapshot_id="snapshot-fixture",
             snapshot_at="2026-07-16T00:00:00Z",
             config_path=config,
-            run_root=run_root,
+            run_root=tmp_path / "run",
         )
-
-    after = json.loads((run_root / "executions.json").read_text())
-    assert after["reconcile"] == 3
-    assert json.loads((run_root / "artifacts" / "reconcile.json").read_text()) == {"mutated_by_failed_proof": True}
-    invalidated = json.loads((run_root / "governance-cadence-receipts.v1.json").read_text())
-    assert invalidated["contract_name"] == "governance-cadence-invalidated.v1"
 
 
 def test_stage_dataflow_must_consume_exact_predecessor_output(tmp_path: Path) -> None:
@@ -1055,3 +1141,115 @@ def test_log_limit_is_enforced_by_parent_owned_drain(tmp_path: Path) -> None:
         )
 
     assert (run_root / "logs" / "traversal-1" / "discover.attempt-1.log").stat().st_size == 128
+
+
+def test_second_failed_full_attempt_exhausts_snapshot_budget(
+    tmp_path: Path,
+) -> None:
+    module = _load("governance_memory_cadence_two_full_attempts")
+    config = _config(module, tmp_path, fail_stage="classify")
+    run_root = tmp_path / "run"
+
+    with pytest.raises(module.CadenceError, match="stage classify failed"):
+        module.run_cadence(
+            snapshot_id="snapshot-fixture",
+            snapshot_at="2026-07-16T00:00:00Z",
+            config_path=config,
+            run_root=run_root,
+        )
+    _write_repair_receipt(module, config=config, run_root=run_root)
+    with pytest.raises(module.CadenceError, match="stage classify failed"):
+        module.run_cadence(
+            snapshot_id="snapshot-fixture",
+            snapshot_at="2026-07-16T00:00:00Z",
+            config_path=config,
+            run_root=run_root,
+        )
+    before = json.loads((run_root / "executions.json").read_text())
+
+    with pytest.raises(module.CadenceError, match="consumed its 2 full cadence attempts"):
+        module.run_cadence(
+            snapshot_id="snapshot-fixture",
+            snapshot_at="2026-07-16T00:00:00Z",
+            config_path=config,
+            run_root=run_root,
+        )
+
+    assert json.loads((run_root / "executions.json").read_text()) == before
+    ledger = json.loads(module.attempt_ledger_path(run_root).read_text())
+    assert [attempt["status"] for attempt in ledger["attempts"]] == [
+        "failed",
+        "failed",
+    ]
+
+
+def test_snapshot_wide_output_budget_counts_undeclared_intermediates(
+    tmp_path: Path,
+) -> None:
+    module = _load("governance_memory_cadence_total_output_budget")
+    config = _config(module, tmp_path)
+    document = yaml.safe_load(config.read_text(encoding="utf-8"))
+    document["execution_policy"]["aggregate_output_budget_bytes"] = 4_500_000
+    document["stages"]["discover"]["env"]["FIXTURE_SCRATCH_BYTES"] = "5000000"
+    config.write_text(yaml.safe_dump(document), encoding="utf-8")
+
+    with pytest.raises(module.CadenceError, match="aggregate output-byte budget exceeded"):
+        module.run_cadence(
+            snapshot_id="snapshot-fixture",
+            snapshot_at="2026-07-16T00:00:00Z",
+            config_path=config,
+            run_root=tmp_path / "run",
+        )
+
+
+def test_scratch_authority_must_be_live_and_backup_excluded(
+    tmp_path: Path,
+) -> None:
+    module = _load("governance_memory_cadence_scratch_authority")
+    config = _config(module, tmp_path)
+    document = yaml.safe_load(config.read_text(encoding="utf-8"))
+    receipt_path = Path(document["execution_policy"]["scratch_authority"]["receipt"])
+    receipt = json.loads(receipt_path.read_text())
+    receipt["backup_status"] = "included"
+    payload = {key: value for key, value in receipt.items() if key != "receipt_digest"}
+    receipt["receipt_digest"] = module.digest_value(payload)
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+    with pytest.raises(module.CadenceError, match="backup-excluded"):
+        module.validate_only(
+            snapshot_id="snapshot-fixture",
+            snapshot_at="2026-07-16T00:00:00Z",
+            config_path=config,
+            run_root=tmp_path / "run",
+        )
+
+
+def test_final_promotion_copies_only_four_verified_receipts(
+    tmp_path: Path,
+) -> None:
+    module = _load("governance_memory_cadence_final_promotion")
+    config = _config(module, tmp_path)
+    document = yaml.safe_load(config.read_text(encoding="utf-8"))
+    archive_root = Path(document["execution_policy"]["final_receipt_promotion"]["root"])
+    run_root = tmp_path / "run"
+    args = [
+        "--snapshot-id",
+        "snapshot-fixture",
+        "--snapshot-at",
+        "2026-07-16T00:00:00Z",
+        "--config",
+        str(config),
+        "--run-root",
+        str(run_root),
+        "--strict",
+        "--write",
+    ]
+
+    assert module.main(args) == 1
+    assert module.main(args) == 0
+    assert sorted(path.name for path in archive_root.iterdir()) == sorted(module.FINAL_PROMOTION_FILENAMES)
+    for filename in module.FINAL_PROMOTION_FILENAMES:
+        assert module.digest_file(archive_root / filename) == module.digest_file(run_root / filename)
+    assert not (archive_root / "logs").exists()
+    assert not (archive_root / "artifacts").exists()
+    assert not (archive_root / module.attempt_ledger_path(run_root).name).exists()

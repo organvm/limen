@@ -7,6 +7,8 @@ import sys
 import time
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "vltima-absorb-cadence.py"
@@ -110,6 +112,34 @@ def test_configured_governance_receipts_preserve_explicit_overrides(
     }
 
 
+def test_promoted_final_receipts_take_precedence_over_scratch(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    snapshot_id = "gov-snapshot-2026-07-16"
+    run_root = tmp_path / "runs"
+    final_root = tmp_path / "archive-finals"
+    final_dir = final_root / snapshot_id
+    final_dir.mkdir(parents=True)
+    for filename in (
+        "governance-stage-receipts.v1.json",
+        "governance-cadence-receipts.v1.json",
+        "post-proof-idempotence.v1.json",
+        "governance-snapshot-bundle.v1.json",
+    ):
+        (final_dir / filename).write_text("{}\n", encoding="utf-8")
+    monkeypatch.setenv("LIMEN_GOV_SNAPSHOT_ID", snapshot_id)
+    monkeypatch.setenv("LIMEN_GOV_RUN_ROOT", str(run_root))
+    monkeypatch.setenv("LIMEN_GOV_FINAL_RECEIPT_ROOT", str(final_root))
+    cadence = _load("vltima_absorb_promoted_governance_receipts")
+
+    assert cadence.governance_receipt_environment() == {
+        "LIMEN_GOV_STAGE_RECEIPTS": str(final_dir / "governance-stage-receipts.v1.json"),
+        "LIMEN_GOV_CADENCE_RECEIPT": str(final_dir / "governance-cadence-receipts.v1.json"),
+        "LIMEN_GOV_SNAPSHOT_BUNDLE": str(final_dir / "governance-snapshot-bundle.v1.json"),
+    }
+
+
 def test_governance_readiness_subprocess_receives_derived_receipts(
     monkeypatch,
     tmp_path: Path,
@@ -150,16 +180,18 @@ def test_governance_heartbeat_exports_selected_run_receipts() -> None:
     heartbeat = (ROOT / "scripts" / "heartbeat-loop.sh").read_text(encoding="utf-8")
 
     assert (
-        'LIMEN_GOV_STAGE_RECEIPTS="${LIMEN_GOV_STAGE_RECEIPTS:-$governance_run_dir/governance-stage-receipts.v1.json}"'
+        'LIMEN_GOV_STAGE_RECEIPTS="${LIMEN_GOV_STAGE_RECEIPTS:-'
+        '$governance_receipt_dir/governance-stage-receipts.v1.json}"'
     ) in heartbeat
     assert (
         'LIMEN_GOV_CADENCE_RECEIPT="${LIMEN_GOV_CADENCE_RECEIPT:-'
-        '$governance_run_dir/governance-cadence-receipts.v1.json}"'
+        '$governance_receipt_dir/governance-cadence-receipts.v1.json}"'
     ) in heartbeat
     assert (
         'LIMEN_GOV_SNAPSHOT_BUNDLE="${LIMEN_GOV_SNAPSHOT_BUNDLE:-'
-        '$governance_run_dir/governance-snapshot-bundle.v1.json}"'
+        '$governance_receipt_dir/governance-snapshot-bundle.v1.json}"'
     ) in heartbeat
+    assert 'governance_receipt_dir="$governance_final_dir"' in heartbeat
 
 
 def test_materialize_private_is_explicit_opt_in() -> None:
@@ -221,6 +253,40 @@ def test_render_markdown_redacts_absolute_home_paths() -> None:
 
     assert "/Users/4jp" not in markdown
     assert "$LIMEN_ROOT/docs/session-corpus-ledger.md" in markdown
+
+
+def test_governance_outer_timeout_is_derived_from_stage_profiles(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "cadence.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {"stages": {f"stage-{index}": {"execution_profile": {"timeout_seconds": 3600}} for index in range(9)}}
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LIMEN_GOV_CONFIG", str(config))
+    cadence = _load("vltima_absorb_governance_outer_timeout")
+
+    assert cadence.governance_memory_outer_timeout(900) == (4 * 9 * 3600) + 60
+
+
+def test_public_line_redacts_governance_storage_authority_paths(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    scratch_receipt = tmp_path / "private" / "scratch-receipt.json"
+    final_root = tmp_path / "archive" / "finals"
+    monkeypatch.setenv("LIMEN_GOV_SCRATCH_AUTHORITY_RECEIPT", str(scratch_receipt))
+    monkeypatch.setenv("LIMEN_GOV_FINAL_RECEIPT_ROOT", str(final_root))
+    cadence = _load("vltima_absorb_storage_path_redaction")
+
+    line = cadence.public_line(f"{scratch_receipt} {final_root}/snapshot")
+
+    assert str(tmp_path) not in line
+    assert "$LIMEN_GOV_SCRATCH_AUTHORITY_RECEIPT" in line
+    assert "$LIMEN_GOV_FINAL_RECEIPT_ROOT/snapshot" in line
 
 
 def test_step_timeout_terminates_the_entire_process_group(tmp_path: Path) -> None:

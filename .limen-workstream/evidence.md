@@ -21,8 +21,14 @@ the refresh boundary).
 - Snapshot identity and timestamp are supplied through `LIMEN_GOV_SNAPSHOT_ID` and
   `LIMEN_GOV_SNAPSHOT_AT`.
 - The exact private digest and custody path remain in the owner-native private receipt.
-- The final config is supplied through `LIMEN_GOV_CONFIG`.
-- The final run root is `$LIMEN_GOV_RUN_ROOT/$LIMEN_GOV_SNAPSHOT_ID`.
+- The superseding config is supplied through `LIMEN_GOV_CONFIG`; the original Archive4T config and
+  7.456 GiB of historical output stay in place.
+- The bounded run root is
+  `$LIMEN_SCRATCH_ROOT/limen-private/governance-memory/runs/$LIMEN_GOV_SNAPSHOT_ID`
+  and requires an exact Domus-owned mount/device/backup-exclusion receipt.
+- Final custody is
+  `$LIMEN_GOV_FINAL_RECEIPT_ROOT/$LIMEN_GOV_SNAPSHOT_ID`, containing only the two aggregate
+  collections, the post-proof observation, and the final bundle.
 
 Preserve the owner-native failed stage-9 run and the explicitly superseded owner-revision run; they
 are evidence, not completion receipts.
@@ -39,9 +45,9 @@ are evidence, not completion receipts.
 - Global readiness is honestly false while blocked exports, quarantines, and incomplete ideal
   predicates remain.
 
-## External gate
+## Hosted-runner verifier state
 
-GitHub is operational. The private session-meta, CORPVS, and Limen jobs were rejected before runner
-allocation because the organization Actions account reports failed-payment/spending-limit policy.
-No billing mutation is authorized by this capsule. Keep every PR draft and do not merge until exact
-head checks actually execute and the dependency order is satisfied.
+GitHub API, pull requests, remotes, and Actions configuration are operational. Some historical jobs
+ended before allocating a runner and executed zero steps; preserve that result as unexecuted
+hosted-runner verifier debt. It is not a GitHub outage, external campaign gate, or reason to stop
+local exact-head predicates, preservation, PR updates, or owner-authorized merges.
