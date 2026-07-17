@@ -2211,6 +2211,30 @@ parameters:
     self_update: none
     owner: gitvs
     note: "Path to the GITVS estate registry (the desired-state resource graph). Overridable so scripts/tests/gitvs.test.sh can point the parity predicate at drift fixtures; production reads the committed institutio/github/estate.yaml."
+  LIMEN_MOAT_GUARD:
+    default: "moat-guard.json"
+    env: LIMEN_MOAT_GUARD
+    self_update: none
+    owner: moat-audit
+    note: "Path to the moat boundary registry (per-public-repo leak-value patterns). Overridable so scripts/tests/moat-audit.test.sh points the predicate at fixture registries; production reads the committed moat-guard.json. See scripts/moat-audit.py."
+  LIMEN_VALUE_REPOS:
+    default: "value-repos.json"
+    env: LIMEN_VALUE_REPOS
+    self_update: none
+    owner: moat-audit
+    note: "Override for the value-tier repo list consumed by scripts/moat-audit.py; production reads the committed value-repos.json. Test/fixture seam only."
+  LIMEN_POSITIONING_SEEDS:
+    default: "positioning-seeds.json"
+    env: LIMEN_POSITIONING_SEEDS
+    self_update: none
+    owner: moat-audit
+    note: "Override for the positioning seeds registry consumed by scripts/moat-audit.py lure-readiness; production reads the committed positioning-seeds.json. Test/fixture seam only."
+  LIMEN_POSITIONING_DIR:
+    default: "docs/positioning"
+    env: LIMEN_POSITIONING_DIR
+    self_update: none
+    owner: moat-audit
+    note: "Override for the published positioning-page directory scanned by scripts/moat-audit.py lure-readiness; production reads docs/positioning. Test/fixture seam only."
   LIMEN_BEAT_GITVS:
     default: 8
     env: LIMEN_BEAT_GITVS
@@ -2222,7 +2246,13 @@ parameters:
     env: LIMEN_BACKBLAZE_EXCLUSIONS
     self_update: none
     owner: substrate
-    note: "Gate for the backblaze-exclusions beat sensor (institutio/governance/sensors.yaml section 0p): scripts/backblaze-exclusions.py --check reads the world-readable bzinfo.xml and verifies every REQUIRED_EXCLUDES entry is a live bzdirfilter — the completion predicate for lever L-BACKBLAZE-EXCLUDE (2026-07-15 host-thrash incident, IF-HOST-PRESSURE form 3). Read-only, advisory, fail-open on an unreadable/unrecognized file. 0 disables the pass."
+    note: "Gate for the backblaze-exclusions beat sensor (institutio/governance/sensors.yaml section 0p): scripts/backblaze-exclusions.py verifies every REQUIRED_EXCLUDES entry is a live bzdirfilter in bzinfo.xml (2026-07-15/16 host-thrash incidents, IF-HOST-PRESSURE form 3). Advisory, fail-open on an unreadable/unrecognized file. Mutation is the separate registry-classified valve LIMEN_BACKBLAZE_APPLY. 0 disables the pass."
+  LIMEN_BACKBLAZE_APPLY:
+    default: "1"
+    env: LIMEN_BACKBLAZE_APPLY
+    self_update: none
+    owner: substrate
+    note: "Arms the backblaze-exclusions self-heal effector: 1 (default — operator directive 2026-07-16: the exclusion estate is organ-tended, never a pane chore; bzinfo.xml proved user-owned, retiring lever L-BACKBLAZE-EXCLUDE) appends --apply so the daily rung inserts any missing REQUIRED_EXCLUDES bzdirfilter (timestamped backup alongside + XML validation + atomic replace; idempotent no-op when green; blocked-not-torn if the file is ever re-rooted). 0 reverts the rung to report-only."
   LIMEN_BEAT_BACKBLAZE:
     default: 24
     env: LIMEN_BEAT_BACKBLAZE
@@ -3137,3 +3167,28 @@ parameters:
     self_update: none
     owner: tabularius
     note: "How many NEW inbound messages since a person's last review make a delta dice-up worth running (relationship-review-delta.py). Default 20 — a meaningful wave, not a single text. Raise to reduce noise, lower to trigger sooner."
+
+  LIMEN_OPPORTUNITY_PIPELINE:
+    default: "1"
+    env: LIMEN_OPPORTUNITY_PIPELINE
+    self_update: none
+    owner: mail
+    note: "Gate for the opportunity-pipeline beat sensor (inbound-lead review-due detector for the UMA inbound-lead-hire/deploy/linkedin classes). ON by default: it is read-only over obligations-ledger.json and fails open, so it cannot red the beat or leak. Its only public output is a PII-clean count (logs/opportunity-status.json); per-lead detail lands only in the sealed _people-private/opportunities estate."
+  LIMEN_BEAT_OPPORTUNITY_PIPELINE:
+    default: 12
+    env: LIMEN_BEAT_OPPORTUNITY_PIPELINE
+    self_update: none
+    owner: mail
+    note: "Cadence (every N beats) of the opportunity-pipeline sensor. 12 beats keeps warm inbound leads moving faster than the weekly relationship cadence. Resolved by the generic scheduled runner (beat-sensors.py --run --source heartbeat --scheduled-only); heartbeat-loop.sh carries no sensor-specific cadence constant."
+  LIMEN_OPPORTUNITY_PIPELINE_TIMEOUT:
+    default: 300
+    env: LIMEN_OPPORTUNITY_PIPELINE_TIMEOUT
+    self_update: none
+    owner: mail
+    note: "Per-run timeout (seconds) for the opportunity-pipeline sensor. The work is a ledger read plus (when application-pipeline is present) one bounded opportunity_sync.py subprocess; 300s is generous headroom."
+  LIMEN_OPPORTUNITY_NOTIFY:
+    default: "1"
+    env: LIMEN_OPPORTUNITY_NOTIFY
+    self_update: none
+    owner: mail
+    note: "Safety-valve arg for the opportunity-pipeline effector (--notify). When 1, review-due detections append COUNT-ONLY events to the sealed private log ~/Workspace/_people-private/opportunities/review-due.jsonl (ARCA-sealed, never public) and push a count-only line through the existing notify cascade. ON by default because both write targets are private/count-only; set 0 to run detection without recording."
