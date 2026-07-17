@@ -677,7 +677,7 @@ sensors:
 
   relationship-review-delta:
     section: heartbeat
-    title: "relationship review-due detector — surface (PII-clean count) when a person's new inbound volume since their last review warrants a delta dice-up"
+    title: "relationship review-due detector — consume a fresh owner-custodied immutable handoff and emit only a PII-clean count"
     gate: LIMEN_RELATIONSHIP_REVIEW
     default: "1"
     source: [heartbeat]
@@ -690,11 +690,5 @@ sensors:
       default: 300
     steps:
       - command: "python3 scripts/relationship-review-delta.py"
-        args_when:
-          - env: LIMEN_RELATIONSHIP_REVIEW_NOTIFY
-            default: "1"
-            equals: "1"
-            args: ["--notify"]
-            armed_valve_type: safety
         severity: silent
-        escalation: "relationship review-due detector skipped or exceeded its bound (read-only chat.db count; fails open)"
+        escalation: "relationship review-due coverage unavailable or exceeded its bound; refresh the owner-produced custody handoff (the sensor has no hydration or storage effector)"

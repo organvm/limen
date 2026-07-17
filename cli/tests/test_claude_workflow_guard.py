@@ -33,15 +33,72 @@ def write_fable_receipt(tmp_path: Path) -> Path:
         json.dumps(
             {
                 "schema": "limen.fable_acceptance.v1",
+                "created_at": now.isoformat(),
                 "week": monday,
                 "category": "adversarial-review",
                 "percent": 5,
                 "sources": ["docs/fable-allotment.md"],
+                "redacted_packets": [],
                 "verification": ["python3 scripts/fable-allotment.py audit"],
+                "mode": "plan-only",
+                "deliverable": "continuation-capsule",
+                "builder_handoff": {
+                    "provider_selection": "auto",
+                    "requirements": {
+                        "planning_only": False,
+                        "build_allowed": True,
+                        "fable_allowed": False,
+                    },
+                },
+                "motion_receipt_deadline_seconds": 5400,
             }
         )
     )
     return receipt
+
+
+def write_fable_balance(tmp_path: Path, spent_pct: float = 5.0) -> Path:
+    balance = tmp_path / "fable-allotment.json"
+    balance.write_text(
+        json.dumps(
+            {
+                "schema": "limen.fable_balance.v1",
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "week": (datetime.now(timezone.utc) - timedelta(days=datetime.now(timezone.utc).weekday()))
+                .date()
+                .isoformat(),
+                "spent_tokens": 0,
+                "spent_pct": spent_pct,
+                "deliberate_cap": 40,
+                "hard_cap": 50,
+                "over_cap": spent_pct >= 50,
+                "source": "test-owner-adapter",
+                "meter_ready": True,
+                "measurement": {
+                    "method": "owner-used-percent",
+                    "owner_observed_pct": spent_pct,
+                },
+            }
+        )
+    )
+    return balance
+
+
+def fable_packet() -> dict:
+    return {
+        "schema": "limen.fable_build_packet.v1",
+        "mode": "plan-only",
+        "implementation_by_fable": "prohibited",
+        "builder_handoff": {
+            "provider_selection": "auto",
+            "requirements": {
+                "planning_only": False,
+                "build_allowed": True,
+                "fable_allowed": False,
+            },
+        },
+        "path": "docs/continuations/fable/t1.md",
+    }
 
 
 def test_normalize_candidates_accepts_nested_json_string():
@@ -60,7 +117,7 @@ def test_normalize_candidates_rejects_undefined_target():
     assert "invalid repo" in proc.stderr
 
 
-def test_audit_workflow_blocks_opus_fanout_and_unparsed_string_args(tmp_path):
+def test_audit_workflow_does_not_infer_cost_from_provider_ids(tmp_path):
     wf = {
         "workflowName": "verify-and-ship-clean-prs",
         "status": "killed",
@@ -68,8 +125,8 @@ def test_audit_workflow_blocks_opus_fanout_and_unparsed_string_args(tmp_path):
         "args": json.dumps([{"repo": "a-organvm/a-i-chat--exporter", "number": 44, "title": "ship"}]),
         "script": "const cands = args\nagent(prompt(c))",
         "workflowProgress": [
-            {"model": "claude-opus-4-8[1m]", "label": "ship:undefined#undefined"},
-            {"model": "claude-opus-4-8[1m]", "label": "ship:undefined#undefined"},
+            {"model": "arbitrarily-renamed-provider-id-a", "label": "ship:undefined#undefined"},
+            {"model": "arbitrarily-renamed-provider-id-b", "label": "ship:undefined#undefined"},
         ],
     }
     p = tmp_path / "wf.json"
@@ -78,7 +135,7 @@ def test_audit_workflow_blocks_opus_fanout_and_unparsed_string_args(tmp_path):
     assert proc.returncode == 2
     report = json.loads(proc.stdout)
     violations = "\n".join(report["reports"][0]["violations"])
-    assert "Opus fanout blocked" in violations
+    assert "fanout blocked" not in violations
     assert "undefined PR target detected" in violations
     assert "script does not parse args" in violations
 
@@ -88,7 +145,13 @@ def test_audit_workflow_blocks_unaccepted_fable(tmp_path):
         "workflowName": "canonical-fable-synthesis",
         "status": "completed",
         "agentCount": 1,
-        "workflowProgress": [{"model": "claude-fable-5", "state": "done"}],
+        "workflowProgress": [
+            {
+                "model": "arbitrarily-renamed-provider-id",
+                "execution_role": "fable-planner",
+                "state": "done",
+            }
+        ],
         "result": {"summary": "done"},
     }
     p = tmp_path / "wf.json"
@@ -99,23 +162,98 @@ def test_audit_workflow_blocks_unaccepted_fable(tmp_path):
     assert "Fable run lacks written acceptance command" in violations
 
 
+def test_audit_workflow_role_binding_cannot_hide_behind_empty_progress(tmp_path):
+    workflow = {
+        "workflowName": "empty-progress-fable",
+        "status": "completed",
+        "executionProfile": {
+            "execution_role": "fable-planner",
+            "planning_only": True,
+            "build_allowed": False,
+            "fanout_allowed": False,
+        },
+        "workflowProgress": [],
+    }
+    path = tmp_path / "wf.json"
+    path.write_text(json.dumps(workflow))
+    proc = run_guard("audit-workflow", str(path))
+    assert proc.returncode == 2
+    violations = "\n".join(json.loads(proc.stdout)["reports"][0]["violations"])
+    assert "Fable run lacks written acceptance command" in violations
+
+
 def test_audit_workflow_allows_accepted_single_fable(tmp_path):
-    receipt = tmp_path / "logs" / "fable-acceptance" / "accepted.json"
-    receipt.parent.mkdir(parents=True)
-    receipt.write_text("{}")
+    receipt = write_fable_receipt(tmp_path)
+    balance = write_fable_balance(tmp_path)
     wf = {
         "workflowName": "canonical-fable-synthesis",
         "status": "completed",
         "agentCount": 1,
         "fableAcceptance": str(receipt),
-        "workflowProgress": [{"model": "claude-fable-5", "state": "done"}],
+        "executionProfile": {
+            "execution_role": "fable-planner",
+            "planning_only": True,
+            "build_allowed": False,
+            "fanout_allowed": False,
+        },
+        "fablePacket": fable_packet(),
+        "workflowProgress": [
+            {
+                "model": "arbitrarily-renamed-provider-id",
+                "execution_role": "fable-planner",
+                "state": "done",
+            }
+        ],
         "result": {"summary": "done"},
     }
     p = tmp_path / "wf.json"
     p.write_text(json.dumps(wf))
-    proc = run_guard("audit-workflow", str(p))
+    proc = run_guard("audit-workflow", str(p), env={"LIMEN_FABLE_BALANCE_PATH": str(balance)})
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert json.loads(proc.stdout)["ok"] is True
+
+
+def test_audit_workflow_rejects_static_builder_model_or_tier(tmp_path):
+    receipt = write_fable_receipt(tmp_path)
+    balance = write_fable_balance(tmp_path)
+    packet = fable_packet()
+    packet["builder_handoff"] = {
+        "provider_selection": "auto",
+        "requirements": {
+            "planning_only": False,
+            "build_allowed": True,
+            "fable_allowed": False,
+        },
+        "model": "pinned-provider-id",
+    }
+    wf = {
+        "workflowName": "static-builder",
+        "status": "completed",
+        "fableAcceptance": str(receipt),
+        "executionProfile": {
+            "execution_role": "fable-planner",
+            "planning_only": True,
+            "build_allowed": False,
+            "fanout_allowed": False,
+        },
+        "fablePacket": packet,
+        "workflowProgress": [
+            {
+                "model": "arbitrarily-renamed-provider-id",
+                "execution_role": "fable-planner",
+                "state": "done",
+            }
+        ],
+    }
+    path = tmp_path / "wf.json"
+    path.write_text(json.dumps(wf))
+    proc = run_guard(
+        "audit-workflow",
+        str(path),
+        env={"LIMEN_FABLE_BALANCE_PATH": str(balance)},
+    )
+    assert proc.returncode == 2
+    assert "provider-neutral builder packet" in "\n".join(json.loads(proc.stdout)["reports"][0]["violations"])
 
 
 def test_audit_workflow_allows_sonnet_success_with_ci_failure_words(tmp_path):
@@ -134,7 +272,7 @@ def test_audit_workflow_allows_sonnet_success_with_ci_failure_words(tmp_path):
     assert json.loads(proc.stdout)["ok"] is True
 
 
-def test_audit_transcript_blocks_unbounded_expensive_opus_fanout(tmp_path):
+def test_audit_transcript_blocks_provider_neutral_session_limits(tmp_path):
     transcript = tmp_path / "session.jsonl"
     transcript.write_text(
         "\n".join(
@@ -149,7 +287,7 @@ def test_audit_transcript_blocks_unbounded_expensive_opus_fanout(tmp_path):
                     {
                         "type": "assistant",
                         "message": {
-                            "model": "claude-opus-4-8",
+                            "model": "arbitrarily-renamed-provider-id",
                             "content": [
                                 {"type": "tool_use", "name": "Agent", "input": {}},
                                 {"type": "tool_use", "name": "Workflow", "input": {}},
@@ -181,9 +319,10 @@ def test_audit_transcript_blocks_unbounded_expensive_opus_fanout(tmp_path):
     report = json.loads(proc.stdout)
     violations = "\n".join(report["violations"])
     assert "billable token budget exceeded" in violations
-    assert "Opus billable budget exceeded" in violations
     assert "agent/workflow fanout exceeded" in violations
     assert "unbounded goal phrase detected" in violations
+    assert report["providerCostClassified"] is False
+    assert report["opusBillableTokens"] is None
 
 
 def test_audit_transcript_redacts_unbounded_prompt_text(tmp_path):
@@ -209,16 +348,14 @@ def test_audit_transcript_redacts_unbounded_prompt_text(tmp_path):
     assert evidence["chars"] == len(prompt)
 
 
-def test_audit_transcript_flags_opus_subagent_fanout(tmp_path):
-    """The verify-studio-launch shape: a cheap orchestrator that fans out expensive-tier
-    subagents. The guard reads each subagent's REAL model field and flags the fan-out."""
+def test_audit_transcript_does_not_classify_subagents_by_provider_id(tmp_path):
     main = tmp_path / "session.jsonl"
     main.write_text(
         json.dumps(
             {
                 "type": "assistant",
                 "message": {
-                    "model": "claude-sonnet-4-6",
+                    "model": "arbitrarily-renamed-provider-id-main",
                     "content": [{"type": "text", "text": "orchestrating"}],
                     "usage": {"input_tokens": 5, "output_tokens": 5},
                 },
@@ -234,7 +371,7 @@ def test_audit_transcript_flags_opus_subagent_fanout(tmp_path):
                 {
                     "type": "assistant",
                     "message": {
-                        "model": "claude-opus-4-8[1m]",
+                        "model": f"arbitrarily-renamed-provider-id-{name}",
                         "content": [{"type": "text", "text": "trivial verify"}],
                         "usage": {"input_tokens": 5, "output_tokens": 5},
                     },
@@ -254,11 +391,11 @@ def test_audit_transcript_flags_opus_subagent_fanout(tmp_path):
         "--max-opus-agents",
         "1",
     )
-    assert proc.returncode == 2, proc.stdout + proc.stderr
+    assert proc.returncode == 0, proc.stdout + proc.stderr
     report = json.loads(proc.stdout)
-    assert report["expensiveSubagents"] == 2
-    assert report["expensiveTier"] == "opus"
-    assert "subagent fanout" in "\n".join(report["violations"])
+    assert report["expensiveSubagents"] is None
+    assert report["expensiveTier"] is None
+    assert report["providerCostClassified"] is False
 
 
 def test_audit_transcript_recurses_workflow_subagent_dirs(tmp_path):
@@ -268,7 +405,7 @@ def test_audit_transcript_recurses_workflow_subagent_dirs(tmp_path):
             {
                 "type": "assistant",
                 "message": {
-                    "model": "claude-sonnet-4-6",
+                    "model": "arbitrarily-renamed-provider-id-main",
                     "content": [{"type": "text", "text": "orchestrating"}],
                     "usage": {"input_tokens": 5, "output_tokens": 5},
                 },
@@ -283,7 +420,7 @@ def test_audit_transcript_recurses_workflow_subagent_dirs(tmp_path):
             {
                 "type": "assistant",
                 "message": {
-                    "model": "claude-opus-4-8[1m]",
+                    "model": "arbitrarily-renamed-provider-id-nested",
                     "content": [{"type": "text", "text": "nested verifier"}],
                     "usage": {"input_tokens": 5, "output_tokens": 5},
                 },
@@ -304,11 +441,11 @@ def test_audit_transcript_recurses_workflow_subagent_dirs(tmp_path):
         "--max-opus-agents",
         "0",
     )
-    assert proc.returncode == 2, proc.stdout + proc.stderr
+    assert proc.returncode == 0, proc.stdout + proc.stderr
     report = json.loads(proc.stdout)
     assert report["files"] == [str(main), str(nested)]
-    assert report["expensiveSubagents"] == 1
-    assert "subagent fanout" in "\n".join(report["violations"])
+    assert report["expensiveSubagents"] is None
+    assert report["providerCostClassified"] is False
 
 
 def test_audit_transcript_blocks_unaccepted_fable(tmp_path):
@@ -317,8 +454,9 @@ def test_audit_transcript_blocks_unaccepted_fable(tmp_path):
         json.dumps(
             {
                 "type": "assistant",
+                "execution_role": "fable-planner",
                 "message": {
-                    "model": "claude-fable-5",
+                    "model": "arbitrarily-renamed-provider-id",
                     "content": [{"type": "text", "text": "canonical answer"}],
                     "usage": {"input_tokens": 5, "output_tokens": 5},
                 },
@@ -347,8 +485,9 @@ def test_audit_transcript_policy_mentions_do_not_accept_fable(tmp_path):
                 json.dumps(
                     {
                         "type": "assistant",
+                        "execution_role": "fable-planner",
                         "message": {
-                            "model": "claude-fable-5",
+                            "model": "arbitrarily-renamed-provider-id",
                             "content": [{"type": "text", "text": "done"}],
                             "usage": {"input_tokens": 5, "output_tokens": 5},
                         },
@@ -369,9 +508,16 @@ def test_audit_transcript_allows_current_receipt_env(tmp_path):
         json.dumps(
             {
                 "type": "assistant",
+                "execution_role": "fable-planner",
                 "message": {
-                    "model": "claude-fable-5",
-                    "content": [{"type": "text", "text": "accepted"}],
+                    "model": "arbitrarily-renamed-provider-id",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "name": "Write",
+                            "input": {"file_path": "docs/continuations/fable/t1.md"},
+                        }
+                    ],
                     "usage": {"input_tokens": 5, "output_tokens": 5},
                 },
             }
@@ -379,15 +525,105 @@ def test_audit_transcript_allows_current_receipt_env(tmp_path):
         + "\n"
     )
     receipt = write_fable_receipt(tmp_path)
+    balance = write_fable_balance(tmp_path)
     proc = run_guard(
         "audit-transcript",
         str(transcript),
         "--max-billable-tokens",
         "1000000",
-        env={"LIMEN_FABLE_ACCEPTANCE": str(receipt)},
+        env={
+            "LIMEN_FABLE_ACCEPTANCE": str(receipt),
+            "LIMEN_FABLE_BALANCE_PATH": str(balance),
+        },
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert json.loads(proc.stdout)["fableAcceptanceSeen"] is True
+
+
+def test_audit_transcript_rejects_fable_implementation_tools(tmp_path):
+    transcript = tmp_path / "session.jsonl"
+    transcript.write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "execution_role": "fable-planner",
+                "message": {
+                    "model": "arbitrarily-renamed-provider-id",
+                    "content": [
+                        {"type": "tool_use", "name": "Bash", "input": {"command": "pytest"}},
+                        {
+                            "type": "tool_use",
+                            "name": "Write",
+                            "input": {"file_path": "cli/src/limen/build.py"},
+                        },
+                    ],
+                    "usage": {"input_tokens": 5, "output_tokens": 5},
+                },
+            }
+        )
+        + "\n"
+    )
+    receipt = write_fable_receipt(tmp_path)
+    balance = write_fable_balance(tmp_path)
+    proc = run_guard(
+        "audit-transcript",
+        str(transcript),
+        "--max-billable-tokens",
+        "1000000",
+        env={
+            "LIMEN_FABLE_ACCEPTANCE": str(receipt),
+            "LIMEN_FABLE_BALANCE_PATH": str(balance),
+        },
+    )
+    assert proc.returncode == 2
+    report = json.loads(proc.stdout)
+    assert len(report["fableToolViolations"]) == 2
+    assert "implementation/fanout tools" in "\n".join(report["violations"])
+
+
+def test_audit_transcript_rejects_ninety_minutes_without_durable_packet_receipt(tmp_path):
+    transcript = tmp_path / "session.jsonl"
+    start = datetime.now(timezone.utc)
+    rows = []
+    for timestamp in (start, start + timedelta(seconds=5400)):
+        rows.append(
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "timestamp": timestamp.isoformat(),
+                    "execution_role": "fable-planner",
+                    "message": {
+                        "model": "arbitrarily-renamed-provider-id",
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "name": "Write",
+                                "input": {"file_path": "docs/continuations/fable/t1.md"},
+                            }
+                        ],
+                        "usage": {"input_tokens": 5, "output_tokens": 5},
+                    },
+                }
+            )
+        )
+    transcript.write_text("\n".join(rows) + "\n")
+    receipt = write_fable_receipt(tmp_path)
+    balance = write_fable_balance(tmp_path)
+    proc = run_guard(
+        "audit-transcript",
+        str(transcript),
+        "--max-billable-tokens",
+        "1000000",
+        env={
+            "LIMEN_FABLE_ACCEPTANCE": str(receipt),
+            "LIMEN_FABLE_BALANCE_PATH": str(balance),
+        },
+    )
+    assert proc.returncode == 2
+    report = json.loads(proc.stdout)
+    assert report["fableMotionSeconds"] == 5400
+    assert "without a durable packet receipt" in "\n".join(report["violations"])
 
 
 def test_audit_transcript_gates_fable_billable_tokens(tmp_path):
@@ -396,8 +632,9 @@ def test_audit_transcript_gates_fable_billable_tokens(tmp_path):
         json.dumps(
             {
                 "type": "assistant",
+                "execution_role": "fable-planner",
                 "message": {
-                    "model": "claude-fable-5",
+                    "model": "arbitrarily-renamed-provider-id",
                     "content": [{"type": "text", "text": "expensive"}],
                     "usage": {"input_tokens": 40, "cache_creation_input_tokens": 40, "output_tokens": 40},
                 },

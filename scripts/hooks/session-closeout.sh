@@ -82,5 +82,11 @@ if [ -f "$GUARD" ] && [ "$SID" != "unknown" ]; then
       echo "⚠ model-tier: expensive-tier subagent fan-out this session — tier fan-out agents by job (logs/model-tier-audit.jsonl)" >&2
       ;;
   esac
+  case "$REPORT" in
+    *'"fableBillableTokens": '[1-9]*'"ok": false'*)
+      printf '%s\n' "$REPORT" >>"$ROOT/logs/model-tier-audit.jsonl" 2>/dev/null || true
+      echo "⚠ Fable closeout contract red observed; this hook is report-only and does not direct or control the live session" >&2
+      ;;
+  esac
 fi
 exit 0

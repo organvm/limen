@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import importlib.util
+import datetime
 import hashlib
+import importlib.util
 import json
 import sqlite3
 import subprocess
@@ -40,10 +41,20 @@ def _cursor(module, *, scope: str = "fixture") -> dict:
 
 def _exact_authority_snapshot(module, *, policy_digest: str = "b" * 64) -> dict:
     contract = module.current_source_adapter_contract()
+    evaluation_time = datetime.datetime(2026, 7, 16, 20, 0, tzinfo=datetime.timezone.utc)
+    freshness = module.source_custody_freshness_evidence(
+        {
+            "scope": "all",
+            "target_scope": "all",
+            "last_scan_at": "2026-07-16T19:00:00Z",
+        },
+        evaluated_at=evaluation_time,
+    )
     return {
         "semantic_digest": "a" * 64,
         "policy_digest": policy_digest,
         "source_cursor_digest": "c" * 64,
+        "source_custody_freshness": freshness,
         "source_scope": {
             "scope": "all",
             "target_scope": "all",
@@ -760,8 +771,8 @@ def test_prompt_authority_seal_is_counts_hash_only_private_safe_and_schema_bound
     payload = corpus.prompt_authority_seal_bytes(snapshot)
     serialized = payload.decode("utf-8")
 
-    assert seal["schema"] == "limen.prompt-authority-seal.v1"
-    assert seal["schema_version"] == 1
+    assert seal["schema"] == "limen.prompt-authority-seal.v2"
+    assert seal["schema_version"] == 2
     assert seal["authority_ready"] is False
     assert seal["validation_ok"] is False
     assert seal["totals"] == {
@@ -824,6 +835,27 @@ def test_prompt_authority_seal_ready_verdict_requires_complete_bound_evidence_an
     incomplete = corpus.prompt_authority_seal(missing_hash)
     assert incomplete["authority_ready"] is False
     assert corpus._prompt_authority_seal_digest_valid(incomplete)
+
+
+def test_prompt_authority_seal_binds_stale_custody_as_not_ready_without_wall_clock_reads():
+    corpus = _load()
+    snapshot = _exact_authority_snapshot(corpus)
+    snapshot["source_custody_freshness"] = corpus.source_custody_freshness_evidence(
+        {
+            "scope": "all",
+            "target_scope": "all",
+            "last_scan_at": "2026-07-14T19:00:00Z",
+        },
+        evaluated_at=datetime.datetime(2026, 7, 16, 20, 0, tzinfo=datetime.timezone.utc),
+    )
+
+    public = corpus.public_projection(snapshot)
+    seal = corpus.prompt_authority_seal(snapshot, public=public)
+
+    assert public["source_scope"]["source_custody_freshness"]["reason"] == "stale"
+    assert seal["source_custody_freshness"] == public["source_scope"]["source_custody_freshness"]
+    assert seal["authority_ready"] is False
+    assert corpus._prompt_authority_seal_digest_valid(seal)
 
 
 def test_prompt_authority_seal_binds_projection_alias_blockers_and_current_contract():
@@ -1032,6 +1064,81 @@ def test_prompt_authority_seal_is_byte_identical_on_zero_change_rerun(tmp_path: 
     assert second["write_changed"] is False
     assert paths.public_seal.read_bytes() == before
     assert paths.public_seal.stat().st_mtime_ns == before_mtime
+    assert corpus.check_ledger(paths) == []
+
+
+def test_duplicate_event_is_byte_identical_across_authority_clock_change(tmp_path: Path, monkeypatch):
+    corpus = _load()
+    paths = _paths(corpus, tmp_path)
+    event = _event("Keep cached prompt ingestion byte-stable.", event_ref="cached-replay")
+    first = corpus.update_ledger(paths, events=[event], cursor=_cursor(corpus))
+    artifacts = (
+        paths.event_journal,
+        paths.outcome_journal,
+        paths.cursor,
+        paths.private_snapshot,
+        paths.public_snapshot,
+        paths.public_markdown,
+        paths.public_seal,
+    )
+    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in artifacts}
+    public = corpus.load_json(paths.public_snapshot)
+    assert paths.public_markdown.read_text(encoding="utf-8") == corpus.render_markdown(
+        public,
+        corpus.load_policy(paths.policy),
+    )
+
+    real_datetime = datetime.datetime
+    future = real_datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=2)
+
+    class FutureDatetime(real_datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return future.replace(tzinfo=None) if tz is None else future.astimezone(tz)
+
+    monkeypatch.setattr(corpus.dt, "datetime", FutureDatetime)
+    second = corpus.update_ledger(paths, events=[event])
+
+    assert first["write_changed"] is True
+    assert second["write_changed"] is False
+    assert second["appended"] == {
+        "occurrences": 0,
+        "atoms": 0,
+        "outcomes": 0,
+        "reclassified": 0,
+    }
+    assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in artifacts} == before
+    assert corpus.check_ledger(paths) == []
+
+
+def test_duplicate_event_fast_path_does_not_mask_source_revision(tmp_path: Path, monkeypatch):
+    corpus = _load()
+    paths = _paths(corpus, tmp_path)
+    original = {
+        **_event("Preserve changed source custody.", event_ref="source-revision"),
+        "source_locator": "/private/fixture/source-one.jsonl#0:0",
+    }
+    corpus.update_ledger(paths, events=[original], cursor=_cursor(corpus))
+
+    real_datetime = datetime.datetime
+    future = real_datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=2)
+
+    class FutureDatetime(real_datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return future.replace(tzinfo=None) if tz is None else future.astimezone(tz)
+
+    monkeypatch.setattr(corpus.dt, "datetime", FutureDatetime)
+    revised = {
+        **original,
+        "source_locator": "/private/fixture/source-two.jsonl#0:0",
+    }
+    result = corpus.update_ledger(paths, events=[revised])
+
+    assert result["write_changed"] is True
+    assert result["appended"]["reclassified"] == 1
+    assert result["occurrences"][0]["source_locator"] == revised["source_locator"]
+    assert len(paths.event_journal.read_text(encoding="utf-8").splitlines()) == 2
     assert corpus.check_ledger(paths) == []
 
 
@@ -3275,16 +3382,16 @@ def test_check_cursor_state_flags_unbound_checkpoint(tmp_path: Path):
     assert any("not bound" in error for error in errors)
 
 
-def _scan_and_bind(tmp_path: Path) -> None:
+def _scan_and_bind(tmp_path: Path, *, all_history: bool = False) -> None:
     """Bootstrap a properly sealed ledger in tmp_path via the script's real scan path."""
+    scope_args = ["--all"] if all_history else ["--days", "0"]
     result = subprocess.run(
         [
             sys.executable,
             str(SCRIPT),
             "--scan",
             "--unbounded",
-            "--days",
-            "0",
+            *scope_args,
             "--write",
             "--root",
             str(tmp_path),
@@ -3345,6 +3452,100 @@ def test_rebind_checkpoint_refuses_on_corrupted_journals(tmp_path: Path):
     )
 
 
+def test_rebind_checkpoint_refuses_stale_live_custody_without_publication(tmp_path: Path, monkeypatch):
+    corpus = _load()
+    ledger = _load_ledger_script()
+    paths = _paths(corpus, tmp_path)
+    _scan_and_bind(tmp_path)
+    before = {
+        path: path.read_bytes()
+        for path in (paths.public_snapshot, paths.public_seal, paths.public_markdown, paths.private_snapshot)
+    }
+
+    monkeypatch.setattr(ledger, "validate_live_source_custody", lambda _cursor: ["fixture custody is stale"])
+    errors = ledger.rebind_checkpoint(paths)
+
+    assert errors == ["live source custody changed; refusing to rebind: fixture custody is stale"]
+    assert all(path.read_bytes() == payload for path, payload in before.items())
+
+
+def test_rebind_checkpoint_preserves_mechanical_binding_but_seals_stale_authority_red(tmp_path: Path):
+    corpus = _load()
+    ledger = _load_ledger_script()
+    paths = _paths(corpus, tmp_path)
+    _scan_and_bind(tmp_path, all_history=True)
+    cursor = json.loads(paths.cursor.read_text(encoding="utf-8"))
+    scanned_at = datetime.datetime.fromisoformat(cursor["last_scan_at"].replace("Z", "+00:00"))
+    stale_evaluation = scanned_at + datetime.timedelta(seconds=corpus.SOURCE_CUSTODY_MAX_AGE_SECONDS + 1)
+
+    paths.cursor.write_bytes(paths.cursor.read_bytes())
+    assert any("not bound" in error for error in ledger.check_cursor_state(paths))
+
+    errors = ledger.rebind_checkpoint(paths, authority_evaluated_at=stale_evaluation)
+
+    assert errors == []
+    assert ledger.check_cursor_state(paths) == []
+    public = json.loads(paths.public_snapshot.read_text(encoding="utf-8"))
+    seal = json.loads(paths.public_seal.read_text(encoding="utf-8"))
+    assert public["source_scope"]["source_custody_freshness"]["reason"] == "stale"
+    assert seal["source_custody_freshness"]["fresh"] is False
+    assert seal["authority_ready"] is False
+
+
+@pytest.mark.parametrize("damage", ["missing", "corrupt"])
+def test_rebind_checkpoint_refuses_invalid_sealed_scan_receipt_without_publication(
+    tmp_path: Path,
+    damage: str,
+):
+    corpus = _load()
+    ledger = _load_ledger_script()
+    paths = _paths(corpus, tmp_path)
+    _scan_and_bind(tmp_path, all_history=True)
+    before = {
+        path: path.read_bytes()
+        for path in (paths.public_snapshot, paths.public_seal, paths.public_markdown, paths.private_snapshot)
+    }
+    cursor = json.loads(paths.cursor.read_text(encoding="utf-8"))
+    receipt_path = paths.private_dir / cursor["source_scan_receipt_ref"]
+    if damage == "missing":
+        receipt_path.unlink()
+    else:
+        receipt_path.chmod(0o600)
+        receipt_path.write_text("{}\n", encoding="utf-8")
+
+    errors = ledger.rebind_checkpoint(paths)
+
+    assert len(errors) == 1
+    assert errors[0].startswith("sealed source adapter custody is invalid; refusing to rebind:")
+    assert "source scan receipt artifact" in errors[0]
+    assert all(path.read_bytes() == payload for path, payload in before.items())
+
+
+def test_rebind_checkpoint_cas_refuses_noncooperative_cursor_writer(tmp_path: Path, monkeypatch):
+    corpus = _load()
+    ledger = _load_ledger_script()
+    paths = _paths(corpus, tmp_path)
+    _scan_and_bind(tmp_path)
+    before = {
+        path: path.read_bytes()
+        for path in (paths.public_snapshot, paths.public_seal, paths.public_markdown, paths.private_snapshot)
+    }
+    real_build_snapshot = ledger.build_snapshot
+
+    def race_cursor(*args, **kwargs):
+        snapshot = real_build_snapshot(*args, **kwargs)
+        cursor = json.loads(paths.cursor.read_text(encoding="utf-8"))
+        cursor["revision"] = int(cursor.get("revision", 0)) + 1
+        paths.cursor.write_text(json.dumps(cursor), encoding="utf-8")
+        return snapshot
+
+    monkeypatch.setattr(ledger, "build_snapshot", race_cursor)
+    errors = ledger.rebind_checkpoint(paths)
+
+    assert any("cursor changed during rebind" in error for error in errors)
+    assert all(path.read_bytes() == payload for path, payload in before.items())
+
+
 def test_rebind_checkpoint_seals_semantic_validation_findings(tmp_path: Path, monkeypatch):
     """Semantic validation findings do NOT block the reseal.
 
@@ -3389,6 +3590,67 @@ def test_rebind_checkpoint_seals_semantic_validation_findings(tmp_path: Path, mo
     # (the compact checkpoint records validation state for --check to report).
     marker = json.loads(paths.private_snapshot.read_text(encoding="utf-8"))
     assert marker, "private marker must exist after rebind"
+
+
+def test_omega_requires_semantic_authority_beyond_cursor_binding():
+    omega = (ROOT / "scripts" / "omega.sh").read_text(encoding="utf-8")
+    assert "--check-cursor" in omega
+    assert 'prompt-atom-ledger.py" --check --require-scope all' in omega
+
+
+def test_exact_all_authority_rejects_stale_or_future_custody():
+    corpus = _load()
+    now = datetime.datetime(2026, 7, 16, 20, 0, tzinfo=datetime.timezone.utc)
+    cursor = {
+        "scope": "all",
+        "target_scope": "all",
+        "last_scan_at": "2026-07-15T19:59:59Z",
+    }
+    assert "source custody is stale" in corpus.source_custody_freshness_errors(cursor, now=now)[0]
+
+    cursor["last_scan_at"] = "2026-07-16T20:06:00Z"
+    assert "timestamp is in the future" in corpus.source_custody_freshness_errors(cursor, now=now)[0]
+
+    cursor["last_scan_at"] = "2026-07-16T19:59:59Z"
+    assert corpus.source_custody_freshness_errors(cursor, now=now) == []
+
+
+def test_exact_scan_attestation_binds_the_freshness_timestamp():
+    corpus = _load()
+    cursor = _cursor(corpus, scope="all")
+    cursor.update(
+        {
+            "target_scope": "all",
+            "last_scan_at": "2026-07-16T19:59:59Z",
+        }
+    )
+    corpus.attest_source_scan(cursor, scanner_code_digest=corpus.current_source_scanner_code_digest())
+    assert corpus._pending_source_scan_valid(cursor)
+
+    cursor["last_scan_at"] = "2026-07-16T20:00:00Z"
+
+    assert not corpus._pending_source_scan_valid(cursor)
+
+
+def test_noop_scan_retains_custody_time_but_changed_source_state_advances_it():
+    corpus = _load()
+    prior = _cursor(corpus, scope="all")
+    prior.update(
+        {
+            "target_scope": "all",
+            "last_scan_at": "2026-07-16T19:00:00Z",
+            "source_unit_count": 1,
+            "source_units": ["fixture:one"],
+            "source_units_digest": corpus.digest(["fixture:one"]),
+        }
+    )
+    candidate = dict(prior)
+    candidate["last_scan_at"] = "2026-07-16T20:00:00Z"
+
+    assert corpus.stable_source_scan_timestamp(candidate, prior) == prior["last_scan_at"]
+
+    candidate["source_manifest_digest"] = corpus.digest({"fixture": 2})
+    assert corpus.stable_source_scan_timestamp(candidate, prior) == "2026-07-16T20:00:00Z"
 
 
 def test_append_jsonl_zero_rows_materializes_empty_journal(tmp_path):

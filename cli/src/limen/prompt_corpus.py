@@ -1290,6 +1290,9 @@ def cursor_semantic(cursor: dict[str, Any]) -> dict[str, Any]:
         "scanner_version": _int_or_zero(cursor.get("scanner_version")),
         "scope": cursor.get("scope", "fixture"),
         "target_scope": cursor.get("target_scope", cursor.get("scope", "fixture")),
+        # Freshness is authority evidence, so the scanner attestation and sealed cursor digest
+        # must bind the exact timestamp later consumed by the authority gate.
+        "last_scan_at": cursor.get("last_scan_at"),
         "horizon_days": cursor.get("horizon_days"),
         "all_baseline_complete": cursor.get("all_baseline_complete") is True,
         "all_source_manifest_digest": (
@@ -1360,7 +1363,17 @@ def cursor_digest(cursor: dict[str, Any]) -> str:
     return digest(cursor_semantic(cursor))
 
 
-_SOURCE_SCAN_SCHEMA = "limen.prompt-source-scan.v1"
+_SOURCE_SCAN_SCHEMA = "limen.prompt-source-scan.v2"
+SOURCE_CUSTODY_MAX_AGE_SECONDS = 24 * 60 * 60
+SOURCE_CUSTODY_FRESHNESS_SCHEMA = "limen.prompt-source-custody-freshness.v1"
+_SOURCE_CUSTODY_FRESHNESS_REASONS = {
+    "fresh",
+    "stale",
+    "future",
+    "missing_scan_time",
+    "not_exact_all",
+    "not_evaluated",
+}
 _SOURCE_SCAN_FIELDS = {
     "source_scan_attestation",
     "source_scan_receipt_schema",
@@ -1373,6 +1386,166 @@ _SOURCE_SCAN_FIELDS = {
 }
 _PENDING_SOURCE_SCANS: dict[str, dict[str, Any]] = {}
 _PENDING_SOURCE_SCANS_LOCK = threading.Lock()
+
+
+def source_custody_freshness_errors(
+    cursor: dict[str, Any],
+    *,
+    now: dt.datetime | None = None,
+    max_age_seconds: int = SOURCE_CUSTODY_MAX_AGE_SECONDS,
+) -> list[str]:
+    """Require a recent exact-all scan before semantic authority can be current."""
+
+    if str(cursor.get("scope") or "") != "all" or str(cursor.get("target_scope") or "") != "all":
+        return []
+    scanned_at = _parse_time(cursor.get("last_scan_at"))
+    if scanned_at is None:
+        return ["exact all/all source custody lacks a valid last_scan_at"]
+    if max_age_seconds <= 0:
+        return ["source custody freshness bound must be positive"]
+    current = now or dt.datetime.now(dt.timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=dt.timezone.utc)
+    age = (current.astimezone(dt.timezone.utc) - scanned_at.astimezone(dt.timezone.utc)).total_seconds()
+    if age < -300:
+        return ["exact all/all source custody timestamp is in the future"]
+    if age > max_age_seconds:
+        return [f"exact all/all source custody is stale (age_seconds={int(age)}, max={max_age_seconds})"]
+    return []
+
+
+def _iso_seconds(value: dt.datetime) -> str:
+    normalized = value.astimezone(dt.timezone.utc).replace(microsecond=0)
+    return normalized.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _exact_all_scope(value: dict[str, Any]) -> bool:
+    return str(value.get("scope") or "") == "all" and str(value.get("target_scope") or "") == "all"
+
+
+def _unevaluated_source_custody_freshness(scope: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": SOURCE_CUSTODY_FRESHNESS_SCHEMA,
+        "evaluated_at": None,
+        "last_scan_at": None,
+        "expires_at": None,
+        "max_age_seconds": SOURCE_CUSTODY_MAX_AGE_SECONDS,
+        "required": _exact_all_scope(scope),
+        "fresh": False,
+        "reason": "not_evaluated",
+    }
+
+
+def source_custody_freshness_evidence(
+    cursor: dict[str, Any],
+    *,
+    evaluated_at: dt.datetime,
+) -> dict[str, Any]:
+    """Derive deterministic, public-safe freshness evidence at a caller-owned boundary."""
+
+    if evaluated_at.tzinfo is None:
+        evaluated_at = evaluated_at.replace(tzinfo=dt.timezone.utc)
+    current = evaluated_at.astimezone(dt.timezone.utc).replace(microsecond=0)
+    required = _exact_all_scope(cursor)
+    evidence = {
+        "schema": SOURCE_CUSTODY_FRESHNESS_SCHEMA,
+        "evaluated_at": _iso_seconds(current),
+        "last_scan_at": None,
+        "expires_at": None,
+        "max_age_seconds": SOURCE_CUSTODY_MAX_AGE_SECONDS,
+        "required": required,
+        "fresh": False,
+        "reason": "not_exact_all" if not required else "missing_scan_time",
+    }
+    if not required:
+        return evidence
+    scanned_at = _parse_time(cursor.get("last_scan_at"))
+    if scanned_at is None:
+        return evidence
+    scanned_at = scanned_at.astimezone(dt.timezone.utc).replace(microsecond=0)
+    expires_at = scanned_at + dt.timedelta(seconds=SOURCE_CUSTODY_MAX_AGE_SECONDS)
+    evidence["last_scan_at"] = _iso_seconds(scanned_at)
+    evidence["expires_at"] = _iso_seconds(expires_at)
+    age = (current - scanned_at).total_seconds()
+    if age < -300:
+        evidence["reason"] = "future"
+    elif age > SOURCE_CUSTODY_MAX_AGE_SECONDS:
+        evidence["reason"] = "stale"
+    else:
+        evidence["fresh"] = True
+        evidence["reason"] = "fresh"
+    return evidence
+
+
+def source_custody_freshness_evidence_errors(
+    value: Any,
+    *,
+    scope: dict[str, Any],
+) -> list[str]:
+    """Validate bound freshness evidence without consulting the wall clock."""
+
+    if not isinstance(value, dict):
+        return ["source custody freshness evidence must be an object"]
+    expected_fields = {
+        "schema",
+        "evaluated_at",
+        "last_scan_at",
+        "expires_at",
+        "max_age_seconds",
+        "required",
+        "fresh",
+        "reason",
+    }
+    errors: list[str] = []
+    if set(value) != expected_fields:
+        errors.append("source custody freshness fields do not match the fixed schema")
+    if value.get("schema") != SOURCE_CUSTODY_FRESHNESS_SCHEMA:
+        errors.append("source custody freshness schema is stale")
+    if value.get("max_age_seconds") != SOURCE_CUSTODY_MAX_AGE_SECONDS:
+        errors.append("source custody freshness bound is stale")
+    required = _exact_all_scope(scope)
+    if value.get("required") is not required:
+        errors.append("source custody freshness required verdict does not match scope")
+    if not isinstance(value.get("fresh"), bool):
+        errors.append("source custody freshness verdict must be boolean")
+    if value.get("reason") not in _SOURCE_CUSTODY_FRESHNESS_REASONS:
+        errors.append("source custody freshness reason is invalid")
+    if errors:
+        return errors
+    if value.get("reason") == "not_evaluated":
+        if any(value.get(field) is not None for field in ("evaluated_at", "last_scan_at", "expires_at")):
+            errors.append("unevaluated source custody freshness cannot contain timestamps")
+        if value.get("fresh") is not False:
+            errors.append("unevaluated source custody freshness cannot be fresh")
+        return errors
+    evaluated_at = _parse_time(value.get("evaluated_at"))
+    if evaluated_at is None:
+        return ["source custody freshness evaluated_at is invalid"]
+    synthetic_cursor = {
+        "scope": scope.get("scope"),
+        "target_scope": scope.get("target_scope"),
+        "last_scan_at": value.get("last_scan_at"),
+    }
+    expected = source_custody_freshness_evidence(synthetic_cursor, evaluated_at=evaluated_at)
+    if value != expected:
+        errors.append("source custody freshness verdict does not match its bound timestamps")
+    return errors
+
+
+def _normalized_source_custody_freshness(
+    value: Any,
+    *,
+    scope: dict[str, Any],
+) -> dict[str, Any]:
+    if isinstance(value, dict) and not source_custody_freshness_evidence_errors(value, scope=scope):
+        return dict(value)
+    return _unevaluated_source_custody_freshness(scope)
+
+
+def _source_custody_evaluation_time(value: Any) -> dt.datetime | None:
+    if not isinstance(value, dict):
+        return None
+    return _parse_time(value.get("evaluated_at"))
 
 
 def _source_scan_payload(cursor: dict[str, Any]) -> dict[str, Any]:
@@ -1447,6 +1620,7 @@ def _source_scan_receipt_payload(cursor: dict[str, Any]) -> dict[str, Any]:
         "scope": str(cursor.get("scope") or ""),
         "target_scope": str(cursor.get("target_scope") or ""),
         "all_baseline_complete": cursor.get("all_baseline_complete") is True,
+        "last_scan_at": str(cursor.get("last_scan_at") or ""),
         "source_unit_count": _int_or_zero(cursor.get("source_unit_count")),
         "source_units_digest": str(cursor.get("source_units_digest") or ""),
         "files_digest": digest(cursor.get("files") if isinstance(cursor.get("files"), dict) else {}),
@@ -1547,6 +1721,20 @@ def _clear_source_scan_authority(cursor: dict[str, Any]) -> dict[str, Any]:
 def source_scan_state_digest(cursor: dict[str, Any]) -> str:
     clean = {key: value for key, value in cursor.items() if key not in _SOURCE_SCAN_FIELDS}
     return digest(cursor_semantic(clean))
+
+
+def stable_source_scan_timestamp(candidate: dict[str, Any], prior: dict[str, Any]) -> str:
+    """Retain custody time when a scan proves no semantic source-state change."""
+
+    candidate_time = str(candidate.get("last_scan_at") or "")
+    prior_time = str(prior.get("last_scan_at") or "")
+    if not prior_time:
+        return candidate_time
+    comparison = dict(candidate)
+    comparison["last_scan_at"] = prior_time
+    if source_scan_state_digest(comparison) == source_scan_state_digest(prior):
+        return prior_time
+    return candidate_time
 
 
 def _source_discovery_spec_valid(value: Any) -> bool:
@@ -2471,6 +2659,7 @@ def build_snapshot(
     *,
     journal_errors: Sequence[str] = (),
     evidence_root: Path | None = None,
+    authority_evaluated_at: dt.datetime | None = None,
 ) -> dict[str, Any]:
     outcomes = {str(row.get("atom_id")): row for row in outcome_rows if isinstance(row, dict) and row.get("atom_id")}
     recurrence = Counter(str(atom.get("lineage_id") or "") for atom in atoms)
@@ -2558,6 +2747,11 @@ def build_snapshot(
         "policy_digest": digest(policy),
         "source_cursor_digest": cursor_digest(cursor),
         "source_scope": cursor_semantic(cursor),
+        "source_custody_freshness": (
+            source_custody_freshness_evidence(cursor, evaluated_at=authority_evaluated_at)
+            if authority_evaluated_at is not None
+            else _unevaluated_source_custody_freshness(cursor)
+        ),
         "coverage": {
             "occurrences": len(occurrence_rows),
             "operator_occurrences": sum(1 for row in occurrence_rows if row.get("authority") == "operator"),
@@ -2717,8 +2911,8 @@ def _safe_evidence_refs(atom: dict[str, Any]) -> list[str]:
     return refs
 
 
-PROMPT_AUTHORITY_SEAL_SCHEMA = "limen.prompt-authority-seal.v1"
-PROMPT_AUTHORITY_SEAL_SCHEMA_VERSION = 1
+PROMPT_AUTHORITY_SEAL_SCHEMA = "limen.prompt-authority-seal.v2"
+PROMPT_AUTHORITY_SEAL_SCHEMA_VERSION = 2
 PROMPT_AUTHORITY_SEAL_MAX_BYTES = 64 * 1024
 PROMPT_AUTHORITY_SEAL_MAX_SOURCE_FAMILIES = 128
 _PROMPT_AUTHORITY_FAMILY_FIELDS = (
@@ -2957,6 +3151,7 @@ def _prompt_authority_ready(
     totals: Any,
     hashes: Any,
     source_alias_blocker_counts: Any,
+    source_custody_freshness: Any,
     public_projection_digest: Any,
 ) -> bool:
     """Derive the authority verdict from complete, public-safe evidence."""
@@ -2966,6 +3161,7 @@ def _prompt_authority_ready(
         or not isinstance(totals, dict)
         or not isinstance(hashes, dict)
         or not isinstance(source_alias_blocker_counts, dict)
+        or not isinstance(source_custody_freshness, dict)
     ):
         return False
     zero_fields = ("pending", "errors", "unsupported", "unresolved", "adapter_gaps", "validation_errors")
@@ -2979,6 +3175,7 @@ def _prompt_authority_ready(
         and scope.get("target_scope") == "all"
         and scope.get("all_baseline_complete") is True
         and scope.get("scanner_version") == current_contract.get("scanner_version")
+        and source_custody_freshness.get("fresh") is True
         and not any(totals.get(field) for field in zero_fields)
         and not any(source_alias_blocker_counts.values())
         and _public_digest(public_projection_digest) is not None
@@ -3073,6 +3270,10 @@ def prompt_authority_seal(
             else None
         ),
     }
+    source_custody_freshness = _normalized_source_custody_freshness(
+        snapshot.get("source_custody_freshness"),
+        scope=seal_scope,
+    )
     public_projection_digest = _public_digest(
         (public if isinstance(public, dict) else public_projection(snapshot)).get("projection_digest")
     )
@@ -3082,6 +3283,7 @@ def prompt_authority_seal(
         totals=totals,
         hashes=hashes,
         source_alias_blocker_counts=source_alias_blocker_counts,
+        source_custody_freshness=source_custody_freshness,
         public_projection_digest=public_projection_digest,
     )
     material: dict[str, Any] = {
@@ -3096,6 +3298,7 @@ def prompt_authority_seal(
         "source_family_overflow": family_overflow,
         "source_error_reason_counts": source_error_reasons,
         "source_alias_blocker_counts": source_alias_blocker_counts,
+        "source_custody_freshness": source_custody_freshness,
         "adapter_gaps_digest": digest(adapter_gaps),
         "public_projection_digest": public_projection_digest,
         "hashes": hashes,
@@ -3140,6 +3343,7 @@ def _prompt_authority_seal_schema_errors(seal: Any) -> list[str]:
         "source_family_overflow",
         "source_error_reason_counts",
         "source_alias_blocker_counts",
+        "source_custody_freshness",
         "adapter_gaps_digest",
         "public_projection_digest",
         "hashes",
@@ -3247,6 +3451,9 @@ def _prompt_authority_seal_schema_errors(seal: Any) -> list[str]:
     ):
         errors.append("seal source alias blocker counts are malformed")
 
+    freshness = seal.get("source_custody_freshness")
+    errors.extend(source_custody_freshness_evidence_errors(freshness, scope=scope if isinstance(scope, dict) else {}))
+
     if isinstance(families, dict) and isinstance(totals, dict):
         family_total_fields = {
             "discovered": "source_units",
@@ -3300,6 +3507,7 @@ def _prompt_authority_seal_schema_errors(seal: Any) -> list[str]:
         totals=totals,
         hashes=hashes,
         source_alias_blocker_counts=alias_blockers,
+        source_custody_freshness=freshness,
         public_projection_digest=seal.get("public_projection_digest"),
     )
     if seal.get("authority_ready") != expected_authority_ready:
@@ -3330,6 +3538,7 @@ def _prompt_authority_seal_matches_public(seal: dict[str, Any], public: dict[str
     )
     raw_public_alias_blockers = public_scope.get("source_alias_blocker_counts")
     public_alias_blockers = _prompt_authority_alias_blocker_counts(raw_public_alias_blockers)
+    public_custody_freshness = public_scope.get("source_custody_freshness")
     current_alias_reasons = set(current_adapter_contract.get("alias_blocker_reasons") or [])
     public_alias_blockers_valid = bool(
         isinstance(raw_public_alias_blockers, dict)
@@ -3387,6 +3596,7 @@ def _prompt_authority_seal_matches_public(seal: dict[str, Any], public: dict[str
         and totals.get("adapter_gaps") == len(sanitized_public_adapter_gaps)
         and seal.get("adapter_gaps_digest") == digest(sanitized_public_adapter_gaps)
         and seal.get("source_alias_blocker_counts") == public_alias_blockers
+        and seal.get("source_custody_freshness") == public_custody_freshness
         and totals.get("validation_errors")
         == (len(validation.get("errors") or []) if isinstance(validation.get("errors"), list) else 0)
         and all(coverage.get(field) == _int_or_zero(public_coverage.get(field)) for field in coverage)
@@ -3396,6 +3606,10 @@ def _prompt_authority_seal_matches_public(seal: dict[str, Any], public: dict[str
 def public_projection(snapshot: dict[str, Any], *, limit: int | None = None) -> dict[str, Any]:
     raw_source_scope = snapshot.get("source_scope")
     source_scope = raw_source_scope if isinstance(raw_source_scope, dict) else {}
+    source_custody_freshness = _normalized_source_custody_freshness(
+        snapshot.get("source_custody_freshness"),
+        scope=source_scope,
+    )
     raw_source_scan = source_scope.get("source_scan_receipt")
     source_scan = raw_source_scan if isinstance(raw_source_scan, dict) else {}
     source_families, source_family_overflow = _prompt_authority_source_families(source_scope.get("source_families"))
@@ -3445,6 +3659,7 @@ def public_projection(snapshot: dict[str, Any], *, limit: int | None = None) -> 
             "target_scope": (snapshot.get("source_scope") or {}).get("target_scope"),
             "horizon_days": (snapshot.get("source_scope") or {}).get("horizon_days"),
             "all_baseline_complete": (snapshot.get("source_scope") or {}).get("all_baseline_complete") is True,
+            "source_custody_freshness": source_custody_freshness,
             "all_source_manifest_digest": (snapshot.get("source_scope") or {}).get("all_source_manifest_digest"),
             "pending_files": (snapshot.get("source_scope") or {}).get("pending_files", 0),
             "source_error_count": len((snapshot.get("source_scope") or {}).get("source_errors") or []),
@@ -3494,7 +3709,11 @@ def public_projection(snapshot: dict[str, Any], *, limit: int | None = None) -> 
 
 
 def _render_counts(values: dict[str, int]) -> str:
-    return ", ".join(f"`{key}` {value}" for key, value in values.items()) or "none"
+    ordered = sorted(
+        values.items(),
+        key=lambda item: (-_int_or_zero(item[1]), str(item[0])),
+    )
+    return ", ".join(f"`{key}` {value}" for key, value in ordered) or "none"
 
 
 def render_markdown(public: dict[str, Any], policy: dict[str, Any]) -> str:
@@ -3653,6 +3872,7 @@ def private_marker(
         "policy_digest": snapshot.get("policy_digest"),
         "source_cursor_digest": snapshot.get("source_cursor_digest"),
         "source_scope": _compact_source_scope(snapshot),
+        "source_custody_freshness": snapshot.get("source_custody_freshness"),
         "coverage": snapshot.get("coverage") or {},
         "counts": snapshot.get("counts") or {},
         "validation": snapshot.get("validation") or {},
@@ -3683,12 +3903,30 @@ def _prompt_authority_fast_path_valid(
     public: dict[str, Any],
     seal: dict[str, Any],
     current_cursor: dict[str, Any],
+    authority_evaluated_at: dt.datetime,
 ) -> bool:
     """Re-derive every seal input from the private checkpoint and current cursor."""
 
     current_scope = cursor_semantic(current_cursor)
     expected_marker_scope = _compact_source_scope({"source_scope": current_scope})
     if marker.get("source_scope") != expected_marker_scope:
+        return False
+    stored_freshness = marker.get("source_custody_freshness")
+    stored_evaluated_at = _source_custody_evaluation_time(stored_freshness)
+    if stored_evaluated_at is None:
+        return False
+    if stored_freshness != source_custody_freshness_evidence(
+        current_cursor,
+        evaluated_at=stored_evaluated_at,
+    ):
+        return False
+    current_freshness = source_custody_freshness_evidence(
+        current_cursor,
+        evaluated_at=authority_evaluated_at,
+    )
+    if stored_freshness.get("fresh") != current_freshness.get("fresh") or stored_freshness.get(
+        "reason"
+    ) != current_freshness.get("reason"):
         return False
     expected_snapshot = {
         "version": marker.get("version"),
@@ -3697,6 +3935,7 @@ def _prompt_authority_fast_path_valid(
         "policy_digest": marker.get("policy_digest"),
         "source_cursor_digest": marker.get("source_cursor_digest"),
         "source_scope": current_scope,
+        "source_custody_freshness": stored_freshness,
         "coverage": marker.get("coverage") or {},
         "counts": marker.get("counts") or {},
         "validation": marker.get("validation") or {},
@@ -3923,6 +4162,63 @@ def _source_revision_changed(current: dict[str, Any], proposed: dict[str, Any]) 
     return any(current.get(field) != proposed.get(field) for field in SOURCE_REVISION_FIELDS)
 
 
+def _events_are_existing_noops(
+    events: Sequence[dict[str, Any]],
+    occurrences: Sequence[dict[str, Any]],
+    cursor: dict[str, Any],
+) -> bool:
+    """Return whether replaying ``events`` would leave the event journal unchanged."""
+
+    occurrence_by_id = _index_by_id(occurrences, "occurrence_id")
+    excluded_units = _excluded_source_units(cursor)
+    for event in events:
+        if not isinstance(event, dict):
+            return False
+        event_locator = str(event.get("source_locator") or "")
+        event_path = event_locator.rsplit("#", 1)[0] if "#" in event_locator else event_locator
+        if (str(event.get("source") or ""), event_path) in excluded_units:
+            continue
+        try:
+            proposed_occurrence = occurrence_from_event(event)
+        except (TypeError, ValueError):
+            return False
+        requested_existing_id = str(event.get("existing_occurrence_id") or "")
+        if requested_existing_id:
+            existing_occurrence = occurrence_by_id.get(requested_existing_id)
+            if existing_occurrence is None or proposed_occurrence.get("prompt_hash") != existing_occurrence.get(
+                "prompt_hash"
+            ):
+                return False
+            occurrence = dict(existing_occurrence)
+            occurrence["raw_text"] = proposed_occurrence["raw_text"]
+            occurrence["atom_ids"] = []
+            for field in SOURCE_REVISION_FIELDS:
+                occurrence[field] = proposed_occurrence.get(field)
+        else:
+            occurrence = proposed_occurrence
+            existing_occurrence = occurrence_by_id.get(str(occurrence["occurrence_id"]))
+        resolved_locator = str(occurrence.get("source_locator") or "")
+        resolved_path = resolved_locator.rsplit("#", 1)[0] if "#" in resolved_locator else resolved_locator
+        if (str(occurrence.get("source") or ""), resolved_path) in excluded_units:
+            continue
+        if existing_occurrence is None:
+            return False
+        explicit_revision = isinstance(event.get("atoms"), list)
+        source_revision = _source_revision_changed(existing_occurrence, occurrence)
+        if not explicit_revision and not source_revision:
+            continue
+        classification_digest = digest(
+            {
+                "kind": "occurrence_classification_revision",
+                "atoms": event.get("atoms") if explicit_revision else None,
+                "source_fields": _source_revision_material(occurrence),
+            }
+        )
+        if existing_occurrence.get("classification_digest") != classification_digest:
+            return False
+    return True
+
+
 def _excluded_source_units(cursor: dict[str, Any]) -> set[tuple[str, str]]:
     units: set[tuple[str, str]] = set()
     receipts = cursor.get("excluded_unit_receipts")
@@ -4003,11 +4299,18 @@ def update_ledger(
         marker = load_json(paths.private_snapshot)
         existing_public = load_json(paths.public_snapshot)
         existing_seal = load_json(paths.public_seal)
+        input_events_are_noops = not events
+        if events:
+            fast_occurrence_rows, _fast_atom_rows, fast_event_errors = load_event_journal(paths.event_journal)
+            input_events_are_noops = bool(
+                not fast_event_errors and _events_are_existing_noops(events, fast_occurrence_rows, effective_cursor)
+            )
+        fast_authority_evaluated_at = dt.datetime.now(dt.timezone.utc)
         fast_public_ok = bool(
             marker
             and existing_public
             and existing_seal
-            and not events
+            and input_events_are_noops
             and not outcomes
             and cursor_digest(effective_cursor) == cursor_digest(current_cursor)
             and marker.get("policy_digest") == digest(policy)
@@ -4028,6 +4331,7 @@ def update_ledger(
                 public=existing_public,
                 seal=existing_seal,
                 current_cursor=current_cursor,
+                authority_evaluated_at=fast_authority_evaluated_at,
             )
             and paths.public_snapshot.exists()
             and paths.public_snapshot.read_bytes() == _json_bytes(existing_public)
@@ -4311,6 +4615,7 @@ def update_ledger(
             atomic_write_bytes(paths.cursor, _json_bytes(effective_cursor), mode=0o600)
 
         raw_errors = validate_raw_references(paths, occurrence_rows, verify_content=True)
+        authority_evaluated_at = dt.datetime.now(dt.timezone.utc)
         snapshot = build_snapshot(
             occurrence_rows,
             atom_rows,
@@ -4319,6 +4624,7 @@ def update_ledger(
             effective_cursor,
             journal_errors=raw_errors,
             evidence_root=paths.root,
+            authority_evaluated_at=authority_evaluated_at,
         )
         public = public_projection(snapshot)
         seal = prompt_authority_seal(snapshot, public=public)
@@ -4399,6 +4705,15 @@ def check_ledger(paths: LedgerPaths, *, require_scope: str | None = None) -> lis
         errors.extend(validate_cursor_shape(live_cursor, role="live"))
         errors.extend(validate_source_adapter_cursor(live_cursor, receipt_root=paths.private_dir))
         errors.extend(validate_live_source_custody(live_cursor))
+        stored_freshness = private.get("source_custody_freshness")
+        errors.extend(
+            source_custody_freshness_evidence_errors(
+                stored_freshness,
+                scope=cursor_semantic(live_cursor),
+            )
+        )
+        if require_scope == "all":
+            errors.extend(source_custody_freshness_errors(live_cursor))
         if private.get("source_cursor_digest") != cursor_digest(live_cursor):
             errors.append("source cursor changed after the private projection")
         occurrence_rows, atom_rows, event_errors = load_event_journal(paths.event_journal)
@@ -4412,6 +4727,7 @@ def check_ledger(paths: LedgerPaths, *, require_scope: str | None = None) -> lis
             live_cursor,
             journal_errors=[*event_errors, *outcome_errors, *raw_errors],
             evidence_root=paths.root,
+            authority_evaluated_at=_source_custody_evaluation_time(stored_freshness),
         )
         if not (rebuilt.get("validation") or {}).get("ok"):
             errors.extend(str(value) for value in (rebuilt.get("validation") or {}).get("errors") or [])

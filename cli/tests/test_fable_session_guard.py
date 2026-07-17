@@ -1,6 +1,7 @@
-"""Tests for scripts/fable-session-guard.py — the SessionStart guard that closes the interactive
-Fable bypass. Clean no-op on a non-Fable model; hard-warn (exit 2) on Fable when over-cap or when
-no live acceptance receipt is present.
+"""Tests for the report-only interactive Fable SessionStart observer.
+
+Fleet launchers enforce policy. The interactive hook always returns success and
+never directs, retunes, terminates, or enumerates a live peer session.
 """
 
 from __future__ import annotations
@@ -34,68 +35,111 @@ def _run(payload: dict, env_extra: dict | None = None):
     )
 
 
+def _balance(spent_pct: float) -> dict:
+    return {
+        "schema": "limen.fable_balance.v1",
+        "observed_at": datetime.now(timezone.utc).isoformat(),
+        "week": _this_monday(),
+        "spent_tokens": 0,
+        "spent_pct": spent_pct,
+        "deliberate_cap": 40,
+        "hard_cap": 50,
+        "over_cap": spent_pct >= 50,
+        "source": "test-owner-adapter",
+        "meter_ready": True,
+        "measurement": {
+            "method": "owner-used-percent",
+            "owner_observed_pct": spent_pct,
+        },
+    }
+
+
+def _acceptance() -> dict:
+    return {
+        "schema": "limen.fable_acceptance.v1",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "week": _this_monday(),
+        "category": "governance",
+        "percent": 5,
+        "sources": ["docs/fable-allotment.md"],
+        "redacted_packets": [],
+        "verification": ["pytest"],
+        "mode": "plan-only",
+        "deliverable": "continuation-capsule",
+        "builder_handoff": {
+            "provider_selection": "auto",
+            "requirements": {
+                "planning_only": False,
+                "build_allowed": True,
+                "fable_allowed": False,
+            },
+        },
+        "motion_receipt_deadline_seconds": 5400,
+    }
+
+
 def test_non_fable_model_is_noop(tmp_path):
-    proc = _run({"model": "claude-opus-4-8"})
+    proc = _run({"model": "arbitrarily-renamed-provider-id"})
     assert proc.returncode == 0
     assert proc.stderr.strip() == ""
 
 
-def test_fable_over_cap_hard_warns(tmp_path):
-    bal = tmp_path / "fable-allotment.json"
-    bal.write_text(
-        json.dumps(
-            {
-                "week": _this_monday(),
-                "spent_pct": 100.0,
-                "deliberate_cap": 40,
-                "hard_cap": 50,
-                "over_cap": True,
-            }
-        )
-    )
-    proc = _run({"model": "claude-fable-5"}, {"LIMEN_FABLE_BALANCE_PATH": str(bal)})
-    assert proc.returncode == 2
-    assert "HARD WARNING" in proc.stderr
-    assert "/model" in proc.stderr
+def test_explicit_fable_role_does_not_depend_on_a_model_id(tmp_path):
+    proc = _run({"model": "arbitrarily-renamed-provider-id", "execution_role": "fable-planner"})
+    assert proc.returncode == 0
+    assert "CONTRACT RED" in proc.stderr
 
 
-def test_fable_no_receipt_hard_warns_even_under_cap(tmp_path):
-    bal = tmp_path / "fable-allotment.json"
-    bal.write_text(
-        json.dumps(
-            {
-                "week": _this_monday(),
-                "spent_pct": 5.0,
-                "deliberate_cap": 40,
-                "hard_cap": 50,
-                "over_cap": False,
-            }
-        )
+def test_fable_over_cap_reports_without_controlling_the_session(tmp_path):
+    balance = tmp_path / "fable-allotment.json"
+    balance.write_text(json.dumps(_balance(100.0)))
+    proc = _run(
+        {"model": "arbitrarily-renamed-provider-id", "execution_role": "fable-planner"},
+        {"LIMEN_FABLE_BALANCE_PATH": str(balance)},
     )
-    proc = _run({"model": "claude-fable-5"}, {"LIMEN_FABLE_BALANCE_PATH": str(bal)})
-    assert proc.returncode == 2  # under cap but no live acceptance receipt
-    assert "HARD WARNING" in proc.stderr
+    assert proc.returncode == 0
+    assert "CONTRACT RED" in proc.stderr
+    assert "/model" not in proc.stderr
+    assert "report-only" in proc.stderr
+    assert "end this invocation" not in proc.stderr
+
+
+def test_fable_no_receipt_reports_even_under_cap(tmp_path):
+    balance = tmp_path / "fable-allotment.json"
+    balance.write_text(json.dumps(_balance(5.0)))
+    proc = _run(
+        {"model": "arbitrarily-renamed-provider-id", "execution_role": "fable-planner"},
+        {"LIMEN_FABLE_BALANCE_PATH": str(balance)},
+    )
+    assert proc.returncode == 0
+    assert "CONTRACT RED" in proc.stderr
+    assert "acceptance" in proc.stderr
 
 
 def test_fable_under_cap_with_receipt_is_clean(tmp_path):
-    bal = tmp_path / "fable-allotment.json"
-    bal.write_text(
-        json.dumps(
-            {
-                "week": _this_monday(),
-                "spent_pct": 5.0,
-                "deliberate_cap": 40,
-                "hard_cap": 50,
-                "over_cap": False,
-            }
-        )
-    )
+    balance = tmp_path / "fable-allotment.json"
+    balance.write_text(json.dumps(_balance(5.0)))
     receipt = tmp_path / "accept.json"
-    receipt.write_text(
-        json.dumps({"schema": "limen.fable_acceptance.v1", "week": _this_monday(), "category": "governance"})
-    )
+    receipt.write_text(json.dumps(_acceptance()))
     proc = _run(
-        {"model": "claude-fable-5"},
-        {"LIMEN_FABLE_BALANCE_PATH": str(bal), "LIMEN_FABLE_ACCEPTANCE": str(receipt)},
+        {"model": "arbitrarily-renamed-provider-id", "execution_role": "fable-planner"},
+        {"LIMEN_FABLE_BALANCE_PATH": str(balance), "LIMEN_FABLE_ACCEPTANCE": str(receipt)},
     )
     assert proc.returncode == 0, proc.stderr
+    assert "CONTRACT RED" not in proc.stderr
+
+
+def test_fable_stale_balance_fails_closed_without_session_control(tmp_path):
+    balance = tmp_path / "fable-allotment.json"
+    data = _balance(5.0)
+    data["observed_at"] = "2020-01-01T00:00:00+00:00"
+    balance.write_text(json.dumps(data))
+    receipt = tmp_path / "accept.json"
+    receipt.write_text(json.dumps(_acceptance()))
+    proc = _run(
+        {"model": "arbitrarily-renamed-provider-id", "execution_role": "fable-planner"},
+        {"LIMEN_FABLE_BALANCE_PATH": str(balance), "LIMEN_FABLE_ACCEPTANCE": str(receipt)},
+    )
+    assert proc.returncode == 0
+    assert "balance-stale-observation" in proc.stderr
+    assert "/model" not in proc.stderr

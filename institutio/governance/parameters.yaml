@@ -1846,43 +1846,37 @@ parameters:
     env: LIMEN_FABLE_ACCEPTANCE
     self_update: none
     owner: arms-agents
-    note: "Path to the current-week written Fable acceptance receipt emitted by scripts/fable-allotment.py accept. Empty, stale, malformed, or arbitrary paths make Fable selections fall back to Opus; value `1` is accepted only under pytest."
+    note: "Path to the current-week written Fable acceptance receipt emitted by scripts/fable-allotment.py accept. The receipt binds a plan-only continuation-capsule, a provider-neutral Auto builder handoff with Fable forbidden, source lineage, verification, and the motion deadline. Empty, stale, malformed, or arbitrary paths close the Fable planner role."
   LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE:
     default: "0"
     env: LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE
     self_update: none
     owner: arms-agents
     note: "Opt-in gate for tried:claude retry escalation from Opus to Fable. Requires LIMEN_FABLE_ACCEPTANCE as well; default caps retry bumping at Opus so Fable is never reached by inherited escalation."
-  LIMEN_ALLOW_FABLE_FANOUT:
-    default: "0"
-    env: LIMEN_ALLOW_FABLE_FANOUT
-    self_update: none
-    owner: arms-agents
-    note: "Emergency override for claude-workflow-guard's Fable fan-out check. Default 0 enforces one bounded accepted Fable objective instead of broad Fable worker pools."
   LIMEN_MAX_FABLE_SESSION_TOKENS:
     default: "1000000"
     env: LIMEN_MAX_FABLE_SESSION_TOKENS
     self_update: none
     owner: arms-agents
     note: "Maximum billable-ish Fable transcript tokens allowed by claude-workflow-guard before it flags the session. Counts input + output + cache creation, excluding cache reads."
-  LIMEN_ALLOW_FABLE_SESSION_BURN:
-    default: "0"
-    env: LIMEN_ALLOW_FABLE_SESSION_BURN
-    self_update: none
-    owner: arms-agents
-    note: "Emergency override for claude-workflow-guard's Fable session token cap. Default 0 keeps accepted Fable runs bounded even when they do not fan out."
-  LIMEN_ALLOW_UNACCEPTED_FABLE:
-    default: "0"
-    env: LIMEN_ALLOW_UNACCEPTED_FABLE
-    self_update: none
-    owner: arms-agents
-    note: "Emergency override for claude-workflow-guard's written-acceptance check when transcript evidence is incomplete. Default 0 blocks Fable runs that lack a visible acceptance command or receipt reference."
   LIMEN_FABLE_WEEKLY_TOKENS:
-    default: "1000000000"
+    default: ""
     env: LIMEN_FABLE_WEEKLY_TOKENS
     self_update: none
     owner: arms-agents
-    note: "Weekly Fable token budget the balance meter (scripts/fable-allotment.py balance) divides actual weekly Fable tokens by when Anthropic's weekly ratelimit-header percent is not captured. Default ~1B ≈ the observed weekly allotment ceiling; used only for the transcript-token-sum fallback source."
+    note: "Owner-supplied weekly token denominator for the transcript-token-sum balance adapter when a direct weekly used-percent observation is unavailable. Blank is intentionally not guessed: the receipt emits meter_ready=false and the Fable planner role stays closed."
+  LIMEN_FABLE_USAGE_METER_PATH:
+    default: ""
+    env: LIMEN_FABLE_USAGE_METER_PATH
+    self_update: none
+    owner: arms-agents
+    note: "Explicit path to one exported limen.fable_usage_meter.v1 owner receipt. Blank performs no provider-runtime discovery. The adapter must bind execution_role=fable-planner, current week, freshness, meter readiness, and a finite weekly used percent."
+  LIMEN_FABLE_USAGE_TRANSCRIPTS_DIR:
+    default: ""
+    env: LIMEN_FABLE_USAGE_TRANSCRIPTS_DIR
+    self_update: none
+    owner: arms-agents
+    note: "Explicit isolated directory of exported usage JSONL for the transcript-token ratio adapter. Blank performs no ~/.claude or ~/.codex scan. Every current-week billable row must bind execution_role=fable-planner; an unbound or malformed row makes coverage dark."
   LIMEN_FABLE_BALANCE:
     default: "1"
     env: LIMEN_FABLE_BALANCE
@@ -1894,7 +1888,13 @@ parameters:
     env: LIMEN_FABLE_BALANCE_PATH
     self_update: none
     owner: arms-agents
-    note: "Override path to the live weekly Fable balance file (default $LIMEN_ROOT/logs/fable-allotment.json). Read by the model_selection cap gate, the session guard, and the vendor advisor; used by tests to seed a mock balance. Empty means the default location."
+    note: "Override path to the live limen.fable_balance.v1 receipt (default $LIMEN_ROOT/logs/fable-allotment.json). The shared contract validator requires a current week, fresh observation, ready source, finite reconciled spend, coherent caps, and exact over-cap state."
+  LIMEN_FABLE_BALANCE_MAX_AGE_SECONDS:
+    default: "900"
+    env: LIMEN_FABLE_BALANCE_MAX_AGE_SECONDS
+    self_update: none
+    owner: arms-agents
+    note: "Maximum age of a limen.fable_balance.v1 observation that may authorize a Fable planner. Missing, malformed, future-dated, source-dark, or older observations fail closed."
   LIMEN_CLAUDE_FABLE_CAP_TIER:
     default: "opus"
     env: LIMEN_CLAUDE_FABLE_CAP_TIER
@@ -1912,7 +1912,7 @@ parameters:
     env: LIMEN_SESSION_MODEL
     self_update: none
     owner: arms-agents
-    note: "Fallback source for the interactive session model in scripts/fable-session-guard.py when the SessionStart hook payload and ANTHROPIC_MODEL/CLAUDE_MODEL are absent. Empty means the guard resolves the model only from the payload/other env; a `fable`-bearing value triggers the interactive Fable guard."
+    note: "Fallback opaque model label for the report-only interactive session observer when hook context lacks one. A hook-provided execution_role=fable-planner is the provider-neutral binding; a legacy fable-bearing label may request the same report but never supplies launch authority."
   LIMEN_VENDOR_IDLE_HEADROOM_PCT:
     default: "90"
     env: LIMEN_VENDOR_IDLE_HEADROOM_PCT
@@ -3106,7 +3106,19 @@ parameters:
     env: LIMEN_RELATIONSHIP_REVIEW
     self_update: none
     owner: tabularius
-    note: "Gate for the relationship-review-delta beat sensor (weekly review-due detector for the relationship-pipeline slugs). ON by default: it is read-only (a bounded, immutable sqlite count of chat.db) and fails open, so it cannot red the beat or leak. Its only public output is a PII-clean count; per-person detail lands only in the sealed _people-private estate."
+    note: "Gate for the relationship-review-delta observation. It consumes only an exact, fresh, owner-custodied immutable snapshot handoff, emits a PII-clean count, and has no raw-path fallback, hydration path, or storage effector."
+  LIMEN_RELATIONSHIP_REVIEW_HANDOFF:
+    default: ""
+    env: LIMEN_RELATIONSHIP_REVIEW_HANDOFF
+    self_update: none
+    owner: tabularius
+    note: "Path injected by the private relationship owner to one atomically published limen.relationship_review_handoff.v1 receipt. Blank yields explicit unavailable coverage. Limen never creates, refreshes, or guesses this private path."
+  LIMEN_RELATIONSHIP_REVIEW_MAX_SNAPSHOT_AGE_SECONDS:
+    default: 691200
+    env: LIMEN_RELATIONSHIP_REVIEW_MAX_SNAPSHOT_AGE_SECONDS
+    self_update: none
+    owner: tabularius
+    note: "Consumer-side freshness ceiling for the owner-produced relationship snapshot and hydration handoff (eight days by default). The owner receipt must also be unexpired; its expiry can shorten but never weaken this ceiling."
   LIMEN_BEAT_RELATIONSHIP_REVIEW:
     default: 168
     env: LIMEN_BEAT_RELATIONSHIP_REVIEW
@@ -3118,13 +3130,7 @@ parameters:
     env: LIMEN_RELATIONSHIP_REVIEW_TIMEOUT
     self_update: none
     owner: tabularius
-    note: "Per-run timeout (seconds) for the relationship-review-delta sensor. The work is a handful of read-only sqlite COUNT queries; 300s is generous headroom if chat.db is large or the volume is slow."
-  LIMEN_RELATIONSHIP_REVIEW_NOTIFY:
-    default: "1"
-    env: LIMEN_RELATIONSHIP_REVIEW_NOTIFY
-    self_update: none
-    owner: tabularius
-    note: "Safety-valve arg for the relationship-review-delta effector (--notify). When 1, review-due detections append to the sealed private log ~/Workspace/_people-private/review-due.jsonl (ARCA-sealed, never public). ON by default because the write target is private-only; set 0 to run detection without recording."
+    note: "Per-run timeout (seconds) for the relationship-review-delta sensor. It verifies exact owner receipt and artifact hashes, then runs bounded immutable SQLite COUNT queries without writing or hydrating."
   LIMEN_RELATIONSHIP_REVIEW_THRESHOLD:
     default: 20
     env: LIMEN_RELATIONSHIP_REVIEW_THRESHOLD

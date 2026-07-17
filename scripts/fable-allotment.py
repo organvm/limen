@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Validate and record Fable 5 allotment acceptances.
+"""Validate and record bounded Fable planning-role acceptances.
 
-Fable is a reserved Claude tier for a small set of high-leverage jobs. This tool is the
-written acceptance command required before a Fable run starts. It records only metadata:
+Fable is an opaque, provider-supplied planning role for a small set of high-leverage jobs.
+This tool is the written acceptance command required before a Fable run starts. It records only metadata:
 category, percent of the weekly allotment, sources by path/URL, and verification commands.
 Do not put raw private prompts, secrets, or personal data in the receipt.
 """
@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import importlib.util
 import json
+import math
 import os
 import re
 import sys
@@ -22,10 +24,25 @@ from typing import Any
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 DEFAULT_RECEIPTS = ROOT / "logs" / "fable-acceptance"
 
+
+def _load_contract() -> Any:
+    path = ROOT / "cli" / "src" / "limen" / "fable_contract.py"
+    if not path.exists():
+        path = Path(__file__).resolve().parents[1] / "cli" / "src" / "limen" / "fable_contract.py"
+    spec = importlib.util.spec_from_file_location("_limen_fable_contract_allotment", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Fable contract validator is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+CONTRACT = _load_contract()
+
 PLAN: dict[str, dict[str, Any]] = {
     "substrate": {
         "cap_percent": 15,
-        "purpose": "Claude/Fable operating substrate audit and patch plan",
+        "purpose": "Fable operating substrate audit and patch plan",
     },
     "prompt-corpus": {
         "cap_percent": 10,
@@ -113,6 +130,13 @@ def _validate_receipt(
     receipts_dir: Path | None = None,
     include_existing: bool = True,
 ) -> None:
+    try:
+        CONTRACT.validate_acceptance_receipt(receipt, require_current_week=False)
+    except CONTRACT.ContractError as exc:
+        if str(exc) == "acceptance-reserve-locked":
+            raise PolicyError("reserve spend requires --reserve-unlock") from exc
+        raise PolicyError(str(exc)) from exc
+
     category = str(receipt.get("category", ""))
     if category not in PLAN:
         raise PolicyError(f"unknown category {category!r}; choose one of {', '.join(sorted(PLAN))}")
@@ -176,9 +200,31 @@ def _receipt_from_args(args: argparse.Namespace) -> dict[str, Any]:
         "redacted_packets": args.redacted_packet or [],
         "verification": args.verification or [],
         "reserve_unlocked": bool(getattr(args, "reserve_unlock", False)),
+        "mode": "plan-only",
+        "deliverable": "continuation-capsule",
+        "builder_handoff": CONTRACT.builder_handoff(),
+        "motion_receipt_deadline_seconds": CONTRACT.MOTION_RECEIPT_DEADLINE_SECONDS,
         "acceptance_command": " ".join(sys.argv),
     }
     return receipt
+
+
+def _atomic_json_write(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def cmd_plan(_: argparse.Namespace) -> int:
@@ -191,10 +237,9 @@ def cmd_accept(args: argparse.Namespace) -> int:
     receipt = _receipt_from_args(args)
     _validate_receipt(receipt, receipts_dir=receipts_dir, include_existing=not args.no_existing)
 
-    receipts_dir.mkdir(parents=True, exist_ok=True)
     stamp = receipt["created_at"].replace(":", "").replace("-", "")
     out = Path(args.out) if args.out else receipts_dir / f"{stamp}-{receipt['slug']}.json"
-    out.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+    _atomic_json_write(out, receipt)
     print(json.dumps({"ok": True, "receipt": str(out)}, indent=2))
     print(f"export LIMEN_FABLE_ACCEPTANCE={out}")
     return 0
@@ -208,136 +253,223 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 
 # ── Live weekly Fable balance (the runtime backstop meter) ───────────────────────────────
-# The receipt ledger above records INTENDED spend (percent metadata at accept-time). The gate
-# also needs ACTUAL Fable tokens burned this ISO-week. organs/financial/token-usage.json is a
-# ROLLING 30-day window and CANNOT give the weekly figure, so the numerator comes from Claude
-# Code's own per-session transcripts (~/.claude/projects/**/*.jsonl). If Anthropic's weekly
-# unified rate-limit headers were captured (logs/anthropic-ratelimit.json), read the % directly —
-# that is the truest source. Fail-open: a dark meter writes over_cap=false (never blocks a run on
-# a measurement hiccup; the acceptance receipt organ remains the authorization).
+# The receipt ledger above records INTENDED spend. Authorization also needs an ACTUAL current-week
+# observation. A direct owner adapter may publish a fresh role-bound used-percent receipt. The
+# transcript fallback counts only usage rows explicitly tagged execution_role=fable-planner; it
+# never infers capability from a provider model name. Any unbound current-week usage makes that
+# fallback dark, and a dark meter cannot authorize a launch.
 
-_FABLE_WEEKLY_BUDGET_TOKENS_DEFAULT = 1_000_000_000  # ≈ the observed weekly Fable allotment ceiling
-_WEEKLY_WIN_S = 7 * 86400
+_BALANCE_REFRESH_SECONDS = 60
+_USAGE_METER_SCHEMA = "limen.fable_usage_meter.v1"
 
 
-def _finite_int(value: object, default: int) -> int:
+def _positive_int(value: object) -> int | None:
     try:
         parsed = int(float(value))  # type: ignore[arg-type]
     except (TypeError, ValueError):
-        return default
-    return parsed if parsed > 0 else default
+        return None
+    return parsed if parsed > 0 else None
 
 
-def _transcripts_dir() -> Path:
-    raw = os.environ.get("LIMEN_CLAUDE_TRANSCRIPTS_DIR")
-    return Path(raw) if raw else (Path.home() / ".claude" / "projects")
+def _transcripts_dir() -> Path | None:
+    raw = os.environ.get("LIMEN_FABLE_USAGE_TRANSCRIPTS_DIR")
+    return Path(raw).expanduser() if raw else None
 
 
 def _iso_ts(value: str) -> float | None:
     try:
-        return dt.datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
     except Exception:
         return None
-
-
-def _fable_ratelimit_pct() -> float | None:
-    """If the fleet captured Anthropic's weekly unified rate-limit headers, read the Fable weekly
-    used-percent directly. Truest source, zero measurement. Returns None if absent/malformed."""
-    p = ROOT / "logs" / "anthropic-ratelimit.json"
-    if not p.exists():
+    if parsed.tzinfo is None:
         return None
+    return parsed.timestamp()
+
+
+def _owner_used_pct() -> float | None:
+    """Read one fresh owner-adapter used-percent receipt, never a bare cached number."""
+
+    raw = os.environ.get("LIMEN_FABLE_USAGE_METER_PATH")
+    if not raw:
+        return None
+    p = Path(raw).expanduser()
     try:
         d = json.loads(p.read_text())
     except Exception:
         return None
-    for key in ("fable_weekly_used_percent", "unified_weekly_used_percent"):
+    if (
+        d.get("schema") != _USAGE_METER_SCHEMA
+        or d.get("execution_role") != "fable-planner"
+        or d.get("meter_ready") is not True
+        or d.get("week") != _week_key(_now())
+    ):
+        return None
+    observed = _iso_ts(str(d.get("observed_at") or ""))
+    if observed is None:
+        return None
+    try:
+        max_age = int(
+            os.environ.get(
+                "LIMEN_FABLE_BALANCE_MAX_AGE_SECONDS",
+                str(CONTRACT.DEFAULT_BALANCE_MAX_AGE_SECONDS),
+            )
+        )
+    except ValueError:
+        return None
+    age = _now().timestamp() - observed
+    if max_age <= 0 or age > max_age or age < -CONTRACT.FUTURE_SKEW_SECONDS:
+        return None
+    for key in ("weekly_used_percent", "used_percent"):
         v = d.get(key)
-        if isinstance(v, (int, float)):
-            return float(v)
-    wk = d.get("weekly")
-    if isinstance(wk, dict):
-        v = wk.get("fable_used_percent")
-        if isinstance(v, (int, float)):
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(float(v)) and v >= 0:
             return float(v)
     return None
 
 
-def _fable_weekly_tokens() -> int:
-    """Sum Fable (claude-fable-5) billable tokens from Claude Code transcripts over the current
-    ISO-week window. Bounded by file mtime so the scan stays cheap. Fail-open to 0."""
+def _execution_role(value: dict[str, Any], message: dict[str, Any]) -> str:
+    containers = (
+        value,
+        message,
+        value.get("metadata"),
+        message.get("metadata"),
+        value.get("execution_profile"),
+        message.get("execution_profile"),
+    )
+    for container in containers:
+        if not isinstance(container, dict):
+            continue
+        role = container.get("execution_role") or container.get("role")
+        if isinstance(role, str) and role:
+            return role
+    return ""
+
+
+def _fable_weekly_tokens(root: Path | None) -> tuple[int, int]:
+    """Return role-bound tokens and the number of unbound current-week usage rows."""
+
     import glob
 
-    root = _transcripts_dir()
-    if not root.exists():
-        return 0
-    now = dt.datetime.now(dt.timezone.utc).timestamp()
+    if root is None or not root.is_dir():
+        return 0, 0
+    now_dt = _now()
+    week_start = (now_dt - dt.timedelta(days=now_dt.weekday())).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    now = now_dt.timestamp()
+    week_start_ts = week_start.timestamp()
     total = 0
+    unbound = 0
     try:
         for f in glob.glob(str(root / "**" / "*.jsonl"), recursive=True):
             try:
-                if now - os.path.getmtime(f) > _WEEKLY_WIN_S:
+                if os.path.getmtime(f) < week_start_ts:
                     continue
             except OSError:
                 continue
             with open(f, errors="ignore") as fh:
                 for line in fh:
-                    if "fable" not in line or '"usage"' not in line:
+                    if '"usage"' not in line:
                         continue
                     try:
                         o = json.loads(line)
                     except Exception:
                         continue
                     msg = o.get("message") or {}
-                    model = str(msg.get("model") or o.get("model") or "")
-                    if "fable" not in model.lower():
-                        continue
                     ts = _iso_ts(o.get("timestamp", "")) if o.get("timestamp") else None
-                    if ts is not None and now - ts > _WEEKLY_WIN_S:
+                    if ts is None:
+                        unbound += 1
+                        continue
+                    if ts < week_start_ts:
+                        continue
+                    if ts > now + CONTRACT.FUTURE_SKEW_SECONDS:
+                        unbound += 1
                         continue
                     u = msg.get("usage") or o.get("usage")
                     if not isinstance(u, dict):
                         continue
-                    total += (
+                    billable = (
                         int(u.get("input_tokens", 0) or 0)
                         + int(u.get("output_tokens", 0) or 0)
                         + int(u.get("cache_creation_input_tokens", 0) or 0)
                     )
+                    if billable <= 0:
+                        continue
+                    if _execution_role(o, msg) == "fable-planner":
+                        total += billable
+                    else:
+                        unbound += 1
     except Exception:
-        return total
-    return total
+        return total, max(unbound, 1)
+    return total, unbound
 
 
 def compute_balance() -> dict[str, Any]:
-    """The live weekly Fable balance: prefer a captured ratelimit % header, else token-sum vs a
-    derived weekly budget. Timestamps derive from data (week key), never wall-clock in the body."""
-    week = _week_key(_now())
-    pct = _fable_ratelimit_pct()
-    spent_tokens = _fable_weekly_tokens()
-    source = "ratelimit-header"
+    """Compute an owner-evidenced balance without inventing a weekly denominator."""
+
+    observed = _now()
+    week = _week_key(observed)
+    pct = _owner_used_pct()
+    if pct is not None and (not math.isfinite(pct) or pct < 0):
+        pct = None
+    transcripts_root = _transcripts_dir()
+    spent_tokens, unbound_usage_rows = _fable_weekly_tokens(transcripts_root)
+    source = "owner-used-percent"
+    denominator_tokens: int | None = None
+    meter_ready = pct is not None
+    measurement: dict[str, Any] = {
+        "method": "owner-used-percent",
+        "owner_observed_pct": float(pct) if pct is not None else None,
+    }
     if pct is None:
-        budget = _finite_int(
-            os.environ.get("LIMEN_FABLE_WEEKLY_TOKENS"),
-            _FABLE_WEEKLY_BUDGET_TOKENS_DEFAULT,
-        )
-        pct = round(100.0 * spent_tokens / budget, 2) if budget > 0 else 0.0
+        denominator_tokens = _positive_int(os.environ.get("LIMEN_FABLE_WEEKLY_TOKENS"))
         source = "transcript-token-sum"
+        meter_ready = (
+            transcripts_root is not None
+            and transcripts_root.is_dir()
+            and denominator_tokens is not None
+            and unbound_usage_rows == 0
+        )
+        pct = round(100.0 * spent_tokens / denominator_tokens, 2) if meter_ready and denominator_tokens else None
+        measurement = {
+            "method": "token-ratio",
+            "numerator_tokens": spent_tokens,
+            "denominator_tokens": denominator_tokens,
+            "unbound_usage_rows": unbound_usage_rows,
+            "role_binding": "execution_role:fable-planner",
+        }
     return {
+        "schema": CONTRACT.BALANCE_SCHEMA,
+        "observed_at": observed.isoformat().replace("+00:00", "Z"),
         "week": week,
         "spent_tokens": spent_tokens,
-        "spent_pct": float(pct),
+        "spent_pct": float(pct) if pct is not None else None,
         "deliberate_cap": DELIBERATE_CAP,
         "hard_cap": HARD_CAP,
-        "over_cap": float(pct) >= HARD_CAP,
+        "over_cap": float(pct) >= HARD_CAP if pct is not None else None,
         "source": source,
+        "meter_ready": meter_ready,
+        "measurement": measurement,
     }
 
 
 def cmd_balance(args: argparse.Namespace) -> int:
     balance = compute_balance()
     out = Path(args.out) if args.out else ROOT / "logs" / "fable-allotment.json"
+    try:
+        prior = json.loads(out.read_text())
+        prior_observed = _iso_ts(str(prior.get("observed_at") or ""))
+        same = {key: value for key, value in prior.items() if key != "observed_at"} == {
+            key: value for key, value in balance.items() if key != "observed_at"
+        }
+        if same and prior_observed is not None and _now().timestamp() - prior_observed < _BALANCE_REFRESH_SECONDS:
+            balance["observed_at"] = prior["observed_at"]
+    except Exception:
+        pass
     if not args.no_write:
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(balance, indent=2, sort_keys=True) + "\n")
+        _atomic_json_write(out, balance)
     print(json.dumps(balance, indent=2, sort_keys=True))
     return 0
 
