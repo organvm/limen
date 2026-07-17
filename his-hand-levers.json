@@ -184,10 +184,21 @@
         "Publish the 3 verified-but-private repos \u2014 mirror-mirror, the-invisible-ledger, domus-genoma are seeded with awaiting_publish:true (banked + tested, kept off every public surface; a private repo's link 404s). Make a repo public, then delete its awaiting_publish line \u2014 it renders next pass.",
         "Decide styx \u2014 value-repos key organvm/styx 404s; the real public product is organvm/peer-audited--behavioral-blockchain, which is pre-revenue (deck live, API undeployed). Tell me to deploy it or reframe the door to admit built-but-not-live systems, and I'll seed it.",
         "Seed the remaining value-repos \u2014 session-meta, portfolio, the two limen mirrors. Point me at a repo's real proof (tests/deploy/scale) or just name it; I verify and draft the seed. No fabricated weight. Seeded & live: public-record-data-scrapper, universal-mail--automation, a-i-chat--exporter.",
-        "Optional: deeper lead capture \u2014 the 3-step inbound-lead protocol-class recipe is in docs/positioning/_capture.md; gives leads a first-class lane beyond today's tagged-inbox classification."
+        "Deeper lead capture \u2014 BUILT: the inbound-lead lane is now live end-to-end (UMA inbound-lead-hire/deploy/linkedin protocol family + the opportunity-pipeline beat sensor + a warm-lead badge on the obligations face). Detail in docs/positioning/_capture.md. No hand step remains here; the lane is armed by LIMEN_MAIL_SEND (the send valve) like every other SAFE reply.",
+        "LinkedIn \u2014 make email the front door (one profile pass, your hand): (1) mirror InMail + message notifications to Gmail (LinkedIn Settings \u2192 Communications \u2192 email notifications ON for messages/InMail) so a reach-out lands in the mail lane that already classifies it; (2) put the fastest channel in the open \u2014 profile headline/About and the Contact-info panel say 'fastest: contact@4444j99.dev'; (3) set Open To Work to recruiters-only (not the public #OpenToWork banner). This is your hand because it edits your public identity + account settings; it turns LinkedIn into an email-first inbound source the built lane already handles."
       ],
       "note": "INVARIANT: none of this sends, deletes, or spends without you \u2014 capture drafts, it never reaches out. The system record docs/positioning/_his-hand.md is the full owner-record; this lever is its single canonical pointer on the obligations face (per this file's _doc: a his-hand task hangs HERE, not only in a satellite doc). See memory: [[repos-are-inbound-signal-surface]], [[publish-form-rent-operation]], [[his-hand-tasks-hang-in-permanent-registry]].",
       "issue": 267
+    },
+    {
+      "id": "L-LINKEDIN-TESTAMENT",
+      "label": "Publish the refreshed LinkedIn testament post \u2014 one click, your identity. The post is drafted and staged in 4444J99/hokage-chess; it is a public statement on your feed, so only you can push it. Publishing it is the demand-side complement to the built inbound-opportunity lane: the post surfaces you, the lane (UMA inbound-lead protocols + the opportunity-pipeline sensor) handles whatever reach-outs it draws \u2014 email-first, captured, never cold-sent.",
+      "owner": "yours",
+      "cost": "one click (review the staged draft, then post to your LinkedIn feed)",
+      "unlocks": "the testament goes live on your feed as an inbound lure; every reach-out it draws is auto-classified into the inbound-lead lane and gets a SAFE first-touch ack when the send valve is armed",
+      "source_task": "opportunity-inbound lane build (PR C); the staged post lives in 4444J99/hokage-chess",
+      "gate": "publishing to your own public feed is your identity \u2014 never automatable; the draft is staged, the push is your click",
+      "note": "INVARIANT: nothing here sends, spends, or deletes. The post is staged, not posted; the inbound lane it feeds only ever drafts/acks by email, never cold-outreaches. Pairs with L-POSITIONING-ACTIVATE's LinkedIn email-first step (mirror InMail to Gmail; 'fastest: contact@4444j99.dev'; Open-To-Work recruiters-only)."
     },
     {
       "id": "L-CARD-FRAUD-HOLD",
@@ -543,17 +554,6 @@
       "unlocks": "the food and steps lanes go from built-armed-unused to ambient-live: plate photos and daily step counts land in the day-log with zero forms, zero menus, zero further taps",
       "source_task": "daily-engine leaf build 2026-07-14 (organvm/daily-engine PRs #9\u2013#12)",
       "issue": 1057
-    },
-    {
-      "id": "L-BACKBLAZE-EXCLUDE",
-      "label": "Backblaze exclusions \u2014 one Settings-pane visit ends the post-reboot re-crawl storms. 2026-07-15: bztransmit pinned a core at ~95% re-crawling regenerable fleet state after a reboot, stacking onto test fan-out to thrash the 16 GB host (swap 6.4/7.2 GiB, load 5.7). The pane excludes exact FOLDERS (no globs), so add each folder below \u2014 every one is regenerable (worktrees re-cut from origin, venvs rebuild from lockfiles, ollama models re-pull); nothing durable leaves the backup set. Backblaze pane \u2192 Settings \u2192 Exclusions \u2192 Add Folder: /Users/4jp/Workspace/limen/.claude/worktrees \u00b7 /Users/4jp/Workspace/limen/.venv \u00b7 /Users/4jp/Workspace/limen/cli/.venv \u00b7 /Users/4jp/.ollama/models (optionally ~/Library/Caches \u2014 often covered by Backblaze's internal defaults already). /Volumes/Scratch needs nothing: it carries no .bzvol.",
-      "owner": "yours",
-      "cost": "~3 min once, reversible in the same pane",
-      "gate": "the Backblaze preferences pane is GUI-only and writes root-context state (/Library/Backblaze.bzpkg/bzdata/bzinfo.xml) \u2014 his hand by construction; the VERIFY side is fully automated (beat sensor `backblaze-exclusions`, scripts/backblaze-exclusions.py --check, reads the world-readable bzinfo.xml and self-clears next beat after Save \u2014 no report-back needed)",
-      "unlocks": "post-reboot bztransmit re-crawls skip the regenerable trees (the worktree estate alone is hundreds of thousands of small files \u2014 file count, not GiB, is what pins the crawler); one of the three stacked loads in the 2026-07-15 thrash is permanently retired; the substrate-storage-pressure backblaze-scope bucket ledgers green",
-      "note": "REQUIRED_EXCLUDES in scripts/backblaze-exclusions.py is the single source of truth \u2014 extend the estate there and the sensor re-opens this lever's escalation automatically. Do NOT hand-edit bzinfo.xml; the pane owns it.",
-      "source_task": "IF-HOST-PRESSURE form 3 (docs/IDEAL-FORMS-LEDGER.md) \u2014 2026-07-15 host-thrash incident; PRs #1083 (form 1) + #1085 (form 2)",
-      "issue": 1087
     },
     {
       "id": "L-REVENUE-ACCT",
