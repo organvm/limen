@@ -396,7 +396,7 @@ def _merge_readiness(
 def _coverage_readiness(
     coverage: Mapping[str, Any],
     *,
-    raw_unit_count: int,
+    expected_source_ids: set[str],
 ) -> dict[str, Any]:
     _require_contract(coverage, "coverage-receipt.v1", label="coverage receipt")
     denominator = coverage.get("denominator")
@@ -404,12 +404,12 @@ def _coverage_readiness(
     counts = coverage.get("counts")
     if (
         not isinstance(denominator, Mapping)
-        or denominator.get("count") != raw_unit_count
         or not isinstance(sources, list)
-        or len(sources) != raw_unit_count
+        or denominator.get("count") != len(sources)
+        or denominator.get("manifest_hash") != digest_value(sources)
         or not isinstance(counts, Mapping)
     ):
-        raise ReceiptContractError("coverage denominator does not equal the source census")
+        raise ReceiptContractError("coverage denominator does not bind its classified sources")
     statuses = (
         "acquired",
         "parsed",
@@ -437,7 +437,7 @@ def _coverage_readiness(
             derived_blockers.append(source_id)
     if any(counts.get(status) != observed[status] for status in statuses):
         raise ReceiptContractError("coverage counts do not match its classified sources")
-    exact_all = len(sources) == raw_unit_count
+    exact_all = source_ids == expected_source_ids
     declared_exact = coverage.get("exact_all")
     declared_ready = coverage.get("ready")
     status = coverage.get("closure_status")
@@ -457,6 +457,41 @@ def _coverage_readiness(
         "ready": declared_ready,
         "status": status,
     }
+
+
+def _lineage_source_ids(lineage: Mapping[str, Any]) -> set[str]:
+    nodes = lineage.get("nodes")
+    edges = lineage.get("edges")
+    if not isinstance(nodes, list) or not nodes or not isinstance(edges, list):
+        raise ReceiptContractError("lineage graph source denominator is invalid")
+    source_ids: set[str] = set()
+    for index, node in enumerate(nodes):
+        if not isinstance(node, Mapping):
+            raise ReceiptContractError(f"lineage node {index} must be an object")
+        source_ids.add(
+            validate_public_id(
+                node.get("source_envelope_id"),
+                f"lineage node {index} source envelope ID",
+            ),
+        )
+    for edge_index, edge in enumerate(edges):
+        if not isinstance(edge, Mapping):
+            raise ReceiptContractError(f"lineage edge {edge_index} must be an object")
+        spans = edge.get("evidence_spans")
+        if not isinstance(spans, list):
+            raise ReceiptContractError(f"lineage edge {edge_index} evidence spans must be a list")
+        for span_index, span in enumerate(spans):
+            if not isinstance(span, Mapping):
+                raise ReceiptContractError(
+                    f"lineage edge {edge_index} evidence span {span_index} must be an object",
+                )
+            source_ids.add(
+                validate_public_id(
+                    span.get("source_envelope_id"),
+                    f"lineage edge {edge_index} evidence span {span_index} source envelope ID",
+                ),
+            )
+    return source_ids
 
 
 def _snapshot_bound(
@@ -729,6 +764,9 @@ def build_receipt_plan(
     edges = lineage.get("edges")
     if not isinstance(edges, list):
         raise ReceiptContractError("lineage graph edges must be a list")
+    lineage_source_ids = _lineage_source_ids(lineage)
+    if not lineage_source_ids.issubset(source_ids):
+        raise ReceiptContractError("source envelopes do not cover the lineage source denominator")
 
     testament = load_object(paths.governance_testament, label="governance testament")
     constitutional_ready, testament_missing, testament_incomplete = _testament_readiness(testament)
@@ -736,10 +774,10 @@ def build_receipt_plan(
     coverage = load_object(paths.coverage, label="coverage receipt")
     _snapshot_bound(coverage, runtime=runtime, snapshot_digest=snapshot_digest, label="coverage")
     coverage_digest = _embedded_digest(coverage, "receipt_hash", "coverage receipt")
-    coverage_ready = _coverage_readiness(coverage, raw_unit_count=len(raw_units))
-    denominator = coverage["denominator"]
-    if denominator.get("manifest_hash") != census.get("manifest_digest"):
-        raise ReceiptContractError("coverage denominator differs from census manifest")
+    coverage_ready = _coverage_readiness(
+        coverage,
+        expected_source_ids=lineage_source_ids,
+    )
 
     ideals = load_object(paths.ideal_form_register, label="ideal-form register")
     _require_contract(ideals, "ideal-form-register.v1", label="ideal-form register")

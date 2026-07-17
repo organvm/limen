@@ -22,6 +22,7 @@ RAW_ID = "raw_" + "1" * 64
 RAW_BLOCKED_ID = "raw_" + "2" * 64
 SOURCE_ID = "src_" + "1" * 64
 SOURCE_BLOCKED_ID = "src_" + "2" * 64
+SECOND_SOURCE_ID = "src_" + "3" * 64
 EVENT_ID = "evt_" + "1" * 64
 SECOND_EVENT_ID = "evt_" + "2" * 64
 CONTENT_DIGEST = "sha256:" + "b" * 64
@@ -112,6 +113,9 @@ def _artifacts(
             "event_ids": [EVENT_ID],
         },
     ]
+    if multiple_events:
+        coverage_sources.append({"source_id": SECOND_SOURCE_ID, "status": "parsed"})
+        coverage_counts["parsed"] = 2
     if blocked_source:
         raw_units.append(
             {
@@ -120,10 +124,6 @@ def _artifacts(
                 "content_hash": None,
             },
         )
-        coverage_sources.append(
-            {"source_id": SOURCE_BLOCKED_ID, "status": "owner_blocked"},
-        )
-        coverage_counts["owner_blocked"] = 1
         coverage_blockers = [SOURCE_BLOCKED_ID]
         parity_blockers = [RAW_BLOCKED_ID]
         promotions.append(
@@ -169,7 +169,15 @@ def _artifacts(
     }
     events = [event]
     if multiple_events:
-        events.append({**event, "event_id": SECOND_EVENT_ID})
+        events.append(
+            {
+                **event,
+                "event_id": SECOND_EVENT_ID,
+                "source_envelope_reference": (
+                    f"source-envelope.v1.jsonl#{SECOND_SOURCE_ID}"
+                ),
+            },
+        )
     source = {
         "contract_name": "source-envelope.v1",
         "contract_version": 1,
@@ -185,6 +193,15 @@ def _artifacts(
         "authority_class": "operator_intent",
         "body_hash": BODY_DIGEST,
     }
+    source_envelopes = [source]
+    if multiple_events:
+        source_envelopes.append(
+            {
+                **source,
+                "source_id": SECOND_SOURCE_ID,
+                "native_identifiers": {"event_id": "native-2"},
+            },
+        )
     assertion = {
         "contract_name": "assertion-evidence.v1",
         "contract_version": 1,
@@ -200,7 +217,15 @@ def _artifacts(
         "graph_id": "lineage-fixture",
         "generated_at": SNAPSHOT_AT,
         "frozen_snapshot_id": SNAPSHOT_ID,
-        "nodes": [{"node_id": "node-fixture"}],
+        "nodes": [
+            {
+                "node_id": (
+                    "node-fixture" if index == 0 else f"node-fixture-{index + 1}"
+                ),
+                "source_envelope_id": row["source_id"],
+            }
+            for index, row in enumerate(coverage_sources)
+        ],
         "edges": [],
     }
     if candidate:
@@ -237,9 +262,9 @@ def _artifacts(
             "snapshot_id": SNAPSHOT_ID,
             "generated_at": SNAPSHOT_AT,
             "denominator": {
-                "count": len(raw_units),
-                "discovery_manifest_reference": "config:source-manifest",
-                "manifest_hash": census["manifest_digest"],
+                "count": len(coverage_sources),
+                "discovery_manifest_reference": "coverage-fixture#/sources",
+                "manifest_hash": _digest(coverage_sources),
             },
             "sources": coverage_sources,
             "counts": coverage_counts,
@@ -404,7 +429,7 @@ def _artifacts(
     }
     _write_json(paths["source_census"], census)
     _write_jsonl(paths["normalized_events"], events)
-    _write_jsonl(paths["source_envelopes"], [source])
+    _write_jsonl(paths["source_envelopes"], source_envelopes)
     _write_json(
         paths["assertion_evidence"],
         [assertion] if assertion_as_list else assertion,
@@ -695,7 +720,7 @@ def test_ratified_bundle_uses_exact_final_schema_reference_shapes(
     assert payload["iceberg_atlas"]["zoom_count"] == 6
 
 
-def test_owner_loads_multirow_jsonl_whose_first_byte_is_an_object(
+def test_owner_loads_multirow_jsonl_and_keeps_scope_denominators_distinct(
     tmp_path: Path,
 ) -> None:
     _, output, _, _ = _first_traversal(
@@ -704,11 +729,38 @@ def test_owner_loads_multirow_jsonl_whose_first_byte_is_an_object(
         multiple_events=True,
     )
 
-    events = json.loads(output.read_text(encoding="utf-8"))["bundle_payload"][
-        "normalized_events"
-    ]
+    payload = json.loads(output.read_text(encoding="utf-8"))["bundle_payload"]
+    events = payload["normalized_events"]
 
     assert [event["event_id"] for event in events] == [EVENT_ID, SECOND_EVENT_ID]
+    assert payload["source_census"]["raw_unit_count"] == 1
+    assert len(payload["source_envelopes"]) == 2
+
+
+def test_owner_rejects_coverage_that_omits_a_lineage_source(
+    tmp_path: Path,
+) -> None:
+    inputs = _artifacts(
+        tmp_path / "inputs",
+        candidate=False,
+        multiple_events=True,
+    )
+    coverage = json.loads(inputs["coverage"].read_text(encoding="utf-8"))
+    coverage["sources"] = coverage["sources"][:1]
+    coverage["counts"]["parsed"] = 1
+    coverage["denominator"]["count"] = 1
+    coverage["denominator"]["manifest_hash"] = _digest(coverage["sources"])
+    coverage = _sealed(coverage, "receipt_hash")
+    _write_json(inputs["coverage"], coverage)
+    run_root = tmp_path / "run"
+
+    result = _run(
+        _args(inputs, run_root / "artifacts" / "pre-proof.json"),
+        _env(run_root, run_root / "metrics" / "receipt.json"),
+        expected=2,
+    )
+
+    assert "coverage classification/readiness fields are invalid" in result.stderr
 
 
 def test_owner_rejects_a_non_object_jsonl_row_with_its_physical_line(
