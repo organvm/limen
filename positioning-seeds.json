@@ -219,8 +219,8 @@
    ]
   },
   "organvm/a-i-chat--exporter": {
-   "display_name": "ChatGPT Conversation Exporter",
-   "what_it_is": "A browser userscript that exports your ChatGPT conversations into five portable formats — Markdown, HTML, JSON, PNG, and plain text — entirely in-browser. No account, no server, no data leaves your machine; it authenticates through your existing ChatGPT session and runs on chatgpt.com, chat.openai.com, and new.oaifree.com.",
+   "display_name": "AI Chat Exporter",
+   "what_it_is": "A browser userscript that exports your AI chat conversations into five portable, archival-quality formats — Markdown, HTML, JSON, PNG, and plain text — entirely in-browser. No account, no server, no data leaves your machine; it reverse-engineers the platform's internal API and linearizes the branching message tree, with a provider layer live for ChatGPT and scaffolded for Claude and Gemini.",
    "proof_signals": [
     "170 tests across 16 suites",
     "~5,900 lines of TypeScript",
