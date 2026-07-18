@@ -9,6 +9,8 @@ Read these modules in order:
 2. `docs/continuations/peer-conductor-live-cutover-2026-07-18/constraints.md`
 3. `docs/continuations/peer-conductor-live-cutover-2026-07-18/decision.md`
 4. `docs/continuations/peer-conductor-live-cutover-2026-07-18/receipts.md`
+5. `docs/continuations/peer-conductor-live-cutover-2026-07-18/workstream.json`
+   — the validated finite-runway, authorization, and conductor receipt.
 
 Missing, stale, contradictory, or unreadable modules make the capsule invalid. Start a fresh
 isolated continuation from the remotely preserved implementation branch:
@@ -24,4 +26,3 @@ The bootstrap command deliberately omits `--conduct`: the production broker must
 session until principal-bound authentication and executor-only lease delivery pass. This direct
 human continuation may repair that gate in isolation, then must register before launching any
 child, task transition, external effect, or separate capacity.
-

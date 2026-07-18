@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,7 @@ try:
         read_session_records,
         resolve_session,
     )
+    from limen.workstream_contract import DEFAULT_RUNWAY, ContractError, packet_contract  # noqa: E402
 except Exception:  # pragma: no cover - import failure is surfaced by the relevant operation
     capacity_census = None
     canonical_agent = lambda value: str(value).strip().replace("-", "_")  # noqa: E731
@@ -69,6 +71,9 @@ except Exception:  # pragma: no cover - import failure is surfaced by the releva
     child_identity_environment = None
     read_session_records = None
     resolve_session = None
+    DEFAULT_RUNWAY = "1d"
+    ContractError = ValueError
+    packet_contract = None
 
 THEMES = [
     ("alpha-omega-product-ledger", ("1000", "alpha", "omega", "product", "shipped")),
@@ -106,6 +111,39 @@ def now_iso() -> str:
 
 def stable_hash(text: str, length: int = 18) -> str:
     return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:length]
+
+
+def runway_arg(value: str) -> str:
+    if packet_contract is None:
+        raise argparse.ArgumentTypeError("workstream contract module unavailable")
+    try:
+        return str(packet_contract(value)["runway"]["requested"])
+    except ContractError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
+def admitted_packet_contract(runway: str) -> dict[str, Any]:
+    """Reuse the parent capsule admission, or admit one standalone snapshot now."""
+
+    started_raw = os.environ.get("LIMEN_WORKSTREAM_STARTED_EPOCH")
+    deadline_raw = os.environ.get("LIMEN_WORKSTREAM_DEADLINE_EPOCH")
+    if started_raw is None and deadline_raw is None:
+        return packet_contract(runway)
+    if started_raw is None or deadline_raw is None:
+        raise ContractError("parent workstream timing is partial")
+    try:
+        started_epoch = int(started_raw)
+        deadline_epoch = int(deadline_raw)
+    except ValueError as exc:
+        raise ContractError("parent workstream timing is not integer epoch state") from exc
+    contract = packet_contract(
+        runway,
+        started_epoch=started_epoch,
+        deadline_epoch=deadline_epoch,
+    )
+    if deadline_epoch - int(time.time()) <= 0:
+        raise ContractError("parent workstream runway is exhausted; emit a successor before packetization")
+    return contract
 
 
 def text_from_content(value: Any) -> list[str]:
@@ -570,9 +608,7 @@ def executor_packets(
     if include_contrib and "contrib-mirror" not in work_themes:
         work_themes.append("contrib-mirror")
     reserved_themes = {
-        theme
-        for lane, theme in PREFERRED_EXECUTOR_THEMES.items()
-        if lane in lanes and theme in work_themes
+        theme for lane, theme in PREFERRED_EXECUTOR_THEMES.items() if lane in lanes and theme in work_themes
     }
     for lane in lanes:
         preferred_theme = PREFERRED_EXECUTOR_THEMES.get(lane)
@@ -645,6 +681,8 @@ def task_seed_context(
     prompt_hashes = ", ".join(str(value) for value in snapshot.get("prompt_hashes", [])[:12])
     if len(snapshot.get("prompt_hashes", [])) > 12:
         prompt_hashes += ", ..."
+    workstream_contract = packet.get("workstream_contract") or snapshot.get("workstream_contract") or {}
+    contract_json = json.dumps(workstream_contract, sort_keys=True, separators=(",", ":"))
     return (
         f"Current-session fanout {phase} packet.\n"
         f"Packet id: {packet['id']}\n"
@@ -655,6 +693,10 @@ def task_seed_context(
         f"Run lineage: {packet['root_run_id']} -> {packet['parent_run_id']} -> {packet['run_id']}\n"
         f"Source plan hashes: {plan_hashes or 'none'}\n"
         f"Source prompt hashes: {prompt_hashes or 'none'}\n"
+        f"Workstream contract: {contract_json}\n"
+        "Full approval: proceed without confirmation for in-scope reversible work. Destructive, "
+        "credential, paid-spend, public-send, and runtime/host mutations remain gated. Re-check "
+        "remaining runway before each bounded packet and stop or successor-route before zero.\n"
         "Do not paste raw private prompt or plan bodies into public files, commits, PRs, "
         "task logs, or outbound systems. Use the hashes above as provenance.\n"
         "Acceptance:\n"
@@ -672,6 +714,8 @@ def task_seed_specs(snapshot: dict[str, Any], repo: str | None = None) -> list[d
     session_hash = str(snapshot["session_hash"])
     seed: list[dict[str, Any]] = []
     planner_task_ids: dict[str, str] = {}
+    runway_seconds = int(snapshot["workstream_contract"]["runway"]["duration_seconds"])
+    runway_label = f"profile:runway-seconds:{runway_seconds}"
 
     for packet in snapshot.get("planner_packets", []):
         task_id = task_seed_id(session_hash, str(packet["id"]))
@@ -694,6 +738,7 @@ def task_seed_specs(snapshot: dict[str, Any], repo: str | None = None) -> list[d
                     "product",
                     "ship-order",
                     "no-reset-spend",
+                    runway_label,
                 ],
                 "urls": [],
                 "context": task_seed_context(snapshot=snapshot, packet=packet, phase="planner"),
@@ -713,6 +758,7 @@ def task_seed_specs(snapshot: dict[str, Any], repo: str | None = None) -> list[d
                 "parent_run_id": packet["parent_run_id"],
                 "run_id": packet["run_id"],
                 "runtime_env": dict(packet["runtime_env"]),
+                "workstream_contract": dict(packet.get("workstream_contract") or {}),
             }
         )
 
@@ -738,6 +784,7 @@ def task_seed_specs(snapshot: dict[str, Any], repo: str | None = None) -> list[d
                     "generated",
                     "product",
                     "ship-order",
+                    runway_label,
                 ],
                 "urls": [],
                 "context": task_seed_context(snapshot=snapshot, packet=packet, phase="executor"),
@@ -757,6 +804,7 @@ def task_seed_specs(snapshot: dict[str, Any], repo: str | None = None) -> list[d
                 "parent_run_id": packet["parent_run_id"],
                 "run_id": packet["run_id"],
                 "runtime_env": dict(packet["runtime_env"]),
+                "workstream_contract": dict(packet.get("workstream_contract") or {}),
             }
         )
     return seed
@@ -789,6 +837,7 @@ def task_model_payload(spec: dict[str, Any]) -> dict[str, Any]:
             "parent_run_id",
             "run_id",
             "runtime_env",
+            "workstream_contract",
         )
         if key in spec
     }
@@ -1233,6 +1282,7 @@ def fanout_verification_command(
     executor_lanes: str,
     include_contrib: bool,
     no_reset_spend: bool,
+    runway: str = DEFAULT_RUNWAY,
 ) -> str:
     args = [
         "python3",
@@ -1247,6 +1297,8 @@ def fanout_verification_command(
         planner_lanes,
         "--executor-lanes",
         executor_lanes,
+        "--runway",
+        runway,
     ]
     if include_contrib:
         args.append("--include-contrib")
@@ -1269,6 +1321,7 @@ def set_run_verification_predicate(
         executor_lanes=args.executor_lanes,
         include_contrib=args.include_contrib,
         no_reset_spend=no_reset_spend,
+        runway=getattr(args, "runway", DEFAULT_RUNWAY),
     )
     for packet in packets:
         predicates = list(packet.get("verification_predicates") or [])
@@ -1293,6 +1346,9 @@ def build_snapshot(args: argparse.Namespace) -> dict[str, Any]:
     conductor_agent = session.agent if session.agent in conductors else (conductors[0] if conductors else "")
     root_run_id = os.environ.get("LIMEN_ROOT_RUN_ID") or f"fanout-{stable_hash(session.locator, 24)}"
     no_reset_spend = not args.allow_reset_spend
+    if packet_contract is None:
+        raise ContractError("workstream contract module unavailable")
+    workstream = admitted_packet_contract(getattr(args, "runway", DEFAULT_RUNWAY))
     planners = planner_packets(
         themes,
         messages,
@@ -1316,6 +1372,8 @@ def build_snapshot(args: argparse.Namespace) -> dict[str, Any]:
         planner_packets_by_theme=planner_packets_by_theme,
         source_plan_hashes=source_plan_hashes,
     )
+    for packet in planners + executors:
+        packet["workstream_contract"] = workstream
     set_run_verification_predicate(planners, session=session, args=args, no_reset_spend=no_reset_spend)
     packet_plan_hashes = packet_plan_hash_intersection(planners + executors)
     unconsolidated_plan_hashes = [plan_hash for plan_hash in source_plan_hashes if plan_hash not in packet_plan_hashes]
@@ -1352,6 +1410,7 @@ def build_snapshot(args: argparse.Namespace) -> dict[str, Any]:
         "planner_lanes": planner_lanes,
         "executor_lanes": executor_lanes,
         "no_reset_spend": no_reset_spend,
+        "workstream_contract": workstream,
         "planner_packets": planners,
         "executor_packets": executors,
         "blocked_local_work": blockers,
@@ -1529,6 +1588,7 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         "",
         "- Planner and executor lanes are selected from the canonical live capability census.",
         "- Each child receives its native executor identity plus explicit initiator, conductor, and root/parent/run lineage.",
+        "- Every packet carries the validated finite runway and no-modal authorization contract.",
         "- Dry-run may render proposed packets; live activation first reserves the root and every child through conduct submit/split.",
         "- Direct task-seed activation is retired; no native child may launch from an unleased dictionary packet.",
         "- This command never applies provider resets, credits, top-ups, or paid overages.",
@@ -1560,6 +1620,14 @@ def main() -> int:
     parser.add_argument("--planner-lanes", default=os.environ.get("LIMEN_PLANNER_LANES", "auto"))
     parser.add_argument("--executor-lanes", default=os.environ.get("LIMEN_LANES", "auto"))
     parser.add_argument("--conductor-agent", default=os.environ.get("LIMEN_CONDUCTOR_AGENT", "auto"))
+    parser.add_argument(
+        "--runway",
+        type=runway_arg,
+        default=os.environ.get(
+            "LIMEN_WORKSTREAM_REQUESTED",
+            os.environ.get("LIMEN_WORKSTREAM_RUNWAY", DEFAULT_RUNWAY),
+        ),
+    )
     parser.add_argument("--include-contrib", action="store_true")
     parser.add_argument("--no-reset-spend", dest="allow_reset_spend", action="store_false", default=False)
     parser.add_argument("--allow-reset-spend", action="store_true", default=False)

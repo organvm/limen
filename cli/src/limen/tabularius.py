@@ -57,6 +57,7 @@ from limen.materialize import (
     diff_boards,
 )
 from limen.models import VALID_STATUSES, LimenFile, Task
+from limen.workstream_contract import WORKSTREAM_SUCCESSOR_REQUIRED_LABEL
 
 # --- ticket intents (a superset of materialize's Event tags, plus the status convenience) --------
 INTENT_UPSERT = "task.upsert"  # create-or-merge a task field-set (patch may be full or partial)
@@ -193,9 +194,9 @@ def submit_task_upsert(
 
     The task is validated HERE (fail-fast, exactly like the old ``Task(**t)`` before a direct write),
     so a producer never emits an invalid task — the keeper's per-ticket validation stays a second
-    line of defense, not the first. Dedup remains the caller's responsibility: read the board and
-    submit only genuinely-new ids, because an upsert MERGES onto any existing task ({**base, **patch})
-    and blind-upserting a live id would overwrite its fields (e.g. flip a `done` task back to `open`).
+    line of defense, not the first. The emitted absent precondition makes this a create-only producer
+    seam: a duplicate/stale generator ticket is quarantined instead of merging over a live lifecycle
+    row. Owners use ``submit_task_status`` or an explicitly preconditioned raw ticket for updates.
     """
     validated = task if isinstance(task, Task) else Task.model_validate(task)
     validate_intake_contract(validated, is_new=True)
@@ -212,6 +213,7 @@ def submit_task_upsert(
         intent=INTENT_UPSERT,
         task_id=tid,
         patch=fields,
+        precondition={"absent": True},
     )
     return submit_ticket(board_path, ticket)
 
@@ -267,6 +269,7 @@ class DrainResult:
     note: str = ""
     applied_ids: list[str] = field(default_factory=list)
     rejected_ids: list[str] = field(default_factory=list)
+    projected_tasks: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -388,7 +391,7 @@ def _compatibility_intent(ticket: Ticket, base: dict[str, Any] | None) -> dict[s
             "task_id": ticket.task_id,
             "expected_absent": True,
             "task": supplied,
-            "log": {"output": (ticket.log or {}).get("output")},
+            "log": dict(ticket.log or {}),
         }
 
     precondition = ticket.precondition or {}
@@ -425,7 +428,7 @@ def _compatibility_intent(ticket: Ticket, base: dict[str, Any] | None) -> dict[s
         "expected_status": prior_status,
         "expected_revision": _canonical_revision(base),
         "patch": changed,
-        "log": {"output": (ticket.log or {}).get("output")},
+        "log": dict(ticket.log or {}),
     }
 
 
@@ -552,18 +555,35 @@ def apply_limen_file_sync(
             continue
         if event_type in {EV_BOARD_ORDER, EV_TASK_REMOVE}:
             raise RuntimeError(f"{event_type} has no authenticated remote compatibility transition")
-        tickets.append(_ticket_from_event(event, agent=agent, session_id=session_id, now=timestamp))
+        ticket = _ticket_from_event(event, agent=agent, session_id=session_id, now=timestamp)
+        if event_type == EV_TASK_UPSERT:
+            task_id = str(event["task_id"])
+            prior = prior_by_id.get(task_id)
+            desired = dict(event.get("data") or {})
+            if prior is not None:
+                prior_log = list(prior.get("dispatch_log") or [])
+                desired_log = list(desired.get("dispatch_log") or [])
+                if desired_log != prior_log:
+                    if len(desired_log) != len(prior_log) + 1 or desired_log[:-1] != prior_log:
+                        raise RuntimeError(
+                            f"task {task_id} compatibility transition must append exactly one dispatch receipt"
+                        )
+                    ticket = ticket.model_copy(update={"log": dict(desired_log[-1])})
+        tickets.append(ticket)
     if not tickets:
         return DrainResult(note="no task transition; budget-window metadata is derived by the remote keeper")
+    projected_tasks: dict[str, dict[str, Any]] = {}
     for ticket in tickets:
         task = _relay_ticket(ticket, prior_by_id.get(str(ticket.task_id)))
         prior_by_id[str(ticket.task_id)] = task
+        projected_tasks[str(ticket.task_id)] = task
     return DrainResult(
         pending=len(tickets),
         applied=len(tickets),
         wrote=False,
         note="broker-committed",
         applied_ids=[ticket.ticket_id for ticket in tickets],
+        projected_tasks=projected_tasks,
     )
 
 
@@ -665,6 +685,13 @@ def _apply(ticket: Ticket, tasks: OrderedDict[str, dict[str, Any]], meta: dict[s
     if ticket.intent == INTENT_REMOVE:
         if not ticket.task_id:
             raise ValueError("task.remove requires task_id")
+        existing = tasks.get(ticket.task_id)
+        if (
+            existing
+            and WORKSTREAM_SUCCESSOR_REQUIRED_LABEL in (existing.get("labels") or [])
+            and existing.get("status") != "archived"
+        ):
+            raise ValueError(f"successor-required task {ticket.task_id} cannot be removed before explicit archival")
         tasks.pop(ticket.task_id, None)
         return
 
@@ -709,6 +736,15 @@ def _apply(ticket: Ticket, tasks: OrderedDict[str, dict[str, Any]], meta: dict[s
             # a task.status ticket carries the transition in its log payload; honor it as the status
             if ticket.intent == INTENT_STATUS and "status" not in (ticket.patch or {}) and status:
                 merged["status"] = status
+        if not is_new and WORKSTREAM_SUCCESSOR_REQUIRED_LABEL in (base.get("labels") or []):
+            next_status = str(merged.get("status") or "")
+            if next_status not in {"failed", "done", "archived"}:
+                raise ValueError(
+                    f"successor-required task {ticket.task_id} is terminal; create a new successor task "
+                    f"instead of transitioning it to {next_status!r}"
+                )
+            if WORKSTREAM_SUCCESSOR_REQUIRED_LABEL not in (merged.get("labels") or []):
+                raise ValueError(f"successor-required task {ticket.task_id} cannot drop its terminal hold label")
         validated = Task.model_validate(merged)  # reject a bad ticket individually
         # A caller can bypass ``submit_task_upsert`` by constructing a raw Ticket.
         # The keeper repeats admission independently so that ticket is quarantined

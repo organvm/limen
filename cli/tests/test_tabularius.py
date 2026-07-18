@@ -20,6 +20,7 @@ from limen.io import load_limen_file, queue_lock, save_limen_file
 from limen.models import LimenFile
 from limen.tabularius import (
     INTENT_META,
+    INTENT_REMOVE,
     INTENT_STATUS,
     INTENT_UPSERT,
     Ticket,
@@ -463,3 +464,33 @@ def test_preserve_projection_is_retired_noop(tmp_path):
     assert result.skipped is True
     assert "remote" in result.reason or "retired" in result.reason
     assert board.read_bytes() == before
+
+
+def test_reducer_preserves_successor_terminal_hold():
+    held = _task(
+        "T-held",
+        status="failed",
+        labels=["workstream:successor-required"],
+    )
+    tasks: OrderedDict[str, dict[str, Any]] = OrderedDict([("T-held", held)])
+    meta: dict[str, Any] = {}
+
+    forbidden = [
+        _ticket(INTENT_STATUS, task_id="T-held", patch={"status": "open"}),
+        _ticket(INTENT_UPSERT, task_id="T-held", patch={"status": "done", "labels": []}),
+        _ticket(INTENT_REMOVE, task_id="T-held"),
+    ]
+    for ticket in forbidden:
+        with pytest.raises(ValueError, match="successor-required"):
+            _apply(ticket, tasks, meta)
+
+    completion = _ticket(
+        INTENT_STATUS,
+        task_id="T-held",
+        patch={"status": "done"},
+        log={"status": "done", "output": "terminal receipt"},
+    )
+    _apply(completion, tasks, meta)
+
+    assert tasks["T-held"]["status"] == "done"
+    assert tasks["T-held"]["labels"] == ["workstream:successor-required"]

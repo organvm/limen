@@ -315,7 +315,9 @@ def test_current_session_fanout_creates_capability_selected_planners_and_executo
         assert plan_hash in markdown
 
 
-def test_current_session_fanout_keeps_explicit_executor_lane_list(monkeypatch) -> None:
+def test_current_session_fanout_keeps_explicit_executor_lane_list_without_inventing_all_fallback(
+    monkeypatch,
+) -> None:
     mod = _load("current-session-fanout.py", "current_session_fanout_lanes_under_test")
 
     assert mod.lane_selection("opencode,agy,github-actions") == ["opencode", "agy", "github_actions"]

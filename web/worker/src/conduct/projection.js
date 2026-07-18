@@ -32,6 +32,19 @@ const PATCHABLE_TASK_FIELDS = new Set([
   "claude_tier",
   "depends_on",
 ]);
+const STRUCTURED_LOG_FIELDS = new Set([
+  "landing_event",
+  "landing_terminal",
+  "landing_outcome",
+  "landing_session_id",
+  "landing_branch",
+  "landing_intent_token",
+  "landing_claim_sha256",
+  "landing_prior_status",
+  "landing_prior_updated",
+  "landing_attempt_count",
+  "landing_attempt",
+]);
 const CANONICAL_TRANSITIONS = new Map([
   ["open", new Set(["open", "dispatched"])],
   ["dispatched", new Set(["open", "dispatched", "in_progress"])],
@@ -84,12 +97,17 @@ function eventAlreadyApplied(board, eventId) {
 }
 
 function conductLog(event, log, fallbackStatus, fallbackOutput) {
+  const structured = Object.fromEntries(
+    Object.entries(log || {})
+      .filter(([field, value]) => STRUCTURED_LOG_FIELDS.has(field) && value !== undefined),
+  );
   return {
     timestamp: event.timestamp,
-    agent: String(event.agent),
-    session_id: String(event.session_id),
-    status: String(fallbackStatus),
+    agent: String(log?.agent ?? event.agent),
+    session_id: String(log?.session_id ?? event.session_id),
+    status: String(log?.status ?? fallbackStatus),
     output: String(log?.output ?? fallbackOutput ?? ""),
+    ...clone(structured),
     conduct_event_id: event.event_id,
     conduct_run_id: event.run_id,
     conduct_lease_id: event.lease_id,
@@ -222,6 +240,16 @@ function validateTransition(taskId, fromStatus, toStatus, kind) {
   }
 }
 
+function isHeldJulesLandingRecovery(task, nextStatus, log) {
+  return task.status === "failed"
+    && (task.labels || []).includes("jules:landing-held")
+    && log?.landing_event === "terminal"
+    && log?.landing_terminal === true
+    && typeof log?.landing_intent_token === "string"
+    && log.landing_intent_token.length > 0
+    && ["done", "failed", "failed_blocked"].includes(nextStatus);
+}
+
 export function applyTaskPacketProjectionEvent(input, event) {
   const board = clone(input);
   const intent = event.intent || {};
@@ -295,7 +323,9 @@ export function applyTaskPacketProjectionEvent(input, event) {
     throw new ConductProjectionError(`task ${taskId} status intent requires a status patch`, 422);
   }
   const nextStatus = patch.status ?? existing.status;
-  validateTransition(taskId, existing.status, nextStatus, kind);
+  if (!isHeldJulesLandingRecovery(existing, nextStatus, intent.log)) {
+    validateTransition(taskId, existing.status, nextStatus, kind);
+  }
   if (kind === "task.claim") applyCanonicalBudgetDebit(board, existing, event, patch);
   if (kind === "task.status" && existing.status === "dispatched" && nextStatus === "open") {
     applyCanonicalBudgetRefund(board, existing, event);
