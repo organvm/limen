@@ -868,6 +868,7 @@ def _restore_done_status(
             agent=agent,
             session_id=session_id,
             status="done",
+            lifecycle_repair="prior-done",
             output=output,
         )
     )

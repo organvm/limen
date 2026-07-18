@@ -375,6 +375,47 @@ def test_drain_defers_all_tickets_when_broker_is_unavailable(tmp_path, monkeypat
     assert board.read_bytes() == before
 
 
+def test_local_retry_replays_committed_full_projection_after_cache_write_crash(tmp_path, monkeypatch):
+    board = _seed_board(tmp_path)
+    ticket = _ticket(
+        INTENT_STATUS,
+        task_id="T-1",
+        patch={"status": "dispatched"},
+        log={"status": "dispatched", "output": "claimed once"},
+        ticket_id="crash-retry",
+    )
+    submit_ticket(board, ticket)
+    real_save = tabularius.save_local_conduct_projection
+    attempts = 0
+
+    def fail_first_cache_write(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError("simulated post-commit cache crash")
+        return real_save(*args, **kwargs)
+
+    monkeypatch.setattr(tabularius, "save_local_conduct_projection", fail_first_cache_write)
+    first = drain_once(board)
+
+    assert first.deferred is True
+    assert first.applied == 0
+    assert pending_count(board) == 1
+    assert load_limen_file(board).tasks[1].status == "open"
+
+    second = drain_once(board)
+    projected = load_limen_file(board)
+    task = projected.tasks[1]
+
+    assert second.deferred is False
+    assert second.applied == 1
+    assert pending_count(board) == 0
+    assert task.status == "dispatched"
+    assert projected.portal.budget.track.spent == task.budget_cost
+    assert sum(bool(entry.conduct_event_id) for entry in task.dispatch_log) == 1
+    assert attempts == 2
+
+
 def test_mid_drain_outage_archives_acknowledged_prefix_and_leaves_rest_pending(tmp_path, monkeypatch):
     board = _seed_board(tmp_path)
     before = board.read_bytes()

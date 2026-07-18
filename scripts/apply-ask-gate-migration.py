@@ -632,11 +632,21 @@ def verify_children_admitted(payload: dict[str, Any], board_path: Path) -> dict[
         if not archived_ticket.log or archived_ticket.log.get("status") != child.status:
             raise MigrationError(f"child {task_id!r} archive receipt lacks its append-only creation log")
         matching_log = any(
-            entry.timestamp == archived_ticket.timestamp
-            and entry.agent == archived_ticket.agent
-            and entry.session_id == archived_ticket.session_id
+            entry.agent == archived_ticket.agent
             and entry.status == archived_ticket.log.get("status")
             and entry.output == archived_ticket.log.get("output")
+            and (
+                (entry.timestamp == archived_ticket.timestamp and entry.session_id == archived_ticket.session_id)
+                or all(
+                    getattr(entry, field, None)
+                    for field in (
+                        "conduct_event_id",
+                        "conduct_run_id",
+                        "conduct_lease_id",
+                        "conduct_generation",
+                    )
+                )
+            )
             for entry in child.dispatch_log
         )
         if not matching_log:

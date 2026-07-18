@@ -1230,6 +1230,30 @@ test("task claims derive canonical debit and identity while canonical transition
     () => applyTaskPacketProjectionEvent(board, bypass),
     /cannot transition from open to done/,
   );
+
+  const historicalDone = structuredClone(board);
+  historicalDone.tasks[0].dispatch_log.push({
+    timestamp: "2026-07-17T00:00:00.000Z",
+    agent: "codex",
+    session_id: "prior-run",
+    status: "done",
+    output: "durable terminal receipt",
+  });
+  const repair = structuredClone(bypass);
+  repair.event_id = "conduct:claim:3:compatibility";
+  repair.intent.log.lifecycle_repair = "prior-done";
+  repair.intent.log.output = "lifecycle guard restored the prior terminal receipt";
+  const repaired = applyTaskPacketProjectionEvent(historicalDone, repair);
+  assert.equal(repaired.task.status, "done");
+  assert.equal(repaired.task.dispatch_log.at(-1).lifecycle_repair, "prior-done");
+
+  const forgedRepairKind = structuredClone(repair);
+  forgedRepairKind.event_id = "conduct:claim:4:compatibility";
+  forgedRepairKind.intent.kind = "task.mutate";
+  assert.throws(
+    () => applyTaskPacketProjectionEvent(historicalDone, forgedRepairKind),
+    /cannot transition from open to done/,
+  );
 });
 
 test("MCP-compatible task packets execute in the keeper without a board-write lane", async () => {

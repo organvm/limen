@@ -35,7 +35,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from limen.conduct.broker import ConductError
-from limen.conduct.client import BrokerUnavailable, client_from_env
+from limen.conduct.client import BrokerUnavailable, LocalConductClient, client_from_env
 from limen.conduct.models import (
     AgentIdentityV1,
     AuthorityEnvelopeV1,
@@ -48,7 +48,12 @@ from limen.conduct.models import (
     canonical_hash,
 )
 from limen.intake import validate_intake_contract
-from limen.io import load_limen_file, queue_lock
+from limen.io import (
+    load_limen_file,
+    local_conduct_projection_lock,
+    queue_lock,
+    save_local_conduct_projection,
+)
 from limen.materialize import (
     EV_BOARD_META,
     EV_BOARD_ORDER,
@@ -91,6 +96,32 @@ _PATCHABLE_TASK_FIELDS = frozenset(
         "depends_on",
     }
 )
+_STRUCTURED_LOG_FIELDS = frozenset(
+    {
+        "landing_event",
+        "landing_terminal",
+        "landing_outcome",
+        "landing_session_id",
+        "landing_branch",
+        "landing_intent_token",
+        "landing_claim_sha256",
+        "landing_prior_status",
+        "landing_prior_updated",
+        "landing_attempt_count",
+        "landing_attempt",
+        "lifecycle_repair",
+    }
+)
+_CANONICAL_TRANSITIONS = {
+    "open": frozenset({"open", "dispatched"}),
+    "dispatched": frozenset({"open", "dispatched", "in_progress"}),
+    "in_progress": frozenset({"in_progress", "done", "failed", "failed_blocked", "needs_human"}),
+    "failed": frozenset({"failed", "open"}),
+    "failed_blocked": frozenset({"failed_blocked", "open"}),
+    "needs_human": frozenset({"needs_human", "open"}),
+    "done": frozenset({"done", "archived"}),
+    "archived": frozenset({"archived"}),
+}
 
 
 class Ticket(BaseModel):
@@ -490,13 +521,244 @@ def _compatibility_intent(ticket: Ticket, base: dict[str, Any] | None) -> dict[s
     }
 
 
-def _relay_ticket(
+def _local_conduct_log(event: dict[str, Any], status: str, fallback_output: str) -> dict[str, Any]:
+    log = dict((event.get("intent") or {}).get("log") or {})
+    structured = {key: value for key, value in log.items() if key in _STRUCTURED_LOG_FIELDS and value is not None}
+    return {
+        "timestamp": str(event["timestamp"]),
+        "agent": str(event["agent"]),
+        "session_id": str(event["session_id"]),
+        "status": status,
+        "output": str(log.get("output") if log.get("output") is not None else fallback_output),
+        **structured,
+        "conduct_event_id": str(event["event_id"]),
+        "conduct_run_id": str(event["run_id"]),
+        "conduct_lease_id": str(event["lease_id"]),
+        "conduct_generation": int(event["generation"]),
+    }
+
+
+def _reset_local_budget_window(budget: dict[str, Any], timestamp: str) -> None:
+    track = budget.setdefault("track", {"date": "", "spent": 0, "per_agent": {}})
+    current_date = timestamp[:10]
+    if str(track.get("date") or "") == current_date:
+        return
+    track["date"] = current_date
+    track["spent"] = 0
+    track["per_agent"] = {str(agent): 0 for agent in (budget.get("per_agent") or {})}
+
+
+def _local_budget_debit(
+    board: dict[str, Any], task: dict[str, Any], event: dict[str, Any], patch: dict[str, Any]
+) -> None:
+    amount = task.get("budget_cost", 0)
+    if isinstance(amount, bool) or not isinstance(amount, int) or amount < 0:
+        raise ValueError(f"task {task['id']} has invalid canonical budget_cost")
+    agent = str(patch.get("target_agent") or task.get("target_agent") or "")
+    if not agent or agent == "any":
+        raise ValueError(f"task {task['id']} claim requires one concrete target_agent")
+    if task.get("target_agent") not in {None, "", "any", agent}:
+        raise ValueError(f"task {task['id']} targets {task.get('target_agent')}, not claim agent {agent}")
+    budget = (board.get("portal") or {}).get("budget") or {}
+    if not budget or not amount:
+        return
+    _reset_local_budget_window(budget, str(event["timestamp"]))
+    track = budget["track"]
+    track.setdefault("per_agent", {})
+    prior_total = int(track.get("spent") or 0)
+    prior_agent = int(track["per_agent"].get(agent) or 0)
+    daily_limit = int(budget.get("daily", 2**63 - 1))
+    agent_limit = int((budget.get("per_agent") or {}).get(agent, daily_limit))
+    if prior_total + amount > daily_limit or prior_agent + amount > agent_limit:
+        raise ValueError(f"task {task['id']} exceeds live {agent} compatibility budget")
+    track["spent"] = prior_total + amount
+    track["per_agent"][agent] = prior_agent + amount
+
+
+def _local_budget_refund(board: dict[str, Any], task: dict[str, Any], event: dict[str, Any]) -> None:
+    amount = task.get("budget_cost", 0)
+    agent = str(task.get("target_agent") or "")
+    if isinstance(amount, bool) or not isinstance(amount, int) or amount < 0 or not agent or agent == "any":
+        raise ValueError(f"task {task['id']} cannot derive a canonical budget refund")
+    budget = (board.get("portal") or {}).get("budget") or {}
+    if not budget or not amount:
+        return
+    _reset_local_budget_window(budget, str(event["timestamp"]))
+    track = budget["track"]
+    track.setdefault("per_agent", {})
+    track["spent"] = max(0, int(track.get("spent") or 0) - amount)
+    track["per_agent"][agent] = max(0, int(track["per_agent"].get(agent) or 0) - amount)
+
+
+def _held_jules_landing_recovery(task: dict[str, Any], next_status: str, log: dict[str, Any]) -> bool:
+    return bool(
+        task.get("status") == "failed"
+        and "jules:landing-held" in (task.get("labels") or [])
+        and log.get("landing_event") == "terminal"
+        and log.get("landing_terminal") is True
+        and log.get("landing_intent_token")
+        and next_status in {"done", "failed", "failed_blocked"}
+    )
+
+
+def _prior_done_lifecycle_repair(task: dict[str, Any], next_status: str, log: dict[str, Any]) -> bool:
+    return bool(
+        next_status == "done"
+        and log.get("lifecycle_repair") == "prior-done"
+        and any(entry.get("status") == "done" for entry in (task.get("dispatch_log") or []))
+    )
+
+
+def _project_local_task_event(board: LimenFile, event: dict[str, Any]) -> tuple[LimenFile, dict[str, Any]]:
+    """Apply the keeper event in memory; serialization happens only after broker commit."""
+
+    data = board.model_dump(mode="json", exclude_none=True)
+    tasks = data.setdefault("tasks", [])
+    intent = dict(event.get("intent") or {})
+    kind = str(intent.get("kind") or "")
+    task_id = str(intent.get("task_id") or event.get("task_id") or "")
+    if not task_id:
+        raise ValueError("compatibility event requires task_id")
+    existing = next((task for task in tasks if task.get("id") == task_id), None)
+    event_id = str(event["event_id"])
+    if existing and any(entry.get("conduct_event_id") == event_id for entry in (existing.get("dispatch_log") or [])):
+        return board, {
+            "status": "duplicate",
+            "mode": "local-sqlite",
+            "task": dict(existing),
+            "event_id": event_id,
+        }
+
+    if kind == "task.upsert":
+        if intent.get("expected_absent") and existing:
+            raise ValueError(f"task {task_id} already exists")
+        supplied = dict(intent.get("task") or {})
+        if supplied.get("id") != task_id:
+            raise ValueError(f"task projection id {supplied.get('id')} does not match {task_id}")
+        task = dict(supplied)
+        is_new = existing is None
+        if existing:
+            if supplied.get("status") != existing.get("status"):
+                raise ValueError(f"task {task_id} upsert cannot change lifecycle status; submit task.status")
+            history = list(existing.get("dispatch_log") or [])
+            created = existing.get("created")
+            task = {**existing, **{key: value for key, value in supplied.items() if key in _PATCHABLE_TASK_FIELDS}}
+            task["dispatch_log"] = history
+            if created is not None:
+                task["created"] = created
+        else:
+            tasks.append(task)
+        task["updated"] = str(event["timestamp"])
+        task.setdefault("dispatch_log", [])
+        task["dispatch_log"].append(
+            _local_conduct_log(
+                event,
+                str(task.get("status") or "open"),
+                f"Created by {event['agent']} through the conduct keeper",
+            )
+        )
+        validated = Task.model_validate(task)
+        validate_intake_contract(validated, is_new=is_new)
+    else:
+        if kind not in {"task.status", "task.claim", "task.mutate"}:
+            raise ValueError(f"unsupported task compatibility intent: {kind}")
+        if existing is None:
+            raise ValueError(f"task {task_id} not found in canonical board")
+        if "expected_revision" in intent and str(intent["expected_revision"]) != _canonical_revision(existing):
+            raise ValueError(f"task {task_id} exact revision moved")
+        expected = intent.get("expected_status")
+        expected_statuses = expected if isinstance(expected, list) else [expected]
+        if existing.get("status") not in expected_statuses:
+            raise ValueError(
+                f"task {task_id} is {existing.get('status')}; "
+                f"compatibility event requires {' or '.join(map(str, expected_statuses))}"
+            )
+        patch = dict(intent.get("patch") or {})
+        forbidden = sorted(set(patch) - _PATCHABLE_TASK_FIELDS)
+        if forbidden:
+            raise ValueError(
+                f"task {task_id} compatibility patch contains server-owned or unsupported fields: "
+                f"{', '.join(forbidden)}"
+            )
+        if kind == "task.status" and "status" not in patch:
+            raise ValueError(f"task {task_id} status intent requires a status patch")
+        prior_status = str(existing.get("status") or "")
+        next_status = str(patch.get("status") or prior_status)
+        log = dict(intent.get("log") or {})
+        recovery = _held_jules_landing_recovery(existing, next_status, log)
+        repair = kind == "task.status" and _prior_done_lifecycle_repair(existing, next_status, log)
+        if not recovery and not repair:
+            if kind == "task.claim" and (prior_status != "open" or next_status != "dispatched"):
+                raise ValueError(f"task {task_id} claim requires open -> dispatched")
+            if next_status not in _CANONICAL_TRANSITIONS.get(prior_status, frozenset()):
+                raise ValueError(f"task {task_id} cannot transition from {prior_status} to {next_status}")
+        if kind == "task.claim":
+            _local_budget_debit(data, existing, event, patch)
+        if kind == "task.status" and prior_status == "dispatched" and next_status == "open":
+            _local_budget_refund(data, existing, event)
+        existing.update(patch)
+        existing["updated"] = str(event["timestamp"])
+        existing.setdefault("dispatch_log", [])
+        existing["dispatch_log"].append(
+            _local_conduct_log(
+                event,
+                str(existing.get("status") or ""),
+                str(log.get("session_id") or f"{kind} applied through the conduct keeper"),
+            )
+        )
+        Task.model_validate(existing)
+        task = existing
+
+    projected = LimenFile.model_validate(data)
+    canonical = next(item for item in projected.tasks if item.id == task_id).model_dump(mode="json", exclude_none=True)
+    return projected, {
+        "status": "committed",
+        "mode": "local-sqlite",
+        "task": canonical,
+        "event_id": event_id,
+    }
+
+
+def _materialize_local_result(
+    board_path: Path,
     ticket: Ticket,
-    base: dict[str, Any] | None,
+    result: dict[str, Any],
     *,
-    client=None,
+    conduct_state: Path,
 ) -> dict[str, Any]:
-    intent = _compatibility_intent(ticket, base)
+    receipts = result.get("projection_receipts")
+    receipt = receipts[-1] if isinstance(receipts, list) and receipts else None
+    if not isinstance(receipt, dict) or not isinstance(receipt.get("task"), dict):
+        raise RuntimeError(
+            f"local conduct broker did not acknowledge canonical projection for {ticket.task_id}; "
+            f"status={result.get('status')}"
+        )
+    projection = result.get("board_projection")
+    if not isinstance(projection, dict):
+        raise RuntimeError("local conduct broker returned no full canonical board projection")
+    board = LimenFile.model_validate(projection)
+    canonical = next(
+        (task.model_dump(mode="json", exclude_none=True) for task in board.tasks if task.id == str(ticket.task_id)),
+        None,
+    )
+    if canonical is None:
+        raise RuntimeError(f"local conduct board projection omitted task {ticket.task_id}")
+    try:
+        save_local_conduct_projection(board_path, board, conduct_state=conduct_state)
+    except OSError as exc:
+        raise BrokerUnavailable(f"local conduct projection cache refresh failed: {exc}") from exc
+    return canonical
+
+
+def _submit_compatibility_ticket(
+    ticket: Ticket,
+    intent: dict[str, Any],
+    remote: Any,
+    work_id: str,
+    *,
+    board_path: Path | None = None,
+    local_board: LimenFile | None = None,
+) -> dict[str, Any]:
     identity = AgentIdentityV1(
         agent=_safe_identifier(ticket.agent, "tabularius-relay"),
         surface="tabularius-relay",
@@ -519,7 +781,6 @@ def _relay_ticket(
     )
     owner = os.environ.get("LIMEN_GITHUB_REPO", "").strip() or "organvm/limen"
     execution = {"adapter": "tabularius", "projection": "tasks.yaml", "observed_heads": {}}
-    work_id = f"ticket-{_safe_identifier(ticket.ticket_id, 'ticket')}"
     work_key = f"task-compat-{canonical_hash({'intent': intent, 'execution': execution})}"
     packet = WorkPacketV1(
         work_id=work_id,
@@ -546,8 +807,24 @@ def _relay_ticket(
         effect="write",
         task_id=ticket.task_id,
     )
-    remote = client or client_from_env()
     remote.register(session)
+
+    if isinstance(remote, LocalConductClient):
+        if board_path is None or local_board is None:
+            raise RuntimeError("local conduct submission lost its temporary projection")
+
+        def project_local(event: dict[str, Any]) -> dict[str, Any]:
+            stored_projection = event.get("board_projection")
+            current = (
+                LimenFile.model_validate(stored_projection) if isinstance(stored_projection, dict) else local_board
+            )
+            projected_board, receipt = _project_local_task_event(current, event)
+            receipt["board_projection"] = projected_board.model_dump(mode="json", exclude_none=True)
+            return receipt
+
+        result = remote.submit_projection(packet, project_local)
+        return _materialize_local_result(board_path, ticket, result, conduct_state=remote.path)
+
     result = remote.submit(packet)
     receipts = result.get("projection_receipts")
     receipt = receipts[-1] if isinstance(receipts, list) and receipts else None
@@ -558,6 +835,54 @@ def _relay_ticket(
             f"status={result.get('status')}"
         )
     return projected
+
+
+def _relay_ticket(
+    ticket: Ticket,
+    base: dict[str, Any] | None,
+    *,
+    client=None,
+    board_path: Path | None = None,
+) -> dict[str, Any]:
+    remote = client or client_from_env()
+    # Bind replay identity to the entire immutable ticket, not its display ID.
+    # Sanitizing/truncating ticket_id alone can collide, and an ID reused with
+    # different intent must never receive an unrelated stored projection.
+    work_id = f"ticket-{canonical_hash(ticket.model_dump(mode='json'))}"
+    if isinstance(remote, LocalConductClient):
+        if board_path is None:
+            raise RuntimeError("local conduct projection requires an explicit temporary board path")
+        with local_conduct_projection_lock(remote.path) as locked:
+            if not locked:
+                raise BrokerUnavailable("local conduct projection lock is held")
+            replay = remote.replay_projection(work_id)
+            if replay is not None:
+                return _materialize_local_result(board_path, ticket, replay, conduct_state=remote.path)
+            stored_projection = remote.local_board_projection()
+            local_board = (
+                LimenFile.model_validate(stored_projection)
+                if isinstance(stored_projection, dict)
+                else load_limen_file(board_path)
+            )
+            local_base = next(
+                (
+                    task.model_dump(mode="json", exclude_none=True)
+                    for task in local_board.tasks
+                    if task.id == str(ticket.task_id)
+                ),
+                None,
+            )
+            intent = _compatibility_intent(ticket, local_base)
+            return _submit_compatibility_ticket(
+                ticket,
+                intent,
+                remote,
+                work_id,
+                board_path=board_path,
+                local_board=local_board,
+            )
+    intent = _compatibility_intent(ticket, base)
+    return _submit_compatibility_ticket(ticket, intent, remote, work_id)
 
 
 def apply_limen_file_sync(
@@ -630,15 +955,21 @@ def apply_limen_file_sync(
         tickets.append(ticket)
     if not tickets:
         return DrainResult(note="no task transition; budget-window metadata is derived by the remote keeper")
+    remote = client_from_env()
     projected_tasks: dict[str, dict[str, Any]] = {}
     for ticket in tickets:
-        task = _relay_ticket(ticket, prior_by_id.get(str(ticket.task_id)))
+        task = _relay_ticket(
+            ticket,
+            prior_by_id.get(str(ticket.task_id)),
+            client=remote,
+            board_path=board_path,
+        )
         prior_by_id[str(ticket.task_id)] = task
         projected_tasks[str(ticket.task_id)] = task
     return DrainResult(
         pending=len(tickets),
         applied=len(tickets),
-        wrote=False,
+        wrote=isinstance(remote, LocalConductClient),
         note="broker-committed",
         applied_ids=[ticket.ticket_id for ticket in tickets],
         projected_tasks=projected_tasks,
@@ -970,6 +1301,7 @@ def drain_once(board_path: Path, *, dry_run: bool = False, lock_timeout: int = 2
                     ticket,
                     tasks.get(str(ticket.task_id)),
                     client=remote,
+                    board_path=board_path,
                 )
                 tasks[str(ticket.task_id)] = projected
                 applied.append((path, ticket))
@@ -988,7 +1320,7 @@ def drain_once(board_path: Path, *, dry_run: bool = False, lock_timeout: int = 2
         pending=pending,
         applied=len(applied),
         rejected=len(rejected),
-        wrote=False,
+        wrote=isinstance(remote, LocalConductClient),
         deferred=bool(deferred_reason),
         note=(
             f"conduct broker unavailable after {len(applied)} acknowledgment(s); unacknowledged tickets remain pending"

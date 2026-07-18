@@ -71,6 +71,11 @@ class DispatchLogEntry(BaseModel):
     landing_prior_updated: datetime | None = None
     landing_attempt_count: int | None = None
     landing_attempt: int | None = None
+    # Canonical keeper escape hatch for one proven lifecycle repair: a stale
+    # row whose append-only history already contains ``done`` may be restored
+    # to that terminal state. Projection owners validate both this marker and
+    # the historical receipt; the marker alone grants no transition.
+    lifecycle_repair: Literal["prior-done"] | None = None
     output: str | None = None
 
     @field_validator("status")

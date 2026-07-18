@@ -13,7 +13,7 @@ from typing import Callable, Sequence
 
 import pytest
 
-from limen.census import Budget, Status, Vendor
+from limen.census import Budget, ExecutionProfile, Status, Vendor
 from limen.harvest import check_remote_harvest
 from limen.io import save_limen_file
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
@@ -779,6 +779,16 @@ def vendor(name: str = "renamed-actions") -> Vendor:
         tiering="none",
         budget=Budget(None, "runs", "none", "test", "unmodeled"),
         status=Status(True, "live", "fixture"),
+        execution=ExecutionProfile(
+            capabilities=frozenset({"conduct", "execute", "review", "inspect", "verify", "github-remote"}),
+            transport="provider-receipt-relay",
+            native_fanout=False,
+            harvest_method="provider-receipt",
+            concurrency_ref="lane:renamed-actions:concurrency",
+            meter_ref="lane:renamed-actions:meter",
+            health_ref="lane:renamed-actions:health",
+            auth_ref="lane:renamed-actions:auth",
+        ),
     )
 
 

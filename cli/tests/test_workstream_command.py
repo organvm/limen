@@ -63,7 +63,10 @@ def test_workstream_command_writes_private_kickstart_packet(tmp_path: Path, monk
     assert intent.exists()
     assert kickstart.exists()
     assert receipt.exists()
-    assert "exec codex --ask-for-approval never --sandbox workspace-write" in kickstart.read_text(encoding="utf-8")
+    kickstart_text = kickstart.read_text(encoding="utf-8")
+    assert "workstream_launch_native_agent" in kickstart_text
+    assert 'agent=opencode' in kickstart_text
+    assert "exec codex --ask-for-approval never --sandbox workspace-write" not in kickstart_text
     assert (
         json.loads((wt / ".limen-workstream" / "workstream.json").read_text(encoding="utf-8"))["runway"][
             "duration_seconds"
@@ -210,12 +213,10 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
     assert "workstream_export_context" in kickstart_text
     assert "workstream_launch_native_agent" in kickstart_text
     assert 'exec "$binary" "$capsule_prompt"' in kickstart_text
-    assert str(readme) in kickstart_text
     assert "IFS= read -r -d '' capsule_prompt" in kickstart_text
-    assert 'exec "$binary" --ask-for-approval never --sandbox workspace-write "$capsule_prompt"' in kickstart_text
-    assert "--ask-for-approval never --sandbox workspace-write" in kickstart_text
+    assert '"$agent" "$registry_binary" "1" "$readme" "$allow_shell_fallback"' in kickstart_text
     assert "run-bounded" in kickstart_text
-    assert kickstart_text.count("refresh_workstream_runway") >= 4
+    assert kickstart_text.count("refresh_workstream_runway") == 3
     assert "workstream-contract.py" in kickstart_text
     readme_assignment = next(line for line in kickstart_text.splitlines() if line.startswith("readme="))
     assert shlex.split(readme_assignment) == [f"readme={readme}"]
@@ -451,7 +452,7 @@ render_workstream_capsule \
     assert _git("status", "--short", cwd=wt).stdout == ""
 
     fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
+    fake_bin.mkdir(exist_ok=True)
     fake_codex = fake_bin / "codex"
     fake_codex.write_text(
         (

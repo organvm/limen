@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import hmac
 import secrets
 from datetime import datetime, timedelta
 from pathlib import PurePath
-from typing import Any
+from typing import Any, Callable
 
 from limen.conduct.models import (
+    AgentIdentityV1,
     AuthorityEnvelopeV1,
     ConductorSessionV1,
     LeaseV1,
@@ -72,6 +74,15 @@ def authority_attenuates(child: AuthorityEnvelopeV1, parent: AuthorityEnvelopeV1
         and _covered_paths(child.path_prefixes, parent.path_prefixes)
         and _covered_atoms(child.external_effects, parent.external_effects)
         and (parent.may_delegate or not child.may_delegate)
+    )
+
+
+def _is_task_compatibility_packet(packet: WorkPacketV1) -> bool:
+    return bool(
+        packet.execution.get("adapter") == "tabularius"
+        and packet.intent.get("kind") in {"task.upsert", "task.status", "task.claim", "task.mutate"}
+        and packet.task_id
+        and packet.intent.get("task_id") == packet.task_id
     )
 
 
@@ -148,7 +159,13 @@ class ConductBroker:
                 "sessions": sessions,
             }
 
-    def submit(self, packet: WorkPacketV1, *, now: datetime | None = None) -> dict[str, Any]:
+    def submit(
+        self,
+        packet: WorkPacketV1,
+        *,
+        now: datetime | None = None,
+        project_task_event: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         now = now or utc_now()
         if packet.deadline <= now:
             raise ConductError("work packet deadline has already passed")
@@ -265,6 +282,8 @@ class ConductBroker:
                 "status": "reserved",
                 "children": [],
                 "receipts": [],
+                "projection_receipts": [],
+                "compatibility_projection": _is_task_compatibility_packet(packet),
                 "created_at": now.isoformat(),
                 "updated_at": now.isoformat(),
             }
@@ -284,14 +303,81 @@ class ConductBroker:
                 lease_id=lease_id,
                 generation=generation,
             )
+            if run["compatibility_projection"]:
+                if project_task_event is None:
+                    raise ConductConflict("task compatibility submission requires the keeper projection handler")
+                projection_event: dict[str, Any] = {
+                    "schema_version": "limen.task_packet_projection_event.v1",
+                    "event_id": f"conduct:{run_id}:{generation}:compatibility",
+                    "kind": packet.intent["kind"],
+                    "timestamp": now.isoformat(),
+                    "task_id": packet.task_id,
+                    "run_id": run_id,
+                    "lease_id": lease_id,
+                    "generation": generation,
+                    "agent": packet.conductor.agent,
+                    "session_id": packet.conductor.session_id,
+                    "lease_executor": _dump(lease.executor),
+                    "intent": packet.intent,
+                }
+                prior_projection = state.get("local_board_projection")
+                if isinstance(prior_projection, dict):
+                    projection_event["board_projection"] = copy.deepcopy(prior_projection)
+                receipt = dict(project_task_event(projection_event))
+                if not isinstance(receipt, dict) or not isinstance(receipt.get("task"), dict):
+                    raise ConductError("task compatibility projection handler returned no canonical task receipt")
+                board_projection = receipt.pop("board_projection", None)
+                if not isinstance(board_projection, dict) or not isinstance(board_projection.get("tasks"), list):
+                    raise ConductError("task compatibility projection handler returned no canonical board projection")
+                state["local_board_projection"] = copy.deepcopy(board_projection)
+                run["projection_receipts"] = [receipt]
+                run["status"] = "succeeded"
+                run["updated_at"] = now.isoformat()
+                lease = lease.model_copy(update={"state": "released", "heartbeat_at": now})
+                state["leases"][lease_id] = _dump(lease)
+                _event(
+                    state,
+                    "task.compatibility_applied",
+                    run_id=run_id,
+                    task_id=packet.task_id,
+                    intent_kind=packet.intent["kind"],
+                    lease_id=lease_id,
+                    generation=generation,
+                )
             result = self._submit_result(state, run)
             result["capability_token"] = token
             return result
 
-    def split(self, parent_run_id: str, packet: WorkPacketV1, *, now: datetime | None = None) -> dict[str, Any]:
+    def split(
+        self,
+        parent_run_id: str,
+        packet: WorkPacketV1,
+        *,
+        now: datetime | None = None,
+        project_task_event: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         if packet.parent_run_id != parent_run_id:
             raise ConductConflict("split packet parent_run_id must match the requested parent")
-        return self.submit(packet, now=now)
+        return self.submit(packet, now=now, project_task_event=project_task_event)
+
+    def replay_work(self, work_id: str) -> dict[str, Any] | None:
+        """Return an already-owned work result without recomputing its packet."""
+
+        with self.store.transaction() as state:
+            run_id = state["work_index"].get(work_id)
+            if not run_id:
+                return None
+            run = state["runs"].get(run_id)
+            if not run:
+                raise ConductError(f"work index points to missing run: {work_id}")
+            return self._submit_result(state, run, duplicate=True)
+
+    def local_board_projection(self) -> dict[str, Any] | None:
+        """Read the explicit local keeper's latest full canonical projection."""
+
+        with self.store.transaction() as state:
+            projection = state.get("local_board_projection")
+            return copy.deepcopy(projection) if isinstance(projection, dict) else None
 
     def graph(self, root_run_id: str) -> dict[str, Any]:
         with self.store.transaction() as state:
@@ -573,6 +659,22 @@ class ConductBroker:
         return parent
 
     def _select_executor(self, state: dict[str, Any], packet: WorkPacketV1, now: datetime) -> ConductorSessionV1:
+        if _is_task_compatibility_packet(packet):
+            identity = AgentIdentityV1(
+                agent="tabularius",
+                surface="keeper",
+                session_id="tabularius-conduct-keeper",
+                provider_identity="tabularius",
+            )
+            return ConductorSessionV1(
+                session_id=identity.session_id,
+                identity=identity,
+                origin="relay",
+                capabilities=frozenset({"board-write"}),
+                transport="keeper",
+                harvest_method="projection-receipt",
+                concurrency=1024,
+            )
         active_load = self._active_load(state, now)
         candidates: list[ConductorSessionV1] = []
         for raw in state["sessions"].values():
@@ -712,14 +814,20 @@ class ConductBroker:
 
     def _submit_result(self, state: dict[str, Any], run: dict[str, Any], *, duplicate: bool = False) -> dict[str, Any]:
         lease = LeaseV1.model_validate(state["leases"][run["lease_id"]])
-        return {
+        result = {
             "schema_version": "limen.conduct_submit_result.v1",
-            "status": "duplicate" if duplicate else "reserved",
+            "status": "duplicate" if duplicate else ("applied" if run.get("compatibility_projection") else "reserved"),
             "run_id": run["run_id"],
             "root_run_id": run["root_run_id"],
             "executor_session_id": run["executor_session_id"],
             "lease": _dump(lease),
         }
+        if run.get("projection_receipts"):
+            result["projection_receipts"] = list(run["projection_receipts"])
+        projection = state.get("local_board_projection")
+        if isinstance(projection, dict):
+            result["board_projection"] = copy.deepcopy(projection)
+        return result
 
     @staticmethod
     def _run_id(packet: WorkPacketV1) -> str:

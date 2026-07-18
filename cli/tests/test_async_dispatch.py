@@ -844,7 +844,8 @@ def test_harvest_applies_pr_result_and_cleans(tmp_path):
     )
     assert da.harvest() == 1
     t0 = _board(tmp_path)["T0"]
-    assert any("pull/9" in str(e.session_id) for e in t0.dispatch_log)
+    assert any("pull/9" in str(e.output) for e in t0.dispatch_log)
+    assert t0.dispatch_log[-1].session_id == "dispatch-async-harvest"
     assert not (da.RUNS / "T0.result.json").exists()
     assert not (da.RUNS / "T0__codex.running").exists()
     track = load_limen_file(tmp_path / "tasks.yaml").portal.budget.track
@@ -2246,7 +2247,7 @@ def test_async_reserve_projects_stale_budget_reset_before_selection(tmp_path, mo
     assert load_limen_file(tmp_path / "tasks.yaml").portal.budget.track.per_agent["jules"] == 100
 
 
-def test_async_reserve_persists_stale_budget_reset_even_without_launches(tmp_path, monkeypatch):
+def test_async_reserve_leaves_budget_window_to_keeper_without_launches(tmp_path, monkeypatch):
     now = datetime.datetime(2026, 7, 6, 12, 0, tzinfo=datetime.timezone.utc)
     stale = (now - datetime.timedelta(days=2)).isoformat()
     da = _load(tmp_path, n_open=0)
@@ -2265,9 +2266,9 @@ def test_async_reserve_persists_stale_budget_reset_even_without_launches(tmp_pat
     assert da.reserve_and_launch(["jules"], per_agent=8, cap=0, dry=False) == []
 
     track = load_limen_file(tmp_path / "tasks.yaml").portal.budget.track
-    assert track.per_agent["jules"] == 0
-    assert track.spent == 0
-    assert track.per_agent_reset["jules"] == now.isoformat()
+    assert track.per_agent["jules"] == 100
+    assert track.spent == 100
+    assert track.per_agent_reset["jules"] == stale
 
 
 def test_async_reserve_skips_open_task_with_prior_done(tmp_path):

@@ -21,6 +21,7 @@ def empty_state() -> dict[str, Any]:
         "work_key_index": {},
         "receipt_index": {},
         "resource_generations": {},
+        "local_board_projection": None,
         "next_generation": 0,
         "events": [],
     }

@@ -315,7 +315,11 @@ def test_current_session_fanout_uses_registry_lanes_and_rejects_unbounded_runway
         encoding="utf-8",
     )
     mod = _load()
-    monkeypatch.setattr(mod, "PAID_AGENT_ORDER", ("codex", "jules", "agy", "opencode", "copilot"))
+    monkeypatch.setattr(
+        mod,
+        "paid_agent_order",
+        lambda: ("codex", "jules", "agy", "opencode", "copilot"),
+    )
     rows = [
         {
             "agent": agent,
@@ -332,7 +336,7 @@ def test_current_session_fanout_uses_registry_lanes_and_rejects_unbounded_runway
 
     monkeypatch.setattr(mod, "lane_rows", lambda: rows)
     monkeypatch.setattr(mod, "digest_blockers", lambda: [])
-    args = _args(session, min_codex_planners=1)
+    args = _args(session, min_planners=1)
     args.runway = "forever"
     with pytest.raises(mod.ContractError):
         mod.build_snapshot(args)

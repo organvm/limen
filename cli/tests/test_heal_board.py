@@ -70,7 +70,8 @@ def test_heal_board_repairs_reopened_done_task(tmp_path: Path) -> None:
     task = data["tasks"][0]
     assert task["status"] == "done"
     assert task["dispatch_log"][-1]["status"] == "done"
-    assert task["dispatch_log"][-1]["session_id"] == "heal-board"
+    assert task["dispatch_log"][-1]["session_id"] == "heal-board-lifecycle-repair"
+    assert task["dispatch_log"][-1]["conduct_event_id"]
 
 
 def test_heal_board_reconciles_needs_human_label(tmp_path: Path) -> None:

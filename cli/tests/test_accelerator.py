@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 import limen.dispatch as D
+from limen.io import save_limen_file
 from limen.models import Budget, BudgetTrack, LimenFile, Portal, Task
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
@@ -169,6 +170,7 @@ def test_dispatch_parallel_accel_tail_is_win_class_only(tmp_path, monkeypatch):
     lf = _lf({"jules": 100}, {"jules": 5}, reset)
     lf.tasks = tasks
     tp = tmp_path / "tasks.yaml"
+    save_limen_file(tp, lf)
     picked: list[tuple[str, str]] = []
     monkeypatch.setattr(D, "_deps_met", lambda t, by: True)
     monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))

@@ -44,6 +44,7 @@ const STRUCTURED_LOG_FIELDS = new Set([
   "landing_prior_updated",
   "landing_attempt_count",
   "landing_attempt",
+  "lifecycle_repair",
 ]);
 const CANONICAL_TRANSITIONS = new Map([
   ["open", new Set(["open", "dispatched"])],
@@ -250,6 +251,12 @@ function isHeldJulesLandingRecovery(task, nextStatus, log) {
     && ["done", "failed", "failed_blocked"].includes(nextStatus);
 }
 
+function isPriorDoneLifecycleRepair(task, nextStatus, log) {
+  return nextStatus === "done"
+    && log?.lifecycle_repair === "prior-done"
+    && (task.dispatch_log || []).some((entry) => entry?.status === "done");
+}
+
 export function applyTaskPacketProjectionEvent(input, event) {
   const board = clone(input);
   const intent = event.intent || {};
@@ -323,7 +330,9 @@ export function applyTaskPacketProjectionEvent(input, event) {
     throw new ConductProjectionError(`task ${taskId} status intent requires a status patch`, 422);
   }
   const nextStatus = patch.status ?? existing.status;
-  if (!isHeldJulesLandingRecovery(existing, nextStatus, intent.log)) {
+  if (!isHeldJulesLandingRecovery(existing, nextStatus, intent.log)
+      && !(kind === "task.status"
+        && isPriorDoneLifecycleRepair(existing, nextStatus, intent.log))) {
     validateTransition(taskId, existing.status, nextStatus, kind);
   }
   if (kind === "task.claim") applyCanonicalBudgetDebit(board, existing, event, patch);

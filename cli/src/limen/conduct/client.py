@@ -113,7 +113,9 @@ class LocalConductClient:
     """Explicit SQLite adapter for tests and disconnected development only."""
 
     def __init__(self, path: Path | str):
-        self.broker = ConductBroker(SQLiteStateStore(path))
+        self.path = Path(path).expanduser().resolve()
+        self.store = SQLiteStateStore(self.path)
+        self.broker = ConductBroker(self.store)
 
     def capabilities(self) -> dict[str, Any]:
         return self.broker.capabilities()
@@ -123,6 +125,26 @@ class LocalConductClient:
 
     def submit(self, packet: WorkPacketV1) -> dict[str, Any]:
         return self.broker.submit(packet)
+
+    def submit_projection(
+        self,
+        packet: WorkPacketV1,
+        project_task_event,
+    ) -> dict[str, Any]:
+        """Submit one task packet through the local keeper's atomic projection seam.
+
+        The callback computes an acknowledged projection in memory while the
+        SQLite keeper transaction is held. TABVLARIVS serializes that receipt to
+        its temporary cache only after this method returns successfully.
+        """
+
+        return self.broker.submit(packet, project_task_event=project_task_event)
+
+    def replay_projection(self, work_id: str) -> dict[str, Any] | None:
+        return self.broker.replay_work(work_id)
+
+    def local_board_projection(self) -> dict[str, Any] | None:
+        return self.broker.local_board_projection()
 
     def split(self, parent_run_id: str, packet: WorkPacketV1) -> dict[str, Any]:
         return self.broker.split(parent_run_id, packet)
