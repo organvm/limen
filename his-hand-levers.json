@@ -5,6 +5,40 @@
   "wall": "Everything involving a token/secret/API/login/env-var has two GitHub homes - never a chat or this file's prose. (1) The INFORMATION lives in code at scripts/creds-hydrate.py DEFAULT_MAP (op:// provenance + env-var name + validity probe; values never in-repo, behind _scrub()). (2) The ACTIONS live as the `credential`-labelled issues, indexed by the PINNED Wall issue #320. Verify the whole estate: `python3 scripts/creds-hydrate.py --verify`. Credential-class levers (L-FLEET-CAPACITY #265, L-IANVA-LOCAL #262, L-IANVA-CLOUD #263) are all on the Wall; the mail-credential atoms are owned by the mail organ's own record (see _doc), not a lever here; gh self-heals via keyring-derive (#251, zero hand); cloudflare closed 2026-07-01 (false-negative probe fixed, wrangler wired headless). The MCP-connector consent lane (Lane B — the claude.ai '! Needs authentication' class) is now probed every beat by scripts/mcp-auth-verify.py, the sibling of creds-hydrate --verify: a lapsed connector surfaces in the beat log with its cure (L-IANVA-CLOUD), never recited in chat. Per Anthony 2026-06-25: credential/login/env atoms are NOT a his-hand chat burden - the info is registered in its code home and the work is pinned on GitHub, not recited at him.",
   "levers": [
     {
+      "id": "L-CENSOR-ISSUES-ARM",
+      "label": "OPTIONAL — arm the censor→GitHub issue mirror (scripts/sync-censor-issues.py). Dark by design (observable-before-autonomous, the LIMEN_CENSOR_APPLY constitutional pattern): every beat it runs in DRY-RUN and logs what it WOULD mirror. Arming makes the system's own findings part of the public graph — each live `warning` residual in logs/censor-residual.json gets exactly one open `censor`-labelled issue, auto-closed with a citation when the lineage clears.",
+      "owner": "yours",
+      "cost": "~1 min once in the daemon env, durable — OR leave dark (the dry-run plan is visible in the beat log either way)",
+      "status": "optional — off is the safe code default; arming is deliberately a human act (no fleet_runtime yet)",
+      "gate": "publishing the system's findings as public GitHub issues is an outward, observable-before-autonomous act — your call",
+      "unlocks": "censor residuals mirrored to public `censor`-labelled issues (retro finding 8: 4 residuals sat unmirrored while it ran in permanent dry-run); a HUMAN issue close is a veto, respected forever; creations capped per pass (--cap, default 8)",
+      "steps": [
+        "Set LIMEN_CENSOR_ISSUES_APPLY=1 in the daemon env (~/.limen.env)",
+        "In the SAME change add fleet_runtime: \"1\" to the LIMEN_CENSOR_ISSUES_APPLY entry in institutio/governance/parameters.yaml so enactment-audit.py locks it live (the #576 dark-switch lesson — never a note that claims what no rung checks)",
+        "Verify: python3 scripts/armed-valve-audit.py --check reads LIMEN_CENSOR_ISSUES_APPLY ARMED; the next beat mirrors residuals to issues"
+      ],
+      "source_task": "censor→issues mirror (scripts/sync-censor-issues.py); armed-valve homing (trunk-green heal, 2026-07-17)",
+      "note": "Owner: censor. Classified deliverable in spec/armed-valves.json; this lever is its required citation (LIMEN_CENSOR_ISSUES_APPLY read SILENT-OFF in the whole-repo verify gate until homed here). Sibling: L-CLOSEOUT-RECONCILE-ARM.",
+      "issue": 650
+    },
+    {
+      "id": "L-CLOSEOUT-RECONCILE-ARM",
+      "label": "OPTIONAL — arm the closeout-reconciliation sensor (scripts/reconcile-closeouts.py). Dark by design (classifier self-test only): when armed the beat runs --check, probing every claimed-done outcome against GitHub/board ground truth, and closeout-fast enforces it. A read-only verification — it never mutates, sends, or spends.",
+      "owner": "yours",
+      "cost": "~30s once in the daemon env, durable — OR leave dark (self-test only)",
+      "status": "optional — off ships the organ dark; arming enables the read-only reconciliation pass",
+      "gate": "arming a beat sensor is your operational choice; the pass is read-only (no outward action)",
+      "unlocks": "the beat continuously reconciles claimed-done vs GitHub/board ground truth (catches a task marked done whose PR never merged, or whose outcome the board cannot confirm)",
+      "steps": [
+        "Set LIMEN_SESSION_CLOSEOUT=1 in the daemon env (~/.limen.env)",
+        "Reload the daemon: launchctl kickstart -k gui/$(id -u)/com.limen.heartbeat (or wait for the next beat)",
+        "Verify: python3 scripts/armed-valve-audit.py --check reads LIMEN_SESSION_CLOSEOUT ARMED; the beat runs reconcile-closeouts.py --check"
+      ],
+      "source_task": "closeout-reconciliation organ (#1211, scripts/reconcile-closeouts.py); armed-valve homing (trunk-green heal, 2026-07-17)",
+      "note": "Owner: censor. Classified deliverable in spec/armed-valves.json; this lever is its required citation (LIMEN_SESSION_CLOSEOUT read UNCLASSIFIED then SILENT-OFF in the whole-repo verify gate — the organ shipped ahead of its classification). Sibling: L-CENSOR-ISSUES-ARM.",
+      "issue": 1211
+    },
+    {
       "id": "L-MAIL-AUTOMATION-GRANT",
       "label": "OPTIONAL fallback — the macOS Automation grant is no longer required for Gmail drafts. The keyed headless path (UMA PR #168 + the creds-hydrate gmail lanes, 2026-07-14) now persists reply drafts to [Gmail]/Drafts over IMAP with NO GUI tap. This grant only still matters for real Drafts on NON-Gmail accounts (iCloud/Outlook) via Apple Mail, and only if you set LIMEN_MAIL_DRAFTS=1.",
       "owner": "yours",
