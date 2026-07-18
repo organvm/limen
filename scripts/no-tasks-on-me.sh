@@ -217,6 +217,22 @@ if ! python3 "$ROOT/scripts/identity.py" verify >/dev/null 2>&1; then
   fi
 fi
 
+# ---------------------------------------------------------------------------
+# 11: no AUTOMATABLE homework parked on him. §1-10 prove every lever is HOMED;
+#     this proves every open lever is IRREDUCIBLE — a genuine sovereignty
+#     boundary (his bank, keys, body, devices, identity, a vendor mint, or a
+#     consent only he may give), never design debt the system could dissolve by
+#     building an organ. His head is not a backlog: a lever that COULD be
+#     automated but sits here regardless is the system parking its own unfinished
+#     work on him under the "human-gated" label. lever-classify.py --check reds
+#     any open lever that is neither tagged sovereignty{reason} nor converted to
+#     design_debt{organ,dissolves_when} (which the beat auto-discharges when its
+#     organ ships). Keep in sync with: scripts/lever-classify.py
+# ---------------------------------------------------------------------------
+if ! LIMEN_HIS_HAND_LEVERS="$REGISTRY" python3 "$ROOT/scripts/lever-classify.py" --check; then
+  bad "an open lever is UNCLASSIFIED or malformed — the sovereignty predicate failed. Tag it sovereignty{reason} (irreducibly his) or design_debt{organ,dissolves_when} (the beat owes it). See: scripts/lever-classify.py --list"
+fi
+
 echo
 if [ "$fail" -ne 0 ]; then
   echo "VERDICT: tasks are hanging — see FAIL lines above. Hang each in its owner's git-tracked record, then re-run."

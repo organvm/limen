@@ -2633,6 +2633,18 @@ parameters:
     self_update: none
     owner: observatory
     note: "The whole day's trending FIELD studied per beat (one bounded search; GitHub caps a page at 100). The top OBSERVATORY_WINNERS_LIMIT of the field get the deep treatment (full snapshot + matched controls); the tail gets light snapshots (meta+README, 2 calls each) for prevalence and inward-facing evidence. Never below the winners limit; the collect report records field_total/field_studied/field_dropped — no silent caps. Degrades to the winners limit when gh rate headroom < 20% (recorded as degraded: true)."
+  LIMEN_LEVER_DISSOLVE:
+    default: 1
+    env: LIMEN_LEVER_DISSOLVE
+    self_update: none
+    owner: tabularius
+    note: "Gate for the lever-dissolve beat sensor (institutio/governance/sensors.yaml section 0r): `lever-classify.py --dissolve` reports any design_debt his-hand lever whose `dissolves_when` predicate has gone green — the organ that obsoletes the human dependency shipped, so the lever can graduate from his hand to the beat (his-hand → the-beat-built-it). Report-only/advisory (1=on, safe: no mutation); the actual auto-discharge is a separate dark valve (LIMEN_LEVER_DISSOLVE_APPLY=1, default off, never run by this sensor). The runtime twin of no-tasks-on-me.sh §11 (lever-classify --check), which reds any open lever that is neither a proven sovereignty boundary nor a converted design_debt — his head is not a backlog."
+  LIMEN_LEVER_DISSOLVE_APPLY:
+    default: 0
+    env: LIMEN_LEVER_DISSOLVE_APPLY
+    self_update: none
+    owner: tabularius
+    note: "Dark valve for lever-classify.py --dissolve --apply: when 1, a design_debt his-hand lever whose `dissolves_when` predicate is green is AUTO-DISCHARGED on the beat — stamped `discharged` crediting the organ (not him), its needs-human issue closed by sync-hishand-issues. Default 0 (report-only): the lever-dissolve sensor NEVER passes --apply, so the registry is never mutated unattended unless this is explicitly armed. Sibling of the persistence-arming valves; arming is a governance_choice consent (the auto-mode classifier blocks the agent from self-arming its own persistence)."
   LIMEN_BIFRONS:
     default: 1
     env: LIMEN_BIFRONS
