@@ -1,0 +1,202 @@
+diff --git a/docs/departments/eng/artifacts/test-strategy.md b/docs/departments/eng/artifacts/test-strategy.md
+index 0207f855..45c4a7d7 100644
+--- a/docs/departments/eng/artifacts/test-strategy.md
++++ b/docs/departments/eng/artifacts/test-strategy.md
+@@ -87,7 +87,7 @@ Eight custom validation gates run as part of CI. Each gate is a standalone scrip
+ |------|----|---------|
+ | Phantom Money | `01-phantom-money` | Verifies double-entry ledger balance invariant: sum of all debits equals sum of all credits. Catches off-by-one errors in escrow settlement. |
+ | Orphan Contracts | `02-orphan-contracts` | Ensures every contract has a valid user, a funded vault entry, and at least one scheduled verification window. |
+-| Fury Quorum | `03-fury-quorum` | Validates that audit consensus requires 3-of-5 agreement and that no single auditor can unilaterally pass/fail a contract. |
++| Fury Quorum | `03-fury-quorum` | Validates that audit consensus requires 2-of-3 agreement and that no single auditor can unilaterally pass/fail a contract. |
+ | Aegis Floor | `04-aegis-floor` | Confirms BMI floor (18.5) enforcement in biological oath creation. Rejects contracts that could incentivize dangerous weight loss. |
+ | Velocity Cap | `05-velocity-cap` | Validates the 2% weekly loss velocity cap is enforced on all biological oaths. |
+ | Escrow Integrity | `06-escrow-integrity` | Cross-references Stripe FBO balance against internal ledger totals. Flags any discrepancy > $0.01. |
+@@ -189,7 +189,7 @@ Additional CI workflows:
+ ## 7. Testing Principles
+ 
+ 1. **Financial correctness over speed.** Every test involving money must assert ledger balance invariants. A fast test that misses a penny is worse than a slow test that catches it.
+-2. **Fury consensus is non-negotiable.** No test may bypass the 3-of-5 quorum requirement. If a test needs a quick pass, it must simulate 3 agreeing auditors.
++2. **Fury consensus is non-negotiable.** No test may bypass the consensus rule: **3 assigned auditors, 2-of-3 or 3-of-3 agreement** (per ADR-004). If a test needs a quick pass, it must simulate 2 of 3 agreeing auditors.
+ 3. **Aegis is a safety system.** Tests for biological oaths must always verify BMI floor and velocity cap enforcement. Skipping Aegis checks in tests is a blocking code review finding.
+ 4. **Recovery contracts are sensitive.** Tests involving no-contact targets must verify guardrails (max 30 days, max 3 targets, cooldown enforcement).
+ 5. **The linguistic cloaker is testable.** Verify that user-facing strings use the approved vocabulary (vault, not bet; oath, not wager) in all test assertions.
+diff --git a/docs/departments/leg/artifacts/regulatory-risk-register.md b/docs/departments/leg/artifacts/regulatory-risk-register.md
+index e1c75a5f..3fdd1767 100644
+--- a/docs/departments/leg/artifacts/regulatory-risk-register.md
++++ b/docs/departments/leg/artifacts/regulatory-risk-register.md
+@@ -184,7 +184,7 @@ Comprehensive risk register for Styx covering regulatory, financial, operational
+ | **Likelihood** | 3 (Possible) |
+ | **Impact** | 3 (Moderate) |
+ | **Score** | 9 |
+-| **Mitigation** | (1) 3-of-5 quorum makes single-auditor manipulation impossible. (2) $2 auditor stake creates skin-in-the-game against bad-faith voting. (3) Conflict-of-interest detection prevents social-graph collusion. (4) Round-robin assignment with randomization prevents targeting. (5) Auditor reputation tracking with ejection threshold. (6) Statistical anomaly detection for voting patterns (e.g., auditor who always votes FAIL). (7) Elevated 7-Fury panel for disputes. |
++| **Mitigation** | (1) 2-of-3 quorum makes single-auditor manipulation impossible. (2) $2 auditor stake creates skin-in-the-game against bad-faith voting. (3) Conflict-of-interest detection prevents social-graph collusion. (4) Round-robin assignment with randomization prevents targeting. (5) Auditor reputation tracking with ejection threshold. (6) Statistical anomaly detection for voting patterns (e.g., auditor who always votes FAIL). (7) Elevated 7-Fury panel for disputes. |
+ | **Owner** | Engineering + Trust & Safety |
+ | **Status** | Active -- quorum, COI detection, and round-robin implemented; anomaly detection planned |
+ 
+diff --git a/docs/departments/leg/artifacts/terms-of-service.md b/docs/departments/leg/artifacts/terms-of-service.md
+index 4968e824..511f392c 100644
+--- a/docs/departments/leg/artifacts/terms-of-service.md
++++ b/docs/departments/leg/artifacts/terms-of-service.md
+@@ -154,7 +154,7 @@ Furies must:
+ 
+ ### 5.4 Quorum
+ 
+-A minimum of 3-of-5 assigned Furies must agree for a verdict to stand. If quorum cannot be reached within 48 hours, the audit is escalated to an elevated panel.
++A minimum of 2-of-3 assigned Furies must agree for a verdict to stand. If quorum cannot be reached within 48 hours, the audit is escalated to an elevated panel.
+ 
+ ## 6. FBO Escrow and Financial Terms
+ 
+diff --git a/docs/departments/prd/artifacts/feature-matrix.md b/docs/departments/prd/artifacts/feature-matrix.md
+index 06105199..201b5091 100644
+--- a/docs/departments/prd/artifacts/feature-matrix.md
++++ b/docs/departments/prd/artifacts/feature-matrix.md
+@@ -95,7 +95,7 @@ Comprehensive feature inventory for Styx with implementation status, phase gatin
+ |---------|--------|-------|----------|-------|
+ | Fury application and vetting | Built | Beta | P0 | Minimum integrity score threshold |
+ | Auditor stake ($2 per assignment) | Built | Beta | P0 | |
+-| 3-of-5 quorum consensus | Built | Beta | P0 | Gate 03 validates |
++| 2-of-3 quorum consensus | Built | Beta | P0 | Gate 03 validates |
+ | Round-robin assignment | Built | Beta | P0 | Gate 08 validates fairness |
+ | Conflict-of-interest detection | Built | Beta | P0 | Social graph + geographic |
+ | Vote casting (PASS/FAIL/NEEDS_MORE_INFO) | Built | Beta | P0 | |
+diff --git a/docs/departments/prd/artifacts/prd.md b/docs/departments/prd/artifacts/prd.md
+index 621a7ba6..00173472 100644
+--- a/docs/departments/prd/artifacts/prd.md
++++ b/docs/departments/prd/artifacts/prd.md
+@@ -34,7 +34,7 @@ Styx is a peer-audited behavioral market that uses loss aversion to enforce habi
+ 1. **Oath creation.** A user creates a behavioral contract (an "Oath") specifying the habit, verification criteria, duration, and financial stake ($39 standard contract).
+ 2. **Vault funding.** The stake is deposited into an FBO (For Benefit Of) escrow account via Stripe. The money is real and at risk.
+ 3. **Proof submission.** At each verification window, the user submits proof of compliance (photo, check-in, or sensor data).
+-4. **Fury audit.** A decentralized network of peer auditors ("Furies") reviews the proof. A quorum of 3-of-5 must agree on pass/fail. Auditors stake $2 of their own money to participate, aligning incentives.
++4. **Fury audit.** A decentralized network of peer auditors ("Furies") reviews the proof. A quorum of 2-of-3 must agree on pass/fail. Auditors stake $2 of their own money to participate, aligning incentives.
+ 5. **Settlement.** On contract completion, the user's stake is returned. On failure, the stake is forfeited (distributed to Furies and the platform).
+ 6. **Integrity scoring.** A persistent reputation score (base 50 + completions - penalties) determines stake limits, Fury eligibility, and platform trust tier.
+ 
+@@ -78,7 +78,7 @@ See `docs/planning/user-personas.md` for detailed persona profiles.
+ 
+ - Auditors apply and are vetted (minimum integrity score, identity verification)
+ - $2 auditor stake per assignment (skin in the game)
+-- 3-of-5 quorum for pass/fail decisions
++- 2-of-3 quorum for pass/fail decisions
+ - Round-robin assignment with conflict-of-interest detection
+ - Auditor reputation tracking and ejection for bad-faith audits
+ 
+diff --git a/docs/legal/regulatory-risk-register.md b/docs/legal/regulatory-risk-register.md
+index afb41515..13044a4f 100644
+--- a/docs/legal/regulatory-risk-register.md
++++ b/docs/legal/regulatory-risk-register.md
+@@ -184,7 +184,7 @@ Comprehensive risk register for Styx covering regulatory, financial, operational
+ | **Likelihood** | 3 (Possible) |
+ | **Impact** | 3 (Moderate) |
+ | **Score** | 9 |
+-| **Mitigation** | (1) 3-of-5 quorum makes single-auditor manipulation impossible. (2) $2 auditor stake creates skin-in-the-game against bad-faith voting. (3) Conflict-of-interest detection prevents social-graph collusion. (4) Round-robin assignment with randomization prevents targeting. (5) Auditor reputation tracking with ejection threshold. (6) Statistical anomaly detection for voting patterns (e.g., auditor who always votes FAIL). (7) Elevated 7-Fury panel for disputes. |
++| **Mitigation** | (1) 2-of-3 quorum makes single-auditor manipulation impossible. (2) $2 auditor stake creates skin-in-the-game against bad-faith voting. (3) Conflict-of-interest detection prevents social-graph collusion. (4) Round-robin assignment with randomization prevents targeting. (5) Auditor reputation tracking with ejection threshold. (6) Statistical anomaly detection for voting patterns (e.g., auditor who always votes FAIL). (7) Elevated 7-Fury panel for disputes. |
+ | **Owner** | Engineering + Trust & Safety |
+ | **Status** | Active -- quorum, COI detection, and round-robin implemented; anomaly detection planned |
+ 
+diff --git a/docs/legal/terms-of-service.md b/docs/legal/terms-of-service.md
+index 770d3e11..6a4b89cf 100644
+--- a/docs/legal/terms-of-service.md
++++ b/docs/legal/terms-of-service.md
+@@ -159,7 +159,7 @@ Furies must:
+ 
+ ### 5.4 Quorum
+ 
+-A minimum of 3-of-5 assigned Furies must agree for a verdict to stand. If quorum cannot be reached within 48 hours, the audit is escalated to an elevated panel.
++A minimum of 2-of-3 assigned Furies must agree for a verdict to stand. If quorum cannot be reached within 48 hours, the audit is escalated to an elevated panel.
+ 
+ ## 6. FBO Escrow and Financial Terms
+ 
+diff --git a/docs/planning/prd.md b/docs/planning/prd.md
+index 621a7ba6..00173472 100644
+--- a/docs/planning/prd.md
++++ b/docs/planning/prd.md
+@@ -34,7 +34,7 @@ Styx is a peer-audited behavioral market that uses loss aversion to enforce habi
+ 1. **Oath creation.** A user creates a behavioral contract (an "Oath") specifying the habit, verification criteria, duration, and financial stake ($39 standard contract).
+ 2. **Vault funding.** The stake is deposited into an FBO (For Benefit Of) escrow account via Stripe. The money is real and at risk.
+ 3. **Proof submission.** At each verification window, the user submits proof of compliance (photo, check-in, or sensor data).
+-4. **Fury audit.** A decentralized network of peer auditors ("Furies") reviews the proof. A quorum of 3-of-5 must agree on pass/fail. Auditors stake $2 of their own money to participate, aligning incentives.
++4. **Fury audit.** A decentralized network of peer auditors ("Furies") reviews the proof. A quorum of 2-of-3 must agree on pass/fail. Auditors stake $2 of their own money to participate, aligning incentives.
+ 5. **Settlement.** On contract completion, the user's stake is returned. On failure, the stake is forfeited (distributed to Furies and the platform).
+ 6. **Integrity scoring.** A persistent reputation score (base 50 + completions - penalties) determines stake limits, Fury eligibility, and platform trust tier.
+ 
+@@ -78,7 +78,7 @@ See `docs/planning/user-personas.md` for detailed persona profiles.
+ 
+ - Auditors apply and are vetted (minimum integrity score, identity verification)
+ - $2 auditor stake per assignment (skin in the game)
+-- 3-of-5 quorum for pass/fail decisions
++- 2-of-3 quorum for pass/fail decisions
+ - Round-robin assignment with conflict-of-interest detection
+ - Auditor reputation tracking and ejection for bad-faith audits
+ 
+diff --git a/docs/specs/spec--fury-router.md b/docs/specs/spec--fury-router.md
+index 8324bc19..fa3839c0 100644
+--- a/docs/specs/spec--fury-router.md
++++ b/docs/specs/spec--fury-router.md
+@@ -7,7 +7,7 @@
+ 
+ ---
+ 
+-> **As-built note ([ADR-004](../adr/adr--004-fury-consensus-engine.md)):** This is a **Draft** forward-spec. The **accepted, as-built** consensus rule is ADR-004's: **3 auditors assigned to every proof, with 2-of-3 or 3-of-3 agreement** (a 3-way split escalates to the senior pool; there is **no** $1000 threshold). The "1 primary auditor" (§4.3) and "2-of-3 only for $1000+ contracts" (§4.5, FR-5) described below are an earlier draft design that ADR-004 superseded.
++> **As-built note ([ADR-004](../adr/adr--004-fury-consensus-engine.md)):** This is a **Draft** forward-spec. The **accepted, as-built** consensus rule is ADR-004's: **3 auditors assigned to every proof, with 2-of-3 or 3-of-3 agreement** (a 3-way split escalates to the senior pool; there is **no** $1000 threshold).
+ 
+ ## 1. Objective
+ 
+diff --git a/packages/audit-engine/src/index.ts b/packages/audit-engine/src/index.ts
+index 8da613a9..e4b18a03 100644
+--- a/packages/audit-engine/src/index.ts
++++ b/packages/audit-engine/src/index.ts
+@@ -19,6 +19,8 @@ export {
+   AUDITOR_STAKE_AMOUNT,
+   AUDITOR_HARASSMENT_THRESHOLD,
+   FALSE_ACCUSATION_WEIGHT,
++  FURY_CONSENSUS_AUDITORS,
++  FURY_CONSENSUS_AGREEMENT_REQUIRED,
+   // Types
+   type UserHistory,
+   type FuryHistory,
+diff --git a/packages/audit-engine/src/integrity.ts b/packages/audit-engine/src/integrity.ts
+index 73416b7b..ca2c9f5d 100644
+--- a/packages/audit-engine/src/integrity.ts
++++ b/packages/audit-engine/src/integrity.ts
+@@ -120,3 +120,7 @@ export function getTierMaxStake(tiers: string[]): number {
+   if (tiers.includes("TIER_1_MICRO_STAKES")) return 2000;
+   return 0;
+ }
++
++// Fury Consensus Constants
++export const FURY_CONSENSUS_AUDITORS = 3;
++export const FURY_CONSENSUS_AGREEMENT_REQUIRED = 2;
+diff --git a/src/api/services/fury-router/fury-router.service.ts b/src/api/services/fury-router/fury-router.service.ts
+index f91577d3..9186935b 100644
+--- a/src/api/services/fury-router/fury-router.service.ts
++++ b/src/api/services/fury-router/fury-router.service.ts
+@@ -1,6 +1,7 @@
+ import { Injectable, OnModuleInit } from '@nestjs/common';
+ import { Queue } from 'bullmq';
+ import { FURY_ROUTER_QUEUE_NAME, getDefaultQueueOptions } from '../../config/queue.config';
++import { FURY_CONSENSUS_AUDITORS } from '@styx/shared/libs/integrity';
+ 
+ @Injectable()
+ export class FuryRouterService implements OnModuleInit {
+@@ -22,7 +23,7 @@ export class FuryRouterService implements OnModuleInit {
+   async routeProof(
+     proofId: string, 
+     submitterUserId: string, 
+-    requiredReviewers: number = 3
++    requiredReviewers: number = FURY_CONSENSUS_AUDITORS
+   ): Promise<string> {
+     
+     // In the real worker implementation, this job will query the database 
+diff --git a/src/shared/libs/integrity.ts b/src/shared/libs/integrity.ts
+index 66476df6..ee2425e2 100644
+--- a/src/shared/libs/integrity.ts
++++ b/src/shared/libs/integrity.ts
+@@ -123,3 +123,7 @@ export function getTierMaxStake(tiers: string[]): number {
+   if (tiers.includes('TIER_1_MICRO_STAKES')) return 2000; // $20
+   return 0;
+ }
++
++// Fury Consensus Constants
++export const FURY_CONSENSUS_AUDITORS = 3;
++export const FURY_CONSENSUS_AGREEMENT_REQUIRED = 2;

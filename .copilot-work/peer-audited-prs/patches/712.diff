@@ -1,0 +1,553 @@
+diff --git a/docs/activation/activation-ledger--peer-audited--2026-06-11.md b/docs/activation/activation-ledger--peer-audited--2026-06-11.md
+index af63a16f..334f301d 100644
+--- a/docs/activation/activation-ledger--peer-audited--2026-06-11.md
++++ b/docs/activation/activation-ledger--peer-audited--2026-06-11.md
+@@ -75,7 +75,7 @@ curl -sS -o /dev/null -w "%{http_code}\n" \
+ | Blocker | Root cause | Resolution path |
+ |---|---|---|
+ | `/launch` 404 | The launch surface (interactive sign-up / waitlist) is not yet built into the `src/web` Next.js app or not yet routed through the GitHub Pages base | Open a tracked issue in Phase Gamma milestone; port the waitlist flow from `src/web`; re-test |
+-| API not publicly deployed | The API (NestJS at `src/api`) is not yet deployed to Render — current `render.yaml` blueprint is the deploy target, and the env-backed config hardening (PR #669) is the prerequisite for stable deploys | Issue #675 CLOSED (2026-06-11) — release workflow (`.github/workflows/release.yml`), deploy docs in README, Render secrets checklist documented. Next: set Render secrets in GitHub → cut `v*` tag → `deploy.yml` triggers |
++| API not publicly deployed | The API (NestJS at `src/api`) is not yet deployed to Render — current `render.yaml` blueprint is the deploy target, and the env-backed config hardening (PR #669) is the prerequisite for stable deploys | Render blueprint verified and deployed via `.github/workflows/deploy.yml`. Issue #675 and #676 CLOSED. |
+ | `/ask-styx` not on canonical URL | `src/ask-styx` exists and is built (title "Ask Styx"), but its Pages deploy is a separate workflow (`.github/workflows/deploy-ask-styx.yml`) that uploads to a Pages sub-path. It is *not* the source of the canonical URL. The canonical URL serves the pitch deck. | Document the routing: canonical URL = pitch deck; `/ask-styx` sub-path = LLM Q&A app. Both are intentional surfaces. |
+ | Activation evidence regen is manual | `scripts/build-chat-context.ts` re-emits the embedded `styx-knowledge.ts` from `CLAUDE.md`; CLAUDE.md is not in repo, so the knowledge file regenerates from a synthetic empty state | Decide whether to (a) add a CLAUDE.md or (b) replace the build-time synthesis with a checked-in artifact |
+ 
+diff --git a/package-lock.json b/package-lock.json
+index 62d0b6e3..978544fc 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -21491,102 +21491,6 @@
+         "undici-types": ">=7.24.0 <7.24.7"
+       }
+     },
+-    "packages/audit-engine/node_modules/@vitest/expect": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/@vitest/expect/-/expect-4.1.0.tgz",
+-      "integrity": "sha512-EIxG7k4wlWweuCLG9Y5InKFwpMEOyrMb6ZJ1ihYu02LVj/bzUwn2VMU+13PinsjRW75XnITeFrQBMH5+dLvCDA==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@standard-schema/spec": "^1.1.0",
+-        "@types/chai": "^5.2.2",
+-        "@vitest/spy": "4.1.0",
+-        "@vitest/utils": "4.1.0",
+-        "chai": "^6.2.2",
+-        "tinyrainbow": "^3.0.3"
+-      },
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      }
+-    },
+-    "packages/audit-engine/node_modules/@vitest/pretty-format": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/@vitest/pretty-format/-/pretty-format-4.1.0.tgz",
+-      "integrity": "sha512-3RZLZlh88Ib0J7NQTRATfc/3ZPOnSUn2uDBUoGNn5T36+bALixmzphN26OUD3LRXWkJu4H0s5vvUeqBiw+kS0A==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "tinyrainbow": "^3.0.3"
+-      },
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      }
+-    },
+-    "packages/audit-engine/node_modules/@vitest/runner": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/@vitest/runner/-/runner-4.1.0.tgz",
+-      "integrity": "sha512-Duvx2OzQ7d6OjchL+trw+aSrb9idh7pnNfxrklo14p3zmNL4qPCDeIJAK+eBKYjkIwG96Bc6vYuxhqDXQOWpoQ==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@vitest/utils": "4.1.0",
+-        "pathe": "^2.0.3"
+-      },
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      }
+-    },
+-    "packages/audit-engine/node_modules/@vitest/snapshot": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/@vitest/snapshot/-/snapshot-4.1.0.tgz",
+-      "integrity": "sha512-0Vy9euT1kgsnj1CHttwi9i9o+4rRLEaPRSOJ5gyv579GJkNpgJK+B4HSv/rAWixx2wdAFci1X4CEPjiu2bXIMg==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@vitest/pretty-format": "4.1.0",
+-        "@vitest/utils": "4.1.0",
+-        "magic-string": "^0.30.21",
+-        "pathe": "^2.0.3"
+-      },
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      }
+-    },
+-    "packages/audit-engine/node_modules/@vitest/spy": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/@vitest/spy/-/spy-4.1.0.tgz",
+-      "integrity": "sha512-pz77k+PgNpyMDv2FV6qmk5ZVau6c3R8HC8v342T2xlFxQKTrSeYw9waIJG8KgV9fFwAtTu4ceRzMivPTH6wSxw==",
+-      "dev": true,
+-      "license": "MIT",
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      }
+-    },
+-    "packages/audit-engine/node_modules/@vitest/utils": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/@vitest/utils/-/utils-4.1.0.tgz",
+-      "integrity": "sha512-XfPXT6a8TZY3dcGY8EdwsBulFCIw+BeeX0RZn2x/BtiY/75YGh8FeWGG8QISN/WhaqSrE2OrlDgtF8q5uhOTmw==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@vitest/pretty-format": "4.1.0",
+-        "convert-source-map": "^2.0.0",
+-        "tinyrainbow": "^3.0.3"
+-      },
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      }
+-    },
+-    "packages/audit-engine/node_modules/magic-string": {
+-      "version": "0.30.21",
+-      "resolved": "https://registry.npmjs.org/magic-string/-/magic-string-0.30.21.tgz",
+-      "integrity": "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@jridgewell/sourcemap-codec": "^1.5.5"
+-      }
+-    },
+     "packages/audit-engine/node_modules/undici-types": {
+       "version": "7.24.6",
+       "resolved": "https://registry.npmjs.org/undici-types/-/undici-types-7.24.6.tgz",
+@@ -21594,115 +21498,6 @@
+       "dev": true,
+       "license": "MIT"
+     },
+-    "packages/audit-engine/node_modules/vitest": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/vitest/-/vitest-4.1.0.tgz",
+-      "integrity": "sha512-YbDrMF9jM2Lqc++2530UourxZHmkKLxrs4+mYhEwqWS97WJ7wOYEkcr+QfRgJ3PW9wz3odRijLZjHEaRLTNbqw==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@vitest/expect": "4.1.0",
+-        "@vitest/mocker": "4.1.0",
+-        "@vitest/pretty-format": "4.1.0",
+-        "@vitest/runner": "4.1.0",
+-        "@vitest/snapshot": "4.1.0",
+-        "@vitest/spy": "4.1.0",
+-        "@vitest/utils": "4.1.0",
+-        "es-module-lexer": "^2.0.0",
+-        "expect-type": "^1.3.0",
+-        "magic-string": "^0.30.21",
+-        "obug": "^2.1.1",
+-        "pathe": "^2.0.3",
+-        "picomatch": "^4.0.3",
+-        "std-env": "^4.0.0-rc.1",
+-        "tinybench": "^2.9.0",
+-        "tinyexec": "^1.0.2",
+-        "tinyglobby": "^0.2.15",
+-        "tinyrainbow": "^3.0.3",
+-        "vite": "^6.0.0 || ^7.0.0 || ^8.0.0-0",
+-        "why-is-node-running": "^2.3.0"
+-      },
+-      "bin": {
+-        "vitest": "vitest.mjs"
+-      },
+-      "engines": {
+-        "node": "^20.0.0 || ^22.0.0 || >=24.0.0"
+-      },
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      },
+-      "peerDependencies": {
+-        "@edge-runtime/vm": "*",
+-        "@opentelemetry/api": "^1.9.0",
+-        "@types/node": "^20.0.0 || ^22.0.0 || >=24.0.0",
+-        "@vitest/browser-playwright": "4.1.0",
+-        "@vitest/browser-preview": "4.1.0",
+-        "@vitest/browser-webdriverio": "4.1.0",
+-        "@vitest/ui": "4.1.0",
+-        "happy-dom": "*",
+-        "jsdom": "*",
+-        "vite": "^6.0.0 || ^7.0.0 || ^8.0.0-0"
+-      },
+-      "peerDependenciesMeta": {
+-        "@edge-runtime/vm": {
+-          "optional": true
+-        },
+-        "@opentelemetry/api": {
+-          "optional": true
+-        },
+-        "@types/node": {
+-          "optional": true
+-        },
+-        "@vitest/browser-playwright": {
+-          "optional": true
+-        },
+-        "@vitest/browser-preview": {
+-          "optional": true
+-        },
+-        "@vitest/browser-webdriverio": {
+-          "optional": true
+-        },
+-        "@vitest/ui": {
+-          "optional": true
+-        },
+-        "happy-dom": {
+-          "optional": true
+-        },
+-        "jsdom": {
+-          "optional": true
+-        },
+-        "vite": {
+-          "optional": false
+-        }
+-      }
+-    },
+-    "packages/audit-engine/node_modules/vitest/node_modules/@vitest/mocker": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/@vitest/mocker/-/mocker-4.1.0.tgz",
+-      "integrity": "sha512-evxREh+Hork43+Y4IOhTo+h5lGmVRyjqI739Rz4RlUPqwrkFFDF6EMvOOYjTx4E8Tl6gyCLRL8Mu7Ry12a13Tw==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@vitest/spy": "4.1.0",
+-        "estree-walker": "^3.0.3",
+-        "magic-string": "^0.30.21"
+-      },
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      },
+-      "peerDependencies": {
+-        "msw": "^2.4.9",
+-        "vite": "^6.0.0 || ^7.0.0 || ^8.0.0-0"
+-      },
+-      "peerDependenciesMeta": {
+-        "msw": {
+-          "optional": true
+-        },
+-        "vite": {
+-          "optional": true
+-        }
+-      }
+-    },
+     "packages/styx-cli": {
+       "name": "@styx/styx-cli",
+       "version": "0.1.0",
+@@ -30526,92 +30321,6 @@
+         "undici-types": ">=7.24.0 <7.24.7"
+       }
+     },
+-    "src/test-harness/node_modules/@vitest/expect": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/@vitest/expect/-/expect-4.1.0.tgz",
+-      "integrity": "sha512-EIxG7k4wlWweuCLG9Y5InKFwpMEOyrMb6ZJ1ihYu02LVj/bzUwn2VMU+13PinsjRW75XnITeFrQBMH5+dLvCDA==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@standard-schema/spec": "^1.1.0",
+-        "@types/chai": "^5.2.2",
+-        "@vitest/spy": "4.1.0",
+-        "@vitest/utils": "4.1.0",
+-        "chai": "^6.2.2",
+-        "tinyrainbow": "^3.0.3"
+-      },
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      }
+-    },
+-    "src/test-harness/node_modules/@vitest/pretty-format": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/@vitest/pretty-format/-/pretty-format-4.1.0.tgz",
+-      "integrity": "sha512-3RZLZlh88Ib0J7NQTRATfc/3ZPOnSUn2uDBUoGNn5T36+bALixmzphN26OUD3LRXWkJu4H0s5vvUeqBiw+kS0A==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "tinyrainbow": "^3.0.3"
+-      },
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      }
+-    },
+-    "src/test-harness/node_modules/@vitest/runner": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/@vitest/runner/-/runner-4.1.0.tgz",
+-      "integrity": "sha512-Duvx2OzQ7d6OjchL+trw+aSrb9idh7pnNfxrklo14p3zmNL4qPCDeIJAK+eBKYjkIwG96Bc6vYuxhqDXQOWpoQ==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@vitest/utils": "4.1.0",
+-        "pathe": "^2.0.3"
+-      },
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      }
+-    },
+-    "src/test-harness/node_modules/@vitest/snapshot": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/@vitest/snapshot/-/snapshot-4.1.0.tgz",
+-      "integrity": "sha512-0Vy9euT1kgsnj1CHttwi9i9o+4rRLEaPRSOJ5gyv579GJkNpgJK+B4HSv/rAWixx2wdAFci1X4CEPjiu2bXIMg==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@vitest/pretty-format": "4.1.0",
+-        "@vitest/utils": "4.1.0",
+-        "magic-string": "^0.30.21",
+-        "pathe": "^2.0.3"
+-      },
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      }
+-    },
+-    "src/test-harness/node_modules/@vitest/spy": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/@vitest/spy/-/spy-4.1.0.tgz",
+-      "integrity": "sha512-pz77k+PgNpyMDv2FV6qmk5ZVau6c3R8HC8v342T2xlFxQKTrSeYw9waIJG8KgV9fFwAtTu4ceRzMivPTH6wSxw==",
+-      "dev": true,
+-      "license": "MIT",
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      }
+-    },
+-    "src/test-harness/node_modules/@vitest/utils": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/@vitest/utils/-/utils-4.1.0.tgz",
+-      "integrity": "sha512-XfPXT6a8TZY3dcGY8EdwsBulFCIw+BeeX0RZn2x/BtiY/75YGh8FeWGG8QISN/WhaqSrE2OrlDgtF8q5uhOTmw==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@vitest/pretty-format": "4.1.0",
+-        "convert-source-map": "^2.0.0",
+-        "tinyrainbow": "^3.0.3"
+-      },
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      }
+-    },
+     "src/test-harness/node_modules/commander": {
+       "version": "15.0.0",
+       "resolved": "https://registry.npmjs.org/commander/-/commander-15.0.0.tgz",
+@@ -30643,16 +30352,6 @@
+         "js-yaml": "bin/js-yaml.js"
+       }
+     },
+-    "src/test-harness/node_modules/magic-string": {
+-      "version": "0.30.21",
+-      "resolved": "https://registry.npmjs.org/magic-string/-/magic-string-0.30.21.tgz",
+-      "integrity": "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@jridgewell/sourcemap-codec": "^1.5.5"
+-      }
+-    },
+     "src/test-harness/node_modules/undici-types": {
+       "version": "7.24.6",
+       "resolved": "https://registry.npmjs.org/undici-types/-/undici-types-7.24.6.tgz",
+@@ -30660,115 +30359,6 @@
+       "dev": true,
+       "license": "MIT"
+     },
+-    "src/test-harness/node_modules/vitest": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/vitest/-/vitest-4.1.0.tgz",
+-      "integrity": "sha512-YbDrMF9jM2Lqc++2530UourxZHmkKLxrs4+mYhEwqWS97WJ7wOYEkcr+QfRgJ3PW9wz3odRijLZjHEaRLTNbqw==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@vitest/expect": "4.1.0",
+-        "@vitest/mocker": "4.1.0",
+-        "@vitest/pretty-format": "4.1.0",
+-        "@vitest/runner": "4.1.0",
+-        "@vitest/snapshot": "4.1.0",
+-        "@vitest/spy": "4.1.0",
+-        "@vitest/utils": "4.1.0",
+-        "es-module-lexer": "^2.0.0",
+-        "expect-type": "^1.3.0",
+-        "magic-string": "^0.30.21",
+-        "obug": "^2.1.1",
+-        "pathe": "^2.0.3",
+-        "picomatch": "^4.0.3",
+-        "std-env": "^4.0.0-rc.1",
+-        "tinybench": "^2.9.0",
+-        "tinyexec": "^1.0.2",
+-        "tinyglobby": "^0.2.15",
+-        "tinyrainbow": "^3.0.3",
+-        "vite": "^6.0.0 || ^7.0.0 || ^8.0.0-0",
+-        "why-is-node-running": "^2.3.0"
+-      },
+-      "bin": {
+-        "vitest": "vitest.mjs"
+-      },
+-      "engines": {
+-        "node": "^20.0.0 || ^22.0.0 || >=24.0.0"
+-      },
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      },
+-      "peerDependencies": {
+-        "@edge-runtime/vm": "*",
+-        "@opentelemetry/api": "^1.9.0",
+-        "@types/node": "^20.0.0 || ^22.0.0 || >=24.0.0",
+-        "@vitest/browser-playwright": "4.1.0",
+-        "@vitest/browser-preview": "4.1.0",
+-        "@vitest/browser-webdriverio": "4.1.0",
+-        "@vitest/ui": "4.1.0",
+-        "happy-dom": "*",
+-        "jsdom": "*",
+-        "vite": "^6.0.0 || ^7.0.0 || ^8.0.0-0"
+-      },
+-      "peerDependenciesMeta": {
+-        "@edge-runtime/vm": {
+-          "optional": true
+-        },
+-        "@opentelemetry/api": {
+-          "optional": true
+-        },
+-        "@types/node": {
+-          "optional": true
+-        },
+-        "@vitest/browser-playwright": {
+-          "optional": true
+-        },
+-        "@vitest/browser-preview": {
+-          "optional": true
+-        },
+-        "@vitest/browser-webdriverio": {
+-          "optional": true
+-        },
+-        "@vitest/ui": {
+-          "optional": true
+-        },
+-        "happy-dom": {
+-          "optional": true
+-        },
+-        "jsdom": {
+-          "optional": true
+-        },
+-        "vite": {
+-          "optional": false
+-        }
+-      }
+-    },
+-    "src/test-harness/node_modules/vitest/node_modules/@vitest/mocker": {
+-      "version": "4.1.0",
+-      "resolved": "https://registry.npmjs.org/@vitest/mocker/-/mocker-4.1.0.tgz",
+-      "integrity": "sha512-evxREh+Hork43+Y4IOhTo+h5lGmVRyjqI739Rz4RlUPqwrkFFDF6EMvOOYjTx4E8Tl6gyCLRL8Mu7Ry12a13Tw==",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@vitest/spy": "4.1.0",
+-        "estree-walker": "^3.0.3",
+-        "magic-string": "^0.30.21"
+-      },
+-      "funding": {
+-        "url": "https://opencollective.com/vitest"
+-      },
+-      "peerDependencies": {
+-        "msw": "^2.4.9",
+-        "vite": "^6.0.0 || ^7.0.0 || ^8.0.0-0"
+-      },
+-      "peerDependenciesMeta": {
+-        "msw": {
+-          "optional": true
+-        },
+-        "vite": {
+-          "optional": true
+-        }
+-      }
+-    },
+     "src/test-harness/node_modules/zod": {
+       "version": "4.4.3",
+       "resolved": "https://registry.npmjs.org/zod/-/zod-4.4.3.tgz",
+diff --git a/src/api/src/modules/contracts/contracts.service.spec.ts b/src/api/src/modules/contracts/contracts.service.spec.ts
+index f0f8e1d1..638fbdfb 100644
+--- a/src/api/src/modules/contracts/contracts.service.spec.ts
++++ b/src/api/src/modules/contracts/contracts.service.spec.ts
+@@ -314,6 +314,38 @@ describe("ContractsService", () => {
+       });
+     });
+ 
++    it("should enforce EARLY_ACCESS_199 pricing stake at $150 and return pricing metadata", async () => {
++      const earlyAccessDto: CreateContractInput = {
++        ...validDto,
++        stakeAmount: 10,
++        pricing: { plan: "EARLY_ACCESS_199" as any },
++      };
++      
++      const highScoreUser = { ...activeUser, integrity_score: 150 }; // Need score >= 100 for $150 tier (TIER_3_HIGH_ROLLER)
++
++      mockPool.query.mockResolvedValueOnce({ rows: [highScoreUser] });
++      mockPool.query.mockResolvedValueOnce({ rows: [{ count: 0 }] }); // Cool-off
++      mockPool.query.mockResolvedValueOnce({ rows: [{ count: 0 }] }); // Downscaling
++      mockPool.query.mockResolvedValueOnce({ rows: [{ id: "contract-1" }] }); // Insert
++      mockPool.query.mockResolvedValueOnce({ rows: [] }); // Update active
++      mockPool.query.mockResolvedValueOnce({ rows: [{ count: 1 }] }); // Prior contracts
++      mockPool.query.mockResolvedValueOnce({ rows: [{ id: "escrow-acct" }] }); // Escrow
++
++      const result = await service.createContract(earlyAccessDto);
++
++      expect(mockStripe.holdStake).toHaveBeenCalledWith(
++        "cus_test_1",
++        15000,
++        "contract-1",
++      );
++      expect(result.pricing).toEqual({
++        plan: "EARLY_ACCESS_199",
++        totalEntryUsd: 199,
++        platformFeeUsd: 49,
++        refundableStakeUsd: 150,
++      });
++    });
++
+     it("should reject POD_BASED cohort enrollment when podId is missing", async () => {
+       const podDto: CreateContractInput = {
+         ...validDto,
+diff --git a/src/api/src/modules/contracts/contracts.service.ts b/src/api/src/modules/contracts/contracts.service.ts
+index d44c359e..59d63853 100644
+--- a/src/api/src/modules/contracts/contracts.service.ts
++++ b/src/api/src/modules/contracts/contracts.service.ts
+@@ -110,6 +110,10 @@ const MVP_39_TOTAL_USD = 39;
+ const MVP_39_PLATFORM_FEE_USD = 9;
+ const MVP_39_STAKE_USD = 30;
+ 
++const EARLY_ACCESS_199_TOTAL_USD = 199;
++const EARLY_ACCESS_199_PLATFORM_FEE_USD = 49;
++const EARLY_ACCESS_199_STAKE_USD = 150;
++
+ type PricingMetadata = {
+   plan: PricingPlan;
+   totalEntryUsd: number;
+@@ -827,6 +831,20 @@ export class ContractsService {
+         },
+       };
+     }
++    if (plan === PricingPlan.EARLY_ACCESS_199) {
++      return {
++        dto: {
++          ...dto,
++          stakeAmount: EARLY_ACCESS_199_STAKE_USD,
++        },
++        pricingMetadata: {
++          plan: PricingPlan.EARLY_ACCESS_199,
++          totalEntryUsd: EARLY_ACCESS_199_TOTAL_USD,
++          platformFeeUsd: EARLY_ACCESS_199_PLATFORM_FEE_USD,
++          refundableStakeUsd: EARLY_ACCESS_199_STAKE_USD,
++        },
++      };
++    }
+ 
+     return { dto };
+   }
+diff --git a/src/api/src/modules/contracts/dto.ts b/src/api/src/modules/contracts/dto.ts
+index eecad230..c96e5e15 100644
+--- a/src/api/src/modules/contracts/dto.ts
++++ b/src/api/src/modules/contracts/dto.ts
+@@ -145,6 +145,7 @@ export class CohortEnrollmentDto {
+ export enum PricingPlan {
+   CUSTOM = "CUSTOM",
+   MVP_39 = "MVP_39",
++  EARLY_ACCESS_199 = "EARLY_ACCESS_199",
+ }
+ 
+ export class PricingPlanDto {

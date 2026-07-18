@@ -1,0 +1,149 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 3b01fdcb..17b8525f 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -60,10 +60,13 @@ jobs:
+       - name: Execute Tests + Lint (Turborepo)
+         # NOTE: do not forward `--coverage --ci` here. Those are jest-only flags:
+         # `--ci` makes the vitest workspaces (ask-styx, test-harness) throw
+-        # `CACError: Unknown option --ci`, and `--coverage` currently fails api
+-        # suite-loading. Each workspace owns its own test invocation. Re-introducing
+-        # coverage-threshold gating is tracked as a follow-up once coverage mode is
+-        # fixed (see docs/audit/2026-05-26-index-propagation-and-vacuum-log.md).
++        # `CACError: Unknown option --ci`. Each workspace owns its own test
++        # invocation instead. Coverage-threshold gating is now ACTIVE: the jest
++        # workspaces (api, web, mobile, desktop) run `jest --coverage` in their
++        # own `test` script and enforce `coverageThreshold` from their jest
++        # config. Coverage mode was unblocked by switching those workspaces to
++        # the V8 `coverageProvider` (the default "babel" provider crashed on the
++        # repo-wide minimatch>=10 override via babel-plugin-istanbul/test-exclude).
+         #
+         # `test` dependsOn `^build` (upstream builds only, no per-workspace build).
+         # `lint` is independent so turbo parallelizes both.
+diff --git a/src/api/jest.config.cjs b/src/api/jest.config.cjs
+index c78d97f7..3a5e592b 100644
+--- a/src/api/jest.config.cjs
++++ b/src/api/jest.config.cjs
+@@ -10,6 +10,12 @@ module.exports = {
+     ...tsJestTransformCfg,
+   },
+   testPathIgnorePatterns: ["/node_modules/", "/dist/"],
++  // Use the V8 coverage provider rather than the default "babel" provider.
++  // The babel provider instruments via babel-plugin-istanbul → test-exclude,
++  // whose minimatch@3 callable API is broken by the repo-wide minimatch>=10
++  // override (test-exclude calls minimatch() but v10 exports an object).
++  // V8 coverage reads native coverage and sidesteps that chain entirely.
++  coverageProvider: "v8",
+   coverageThreshold: {
+     global: {
+       lines: 70,
+diff --git a/src/api/package.json b/src/api/package.json
+index f802533e..1745f64b 100644
+--- a/src/api/package.json
++++ b/src/api/package.json
+@@ -7,7 +7,7 @@
+     "dev": "node ../../scripts/dev/run-api.mjs",
+     "build": "nest build",
+     "lint": "tsc --noEmit",
+-    "test": "jest --forceExit",
++    "test": "jest --coverage --forceExit",
+     "migrate": "node ../../scripts/dev/run-migrate.mjs"
+   },
+   "dependencies": {
+diff --git a/src/desktop/jest.config.js b/src/desktop/jest.config.js
+index c57e4925..85ae477b 100644
+--- a/src/desktop/jest.config.js
++++ b/src/desktop/jest.config.js
+@@ -9,6 +9,10 @@ module.exports = {
+     ...tsJestTransformCfg,
+   },
+   testPathIgnorePatterns: ["/node_modules/", "/dist/"],
++  // V8 coverage provider: the default "babel" provider instruments via
++  // babel-plugin-istanbul → test-exclude, whose minimatch@3 callable API is
++  // broken by the repo-wide minimatch>=10 override. V8 sidesteps that chain.
++  coverageProvider: "v8",
+   coverageThreshold: {
+     global: {
+       lines: 50,
+diff --git a/src/desktop/package.json b/src/desktop/package.json
+index 01be94b4..193d40d9 100644
+--- a/src/desktop/package.json
++++ b/src/desktop/package.json
+@@ -8,7 +8,7 @@
+     "lint": "tsc --noEmit",
+     "preview": "vite preview",
+     "tauri": "tauri",
+-    "test": "jest"
++    "test": "jest --coverage"
+   },
+   "dependencies": {
+     "lucide-react": "^1.17.0",
+diff --git a/src/mobile/jest.config.js b/src/mobile/jest.config.js
+index 4f96562b..4e7f6234 100644
+--- a/src/mobile/jest.config.js
++++ b/src/mobile/jest.config.js
+@@ -19,6 +19,10 @@ module.exports = {
+       "<rootDir>/__mocks__/async-storage.ts",
+     "^react-native$": "<rootDir>/__mocks__/react-native.ts",
+   },
++  // V8 coverage provider: the default "babel" provider instruments via
++  // babel-plugin-istanbul → test-exclude, whose minimatch@3 callable API is
++  // broken by the repo-wide minimatch>=10 override. V8 sidesteps that chain.
++  coverageProvider: "v8",
+   coverageThreshold: {
+     global: {
+       lines: 50,
+diff --git a/src/mobile/package.json b/src/mobile/package.json
+index dd48bae6..54280374 100644
+--- a/src/mobile/package.json
++++ b/src/mobile/package.json
+@@ -7,7 +7,7 @@
+     "start": "react-native start",
+     "build": "tsc --noEmit",
+     "lint": "tsc --noEmit",
+-    "test": "jest"
++    "test": "jest --coverage"
+   },
+   "dependencies": {
+     "@react-native-async-storage/async-storage": "3.1.1",
+diff --git a/src/test-harness/package.json b/src/test-harness/package.json
+index 9e159d39..dfb78022 100644
+--- a/src/test-harness/package.json
++++ b/src/test-harness/package.json
+@@ -10,7 +10,7 @@
+   },
+   "scripts": {
+     "build": "tsc",
+-    "test": "vitest",
++    "test": "vitest run",
+     "lint": "tsc --noEmit",
+     "audit": "tsx src/index.ts"
+   },
+diff --git a/src/web/jest.config.js b/src/web/jest.config.js
+index b7920c74..1f8b32ea 100644
+--- a/src/web/jest.config.js
++++ b/src/web/jest.config.js
+@@ -15,6 +15,10 @@ module.exports = {
+   testPathIgnorePatterns: ["/node_modules/", "/.next/"],
+   modulePathIgnorePatterns: ["<rootDir>/.next/"],
+   watchPathIgnorePatterns: ["<rootDir>/.next/"],
++  // V8 coverage provider: the default "babel" provider instruments via
++  // babel-plugin-istanbul → test-exclude, whose minimatch@3 callable API is
++  // broken by the repo-wide minimatch>=10 override. V8 sidesteps that chain.
++  coverageProvider: "v8",
+   coverageThreshold: {
+     global: {
+       lines: 40,
+diff --git a/src/web/package.json b/src/web/package.json
+index a1b0757a..af168128 100644
+--- a/src/web/package.json
++++ b/src/web/package.json
+@@ -6,7 +6,7 @@
+     "build": "next build",
+     "lint": "tsc --noEmit",
+     "start": "next start",
+-    "test": "jest"
++    "test": "jest --coverage"
+   },
+   "dependencies": {
+     "lucide-react": "^1.17.0",

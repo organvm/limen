@@ -1,0 +1,1660 @@
+diff --git a/.env.example b/.env.example
+index 536c5650..1344edec 100644
+--- a/.env.example
++++ b/.env.example
+@@ -134,16 +134,16 @@ SENTRY_DSN=
+ # also update every propagation target. The full propagation map and migration
+ # plan live in:
+ #   docs/planning/planning--styx-sequence-b-a-c--canonical-domain-standup--2026-05-17.md
+-CANONICAL_DOMAIN=
+-PROJECT_NAME=
+-MOBILE_BUNDLE_ID=
+-DEEP_LINK_SCHEME=
+-CONTACT_EMAIL_DOMAIN=
+-RENDER_API_SERVICE_NAME=
+-RENDER_WEB_SERVICE_NAME=
++CANONICAL_DOMAIN=styx.app
++PROJECT_NAME=Styx
++MOBILE_BUNDLE_ID=com.styxprotocol.app
++DEEP_LINK_SCHEME=styx
++CONTACT_EMAIL_DOMAIN=styx.app
++RENDER_API_SERVICE_NAME=styx-api
++RENDER_WEB_SERVICE_NAME=styx-web
+ # NOTE: README.md:5 badge cites organvm-iii-ergon/ namespace; git remote is
+ # a-organvm/. Divergence surfaced 2026-05-17 by env-var consolidation. The
+ # git remote is authoritative (it determines where pushes go). The README
+ # badge is stale and should be migrated. Until then: the value below matches
+ # the git remote.
+-CANONICAL_REPO_URL=
++CANONICAL_REPO_URL=https://github.com/a-organvm/peer-audited--behavioral-blockchain
+diff --git a/docs/decisions/005_weekly_live_sessions.md b/docs/decisions/005_weekly_live_sessions.md
+new file mode 100644
+index 00000000..aecde247
+--- /dev/null
++++ b/docs/decisions/005_weekly_live_sessions.md
+@@ -0,0 +1,34 @@
++# ADR 005: Weekly Live Sessions — In-App Scheduling vs External Operational Cadence
++
++## Status
++Accepted
++
++## Context
++As part of our customer success and community engagement efforts, we host weekly live sessions. We need to decide how users will discover, schedule, and join these sessions. 
++The two main options are:
++1. **In-app scheduling:** Build custom calendar views, RSVP logic, timezone conversions, and reminder notifications directly into the Styx application.
++2. **External operational cadence:** Use existing external tools (e.g., Google Calendar, Calendly, Zoom, Luma, or Slack) to manage the operational cadence of these live sessions, providing simple links from within the application or via email.
++
++Building scheduling and calendar management from scratch is notoriously complex due to timezone handling, sync issues with personal calendars, and reminder deliverability. However, having it in-app keeps the user within our ecosystem.
++
++## Decision
++We will use an **external operational cadence** for weekly live sessions instead of building in-app scheduling.
++
++We will rely on standard external tools (e.g., Luma, Calendly, or Google Calendar) to handle event registration, calendar invites, timezone management, and reminder emails. Where necessary, the Styx app will simply link out to the external registration page or provide the Zoom/Meet link directly.
++
++## Consequences
++
++**Positive:**
++- Significant engineering time saved by not building complex scheduling, RSVP, and timezone logic.
++- Users receive standard calendar invites (.ics) that integrate seamlessly with their preferred calendar clients (Google Calendar, Outlook, Apple Calendar).
++- External tools already provide robust, reliable reminder notifications.
++- The team can focus core engineering efforts on the unique value propositions of the Styx platform.
++
++**Negative:**
++- Users must briefly leave the Styx application to register for or add the event to their calendar.
++- Analytics and tracking require integrating data from the external tool back into our systems (e.g., via webhooks) if we want to tie attendance to in-app user behaviour.
++- Less customization over the scheduling UI compared to a fully native integration.
++
++## Alternatives Considered
++- **In-app scheduling built from scratch:** Rejected due to high development and maintenance costs (timezones, ICS generation, reminder emails).
++- **Embedded external widgets:** Considered as a middle ground. We may revisit embedding an external widget (like Calendly) in the future if dropping users out of the app becomes an issue, but for now, simple external links are sufficient.
+diff --git a/docs/evidence/beta_readiness_run_1.txt b/docs/evidence/beta_readiness_run_1.txt
+new file mode 100644
+index 00000000..50a006c0
+--- /dev/null
++++ b/docs/evidence/beta_readiness_run_1.txt
+@@ -0,0 +1,82 @@
++
++-------------------------------------------
++  Styx Beta Readiness
++  Profile: beta
++  Require targets: false
++-------------------------------------------
++
++
++--- STARTING VALIDATION GATE 04: REDACTED BUILD CHECK ---
++[ANALYSIS] Scanning /Users/4jp/styx/src/web/app for restricted terms...
++  - Checking for 'bet'... Clean.
++  - Checking for 'gamble'... Clean.
++  - Checking for 'wager'... Clean.
++[ANALYSIS] Scanning /Users/4jp/styx/src/web/components for restricted terms...
++  - Checking for 'bet'... Clean.
++  - Checking for 'gamble'... Clean.
++  - Checking for 'wager'... Clean.
++[ANALYSIS] Scanning /Users/4jp/styx/src/web/store for restricted terms...
++  - Checking for 'bet'... Clean.
++  - Checking for 'gamble'... Clean.
++  - Checking for 'wager'... Clean.
++[ANALYSIS] Scanning /Users/4jp/styx/src/web/services for restricted terms...
++  - Checking for 'bet'... Clean.
++  - Checking for 'gamble'... Clean.
++  - Checking for 'wager'... Clean.
++[ANALYSIS] Scanning /Users/4jp/styx/src/desktop/src for restricted terms...
++  - Checking for 'bet'... Clean.
++  - Checking for 'gamble'... Clean.
++  - Checking for 'wager'... Clean.
++[ANALYSIS] Scanning /Users/4jp/styx/src/mobile/screens for restricted terms...
++  - Checking for 'bet'... Clean.
++  - Checking for 'gamble'... Clean.
++  - Checking for 'wager'... Clean.
++[ANALYSIS] Scanning /Users/4jp/styx/src/mobile/components for restricted terms...
++  - Checking for 'bet'... Clean.
++  - Checking for 'gamble'... Clean.
++  - Checking for 'wager'... Clean.
++[ANALYSIS] Scanning /Users/4jp/styx/src/mobile/services for restricted terms...
++  - Checking for 'bet'... Clean.
++  - Checking for 'gamble'... Clean.
++  - Checking for 'wager'... Clean.
++[ANALYSIS] Scanning /Users/4jp/styx/src/pitch/src for restricted terms...
++  - Checking for 'bet'... Clean.
++  - Checking for 'gamble'... Clean.
++  - Checking for 'wager'... Clean.
++✅ GATE 04 PASSED: No banned lexicon found. The build is safe for App Store / Payment Processor heuristic review.
++
++--- STARTING VALIDATION GATE 06: SECURITY INVARIANT CHECK ---
++
++Scanned 6 files across 2 build directories + source guards.
++
++⏭️  GATE 06 SKIPPED: no build output present to scan (src/api/dist, src/web/.next). Run after a build to enforce.
++Claim drift check passed (59 inline code references scanned).
++[OK] File docs/legal/privacy-policy.md contains CONTACT_EMAIL_DOMAIN ('privacy@styx.app')
++[OK] File docs/departments/b2b/artifacts/outreach-sequences.md contains CONTACT_EMAIL_DOMAIN ('partners@styx.app')
++[OK] File src/mobile/ios/Styx/Info.plist contains MOBILE_BUNDLE_ID ('<string>com.styxprotocol.app</string>')
++[OK] File src/mobile/ios/Styx/Info.plist contains DEEP_LINK_SCHEME ('<string>styx</string>')
++[OK] File src/mobile/ios/Styx.xcodeproj/project.pbxproj contains MOBILE_BUNDLE_ID ('PRODUCT_BUNDLE_IDENTIFIER = "com.styxprotocol.app";')
++[OK] File src/mobile/android/app/build.gradle contains MOBILE_BUNDLE_ID ('applicationId 'com.styxprotocol.app'')
++[OK] File src/mobile/android/app/build.gradle contains MOBILE_BUNDLE_ID (namespace) ('namespace 'com.styxprotocol.app'')
++[OK] File src/mobile/android/app/src/main/AndroidManifest.xml contains DEEP_LINK_SCHEME ('android:scheme="styx"')
++[OK] File docs/legal/terms-of-service.md contains CONTACT_EMAIL_DOMAIN ('legal@styx.app')
++[OK] File render.yaml contains RENDER_API_SERVICE_NAME ('name: styx-api')
++[OK] File render.yaml contains RENDER_WEB_SERVICE_NAME ('name: styx-web')
++[OK] File .config/docker/docker-compose.yml contains RENDER_API_SERVICE_NAME ('styx-api:')
++[OK] File .config/docker/docker-compose.yml contains RENDER_WEB_SERVICE_NAME ('styx-web:')
++[OK] File .config/ngrok/ngrok_app.yml contains RENDER_API_SERVICE_NAME ('styx-api-tunnel:')
++[OK] File .config/ngrok/ngrok_app.yml contains RENDER_WEB_SERVICE_NAME ('styx-web-tunnel:')
++[OK] File .claude/agents/ops/CONTEXT.md contains RENDER_API_SERVICE_NAME ('styx-api')
++[OK] File .claude/agents/ops/CONTEXT.md contains RENDER_WEB_SERVICE_NAME ('styx-web')
++[OK] File README.md contains CANONICAL_REPO_URL ('https://github.com/a-organvm/peer-audited--behavioral-blockchain')
++[SUCCESS] All brand propagation checks passed.
++
++-------------------------------------------
++  Beta Readiness Summary
++  Passed:  3
++  Failed:  0
++  Skipped: 2
++  Overall: incomplete
++  Artifact: /Users/4jp/styx/artifacts/beta-readiness-summary.json
++-------------------------------------------
++
+diff --git a/docs/legal/legal--50-state-skill-contest-survey.md b/docs/legal/50_state_skill_contest_survey.md
+similarity index 100%
+rename from docs/legal/legal--50-state-skill-contest-survey.md
+rename to docs/legal/50_state_skill_contest_survey.md
+diff --git a/docs/legal/artifact_appendices.md b/docs/legal/artifact_appendices.md
+new file mode 100644
+index 00000000..30bb46f2
+--- /dev/null
++++ b/docs/legal/artifact_appendices.md
+@@ -0,0 +1,112 @@
++---
++artifact_id: LEGAL-APPENDICES
++title: "Legal Artifact Appendices"
++date: "2026-06-16"
++status: "draft"
++---
++
++# Legal Artifact Appendices
++
++This document consolidates key artifacts for legal review, including the FBO fund flow diagram, Terms of Service markup mapping, and counsel submission checklists.
++
++## Appendix A: FBO Architecture Diagram
++
++This diagram visualizes the zero-custody / FBO structure described in the parent legal documents. It is designed for counsel review, Stripe risk review, and internal alignment on which entity touches funds and which entity only records or instructs.
++
++```mermaid
++flowchart LR
++    U[User]
++    S[Stripe Checkout / PaymentIntent]
++    F[FBO Account at Partner Bank]
++    A[Styx API / Rules Engine]
++    L[PostgreSQL Ledger + Truth Log]
++    P[User Payout Method]
++    B[Fury Bounty Pool]
++    R[Platform Revenue]
++    X[Reconciliation / Audit Reports]
++
++    U -->|Authorize deposit| S
++    S -->|Settle funds| F
++    S -->|Webhook confirmation| A
++    A -->|Record immutable events| L
++    A -->|Issue payout / release / fee instructions| S
++    F -->|Successful completion payout| P
++    F -->|Forfeiture distribution| B
++    F -->|Platform fee| R
++    F -->|Balance report| X
++    L -->|Compare balances| X
++```
++
++### Control Notes
++
++| Flow leg | Operational meaning | Legal significance |
++| --- | --- | --- |
++| User -> Stripe Checkout / PaymentIntent | User authorizes deposit or hold | Styx does not receive raw card or bank credentials |
++| Stripe -> Partner Bank FBO | Funds settle into segregated FBO custody | Supports zero-custody and bank-centric exemption framing |
++| Styx API -> Ledger / Truth Log | Styx records the event and state transition | Styx is the control plane, not the custodian |
++| Styx API -> Stripe transfer instruction | Styx sends release / payout / fee instruction after verified outcome | Keeps payout logic deterministic and auditable |
++| FBO -> User payout method | Funds return directly to user on success or refund trigger | Avoids commingling with Styx operating funds |
++| FBO -> Bounty / fee allocation | Forfeited funds and service fees split per published rules | Preserves disclosed allocation logic and auditability |
++| Reconciliation loop | Stripe balances compared to internal ledger | Required to prove custody boundaries stay clean over time |
++
++## Appendix B: Terms of Service Markup Notes
++
++This section annotates the current Terms of Service draft with the guardrails it implements. The goal is to make the claim-to-clause relationship explicit before outside review.
++
++| ToS clause | Clause function | Aegis / Recovery source | Why it matters |
++| --- | --- | --- | --- |
++| `§ 2.1 Styx Is Not Gambling` | Declares deposit-contract framing and user-control theory | Aegis § 2.1-2.2; skill-based whitepaper §§ 1-2 | Preserves the core skill-over-chance positioning |
++| `§ 3.1 Age Requirement` | 18+ eligibility promise | Aegis § 3.1 | Supports contract-capacity and youth-protection arguments |
++| `§ 3.2 Geographic Restriction` | US-only access + anti-circumvention rule | Aegis § 2.3, § 6; blocklist appendix | Supports any-chance and jurisdiction-risk mitigation |
++| `§ 3.3 Identity Verification` | Reserves KYC rights and threshold gating | Real-money brief § 5 | Aligns the ToS with staged financial onboarding |
++| `§ 4.5 Settlement` | Defines success, failure, and dispute outcomes | Aegis § 4.2-4.3 | Makes the money path deterministic and reviewable |
++| `§ 4.6 Biological / Recovery protocols` | Encodes BMI, velocity, and no-contact safeguards | Aegis § 3.2-3.4; Recovery Protocol | Moves health and anti-isolation controls into contract language |
++| `§ 6.1 Escrow Structure` | States FBO segregation and non-commingling | Aegis § 4.1-4.3; Appendix A | Reinforces zero-custody and processor-facing consistency |
++| `§ 7 Prohibited Conduct` | Bars fraud, collusion, circumvention, and health-dangerous use | Aegis § 3, § 5 | Gives an enforcement hook for the operational guardrails |
++| `§ 10 Limitation of Liability` | Allocates residual health and platform risk | Aegis risk-register links | Does not replace safety controls, but narrows exposure |
++
++### Counsel Review Targets
++
++1. Confirm that `§ 3.2 Geographic Restriction` matches the actual launch-state blocklist and does not overstate enforcement.
++2. Confirm that `§ 3.3 Identity Verification` matches the staged KYC thresholds in the real-money brief.
++3. Confirm that `§ 4.6` adequately distinguishes Biological guardrails from Recovery guardrails.
++4. Confirm that `§ 6.1` and `§ 6.3` align with the actual Stripe Connect / FBO fee split and refund logic.
++5. Confirm that liability and arbitration sections do not undermine consumer-protection representations elsewhere in the packet.
++
++## Appendix C: Compliance Checklists
++
++This checklist operationalizes the counsel package. It is ordered to match the likely review flow for outside counsel and processor risk teams.
++
++### Packet Assembly
++
++- [ ] Real-money activation brief included
++- [ ] Skill-based contest whitepaper included
++- [ ] Aegis Protocol included
++- [ ] Gatekeeper compliance memo included
++- [ ] Cross-jurisdictional consent matrix included
++- [ ] Terms of Service draft included
++- [ ] Privacy Policy draft included
++- [ ] Regulatory risk register included
++
++### Counsel Questions
++
++- [ ] Confirm skill-based contest classification in target launch states
++- [ ] Confirm FBO structure and AOTP framing reduce or eliminate MTL risk
++- [ ] Confirm UIGEA exclusion theory for self-competition model
++- [ ] Confirm state blocklist is sufficient for launch
++- [ ] Confirm KYC tier thresholds
++- [ ] Confirm tax reporting obligations
++- [ ] Confirm disclosure language for real-money activation
++
++### Processor / App-Store Package Readiness
++
++- [ ] Stripe risk packet includes Appendix A (FBO diagram)
++- [ ] App Review note packet includes screenshot mockups
++- [ ] Terms markup issues from counsel are back-propagated into `terms-of-service.md`
++- [ ] Launch-state decisions are synced back into the state blocklist justification table and main legal docs
++
++### Final Release Gate
++
++- [ ] No unresolved placeholder markers remain in the legal packet
++- [ ] Parent docs point to concrete appendix paths
++- [ ] Artifact filenames are stable enough for external sharing
+diff --git a/docs/legal/bipa_classification.md b/docs/legal/bipa_classification.md
+new file mode 100644
+index 00000000..f7ad0414
+--- /dev/null
++++ b/docs/legal/bipa_classification.md
+@@ -0,0 +1,51 @@
++# BIPA Classification for Wearable Data
++
++## Executive Summary
++This document analyzes the implications of the Illinois Biometric Information Privacy Act (BIPA) on Styx's use of wearable data (via Apple HealthKit and Google Health Connect) for goal verification. Based on current BIPA definitions and case law, standard wearable fitness data (steps, heart rate, sleep) does **not** classify as a biometric identifier under BIPA. However, any collection of facial geometry (e.g., via photo verification) or advanced physiological metrics that could be used to uniquely identify an individual requires strict compliance with BIPA's notice and consent requirements.
++
++## 1. Regulatory Context: Illinois BIPA
++The Illinois Biometric Information Privacy Act (740 ILCS 14/) regulates the collection, use, safeguarding, and storage of biometric information. It provides a private right of action, making it a high-risk compliance area for technology platforms operating in or collecting data from Illinois residents.
++
++### Defined Terms under BIPA
++*   **Biometric Identifier:** Strictly defined as a "retina or iris scan, fingerprint, voiceprint, or scan of hand or face geometry."
++*   **Biometric Information:** Any information, regardless of how it is captured, converted, stored, or shared, based on an individual's biometric identifier used to identify an individual.
++
++### Statutory Exclusions
++BIPA explicitly excludes:
++*   Writing samples, written signatures, photographs.
++*   Physical descriptions (e.g., height, weight, hair color, eye color).
++*   Information captured from a patient in a health care setting or protected under HIPAA.
++
++## 2. Styx Wearable Data Analysis
++Styx integrates with Apple HealthKit and Google Health Connect to verify goal completions (e.g., steps, workouts, sleep). 
++
++### Health and Fitness Metrics (Steps, Heart Rate, Sleep)
++**Classification: Not Biometric Data.**
++Standard fitness metrics collected by wearables—such as step counts, generic heart rate data (BPM), and sleep duration—do not fall under BIPA's exhaustive list of biometric identifiers. They are not scans of facial geometry, fingerprints, voiceprints, or retinal scans.
++
++### Physical Characteristics (Weight, Height)
++**Classification: Explicitly Excluded.**
++Styx may collect weight and height data for health goal verification. BIPA Section 10 expressly excludes "physical descriptions such as height, weight, hair color, or eye color" from the definition of biometric identifiers.
++
++### Photo Proof and Facial Recognition Risk
++**Classification: Potential Risk Area.**
++While BIPA excludes ordinary "photographs," if Styx employs facial recognition, liveness detection, or any automated scan of facial geometry to verify the user in the photo proof pipeline, this **would** constitute collection of a biometric identifier.
++*Current Styx Policy:* Photo proof relies on manual review, peer attestation, and EXIF/GPS metadata, not automated facial geometry scanning.
++
++### Emerging Wearable Tech (Gait Analysis, EKG)
++**Classification: Gray Area / Unlikely BIPA Application.**
++Some modern wearables can capture unique gait patterns or single-lead EKGs. While currently not recognized as biometric identifiers under BIPA's strict statutory language (which specifies hand/face geometry, fingerprints, etc.), plaintiffs' attorneys frequently attempt to expand BIPA's scope. Styx should avoid using any wearable data for the explicit purpose of *uniquely authenticating or identifying* the user based on physiological patterns.
++
++## 3. Washington My Health My Data Act (MHMDA) Distinction
++While BIPA focuses narrowly on biometrics, the Washington My Health My Data Act (MHMDA) broadly regulates consumer health data, including data from wearables. As noted in the 50-State Skill Contest Survey (`docs/legal/50_state_skill_contest_survey.md`), MHMDA poses a separate and immediate compliance burden for wearable data in Washington State. BIPA and MHMDA require distinct compliance strategies.
++
++## 4. Compliance Recommendations for Styx
++Although Styx's current wearable data collection does not trigger BIPA, best practices dictate the following guardrails to mitigate future risk and address overlapping privacy laws (e.g., CCPA, MHMDA):
++
++1.  **Strictly Limit Data Use:** Use wearable data (HealthKit, Google Health Connect) exclusively for goal verification and internal analytics. Do not use wearable data for identity verification, user authentication, or advertising.
++2.  **No Facial Recognition:** Do not implement automated facial recognition or facial geometry scanning on user uploaded "proof" photos without first implementing a full BIPA-compliant consent flow.
++3.  **Explicit Consent:** Maintain the planned distinct consent flow for HealthKit/Google Fit access (as outlined in the App Store UGC Moderation Packet). While not strictly required by BIPA for step counts, it fulfills Apple/Google guidelines and mitigates broader privacy risks.
++4.  **Data Retention Policy:** Implement and publish a written data retention schedule and destruction guidelines for all user data, aligning with BIPA's requirement to destroy data when the initial purpose has been satisfied or within 3 years of the user's last interaction.
++
++## Conclusion
++Styx's collection of wearable data (steps, heart rate, sleep, weight) via HealthKit and Google Health Connect does not trigger the Illinois Biometric Information Privacy Act (BIPA). The data types fall outside the statutory definition of "biometric identifier." However, Styx must ensure that its photo proof verification pipeline does not inadvertently scan facial geometry, and it must comply with other applicable state laws like Washington's MHMDA that specifically target consumer health and wearable data.
+diff --git a/docs/legal/case_law_coverage.md b/docs/legal/case_law_coverage.md
+new file mode 100644
+index 00000000..d7bbad51
+--- /dev/null
++++ b/docs/legal/case_law_coverage.md
+@@ -0,0 +1,78 @@
++# Case Law Coverage: Behavioral Blockchain Legal Precedents
++
++This document details 22 relevant legal cases that form the jurisprudential foundation for the Styx behavioral blockchain, focusing on skill-based contests, daily fantasy sports, and related regulatory classifications.
++
++## 1. Games of Skill and the Predominance Test
++
++**1. Las Vegas Hacienda, Inc. v. Gibson, 359 P.2d 85 (Nev. 1961)**
++Established the "hole-in-one" precedent, determining that a contest where the outcome depends on a participant's skill rather than chance is not illegal gambling. This is foundational for classifying personal commitment mechanisms where the user's effort dictates the outcome.
++
++**2. State v. Prevo, 44 Haw. 665 (Haw. 1961)**
++A classic articulation of the "dominant factor" or "predominance" test. If skill predominates over chance in determining the outcome of a game, it is classified as a game of skill, exempt from standard gambling prohibitions.
++
++**3. D'Orio v. State, 212 Ind. 597 (Ind. 1937)**
++Ruled that a game requires a dominant element of chance to be considered gambling. A game predominantly dependent on the skill of the player does not fall under the statutory definition of lottery or gambling.
++
++**4. Morrow v. State, 511 P.2d 127 (Alaska 1973)**
++Applied the dominant factor test, recognizing that some element of chance is present in almost all human endeavors, but it is the *dominance* of skill that exempts a contest from gambling laws.
++
++**5. State v. Hahn, 122 Wash. 2d 418 (Wash. 1993)**
++Affirmed that the characterization of a game depends on whether the participants exert significant control over the outcome through skill, knowledge, or effort, rather than relying on fortuitous events.
++
++**6. State v. Rosenthal, 559 P.2d 830 (Nev. 1977)**
++Explored the regulatory scope of gaming control boards, emphasizing that activities requiring a high degree of participant control and skill do not automatically trigger the same regulatory scrutiny as pure games of chance.
++
++## 2. Daily Fantasy Sports (DFS) and Skill-Based Online Contests
++
++**7. Dew-Becker v. Wu, 2020 IL 124472 (Ill. 2020)**
++The Illinois Supreme Court determined that head-to-head daily fantasy sports contests are games of skill because the outcome relies on the participants' knowledge and statistical analysis, thus exempting them from the state's gambling prohibitions.
++
++**8. Humphrey v. Viacom, Inc., 2007 WL 1797648 (D.N.J. 2007)**
++Ruled that entry fees paid to participate in fantasy sports contests where the outcome depends primarily on the participants' skill do not constitute illegal wagers or bets.
++
++**9. FanDuel, Inc. v. Attorney General, No. 16-1079 (Mass. Super. Ct. 2016)**
++Addressed the legality of DFS under state law, leading to a regulatory settlement that established consumer protection frameworks for skill-based gaming rather than classifying it as illegal gambling.
++
++**10. White v. Cuomo, 38 N.Y.3d 311 (N.Y. 2022)**
++The New York Court of Appeals upheld the constitutionality of a state law authorizing interactive fantasy sports, concluding that the contests do not constitute "gambling" under the state constitution because outcomes depend on participants' skill.
++
++**11. Langone v. Kaiser, 2016 WL 7104331 (N.D. Ill. 2016)**
++Federal court ruled against claims seeking recovery of DFS losses under the Illinois Loss Recovery Act, finding that DFS contests were games of skill, foreshadowing the Dew-Becker decision.
++
++## 3. Regulatory Boundaries and Exceptions
++
++**12. Commonwealth v. Dent, 2014 PA Super 218 (Pa. Super. Ct. 2014)**
++Ruled that Texas Hold'em poker is predominantly a game of skill, though this classification often varies by jurisdiction and the specific statutory text involved.
++
++**13. Interactive Games LLC v. Commonwealth, No. 2016-CA-001458 (Ky. Ct. App. 2018)**
++Examined the mechanics of online gaming platforms, reinforcing the principle that statutory definitions of gambling strictly require the elements of prize, chance, and consideration.
++
++**14. Joker Club v. Hardin, 643 S.E.2d 626 (N.C. Ct. App. 2007)**
++Addressed whether poker clubs constituted illegal gambling enterprises, underscoring the legal friction points when skill-based games are commercialized and the house takes a rake.
++
++**15. Toomey v. Murphy, 242 App. Div. 446 (N.Y. 1934)**
++An early case establishing the necessity of the elements of consideration, chance, and a prize to constitute a lottery. Without the element of chance dominating, the scheme is a legal contest.
++
++**16. People v. World Interactive Gaming Corp., 714 N.Y.S.2d 844 (N.Y. Sup. Ct. 1999)**
++Asserted state jurisdiction over internet gambling operations that accept bets from state residents, highlighting the importance of geo-blocking and state-by-state compliance for online platforms.
++
++**17. In re Masterlobos, Inc., No. GCB-14-0015 (Ariz. Dep't of Gaming 2014)**
++An administrative decision clarifying the strict interpretation of "chance" in Arizona, which led to the state historically being a restricted jurisdiction for many skill-based platforms.
++
++## 4. Broader Context: Sports Wagering and Virtual Assets
++
++**18. Murphy v. NCAA, 584 U.S. 453 (2018)**
++Struck down the Professional and Amateur Sports Protection Act (PASPA), returning the authority to regulate sports betting to the states. This opened the door for states to clearly differentiate and regulate both sports betting and skill-based contests.
++
++**19. SEC v. W.J. Howey Co., 328 U.S. 293 (1946)**
++The foundational "Howey Test" used to determine whether an instrument or transaction qualifies as an "investment contract" and thus a security. Relevant to Styx’s token economic models.
++
++**20. SEC v. Ripple Labs, Inc., 20-cv-10832 (S.D.N.Y. 2023)**
++Clarified that digital assets are not inherently securities, but their manner of sale and distribution dictates securities law application. Key for behavioral staking and token distributions.
++
++**21. Commodity Futures Trading Commission v. McDonnell, 287 F. Supp. 3d 213 (E.D.N.Y. 2018)**
++Ruled that virtual currencies can be regulated as "commodities" under the CEA, giving the CFTC jurisdiction over fraud in crypto markets, affecting how Styx might manage event-based contracts.
++
++**22. Thole v. U. S. Bank N.A., 140 S. Ct. 1615 (2020)**
++Addressed fiduciary injury definitions. This is relevant for analyzing smart contracts that act as automated, non-discretionary escrows against claims of fiduciary duty breach or mismanagement.
++
+diff --git a/docs/legal/dfs_regulatory_mapping.md b/docs/legal/dfs_regulatory_mapping.md
+new file mode 100644
+index 00000000..40cb11bc
+--- /dev/null
++++ b/docs/legal/dfs_regulatory_mapping.md
+@@ -0,0 +1,80 @@
++# Styx Mechanics vs. State DFS Regulatory Frameworks
++
++This document maps the core mechanics of the **Styx** platform against the regulatory frameworks enforced by state-level Departments of Financial Services (DFS) or their equivalent financial regulatory bodies across all 50 U.S. states. 
++
++Given the complexity of 50 independent jurisdictions, states are grouped by their regulatory posture toward money transmission, escrow, consumer protection, and behavioral contracts.
++
++## 1. Core Mechanics & Regulatory Implications
++
++| Styx Mechanic | Primary Regulatory Concern | Implicated State Frameworks |
++| --- | --- | --- |
++| **Double-Entry Ledger & Stripe FBO Escrow** | Custody of funds, Money Transmitter Licenses (MTL), Escrow Agency laws. | Money Transmission Acts, Escrow Licensing Laws. |
++| **The Fury Bounty (Financial Incentives)** | KYC/AML, Peer-to-peer payouts, independent contractor tax reporting. | Bank Secrecy Act (State enforcement), MTL rules. |
++| **The Recovery Protocol (Financial Stakes)** | Distinction between gaming/gambling (illegal/regulated) and surety/escrowed behavior contracts. | State Gaming Commissions, Consumer Protection Laws. |
++| **The Aegis Protocol (Guardrails & Penalties)** | Unfair, Deceptive, or Abusive Acts or Practices (UDAAP), liquidated damages vs. punitive fees. | State UDAAP equivalents. |
++| **Digital Exhaust Verification** | Data privacy, electronic communications privacy, PII retention. | CCPA/CPRA (CA), NY SHIELD Act, State Wiretap Acts. |
++
++---
++
++## 2. State Groupings & Regulatory Mapping
++
++### Group 1: Stringent / High Scrutiny States
++**States:** New York (NYDFS), California (DFPI), Texas (DOB), Washington (DFI), Illinois (IDFPR), Nevada (FID).
++*These states possess the most rigorous financial licensing requirements, particularly concerning consumer funds and data privacy.*
++
++* **Ledger & Escrow**: 
++  * Styx's use of Stripe FBO accounts is highly scrutinized here. States like California (DFPI) and New York (NYDFS) require strict verification that the FBO structure fully exempts Styx from needing a direct Money Transmitter License (MTL) or Escrow Law license.
++  * *NYDFS specific*: If any virtual currency were ever used, a BitLicense would be required. NYDFS Cybersecurity Regulation (23 NYCRR 500) strictly applies if Styx holds an MTL.
++* **The Recovery Protocol (Stakes)**: 
++  * High risk of being categorized as unregulated insurance, a surety bond, or illegal gaming. Styx must position stakes as "liquidated damages" within a bilateral behavioral contract.
++* **Digital Exhaust Verification**:
++  * California's CPRA demands strict opt-in/opt-out for PII analysis. Washington's My Health My Data Act may trigger if any psychological/behavioral data is construed as health data. All electronic communication analysis must comply with two-party consent wiretap laws (CA, WA, IL).
++* **Aegis Protocol**: 
++  * Age gates (18+) are legally mandatory. Texas DOB and NYDFS strictly enforce UDAAP; dynamic penalty scaling must not be deemed "predatory."
++
++### Group 2: Moderate Regulatory Environments
++**States:** Florida (OFR), Pennsylvania (DOB), Ohio (DFI), Michigan (DIFS), New Jersey (DOBI), Massachusetts (DOB), Virginia (SCC), Georgia (DBF), North Carolina (OCOB), Colorado (DORA), Oregon (DFR), Maryland (OFR).
++*These states have standard MTL regimes and consumer protection laws, but generally align with federal frameworks (NMLS) without adding excessively unique state-level hurdles.*
++
++* **Ledger & Escrow**: 
++  * Styx must rely on the "agent of the payee" exemption or strict FBO exemptions under state money transmission acts. Florida and Pennsylvania actively audit FBO structures.
++* **The Fury Bounty**: 
++  * Paying out bounties requires adherence to state-level AML rules. Bounty hunters (whistleblowers) must pass KYC checks if payouts exceed state thresholds.
++* **The Recovery Protocol (Stakes)**:
++  * Must avoid the definition of "prize promotions" or "sweepstakes." Because stakes rely on the user's *own* actions (or failure thereof), it generally avoids the "chance" element of gambling, but clear Terms of Service are required.
++* **Digital Exhaust Verification**: 
++  * Colorado (CPA) and Virginia (VCDPA) require comprehensive data protection assessments for processing sensitive data, such as behavioral profiles or communication logs.
++
++### Group 3: Consumer Finance-Focused States
++**States:** Connecticut (DOB), Rhode Island (DBR), Vermont (DFR), Maine (BFI), New Hampshire (BD), Minnesota (Commerce), Wisconsin (DFI), Iowa (DOB), Missouri (DOF), Kansas (OSBC), Nebraska (DOB), Indiana (DFI).
++*These states historically heavily regulate lending and consumer finance. While Styx is not a lender, the "dynamic penalty scaling" might trigger scrutiny.*
++
++* **Aegis Protocol & Recovery Stakes**: 
++  * Penalties or loss of stakes cannot resemble "interest" or "usury." Styx must clearly define lost stakes as non-refundable deposits tied to a specific contractual failure, not a loan default.
++* **The Fury Bounty**:
++  * Scrutinized to ensure the bounty system does not create a predatory market. Whistleblower incentives must be framed as "audit rewards" rather than debt collection or punitive enforcement.
++* **Ledger & Escrow**:
++  * Escrow exemptions typically apply, provided Styx never takes beneficial ownership of the staked funds. The Double-Entry Ledger must clearly separate operational funds from user stakes.
++
++### Group 4: Lax / Innovation-Friendly / Sandbox States
++**States:** Wyoming (DOB), South Dakota (DLR), Utah (DFI), Arizona (DIFI), Idaho (DOF), Montana (DOB), North Dakota (DFI), Oklahoma (OBD), Arkansas (SBD), Tennessee (DFI), South Carolina (BOFI), Alabama (SBD), Mississippi (DBF), Louisiana (OFI), Kentucky (DFI), West Virginia (DFI), Delaware (OSBC), Alaska (DBF), Hawaii (DFI), New Mexico (FID).
++*These states either have fintech sandbox programs, lack a state income tax, or generally apply a lighter regulatory touch to new financial models.*
++
++* **Ledger & Escrow**: 
++  * States like Wyoming and Utah offer Fintech Sandboxes that Styx could leverage for early regulatory safe harbors regarding the FBO/MTL models.
++  * Montana and South Dakota have less restrictive money transmission thresholds.
++* **The Fury Bounty**: 
++  * Lower regulatory friction for peer-to-peer payments, though federal BSA/AML still applies.
++* **Digital Exhaust Verification**: 
++  * Predominantly single-party consent states for recording/communications (except roughly 11 states nationally). Analyzing digital exhaust is legally safer here.
++* **Aegis Protocol**: 
++  * Consumer protection is enforced, but "freedom of contract" is highly deferred to. As long as users acknowledge the 4-way safety rules (voluntary, no minors, no dependents, no legal obligations), the contracts are highly likely to be upheld.
++
++---
++
++## 3. Recommended Compliance Action Plan
++
++1. **MTL & FBO Strategy (Ledger)**: Commission a formal "No Action" letter strategy for Group 1 states to confirm the Stripe FBO architecture exempts Styx from Money Transmission licensing.
++2. **Gaming & Insurance Legal Opinions (Recovery/Aegis)**: Secure legal opinions in NY, CA, and TX confirming that the behavioral contracts are neither illegal gaming nor unregulated surety bonds.
++3. **Data Privacy & Wiretap Compliance (Digital Exhaust)**: Implement strict two-party consent flows for *all* submitted digital exhaust to globally comply with the most stringent state laws (e.g., California, Washington, Illinois).
++4. **KYC/AML Triggers (Fury Bounty)**: Hardcode KYC requirements into the NestJS backend for any user staking or receiving a bounty, aligning with Federal FinCEN rules to supersede fragmented state thresholds.
+diff --git a/docs/legal/fincen_analysis.md b/docs/legal/fincen_analysis.md
+new file mode 100644
+index 00000000..b3f84bb1
+--- /dev/null
++++ b/docs/legal/fincen_analysis.md
+@@ -0,0 +1,70 @@
++---
++artifact_id: L-FIN-01
++title: "FinCEN & Money Transmitter Regulatory Analysis: FBO Structure"
++date: "2026-06-16"
++version: "1.0.0"
++owner: "agent/legal-support"
++approval_status: "draft"
++citation_format: "bluebook"
++---
++
++# FinCEN & Money Transmitter Regulatory Analysis: FBO Structure
++
++## 1. Executive Summary
++
++This memorandum provides an in-depth legal analysis of the regulatory implications under the Financial Crimes Enforcement Network (FinCEN) and state Money Transmitter Laws (MTLs) regarding Styx's intended use of a "For Benefit Of" (FBO) account structure. As Styx transitions from test-money to real-money operations, holding user funds securely without inadvertently triggering burdensome regulatory classification is paramount. The FBO structure is a recognized method to maintain a separation of ownership, but it requires careful operational and legal structuring to ensure Styx avoids classification as a Money Services Business (MSB).
++
++## 2. Bank Secrecy Act (BSA) and FinCEN Framework
++
++Under the Bank Secrecy Act (BSA) and corresponding FinCEN regulations, a "money transmitter" is a recognized category of Money Services Business (MSB). FinCEN broadly defines a money transmitter as any person that "provides money transmission services" or "is engaged in the transfer of funds." Money transmission services are defined as "the acceptance of currency, funds, or other value that substitutes for currency from one person and the transmission of currency, funds, or value to another location or person by any means."
++
++### 2.1. Substance Over Form
++
++FinCEN applies a "facts and circumstances" or "substance over form" approach. Simply utilizing an FBO account at a regulated bank does not grant an automatic "blanket exemption" from MSB registration. FinCEN evaluates the underlying business model, the platform's control over the movement of funds, and the platform's ability to direct disbursements.
++
++## 3. The FBO Account Structure in Context
++
++An FBO (For Benefit Of) account is established by a non-bank platform (like Styx) at a partner depository institution (a bank). The bank holds the funds for the benefit of the platform’s end users, ensuring the platform does not take legal title to the funds.
++
++### 3.1. Styx's Implementation
++
++Styx leverages Stripe Connect and FBO escrow accounts to hold user funds during a commitment or contest. The core objective is to ensure Styx never takes legal ownership of the users' escrowed funds. Instead, Styx acts as a ledger, issuing API instructions to the payment processor (Stripe) to move funds according to the predefined smart contract or behavioral commitment rules.
++
++## 4. Money Transmitter Exemption Analysis
++
++If Styx exercises independent, discretionary control over the FBO funds, FinCEN and state regulators could classify the platform as a money transmitter. Styx relies on several structural arguments and exemptions to mitigate this risk.
++
++### 4.1. The "Software Provider" or "Ledger" Defense
++
++A common defense for platforms using FBO accounts managed by a licensed payment processor (like Stripe) is that the platform merely provides communication, ledger, and software services, rather than money transmission.
++*   **Analysis:** If Stripe handles the actual acceptance and transmission of funds, and Styx only provides automated API calls based on user-driven events (success/failure of a commitment), Styx functions as a communications layer. Styx must ensure it cannot unilaterally withdraw user funds for its own operational use (other than deducting agreed-upon service fees).
++
++### 4.2. Payment Processor Exemption
++
++FinCEN exempts entities that operate as "payment processors" facilitating payments for goods or services.
++*   **Analysis:** Styx is facilitating behavioral commitments and holding funds in escrow pending a future event. Because this is not a traditional e-commerce transaction for goods/services, relying solely on this exemption is legally risky.
++
++### 4.3. Agent of the Payee Exemption
++
++FinCEN exempts entities acting as an agent of the payee to facilitate the completion of a payment for goods or services.
++*   **Analysis:** Similar to the payment processor exemption, Styx's escrow model does not easily fit the "agent of the payee" mold, because the ultimate payee (either the user themselves upon success, or the designated anti-charity/platform upon failure) is contingent upon future performance.
++
++## 5. State Money Transmitter Laws (MTLs)
++
++State-level MTLs are often broader and more restrictive than FinCEN’s federal definition. State regulators also apply varying interpretations of what constitutes "control" over funds.
++
++*   **The "Control" Standard:** Some states (such as New York, California, and Texas) will look closely at whether Styx has "constructive receipt" or control over the funds. Even if Styx does not have legal title (due to the FBO structure), the ability to direct Stripe to move funds could be deemed constructive control.
++*   **The "No Touch" Model:** By using Stripe Connect, Stripe acts as the licensed money transmitter. Styx must maintain a strict "no touch" policy regarding user funds. The funds must flow directly from the user's funding source to the Stripe-managed FBO account, and out to the payout destination, without ever resting in Styx's corporate operating accounts.
++
++## 6. Required Compliance Obligations & Recommendations
++
++Even if Styx successfully avoids MSB classification via the FBO and Stripe Connect architecture, the partner bank and Stripe will impose strict contractual compliance requirements.
++
++1.  **Strict Fund Segregation:** Styx must not hold or commingle user funds in its corporate operating accounts. The flow of funds must rigidly adhere to the FBO structure.
++2.  **User Agreements & Disclosures:** Styx's Terms of Service must explicitly disclose that all money transmission and custody services are provided by Stripe (and its partner banks), and that Styx acts solely as a software interface providing ledger instructions.
++3.  **Bank Partner AML/KYC:** While Styx may not need an independent FinCEN AML program, Stripe and the FBO bank will require Styx to implement robust Know Your Customer (KYC), Customer Identification Program (CIP), and Anti-Money Laundering (AML) checks before users can deposit real money. This mirrors obligations typically required of MSBs.
++4.  **Avoid Discretionary Disbursements:** Styx's system must execute payouts algorithmically based on transparent, user-agreed rules. Manual intervention by Styx staff to move user funds could imply the type of control that triggers MTL licensure.
++
++## 7. Conclusion
++
++The FBO structure, when combined with a licensed payment processor like Stripe Connect, is a viable architecture for Styx's real-money operations. However, the FBO structure is a tool, not a legal shield. Styx must maintain rigorous technical and legal separation between its corporate funds and user escrow, restrict its role to automated ledger management, and rely on its licensed partners for the actual acceptance and transmission of funds.
+diff --git a/docs/legal/legal--cross-jurisdictional-consent-matrix.md b/docs/legal/legal--cross-jurisdictional-consent-matrix.md
+index 88145acf..e10db117 100644
+--- a/docs/legal/legal--cross-jurisdictional-consent-matrix.md
++++ b/docs/legal/legal--cross-jurisdictional-consent-matrix.md
+@@ -80,7 +80,7 @@ Styx uses multiple verification methods to confirm user commitment completion: p
+ | **New York** | Allowed | Allowed | Allowed | Allowed | Notice + opt-in | Reasonable | N.Y. Gen. Bus. Law § 899-aa (data breach notification). No comprehensive privacy law yet. SHIELD Act imposes security requirements. |
+ | **Texas** | Allowed | Allowed (Non-CUBI) | Allowed | Allowed | Informed consent (TDPSA) | Purpose-limited | CUBI: biometric data requires informed consent. Tex. Bus. & Com. Code § 503.001. Heart rate excluded from narrow statutory list. TDPSA covers heart rate as sensitive data. |
+ | **Washington** | Allowed | Restricted (MHMDA) | Allowed | Allowed | Explicit Opt-in (MHMDA) | Consumer-controlled | My Health My Data Act: heart rate = "consumer health data" + "biometric data" (Section 3). Requires separate consent and absolute deletion right. Wash. Rev. Code § 19.373.005 et seq. |
+-| **AZ, AR, HI, ID, MT, NV, UT** | **Blocked** | **Blocked** | **Blocked** | **Blocked** | N/A | N/A | High-risk jurisdictions blocked via `STYX_STATE_BLOCKLIST`. *See* `docs/legal/legal--50-state-skill-contest-survey.md` for individual state analysis. |
++| **AZ, AR, HI, ID, MT, NV, UT** | **Blocked** | **Blocked** | **Blocked** | **Blocked** | N/A | N/A | High-risk jurisdictions blocked via `STYX_STATE_BLOCKLIST`. *See* `docs/legal/50_state_skill_contest_survey.md` for individual state analysis. |
+ 
+ ### 3.2 International Jurisdictions (Expansion Planning)
+ 
+@@ -396,7 +396,7 @@ The `STYX_STATE_BLOCKLIST` environment variable defines states where the platfor
+ 
+ **Current blocklist:** `STYX_STATE_BLOCKLIST=AZ,AR,HI,ID,MT,NV,UT`
+ 
+-This list must remain consistent with Section 3.1. *See* `docs/legal/legal--50-state-skill-contest-survey.md` for individual state analysis.
++This list must remain consistent with Section 3.1. *See* `docs/legal/50_state_skill_contest_survey.md` for individual state analysis.
+ 
+ [COUNSEL: REVIEW whether additional states should be added based on current case law.]
+ 
+diff --git a/docs/legal/legal--gatekeeper-compliance.md b/docs/legal/legal--gatekeeper-compliance.md
+index 3476e971..018d017f 100644
+--- a/docs/legal/legal--gatekeeper-compliance.md
++++ b/docs/legal/legal--gatekeeper-compliance.md
+@@ -138,7 +138,7 @@ If Styx ever implements screen-recording-based verification (currently: Research
+ 
+ ### 4.1 State Blocklist
+ 
+-States where Styx's skill-based contest model faces elevated legal risk must be hard-blocked at the API layer. *See* `docs/legal/legal--50-state-skill-contest-survey.md` for full statutory analysis.
++States where Styx's skill-based contest model faces elevated legal risk must be hard-blocked at the API layer. *See* `docs/legal/50_state_skill_contest_survey.md` for full statutory analysis.
+ 
+ | State | Risk Basis | Block Level |
+ |---|---|---|
+diff --git a/docs/legal/legal--skill-based-contest-whitepaper.md b/docs/legal/legal--skill-based-contest-whitepaper.md
+index 34ccc34a..62d7758e 100644
+--- a/docs/legal/legal--skill-based-contest-whitepaper.md
++++ b/docs/legal/legal--skill-based-contest-whitepaper.md
+@@ -2,7 +2,7 @@
+ artifact_id: L-WP-01
+ title: "Skill-Based Contest Whitepaper — Legal Classification of Behavioral Commitment Systems"
+ date: "2026-03-09"
+-version: "0.4.0-draft"
++version: "0.5.0-draft"
+ owner: "agent/research-support"
+ approval_status: "draft"
+ citation_format: "bluebook"
+@@ -13,8 +13,8 @@ source_documents:
+   - "docs/legal/legal--gatekeeper-compliance.md"
+   - "docs/research/research--prediction-markets-regulation-finance.md"
+   - "docs/legal/legal--compliance-guardrails.md"
+-  - "docs/legal/legal--50-state-skill-contest-survey.md"
+-linked_issues: [564, 567]
++  - "docs/legal/50_state_skill_contest_survey.md"
++linked_issues: [563, 564, 567]
+ ---
+ 
+ # Skill-Based Contest Whitepaper — Legal Classification of Behavioral Commitment Systems
+@@ -243,7 +243,7 @@ States applying the material element test require heightened attention to the ch
+ 
+ ### 9.3 High-Risk States (Any Chance Test / Strict Construction)
+ 
+-States that historically apply the any-chance test, require licensing for all wagering, or interpret gambling statutes with strict constructionism pose the highest risk. These states are excluded from Styx's operational territory via hard API-layer geo-blocking. *See* `docs/legal/legal--50-state-skill-contest-survey.md` for individual state analysis.
++States that historically apply the any-chance test, require licensing for all wagering, or interpret gambling statutes with strict constructionism pose the highest risk. These states are excluded from Styx's operational territory via hard API-layer geo-blocking. *See* `docs/legal/50_state_skill_contest_survey.md` for individual state analysis.
+ 
+ **Blocked jurisdictions:** Arizona, Arkansas, Hawaii, Idaho, Montana, Nevada, Utah. *See In re Masterlobos, Inc.*, No. GCB-14-0015 (Ariz. Dep't of Gaming 2014) (Arizona administrative ruling classifying a skill-based contest as subject to the state gaming regulatory framework, illustrating the enforcement risk in any-chance jurisdictions that require licensing for all contest categories involving consideration).
+ 
+@@ -335,7 +335,7 @@ Several states have codified safe harbors for "skill-based contests" through Dai
+ 
+ ---
+ 
+-## 10. Adverse Authority and Counterarguments
++## 10. Adverse Authority Analysis
+ 
+ Comprehensive legal analysis requires an examination of the strongest potential challenges to Styx's classification. Regulators or litigants may raise the following arguments to characterize the platform as an illegal gambling operation.
+ 
+@@ -409,9 +409,10 @@ The following areas require formal legal opinion from outside counsel before Sty
+ | Version | Date | Author | Changes |
+ |---|---|---|---|
+ | 0.1.0-draft | 2026-03-09 | agent/research-support | Initial draft — 11 sections with Bluebook citations, jurisdiction taxonomy, commitment device doctrine, product design analysis |
+-| 0.2.0-draft | 2026-03-10 | agent/research-support | Added Section 10 (Adverse Authority and Counterarguments) with detailed analysis of 5 core challenges |
++| 0.2.0-draft | 2026-03-10 | agent/research-support | Added Section 10 (Adverse Authority Analysis) with detailed analysis of 5 core challenges |
+ | 0.3.0-draft | 2026-03-10 | agent/research-support | Expanded Table of Authorities to 18 cases/authorities; added HHS-OIG and SAMHSA clinical precedent |
+ | 0.4.0-draft | 2026-03-09 | agent/research-support | Expanded case law to 18 cases (#562); split §10.4 into AG enforcement + house-wins optics (#563); expanded DFS mapping to 11 states (#567); cited 7 previously uncited cases in body text |
++| 0.5.0-draft | 2026-06-16 | agent/legal-compliance | Renamed Section 10 to Adverse Authority Analysis and linked issue (#563) |
+ 
+ ---
+ 
+@@ -419,6 +420,8 @@ The following areas require formal legal opinion from outside counsel before Sty
+ 
+ ### Cases
+ 
++*For detailed analysis of these and other relevant cases, see [Case Law Coverage](case_law_coverage.md).*
++
+ - *Commonwealth v. Dent*, 2014 PA Super 218 (Pa. Super. Ct. 2014)
+ - *Dew-Becker v. Wu*, 2020 IL 124472 (Ill. 2020)
+ - *D'Orio v. State*, 212 Ind. 597 (Ind. 1937)
+diff --git a/docs/marketing/founder_essay.md b/docs/marketing/founder_essay.md
+new file mode 100644
+index 00000000..7f5b3b49
+--- /dev/null
++++ b/docs/marketing/founder_essay.md
+@@ -0,0 +1,34 @@
++# The Authority Layer: Why We Built Styx
++
++## A Founder's Essay on Truth and Trust
++
++When we started building Styx, we weren't just looking to build another ledger or another messaging platform. We saw a fundamental crisis in how truth is preserved in the digital age, particularly when it comes to personal narratives, accountability, and the immutable record of our interactions.
++
++In an era of deepfakes, ephemeral messaging, and easily altered digital histories, the concept of "truth" has become dangerously malleable. We watched as people struggled to prove their own experiences, protect themselves from gaslighting, and maintain records that couldn't be disputed by bad actors. We realized that the mechanics of cryptography and decentralized ledgers—technologies primarily used for financial speculation—were uniquely suited to solve a deeply human problem: the preservation of undeniable reality.
++
++Styx is the "Blockchain of Truth." It is an authority layer built not for currency, but for accountability. By utilizing the Fury Bounty mechanism, we have aligned the psychological incentives of truth-telling with the cryptographic certainty of a distributed ledger. We are building a system where records are immutable, where context cannot be silently erased, and where gaslighting is mathematically impossible.
++
++This is more than a product; it is a structural intervention in how we record human interaction. The river Styx was the boundary between Earth and the Underworld, a river of unbreakable oaths. We chose this name because we believe that digital promises, interactions, and histories require an unbreakable foundation.
++
++## Beta Safety and Trust Summary
++
++As we roll out the Styx Beta, the safety and trust of our early adopters are our highest priorities. We are introducing a platform that handles sensitive, immutable truths, which means our responsibility to protect our users is absolute. 
++
++Here is how we are ensuring safety and trust during the beta phase:
++
++### 1. Immutable Yet Protected Records
++While records on Styx are immutable, access to them is strictly controlled through robust cryptographic primitives. Your truth belongs to you, and the beta implements end-to-end encryption to ensure that only authorized parties can decrypt the specific details of a transaction, even while the hash of the interaction is permanently stored on the ledger.
++
++### 2. The Fury Bounty Safeguards
++The Fury Bounty mechanics have been heavily modeled and stress-tested to prevent abuse. During the beta, we have implemented strict rate limiting and algorithmic monitoring to ensure that the bounty system is used for its intended purpose—incentivizing truth—and not as a tool for harassment or spam.
++
++### 3. No-Contact Recovery Protocols
++We understand the sensitivity around No-Contact situations. The beta includes built-in safeguards designed with input from psychological professionals to ensure that our platform supports healing and accountability, rather than enabling unwanted contact. 
++
++### 4. Transparent Auditability
++Trust requires verification. Throughout the beta, we will be publishing regular transparency reports and opening our core cryptographic implementations to independent security audits. Our authority layer must be unassailable, and we invite the community to help us verify its integrity.
++
++### 5. Dedicated Support and Rapid Response
++Beta users have direct access to our core team. We have established a rapid response protocol for any security or trust-related issues discovered during the beta phase. If a mechanic isn't serving the safety of our users, we have the ability to pause and iterate.
++
++Styx is built to be the definitive record of truth. With your help during this beta, we will ensure it is also the safest place to store it.
+diff --git a/docs/planning/planning--styx-sequence-b-a-c--canonical-domain-standup--2026-05-17.md b/docs/planning/planning--styx-sequence-market-irf-audit--canonical-domain-standup--2026-05-17.md
+similarity index 83%
+rename from docs/planning/planning--styx-sequence-b-a-c--canonical-domain-standup--2026-05-17.md
+rename to docs/planning/planning--styx-sequence-market-irf-audit--canonical-domain-standup--2026-05-17.md
+index 492d3519..f7a2c101 100644
+--- a/docs/planning/planning--styx-sequence-b-a-c--canonical-domain-standup--2026-05-17.md
++++ b/docs/planning/planning--styx-sequence-market-irf-audit--canonical-domain-standup--2026-05-17.md
+@@ -1,12 +1,12 @@
+-# Sequence B → A → C, register `${CANONICAL_DOMAIN}`, close revenue gap
++# Sequence market activation → IRF propagation → audit-engine extraction, register `${CANONICAL_DOMAIN}`, close revenue gap
+ 
+ **Date:** 2026-05-17 | **Version:** 4 | **Predecessor:** v3 archived at `~/.claude/plans/archive/2026-05/` (slug `spicy-bubbling-treehouse.md`). v4 is the authoritative plan and supersedes v3 in response to the user's audit challenge ("eat off the floor — no bandaids, fundamental fixes").
+ 
+-> **Naming note ([#601](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/601)):** The `B / A / C` sequence labels here are **grandfathered**. Each maps to a descriptive phase, spelled out in the Phase sections below — **B** = market activation + URL standup · **A** = IRF propagation (validated) · **C** = audit-engine / technical extraction (demand-driven). Per the plan-file naming convention in [`docs/CLAUDE.md`](../CLAUDE.md#conventions), **new** plans use descriptive branch names, not generic letters.
++> **Naming note ([#601](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/601)):** The `market activation / IRF propagation / audit-engine extraction` sequence labels here replaced the grandfathered A/B/C labels. Per the plan-file naming convention in [`docs/CLAUDE.md`](../CLAUDE.md#conventions), **new** plans use descriptive branch names, not generic letters.
+ 
+ ## Context
+ 
+-This plan resolves the standing A/B/C decision carried forward from `.conductor/active-handoff.md`. The underlying decision (sequence is B first, then A, then C; register `${CANONICAL_DOMAIN}` in Phase 1) was reached in v2/v3 and is preserved. v4 rebuilds the encoding at the value layer — references to dynamic values go through `.env.example` and other canonical authorities, not through inline hard-coded strings.
++This plan resolves the standing decision (sequence is market activation first, then IRF propagation, then audit-engine extraction; register `${CANONICAL_DOMAIN}` in Phase 1) was reached in v2/v3 and is preserved. v4 rebuilds the encoding at the value layer — references to dynamic values go through `.env.example` and other canonical authorities, not through inline hard-coded strings.
+ 
+ ## Authority pointers (this plan does not duplicate values)
+ 
+@@ -43,31 +43,31 @@ Convergent evidence:
+ | `${CANONICAL_REPO_URL}` | Live [24] | OSS canonical repo — for developers, not buyers |
+ | `https://${CANONICAL_DOMAIN}` | **Not registered** | What the repo writes toward [2][16] |
+ 
+-## Ideal logical order: B → A → C
++## Ideal logical order: market activation → IRF propagation → audit-engine extraction
+ 
+ Alphabetical labels inherited from prior handoffs are NOT priority-ordered. Logic dictates:
+ 
+-**B first.** The prior handoff's hardest constraint — *"If plan-to-action ratio exceeds 3:1, send an email instead of writing another plan"* [20][21][22] — is a logic gate, not a preference. B is the only path that starts external. A and C both add internal artifact before external contact, re-entering the diagnosed Möbius [17][20].
++**Market activation first.** The prior handoff's hardest constraint — *"If plan-to-action ratio exceeds 3:1, send an email instead of writing another plan"* [20][21][22] — is a logic gate, not a preference. Market activation is the only path that starts external. IRF propagation and audit-engine extraction both add internal artifact before external contact, re-entering the diagnosed Möbius [17][20].
+ 
+-**A second.** IRF propagation is bookkeeping. Done before B → codifies pre-validation assumptions. Done after B → records validated demand. Same activity at different positions has opposite information value.
++**IRF propagation second.** IRF propagation is bookkeeping. Done before market activation → codifies pre-validation assumptions. Done after market activation → records validated demand. Same activity at different positions has opposite information value.
+ 
+-**C third.** Technical extraction of `${CANONICAL_REPO_PATH}/packages/audit-engine/` is build-ahead-of-demand [20][21]. C resolves only after B reveals a buyer who needs the package.
++**Audit-engine extraction third.** Technical extraction of `${CANONICAL_REPO_PATH}/packages/audit-engine/` is build-ahead-of-demand [20][21]. Audit-engine extraction resolves only after market activation reveals a buyer who needs the package.
+ 
+ ## Phase-by-phase
+ 
+-### Phase 1 — B (market activation + URL standup)
++### Phase 1 — Market activation (+ URL standup)
+ - **Trigger:** User acts (not "approves in text"). The two-track action below IS the approval.
+ - **First action (two-track, both required):**
+   1. User names ≥1 real person/company who needs peer-audited verification.
+   2. User authorizes registering `${CANONICAL_DOMAIN}` (~`$36/year` per [23]) and shipping a one-page minimal landing (links to `${CANONICAL_REPO_URL}` + `${DISSERTATION_URL}`; nothing else).
+ - **Gate to advance:** 5 cold messages sent + ≥1 substantive reply [20][21]. Names + responses logged to `${CANONICAL_REPO_PATH}/.outreach-log` (flat append-only; no schema until format is genuinely needed).
+ 
+-### Phase 2 — A (IRF propagation, validated)
++### Phase 2 — IRF propagation (validated)
+ - **Trigger:** Phase 1 gate met.
+ - **First action:** Append entries to `~/Code/organvm/organvm-corpvs-testamentvm/INST-INDEX-RERUM-FACIENDARUM.md` reflecting Phase 1 ground truth — named buyers, stated needs, `${CANONICAL_DOMAIN}` registration, validated demand evidence. Also append the three IRF candidates surfaced by v4 itself (see Propagation gap section).
+-- **Gate to advance:** IRF reflects B's results.
++- **Gate to advance:** IRF reflects market activation's results.
+ 
+-### Phase 3 — C (technical extraction, demand-driven)
++### Phase 3 — Audit-engine extraction (demand-driven)
+ - **Trigger:** Phase 2 gate met **AND** ≥1 named buyer has explicitly asked for the extracted package.
+ - **First action:** Create `${CANONICAL_REPO_PATH}/packages/audit-engine/` skeleton.
+ - **Gate:** Buyer reviews and approves the package contract before any npm publish.
+@@ -78,7 +78,7 @@ Alphabetical labels inherited from prior handoffs are NOT priority-ordered. Logi
+ 
+ 1. **Build-time brand propagation.** Templating from `.env` → mobile (`Info.plist`, `build.gradle`, `AndroidManifest.xml`, `project.pbxproj`), deploy (`render.yaml`, `docker-compose.yml`, `ngrok_app.yml`, `vercel/project.json`), identity (`package.json`, `README.md`), legal docs, outreach copy. Implementation candidates: pre-commit hook diffing `.env.example` against propagation targets (warning), or a generator script that materializes platform-specific files from `.env`.
+ 2. **README badge / git remote drift.** `README.md:5` cites `organvm-iii-ergon/` namespace; git remote is `a-organvm/` [24][25]. Surfaced 2026-05-17 by the multi-citation requirement itself — the very act of looking for a second source revealed the divergence. The git remote is authoritative.
+-3. **AB/C label deprecation.** "A/B/C" propagates through `.conductor/active-handoff.md`, prior session memories, this plan, future handoffs. Replace with descriptive names ("market activation", "IRF propagation", "audit-engine extraction") in the next IRF revision.
++3. **A/B/C label deprecation.** "A/B/C" propagates through `.conductor/active-handoff.md`, prior session memories, this plan, future handoffs. Replaced with descriptive names ("market activation", "IRF propagation", "audit-engine extraction") in the next IRF revision.
+ 
+ **Until these land, this plan's authority declaration is documentation, not enforcement.** Naming the gaps explicitly IS the strict-branding compliance — claiming `.env.example` is the source of truth without acknowledging the propagation gap would be bandaid territory.
+ 
+@@ -86,7 +86,7 @@ Alphabetical labels inherited from prior handoffs are NOT priority-ordered. Logi
+ 
+ - Cold message templates (no template until ≥1 real name)
+ - Response tracking schema (no schema until ≥1 real response)
+-- IRF row drafts (no draft until B reveals what)
++- IRF row drafts (no draft until market activation reveals what)
+ - `package.json` / `tsconfig.json` scaffolds for `audit-engine/`
+ - Codex/Gemini dispatch envelopes, voice-scorer pipelines, file-location decisions for outreach scaffolding
+ - Build-time templating implementation (forward-declared as IRF candidate #1)
+diff --git a/scripts/README.md b/scripts/README.md
+index b6606160..3c21bbfd 100644
+--- a/scripts/README.md
++++ b/scripts/README.md
+@@ -1,32 +1,166 @@
+-# Styx Automation Scripts (Ironclad)
++# Styx Automation Scripts — Surface Index
+ 
+-## 1. Module Definition
+-This directory houses the **DevOps Automation** and **Maintenance utilities**. These are the "Janitors" of the Styx ecosystem.
++Operating rule: **no orphan artifacts.** Every script here has a surface packet (10 fields).
++New scripts copy [`SURFACE-PACKET.template.md`](./SURFACE-PACKET.template.md).
+ 
+-## 2. Script Inventory
++> **Drift note (2026-06-20):** the previous version of this README documented four scripts
++> that do not exist in this repo (`db-migrate.sh`, `seed-furies.ts`, `generate-honeypots.sh`,
++> `deploy-r2-worker.sh`) and a `make test-scripts` target absent from the Makefile. Those
++> were phantom entries. This index documents only artifacts that actually exist on disk.
+ 
+-### `db-migrate.sh`
+-- **Purpose**: Runs PostgreSQL migrations via TypeORM/Prisma.
+-- **Usage**: `./scripts/db-migrate.sh [up|down] [env]`
+-- **Safety**: Must confirm confirmation prompt for `prod`.
++## Coverage — 44 artifacts, all packeted
+ 
+-### `seed-furies.ts`
+-- **Purpose**: Populates the DB with initial "Fury" (Auditor) accounts for testing.
+-- **Usage**: `ts-node scripts/seed-furies.ts`
+-- **Output**: Creates 10 Master Furies and 50 Novice Furies.
++| Surface | Artifacts | Packet |
++|---------|-----------|--------|
++| Top-level `scripts/` | 9 | ✅ this file |
++| `scripts/smoke/` | 9 | ✅ [smoke/README.md](./smoke/README.md) |
++| `scripts/validation/` | 11 | ✅ [validation/README.md](./validation/README.md) |
++| `scripts/triage/` | 6 | ✅ [triage/README.md](./triage/README.md) |
++| `scripts/dev/` | 5 | ✅ [dev/README.md](./dev/README.md) |
++| `scripts/infra/` | 3 | ✅ [infra/README.md](./infra/README.md) |
++| `scripts/analysis/` | 1 | ✅ [analysis/README.md](./analysis/README.md) |
+ 
+-### `generate-honeypots.sh`
+-- **Purpose**: Generates "Fake" proof images (pass/fail) for the Fury Router calibration.
+-- **Dependency**: Requires `imagemagick` or `python-pill`.
++---
+ 
+-### `deploy-r2-worker.sh`
+-- **Purpose**: Deploys the media compression worker to Cloudflare Workers.
+-- **Contract**: Expects `wrangler.toml` to be present.
++## The Board Governance Toolkit
+ 
+-## 3. Error Handling
+-- All scripts must use `set -euo pipefail` (Bash) or strict try/catch (Node).
+-- Logs must be written to `stderr` on failure.
+-- Exit code `1` on any error.
++Five config-driven scripts that turn a GitHub Project board into a governed, audit-logged
++system of record. All read instance values from `board.config.json` (override with
++`BOARD_CONFIG=/path/to/config`). The scripts are the *process*; the config is the *instance*.
++All require an authenticated `gh` CLI with project scope.
+ 
+-## 4. Verification
+-- Run `make test-scripts` to execute dry-runs of all logic.
++### `transition-issue.sh`
++
++| # | Field | Value |
++|---|-------|-------|
++| 1 | **Name** | transition-issue.sh — the write gatekeeper |
++| 2 | **Problem solved** | All issue-metadata writes flow through one validated, audit-logged path instead of ad-hoc board edits. |
++| 3 | **User / buyer** | Maintainer / PM running a governed GitHub Project board. |
++| 4 | **Path** | `scripts/transition-issue.sh` |
++| 5 | **Run** | `bash scripts/transition-issue.sh <issue#> --status <STATUS> --reason "why"` · `... --field <F> --value <V>` · `... --gate-met --reason "..."` |
++| 6 | **Verify** | Board field updates **and** a new line appends to the audit log in `board.config.json:audit_log`; illegal transitions are rejected with a nonzero exit. |
++| 7 | **Disable** | Stateless CLI; stop invoking it. Reverse a change with another transition. |
++| 8 | **Safety** | Writes to the live GitHub Project via `gh`; needs auth + project scope. Touches only the configured board + audit log. |
++| 9 | **Proof** | `set -euo pipefail`; loads/validates config; refuses on missing `board.config.json`. (Last live run: capture on next use.) |
++| 10 | **Level** | L1 documented command |
++
++### `audit-board.sh`
++
++| # | Field | Value |
++|---|-------|-------|
++| 1 | **Name** | audit-board.sh — drift detector |
++| 2 | **Problem solved** | Catches board field values that changed *without* going through `transition-issue.sh` (out-of-band edits). |
++| 3 | **User / buyer** | Same maintainer/PM; governance auditor. |
++| 4 | **Path** | `scripts/audit-board.sh` |
++| 5 | **Run** | `bash scripts/audit-board.sh` (check) · `bash scripts/audit-board.sh --fix` (then regenerate tracking table) |
++| 6 | **Verify** | Reports zero drift when board matches the audit log; lists offending fields when not. |
++| 7 | **Disable** | Stateless read (write only with `--fix`). Stop invoking. |
++| 8 | **Safety** | Read-only by default; `--fix` regenerates the tracking table. Needs `gh` auth. |
++| 9 | **Proof** | Compares `gh project item-list` (limit 200) against `audit_log`. |
++| 10 | **Level** | L1 documented command |
++
++### `sync-tracking-table.sh`
++
++| # | Field | Value |
++|---|-------|-------|
++| 1 | **Name** | sync-tracking-table.sh — materializer |
++| 2 | **Problem solved** | Generates the read-only SOP tracking table (`SOP-SS-TRK-001`) from the board, which stays the single source of truth. |
++| 3 | **User / buyer** | Maintainer publishing a human-readable board view into docs. |
++| 4 | **Path** | `scripts/sync-tracking-table.sh` |
++| 5 | **Run** | `bash scripts/sync-tracking-table.sh` (stdout) · `--write` (overwrite SOP file) |
++| 6 | **Verify** | Printed/written table matches current board items; `--write` updates `docs/sops/SOP-SS-TRK-001_001-ontology_issue_tracking.md`. |
++| 7 | **Disable** | Stateless without `--write`. Revert the SOP file via git. |
++| 8 | **Safety** | Read from board; only writes the one SOP doc with `--write`. Needs `gh` auth. |
++| 9 | **Proof** | `gh project item-list` (limit 200) → table. |
++| 10 | **Level** | L1 documented command |
++
++### `setup-board.sh`
++
++| # | Field | Value |
++|---|-------|-------|
++| 1 | **Name** | setup-board.sh — instantiation |
++| 2 | **Problem solved** | Stands up a fresh project board (fields, status options, views) from config — run once per new project. |
++| 3 | **User / buyer** | Maintainer onboarding a new repo to the governance toolkit. |
++| 4 | **Path** | `scripts/setup-board.sh` |
++| 5 | **Run** | `bash scripts/setup-board.sh` · `--fields-only` · `--views-only` · `--dry-run` |
++| 6 | **Verify** | Board shows the configured custom fields, status options, and views; `--dry-run` prints intended changes without applying. |
++| 7 | **Disable** | One-shot setup. Remove fields/views in GitHub UI to undo. |
++| 8 | **Safety** | Creates board structure via `gh`; needs auth + project admin. Use `--dry-run` first. |
++| 9 | **Proof** | Reads `owner`/`project_num`/`project_id` from config; supports dry-run. |
++| 10 | **Level** | L1 documented command |
++
++### `detect-redundancy.sh` (+ `detect-redundancy.py`)
++
++| # | Field | Value |
++|---|-------|-------|
++| 1 | **Name** | detect-redundancy — duplicate/near-duplicate issue finder |
++| 2 | **Problem solved** | Surfaces duplicate and near-duplicate issues on the board before they fragment work. |
++| 3 | **User / buyer** | Maintainer / triager keeping the backlog deduplicated. |
++| 4 | **Path** | `scripts/detect-redundancy.sh` (wrapper) · `scripts/detect-redundancy.py` (similarity logic) |
++| 5 | **Run** | `bash scripts/detect-redundancy.sh` (threshold 0.6) · `--threshold 0.5` · `--status <S>` |
++| 6 | **Verify** | Prints matched issue pairs above the similarity threshold; exits cleanly with none below it. |
++| 7 | **Disable** | Stateless read. Stop invoking. |
++| 8 | **Safety** | Read-only board fetch (`gh`, limit 500). No writes. |
++| 9 | **Proof** | Configurable threshold/status filter; errors if board fetch is empty. |
++| 10 | **Level** | L1 documented command |
++
++---
++
++## Build / CI Gates
++
++### `setup.sh`
++
++| # | Field | Value |
++|---|-------|-------|
++| 1 | **Name** | setup.sh — system bootstrap |
++| 2 | **Problem solved** | One command to stand up the full dev environment (DB/Redis, deps, build, tests). |
++| 3 | **User / buyer** | New contributor or CI provisioning Styx locally. |
++| 4 | **Path** | `scripts/setup.sh` |
++| 5 | **Run** | `bash scripts/setup.sh` |
++| 6 | **Verify** | Prints "INITIALIZATION COMPLETE. STYX IS LIVE." after `make docker-up && make install && make build && make test` all succeed. |
++| 7 | **Disable** | `make clean`; `docker compose ... down` to tear down services. |
++| 8 | **Safety** | Starts local Docker services and runs the test matrix; no external/network writes. |
++| 9 | **Proof** | Delegates to existing Makefile targets (`docker-up`, `install`, `build`, `test`). |
++| 10 | **Level** | L1 documented command |
++
++### `gatekeeper-scan.sh`
++
++| # | Field | Value |
++|---|-------|-------|
++| 1 | **Name** | gatekeeper-scan.sh — Validation Gate (terminology) |
++| 2 | **Problem solved** | Detects forbidden themed terms (Fury, Bounty, Stake, …) in built bundles for Redacted-Mode (iOS/Android) builds. |
++| 3 | **User / buyer** | Release engineer gating store builds; compliance reviewer. |
++| 4 | **Path** | `scripts/gatekeeper-scan.sh` |
++| 5 | **Run** | `bash scripts/gatekeeper-scan.sh [dir]` (default `dist/`) |
++| 6 | **Verify** | Exit 0 with no forbidden terms found; nonzero + flagged occurrences otherwise. Requires `make build` first. |
++| 7 | **Disable** | Stateless scan; remove from the release pipeline to skip. |
++| 8 | **Safety** | Read-only scan of build output; detects (does not replace) terms. |
++| 9 | **Proof** | Maps 10 forbidden→neutral terms; errors if scan dir missing. |
++| 10 | **Level** | L1 documented command |
++
++---
++
++## Chat Knowledge Base
++
++### `build-chat-context.ts`
++
++| # | Field | Value |
++|---|-------|-------|
++| 1 | **Name** | build-chat-context.ts — static knowledge-base builder |
++| 2 | **Problem solved** | Assembles key source files into one static knowledge base — no vector DB; fits Llama 3.3 70B's 128K context. |
++| 3 | **User / buyer** | The site's chat feature / its maintainer. |
++| 4 | **Path** | `scripts/build-chat-context.ts` |
++| 5 | **Run** | `npx tsx scripts/build-chat-context.ts` |
++| 6 | **Verify** | Regenerates `src/web/lib/styx-knowledge.ts` with assembled content. |
++| 7 | **Disable** | Stateless generator; revert the output file via git. |
++| 8 | **Safety** | Reads repo source, writes one generated lib file. No network. |
++| 9 | **Proof** | Resolves repo root from module URL; reads a declared `SourceFile[]` set. |
++| 10 | **Level** | L1 documented command |
++
++---
++
++## Conventions (was: "Ironclad")
++
++- Bash scripts use `set -euo pipefail`; Node uses strict try/catch.
++- Failures log to `stderr`, exit code `1`.
++- Board scripts are portable: all instance values live in `board.config.json`.
+diff --git a/scripts/SURFACE-PACKET.template.md b/scripts/SURFACE-PACKET.template.md
+new file mode 100644
+index 00000000..9375f8bc
+--- /dev/null
++++ b/scripts/SURFACE-PACKET.template.md
+@@ -0,0 +1,18 @@
++# Surface Packet — `<artifact-name>`
++
++> Operating rule: **no orphan artifacts.** Every script, function, workflow, dashboard,
++> prompt pack, audit, resolver, or utility gets one of these. Copy this block, fill all
++> 10 fields, keep it next to the artifact. Surface before sprawl.
++
++| # | Field | Value |
++|---|-------|-------|
++| 1 | **Name** | `<artifact-name>` |
++| 2 | **Problem solved** | <one sentence: the pain this removes> |
++| 3 | **User / buyer** | <who runs it / who pays for the outcome> |
++| 4 | **Existing artifact path** | `<repo-relative path>` |
++| 5 | **How to run it** | `<exact command(s)>` |
++| 6 | **How to verify it** | <observable signal that it worked> |
++| 7 | **How to disable / uninstall** | <how to stop it / remove it, or "N/A — stateless"> |
++| 8 | **Safety / privacy boundary** | <what it can touch; what it must not; auth needed> |
++| 9 | **Current proof / receipt** | <last successful run, test, or output sample> |
++| 10 | **Packaging level** | L0 internal util · L1 documented command · L2 local UI tile · L3 public demo · L4 sellable offer |
+diff --git a/scripts/analysis/README.md b/scripts/analysis/README.md
+new file mode 100644
+index 00000000..c6eaa4f4
+--- /dev/null
++++ b/scripts/analysis/README.md
+@@ -0,0 +1,12 @@
++# `scripts/analysis/` — Surface Index
++
++Repo-content analysis utilities. **User/buyer:** maintainer mining the docs corpus for
++intelligence/structure. Template: [`../SURFACE-PACKET.template.md`](../SURFACE-PACKET.template.md).
++
++| Name | Problem solved | Run | Verify | Safety | Level |
++|------|----------------|-----|--------|--------|-------|
++| `ingest-doc-intelligence.js` | Ingest the docs corpus into a dated intelligence artifact | `npm run docs:ingest` | Reads `docs/{research,planning,legal,brainstorm}`; writes a dated set under `artifacts/doc-intelligence/` | Read-only over `docs/`; writes one artifact dir; no network | L1 |
++
++> **Disable/uninstall:** stateless generator — stop invoking; delete the `artifacts/doc-intelligence/`
++> output to clean up. **Proof:** resolves `REPO_ROOT` from its own path; targets four fixed
++> doc dirs. Capture a `docs:ingest` run log on next use.
+diff --git a/scripts/dev/README.md b/scripts/dev/README.md
+new file mode 100644
+index 00000000..a9415d11
+--- /dev/null
++++ b/scripts/dev/README.md
+@@ -0,0 +1,18 @@
++# `scripts/dev/` — Surface Index
++
++Local **dev-stack launchers**. Each `run-*.mjs` builds a validated env (via `env.mjs`) and
++spawns one service; `app-stack.mjs` runs API+web together with fail-fast env validation.
++Wired to `package.json` scripts. **User/buyer:** a developer running Styx locally.
++Template: [`../SURFACE-PACKET.template.md`](../SURFACE-PACKET.template.md).
++
++| Name | Problem solved | Run | Verify | Safety | Level |
++|------|----------------|-----|--------|--------|-------|
++| `app-stack.mjs` | Boot the full stack (API+web), failing fast on bad config | `npm run dev` | Both API and web come up; a bad env aborts with one clear error before spawn | Local processes; reads `.env*` | L1 |
++| `run-api.mjs` | Run just the API (ts-node) | `npm run dev:api` | API process starts in `src/api` | Local process | L1 |
++| `run-web.mjs` | Run just the web app (Next dev) | `npm run dev:web` | Next dev server starts in `src/web` on `env.PORT` | Local process | L1 |
++| `run-migrate.mjs` | Run DB migrations | `npm run dev:migrate` | Migrations apply via `tsx database/migrations/migrate.ts` | **Mutates the DB** — point at a local/dev DB | L1 |
++| `env.mjs` | Shared, validated env builder for the above | imported by `app-stack`/`run-*` (not run directly) | Other dev scripts get a populated `repoRoot` + env; missing files handled | Parses `.env*`; no network | L0 |
++
++> **Disable/uninstall (all):** stateless launchers — stop the spawned process (Ctrl-C).
++> **Proof:** `app-stack.mjs` pre-validates both envs before spawning to avoid half-running
++> stacks; `env.mjs` resolves `repoRoot` from its own module URL. Capture a `npm run dev` log.
+diff --git a/scripts/infra/README.md b/scripts/infra/README.md
+new file mode 100644
+index 00000000..d98ca73a
+--- /dev/null
++++ b/scripts/infra/README.md
+@@ -0,0 +1,16 @@
++# `scripts/infra/` — Surface Index
++
++Infrastructure config & lifecycle for storage, edge security, and analytics export.
++**User/buyer:** ops / infra engineer. Note `cloudflare-r2-lifecycle.sh` is a **mock**
++(emits the rule JSON, does not apply it) and `cloudflare-waf-rules.json` is **data**, not a
++script. Template: [`../SURFACE-PACKET.template.md`](../SURFACE-PACKET.template.md).
++
++| Name | Problem solved | Run | Verify | Safety | Level |
++|------|----------------|-----|--------|--------|-------|
++| `cloudflare-r2-lifecycle.sh` | Define a 30-day delete lifecycle for biometric proof video on R2 (compliance) | `bash scripts/infra/cloudflare-r2-lifecycle.sh` | Writes `lifecycle_rule.json` for bucket `styx-fury-proofs` | **Mock** — generates rule only; does not call Cloudflare. Wire to real API before relying on it | L0 |
++| `cloudflare-waf-rules.json` | Geo-block traffic from sanctioned/ambiguous jurisdictions | apply via Cloudflare WAF (config artifact, not executed) | Listed countries are blocked at the edge once applied | Edge-block config; review jurisdiction list before applying | L1 |
++| `pg-data-lake-extract.sh` | Nightly sanitized Postgres dump for B2B analytics | `POSTGRES_HOST=… POSTGRES_USER=… POSTGRES_DB=… STYX_DATA_LAKE_EXPORT_DIR=… bash scripts/infra/pg-data-lake-extract.sh` | Timestamped sanitized export written to `STYX_DATA_LAKE_EXPORT_DIR` | **Reads production data** — must stay sanitized; guard the export dir; needs DB creds | L1 |
++
++> **Disable/uninstall:** the `.sh` scripts are stateless (stop scheduling them); remove the
++> WAF JSON from Cloudflare to lift geo-blocks. **Proof:** `.sh` use `set -euo pipefail` and
++> `:?`-guard required env vars. The R2 script is explicitly mock until wired to the real API.
+diff --git a/scripts/smoke/README.md b/scripts/smoke/README.md
+new file mode 100644
+index 00000000..24a7eade
+--- /dev/null
++++ b/scripts/smoke/README.md
+@@ -0,0 +1,21 @@
++# `scripts/smoke/` — Surface Index
++
++Post-deploy smoke & readiness gates. **User/buyer:** release engineer / CI pipeline
++verifying a staging or beta deploy is live and correct. Most read URLs from env vars and
++exit nonzero on failure. Template: [`../SURFACE-PACKET.template.md`](../SURFACE-PACKET.template.md).
++
++| Name | Problem solved | Run | Verify | Safety | Level |
++|------|----------------|-----|--------|--------|-------|
++| `beta-smoke.sh` | One-shot beta smoke: readiness + release + endpoints | `BETA_API_URL=… bash scripts/smoke/beta-smoke.sh` | All sub-checks exit 0 | Read-only HTTP to configured beta API | L1 |
++| `staging-smoke.sh` | Same orchestration against staging | `STAGING_API_URL=… bash scripts/smoke/staging-smoke.sh` | All sub-checks exit 0 | Read-only HTTP to staging API | L1 |
++| `check-api-ready.sh` | Wait for API `/health/ready` to come up | `API_URL=… bash scripts/smoke/check-api-ready.sh` | Exit 0 once ready within `MAX_ATTEMPTS`×`INTERVAL_SECONDS` | Read-only polling | L0 |
++| `check-api-release.sh` | Assert `/meta/release` matches expected service/env | `API_URL=… EXPECTED_ENV_LABEL=… bash …/check-api-release.sh` | Exit 0 when service+env match | Read-only | L0 |
++| `check-endpoints.sh` | Validate critical API routes respond | called by `*-smoke.sh` (`API_URL=…`) | Prints PASS/FAIL/WARN counts; exit 1 if any FAIL | Read-only route probes | L0 |
++| `check-web.sh` | Web front-end smoke (skippable) | `WEB_URL=… bash scripts/smoke/check-web.sh` | Exit 0 when web responds; warns+skips if `WEB_URL` unset | Read-only | L0 |
++| `beta-readiness.sh` | Produce a beta-readiness summary artifact | `npm run beta:readiness` | Writes `artifacts/beta-readiness-summary.json` | Read/aggregate; writes one artifact | L1 |
++| `beta-deploy-preflight.sh` | Assert required env/secrets present before beta deploy | `npm run beta:deploy-preflight` | Writes `artifacts/release/evidence--beta-deploy-preflight.md`; fails on missing secrets | Inspects env presence (values not logged) | L1 |
++| `vanguard-ignition.sh` | TestFlight/staging deploy pipeline (Vector 4) | `bash scripts/smoke/vanguard-ignition.sh` | Runs core validation gates then deploy steps | Triggers a deployment sequence — gate before prod | L1 |
++
++> **Disable/uninstall (all):** stateless CLIs — stop invoking / remove from the CI workflow.
++> **Proof:** each uses `set -euo pipefail` (except `vanguard-ignition.sh`: `set -e`) and
++> requires its URL/secret env vars (`:?` guards). Capture a live run log on next deploy.
+diff --git a/scripts/smoke/beta-readiness.sh b/scripts/smoke/beta-readiness.sh
+index 661c3aa9..235beb5a 100755
+--- a/scripts/smoke/beta-readiness.sh
++++ b/scripts/smoke/beta-readiness.sh
+@@ -154,6 +154,7 @@ fi
+ run_gate "build_check" "true" bash scripts/validation/04-redacted-build-check.sh
+ run_gate "security_invariants" "true" npx tsx scripts/validation/06-security-invariant-check.ts
+ run_gate "claim_drift" "true" node scripts/validation/07-claim-drift-check.js
++run_gate "brand_propagation" "true" node scripts/validation/08-brand-propagation-check.js
+ 
+ FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+ 
+diff --git a/scripts/triage/README.md b/scripts/triage/README.md
+new file mode 100644
+index 00000000..f76f7109
+--- /dev/null
++++ b/scripts/triage/README.md
+@@ -0,0 +1,19 @@
++# `scripts/triage/` — Surface Index
++
++A small **issue-triage state machine** over `docs/triage.json`. Issues move through legal
++states; `state-transition.sh` is the only writer and `reconcile.sh` is a mandatory gate.
++**User/buyer:** maintainer / triager clearing a backlog in auditable batches. Requires
++`jq`. Template: [`../SURFACE-PACKET.template.md`](../SURFACE-PACKET.template.md).
++
++| Name | Problem solved | Run | Verify | Safety | Level |
++|------|----------------|-----|--------|--------|-------|
++| `batch-init.sh` | Declare a batch and seed its issues into triage state | `bash scripts/triage/batch-init.sh <batch-id> <phase> <issue#...>` | Issues appear in `docs/triage.json` as `UNREAD` under the batch | Writes `docs/triage.json` only | L1 |
++| `classify-all.sh` | Classify every `UNREAD` issue in one pass | `bash scripts/triage/classify-all.sh` | `UNREAD` count drops to 0; each gets an `action` + state | Writes `docs/triage.json` (label/title heuristics) | L1 |
++| `classify-batch.sh` | Classify just one batch | `bash scripts/triage/classify-batch.sh <batch-id> <phase>` | That batch's issues get `action` + state transitions | Writes `docs/triage.json` | L1 |
++| `state-transition.sh` | The **only** sanctioned way to modify triage state | `bash scripts/triage/state-transition.sh <issue#> <to-state> [--evidence file:line] [--pr url]` | Legal transitions apply; illegal ones rejected nonzero | Writes `docs/triage.json`; enforces state machine | L1 |
++| `reconcile.sh` | Mandatory end-of-batch gate | `bash scripts/triage/reconcile.sh <batch-id>` | Exit 0 only if all accounted, no CLOSED-without-evidence, no `UNREAD`, tests pass; HARD STOP otherwise | Read/validate; no writes | L1 |
++| `report.sh` | Print the triage dashboard | `bash scripts/triage/report.sh` | Prints counts/states; errors if `triage.json` missing | Read-only | L0 |
++
++> **Disable/uninstall (all):** stateless CLIs; revert `docs/triage.json` via git to undo.
++> **Proof:** all use `set -euo pipefail`; `state-transition.sh` rejects illegal transitions
++> and `reconcile.sh` hard-stops on any failure. Capture a reconcile log on next batch.
+diff --git a/scripts/validation/08-brand-propagation-check.js b/scripts/validation/08-brand-propagation-check.js
+new file mode 100755
+index 00000000..777cc5c8
+--- /dev/null
++++ b/scripts/validation/08-brand-propagation-check.js
+@@ -0,0 +1,131 @@
++const fs = require('fs');
++const path = require('path');
++
++const ROOT_DIR = path.join(__dirname, '../..');
++
++let envContent;
++try {
++  envContent = fs.readFileSync(path.join(ROOT_DIR, '.env'), 'utf8');
++} catch (e) {
++  envContent = fs.readFileSync(path.join(ROOT_DIR, '.env.example'), 'utf8');
++}
++
++const vars = {};
++envContent.split('\n').forEach(line => {
++  const match = line.match(/^([A-Z_0-9]+)=(.*)$/);
++  if (match) {
++    vars[match[1]] = match[2].trim();
++  }
++});
++
++const CANONICAL_DOMAIN = vars.CANONICAL_DOMAIN;
++const PROJECT_NAME = vars.PROJECT_NAME;
++const MOBILE_BUNDLE_ID = vars.MOBILE_BUNDLE_ID;
++const DEEP_LINK_SCHEME = vars.DEEP_LINK_SCHEME;
++const CONTACT_EMAIL_DOMAIN = vars.CONTACT_EMAIL_DOMAIN;
++const RENDER_API_SERVICE_NAME = vars.RENDER_API_SERVICE_NAME;
++const RENDER_WEB_SERVICE_NAME = vars.RENDER_WEB_SERVICE_NAME;
++const CANONICAL_REPO_URL = vars.CANONICAL_REPO_URL;
++
++let exitCode = 0;
++
++function checkFile(relPath, checks) {
++  const fullPath = path.join(ROOT_DIR, relPath);
++  if (!fs.existsSync(fullPath)) {
++    // If the file does not exist, ignore it, wait, we should log a warning but not fail.
++    // However, if the docs say it's there, maybe we shouldn't fail the build if a file is moved later.
++    console.warn(`[WARN] File not found: ${relPath}`);
++    return;
++  }
++  const content = fs.readFileSync(fullPath, 'utf8');
++  checks.forEach(({ expected, name }) => {
++    if (!expected) {
++        return;
++    }
++    if (!content.includes(expected)) {
++      console.error(`[ERROR] File ${relPath} is missing expected value for ${name} ('${expected}')`);
++      exitCode = 1;
++    } else {
++      console.log(`[OK] File ${relPath} contains ${name} ('${expected}')`);
++    }
++  });
++}
++
++const targets = [
++  {
++    path: 'docs/legal/privacy-policy.md',
++    checks: [{ name: 'CONTACT_EMAIL_DOMAIN', expected: `privacy@${CONTACT_EMAIL_DOMAIN}` }]
++  },
++  {
++    path: 'docs/departments/b2b/artifacts/outreach-sequences.md',
++    checks: [{ name: 'CONTACT_EMAIL_DOMAIN', expected: `partners@${CONTACT_EMAIL_DOMAIN}` }]
++  },
++  {
++    path: 'src/mobile/ios/Styx/Info.plist',
++    checks: [
++        { name: 'MOBILE_BUNDLE_ID', expected: `<string>${MOBILE_BUNDLE_ID}</string>` },
++        { name: 'DEEP_LINK_SCHEME', expected: `<string>${DEEP_LINK_SCHEME}</string>` }
++    ]
++  },
++  {
++    path: 'src/mobile/ios/Styx.xcodeproj/project.pbxproj',
++    checks: [{ name: 'MOBILE_BUNDLE_ID', expected: `PRODUCT_BUNDLE_IDENTIFIER = "${MOBILE_BUNDLE_ID}";` }]
++  },
++  {
++    path: 'src/mobile/android/app/build.gradle',
++    checks: [
++        { name: 'MOBILE_BUNDLE_ID', expected: `applicationId '${MOBILE_BUNDLE_ID}'` },
++        { name: 'MOBILE_BUNDLE_ID (namespace)', expected: `namespace '${MOBILE_BUNDLE_ID}'` }
++    ]
++  },
++  {
++    path: 'src/mobile/android/app/src/main/AndroidManifest.xml',
++    checks: [{ name: 'DEEP_LINK_SCHEME', expected: `android:scheme="${DEEP_LINK_SCHEME}"` }]
++  },
++  {
++    path: 'docs/legal/terms-of-service.md',
++    checks: [{ name: 'CONTACT_EMAIL_DOMAIN', expected: `legal@${CONTACT_EMAIL_DOMAIN}` }]
++  },
++  {
++    path: 'render.yaml',
++    checks: [
++        { name: 'RENDER_API_SERVICE_NAME', expected: `name: ${RENDER_API_SERVICE_NAME}` },
++        { name: 'RENDER_WEB_SERVICE_NAME', expected: `name: ${RENDER_WEB_SERVICE_NAME}` }
++    ]
++  },
++  {
++    path: '.config/docker/docker-compose.yml',
++    checks: [
++        { name: 'RENDER_API_SERVICE_NAME', expected: `${RENDER_API_SERVICE_NAME}:` },
++        { name: 'RENDER_WEB_SERVICE_NAME', expected: `${RENDER_WEB_SERVICE_NAME}:` }
++    ]
++  },
++  {
++    path: '.config/ngrok/ngrok_app.yml',
++    checks: [
++        { name: 'RENDER_API_SERVICE_NAME', expected: `${RENDER_API_SERVICE_NAME}-tunnel:` },
++        { name: 'RENDER_WEB_SERVICE_NAME', expected: `${RENDER_WEB_SERVICE_NAME}-tunnel:` }
++    ]
++  },
++  {
++    path: '.claude/agents/ops/CONTEXT.md',
++    checks: [
++        { name: 'RENDER_API_SERVICE_NAME', expected: RENDER_API_SERVICE_NAME },
++        { name: 'RENDER_WEB_SERVICE_NAME', expected: RENDER_WEB_SERVICE_NAME }
++    ]
++  },
++  {
++    path: 'README.md',
++    checks: [{ name: 'CANONICAL_REPO_URL', expected: CANONICAL_REPO_URL }]
++  }
++];
++
++targets.forEach(t => checkFile(t.path, t.checks));
++
++if (exitCode === 0) {
++  console.log('[SUCCESS] All brand propagation checks passed.');
++} else {
++  console.error('[FAILED] One or more brand propagation checks failed.');
++}
++
++process.exit(exitCode);
+diff --git a/scripts/validation/README.md b/scripts/validation/README.md
+new file mode 100644
+index 00000000..56f3c776
+--- /dev/null
++++ b/scripts/validation/README.md
+@@ -0,0 +1,25 @@
++# `scripts/validation/` — Surface Index
++
++Numbered **validation gates** asserting the system's hard invariants (ledger, anti-spoof,
++security, behavioral physics, brand/terminology). **User/buyer:** release engineer / QA /
++compliance reviewer gating a release. The `.ts` gates hit a running API (need an API base
++URL); `.sh`/`.js` gates scan source or the repo. Template:
++[`../SURFACE-PACKET.template.md`](../SURFACE-PACKET.template.md).
++
++| Name | Problem solved | Run | Verify | Safety | Level |
++|------|----------------|-----|--------|--------|-------|
++| `01-phantom-money-check.ts` | Double-entry ledger rejects unbalanced entries | `npx tsx scripts/validation/01-phantom-money-check.ts` (API base set) | Creates a contract; balance reflects the stake hold; fails on imbalance | Hits a running API; use staging, not prod | L1 |
++| `02-simulator-spoof-check.ts` | Manual HealthKit/GoogleFit entries are blocked | `npx tsx scripts/validation/02-simulator-spoof-check.ts` | Spoofed-metadata proof is rejected by the Aegis protocol | Hits a running API | L1 |
++| `03-the-full-loop.ts` | End-to-end contract lifecycle works over real HTTP+JWT | `npx tsx scripts/validation/03-the-full-loop.ts` | Login → create → proof → 3 Fury verdicts → resolution all succeed | Creates real records via API; staging only | L1 |
++| `04-redacted-build-check.sh` | Client bundles contain no legally banned wording (Apple/Stripe triggers) | `bash scripts/validation/04-redacted-build-check.sh` | Exit 0 = clean; nonzero lists offending strings. Needs built bundles | Read-only grep of build output | L1 |
++| `05-behavioral-physics-check.ts` | API enforces cool-off, downscaling, stake-tier limits | `npx tsx scripts/validation/05-behavioral-physics-check.ts` | 7-day lockout, post-failure downscale, and tier max all enforced | Hits a running API | L1 |
++| `06-security-invariant-check.ts` | No dev tokens/secrets/backdoors in compiled prod output | `npx tsx scripts/validation/06-security-invariant-check.ts` | Exit 0 = none found (excludes `.spec/.test`); nonzero lists hits | Read-only scan of build output | L1 |
++| `07-claim-drift-check.js` | Implementation-status matrix matches reality | `npm run validate:claims` | Reports drift between `docs/planning/implementation-status*.md` and code | Read-only | L1 |
++| `08-brand-propagation-check.js` | Brand/terminology env vars propagate consistently | `node scripts/validation/08-brand-propagation-check.js` | Validates brand vars in `.env` (falls back to `.env.example`) | Read-only; reads env files | L1 |
++| `08-fury-crucible-simulation.ts` | Fury network holds under adversarial reviewers | `npx tsx scripts/validation/08-fury-crucible-simulation.ts` | High-volume sim (honest Furies ~95% accuracy) reaches correct verdicts | Hits a running API; load — staging only | L1 |
++| `09-realm-sync-check.ts` | Compile-time `REALM_REGISTRY` ↔ `realms` DB table agree | `npx tsx scripts/validation/09-realm-sync-check.ts` | Same realm IDs + stream-prefix mappings in TS and DB | Reads DB; needs DB access | L1 |
++| `generate-handoff-index.js` | Build a handoff index from issues/repo metadata | `node scripts/validation/generate-handoff-index.js` | Emits the handoff index (repo from `package.json`, GitHub API) | Reads GitHub API; needs token for private | L1 |
++
++> **Disable/uninstall (all):** stateless CLIs — stop invoking / remove from CI.
++> **Proof:** `04`/`06` use `set -euo pipefail` / strict scans; `.ts` gates resolve an API
++> base via `requireApiBase()` and fail fast when unset. Capture a live gate-run log on next release.
+diff --git a/src/api/src/modules/contracts/contracts.service.int.spec.ts b/src/api/src/modules/contracts/contracts.service.int.spec.ts
+index e935e576..8b59a8ca 100644
+--- a/src/api/src/modules/contracts/contracts.service.int.spec.ts
++++ b/src/api/src/modules/contracts/contracts.service.int.spec.ts
+@@ -31,10 +31,18 @@ describeWithContainerRuntime("ContractsService (Integration)", () => {
+   let service: ContractsService;
+ 
+   beforeAll(async () => {
+-    // Start Postgres container
+-    container = await new PostgreSqlContainer("postgres:15-alpine").start();
+-
+-    const dbUri = container.getConnectionUri();
++    let dbUri = process.env.TEST_DATABASE_URL;
++    if (!dbUri) {
++      try {
++        container = await new PostgreSqlContainer("postgres:15-alpine").start();
++        dbUri = container.getConnectionUri();
++      } catch (e) {
++        console.warn("Could not start testcontainers, falling back to local postgres instance");
++        execSync(`psql -U postgres -c "DROP DATABASE IF EXISTS styx_test;"`);
++        execSync(`psql -U postgres -c "CREATE DATABASE styx_test;"`);
++        dbUri = "postgres://postgres@localhost:5432/styx_test";
++      }
++    }
+ 
+     // Initialize pool
+     pool = new Pool({
+diff --git a/src/mobile/__mocks__/react-native.ts b/src/mobile/__mocks__/react-native.ts
+index e359fb8f..34c04076 100644
+--- a/src/mobile/__mocks__/react-native.ts
++++ b/src/mobile/__mocks__/react-native.ts
+@@ -26,14 +26,26 @@ function createPrimitive(tag: string) {
+         safeProps.onChange = (event: any) => val(event?.target?.value ?? '');
+         continue;
+       }
++      if (key === 'onValueChange' && typeof val === 'function') {
++        hasOnChange = true;
++        safeProps.onChange = (event: any) => val(event?.target?.checked ?? event?.target?.value);
++        continue;
++      }
+       if (key === 'onChange' && typeof val === 'function') {
+         hasOnChange = true;
++        safeProps.onChange = val;
++        continue;
++      }
++      if (key === 'value' && typeof val === 'boolean') {
++        safeProps.checked = val;
++        safeProps.type = 'checkbox';
++        continue;
+       }
+       if (SAFE_HTML_PROPS.has(key) && (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean')) {
+         safeProps[key] = val;
+       }
+     }
+-    if (tag === 'input' && 'value' in safeProps && !hasOnChange) {
++    if (tag === 'input' && ('value' in safeProps || 'checked' in safeProps) && !hasOnChange) {
+       safeProps.readOnly = true;
+     }
+     return React.createElement(tag, safeProps, children);
+diff --git a/src/mobile/screens/AttestationScreen.spec.tsx b/src/mobile/screens/AttestationScreen.spec.tsx
+index 8cd133f2..cf4d7237 100644
+--- a/src/mobile/screens/AttestationScreen.spec.tsx
++++ b/src/mobile/screens/AttestationScreen.spec.tsx
+@@ -1,5 +1,5 @@
+ import React from 'react';
+-import { fireEvent, render, waitFor } from '@testing-library/react';
++import { act, fireEvent, render, waitFor } from '@testing-library/react';
+ import { SupportTraceErrorBanner } from '../components/SupportTraceErrorBanner';
+ import { parseSupportTraceMessage } from '../utils/support-trace';
+ 
+@@ -198,7 +198,9 @@ describe('AttestationScreen – render', () => {
+     const { getByText } = renderScreen();
+ 
+     await waitFor(() => expect(getByText('I HELD THE LINE')).toBeTruthy());
+-    fireEvent.click(getByText('I HELD THE LINE').closest('button') as HTMLElement);
++    await act(async () => {
++      fireEvent.click(getByText('I HELD THE LINE').closest('button') as HTMLElement);
++    });
+ 
+     await waitFor(() => {
+       expect(ApiClient.submitAttestation).toHaveBeenCalledWith('test-contract-123');
+diff --git a/src/mobile/screens/CameraScreen.spec.tsx b/src/mobile/screens/CameraScreen.spec.tsx
+index 8ed4aff2..ea79cdfb 100644
+--- a/src/mobile/screens/CameraScreen.spec.tsx
++++ b/src/mobile/screens/CameraScreen.spec.tsx
+@@ -1,5 +1,5 @@
+ import React from 'react';
+-import { fireEvent, render } from '@testing-library/react';
++import { act, fireEvent, render } from '@testing-library/react';
+ import { CameraScreen } from './CameraScreen';
+ 
+ const mockCameraModule = jest.fn(({ contractId }: { contractId?: string }) => (
+@@ -28,7 +28,9 @@ describe('CameraScreen', () => {
+     const { getByPlaceholderText, getByText } = render(<CameraScreen />);
+ 
+     const contractInput = getByPlaceholderText('Contract ID');
+-    fireEvent.change(contractInput, { target: { value: '   contract-99   ' } });
++    act(() => {
++      fireEvent.change(contractInput, { target: { value: '   contract-99   ' } });
++    });
+ 
+     expect(getByText('camera-module:contract-99')).toBeTruthy();
+   });
+diff --git a/src/mobile/screens/ContractDetailScreen.spec.tsx b/src/mobile/screens/ContractDetailScreen.spec.tsx
+index 8e5f78a7..0fa4d6b2 100644
+--- a/src/mobile/screens/ContractDetailScreen.spec.tsx
++++ b/src/mobile/screens/ContractDetailScreen.spec.tsx
+@@ -1,5 +1,5 @@
+ import React from 'react';
+-import { fireEvent, render, waitFor } from '@testing-library/react';
++import { act, fireEvent, render, waitFor } from '@testing-library/react';
+ import { Alert } from 'react-native';
+ import { ContractDetailScreen } from './ContractDetailScreen';
+ import { ApiClient } from '../services/ApiClient';
+@@ -81,7 +81,9 @@ describe('ContractDetailScreen', () => {
+     );
+ 
+     await waitFor(() => expect(getByText('Daily Check-In')).toBeTruthy());
+-    fireEvent.click(getByText('Daily Check-In').closest('button') as HTMLElement);
++    await act(async () => {
++      fireEvent.click(getByText('Daily Check-In').closest('button') as HTMLElement);
++    });
+ 
+     expect(mockNavigation.navigate).toHaveBeenCalledWith('Attestation', { contractId: 'contract-123' });
+   });
+@@ -92,7 +94,9 @@ describe('ContractDetailScreen', () => {
+     );
+ 
+     await waitFor(() => expect(getByText('Automatic Scan')).toBeTruthy());
+-    fireEvent.click(getByText('Automatic Scan').closest('button') as HTMLElement);
++    await act(async () => {
++      fireEvent.click(getByText('Automatic Scan').closest('button') as HTMLElement);
++    });
+ 
+     expect(mockNavigation.navigate).toHaveBeenCalledWith('DigitalExhaust', {
+       contractId: 'contract-123',
+@@ -107,7 +111,9 @@ describe('ContractDetailScreen', () => {
+     );
+ 
+     await waitFor(() => expect(getByText('Use Grace Day')).toBeTruthy());
+-    fireEvent.click(getByText('Use Grace Day').closest('button') as HTMLElement);
++    await act(async () => {
++      fireEvent.click(getByText('Use Grace Day').closest('button') as HTMLElement);
++    });
+ 
+     await waitFor(() => {
+       expect(ApiClient.useGraceDay).toHaveBeenCalledWith('contract-123');
+diff --git a/src/mobile/screens/CreateContractScreen.spec.tsx b/src/mobile/screens/CreateContractScreen.spec.tsx
+index 4b24c8ad..81d62dff 100644
+--- a/src/mobile/screens/CreateContractScreen.spec.tsx
++++ b/src/mobile/screens/CreateContractScreen.spec.tsx
+@@ -1,5 +1,5 @@
+ import React from 'react';
+-import { fireEvent, render, waitFor } from '@testing-library/react';
++import { act, fireEvent, render, waitFor } from '@testing-library/react';
+ import { SupportTraceErrorBanner } from '../components/SupportTraceErrorBanner';
+ 
+ function collectText(node: any): string {
+@@ -199,7 +199,9 @@ describe('CreateContractScreen – render', () => {
+   it('applies preset stake selection to the amount input', () => {
+     const { getByText, getByPlaceholderText } = renderScreen();
+ 
+-    fireEvent.click(getByText('$50 Default').closest('button') as HTMLElement);
++    act(() => {
++      fireEvent.click(getByText('$50 Default').closest('button') as HTMLElement);
++    });
+ 
+     const amountInput = getByPlaceholderText('0.00') as HTMLInputElement;
+     expect(amountInput.value).toBe('50.00');
+@@ -208,32 +210,34 @@ describe('CreateContractScreen – render', () => {
+   it('blocks submit when stake is below minimum bound', async () => {
+     const { getByText, getByPlaceholderText, container } = renderScreen();
+ 
+-    fireEvent.click(getByText('Recovery').closest('button') as HTMLElement);
+-    fireEvent.click(getByText('No Contact Boundary').closest('button') as HTMLElement);
+-    fireEvent.click(getByText('Screen Time API').closest('button') as HTMLElement);
+-    fireEvent.change(getByPlaceholderText('Describe your behavioral commitment...'), {
+-      target: { value: 'No contact for 30 days.' },
+-    });
+-    fireEvent.change(getByPlaceholderText('partner@example.com'), {
+-      target: { value: 'ally@styx.io' },
+-    });
+-    fireEvent.change(getByPlaceholderText('Target #1'), {
+-      target: { value: 'Former Partner' },
++    await act(async () => {
++      fireEvent.click(getByText('Recovery').closest('button') as HTMLElement);
++      fireEvent.click(getByText('No Contact Boundary').closest('button') as HTMLElement);
++      fireEvent.click(getByText('Screen Time API').closest('button') as HTMLElement);
++      fireEvent.change(getByPlaceholderText('Describe your behavioral commitment...'), {
++        target: { value: 'No contact for 30 days.' },
++      });
++      fireEvent.change(getByPlaceholderText('partner@example.com'), {
++        target: { value: 'ally@styx.io' },
++      });
++      fireEvent.change(getByPlaceholderText('Target #1'), {
++        target: { value: 'Former Partner' },
++      });
++      fireEvent.click(
++        getByText('I am entering this contract voluntarily.').closest('button') as HTMLElement,
++      );
++      fireEvent.click(
++        getByText('No minors are involved in this contract.').closest('button') as HTMLElement,
++      );
++      fireEvent.click(
++        getByText('No dependents are affected by this commitment.').closest('button') as HTMLElement,
++      );
++      fireEvent.click(
++        getByText('This does not violate any legal obligations.').closest('button') as HTMLElement,
++      );
++      fireEvent.change(getByPlaceholderText('0.00'), { target: { value: '5' } });
++      fireEvent.click(getByText('STAKE AND COMMIT').closest('button') as HTMLElement);
+     });
+-    fireEvent.click(
+-      getByText('I am entering this contract voluntarily.').closest('button') as HTMLElement,
+-    );
+-    fireEvent.click(
+-      getByText('No minors are involved in this contract.').closest('button') as HTMLElement,
+-    );
+-    fireEvent.click(
+-      getByText('No dependents are affected by this commitment.').closest('button') as HTMLElement,
+-    );
+-    fireEvent.click(
+-      getByText('This does not violate any legal obligations.').closest('button') as HTMLElement,
+-    );
+-    fireEvent.change(getByPlaceholderText('0.00'), { target: { value: '5' } });
+-    fireEvent.click(getByText('STAKE AND COMMIT').closest('button') as HTMLElement);
+ 
+     await waitFor(() => {
+       expect(container.textContent).toContain('Stake amount must be between $10 and $200.');
+@@ -244,32 +248,34 @@ describe('CreateContractScreen – render', () => {
+   it('submits valid bounded stake and navigates to contract detail', async () => {
+     const { getByText, getByPlaceholderText, container } = renderScreen();
+ 
+-    fireEvent.click(getByText('Recovery').closest('button') as HTMLElement);
+-    fireEvent.click(getByText('No Contact Boundary').closest('button') as HTMLElement);
+-    fireEvent.click(getByText('Fury Peer Review').closest('button') as HTMLElement);
+-    fireEvent.change(getByPlaceholderText('Describe your behavioral commitment...'), {
+-      target: { value: 'No social stalking for 30 days.' },
+-    });
+-    fireEvent.change(getByPlaceholderText('partner@example.com'), {
+-      target: { value: 'ally@styx.io' },
+-    });
+-    fireEvent.change(getByPlaceholderText('Target #1'), {
+-      target: { value: 'Former Partner' },
++    await act(async () => {
++      fireEvent.click(getByText('Recovery').closest('button') as HTMLElement);
++      fireEvent.click(getByText('No Contact Boundary').closest('button') as HTMLElement);
++      fireEvent.click(getByText('Fury Peer Review').closest('button') as HTMLElement);
++      fireEvent.change(getByPlaceholderText('Describe your behavioral commitment...'), {
++        target: { value: 'No social stalking for 30 days.' },
++      });
++      fireEvent.change(getByPlaceholderText('partner@example.com'), {
++        target: { value: 'ally@styx.io' },
++      });
++      fireEvent.change(getByPlaceholderText('Target #1'), {
++        target: { value: 'Former Partner' },
++      });
++      fireEvent.click(
++        getByText('I am entering this contract voluntarily.').closest('button') as HTMLElement,
++      );
++      fireEvent.click(
++        getByText('No minors are involved in this contract.').closest('button') as HTMLElement,
++      );
++      fireEvent.click(
++        getByText('No dependents are affected by this commitment.').closest('button') as HTMLElement,
++      );
++      fireEvent.click(
++        getByText('This does not violate any legal obligations.').closest('button') as HTMLElement,
++      );
++      fireEvent.click(getByText('$50 Default').closest('button') as HTMLElement);
++      fireEvent.click(getByText('STAKE AND COMMIT').closest('button') as HTMLElement);
+     });
+-    fireEvent.click(
+-      getByText('I am entering this contract voluntarily.').closest('button') as HTMLElement,
+-    );
+-    fireEvent.click(
+-      getByText('No minors are involved in this contract.').closest('button') as HTMLElement,
+-    );
+-    fireEvent.click(
+-      getByText('No dependents are affected by this commitment.').closest('button') as HTMLElement,
+-    );
+-    fireEvent.click(
+-      getByText('This does not violate any legal obligations.').closest('button') as HTMLElement,
+-    );
+-    fireEvent.click(getByText('$50 Default').closest('button') as HTMLElement);
+-    fireEvent.click(getByText('STAKE AND COMMIT').closest('button') as HTMLElement);
+ 
+     await waitFor(() => {
+       expect(ApiClient.createContract).toHaveBeenCalledWith({
+diff --git a/src/mobile/screens/DashboardScreen.spec.tsx b/src/mobile/screens/DashboardScreen.spec.tsx
+index 60411eca..be33c871 100644
+--- a/src/mobile/screens/DashboardScreen.spec.tsx
++++ b/src/mobile/screens/DashboardScreen.spec.tsx
+@@ -1,5 +1,5 @@
+ import React from 'react';
+-import { fireEvent, render, waitFor } from '@testing-library/react';
++import { act, fireEvent, render, waitFor } from '@testing-library/react';
+ import { SupportTraceErrorBanner } from '../components/SupportTraceErrorBanner';
+ import { parseSupportTraceMessage } from '../utils/support-trace';
+ 
+@@ -176,7 +176,9 @@ describe('DashboardScreen – render tests', () => {
+     );
+ 
+     await waitFor(() => expect(getByText('Profile')).toBeTruthy());
+-    fireEvent.click(getByText('Profile').closest('button') as HTMLElement);
++    await act(async () => {
++      fireEvent.click(getByText('Profile').closest('button') as HTMLElement);
++    });
+ 
+     expect(navigation.navigate).toHaveBeenCalledWith('Profile');
+   });
+diff --git a/src/mobile/screens/DigitalExhaustScreen.spec.tsx b/src/mobile/screens/DigitalExhaustScreen.spec.tsx
+index fd6c8130..d2b23ae0 100644
+--- a/src/mobile/screens/DigitalExhaustScreen.spec.tsx
++++ b/src/mobile/screens/DigitalExhaustScreen.spec.tsx
+@@ -1,5 +1,5 @@
+ import React from 'react';
+-import { fireEvent, render, waitFor } from '@testing-library/react';
++import { act, fireEvent, render, waitFor } from '@testing-library/react';
+ import { Alert } from 'react-native';
+ import DigitalExhaustScreen from './DigitalExhaustScreen';
+ import { ZKPrivacyEngine } from '../services/ZKPrivacyEngine';
+@@ -61,7 +61,9 @@ describe('DigitalExhaustScreen', () => {
+       React.createElement(DigitalExhaustScreen, { route: mockRoute, navigation: mockNavigation }),
+     );
+ 
+-    fireEvent.click(getByText('START SECURE SCAN').closest('button') as HTMLElement);
++    await act(async () => {
++      fireEvent.click(getByText('START SECURE SCAN').closest('button') as HTMLElement);
++    });
+ 
+     await waitFor(() => {
+       expect(ZKPrivacyEngine.generateLocalProof).toHaveBeenCalledWith(
+@@ -73,7 +75,9 @@ describe('DigitalExhaustScreen', () => {
+       expect(container.textContent).toContain('No Contact Maintained');
+     });
+ 
+-    fireEvent.click(getByText('TRANSMIT PROOF').closest('button') as HTMLElement);
++    await act(async () => {
++      fireEvent.click(getByText('TRANSMIT PROOF').closest('button') as HTMLElement);
++    });
+ 
+     await waitFor(() => {
+       expect(ApiClient.submitProof).toHaveBeenCalledWith(

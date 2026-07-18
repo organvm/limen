@@ -1,0 +1,855 @@
+diff --git a/src/api/database/migrations/042_user_subscription_id.sql b/src/api/database/migrations/042_user_subscription_id.sql
+new file mode 100644
+index 00000000..b88575e6
+--- /dev/null
++++ b/src/api/database/migrations/042_user_subscription_id.sql
+@@ -0,0 +1,11 @@
++-- Migration 042: Store Stripe subscription linkage for early-access billing
++
++ALTER TABLE users
++  ADD COLUMN IF NOT EXISTS subscription_id TEXT;
++
++CREATE UNIQUE INDEX IF NOT EXISTS idx_users_subscription_id
++  ON users(subscription_id)
++  WHERE subscription_id IS NOT NULL;
++
++COMMENT ON COLUMN users.subscription_id IS
++  'Stripe subscription ID for early-access subscription billing.';
+diff --git a/src/api/database/schema.sql b/src/api/database/schema.sql
+index cfe9dc58..0caf7d0e 100644
+--- a/src/api/database/schema.sql
++++ b/src/api/database/schema.sql
+@@ -56,6 +56,7 @@ CREATE TABLE users (
+     email TEXT UNIQUE NOT NULL,
+     password_hash TEXT,
+     stripe_customer_id TEXT,
++    subscription_id TEXT,
+     integrity_score INTEGER DEFAULT 50,
+     account_id UUID REFERENCES accounts(id),
+     role TEXT DEFAULT 'USER',
+@@ -260,6 +261,7 @@ CREATE INDEX idx_entries_debit_account_id ON entries(debit_account_id);
+ CREATE INDEX idx_entries_credit_account_id ON entries(credit_account_id);
+ CREATE INDEX idx_entries_contract_id ON entries(contract_id);
+ CREATE INDEX idx_users_access_tier ON users(access_tier);
++CREATE UNIQUE INDEX idx_users_subscription_id ON users(subscription_id) WHERE subscription_id IS NOT NULL;
+ CREATE INDEX idx_users_enterprise_id ON users(enterprise_id);
+ CREATE INDEX idx_users_deletion_requested_at ON users(deletion_requested_at);
+ 
+diff --git a/src/api/src/modules/b2b/anonymize.service.spec.ts b/src/api/src/modules/b2b/anonymize.service.spec.ts
+index 51834018..48bfe3ed 100644
+--- a/src/api/src/modules/b2b/anonymize.service.spec.ts
++++ b/src/api/src/modules/b2b/anonymize.service.spec.ts
+@@ -41,6 +41,7 @@ describe('AnonymizeService', () => {
+         email: 'alice@example.com',
+         password_hash: '$2b$10$...',
+         stripe_customer_id: 'cus_abc',
++        subscription_id: 'sub_abc',
+         integrity_score: 75,
+         ip_address: '192.168.1.1',
+         name: 'Alice Smith',
+diff --git a/src/api/src/modules/b2b/anonymize.service.ts b/src/api/src/modules/b2b/anonymize.service.ts
+index 02b08b6c..066e0c0c 100644
+--- a/src/api/src/modules/b2b/anonymize.service.ts
++++ b/src/api/src/modules/b2b/anonymize.service.ts
+@@ -49,7 +49,7 @@ export interface AnonymizedExport {
+  */
+ const K_ANONYMITY = 5;
+ 
+-const PII_FIELDS = ['email', 'password_hash', 'stripe_customer_id', 'ip_address', 'name', 'first_name', 'last_name', 'phone'] as const;
++const PII_FIELDS = ['email', 'password_hash', 'stripe_customer_id', 'subscription_id', 'ip_address', 'name', 'first_name', 'last_name', 'phone'] as const;
+ 
+ function requireAnonymizeSalt(): string {
+   const salt = process.env.ANONYMIZE_SALT; // allow-secret
+diff --git a/src/api/src/modules/payments/payments.controller.spec.ts b/src/api/src/modules/payments/payments.controller.spec.ts
+index 59ad4efd..3aa75516 100644
+--- a/src/api/src/modules/payments/payments.controller.spec.ts
++++ b/src/api/src/modules/payments/payments.controller.spec.ts
+@@ -4,6 +4,8 @@ import { NotificationsService } from '../notifications/notifications.service';
+ import { CompliancePolicyService } from '../compliance/compliance-policy.service';
+ import { SettlementService } from './settlement.service';
+ import { Pool } from 'pg';
++import { GUARDS_METADATA } from '@nestjs/common/constants';
++import { AuthGuard } from '../../../guards/auth.guard';
+ 
+ describe('PaymentsController', () => {
+   let controller: PaymentsController;
+@@ -12,6 +14,11 @@ describe('PaymentsController', () => {
+   let mockNotifications: { create: jest.Mock };
+   let mockPolicy: { evaluateRequestPolicy: jest.Mock; getJurisdictionPolicy: jest.Mock };
+   let mockSettlement: { getSettlementPreview: jest.Mock; getSettlementStatus: jest.Mock; dispatchSettlement: jest.Mock };
++  let mockStripe: {
++    subscriptions: { create: jest.Mock; retrieve: jest.Mock; update: jest.Mock; cancel: jest.Mock };
++    customers: { create: jest.Mock; update: jest.Mock };
++    paymentMethods: { attach: jest.Mock };
++  };
+ 
+   beforeEach(() => {
+     mockPool = { query: jest.fn() };
+@@ -29,6 +36,16 @@ describe('PaymentsController', () => {
+       getSettlementStatus: jest.fn(),
+       dispatchSettlement: jest.fn(),
+     };
++    mockStripe = {
++      subscriptions: {
++        create: jest.fn(),
++        retrieve: jest.fn(),
++        update: jest.fn(),
++        cancel: jest.fn().mockResolvedValue({ id: 'sub_cancelled' }),
++      },
++      customers: { create: jest.fn(), update: jest.fn() },
++      paymentMethods: { attach: jest.fn() },
++    };
+ 
+     const mockReconciliation = {
+       reconcileContract: jest.fn(),
+@@ -43,6 +60,283 @@ describe('PaymentsController', () => {
+       mockSettlement as unknown as SettlementService,
+       mockReconciliation as unknown as import('./reconciliation.service').ReconciliationService,
+     );
++    (controller as any).stripe = mockStripe;
++  });
++
++  describe('subscribe', () => {
++    const activeUserRow = (overrides: Record<string, unknown> = {}) => ({
++      id: 'user-1',
++      email: 'user@example.com',
++      stripe_customer_id: 'cus_1',
++      subscription_id: null,
++      status: 'ACTIVE',
++      access_tier: 'free',
++      ...overrides,
++    });
++
++    it('creates a 30-day $14.99/month Stripe subscription and stores subscription_id', async () => {
++      const trialEnd = 1780000000;
++      mockPool.query
++        .mockResolvedValueOnce({
++          rows: [activeUserRow()],
++        })
++        .mockResolvedValueOnce({ rows: [] });
++      mockStripe.subscriptions.create.mockResolvedValue({
++        id: 'sub_1',
++        status: 'trialing',
++        trial_end: trialEnd,
++      });
++
++      const result = await controller.subscribe({ id: 'user-1', email: 'auth@example.com' }, {});
++
++      expect(mockStripe.subscriptions.create).toHaveBeenCalledWith(
++        expect.objectContaining({
++          customer: 'cus_1',
++          trial_period_days: 30,
++          items: [
++            expect.objectContaining({
++              price_data: expect.objectContaining({
++                currency: 'usd',
++                unit_amount: 1499,
++                recurring: { interval: 'month' },
++              }),
++            }),
++          ],
++          metadata: expect.objectContaining({
++            product: 'early_access',
++            userId: 'user-1',
++          }),
++        }),
++        { idempotencyKey: 'styx-subscribe-user-1' },
++      );
++      expect(mockPool.query).toHaveBeenLastCalledWith(
++        expect.stringContaining('subscription_id = $2'),
++        ['cus_1', 'sub_1', 'user-1'],
++      );
++      expect(mockPool.query.mock.calls[1][0]).toContain("WHEN access_tier = 'free'");
++      expect(result).toEqual({
++        subscriptionId: 'sub_1',
++        customerId: 'cus_1',
++        status: 'trialing',
++        trialDays: 30,
++        trialEndsAt: new Date(trialEnd * 1000).toISOString(),
++        amountCents: 1499,
++        currency: 'usd',
++        interval: 'month',
++        reused: false,
++      });
++    });
++
++    it('creates and stores a Stripe customer before subscribing when the user has none', async () => {
++      mockPool.query
++        .mockResolvedValueOnce({
++          rows: [activeUserRow({
++            id: 'user-2',
++            email: 'new@example.com',
++            stripe_customer_id: null,
++          })],
++        })
++        .mockResolvedValueOnce({ rows: [] })
++        .mockResolvedValueOnce({ rows: [] });
++      mockStripe.customers.create.mockResolvedValue({ id: 'cus_new' });
++      mockStripe.subscriptions.create.mockResolvedValue({
++        id: 'sub_new',
++        status: 'trialing',
++        trial_end: null,
++      });
++
++      const result = await controller.subscribe({ id: 'user-2' }, {});
++
++      expect(mockStripe.customers.create).toHaveBeenCalledWith(
++        {
++          email: 'new@example.com',
++          metadata: { userId: 'user-2' },
++        },
++        { idempotencyKey: 'styx-customer-user-2' },
++      );
++      expect(mockStripe.subscriptions.create).toHaveBeenCalledWith(
++        expect.objectContaining({ customer: 'cus_new' }),
++        { idempotencyKey: 'styx-subscribe-user-2' },
++      );
++      expect(result.subscriptionId).toBe('sub_new');
++      expect(result.customerId).toBe('cus_new');
++    });
++
++    it('attaches an optional payment method as the customer and subscription default', async () => {
++      mockPool.query
++        .mockResolvedValueOnce({
++          rows: [activeUserRow({
++            id: 'user-3',
++            email: 'paid@example.com',
++            stripe_customer_id: 'cus_paid',
++          })],
++        })
++        .mockResolvedValueOnce({ rows: [] });
++      mockStripe.subscriptions.create.mockResolvedValue({
++        id: 'sub_paid',
++        status: 'trialing',
++        trial_end: null,
++      });
++
++      await controller.subscribe({ id: 'user-3' }, { paymentMethodId: 'pm_123' });
++
++      expect(mockStripe.paymentMethods.attach).toHaveBeenCalledWith('pm_123', {
++        customer: 'cus_paid',
++      });
++      expect(mockStripe.customers.update).toHaveBeenCalledWith('cus_paid', {
++        invoice_settings: {
++          default_payment_method: 'pm_123',
++        },
++      });
++      expect(mockStripe.subscriptions.create).toHaveBeenCalledWith(
++        expect.objectContaining({
++          default_payment_method: 'pm_123',
++          payment_settings: {
++            save_default_payment_method: 'on_subscription',
++          },
++        }),
++        { idempotencyKey: 'styx-subscribe-user-3' },
++      );
++    });
++
++    it('refreshes a stored subscription and updates its default payment method without duplicating it', async () => {
++      mockPool.query.mockResolvedValueOnce({
++        rows: [activeUserRow({
++          id: 'user-4',
++          email: 'stored@example.com',
++          stripe_customer_id: 'cus_stored',
++          subscription_id: 'sub_stored',
++        })],
++      });
++      mockStripe.subscriptions.retrieve.mockResolvedValue({
++        id: 'sub_stored',
++        status: 'active',
++        trial_end: null,
++      });
++      mockStripe.subscriptions.update.mockResolvedValue({
++        id: 'sub_stored',
++        status: 'active',
++        trial_end: null,
++      });
++
++      const result = await controller.subscribe({ id: 'user-4' }, { paymentMethodId: 'pm_later' });
++
++      expect(mockStripe.paymentMethods.attach).toHaveBeenCalledWith('pm_later', {
++        customer: 'cus_stored',
++      });
++      expect(mockStripe.customers.update).toHaveBeenCalledWith('cus_stored', {
++        invoice_settings: {
++          default_payment_method: 'pm_later',
++        },
++      });
++      expect(mockStripe.subscriptions.retrieve).toHaveBeenCalledWith('sub_stored');
++      expect(mockStripe.subscriptions.update).toHaveBeenCalledWith('sub_stored', {
++        default_payment_method: 'pm_later',
++      });
++      expect(mockStripe.subscriptions.create).not.toHaveBeenCalled();
++      expect(result).toEqual({
++        subscriptionId: 'sub_stored',
++        customerId: 'cus_stored',
++        status: 'active',
++        trialDays: 30,
++        trialEndsAt: null,
++        amountCents: 1499,
++        currency: 'usd',
++        interval: 'month',
++        reused: true,
++      });
++    });
++
++    it('rejects blank payment method ids before calling Stripe', async () => {
++      await expect(
++        controller.subscribe({ id: 'user-5' }, { paymentMethodId: '   ' }),
++      ).rejects.toThrow(/paymentMethodId/i);
++
++      expect(mockPool.query).not.toHaveBeenCalled();
++      expect(mockStripe.subscriptions.create).not.toHaveBeenCalled();
++    });
++
++    it('rejects inactive users before creating Stripe resources', async () => {
++      mockPool.query.mockResolvedValueOnce({
++        rows: [activeUserRow({ status: 'PENDING_DELETION' })],
++      });
++
++      await expect(
++        controller.subscribe({ id: 'user-6' }, {}),
++      ).rejects.toThrow(/active account/i);
++
++      expect(mockStripe.customers.create).not.toHaveBeenCalled();
++      expect(mockStripe.subscriptions.create).not.toHaveBeenCalled();
++    });
++
++    it('clears canceled stored subscriptions and creates a replacement', async () => {
++      mockPool.query
++        .mockResolvedValueOnce({
++          rows: [activeUserRow({
++            id: 'user-7',
++            stripe_customer_id: 'cus_7',
++            subscription_id: 'sub_old',
++          })],
++        })
++        .mockResolvedValueOnce({ rows: [] })
++        .mockResolvedValueOnce({ rows: [] });
++      mockStripe.subscriptions.retrieve.mockResolvedValue({
++        id: 'sub_old',
++        status: 'canceled',
++        trial_end: null,
++      });
++      mockStripe.subscriptions.create.mockResolvedValue({
++        id: 'sub_new',
++        status: 'trialing',
++        trial_end: null,
++      });
++
++      const result = await controller.subscribe({ id: 'user-7' }, {});
++
++      expect(mockPool.query.mock.calls[1][0]).toContain('SET subscription_id = NULL');
++      expect(mockStripe.subscriptions.create).toHaveBeenCalledWith(
++        expect.objectContaining({ customer: 'cus_7' }),
++        { idempotencyKey: 'styx-subscribe-user-7' },
++      );
++      expect(result.subscriptionId).toBe('sub_new');
++      expect(result.reused).toBe(false);
++    });
++
++    it('cancels a newly created subscription if local persistence fails', async () => {
++      mockPool.query
++        .mockResolvedValueOnce({
++          rows: [activeUserRow({
++            id: 'user-8',
++            stripe_customer_id: 'cus_8',
++          })],
++        })
++        .mockRejectedValueOnce(new Error('db down'));
++      mockStripe.subscriptions.create.mockResolvedValue({
++        id: 'sub_orphan',
++        status: 'trialing',
++        trial_end: null,
++      });
++
++      await expect(
++        controller.subscribe({ id: 'user-8' }, {}),
++      ).rejects.toThrow('db down');
++
++      expect(mockStripe.subscriptions.cancel).toHaveBeenCalledWith(
++        'sub_orphan',
++        { prorate: true },
++        { idempotencyKey: 'styx-subscribe-rollback-sub_orphan' },
++      );
++    });
++
++    it('uses AuthGuard without the contract-creation tier guard', () => {
++      const guards =
++        Reflect.getMetadata(
++          GUARDS_METADATA,
++          PaymentsController.prototype.subscribe,
++        ) ?? [];
++
++      expect(guards).toEqual([AuthGuard]);
++    });
+   });
+ 
+   describe('previewSettlement', () => {
+diff --git a/src/api/src/modules/payments/payments.controller.ts b/src/api/src/modules/payments/payments.controller.ts
+index 5ac2e39c..ac14113b 100644
+--- a/src/api/src/modules/payments/payments.controller.ts
++++ b/src/api/src/modules/payments/payments.controller.ts
+@@ -1,4 +1,4 @@
+-import { Controller, Get, Post, Req, Res, Logger, RawBodyRequest, OnModuleInit, UseGuards, Param, Body, BadRequestException, Query } from '@nestjs/common';
++import { Controller, Get, Post, Req, Res, Logger, RawBodyRequest, OnModuleInit, UseGuards, Param, Body, BadRequestException, Query, ForbiddenException } from '@nestjs/common';
+ import { ApiTags, ApiOperation, ApiExcludeEndpoint, ApiBearerAuth } from '@nestjs/swagger';
+ import { Pool } from 'pg';
+ import { Request, Response } from 'express';
+@@ -8,16 +8,27 @@ import { NotificationsService } from '../notifications/notifications.service';
+ import { CompliancePolicyService } from '../compliance/compliance-policy.service';
+ import { SettlementService } from './settlement.service';
+ import { ReconciliationService } from './reconciliation.service';
+-import { Public } from '../../common/decorators/current-user.decorator';
++import { CurrentUser, Public } from '../../common/decorators/current-user.decorator';
+ import { AuthGuard } from '../../../guards/auth.guard';
+ import { RoleGuard, Roles } from '../../common/guards/role.guard';
+ import { JurisdictionDispositionMapper } from '../compliance/jurisdiction-disposition.mapper';
+ import { toCents } from '../../../../shared/libs/money';
++import { MONTHLY_SUBSCRIPTION_PRICE } from '../../../services/billing';
+ 
+ type StripeClient = InstanceType<typeof Stripe>;
+ type StripeEvent = ReturnType<StripeClient['webhooks']['constructEvent']>;
+ type StripePaymentIntent = Awaited<ReturnType<StripeClient['paymentIntents']['retrieve']>>;
+ type StripeDispute = Awaited<ReturnType<StripeClient['disputes']['retrieve']>>;
++type StripeSubscription = Awaited<ReturnType<StripeClient['subscriptions']['retrieve']>>;
++
++type SubscribeBody = {
++  paymentMethodId?: string;
++};
++
++const EARLY_ACCESS_SUBSCRIPTION_TRIAL_DAYS = 30;
++const EARLY_ACCESS_SUBSCRIPTION_CURRENCY = 'usd';
++const EARLY_ACCESS_SUBSCRIPTION_PRODUCT_NAME = 'Styx Early Access';
++const REUSABLE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due']);
+ 
+ @ApiTags('Payments')
+ @Controller('payments')
+@@ -47,6 +58,193 @@ export class PaymentsController implements OnModuleInit {
+     }
+   }
+ 
++  @Post('subscribe')
++  @UseGuards(AuthGuard)
++  @ApiBearerAuth()
++  @ApiOperation({ summary: 'Start early-access subscription billing' })
++  async subscribe(
++    @CurrentUser() user: { id: string; email?: string },
++    @Body() body: SubscribeBody = {},
++  ) {
++    const paymentMethodId = this.resolvePaymentMethodId(body);
++    const userResult = await this.pool.query(
++      `SELECT id, email, stripe_customer_id, subscription_id, status, access_tier
++       FROM users
++       WHERE id = $1`,
++      [user.id],
++    );
++
++    if (userResult.rows.length === 0) {
++      throw new BadRequestException('User account not found.');
++    }
++
++    const userRow = userResult.rows[0];
++    this.assertActiveBillingUser(userRow);
++
++    const customerId = await this.ensureStripeCustomer(
++      user.id,
++      userRow.email ?? user.email,
++      userRow.stripe_customer_id,
++    );
++
++    if (paymentMethodId) {
++      await this.attachDefaultPaymentMethod(customerId, paymentMethodId);
++    }
++
++    if (userRow.subscription_id) {
++      const storedSubscription = await this.refreshStoredSubscription(
++        user.id,
++        userRow.subscription_id,
++        paymentMethodId,
++      );
++      if (!storedSubscription) {
++        await this.clearStoredSubscription(user.id);
++      } else {
++        return this.formatSubscribeResponse({
++          subscriptionId: storedSubscription.id,
++          customerId,
++          status: storedSubscription.status,
++          trialEndsAt: this.toStripeTimestampIso(storedSubscription.trial_end),
++          reused: true,
++        });
++      }
++    }
++
++    const subscription = await this.createEarlyAccessSubscription(user.id, customerId, paymentMethodId);
++
++    try {
++      await this.persistSubscription(user.id, customerId, subscription.id);
++    } catch (error) {
++      await this.cancelSubscriptionQuietly(
++        subscription.id,
++        `local subscription persistence failed for user ${user.id}`,
++      );
++      throw error;
++    }
++
++    return this.formatSubscribeResponse({
++      subscriptionId: subscription.id,
++      customerId,
++      status: subscription.status,
++      trialEndsAt: this.toStripeTimestampIso(subscription.trial_end),
++      reused: false,
++    });
++  }
++
++  private assertActiveBillingUser(userRow: { status?: unknown }): void {
++    if (String(userRow.status || '').toUpperCase() !== 'ACTIVE') {
++      throw new ForbiddenException('An active account is required to start subscription billing.');
++    }
++  }
++
++  private async refreshStoredSubscription(
++    userId: string,
++    subscriptionId: string,
++    paymentMethodId: string | undefined,
++  ): Promise<StripeSubscription | null> {
++    const subscription = await this.stripe.subscriptions.retrieve(subscriptionId);
++    if (!this.isReusableSubscription(subscription)) {
++      this.logger.warn(
++        `Stored subscription ${subscriptionId} for user ${userId} is ${subscription.status}; clearing before replacement.`,
++      );
++      return null;
++    }
++
++    if (paymentMethodId) {
++      return this.stripe.subscriptions.update(subscriptionId, {
++        default_payment_method: paymentMethodId,
++      });
++    }
++
++    return subscription;
++  }
++
++  private isReusableSubscription(subscription: StripeSubscription): boolean {
++    return REUSABLE_SUBSCRIPTION_STATUSES.has(String(subscription.status || ''));
++  }
++
++  private async clearStoredSubscription(userId: string): Promise<void> {
++    await this.pool.query(
++      `UPDATE users
++       SET subscription_id = NULL
++       WHERE id = $1`,
++      [userId],
++    );
++  }
++
++  private async createEarlyAccessSubscription(
++    userId: string,
++    customerId: string,
++    paymentMethodId: string | undefined,
++  ): Promise<StripeSubscription> {
++    const subscriptionParams: Stripe.SubscriptionCreateParams = {
++      customer: customerId,
++      items: [
++        {
++          price_data: {
++            currency: EARLY_ACCESS_SUBSCRIPTION_CURRENCY,
++            product_data: {
++              name: EARLY_ACCESS_SUBSCRIPTION_PRODUCT_NAME,
++            },
++            recurring: {
++              interval: 'month',
++            },
++            unit_amount: MONTHLY_SUBSCRIPTION_PRICE,
++          },
++        },
++      ],
++      metadata: {
++        product: 'early_access',
++        userId,
++      },
++      payment_settings: {
++        save_default_payment_method: 'on_subscription',
++      },
++      trial_period_days: EARLY_ACCESS_SUBSCRIPTION_TRIAL_DAYS,
++    };
++
++    if (paymentMethodId) {
++      subscriptionParams.default_payment_method = paymentMethodId;
++    }
++
++    return this.stripe.subscriptions.create(
++      subscriptionParams,
++      { idempotencyKey: `styx-subscribe-${userId}` },
++    );
++  }
++
++  private async persistSubscription(
++    userId: string,
++    customerId: string,
++    subscriptionId: string,
++  ): Promise<void> {
++    await this.pool.query(
++      `UPDATE users
++       SET stripe_customer_id = $1,
++           subscription_id = $2,
++           access_tier = CASE
++             WHEN access_tier = 'free' THEN 'early_access'::access_tier
++             ELSE access_tier
++           END
++       WHERE id = $3`,
++      [customerId, subscriptionId, userId],
++    );
++  }
++
++  private async cancelSubscriptionQuietly(subscriptionId: string, reason: string): Promise<void> {
++    try {
++      await this.stripe.subscriptions.cancel(
++        subscriptionId,
++        { prorate: true },
++        { idempotencyKey: `styx-subscribe-rollback-${subscriptionId}` },
++      );
++    } catch (error) {
++      this.logger.error(
++        `Failed to roll back Stripe subscription ${subscriptionId} after ${reason}: ${error instanceof Error ? error.message : 'unknown error'}`,
++      );
++    }
++  }
++
+   @Get('disposition-policy/effective')
+   @UseGuards(AuthGuard)
+   @ApiBearerAuth()
+@@ -181,6 +379,81 @@ export class PaymentsController implements OnModuleInit {
+     return { message: 'Settlement job dispatched' };
+   }
+ 
++  private resolvePaymentMethodId(body: SubscribeBody | null | undefined): string | undefined {
++    const paymentMethodId = body?.paymentMethodId;
++    if (paymentMethodId === undefined) {
++      return undefined;
++    }
++
++    if (typeof paymentMethodId !== 'string' || paymentMethodId.trim().length === 0) {
++      throw new BadRequestException('paymentMethodId must be a non-empty string when provided.');
++    }
++
++    return paymentMethodId.trim();
++  }
++
++  private async ensureStripeCustomer(
++    userId: string,
++    email: string | undefined,
++    existingCustomerId: string | null,
++  ): Promise<string> {
++    if (existingCustomerId) {
++      return existingCustomerId;
++    }
++
++    const customer = await this.stripe.customers.create(
++      {
++        email,
++        metadata: { userId },
++      },
++      { idempotencyKey: `styx-customer-${userId}` },
++    );
++
++    await this.pool.query(
++      `UPDATE users
++       SET stripe_customer_id = $1
++       WHERE id = $2`,
++      [customer.id, userId],
++    );
++
++    return customer.id;
++  }
++
++  private async attachDefaultPaymentMethod(customerId: string, paymentMethodId: string): Promise<void> {
++    await this.stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
++    await this.stripe.customers.update(customerId, {
++      invoice_settings: {
++        default_payment_method: paymentMethodId,
++      },
++    });
++  }
++
++  private toStripeTimestampIso(timestamp: number | null | undefined): string | null {
++    return typeof timestamp === 'number'
++      ? new Date(timestamp * 1000).toISOString()
++      : null;
++  }
++
++  private formatSubscribeResponse(params: {
++    subscriptionId: string;
++    customerId: string | null;
++    status: string;
++    trialEndsAt: string | null;
++    reused: boolean;
++  }) {
++    return {
++      subscriptionId: params.subscriptionId,
++      customerId: params.customerId,
++      status: params.status,
++      trialDays: EARLY_ACCESS_SUBSCRIPTION_TRIAL_DAYS,
++      trialEndsAt: params.trialEndsAt,
++      amountCents: MONTHLY_SUBSCRIPTION_PRICE,
++      currency: EARLY_ACCESS_SUBSCRIPTION_CURRENCY,
++      interval: 'month',
++      reused: params.reused,
++    };
++  }
++
+   @Post('webhook')
+   @ApiOperation({ summary: 'Handle Stripe webhook events (payment, dispute)' })
+   @ApiExcludeEndpoint()
+diff --git a/src/api/src/modules/users/gdpr.service.spec.ts b/src/api/src/modules/users/gdpr.service.spec.ts
+index 95efa50a..8fe1b34c 100644
+--- a/src/api/src/modules/users/gdpr.service.spec.ts
++++ b/src/api/src/modules/users/gdpr.service.spec.ts
+@@ -13,9 +13,16 @@ const mockPool = {
+ 
+ describe('GdprService', () => {
+   let service: GdprService;
++  let mockStripe: { subscriptions: { cancel: jest.Mock } };
+ 
+   beforeEach(() => {
+     service = new GdprService(mockPool);
++    mockStripe = {
++      subscriptions: {
++        cancel: jest.fn().mockResolvedValue({ id: 'sub_cancelled' }),
++      },
++    };
++    (service as any).stripe = mockStripe;
+     (mockPool.query as jest.Mock).mockReset();
+     (mockPool.connect as jest.Mock).mockReset().mockResolvedValue(mockClient);
+     // appendTruthLogEvent runs on a connected client; default every client query
+@@ -140,6 +147,34 @@ describe('GdprService', () => {
+       expect(updateCall![1][1]).toBe(`deleted-${userId}@anonymized.styx`);
+     });
+ 
++    it('should cancel a stored subscription before scrubbing Stripe linkage', async () => {
++      const userId = 'subscribed-user';
++
++      (mockPool.query as jest.Mock)
++        .mockResolvedValueOnce({ rows: [{ id: userId }] });
++      mockClient.query.mockReset();
++      mockClient.query
++        .mockResolvedValueOnce({ rows: [] }) // BEGIN
++        .mockResolvedValueOnce({ rows: [{ subscription_id: 'sub_gdpr' }] })
++        .mockResolvedValue({ rows: [] });
++
++      await service.processPendingDeletions();
++
++      expect(mockStripe.subscriptions.cancel).toHaveBeenCalledWith(
++        'sub_gdpr',
++        { prorate: true },
++        { idempotencyKey: 'styx-gdpr-cancel-subscribed-user-sub_gdpr' },
++      );
++      const subscriptionLookupIndex = mockClient.query.mock.calls.findIndex(
++        (call) => typeof call[0] === 'string' && call[0].includes('SELECT subscription_id'),
++      );
++      const scrubIndex = mockClient.query.mock.calls.findIndex(
++        (call) => typeof call[0] === 'string' && call[0].includes('UPDATE users SET'),
++      );
++      expect(subscriptionLookupIndex).toBeGreaterThan(-1);
++      expect(scrubIndex).toBeGreaterThan(subscriptionLookupIndex);
++    });
++
+     it('should scrub remaining identity/compliance PII columns on the user (PRV3)', async () => {
+       const userId = 'pii-user';
+ 
+@@ -152,6 +187,7 @@ describe('GdprService', () => {
+       expect(updateCall).toBeDefined();
+       expect(updateCall![0]).toContain('date_of_birth = NULL');
+       expect(updateCall![0]).toContain('stripe_customer_id = NULL');
++      expect(updateCall![0]).toContain('subscription_id = NULL');
+       expect(updateCall![0]).toContain("compliance_metadata = '{}'::jsonb");
+       expect(updateCall![0]).toContain('identity_verification_id = NULL');
+       expect(updateCall![0]).toContain('identity_provider = NULL');
+diff --git a/src/api/src/modules/users/gdpr.service.ts b/src/api/src/modules/users/gdpr.service.ts
+index 31c7f51e..8c5a52b8 100644
+--- a/src/api/src/modules/users/gdpr.service.ts
++++ b/src/api/src/modules/users/gdpr.service.ts
+@@ -1,6 +1,9 @@
+ import { Injectable, Logger } from '@nestjs/common';
+ import { Pool, PoolClient } from 'pg';
+ import { createHash, randomUUID } from 'crypto';
++import Stripe from 'stripe';
++
++type StripeClient = InstanceType<typeof Stripe>;
+ 
+ // Matches TruthLogService.GENESIS_HASH / APPEND_LOCK_KEY so audit events written
+ // here stay part of the same tamper-evident chain.
+@@ -10,8 +13,12 @@ const TRUTH_LOG_APPEND_LOCK_KEY = 0x57_54_4c_47; // 'WTLG'
+ @Injectable()
+ export class GdprService {
+   private readonly logger = new Logger(GdprService.name);
++  private readonly stripe: StripeClient;
+ 
+-  constructor(private readonly pool: Pool) {}
++  constructor(private readonly pool: Pool) {
++    const apiKey = process.env.STRIPE_SECRET_KEY || 'sk_test_mock_key'; // allow-secret
++    this.stripe = new Stripe(apiKey, { apiVersion: '2026-05-27.dahlia' });
++  }
+ 
+   /**
+    * Appends an audit event to the tamper-evident event_log, keeping it linked to
+@@ -156,6 +163,7 @@ export class GdprService {
+       const client: PoolClient = await this.pool.connect();
+       try {
+         await client.query('BEGIN');
++        await this.cancelStoredSubscriptionIfPresent(client, userId);
+         await this.runErasureStatements(client, userId);
+         await this.appendTruthLogEventWithClient(client, 'GDPR_ERASURE_COMPLETED', {
+           userId,
+@@ -170,6 +178,7 @@ export class GdprService {
+       }
+     } else {
+       // Non-transactional fallback (no atomicity guarantee).
++      await this.cancelStoredSubscriptionIfPresent(this.pool, userId);
+       await this.runErasureStatements(this.pool, userId);
+       await this.appendTruthLogEvent('GDPR_ERASURE_COMPLETED', {
+         userId,
+@@ -180,6 +189,26 @@ export class GdprService {
+     this.logger.log(`GDPR erasure completed for user ${userId}`);
+   }
+ 
++  private async cancelStoredSubscriptionIfPresent(
++    db: Pool | PoolClient,
++    userId: string,
++  ): Promise<void> {
++    const subscriptionResult = await db.query(
++      'SELECT subscription_id FROM users WHERE id = $1',
++      [userId],
++    );
++    const subscriptionId = subscriptionResult.rows[0]?.subscription_id;
++    if (typeof subscriptionId !== 'string' || subscriptionId.trim().length === 0) {
++      return;
++    }
++
++    await this.stripe.subscriptions.cancel(
++      subscriptionId,
++      { prorate: true },
++      { idempotencyKey: `styx-gdpr-cancel-${userId}-${subscriptionId}` },
++    );
++  }
++
+   /**
+    * Issue every PII-scrubbing UPDATE/DELETE for an erased user against the given
+    * query target (a transaction client during normal operation, the pool only in
+@@ -192,7 +221,7 @@ export class GdprService {
+   ): Promise<void> {
+     // 1. Anonymize the user record. Scrub every direct-PII / identity / compliance
+     //    column, not just email/password (PRV3): geolocation, date_of_birth, the
+-    //    Stripe customer linkage, KYC compliance_metadata, identity-provider refs
++    //    Stripe customer/subscription linkage, KYC compliance_metadata, identity-provider refs
+     //    and Terms-of-Service acceptance metadata.
+     await db.query(
+       `UPDATE users SET
+@@ -201,6 +230,7 @@ export class GdprService {
+         last_known_state = NULL,
+         date_of_birth = NULL,
+         stripe_customer_id = NULL,
++        subscription_id = NULL,
+         compliance_metadata = '{}'::jsonb,
+         identity_verification_id = NULL,
+         identity_provider = NULL,

@@ -1,0 +1,42 @@
+diff --git a/src/api/database/schema.sql b/src/api/database/schema.sql
+index 8ef38975..08c5235a 100644
+--- a/src/api/database/schema.sql
++++ b/src/api/database/schema.sql
+@@ -51,6 +51,14 @@ CREATE TRIGGER trg_event_log_immutable
+ -- Domain Tables: Users, Contracts, Proofs, Fury Assignments
+ -- ============================================================
+ 
++CREATE TABLE IF NOT EXISTS enterprises (
++    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++    name TEXT NOT NULL,
++    status TEXT NOT NULL DEFAULT 'ACTIVE',
++    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
++);
++
+ CREATE TABLE users (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     email TEXT UNIQUE NOT NULL,
+@@ -231,6 +239,22 @@ CREATE INDEX idx_consumption_logs_enterprise_period
+ CREATE INDEX idx_consumption_logs_event_type
+   ON consumption_logs(enterprise_id, event_type, recorded_at);
+ 
++CREATE TABLE IF NOT EXISTS usage_event (
++    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++    user_id UUID NOT NULL REFERENCES users(id),
++    enterprise_id UUID REFERENCES enterprises(id),
++    event_type TEXT NOT NULL,
++    quantity INTEGER NOT NULL DEFAULT 1,
++    idempotency_key TEXT UNIQUE,
++    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
++);
++
++CREATE INDEX idx_usage_event_user
++  ON usage_event(user_id, created_at DESC);
++CREATE INDEX idx_usage_event_enterprise_type
++  ON usage_event(enterprise_id, event_type, created_at)
++  WHERE enterprise_id IS NOT NULL;
++
+ CREATE INDEX idx_contracts_user_id ON contracts(user_id);
+ CREATE INDEX idx_contracts_status ON contracts(status);
+ CREATE INDEX idx_proofs_contract_id ON proofs(contract_id);

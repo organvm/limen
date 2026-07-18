@@ -1,0 +1,379 @@
+diff --git a/src/api/database/migrations/041_user_access_tier.sql b/src/api/database/migrations/041_user_access_tier.sql
+new file mode 100644
+index 00000000..ec33d49b
+--- /dev/null
++++ b/src/api/database/migrations/041_user_access_tier.sql
+@@ -0,0 +1,22 @@
++-- Migration 041: User access tiers for beta contract creation gating.
++
++DO $$
++BEGIN
++  CREATE TYPE access_tier AS ENUM ('free', 'early_access', 'pro');
++EXCEPTION
++  WHEN duplicate_object THEN NULL;
++END $$;
++
++ALTER TABLE users
++  ADD COLUMN IF NOT EXISTS access_tier access_tier NOT NULL DEFAULT 'free';
++
++UPDATE users
++SET access_tier = 'pro'
++WHERE email IN ('demo@styx.protocol', 'fury@styx.protocol', 'admin@styx.protocol')
++  AND access_tier = 'free';
++
++COMMENT ON TYPE access_tier IS
++  'Product access tier: free, early_access, or pro.';
++
++COMMENT ON COLUMN users.access_tier IS
++  'Controls contract creation access. early_access is capped by TierGuard to 3 active contracts and $0 escrow.';
+diff --git a/src/api/database/schema.sql b/src/api/database/schema.sql
+index 50b62167..a83fb964 100644
+--- a/src/api/database/schema.sql
++++ b/src/api/database/schema.sql
+@@ -2,6 +2,7 @@
+ -- Enforce absolute financial integrity for user stakes and bounties.
+ 
+ CREATE TYPE account_type AS ENUM ('ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE');
++CREATE TYPE access_tier AS ENUM ('free', 'early_access', 'pro');
+ 
+ CREATE TABLE accounts (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+@@ -58,6 +59,7 @@ CREATE TABLE users (
+     integrity_score INTEGER DEFAULT 50,
+     account_id UUID REFERENCES accounts(id),
+     role TEXT DEFAULT 'USER',
++    access_tier access_tier NOT NULL DEFAULT 'free',
+     enterprise_id UUID,
+     status TEXT DEFAULT 'ACTIVE', last_known_state TEXT, social_guild_id UUID,
+     deletion_requested_at TIMESTAMPTZ,
+@@ -433,4 +435,3 @@ ALTER TABLE fury_assignments ADD COLUMN IF NOT EXISTS realm_id TEXT REFERENCES r
+ CREATE INDEX IF NOT EXISTS idx_fury_assignments_realm_id ON fury_assignments(realm_id);
+ 
+ ALTER TABLE users ADD COLUMN IF NOT EXISTS realm_preferences JSONB DEFAULT '{}';
+-
+diff --git a/src/api/database/seed.sql b/src/api/database/seed.sql
+index d097004c..0fb2cdcd 100644
+--- a/src/api/database/seed.sql
++++ b/src/api/database/seed.sql
+@@ -16,10 +16,10 @@ INSERT INTO accounts (id, name, type) VALUES
+ ON CONFLICT (name) DO NOTHING;
+ 
+ -- Demo users (password: demo-password-123, bcrypt cost 10) -- allow-secret
+-INSERT INTO users (id, email, password_hash, stripe_customer_id, integrity_score, account_id, role, enterprise_id, status) VALUES
+-  ('d0000000-0000-0000-0000-000000000001', 'demo@styx.protocol', '$2b$10$Qvqvkece7/TpoSbDjHr75eHpT7blt9.4dwoub11ClSk2/PCk4tehe', 'cus_demo_001', 75, 'a0000000-0000-0000-0000-000000000010', 'USER', 'e0000000-0000-0000-0000-000000000001', 'ACTIVE'),
+-  ('d0000000-0000-0000-0000-000000000002', 'fury@styx.protocol', '$2b$10$Qvqvkece7/TpoSbDjHr75eHpT7blt9.4dwoub11ClSk2/PCk4tehe', 'cus_fury_001', 90, 'a0000000-0000-0000-0000-000000000011', 'FURY', 'e0000000-0000-0000-0000-000000000001', 'ACTIVE'),
+-  ('d0000000-0000-0000-0000-000000000003', 'admin@styx.protocol', '$2b$10$Qvqvkece7/TpoSbDjHr75eHpT7blt9.4dwoub11ClSk2/PCk4tehe', 'cus_admin_001', 200, 'a0000000-0000-0000-0000-000000000012', 'ADMIN', 'e0000000-0000-0000-0000-000000000001', 'ACTIVE')
++INSERT INTO users (id, email, password_hash, stripe_customer_id, integrity_score, account_id, role, access_tier, enterprise_id, status) VALUES
++  ('d0000000-0000-0000-0000-000000000001', 'demo@styx.protocol', '$2b$10$Qvqvkece7/TpoSbDjHr75eHpT7blt9.4dwoub11ClSk2/PCk4tehe', 'cus_demo_001', 75, 'a0000000-0000-0000-0000-000000000010', 'USER', 'pro', 'e0000000-0000-0000-0000-000000000001', 'ACTIVE'),
++  ('d0000000-0000-0000-0000-000000000002', 'fury@styx.protocol', '$2b$10$Qvqvkece7/TpoSbDjHr75eHpT7blt9.4dwoub11ClSk2/PCk4tehe', 'cus_fury_001', 90, 'a0000000-0000-0000-0000-000000000011', 'FURY', 'pro', 'e0000000-0000-0000-0000-000000000001', 'ACTIVE'),
++  ('d0000000-0000-0000-0000-000000000003', 'admin@styx.protocol', '$2b$10$Qvqvkece7/TpoSbDjHr75eHpT7blt9.4dwoub11ClSk2/PCk4tehe', 'cus_admin_001', 200, 'a0000000-0000-0000-0000-000000000012', 'ADMIN', 'pro', 'e0000000-0000-0000-0000-000000000001', 'ACTIVE')
+ ON CONFLICT (id) DO NOTHING;
+ 
+ -- Contracts in different states
+diff --git a/src/api/src/guards/tier.guard.spec.ts b/src/api/src/guards/tier.guard.spec.ts
+new file mode 100644
+index 00000000..f9f67535
+--- /dev/null
++++ b/src/api/src/guards/tier.guard.spec.ts
+@@ -0,0 +1,130 @@
++import { BadRequestException, ForbiddenException } from "@nestjs/common";
++import {
++  AccessTier,
++  EARLY_ACCESS_ACTIVE_CONTRACT_LIMIT,
++  TierGuard,
++} from "./tier.guard";
++
++describe("TierGuard", () => {
++  let guard: TierGuard;
++  let mockPool: { query: jest.Mock };
++
++  beforeEach(() => {
++    mockPool = { query: jest.fn() };
++    guard = new TierGuard(mockPool as any);
++  });
++
++  function createContext(input?: {
++    user?: { id?: string };
++    body?: Record<string, unknown>;
++  }) {
++    const hasUserKey =
++      !!input && Object.prototype.hasOwnProperty.call(input, "user");
++
++    return {
++      switchToHttp: () => ({
++        getRequest: () => ({
++          user: hasUserKey ? input?.user : { id: "user-1" },
++          body: input?.body ?? { stakeAmount: 0 },
++        }),
++      }),
++    } as any;
++  }
++
++  function mockTier(
++    accessTier: AccessTier | string,
++    activeContractCount: number,
++  ) {
++    mockPool.query.mockResolvedValueOnce({
++      rows: [
++        {
++          access_tier: accessTier,
++          active_contract_count: activeContractCount,
++        },
++      ],
++    });
++  }
++
++  it("denies when no authenticated user is present", async () => {
++    await expect(
++      guard.canActivate(createContext({ user: undefined })),
++    ).rejects.toThrow(ForbiddenException);
++    expect(mockPool.query).not.toHaveBeenCalled();
++  });
++
++  it("denies when user is not found", async () => {
++    mockPool.query.mockResolvedValueOnce({ rows: [] });
++
++    await expect(guard.canActivate(createContext())).rejects.toThrow(
++      /not found/,
++    );
++  });
++
++  it("allows pro users without contract or escrow caps", async () => {
++    mockTier(AccessTier.PRO, 12);
++
++    await expect(
++      guard.canActivate(createContext({ body: { stakeAmount: 250 } })),
++    ).resolves.toBe(true);
++  });
++
++  it("denies free users from contract creation", async () => {
++    mockTier(AccessTier.FREE, 0);
++
++    await expect(guard.canActivate(createContext())).rejects.toThrow(
++      /requires early access or pro access/,
++    );
++  });
++
++  it("allows early-access users below the active contract cap with zero escrow", async () => {
++    mockTier(AccessTier.EARLY_ACCESS, EARLY_ACCESS_ACTIVE_CONTRACT_LIMIT - 1);
++
++    await expect(
++      guard.canActivate(createContext({ body: { stakeAmount: 0 } })),
++    ).resolves.toBe(true);
++  });
++
++  it("denies early-access users at the active contract cap", async () => {
++    mockTier(AccessTier.EARLY_ACCESS, EARLY_ACCESS_ACTIVE_CONTRACT_LIMIT);
++
++    await expect(
++      guard.canActivate(createContext({ body: { stakeAmount: 0 } })),
++    ).rejects.toThrow(/limited to 3 active contracts/);
++  });
++
++  it("denies early-access users requesting escrow through stakeAmount", async () => {
++    mockTier(AccessTier.EARLY_ACCESS, 0);
++
++    await expect(
++      guard.canActivate(createContext({ body: { stakeAmount: 0.01 } })),
++    ).rejects.toThrow(/limited to \$0 escrow contracts/);
++  });
++
++  it("denies early-access users requesting paid pricing metadata", async () => {
++    mockTier(AccessTier.EARLY_ACCESS, 0);
++
++    await expect(
++      guard.canActivate(
++        createContext({
++          body: { stakeAmount: 0, pricing: { plan: "MVP_39" } },
++        }),
++      ),
++    ).rejects.toThrow(/limited to \$0 escrow contracts/);
++  });
++
++  it("rejects non-numeric stakeAmount before applying tier policy", async () => {
++    mockTier(AccessTier.EARLY_ACCESS, 0);
++
++    await expect(
++      guard.canActivate(createContext({ body: { stakeAmount: {} } })),
++    ).rejects.toThrow(BadRequestException);
++  });
++
++  it("fails closed for unsupported database tier values", async () => {
++    mockTier("internal", 0);
++
++    await expect(guard.canActivate(createContext())).rejects.toThrow(
++      /Unsupported access tier/,
++    );
++  });
++});
+diff --git a/src/api/src/guards/tier.guard.ts b/src/api/src/guards/tier.guard.ts
+new file mode 100644
+index 00000000..e39fd5b5
+--- /dev/null
++++ b/src/api/src/guards/tier.guard.ts
+@@ -0,0 +1,116 @@
++import {
++  BadRequestException,
++  CanActivate,
++  ExecutionContext,
++  ForbiddenException,
++  Injectable,
++} from "@nestjs/common";
++import { Pool } from "pg";
++
++export enum AccessTier {
++  FREE = "free",
++  EARLY_ACCESS = "early_access",
++  PRO = "pro",
++}
++
++export const EARLY_ACCESS_ACTIVE_CONTRACT_LIMIT = 3;
++export const EARLY_ACCESS_ESCROW_LIMIT_CENTS = 0;
++
++@Injectable()
++export class TierGuard implements CanActivate {
++  constructor(private readonly pool: Pool) {}
++
++  async canActivate(context: ExecutionContext): Promise<boolean> {
++    const request = context.switchToHttp().getRequest();
++    const userId = request.user?.id;
++
++    if (!userId) {
++      throw new ForbiddenException("Authentication required");
++    }
++
++    const result = await this.pool.query(
++      `SELECT
++         u.access_tier::text AS access_tier,
++         COUNT(c.id)::int AS active_contract_count
++       FROM users u
++       LEFT JOIN contracts c
++         ON c.user_id = u.id
++        AND c.status = 'ACTIVE'
++       WHERE u.id = $1
++       GROUP BY u.id, u.access_tier`,
++      [userId],
++    );
++
++    if (result.rows.length === 0) {
++      throw new ForbiddenException("User account not found.");
++    }
++
++    const accessTier = String(result.rows[0].access_tier || "").toLowerCase();
++    if (accessTier === AccessTier.PRO) {
++      return true;
++    }
++
++    if (accessTier === AccessTier.FREE) {
++      throw new ForbiddenException(
++        "Contract creation requires early access or pro access.",
++      );
++    }
++
++    if (accessTier !== AccessTier.EARLY_ACCESS) {
++      throw new ForbiddenException("Unsupported access tier.");
++    }
++
++    const activeContractCount = Number(result.rows[0].active_contract_count);
++    if (activeContractCount >= EARLY_ACCESS_ACTIVE_CONTRACT_LIMIT) {
++      throw new ForbiddenException(
++        `Early access is limited to ${EARLY_ACCESS_ACTIVE_CONTRACT_LIMIT} active contracts.`,
++      );
++    }
++
++    const requestedEscrowCents = this.getRequestedEscrowCents(request.body);
++    if (requestedEscrowCents > EARLY_ACCESS_ESCROW_LIMIT_CENTS) {
++      throw new ForbiddenException(
++        "Early access is limited to $0 escrow contracts.",
++      );
++    }
++
++    return true;
++  }
++
++  private getRequestedEscrowCents(body: unknown): number {
++    if (!body || typeof body !== "object") {
++      return 0;
++    }
++
++    const payload = body as {
++      stakeAmount?: unknown;
++      pricing?: { plan?: unknown };
++    };
++
++    const pricingPlan =
++      typeof payload.pricing?.plan === "string"
++        ? payload.pricing.plan.toUpperCase()
++        : undefined;
++    if (pricingPlan && pricingPlan !== "CUSTOM") {
++      return 1;
++    }
++
++    const rawStakeAmount = payload.stakeAmount ?? 0;
++    if (
++      typeof rawStakeAmount !== "number" &&
++      typeof rawStakeAmount !== "string"
++    ) {
++      throw new BadRequestException("stakeAmount must be numeric.");
++    }
++
++    const stakeAmount = Number(rawStakeAmount);
++    if (!Number.isFinite(stakeAmount)) {
++      throw new BadRequestException("stakeAmount must be numeric.");
++    }
++    if (stakeAmount < 0) {
++      throw new BadRequestException("stakeAmount must be non-negative.");
++    }
++
++    return stakeAmount > 0 ? Math.max(1, Math.round(stakeAmount * 100)) : 0;
++  }
++}
+diff --git a/src/api/src/modules/contracts/contracts.controller.ts b/src/api/src/modules/contracts/contracts.controller.ts
+index 762b5ec1..3a80de9d 100644
+--- a/src/api/src/modules/contracts/contracts.controller.ts
++++ b/src/api/src/modules/contracts/contracts.controller.ts
+@@ -26,6 +26,7 @@ import { LedgerService } from "../../../services/ledger/ledger.service";
+ import { TruthLogService } from "../../../services/ledger/truth-log.service";
+ import { AuthGuard } from "../../../guards/auth.guard";
+ import { BannedUserGuard } from "../../guards/banned-user.guard";
++import { TierGuard } from "../../guards/tier.guard";
+ import { GeofenceGuard } from "../../common/guards/geofence.guard";
+ import { ComplianceAccessGuard } from "../../common/guards/compliance-access.guard";
+ import { CurrentUser } from "../../common/decorators/current-user.decorator";
+@@ -57,7 +58,13 @@ export class ContractsController {
+     return this.contractsService.getUserContracts(user.id);
+   }
+ 
+-  @UseGuards(AuthGuard, GeofenceGuard, ComplianceAccessGuard, BannedUserGuard)
++  @UseGuards(
++    AuthGuard,
++    GeofenceGuard,
++    ComplianceAccessGuard,
++    BannedUserGuard,
++    TierGuard,
++  )
+   @Post()
+   @ApiOperation({
+     summary: "Create a new behavioral contract with a financial stake",
+diff --git a/src/api/src/modules/contracts/contracts.module.ts b/src/api/src/modules/contracts/contracts.module.ts
+index 5ca72b94..7b191414 100644
+--- a/src/api/src/modules/contracts/contracts.module.ts
++++ b/src/api/src/modules/contracts/contracts.module.ts
+@@ -13,6 +13,8 @@ import { AegisProtocolService } from "../../../services/health/aegis.service";
+ import { RecoveryProtocolService } from "../../../services/health/recovery-protocol.service";
+ import { DynamicPenaltyService } from "../../../services/health/dynamic-penalty.service";
+ import { HoneypotService } from "../../../services/intelligence/honeypot.service";
++import { BannedUserGuard } from "../../guards/banned-user.guard";
++import { TierGuard } from "../../guards/tier.guard";
+ 
+ import { SurveyService } from "./survey.service";
+ import { WaitlistService } from "./waitlist.service";
+@@ -58,6 +60,8 @@ const redisProvider = {
+     HoneypotService,
+     SurveyService,
+     WaitlistService,
++    BannedUserGuard,
++    TierGuard,
+ 
+     AnomalyService,
+     redisProvider,

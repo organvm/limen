@@ -1,0 +1,527 @@
+[
+  {
+    "number": 465,
+    "disposition": "engaged",
+    "comment": "I checked the repo for the leaderboard/test side of `Tests \u2014 gradient math + leaderboard ranking`. The docs still promise `/users/leaderboard` and `Redis Sorted Sets` for ranking (`docs/api/api--spec.md`, `docs/architecture/architecture--technical-feasibility.md`), but I did not find a focused test artifact that obviously covers goal-gradient math plus ranking tie-break behavior. The core ask here looks real: pin the gradient formula and ordering semantics in an explicit spec/test so the public leaderboard cannot drift quietly."
+  },
+  {
+    "number": 466,
+    "disposition": "evolving",
+    "comment": "I traced the notification path before touching this. Mobile already has `NotificationService.registerDeviceToken()` in `src/mobile/services/NotificationService.ts`, and the API has a `NotificationsService` for DB/SSE delivery in `src/api/src/modules/notifications/notifications.service.ts`, but I did not find provider wiring for remote APNs/FCM dispatch or server-side device-token persistence. So the API portion is still a live gap: persist tokens, define provider abstraction, and route remote sends through the notification module instead of only local/SSE paths."
+  },
+  {
+    "number": 467,
+    "disposition": "evolving",
+    "comment": "Repo reality for this native slice: mobile currently leans on Expo notifications (`src/mobile/services/NotificationService.ts`) and the repo guidance still says true native bridges remain outstanding when platform code matters (`docs/CLAUDE.md` notes native Swift/Kotlin gaps elsewhere too). I do not see a committed APNs/FCM native integration layer yet, so this issue still represents concrete work rather than backlog noise. The decision to make here is whether Styx stays on Expo push tokens as the control surface or graduates to first-party APNs/FCM plumbing per platform."
+  },
+  {
+    "number": 468,
+    "disposition": "engaged",
+    "comment": "I looked for delivery-path tests after tracing the notification code. There are unit tests around the Expo-facing mobile service and around the API notification store/SSE surface, but I did not find the higher-level coverage this title asks for: delivery confirmation, provider fallback, and remote push acknowledgement across the mobile/API boundary. This should stay visible until those end-to-end delivery scenarios are pinned down as executable tests rather than inferred from local notification helpers."
+  },
+  {
+    "number": 469,
+    "disposition": "evolving",
+    "comment": "There is already serious legal writing in the repo \u2014 especially `docs/legal/legal--skill-based-contest-whitepaper.md` and the 50-state survey \u2014 so this is no longer a blank-page request. The remaining job is to tighten the specific *skill-vs-chance* through-line into one argument section that product, counsel, and release gates can all cite consistently. I would treat this issue as the place that extracts the strongest claim path from the broader whitepaper corpus rather than starting over."
+  },
+  {
+    "number": 470,
+    "disposition": "engaged",
+    "comment": "I found the legal packet, but I did **not** find the durable thing this issue actually needs: an external counsel sign-off receipt. The repo has substantive inputs (`docs/legal/legal--skill-based-contest-whitepaper.md`, `docs/legal/legal--50-state-skill-contest-survey.md`, `docs/legal/legal--performance-wagering.md`), so the gap is not drafting \u2014 it is outside review and a recorded yes/no on the classification position. Keeping this open is correct until that receipt exists in-repo or is linked from here."
+  },
+  {
+    "number": 471,
+    "disposition": "evolving",
+    "comment": "I checked the existing readiness gate. `src/api/src/modules/ops/beta-readiness.service.ts` already aggregates money/KYC/jurisdiction/safety signals, but I do not see a release check that specifically blocks contest-facing features when the legal whitepaper / counsel-signoff lane is incomplete. So this issue has a clean next step: extend the readiness contract so contest features cannot silently ship on technical green alone."
+  },
+  {
+    "number": 472,
+    "disposition": "evolving",
+    "comment": "This is partially real on disk now. Migration `012_self_exclusion_and_partner_v2.sql` adds `self_exclusion_expires_at`, the API exposes `POST /users/me/self-exclusion`, and `SelfExclusionService` exists in `src/api/services/security/self-exclusion.service.ts`. What still seems worth tightening under this issue is the full registry/cooling-off model promised by the title \u2014 right now I see a user-level exclusion timer, but not yet a richer exclusion registry or broader contract-creation enforcement story documented here."
+  },
+  {
+    "number": 473,
+    "disposition": "evolving",
+    "comment": "I found the safety backend for self-exclusion plus legal disclosure pages, and the mobile API client already knows how to hit `/users/me/self-exclusion`. What I did **not** immediately find is a clearly surfaced user-facing settings flow that turns that backend into a deliberate responsible-use control panel. So the UI half still looks live: expose the exclusion action, duration, status, and re-entry messaging in a place users will actually reach before harm escalates."
+  },
+  {
+    "number": 474,
+    "disposition": "engaged",
+    "comment": "The repo already tests parts of the self-exclusion backend, but I did not find a focused suite that proves the full behavioral contract asked for here: exclusion enforcement, blocked contract creation during the cooling-off window, and safe re-entry after expiry. Given the safety implications, I think this issue should remain explicit until those scenarios exist as named tests instead of being assumed from the service alone."
+  },
+  {
+    "number": 475,
+    "disposition": "evolving",
+    "comment": "I inspected the current health bridge surface. `src/shared/native/health-bridge.ts` and `src/mobile/services/HealthKitMetadataGuard.ts` prove the anti-manual-entry logic exists, but the repo docs still explicitly call out true HealthKit/Google Fit/Health Connect native bridges as unfinished (`docs/CLAUDE.md`, `README.md`). So the core integration issue is still valid: the validation model is here, the production-grade native ingestion path is not."
+  },
+  {
+    "number": 476,
+    "disposition": "evolving",
+    "comment": "The repo already has legal/privacy scaffolding for health data and some underlying bridge logic, but I did not find a clearly finished UI for health-data display plus consent management. Given the BIPA / consent distinctions documented in `docs/legal/legal--cross-jurisdictional-consent-matrix.md`, this issue should probably anchor the user-facing permission narrative: what data is pulled, why, and how the user revokes or narrows it."
+  },
+  {
+    "number": 477,
+    "disposition": "engaged",
+    "comment": "There are useful unit tests around health metadata validation, but I did not see a full cross-platform test story that matches this title: sync accuracy, trusted-source filtering, and privacy/compliance behavior for health ingestion end to end. Since the repo itself still describes the native bridge as incomplete, the test obligation here remains real and should stay attached to the unfinished bridge rather than getting lost inside generic mobile testing."
+  },
+  {
+    "number": 478,
+    "disposition": "evolving",
+    "comment": "This pipeline is no longer hypothetical. `src/api/src/modules/proofs/proofs.controller.ts` already issues pre-signed R2 upload URLs, confirms uploads, runs anomaly + pHash checks, and routes proofs into Fury review. The remaining thing I would keep this issue for is the *processing pipeline* layer named in the title \u2014 especially the out-of-band processing callback / job state machinery that should own redaction and post-upload stages rather than just raw upload confirmation."
+  },
+  {
+    "number": 479,
+    "disposition": "evolving",
+    "comment": "I found an API for processing-state visibility (`GET /proofs/:id/processing-status`) and the controller tracks `processing_status`, but I did not find a clearly finished user-facing surface that exposes upload progress + processing states coherently in the web/mobile UI. That makes this issue still useful: the backend status model exists, the human-readable progress UX still needs to become first-class."
+  },
+  {
+    "number": 480,
+    "disposition": "engaged",
+    "comment": "There is meaningful proof-upload logic on disk, but I did not find a single focused suite that exercises the whole upload \u2192 processing-state \u2192 callback \u2192 masked-media progression as a state machine. Given how much correctness here depends on status transitions (`PENDING_UPLOAD`, `PENDING_REVIEW`, processing callback guards, manual-review quarantines), the test concern in this issue is still very alive."
+  },
+  {
+    "number": 481,
+    "disposition": "evolving",
+    "comment": "The schema side landed further than the stale issue history suggests. Migration `011_fury_audit_masks.sql` adds `masked_media_uri`, `redaction_status`, and `subject_alias`, and those fields show up in proof/fury code paths. What I would still keep under this issue is tightening the audit-trail semantics: when a mask was produced, by which pipeline stage, and how redaction failures are surfaced alongside the happy path."
+  },
+  {
+    "number": 482,
+    "disposition": "evolving",
+    "comment": "The backend already understands masked assets and reviewer aliases, and `src/api/src/modules/fury/fury.controller.ts` even exposes a `mask-audit` view. I did not, however, find a distinct admin/workbench UI that feels like the dedicated masked-display toggle and audit review surface this title promises. So the data plumbing is there; the operator-facing workbench still deserves its own visible lane."
+  },
+  {
+    "number": 483,
+    "disposition": "engaged",
+    "comment": "I found tests around serving masked vs raw proof assets to different actors, which is a solid start, but not the broader fidelity suite implied here. What still seems missing is a concentrated set of tests around masking-rule correctness, redaction failure behavior, and whether the reviewer ever sees a privacy leak when the mask pipeline misbehaves. That is important enough to keep explicit."
+  },
+  {
+    "number": 484,
+    "disposition": "evolving",
+    "comment": "There is some real anti-collusion substrate here: Fury routing exists, honeypot expectations exist, and `EnforcementService.evaluateCollusion()` opens enforcement cases in `src/api/src/modules/fury/enforcement.service.ts`. What I did **not** find is an explicit cluster-detection/routing module that matches this issue title word-for-word. I would keep this open for the missing piece: make reviewer-network clustering a first-class routing signal rather than relying only on post-hoc honeypot enforcement."
+  },
+  {
+    "number": 485,
+    "disposition": "evolving",
+    "comment": "I found admin and Fury review surfaces, but I did not find a dedicated cluster-visualization / override screen that would let an operator inspect suspected reviewer blocs and intervene. Since the backend anti-collusion story is partly present but not yet legible to humans, this UI issue still has a crisp purpose: expose the collusion graph instead of burying it in enforcement tables and logs."
+  },
+  {
+    "number": 486,
+    "disposition": "engaged",
+    "comment": "The repo has honeypot and enforcement tests, but I did not find a focused measurement harness for the thing this issue names: routing fairness and cluster-detection accuracy. For anti-collusion logic, that benchmark layer matters as much as the code itself \u2014 otherwise the system can 'feel' adversarially aware without ever proving false-positive/false-negative behavior."
+  },
+  {
+    "number": 487,
+    "disposition": "evolving",
+    "comment": "This one already has meaningful code on disk. `src/api/src/modules/fury/enforcement.service.ts` opens honeypot-failure cases, applies penalties idempotently, and logs appeals; `src/api/services/intelligence/honeypot.service.ts` injects and grades honeypots. That means the open work is not 'invent slashing from scratch' but harden the remaining policy surface: which rules fire automatically, which stay pending-review, and how honey-trap triggers graduate into durable enforcement policy."
+  },
+  {
+    "number": 488,
+    "disposition": "evolving",
+    "comment": "The enforcement backend exists, but I did not find the explicit evidence-review dashboard the title calls for. Right now the repo gives me services and controllers; it does not yet give operators a visibly mature place to inspect slashing cases, see the attached evidence, and resolve appeals with context. That gap is big enough that I would keep this UI issue alive on its own."
+  },
+  {
+    "number": 489,
+    "disposition": "engaged",
+    "comment": "I found tests around honeypots and enforcement idempotency, but not the more policy-shaped suite this issue implies: penalty math, threshold behavior, and false-positive safeguards for reviewer punishment. Because slashing can damage the integrity network if it is too eager, this deserves dedicated test coverage rather than being inferred from generic service specs."
+  },
+  {
+    "number": 490,
+    "disposition": "evolving",
+    "comment": "There is already a concrete service here, just under a slightly different name. `src/api/src/modules/ops/beta-readiness.service.ts` is effectively the beginnings of the `BetaReadinessContract`: it aggregates lane checks for money rails, KYC, jurisdiction coverage, and safety schemas. The remaining work is to finish the contract shape and explicitly cover all 19 criteria promised by this ticket instead of leaving the service as a small subset under a different label."
+  },
+  {
+    "number": 491,
+    "disposition": "evolving",
+    "comment": "I found the in-repo readiness service and the beta-readiness artifact flow referenced in `docs/planning/beta-readiness-contract.md` / `artifacts/beta-readiness-summary.json`, but I do not yet see this modeled as a hard pre-deploy status lane with issue/CI reporting at the granularity suggested by the title. This is close enough to be live work: wire the existing readiness report into CI as a blocking contract, not just a side artifact."
+  },
+  {
+    "number": 492,
+    "disposition": "engaged",
+    "comment": "The current readiness service exercises four visible gates; this issue says nineteen pass/fail criteria. I did not find a test suite that proves all 19 named criteria in executable form, so I think this remains a useful pressure ticket. The service exists; the test contract still needs to catch up to the scope that was promised."
+  },
+  {
+    "number": 493,
+    "disposition": "evolving",
+    "comment": "I checked whether this survey-storage work is still hypothetical. It is not: `src/api/src/modules/contracts/survey.service.ts` exists, and the pattern log records migration-backed survey work in the 2026-06-01 batch. What still seems worth keeping visible is API completeness and schema ownership per the sub-issue split \u2014 the parent landed, but this child is where the survey definitions / storage surface should be tightened and documented explicitly."
+  },
+  {
+    "number": 494,
+    "disposition": "evolving",
+    "comment": "The backend survey plumbing exists now, but I did not find a clearly finished presentation/completion-tracking UI that makes baseline/final surveys feel like a first-class user journey. The parent feature was built enough to reopen the conversation with evidence; the remaining question here is whether web/mobile actually walk the user through survey completion rather than just storing responses."
+  },
+  {
+    "number": 495,
+    "disposition": "engaged",
+    "comment": "The pattern log says the survey batch added code and nine tests, but I did not find a dedicated analytics/statistical-analysis test layer matching this issue title. If survey outputs will feed product claims or behavioral reporting, this sub-issue still matters as the place to pin aggregation logic and regression checks beyond simple submit/read coverage."
+  },
+  {
+    "number": 496,
+    "disposition": "evolving",
+    "comment": "This emotional-tracking slice is partially realized already: the survey/attestation batch explicitly mentions emotional tracking columns, and the repo contains behavioral / attestation infrastructure around daily check-ins. I would keep this issue open as the place to reconcile the raw fields (urge, trigger, outcome) with the actual attestation APIs and reporting surfaces so the schema shape is not only implied by history."
+  },
+  {
+    "number": 497,
+    "disposition": "evolving",
+    "comment": "I found backend support for emotional-tracking work, but I did not find an obvious finished UI component set that makes urge/trigger/outcome inputs a clear part of the daily attestation experience. The issue still earns its keep by separating 'columns exist' from 'users can actually enter this safely and consistently.'"
+  },
+  {
+    "number": 498,
+    "disposition": "engaged",
+    "comment": "The parent batch shipped tests, but I did not see a specifically named suite around emotional attestation integrity: preserving urge/trigger/outcome values across the full daily flow and verifying they survive analytics / retrieval intact. Given how easy mood-state data is to lose in refactors, I think this should remain an explicit test obligation."
+  },
+  {
+    "number": 499,
+    "disposition": "evolving",
+    "comment": "This queue/cohort logic is materially further along now. Migration `036_cohort_waitlist.sql` plus `src/api/src/modules/contracts/waitlist.service.ts` give the repo a real waitlist table and cohort-position service. The live question for this sub-issue is whether the cohort-threshold / auto-admit rules are fully encoded, because I found join/promote/count behavior but not an obviously complete 'cohort fill threshold' policy layer."
+  },
+  {
+    "number": 500,
+    "disposition": "evolving",
+    "comment": "The waitlist backend exists, and onboarding emails are even triggered from `WaitlistService`, but I did not find a finished UI that shows a user their waitlist position and lets them manage notification preferences in a product-facing way. So this child issue still has a clean purpose: turn the new service layer into a visible waitlist experience rather than a hidden admin capability."
+  },
+  {
+    "number": 501,
+    "disposition": "engaged",
+    "comment": "The repo has service tests for waitlist mechanics, but I did not find a dedicated suite that makes cohort-ordering guarantees and cohort-fill triggers explicit at the issue level. For queueing systems the dangerous bugs are off-by-one / double-admit / threshold drift, so I agree with keeping this test sub-issue visible until those invariants are spelled out in executable form."
+  },
+  {
+    "number": 502,
+    "disposition": "distilled",
+    "comment": "I searched both code and product docs for referral implementation. What I found is strategy language \u2014 `docs/departments/gro/REGE.md` calls referral design dormant and gated on active user volume \u2014 but I did **not** find a live schema/API implementation. So the core ask here should be treated as future growth infrastructure, not hidden 'almost done' work: define the referral object model only when the product is ready to support real attribution and reward liability."
+  },
+  {
+    "number": 503,
+    "disposition": "distilled",
+    "comment": "The UI title is ahead of repo reality. Customer-success and growth docs talk about dashboard referrals conceptually, but I could not find an actual referral page/component in `src/web` or `src/mobile`. My read: keep this open as a clear design placeholder, but anchor it to a real post-launch growth milestone instead of letting documentation references masquerade as implemented UI."
+  },
+  {
+    "number": 504,
+    "disposition": "distilled",
+    "comment": "I did not find referral code to test yet, which makes this issue useful as a spec anchor rather than a stale checkbox. When this moves, the hard part will be the exact thing the title names: attribution integrity and double-spend prevention on rewards. Calling that out now is valuable because the growth docs currently describe referrals at a strategy level, not as a settled financial-control design."
+  },
+  {
+    "number": 505,
+    "disposition": "evolving",
+    "comment": "I checked the live-status docs against the repo. The activation ledger explicitly records `/launch` as `404` and calls the waitlist / sign-up surface a gap, so this landing-page issue is still grounded in live evidence rather than old planning noise. The ask here has sharpened: ship a single focused beta landing page with one CTA instead of scattering this across pitch and planning surfaces."
+  },
+  {
+    "number": 506,
+    "disposition": "evolving",
+    "comment": "The backend is partway there indirectly \u2014 there is a waitlist service and onboarding email machinery \u2014 but I did not find the public waitlist-signup + source-tagging API surface that this title implies. The activation docs say the launch funnel is still missing, so I would keep this issue as the bridge between the existing cohort service and an actual acquisition endpoint the landing page can call."
+  },
+  {
+    "number": 507,
+    "disposition": "engaged",
+    "comment": "I found waitlist/cohort code and email tests, but I did not find the conversion-tracking + signup-email delivery coverage that would prove the public beta funnel end to end. Because the launch ledger still shows `/launch` missing, the test requirement here remains real: verify the acquisition path itself, not just the internal waitlist service."
+  },
+  {
+    "number": 508,
+    "disposition": "evolving",
+    "comment": "This taxonomy is no longer imaginary. `src/shared/fury-logic/violation-codes.ts` already defines a structured violation-code catalog with labels, descriptions, and severities. The remaining work under this issue is to treat that file as the canonical schema owner: make sure DB/API surfaces consume it rather than letting free-text rejection reasons creep back in."
+  },
+  {
+    "number": 509,
+    "disposition": "evolving",
+    "comment": "The shared catalog exists, but I did not find an obvious CRUD/audit API that exposes violation-code administration as its own lane. That makes this issue still valid: wire the catalog into admin/editor flows and preserve an audit trail when the taxonomy changes, instead of leaving it as a static TypeScript constant only developers can touch."
+  },
+  {
+    "number": 510,
+    "disposition": "engaged",
+    "comment": "There are tests for the shared violation-code file, but I did not find the stronger completeness/audit-logging suite this title points toward. Since these codes become reviewer-facing compliance evidence, the repo should eventually prove both catalog coverage and immutable logging when a code is used or revised."
+  },
+  {
+    "number": 511,
+    "disposition": "evolving",
+    "comment": "This issue has real implementation on disk now. Migration `039_pregnancy_exclusion.sql` adds the exclusion fields, and the surrounding safety architecture already contains self-exclusion / recovery guardrails. What still seems unfinished is tying the pregnancy gate cleanly into contract-creation and suspension APIs so the policy is enforced as an operational rule, not only a schema flag."
+  },
+  {
+    "number": 512,
+    "disposition": "evolving",
+    "comment": "I found the backend/safety primitives for pregnancy exclusion, but I did not find a clearly surfaced product flow where a user can request the suspension, see its status, and understand the penalty-free implications. Given the sensitivity of the use case, I think the UI should stay tracked separately instead of being assumed because the column exists."
+  },
+  {
+    "number": 513,
+    "disposition": "engaged",
+    "comment": "I found the migration for the pregnancy gate, but not a focused suite that proves exclusion triggers and safe re-entry behavior under real contract flows. Since this is a policy edge case with financial consequences, it deserves named tests rather than informal trust in the schema change."
+  },
+  {
+    "number": 514,
+    "disposition": "evolving",
+    "comment": "This logic already has a concrete home: `src/shared/config/verification-tiers.ts` defines tier rules, stake thresholds, escalation triggers, and media requirements. The issue is still useful because the title names the *schema/API* part, and I did not verify that every creation / review surface consumes the same tier authority without drift. The next step is to make this file the single truth and expose it cleanly at runtime."
+  },
+  {
+    "number": 515,
+    "disposition": "evolving",
+    "comment": "The verification-tier model exists, but I did not find a fully explicit user-facing surface that tells a user, at contract creation time, which verification burdens apply to *their* tier and why. The repo has the rules; this issue should keep pressure on making those rules legible in-product instead of only in shared config and legal docs."
+  },
+  {
+    "number": 516,
+    "disposition": "engaged",
+    "comment": "The shared tier config includes unit tests, but I did not see a broader transition suite that proves stake-based escalation plus risk-trigger escalation through real flows. This test issue still matters because the dangerous regressions here are boundary cases \u2014 exactly at thresholds, after fraud strikes, or after duplicate-media signals."
+  },
+  {
+    "number": 517,
+    "disposition": "evolving",
+    "comment": "This moderation queue now exists in substance. Migration `033_content_moderation_queue.sql` creates `content_flags`, and `src/api/services/security/moderation.service.ts` implements auto-filtering, queueing, and review actions. What still looks worth tracking here is the 'automated filtering' maturity: the current keyword model is intentionally simple, so this issue can own the jump from basic flagging to a more robust moderation ingress."
+  },
+  {
+    "number": 518,
+    "disposition": "evolving",
+    "comment": "I verified the moderation backend, but I did not find the dedicated admin dashboard + appeal UI the title promises. Since the service already supports queue/review/appeal state, this remains a strong UI issue: give operators a first-class moderation console instead of leaving the workflow stranded behind controller methods."
+  },
+  {
+    "number": 519,
+    "disposition": "engaged",
+    "comment": "The moderation service has unit coverage, but I did not find the performance/accuracy benchmarking layer that this issue names. Keyword filters are easy to ship and easy to miscalibrate, so keeping this test issue open until false positives / latency expectations are actually measured feels correct."
+  },
+  {
+    "number": 520,
+    "disposition": "distilled",
+    "comment": "I searched for a true circuit-breaker state machine and mostly found a related-but-narrower legal kill switch: refund-only jurisdiction logic in `compliance-policy.service.ts` and payout handling. I did **not** find a dedicated countdown/oracle outage pause state machine matching the title. So this issue should stay alive, but its core should be stated plainly: pause contract timers safely when verification infrastructure is degraded, rather than conflating that with state-by-state refund-only mode."
+  },
+  {
+    "number": 521,
+    "disposition": "distilled",
+    "comment": "I found refund-only legal controls and some admin kill-switch language, but not an end-user countdown pause/resume control surface. That means the UI request here is still cleanly separate from legal disposition toggles: if the platform pauses a contract due to oracle trouble, users need a visible timer state and explanation rather than silent backend magic."
+  },
+  {
+    "number": 522,
+    "disposition": "engaged",
+    "comment": "I did not find a dedicated suite that proves the pause/resume timer semantics implied by this title. Given how easy time-based state machines are to get subtly wrong, I think the test obligation should stay explicit until the repo has concrete circuit-breaker code rather than adjacent refund-only logic."
+  },
+  {
+    "number": 523,
+    "disposition": "distilled",
+    "comment": "I found `docs/architecture/load-test-report.md` and planning references to load testing, but I did not find an obvious committed k6/artillery harness under source control that matches this issue literally. So the ask remains valid, and I would restate it narrowly: add a reproducible load-testing package that exercises the Fury queue and can be rerun in CI/manual ops without depending on prose reports."
+  },
+  {
+    "number": 524,
+    "disposition": "distilled",
+    "comment": "The repo talks about Fury Router scale, but I did not find a dedicated saturation suite artifact for the queue itself. This issue is still the right pressure point if the goal is not generic perf talk but a named stress scenario: push review jobs until queue behavior, latency, and backpressure are measurable."
+  },
+  {
+    "number": 525,
+    "disposition": "distilled",
+    "comment": "I found load-test documentation, not the living regression thresholds this title asks for. Keeping this issue open makes sense because the risky part is not 'ran a load test once' \u2014 it is capturing a baseline and then failing future changes when Fury queue performance drifts beyond an agreed budget."
+  },
+  {
+    "number": 526,
+    "disposition": "evolving",
+    "comment": "The notification substrate exists on both API and mobile, and the repo already contains behaviorally tuned copy in places like `BehavioralEnhancements` and RAIN intervention notifications. I did not find a dedicated library of linguistically safe notification templates, though, so this issue still has real product value: centralize the tone rules instead of scattering high-stakes phrasing across services."
+  },
+  {
+    "number": 527,
+    "disposition": "evolving",
+    "comment": "I found notification creation, unread counts, SSE tickets, and mobile notification helpers, but not a deliberately designed display / acknowledgement flow that matches the title. Because high-emotion notifications are part of the product safety surface, this UI issue still deserves to exist independently of the plumbing."
+  },
+  {
+    "number": 528,
+    "disposition": "engaged",
+    "comment": "The repo has unit tests for notification plumbing, but I did not find a copy-validation or delivery-confirmation suite specific to these high-sensitivity templates. Given the emotional-safety goal called out by the parent feature, I think this test issue should stay explicit until language and delivery behavior are both pinned down."
+  },
+  {
+    "number": 529,
+    "disposition": "evolving",
+    "comment": "I verified that beta-readiness already exists as a service/artifact pattern, so this issue is not starting from zero. The gap is that TestFlight readiness still needs a scripted checklist contract with named criteria rather than a mostly human-readable gate. I would keep this issue focused on turning the existing readiness pattern into an executable TestFlight-specific checklist."
+  },
+  {
+    "number": 530,
+    "disposition": "evolving",
+    "comment": "There is already CI/readiness infrastructure in the repo, but I did not find a clearly separate enforcement hook that fails builds specifically on TestFlight readiness criteria. This issue still looks live: move checklist output from 'generated report' to 'blocking signal' for the exact gate it claims to own."
+  },
+  {
+    "number": 531,
+    "disposition": "evolving",
+    "comment": "The financial/compliance side of readiness has raw ingredients on disk \u2014 payout logic, jurisdiction policy, legal docs, and the beta-readiness service \u2014 but I did not see a dedicated automation layer for *real-money pilot* criteria. Keeping this ticket open makes sense as the place where those money-moving requirements become a named executable gate."
+  },
+  {
+    "number": 532,
+    "disposition": "evolving",
+    "comment": "I found settlement/compliance logic and jurisdictional refund-only handling, but not a single enforcement point that proves the settlement + compliance verification lane before pilot release. This issue should stay as the legal/financial hard gate companion to the broader readiness service."
+  },
+  {
+    "number": 533,
+    "disposition": "evolving",
+    "comment": "There is already significant App Store / moderation / legal documentation in the repo, but I did not find a dedicated script that asserts App Store launch criteria as a machine-checked contract. So the checklist part here is still real: consolidate the docs into a pass/fail artifact rather than trusting prose and memory."
+  },
+  {
+    "number": 534,
+    "disposition": "evolving",
+    "comment": "The repo contains legal packets, UX work, and performance discussions, but I did not find this triad enforced together as an App Store gate. I would keep this issue active until legal + UX + performance are represented by one blocking readiness result instead of three parallel document piles."
+  },
+  {
+    "number": 535,
+    "disposition": "distilled",
+    "comment": "I do not see enterprise-readiness automation implemented yet, but the repo *does* have enough surfaces to define it sharply: security questionnaire docs, B2B materials, audit controls, and deployment/runtime evidence. This issue should probably remain open as a distilled contract for enterprise prerequisites rather than vague 'someday sales ops' work."
+  },
+  {
+    "number": 536,
+    "disposition": "distilled",
+    "comment": "Security / DPA / demo readiness is still more visible in docs than in code. That is not a reason to hide the issue; it is a reason to make the spec crisper. I would treat this as the enterprise gate that turns current artifacts (`docs/enterprise/security-questionnaire.md`, legal docs, demo surfaces) into a checklist with evidence links and a fail condition."
+  },
+  {
+    "number": 537,
+    "disposition": "distilled",
+    "comment": "I searched for this specific feature and mostly found planning references plus the related `Save More Tomorrow` behavioral-enhancement logic. I did **not** find a shipped spike-calculation / stake-doubling API path matching the title. So this remains real backlog, and the spec should distinguish it from generic upward-escalation math: this is a finish-line-specific incentive, not the broader escalation framework already on disk."
+  },
+  {
+    "number": 538,
+    "disposition": "distilled",
+    "comment": "I did not find a visible 'finish line spike' UI in the contract/web surfaces. Since the behavioral library already has adjacent escalation concepts, keeping this issue open is useful precisely to stop those from being conflated. If built, users should see a distinct endgame incentive state rather than a hidden multiplier in backend math."
+  },
+  {
+    "number": 539,
+    "disposition": "engaged",
+    "comment": "I did not find dedicated tests for this feature because I did not find the feature itself implemented. The title still matters because endgame incentive math is exactly where edge cases and manipulative UX can slip in; when the feature lands, this issue should anchor those boundary tests."
+  },
+  {
+    "number": 540,
+    "disposition": "distilled",
+    "comment": "The repo already has the legal substrate for per-state rules \u2014 especially the 50-state survey and the existing jurisdiction/refund-only policy engine \u2014 but I did not find a dedicated schema for mutable per-state compliance flags. That makes this issue still valid. The clean formulation is: separate static legal classification from operational toggles so counsel updates do not require ad hoc code edits."
+  },
+  {
+    "number": 541,
+    "disposition": "distilled",
+    "comment": "I found planning references to a compliance admin panel, but not the actual state-toggle management UI. Since the legal analysis is already deep, this issue remains useful as the operator-facing half: a human needs to see, change, and audit per-state modes without spelunking service code."
+  },
+  {
+    "number": 542,
+    "disposition": "engaged",
+    "comment": "I found jurisdiction policy tests, but not the combinatorial toggle-enforcement suite that this title implies. Because per-state modes create a matrix of allowed / refund-only / blocked behavior, the test burden here is real and should stay explicit rather than being assumed from a few policy specs."
+  },
+  {
+    "number": 543,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/pull/692",
+    "comment": "I traced this against the repo instead of trusting the old closure churn. The bounded selector is now materially represented in `src/web/app/contracts/new/page.tsx`: bounded slider, numeric amount control, live cap messaging, and loss-framed copy. The strongest durable implementation receipt I found is merged PR https://github.com/organvm/peer-audited--behavioral-blockchain/pull/692, so I am treating this issue's UI ask as superseded by that shipped work while keeping the historical thread visible."
+  },
+  {
+    "number": 544,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/pull/692",
+    "comment": "The API/validation half of bounded stake selection now appears covered by the live contract-creation flow and the merged implementation tracked in PR https://github.com/organvm/peer-audited--behavioral-blockchain/pull/692. The current web flow derives tier caps, Aegis ceiling, and failure-history downscaling before submit, which is the practical realization of the jurisdictional/bounds lookup intent behind this ticket. I would preserve the issue for history, but the active implementation surface now lives in https://github.com/organvm/peer-audited--behavioral-blockchain/pull/692."
+  },
+  {
+    "number": 545,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/pull/692",
+    "comment": "I checked this against both the issue history and on-disk evidence. The bounded-stake build batch plus merged PR https://github.com/organvm/peer-audited--behavioral-blockchain/pull/692 already produced focused UI coverage for the new selector and bounds behavior, so this test issue no longer looks like the live control point. I am marking it superseded by https://github.com/organvm/peer-audited--behavioral-blockchain/pull/692's implementation/test receipt rather than pretending the subject vanished."
+  },
+  {
+    "number": 555,
+    "disposition": "distilled",
+    "comment": "I read this as a root gate, not a code ticket. The repo already has planning and readiness artifacts, but they are spread across docs, services, and audits. The useful role for this issue is to keep Beta reduced to one checkable sentence: do we have enough evidence for money movement, legal safety, and beta-readiness evidence, and which sub-issues are the actual blockers right now? That distilled framing is more actionable than letting the phase gate drift into a generic milestone placeholder."
+  },
+  {
+    "number": 556,
+    "disposition": "distilled",
+    "comment": "I read this as a root gate, not a code ticket. The repo already has planning and readiness artifacts, but they are spread across docs, services, and audits. The useful role for this issue is to keep Gamma reduced to one checkable sentence: do we have enough evidence for proof integrity, native bridge maturity, and trust-chain hardening, and which sub-issues are the actual blockers right now? That distilled framing is more actionable than letting the phase gate drift into a generic milestone placeholder."
+  },
+  {
+    "number": 557,
+    "disposition": "distilled",
+    "comment": "I read this as a root gate, not a code ticket. The repo already has planning and readiness artifacts, but they are spread across docs, services, and audits. The useful role for this issue is to keep Delta reduced to one checkable sentence: do we have enough evidence for retention, growth loops, and post-proof network effects, and which sub-issues are the actual blockers right now? That distilled framing is more actionable than letting the phase gate drift into a generic milestone placeholder."
+  },
+  {
+    "number": 558,
+    "disposition": "distilled",
+    "comment": "I read this as a root gate, not a code ticket. The repo already has planning and readiness artifacts, but they are spread across docs, services, and audits. The useful role for this issue is to keep Omega reduced to one checkable sentence: do we have enough evidence for enterprise expansion, security/compliance packaging, and operator trust surfaces, and which sub-issues are the actual blockers right now? That distilled framing is more actionable than letting the phase gate drift into a generic milestone placeholder."
+  },
+  {
+    "number": 561,
+    "disposition": "distilled",
+    "comment": "I found the growth docs that call for a founder authority layer, but I did not find the actual founder essay + beta safety/trust summary package the issue names. The cleanest reading is that this is not 'marketing fluff'; it is the public translation layer between the deep legal/technical corpus and a skeptical first-time reader. Keeping it open as an authority-surface spec makes sense."
+  },
+  {
+    "number": 562,
+    "disposition": "evolving",
+    "comment": "This legal-expansion ask is substantially grounded already. `docs/legal/legal--50-state-skill-contest-survey.md` is a serious artifact with state-by-state analysis, but the issue's demand for broader case-law coverage is still reasonable because several sections carry counsel/verification notes and the whitepaper depends on robust authority, not just statutory summaries. I would keep this open as the place to deepen the cited case bench, not to restart the whole survey."
+  },
+  {
+    "number": 563,
+    "disposition": "evolving",
+    "comment": "I found strong pro-position legal material, but I agree there is room for the specific thing this issue names: an *adverse authority* section that squarely states the hardest counterarguments and the jurisdictions that make Styx uncomfortable. That would strengthen the whitepaper more than another round of affirmative rhetoric. So I think this issue is still alive and intellectually useful."
+  },
+  {
+    "number": 564,
+    "disposition": "evolving",
+    "comment": "This artifact already exists in meaningful form: `docs/legal/legal--50-state-skill-contest-survey.md` is explicitly linked to issue #564 in its frontmatter. I am not treating that as 'done and forget it,' though, because the survey still needs freshness/verification discipline as laws and AG posture move. The live role of this issue now seems to be maintaining and operationalizing that survey, not inventing it."
+  },
+  {
+    "number": 565,
+    "disposition": "evolving",
+    "comment": "I found the FinCEN / money-transmitter analysis embedded in `docs/legal/legal--performance-wagering.md`, including FBO-account discussion. That means the issue is no longer asking for first-pass research; it is asking for deeper structuring confidence around the FBO path and its operational implications. Keeping it open is justified until the analysis is tightened into something counsel / processors can directly rely on."
+  },
+  {
+    "number": 566,
+    "disposition": "evolving",
+    "comment": "This issue is materially engaged by `docs/legal/legal--cross-jurisdictional-consent-matrix.md`, which already distinguishes heart-rate data from face-geometry processing and explicitly discusses BIPA. I would keep the thread open because the current analysis still contains verification notes and engineering consequences that need to stay coupled to product decisions, but the repo is no longer starting blind here."
+  },
+  {
+    "number": 567,
+    "disposition": "evolving",
+    "comment": "The 50-state survey is already linked to this issue, and it does map state gambling/DFS posture in depth. The remaining value of this issue is narrower: extract the parts that specifically matter to DFS-style regulatory frameworks and turn them into an operator-facing deployment map instead of leaving them embedded in a giant survey artifact."
+  },
+  {
+    "number": 568,
+    "disposition": "evolving",
+    "comment": "I verified that the appendices package exists: `docs/legal/appendices/README.md` indexes the FBO diagram, ToS markup, app-review mockups, blocklist table, and counsel checklist. So this issue has clearly moved from idea to artifact set. I would keep it open only in the sense of curating/reviewing the packet, not because the appendices still need to be conceptually invented."
+  },
+  {
+    "number": 569,
+    "disposition": "distilled",
+    "comment": "This one reads like a coordination memory, and I checked whether its payload exists elsewhere. The repo now has the triage ledger, pattern log, activation audit, and multiple board/cleanup artifacts, so the right way to keep this alive is to distill it into a recurring board-health checklist rather than a forever-'tomorrow' note. The underlying need is still real; the phrasing should stop pretending it is a one-day task."
+  },
+  {
+    "number": 597,
+    "disposition": "distilled",
+    "comment": "I read both the issue and the attached research trail. The most grounded synthesis I can make is that the repo already diagnosed its own problem correctly: external demand capture is weaker than internal system completion, and the activation ledger still shows `/launch` missing while the pitch/architecture corpus keeps expanding. I think this issue is best kept as the top-level inquiry thread that forces revenue-gap discussion back onto concrete missing surfaces and customer contact, not another generic theory container."
+  },
+  {
+    "number": 598,
+    "disposition": "distilled",
+    "comment": "The premortem is directionally right, and the repo evidence still supports it: there are abundant internal artifacts, but the first sellable surface and send-the-message step remain thin. What this issue wants, in plainer language, is not another extraction brainstorm \u2014 it is one smallest externally payable artifact with an owner, a route to contact, and a proof of payment criterion. Distilling it to that sharper ask makes the issue more useful."
+  },
+  {
+    "number": 599,
+    "disposition": "evolving",
+    "comment": "I verified the canonical identity bindings in `.env.example` (`CANONICAL_DOMAIN`, `PROJECT_NAME`, `MOBILE_BUNDLE_ID`, `DEEP_LINK_SCHEME`, `CONTACT_EMAIL_DOMAIN`, `RENDER_*_SERVICE_NAME`) and found a planning artifact that already treats those as the authority surface. What I did **not** prove is end-to-end build-time propagation into every platform-specific file the issue cares about. So I would keep this open as a config-propagation hardening task, not a naming brainstorm."
+  },
+  {
+    "number": 601,
+    "disposition": "evolving",
+    "comment": "This issue has already changed repo conventions in a useful way: `docs/CLAUDE.md` now explicitly says new plan files should use descriptive names, and the grandfathered `planning--styx-sequence-b-a-c--canonical-domain-standup--2026-05-17.md` documents the old labels as legacy. I would keep the issue open only for the residual cleanup \u2014 removing remaining live A/B/C references from handoffs and future planning surfaces \u2014 because the governing rule is now clear."
+  },
+  {
+    "number": 663,
+    "disposition": "distilled",
+    "comment": "The original premise is partially stale now: the repo *does* have real integration-style specs such as `src/api/src/modules/contracts/contracts.service.int.spec.ts`. But the broader concern still stands because a large fraction of API/service coverage is mock-Pool based. So the distilled version of this issue is: expand true DB-backed integration coverage beyond the few existing islands, especially around the financial and `EXCLUDED`-class regressions the issue body calls out."
+  },
+  {
+    "number": 673,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/issues/785",
+    "comment": "I reviewed the blocked-handoff index history and the later weekly burn-down chain. This issue still records a real weekly snapshot, but as a live tracker it has been overtaken by the latest report at https://github.com/organvm/peer-audited--behavioral-blockchain/issues/785. I am treating it as superseded by that newer weekly receipt rather than as something to close or ignore."
+  },
+  {
+    "number": 702,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/issues/785",
+    "comment": "I reviewed the blocked-handoff index history and the later weekly burn-down chain. This issue still records a real weekly snapshot, but as a live tracker it has been overtaken by the latest report at https://github.com/organvm/peer-audited--behavioral-blockchain/issues/785. I am treating it as superseded by that newer weekly receipt rather than as something to close or ignore."
+  },
+  {
+    "number": 745,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/issues/785",
+    "comment": "I reviewed the blocked-handoff index history and the later weekly burn-down chain. This issue still records a real weekly snapshot, but as a live tracker it has been overtaken by the latest report at https://github.com/organvm/peer-audited--behavioral-blockchain/issues/785. I am treating it as superseded by that newer weekly receipt rather than as something to close or ignore."
+  },
+  {
+    "number": 748,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/issues/785",
+    "comment": "I reviewed the blocked-handoff index history and the later weekly burn-down chain. This issue still records a real weekly snapshot, but as a live tracker it has been overtaken by the latest report at https://github.com/organvm/peer-audited--behavioral-blockchain/issues/785. I am treating it as superseded by that newer weekly receipt rather than as something to close or ignore."
+  },
+  {
+    "number": 774,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/issues/785",
+    "comment": "I reviewed the blocked-handoff index history and the later weekly burn-down chain. This issue still records a real weekly snapshot, but as a live tracker it has been overtaken by the latest report at https://github.com/organvm/peer-audited--behavioral-blockchain/issues/785. I am treating it as superseded by that newer weekly receipt rather than as something to close or ignore."
+  },
+  {
+    "number": 785,
+    "disposition": "distilled",
+    "comment": "I checked this against the planning index and the earlier weekly issues. This is the current head of the blocked-handoff burn-down chain in my assigned slice, so its useful job is not to exist as one more snapshot but to point at the *current* blocked set and which older blockers have actually moved. Keeping it open as the latest canonical weekly tracker is more coherent than letting every dated snapshot compete equally for attention."
+  }
+]

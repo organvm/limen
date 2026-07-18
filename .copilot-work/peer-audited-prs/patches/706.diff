@@ -1,0 +1,320 @@
+diff --git a/.gitignore b/.gitignore
+index d0851ff7..6f76fb25 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -89,3 +89,4 @@ docs/evaluation/
+ docs/EXPORT-*.md
+ docs/audit/document-audit-*.md
+ data/
++.claude/worktrees/
+diff --git a/docs/triage.json b/docs/triage.json
+index 3f052f70..af970848 100644
+--- a/docs/triage.json
++++ b/docs/triage.json
+@@ -4231,12 +4231,22 @@
+       "action": "TRACK",
+       "batch": null,
+       "closed_at": null,
+-      "evidence": null,
++      "evidence": ".github/FUNDING.yml:3",
+       "history": [
+         {
+           "from": "UNREAD",
+           "to": "TRACK",
+           "at": "2026-06-01T15:50:41Z"
++        },
++        {
++          "from": "TRACK",
++          "to": "BUILD_STARTED",
++          "at": "2026-06-17T16:04:14Z"
++        },
++        {
++          "from": "BUILD_STARTED",
++          "to": "CLOSED",
++          "at": "2026-06-17T16:04:14Z"
+         }
+       ],
+       "labels": [
+@@ -4245,8 +4255,8 @@
+         "unimplemented-plan"
+       ],
+       "pr": null,
+-      "state": "TRACK",
+-      "state_updated": "2026-06-01T15:50:41Z",
++      "state": "CLOSED",
++      "state_updated": "2026-06-17T16:04:14Z",
+       "title": "chore: add FUNDING.yml for GitHub Sponsors"
+     },
+     "186": {
+@@ -6075,12 +6085,22 @@
+       "action": "TRACK",
+       "batch": null,
+       "closed_at": null,
+-      "evidence": null,
++      "evidence": ".github/FUNDING.yml:3",
+       "history": [
+         {
+           "from": "UNREAD",
+           "to": "TRACK",
+           "at": "2026-06-01T15:50:43Z"
++        },
++        {
++          "from": "TRACK",
++          "to": "BUILD_STARTED",
++          "at": "2026-06-17T16:04:14Z"
++        },
++        {
++          "from": "BUILD_STARTED",
++          "to": "CLOSED",
++          "at": "2026-06-17T16:04:14Z"
+         }
+       ],
+       "labels": [
+@@ -6088,8 +6108,8 @@
+         "artifact-dissection"
+       ],
+       "pr": null,
+-      "state": "TRACK",
+-      "state_updated": "2026-06-01T15:50:43Z",
++      "state": "CLOSED",
++      "state_updated": "2026-06-17T16:04:14Z",
+       "title": "chore: create .github/FUNDING.yml with GitHub Sponsors placeholder"
+     },
+     "262": {
+@@ -6102,6 +6122,11 @@
+           "from": "UNREAD",
+           "to": "TRACK",
+           "at": "2026-06-01T15:50:43Z"
++        },
++        {
++          "from": "TRACK",
++          "to": "SUPERSEDED",
++          "at": "2026-06-17T16:04:15Z"
+         }
+       ],
+       "labels": [
+@@ -6109,8 +6134,8 @@
+         "session-archive"
+       ],
+       "pr": null,
+-      "state": "TRACK",
+-      "state_updated": "2026-06-01T15:50:43Z",
++      "state": "SUPERSEDED",
++      "state_updated": "2026-06-17T16:04:15Z",
+       "title": "archive: pre-migration session transcripts (intake/ scope, 2 sessions + 15 subagents)"
+     },
+     "263": {
+@@ -6123,6 +6148,11 @@
+           "from": "UNREAD",
+           "to": "TRACK",
+           "at": "2026-06-01T15:50:43Z"
++        },
++        {
++          "from": "TRACK",
++          "to": "SUPERSEDED",
++          "at": "2026-06-17T16:04:15Z"
+         }
+       ],
+       "labels": [
+@@ -6130,8 +6160,8 @@
+         "session-archive"
+       ],
+       "pr": null,
+-      "state": "TRACK",
+-      "state_updated": "2026-06-01T15:50:43Z",
++      "state": "SUPERSEDED",
++      "state_updated": "2026-06-17T16:04:15Z",
+       "title": "archive: primary development session transcripts (8 sessions + 80+ subagents)"
+     },
+     "264": {
+@@ -6144,6 +6174,11 @@
+           "from": "UNREAD",
+           "to": "TRACK",
+           "at": "2026-06-01T15:50:43Z"
++        },
++        {
++          "from": "TRACK",
++          "to": "SUPERSEDED",
++          "at": "2026-06-17T16:04:15Z"
+         }
+       ],
+       "labels": [
+@@ -6151,8 +6186,8 @@
+         "session-archive"
+       ],
+       "pr": null,
+-      "state": "TRACK",
+-      "state_updated": "2026-06-01T15:50:43Z",
++      "state": "SUPERSEDED",
++      "state_updated": "2026-06-17T16:04:15Z",
+       "title": "archive: documentation session transcripts (docs/ scope, 4 sessions + 30+ subagents)"
+     },
+     "265": {
+@@ -6180,20 +6215,30 @@
+       "action": "TRACK",
+       "batch": null,
+       "closed_at": null,
+-      "evidence": null,
++      "evidence": ".claude/MEMORY.md:1",
+       "history": [
+         {
+           "from": "UNREAD",
+           "to": "TRACK",
+           "at": "2026-06-01T15:50:43Z"
++        },
++        {
++          "from": "TRACK",
++          "to": "BUILD_STARTED",
++          "at": "2026-06-17T16:04:14Z"
++        },
++        {
++          "from": "BUILD_STARTED",
++          "to": "CLOSED",
++          "at": "2026-06-17T16:04:14Z"
+         }
+       ],
+       "labels": [
+         "artifact-dissection"
+       ],
+       "pr": null,
+-      "state": "TRACK",
+-      "state_updated": "2026-06-01T15:50:43Z",
++      "state": "CLOSED",
++      "state_updated": "2026-06-17T16:04:14Z",
+       "title": "chore: create MEMORY.md for all 3 project directories"
+     },
+     "267": {
+@@ -6383,60 +6428,90 @@
+       "action": "TRACK",
+       "batch": null,
+       "closed_at": null,
+-      "evidence": null,
++      "evidence": ".claude/plans/archive/breezy-foraging-gadget.md:1",
+       "history": [
+         {
+           "from": "UNREAD",
+           "to": "TRACK",
+           "at": "2026-06-01T15:50:43Z"
++        },
++        {
++          "from": "TRACK",
++          "to": "BUILD_STARTED",
++          "at": "2026-06-17T16:04:15Z"
++        },
++        {
++          "from": "BUILD_STARTED",
++          "to": "CLOSED",
++          "at": "2026-06-17T16:04:15Z"
+         }
+       ],
+       "labels": [
+         "documentation"
+       ],
+       "pr": null,
+-      "state": "TRACK",
+-      "state_updated": "2026-06-01T15:50:43Z",
++      "state": "CLOSED",
++      "state_updated": "2026-06-17T16:04:15Z",
+       "title": "docs: archived plan catalog (14 plans)"
+     },
+     "276": {
+       "action": "TRACK",
+       "batch": null,
+       "closed_at": null,
+-      "evidence": null,
++      "evidence": ".claude/plans/2026-03-04-doctoral-dissertation-styx.md:1",
+       "history": [
+         {
+           "from": "UNREAD",
+           "to": "TRACK",
+           "at": "2026-06-01T15:50:43Z"
++        },
++        {
++          "from": "TRACK",
++          "to": "BUILD_STARTED",
++          "at": "2026-06-17T16:04:15Z"
++        },
++        {
++          "from": "BUILD_STARTED",
++          "to": "CLOSED",
++          "at": "2026-06-17T16:04:15Z"
+         }
+       ],
+       "labels": [
+         "documentation"
+       ],
+       "pr": null,
+-      "state": "TRACK",
+-      "state_updated": "2026-06-01T15:50:43Z",
++      "state": "CLOSED",
++      "state_updated": "2026-06-17T16:04:15Z",
+       "title": "docs: active plan catalog (22 plans)"
+     },
+     "277": {
+       "action": "TRACK",
+       "batch": null,
+       "closed_at": null,
+-      "evidence": null,
++      "evidence": ".codex/plans/2026-03-09-beta-launch-propulsion.md:1",
+       "history": [
+         {
+           "from": "UNREAD",
+           "to": "TRACK",
+           "at": "2026-06-01T15:50:43Z"
++        },
++        {
++          "from": "TRACK",
++          "to": "BUILD_STARTED",
++          "at": "2026-06-17T16:04:15Z"
++        },
++        {
++          "from": "BUILD_STARTED",
++          "to": "CLOSED",
++          "at": "2026-06-17T16:04:15Z"
+         }
+       ],
+       "labels": [
+         "documentation"
+       ],
+       "pr": null,
+-      "state": "TRACK",
+-      "state_updated": "2026-06-01T15:50:43Z",
++      "state": "CLOSED",
++      "state_updated": "2026-06-17T16:04:15Z",
+       "title": "docs: codex plan catalog (8 plans)"
+     },
+     "278": {
+@@ -13453,20 +13528,30 @@
+       "action": "TRACK",
+       "batch": null,
+       "closed_at": null,
+-      "evidence": null,
++      "evidence": "AGENTS.md:1",
+       "history": [
+         {
+           "from": "UNREAD",
+           "to": "TRACK",
+           "at": "2026-06-01T15:50:49Z"
++        },
++        {
++          "from": "TRACK",
++          "to": "BUILD_STARTED",
++          "at": "2026-06-17T16:04:15Z"
++        },
++        {
++          "from": "BUILD_STARTED",
++          "to": "CLOSED",
++          "at": "2026-06-17T16:04:15Z"
+         }
+       ],
+       "labels": [
+         "documentation"
+       ],
+       "pr": null,
+-      "state": "TRACK",
+-      "state_updated": "2026-06-01T15:50:49Z",
++      "state": "CLOSED",
++      "state_updated": "2026-06-17T16:04:15Z",
+       "title": "docs: AGENTS.md verified developer guidance update"
+     },
+     "597": {

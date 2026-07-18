@@ -1,0 +1,717 @@
+diff --git a/src/api/src/modules/b2b/b2b.controller.spec.ts b/src/api/src/modules/b2b/b2b.controller.spec.ts
+index 158e7623..045c0217 100644
+--- a/src/api/src/modules/b2b/b2b.controller.spec.ts
++++ b/src/api/src/modules/b2b/b2b.controller.spec.ts
+@@ -20,6 +20,8 @@ describe('B2BController', () => {
+ 
+   const mockBilling = {
+     recordConsumptionEvent: jest.fn(),
++    getEnterpriseSubscriptionStatus: jest.fn(),
++    getUsageSummary: jest.fn(),
+   } as unknown as BillingService;
+ 
+   const mockWebhook = {
+@@ -57,6 +59,21 @@ describe('B2BController', () => {
+     (mockPool.query as jest.Mock).mockResolvedValue({
+       rows: [{ enterprise_id: 'ent-001', role: 'ADMIN' }],
+     });
++    (mockBilling.getEnterpriseSubscriptionStatus as jest.Mock).mockResolvedValue({
++      enterpriseId: 'ent-001',
++      active: true,
++      status: 'active',
++      plan: 'SOLO',
++      stripeCustomerId: 'cus_ent_001',
++      subscriptionId: 'sub_ent_001',
++      currentPeriodStart: new Date('2026-06-01T00:00:00Z'),
++      currentPeriodEnd: new Date('2026-07-01T00:00:00Z'),
++    });
++    (mockBilling.getUsageSummary as jest.Mock).mockResolvedValue({
++      totalUsage: 12,
++      currentPeriodStart: new Date('2026-06-01T00:00:00Z'),
++      currentPeriodEnd: new Date('2026-07-01T00:00:00Z'),
++    });
+   });
+ 
+   describe('getMetrics', () => {
+@@ -76,21 +93,66 @@ describe('B2BController', () => {
+       const result = await controller.getMetrics(adminUser, 'ent-001');
+ 
+       expect(result).toEqual(expected);
++      expect(mockBilling.getEnterpriseSubscriptionStatus).toHaveBeenCalledWith('ent-001');
+       expect(mockMetrics.getEnterpriseMetrics).toHaveBeenCalledWith('ent-001');
+     });
++
++    it('should reject analytics when the enterprise has no active subscription', async () => {
++      (mockBilling.getEnterpriseSubscriptionStatus as jest.Mock).mockResolvedValueOnce({
++        enterpriseId: 'ent-001',
++        active: false,
++        status: null,
++        plan: null,
++        stripeCustomerId: null,
++        subscriptionId: null,
++        currentPeriodStart: null,
++        currentPeriodEnd: null,
++      });
++
++      let thrown: unknown;
++      try {
++        await controller.getMetrics(adminUser, 'ent-001');
++      } catch (error) {
++        thrown = error;
++      }
++
++      expect(thrown).toBeDefined();
++      expect((thrown as { getStatus: () => number }).getStatus()).toBe(402);
++      expect((thrown as { getResponse: () => unknown }).getResponse()).toEqual(
++        expect.objectContaining({
++          error_code: 'B2B_LICENSE_REQUIRED',
++        }),
++      );
++      expect(mockMetrics.getEnterpriseMetrics).not.toHaveBeenCalled();
++    });
++  });
++
++  describe('getLicense', () => {
++    it('should return current enterprise license state', async () => {
++      const result = await controller.getLicense(adminUser, 'ent-001');
++
++      expect(result).toEqual(expect.objectContaining({
++        enterpriseId: 'ent-001',
++        active: true,
++        plan: 'SOLO',
++      }));
++      expect(mockBilling.getEnterpriseSubscriptionStatus).toHaveBeenCalledWith('ent-001');
++    });
+   });
+ 
+   describe('getBilling', () => {
+     it('should return billing summary WITHOUT recording a consumption event', async () => {
+       const result = await controller.getBilling(adminUser, 'ent-001');
+ 
+-      expect(result).toEqual({
++      expect(result).toEqual(expect.objectContaining({
+         enterpriseId: 'ent-001',
+-        plan: 'CONSUMPTION',
++        plan: 'SOLO',
++        license: expect.objectContaining({ active: true, plan: 'SOLO' }),
++        usageSummary: expect.objectContaining({ totalUsage: 12 }),
+         events: [],
+         totalDue: 0,
+         currency: 'USD',
+-      });
++      }));
+       // Read-only fetch must not bill the customer.
+       expect(mockBilling.recordConsumptionEvent).not.toHaveBeenCalled();
+     });
+@@ -108,6 +170,7 @@ describe('B2BController', () => {
+         enterpriseId: 'ent-001',
+         url: 'https://example.com/webhook',
+       });
++      expect(mockBilling.getEnterpriseSubscriptionStatus).toHaveBeenCalledWith('ent-001');
+     });
+   });
+ 
+@@ -121,6 +184,7 @@ describe('B2BController', () => {
+       });
+ 
+       expect(result).toEqual({ status: 'sent' });
++      expect(mockBilling.getEnterpriseSubscriptionStatus).toHaveBeenCalledWith('ent-001');
+       expect(mockWebhook.dispatchEnterpriseMetricEvent).toHaveBeenCalledWith(
+         'https://example.com/hook',
+         expect.objectContaining({ type: 'TEST' }),
+@@ -162,6 +226,7 @@ describe('B2BController', () => {
+       const result = await controller.exportHrData(adminUser, 'ent-001');
+ 
+       expect(result.employeeCount).toBe(0);
++      expect(mockBilling.getEnterpriseSubscriptionStatus).toHaveBeenCalledWith('ent-001');
+       expect(mockAnonymize.anonymizeEmployeeData).toHaveBeenCalledWith('ent-001', []);
+     });
+   });
+@@ -171,6 +236,7 @@ describe('B2BController', () => {
+       const result = await controller.getDataLakeSnapshot(adminUser, 'ent-001', '2026-01-01', '2026-02-01');
+ 
+       expect(result.enterpriseId).toBe('ent-001');
++      expect(mockBilling.getEnterpriseSubscriptionStatus).toHaveBeenCalledWith('ent-001');
+       expect(mockDataLake.extractSnapshot).toHaveBeenCalledWith('ent-001', '2026-01-01', '2026-02-01');
+     });
+   });
+diff --git a/src/api/src/modules/b2b/b2b.controller.ts b/src/api/src/modules/b2b/b2b.controller.ts
+index 374a7005..0a8d2460 100644
+--- a/src/api/src/modules/b2b/b2b.controller.ts
++++ b/src/api/src/modules/b2b/b2b.controller.ts
+@@ -1,4 +1,15 @@
+-import { Controller, Get, Post, Param, Body, Query, UseGuards, ForbiddenException } from '@nestjs/common';
++import {
++  Controller,
++  Get,
++  Post,
++  Param,
++  Body,
++  Query,
++  UseGuards,
++  ForbiddenException,
++  HttpException,
++  HttpStatus,
++} from '@nestjs/common';
+ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+ import { Pool } from 'pg';
+ import { AuthGuard } from '../../../guards/auth.guard';
+@@ -58,6 +69,24 @@ export class B2BController {
+     }
+   }
+ 
++  private async assertActiveEnterpriseLicense(enterpriseId: string): Promise<void> {
++    const license = await this.billing.getEnterpriseSubscriptionStatus(enterpriseId);
++    if (!license.active) {
++      throw new HttpException(
++        {
++          error_code: 'B2B_LICENSE_REQUIRED',
++          message: 'Active B2B subscription required for enterprise analytics access',
++          details: {
++            enterpriseId,
++            status: license.status,
++            requiredPlan: 'SOLO_OR_HIGHER',
++          },
++        },
++        HttpStatus.PAYMENT_REQUIRED,
++      );
++    }
++  }
++
+   @Get('metrics/:enterpriseId')
+   @ApiOperation({ summary: 'Get enterprise compliance metrics' })
+   async getMetrics(
+@@ -65,9 +94,20 @@ export class B2BController {
+     @Param('enterpriseId') enterpriseId: string,
+   ) {
+     await this.assertEnterpriseMembership(user.id, enterpriseId);
++    await this.assertActiveEnterpriseLicense(enterpriseId);
+     return this.metrics.getEnterpriseMetrics(enterpriseId);
+   }
+ 
++  @Get('license/:enterpriseId')
++  @ApiOperation({ summary: 'Get enterprise subscription/license status' })
++  async getLicense(
++    @CurrentUser() user: { id: string },
++    @Param('enterpriseId') enterpriseId: string,
++  ) {
++    await this.assertEnterpriseMembership(user.id, enterpriseId);
++    return this.billing.getEnterpriseSubscriptionStatus(enterpriseId);
++  }
++
+   @Get('billing/:enterpriseId')
+   @ApiOperation({ summary: 'Get enterprise billing summary' })
+   async getBilling(
+@@ -77,9 +117,16 @@ export class B2BController {
+     await this.assertEnterpriseMembership(user.id, enterpriseId);
+     // NOTE: this is a read-only fetch; it must NOT emit a metered consumption
+     // event (that would bill the customer for simply viewing their bill).
++    const [license, usageSummary] = await Promise.all([
++      this.billing.getEnterpriseSubscriptionStatus(enterpriseId),
++      this.billing.getUsageSummary(enterpriseId),
++    ]);
++
+     return {
+       enterpriseId,
+-      plan: 'CONSUMPTION',
++      plan: license.plan ?? 'UNLICENSED',
++      license,
++      usageSummary,
+       events: [],
+       totalDue: 0,
+       currency: 'USD',
+@@ -93,6 +140,7 @@ export class B2BController {
+     @Body() body: { enterpriseId: string; url: string },
+   ) {
+     await this.assertEnterpriseMembership(user.id, body.enterpriseId);
++    await this.assertActiveEnterpriseLicense(body.enterpriseId);
+     return {
+       status: 'registered',
+       enterpriseId: body.enterpriseId,
+@@ -111,6 +159,7 @@ export class B2BController {
+     // SSRF guard bypasses in PRV7) probe internal hosts. Tenant membership is derived
+     // from the caller's own record, never trusted from the body.
+     await this.assertEnterpriseMembership(user.id, body.enterpriseId);
++    await this.assertActiveEnterpriseLicense(body.enterpriseId);
+     const sent = await this.webhook.dispatchEnterpriseMetricEvent(
+       body.url,
+       { type: 'TEST', timestamp: new Date().toISOString() },
+@@ -125,6 +174,7 @@ export class B2BController {
+     @Param('enterpriseId') enterpriseId: string,
+   ) {
+     await this.assertEnterpriseMembership(user.id, enterpriseId);
++    await this.assertActiveEnterpriseLicense(enterpriseId);
+     return this.anonymize.anonymizeEmployeeData(enterpriseId, []);
+   }
+ 
+@@ -137,6 +187,7 @@ export class B2BController {
+     @Query('end') end: string,
+   ) {
+     await this.assertEnterpriseMembership(user.id, enterpriseId);
++    await this.assertActiveEnterpriseLicense(enterpriseId);
+     return this.dataLake.extractSnapshot(enterpriseId, start, end);
+   }
+ }
+diff --git a/src/api/src/modules/b2b/billing.service.spec.ts b/src/api/src/modules/b2b/billing.service.spec.ts
+index e2569e15..206d4263 100644
+--- a/src/api/src/modules/b2b/billing.service.spec.ts
++++ b/src/api/src/modules/b2b/billing.service.spec.ts
+@@ -53,6 +53,96 @@ describe('BillingService', () => {
+     });
+   });
+ 
++  describe('getEnterpriseSubscriptionStatus', () => {
++    it('should return an active license for an active enterprise subscription', async () => {
++      mockSearchSubscriptions.mockResolvedValue({
++        data: [{
++          id: 'sub_ent_001',
++          status: 'active',
++          customer: 'cus_ent_001',
++          metadata: { plan: 'PRACTICE' },
++          items: {
++            data: [{
++              id: 'si_metered',
++              current_period_start: 1780272000,
++              current_period_end: 1782864000,
++              price: { id: 'price_practice', lookup_key: 'practice_monthly' },
++            }],
++          },
++        }],
++      });
++
++      const result = await service.getEnterpriseSubscriptionStatus('ent-001');
++
++      expect(result).toEqual({
++        enterpriseId: 'ent-001',
++        active: true,
++        status: 'active',
++        plan: 'PRACTICE',
++        stripeCustomerId: 'cus_ent_001',
++        subscriptionId: 'sub_ent_001',
++        currentPeriodStart: new Date(1780272000 * 1000),
++        currentPeriodEnd: new Date(1782864000 * 1000),
++      });
++      expect(mockSearchSubscriptions).toHaveBeenCalledWith({
++        query: 'metadata["enterpriseId"]:"ent-001" AND status:"active"',
++        limit: 1,
++      });
++    });
++
++    it('should allow a trialing subscription as licensed access for pilots', async () => {
++      mockSearchSubscriptions
++        .mockResolvedValueOnce({ data: [] })
++        .mockResolvedValueOnce({
++          data: [{
++            id: 'sub_trial_001',
++            status: 'trialing',
++            customer: { id: 'cus_trial_001' },
++            metadata: {},
++            items: {
++              data: [{
++                id: 'si_trial',
++                current_period_start: 1780272000,
++                current_period_end: 1782864000,
++                price: { id: 'price_solo', nickname: 'Solo' },
++              }],
++            },
++          }],
++        });
++
++      const result = await service.getEnterpriseSubscriptionStatus('ent-001');
++
++      expect(result.active).toBe(true);
++      expect(result.status).toBe('trialing');
++      expect(result.plan).toBe('Solo');
++      expect(result.stripeCustomerId).toBe('cus_trial_001');
++    });
++
++    it('should return inactive status when no active or trialing subscription exists', async () => {
++      mockSearchSubscriptions.mockResolvedValue({ data: [] });
++
++      const result = await service.getEnterpriseSubscriptionStatus('ent-missing');
++
++      expect(result).toEqual({
++        enterpriseId: 'ent-missing',
++        active: false,
++        status: null,
++        plan: null,
++        stripeCustomerId: null,
++        subscriptionId: null,
++        currentPeriodStart: null,
++        currentPeriodEnd: null,
++      });
++    });
++
++    it('should reject unsafe enterprise ids before building a Stripe search query', async () => {
++      await expect(
++        service.getEnterpriseSubscriptionStatus('ent-001" OR status:"active'),
++      ).rejects.toThrow('Invalid enterpriseId');
++      expect(mockSearchSubscriptions).not.toHaveBeenCalled();
++    });
++  });
++
+   describe('recordUsage', () => {
+     it('should record usage with an idempotent increment when a stable event id is supplied (PM21)', async () => {
+       mockSearchSubscriptions.mockResolvedValue({
+diff --git a/src/api/src/modules/b2b/billing.service.ts b/src/api/src/modules/b2b/billing.service.ts
+index 3fe11415..c57ccc42 100644
+--- a/src/api/src/modules/b2b/billing.service.ts
++++ b/src/api/src/modules/b2b/billing.service.ts
+@@ -12,6 +12,17 @@ interface MeteredSubscription {
+   currentPeriodEnd: number;
+ }
+ 
++export interface EnterpriseSubscriptionStatus {
++  enterpriseId: string;
++  active: boolean;
++  status: string | null;
++  plan: string | null;
++  stripeCustomerId: string | null;
++  subscriptionId: string | null;
++  currentPeriodStart: Date | null;
++  currentPeriodEnd: Date | null;
++}
++
+ @Injectable()
+ export class BillingService {
+   private readonly logger = new Logger(BillingService.name);
+@@ -99,22 +110,74 @@ export class BillingService {
+     return value;
+   }
+ 
++  private async findEnterpriseSubscription(
++    enterpriseId: string,
++    statuses: string[] = ['active', 'trialing'],
++  ): Promise<Stripe.Subscription | null> {
++    const safeEnterpriseId = this.assertSafeQueryValue(enterpriseId);
++
++    for (const status of statuses) {
++      const subscriptions = await this.stripe.subscriptions.search({
++        query: `metadata["enterpriseId"]:"${safeEnterpriseId}" AND status:"${status}"`,
++        limit: 1,
++      });
++
++      const subscription = subscriptions.data[0];
++      if (subscription) return subscription;
++    }
++
++    return null;
++  }
++
++  async getEnterpriseSubscriptionStatus(
++    enterpriseId: string,
++  ): Promise<EnterpriseSubscriptionStatus> {
++    const subscription = await this.findEnterpriseSubscription(enterpriseId);
++    if (!subscription) {
++      return {
++        enterpriseId,
++        active: false,
++        status: null,
++        plan: null,
++        stripeCustomerId: null,
++        subscriptionId: null,
++        currentPeriodStart: null,
++        currentPeriodEnd: null,
++      };
++    }
++
++    const firstItem = subscription.items.data[0];
++    const price = firstItem?.price;
++    const customerId = this.resolveStripeCustomerId(subscription.customer);
++    const plan =
++      subscription.metadata?.plan ||
++      price?.lookup_key ||
++      price?.nickname ||
++      price?.id ||
++      null;
++
++    return {
++      enterpriseId,
++      active: ['active', 'trialing'].includes(subscription.status),
++      status: subscription.status,
++      plan,
++      stripeCustomerId: customerId,
++      subscriptionId: subscription.id,
++      currentPeriodStart: firstItem?.current_period_start
++        ? new Date(firstItem.current_period_start * 1000)
++        : null,
++      currentPeriodEnd: firstItem?.current_period_end
++        ? new Date(firstItem.current_period_end * 1000)
++        : null,
++    };
++  }
++
+   /**
+    * Find the metered subscription item for an enterprise.
+    * Looks up the active subscription with the matching enterpriseId metadata.
+    */
+   private async getMeteredSubscription(enterpriseId: string): Promise<MeteredSubscription | null> {
+-    // Guard against Stripe Search Query Language injection. enterpriseId is a UUID
+-    // in our schema; anything containing quotes/backslashes/control chars could
+-    // break out of the quoted string literal and alter the query, so reject it.
+-    const safeEnterpriseId = this.assertSafeQueryValue(enterpriseId);
+-
+-    const subscriptions = await this.stripe.subscriptions.search({
+-      query: `metadata["enterpriseId"]:"${safeEnterpriseId}" AND status:"active"`,
+-      limit: 1,
+-    });
+-
+-    const subscription = subscriptions.data[0];
++    const subscription = await this.findEnterpriseSubscription(enterpriseId);
+     if (!subscription) return null;
+ 
+     const customerId = this.resolveStripeCustomerId(subscription.customer);
+diff --git a/src/web/app/hr/page.test.tsx b/src/web/app/hr/page.test.tsx
+index d6348185..7523a820 100644
+--- a/src/web/app/hr/page.test.tsx
++++ b/src/web/app/hr/page.test.tsx
+@@ -4,9 +4,11 @@ import React from 'react';
+ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+ 
+ const mockGetEnterpriseMetrics = jest.fn();
++const mockGetEnterpriseLicense = jest.fn();
+ 
+ jest.mock('../../services/api-client', () => ({
+   api: {
++    getEnterpriseLicense: (...args: unknown[]) => mockGetEnterpriseLicense(...args),
+     getEnterpriseMetrics: (...args: unknown[]) => mockGetEnterpriseMetrics(...args),
+   },
+ }));
+@@ -20,6 +22,16 @@ describe('HR dashboard page', () => {
+     jest.clearAllMocks();
+     process.env.NEXT_PUBLIC_STYX_FEATURE_B2B_HR_UI = 'true';
+     window.history.pushState({}, '', '/hr');
++    mockGetEnterpriseLicense.mockResolvedValue({
++      enterpriseId: 'e0000000-0000-0000-0000-000000000001',
++      active: true,
++      status: 'active',
++      plan: 'SOLO',
++      stripeCustomerId: 'cus_ent_001',
++      subscriptionId: 'sub_ent_001',
++      currentPeriodStart: '2026-06-01T00:00:00.000Z',
++      currentPeriodEnd: '2026-07-01T00:00:00.000Z',
++    });
+   });
+ 
+   afterAll(() => {
+@@ -32,6 +44,7 @@ describe('HR dashboard page', () => {
+     render(<HRDashboard />);
+ 
+     expect(screen.getByText('Internal Feature Disabled')).toBeTruthy();
++    expect(mockGetEnterpriseLicense).not.toHaveBeenCalled();
+     expect(mockGetEnterpriseMetrics).not.toHaveBeenCalled();
+   });
+ 
+@@ -50,15 +63,36 @@ describe('HR dashboard page', () => {
+     render(<HRDashboard />);
+ 
+     await waitFor(() => {
++      expect(mockGetEnterpriseLicense).toHaveBeenCalledWith('e0000000-0000-0000-0000-000000000001');
+       expect(mockGetEnterpriseMetrics).toHaveBeenCalledWith('e0000000-0000-0000-0000-000000000001');
+     });
+ 
+     expect(await screen.findByText('Total Contracts')).toBeTruthy();
++    expect(screen.getByText('Plan: SOLO')).toBeTruthy();
+     expect(screen.getByText('25')).toBeTruthy();
+     expect(screen.getByText('Open Risk Exposure')).toBeTruthy();
+     expect(screen.getByText('7')).toBeTruthy();
+   });
+ 
++  it('renders a subscription gate and skips metrics when the enterprise is unlicensed', async () => {
++    mockGetEnterpriseLicense.mockResolvedValueOnce({
++      enterpriseId: 'e0000000-0000-0000-0000-000000000001',
++      active: false,
++      status: null,
++      plan: null,
++      stripeCustomerId: null,
++      subscriptionId: null,
++      currentPeriodStart: null,
++      currentPeriodEnd: null,
++    });
++
++    render(<HRDashboard />);
++
++    expect(await screen.findByText('Subscription Required')).toBeTruthy();
++    expect(screen.getByText('Plan: Unlicensed')).toBeTruthy();
++    expect(mockGetEnterpriseMetrics).not.toHaveBeenCalled();
++  });
++
+   it('renders support trace parsing for request_id formatted errors', async () => {
+     mockGetEnterpriseMetrics.mockRejectedValue(
+       new Error('Failed to load metrics [request_id: hr-load-001]'),
+@@ -94,6 +128,7 @@ describe('HR dashboard page', () => {
+     fireEvent.click(screen.getByText('Load Enterprise'));
+ 
+     await waitFor(() => {
++      expect(mockGetEnterpriseLicense).toHaveBeenCalledWith('ent-alpha-01');
+       expect(mockGetEnterpriseMetrics).toHaveBeenCalledWith('ent-alpha-01');
+     });
+   });
+@@ -114,6 +149,7 @@ describe('HR dashboard page', () => {
+     render(<HRDashboard />);
+ 
+     await waitFor(() => {
++      expect(mockGetEnterpriseLicense).toHaveBeenCalledWith('ent-query-77');
+       expect(mockGetEnterpriseMetrics).toHaveBeenCalledWith('ent-query-77');
+     });
+   });
+diff --git a/src/web/app/hr/page.tsx b/src/web/app/hr/page.tsx
+index 34cba5f2..e010478a 100644
+--- a/src/web/app/hr/page.tsx
++++ b/src/web/app/hr/page.tsx
+@@ -1,8 +1,8 @@
+ 'use client';
+ 
+ import React, { useEffect, useState } from 'react';
+-import { Loader2, AlertTriangle, RefreshCw, Search } from 'lucide-react';
+-import { api } from '../../services/api-client';
++import { Loader2, AlertTriangle, RefreshCw, Search, LockKeyhole } from 'lucide-react';
++import { api, type EnterpriseLicenseStatus } from '../../services/api-client';
+ import { SupportTraceMessage } from '../../components/support/SupportTraceMessage';
+ 
+ interface EnterpriseMetrics {
+@@ -31,6 +31,7 @@ export default function HRDashboard() {
+   const [metrics, setMetrics] = useState<EnterpriseMetrics | null>(null);
+   const [loading, setLoading] = useState(true);
+   const [error, setError] = useState<string | null>(null);
++  const [license, setLicense] = useState<EnterpriseLicenseStatus | null>(null);
+   const [enterpriseInput, setEnterpriseInput] = useState(DEFAULT_ENTERPRISE_ID);
+   const [activeEnterpriseId, setActiveEnterpriseId] = useState(DEFAULT_ENTERPRISE_ID);
+   const [refreshNonce, setRefreshNonce] = useState(0);
+@@ -56,6 +57,15 @@ export default function HRDashboard() {
+ 
+     async function load() {
+       try {
++        const licenseStatus = await api.getEnterpriseLicense(activeEnterpriseId);
++        if (cancelled) return;
++        setLicense(licenseStatus);
++
++        if (!licenseStatus.active) {
++          setMetrics(null);
++          return;
++        }
++
+         const data = await api.getEnterpriseMetrics(activeEnterpriseId);
+         if (!cancelled) {
+           setMetrics(data);
+@@ -64,6 +74,7 @@ export default function HRDashboard() {
+         if (!cancelled) {
+           setError(err instanceof Error ? err.message : 'Failed to load metrics');
+           setMetrics(null);
++          setLicense(null);
+         }
+       } finally {
+         if (!cancelled) {
+@@ -129,6 +140,7 @@ export default function HRDashboard() {
+         </div>
+         <div className="text-right text-sm">
+           <div className="text-green-500 font-bold mb-1">Enterprise: {activeEnterpriseId}</div>
++          <div className="text-gray-500">Plan: {license?.plan ?? 'Unlicensed'}</div>
+           <div className="text-gray-500">Total Enrolled: {metrics?.totalEmployees ?? 0} Employees</div>
+           <div className="text-gray-500">Avg Integrity Score: {metrics?.avgIntegrityScore ?? 0}</div>
+         </div>
+@@ -174,28 +186,40 @@ export default function HRDashboard() {
+         </div>
+       ) : null}
+ 
+-      <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+-        <div className="bg-black border border-gray-800 p-6 rounded-lg">
+-          <h3 className="text-gray-500 text-xs uppercase mb-2">Total Contracts</h3>
+-          <p className="text-4xl font-bold text-white">{metrics?.totalContracts ?? 0}</p>
+-        </div>
+-        <div className="bg-black border border-gray-800 p-6 rounded-lg">
+-          <h3 className="text-gray-500 text-xs uppercase mb-2">Completion Rate</h3>
+-          <p className="text-4xl font-bold text-blue-500">{metrics?.completionRate ?? 0}%</p>
+-        </div>
+-        <div className="bg-black border border-gray-800 p-6 rounded-lg">
+-          <h3 className="text-gray-500 text-xs uppercase mb-2">Failed Contracts</h3>
+-          <p className="text-4xl font-bold text-red-500">{metrics?.failedContracts ?? 0}</p>
+-        </div>
+-        <div className="bg-black border border-gray-800 p-6 rounded-lg">
+-          <h3 className="text-gray-500 text-xs uppercase mb-2">Active Contracts</h3>
+-          <p className="text-4xl font-bold text-yellow-500">{metrics?.activeContracts ?? 0}</p>
+-        </div>
+-        <div className="bg-black border border-gray-800 p-6 rounded-lg">
+-          <h3 className="text-gray-500 text-xs uppercase mb-2">Open Risk Exposure</h3>
+-          <p className="text-4xl font-bold text-orange-500">{openRiskExposure}</p>
+-        </div>
+-      </main>
++      {license && !license.active ? (
++        <section className="border border-amber-800 bg-amber-950/20 p-6 rounded-lg flex flex-col md:flex-row md:items-center gap-4">
++          <LockKeyhole className="text-amber-400 flex-shrink-0" size={28} />
++          <div>
++            <h2 className="text-lg font-bold text-amber-100">Subscription Required</h2>
++            <p className="text-sm text-amber-200/70 mt-1">
++              Attach an active B2B subscription to view enterprise analytics for this account.
++            </p>
++          </div>
++        </section>
++      ) : (
++        <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
++          <div className="bg-black border border-gray-800 p-6 rounded-lg">
++            <h3 className="text-gray-500 text-xs uppercase mb-2">Total Contracts</h3>
++            <p className="text-4xl font-bold text-white">{metrics?.totalContracts ?? 0}</p>
++          </div>
++          <div className="bg-black border border-gray-800 p-6 rounded-lg">
++            <h3 className="text-gray-500 text-xs uppercase mb-2">Completion Rate</h3>
++            <p className="text-4xl font-bold text-blue-500">{metrics?.completionRate ?? 0}%</p>
++          </div>
++          <div className="bg-black border border-gray-800 p-6 rounded-lg">
++            <h3 className="text-gray-500 text-xs uppercase mb-2">Failed Contracts</h3>
++            <p className="text-4xl font-bold text-red-500">{metrics?.failedContracts ?? 0}</p>
++          </div>
++          <div className="bg-black border border-gray-800 p-6 rounded-lg">
++            <h3 className="text-gray-500 text-xs uppercase mb-2">Active Contracts</h3>
++            <p className="text-4xl font-bold text-yellow-500">{metrics?.activeContracts ?? 0}</p>
++          </div>
++          <div className="bg-black border border-gray-800 p-6 rounded-lg">
++            <h3 className="text-gray-500 text-xs uppercase mb-2">Open Risk Exposure</h3>
++            <p className="text-4xl font-bold text-orange-500">{openRiskExposure}</p>
++          </div>
++        </main>
++      )}
+ 
+       <div className="mt-12 text-xs text-gray-700 uppercase tracking-widest text-center">
+         PII and specific employee performance metrics are structurally redacted by the Aegis protocol.
+diff --git a/src/web/services/api-client.ts b/src/web/services/api-client.ts
+index fe46a674..855b0fa3 100644
+--- a/src/web/services/api-client.ts
++++ b/src/web/services/api-client.ts
+@@ -189,6 +189,17 @@ export interface LeaderboardEntry {
+   created_at: string;
+ }
+ 
++export interface EnterpriseLicenseStatus {
++  enterpriseId: string;
++  active: boolean;
++  status: string | null;
++  plan: string | null;
++  stripeCustomerId: string | null;
++  subscriptionId: string | null;
++  currentPeriodStart: string | null;
++  currentPeriodEnd: string | null;
++}
++
+ export const api = {
+   health: () => request<{ status: string }>("/health"),
+   getMobileBootstrap: () =>
+@@ -420,10 +431,19 @@ export const api = {
+       totalEmployees: number;
+     }>(`/b2b/metrics/${enterpriseId}`),
+ 
++  getEnterpriseLicense: (enterpriseId: string) =>
++    request<EnterpriseLicenseStatus>(`/b2b/license/${enterpriseId}`),
++
+   getEnterpriseBilling: (enterpriseId: string) =>
+     request<{
+       enterpriseId: string;
+       plan: string;
++      license: EnterpriseLicenseStatus;
++      usageSummary: {
++        totalUsage: number;
++        currentPeriodStart: string;
++        currentPeriodEnd: string;
++      };
+       events: unknown[];
+       totalDue: number;
+       currency: string;

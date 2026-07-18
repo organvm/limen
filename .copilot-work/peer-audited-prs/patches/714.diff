@@ -1,0 +1,799 @@
+diff --git a/.env.example b/.env.example
+index bd867966..536c5650 100644
+--- a/.env.example
++++ b/.env.example
+@@ -30,6 +30,13 @@ SALESFORCE_CLIENT_SECRET=
+ HUBSPOT_API_KEY=
+ ANONYMIZATION_SALT=
+ 
++# Transactional email. If SENDGRID_API_KEY or a verified sender is absent, the API
++# falls back to the mock sender and logs the queued email.
++SENDGRID_API_KEY=
++SENDGRID_FROM_EMAIL=
++SENDGRID_EARLY_ACCESS_ONBOARDING_TEMPLATE_ID=
++STYX_EMAIL_FROM=
++
+ # Beta / release metadata (Phase 1 mobile-first private beta defaults)
+ STYX_ENV_LABEL=local
+ STYX_PRIVATE_BETA=true
+diff --git a/src/api/src/modules/compliance/compliance.module.ts b/src/api/src/modules/compliance/compliance.module.ts
+index 67e44384..1dbc792e 100644
+--- a/src/api/src/modules/compliance/compliance.module.ts
++++ b/src/api/src/modules/compliance/compliance.module.ts
+@@ -13,10 +13,11 @@ import {
+ } from './identity-provider.service';
+ import { MedicalExemptionService } from './medical-exemption.service';
+ import { ContractsModule } from '../contracts/contracts.module';
++import { EmailModule } from '../email/email.module';
+ 
+ @Global()
+ @Module({
+-  imports: [DatabaseModule, forwardRef(() => ContractsModule)],
++  imports: [DatabaseModule, EmailModule, forwardRef(() => ContractsModule)],
+   controllers: [ComplianceController],
+   providers: [
+     CompliancePolicyService,
+diff --git a/src/api/src/modules/compliance/identity-verification.service.spec.ts b/src/api/src/modules/compliance/identity-verification.service.spec.ts
+index 9c25f705..6aca1ab5 100644
+--- a/src/api/src/modules/compliance/identity-verification.service.spec.ts
++++ b/src/api/src/modules/compliance/identity-verification.service.spec.ts
+@@ -5,11 +5,22 @@ import {
+   IdentityProviderService,
+   IdentityProviderCompletionResult,
+ } from './identity-provider.service';
++import { EmailService } from '../email/email.service';
+ 
+ describe('IdentityVerificationService', () => {
+   let service: IdentityVerificationService;
+   let mockPool: { query: jest.Mock };
+-  let mockProvider: jest.Mocked<Pick<IdentityProviderService, 'startVerification' | 'parseStripeIdentityWebhook' | 'verifyAndParseStripeWebhook'>>;
++  let mockProvider: jest.Mocked<
++    Pick<
++      IdentityProviderService,
++      | 'startVerification'
++      | 'parseStripeIdentityWebhook'
++      | 'verifyAndParseStripeWebhook'
++    >
++  >;
++  let mockEmail: jest.Mocked<
++    Pick<EmailService, 'sendEarlyAccessOnboarding'>
++  >;
+ 
+   beforeEach(() => {
+     mockPool = { query: jest.fn() };
+@@ -18,6 +29,9 @@ describe('IdentityVerificationService', () => {
+       parseStripeIdentityWebhook: jest.fn(),
+       verifyAndParseStripeWebhook: jest.fn(),
+     };
++    mockEmail = {
++      sendEarlyAccessOnboarding: jest.fn(),
++    };
+     service = new IdentityVerificationService(
+       mockPool as any,
+       mockProvider as unknown as IdentityProviderService,
+@@ -365,9 +379,67 @@ describe('IdentityVerificationService', () => {
+   // ─── applyProviderCompletion ───
+ 
+   describe('applyProviderCompletion', () => {
++    it('should send early-access onboarding when KYC verification upgrades the user tier', async () => {
++      service = new IdentityVerificationService(
++        mockPool as any,
++        mockProvider as unknown as IdentityProviderService,
++        mockEmail as unknown as EmailService,
++      );
++      mockPool.query
++        .mockResolvedValueOnce({
++          rows: [
++            { id: 'user-1', email: 'test@styx.io', kyc_status: 'PENDING' },
++          ],
++        } as any)
++        .mockResolvedValueOnce({ rowCount: 1 } as any);
++
++      await service.applyProviderCompletion({
++        provider: 'MOCK',
++        verificationId: 'mock_abc',
++        mode: 'KYC_ONLY',
++        status: 'VERIFIED',
++        userId: 'user-1',
++      });
++
++      expect(mockEmail.sendEarlyAccessOnboarding).toHaveBeenCalledWith({
++        to: 'test@styx.io',
++        userId: 'user-1',
++        trigger: 'tier_upgrade',
++      });
++    });
++
++    it('should not resend tier-upgrade onboarding for already verified KYC', async () => {
++      service = new IdentityVerificationService(
++        mockPool as any,
++        mockProvider as unknown as IdentityProviderService,
++        mockEmail as unknown as EmailService,
++      );
++      mockPool.query
++        .mockResolvedValueOnce({
++          rows: [
++            { id: 'user-1', email: 'test@styx.io', kyc_status: 'VERIFIED' },
++          ],
++        } as any)
++        .mockResolvedValueOnce({ rowCount: 1 } as any);
++
++      await service.applyProviderCompletion({
++        provider: 'MOCK',
++        verificationId: 'mock_abc',
++        mode: 'KYC_ONLY',
++        status: 'VERIFIED',
++        userId: 'user-1',
++      });
++
++      expect(mockEmail.sendEarlyAccessOnboarding).not.toHaveBeenCalled();
++    });
++
+     it('should look up user by verificationId when userId is not provided', async () => {
+       mockPool.query
+-        .mockResolvedValueOnce({ rows: [{ id: 'user-found' }] } as any) // lookup
++        .mockResolvedValueOnce({
++          rows: [
++            { id: 'user-found', email: 'found@styx.io', kyc_status: 'PENDING' },
++          ],
++        } as any) // lookup
+         .mockResolvedValueOnce({ rowCount: 1 } as any); // recordVerificationStatus
+ 
+       await service.applyProviderCompletion({
+diff --git a/src/api/src/modules/compliance/identity-verification.service.ts b/src/api/src/modules/compliance/identity-verification.service.ts
+index aecc07f2..833c6c56 100644
+--- a/src/api/src/modules/compliance/identity-verification.service.ts
++++ b/src/api/src/modules/compliance/identity-verification.service.ts
+@@ -1,4 +1,10 @@
+-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
++import {
++  ForbiddenException,
++  Injectable,
++  Logger,
++  NotFoundException,
++  Optional,
++} from '@nestjs/common';
+ import { Pool } from 'pg';
+ import {
+   IdentityProviderService,
+@@ -6,8 +12,14 @@ import {
+   IdentityProviderStatus,
+   StartIdentityVerificationResult,
+ } from './identity-provider.service';
++import { EmailService } from '../email/email.service';
+ 
+-export type VerificationStatus = 'NOT_STARTED' | 'PENDING' | 'VERIFIED' | 'FAILED' | 'REJECTED';
++export type VerificationStatus =
++  | 'NOT_STARTED'
++  | 'PENDING'
++  | 'VERIFIED'
++  | 'FAILED'
++  | 'REJECTED';
+ 
+ export interface UserComplianceStatus {
+   userId: string;
+@@ -22,9 +34,12 @@ export interface UserComplianceStatus {
+ 
+ @Injectable()
+ export class IdentityVerificationService {
++  private readonly logger = new Logger(IdentityVerificationService.name);
++
+   constructor(
+     private readonly pool: Pool,
+     private readonly identityProvider: IdentityProviderService,
++    @Optional() private readonly emailService?: EmailService,
+   ) {}
+ 
+   async getUserComplianceStatus(userId: string): Promise<UserComplianceStatus> {
+@@ -50,8 +65,12 @@ export class IdentityVerificationService {
+     }
+ 
+     const row = result.rows[0];
+-    const kycStatus = String(row.kyc_status || 'NOT_STARTED').toUpperCase() as VerificationStatus;
+-    const ageVerificationStatus = String(row.age_verification_status || 'NOT_STARTED').toUpperCase() as VerificationStatus;
++    const kycStatus = String(
++      row.kyc_status || 'NOT_STARTED',
++    ).toUpperCase() as VerificationStatus;
++    const ageVerificationStatus = String(
++      row.age_verification_status || 'NOT_STARTED',
++    ).toUpperCase() as VerificationStatus;
+ 
+     return {
+       userId: row.id,
+@@ -59,7 +78,9 @@ export class IdentityVerificationService {
+       ageVerificationStatus,
+       identityProvider: row.identity_provider ?? null,
+       identityVerificationId: row.identity_verification_id ?? null,
+-      identityVerifiedAt: row.identity_verified_at ? new Date(row.identity_verified_at).toISOString() : null,
++      identityVerifiedAt: row.identity_verified_at
++        ? new Date(row.identity_verified_at).toISOString()
++        : null,
+       isKycVerified: kycStatus === 'VERIFIED',
+       isAgeVerified: ageVerificationStatus === 'VERIFIED',
+     };
+@@ -176,7 +197,10 @@ export class IdentityVerificationService {
+     // (unsigned) event must never be able to mark a user KYC/age VERIFIED.
+     let parsed;
+     try {
+-      parsed = this.identityProvider.verifyAndParseStripeWebhook(input.rawBody, input.signature);
++      parsed = this.identityProvider.verifyAndParseStripeWebhook(
++        input.rawBody,
++        input.signature,
++      );
+     } catch {
+       // Signature verification / secret configuration failure — reject.
+       return { applied: false, reason: 'invalid_signature' };
+@@ -198,37 +222,105 @@ export class IdentityVerificationService {
+     userId?: string | null;
+     raw?: any;
+   }): Promise<void> {
+-    const mappedStatus = this.mapProviderStatusToVerificationStatus(input.status);
++    const mappedStatus = this.mapProviderStatusToVerificationStatus(
++      input.status,
++    );
+     const verifiedAt = mappedStatus === 'VERIFIED' ? new Date() : null;
++    const upgradesKycTier =
++      mappedStatus === 'VERIFIED' && this.modeIncludesKyc(input.mode);
+ 
+     let targetUserId = input.userId || null;
++    let targetUser: {
++      id: string;
++      email: string | null;
++      kyc_status: string | null;
++    } | null = null;
+     if (!targetUserId) {
+       const lookup = await this.pool.query(
+-        `SELECT id FROM users WHERE identity_verification_id = $1 LIMIT 1`,
++        `SELECT id, email, kyc_status FROM users WHERE identity_verification_id = $1 LIMIT 1`,
+         [input.verificationId],
+       );
+       if (lookup.rows.length === 0) {
+-        throw new NotFoundException(`No user found for verification ${input.verificationId}`);
++        throw new NotFoundException(
++          `No user found for verification ${input.verificationId}`,
++        );
+       }
+-      targetUserId = lookup.rows[0].id;
++      targetUser = lookup.rows[0];
++      targetUserId = targetUser.id;
+     }
+ 
+     const resolvedUserId = targetUserId as string;
++    if (upgradesKycTier && this.emailService && !targetUser) {
++      const userResult = await this.pool.query(
++        `SELECT id, email, kyc_status FROM users WHERE id = $1 LIMIT 1`,
++        [resolvedUserId],
++      );
++      targetUser = userResult.rows[0] ?? null;
++    }
+ 
+     await this.recordVerificationStatus({
+       userId: resolvedUserId,
+-      ...(input.mode === 'KYC_ONLY' || input.mode === 'KYC_AND_AGE' ? { kycStatus: mappedStatus } : {}),
+-      ...(input.mode === 'AGE_ONLY' || input.mode === 'KYC_AND_AGE' ? { ageVerificationStatus: mappedStatus } : {}),
++      ...(input.mode === 'KYC_ONLY' || input.mode === 'KYC_AND_AGE'
++        ? { kycStatus: mappedStatus }
++        : {}),
++      ...(input.mode === 'AGE_ONLY' || input.mode === 'KYC_AND_AGE'
++        ? { ageVerificationStatus: mappedStatus }
++        : {}),
+       identityProvider: input.provider,
+       identityVerificationId: input.verificationId,
+       verifiedAt,
+     });
++
++    if (
++      upgradesKycTier &&
++      this.emailService &&
++      this.wasNotVerified(targetUser?.kyc_status)
++    ) {
++      await this.sendTierUpgradeOnboarding(
++        resolvedUserId,
++        targetUser?.email ?? null,
++      );
++    }
+   }
+ 
+-  private mapProviderStatusToVerificationStatus(status: IdentityProviderStatus): VerificationStatus {
++  private mapProviderStatusToVerificationStatus(
++    status: IdentityProviderStatus,
++  ): VerificationStatus {
+     if (status === 'VERIFIED') return 'VERIFIED';
+     if (status === 'REJECTED') return 'REJECTED';
+     if (status === 'FAILED') return 'FAILED';
+     return 'PENDING';
+   }
++
++  private modeIncludesKyc(mode: IdentityVerificationMode): boolean {
++    return mode === 'KYC_ONLY' || mode === 'KYC_AND_AGE';
++  }
++
++  private wasNotVerified(status: string | null | undefined): boolean {
++    return String(status || 'NOT_STARTED').toUpperCase() !== 'VERIFIED';
++  }
++
++  private async sendTierUpgradeOnboarding(
++    userId: string,
++    email: string | null,
++  ): Promise<void> {
++    if (!email) {
++      this.logger.warn(
++        `Skipping tier-upgrade onboarding email for ${userId}: missing email`,
++      );
++      return;
++    }
++
++    try {
++      await this.emailService?.sendEarlyAccessOnboarding({
++        to: email,
++        userId,
++        trigger: 'tier_upgrade',
++      });
++    } catch (error) {
++      this.logger.warn(
++        `Tier-upgrade onboarding email failed for user ${userId}: ${(error as Error).message}`,
++      );
++    }
++  }
+ }
+diff --git a/src/api/src/modules/contracts/contracts.module.ts b/src/api/src/modules/contracts/contracts.module.ts
+index 5ca72b94..f81aadc8 100644
+--- a/src/api/src/modules/contracts/contracts.module.ts
++++ b/src/api/src/modules/contracts/contracts.module.ts
+@@ -22,6 +22,7 @@ import {
+ } from "../../../services/anomaly/anomaly.service";
+ import { NotificationsModule } from "../notifications/notifications.module";
+ import { PaymentsModule } from "../payments/payments.module";
++import { EmailModule } from "../email/email.module";
+ import Redis from "ioredis";
+ import { getRedisConnectionConfig } from "../../../config/queue.config";
+ 
+@@ -40,6 +41,7 @@ const redisProvider = {
+   imports: [
+     ScheduleModule.forRoot(),
+     NotificationsModule,
++    EmailModule,
+     forwardRef(() => PaymentsModule),
+   ],
+   controllers: [ContractsController],
+diff --git a/src/api/src/modules/contracts/waitlist.service.spec.ts b/src/api/src/modules/contracts/waitlist.service.spec.ts
+index 554a675c..2cf3e876 100644
+--- a/src/api/src/modules/contracts/waitlist.service.spec.ts
++++ b/src/api/src/modules/contracts/waitlist.service.spec.ts
+@@ -1,18 +1,24 @@
+ import { Test, TestingModule } from "@nestjs/testing";
+ import { WaitlistService } from "./waitlist.service";
+ import { Pool } from "pg";
++import { EmailService } from "../email/email.service";
+ 
+ describe("WaitlistService", () => {
+   let service: WaitlistService;
+   let pool: Pool;
+   const mockQuery = jest.fn();
++  const mockEmail = {
++    sendEarlyAccessOnboarding: jest.fn(),
++  };
+ 
+   beforeEach(async () => {
+     mockQuery.mockReset();
++    mockEmail.sendEarlyAccessOnboarding.mockReset();
+     const module: TestingModule = await Test.createTestingModule({
+       providers: [
+         WaitlistService,
+         { provide: Pool, useValue: { query: mockQuery } },
++        { provide: EmailService, useValue: mockEmail },
+       ],
+     }).compile();
+ 
+@@ -38,11 +44,46 @@ describe("WaitlistService", () => {
+             created_at: new Date(),
+           },
+         ],
++      })
++      .mockResolvedValueOnce({
++        rows: [{ email: "early@styx.app" }],
+       });
+ 
+     const result = await service.joinWaitlist("u1", "c1");
+     expect(result.position).toBe(1);
+     expect(result.cohortId).toBe("c1");
++    expect(mockEmail.sendEarlyAccessOnboarding).toHaveBeenCalledWith({
++      to: "early@styx.app",
++      userId: "u1",
++      cohortId: "c1",
++      position: 1,
++      trigger: "waitlist_join",
++    });
++  });
++
++  it("does not resend onboarding when updating an existing waitlist entry", async () => {
++    mockQuery
++      .mockResolvedValueOnce({ rows: [{ id: "w1", enrolled: false }] })
++      .mockResolvedValueOnce({ rows: [{ next_position: 2 }] })
++      .mockResolvedValueOnce({
++        rows: [
++          {
++            id: "w1",
++            user_id: "u1",
++            cohort_id: "c1",
++            pod_id: "p2",
++            display_alias: null,
++            position: 1,
++            enrolled: false,
++            enrolled_at: null,
++            created_at: new Date(),
++          },
++        ],
++      });
++
++    await service.joinWaitlist("u1", "c1", "p2");
++
++    expect(mockEmail.sendEarlyAccessOnboarding).not.toHaveBeenCalled();
+   });
+ 
+   it("gets waitlist position", async () => {
+diff --git a/src/api/src/modules/contracts/waitlist.service.ts b/src/api/src/modules/contracts/waitlist.service.ts
+index 0c147f79..7dedd2d7 100644
+--- a/src/api/src/modules/contracts/waitlist.service.ts
++++ b/src/api/src/modules/contracts/waitlist.service.ts
+@@ -1,10 +1,6 @@
+-import {
+-  Injectable,
+-  Logger,
+-  NotFoundException,
+-  ConflictException,
+-} from "@nestjs/common";
++import { Injectable, Logger, ConflictException } from "@nestjs/common";
+ import { Pool } from "pg";
++import { EmailService } from "../email/email.service";
+ 
+ export interface WaitlistEntry {
+   id: string;
+@@ -22,7 +18,10 @@ export interface WaitlistEntry {
+ export class WaitlistService {
+   private readonly logger = new Logger(WaitlistService.name);
+ 
+-  constructor(private readonly pool: Pool) {}
++  constructor(
++    private readonly pool: Pool,
++    private readonly emailService: EmailService,
++  ) {}
+ 
+   async joinWaitlist(
+     userId: string,
+@@ -61,7 +60,15 @@ export class WaitlistService {
+     this.logger.log(
+       `User ${userId} joined waitlist for cohort ${cohortId} at position ${position}`,
+     );
+-    return this.mapEntry(entry);
++    const mappedEntry = this.mapEntry(entry);
++    if (!existing) {
++      await this.sendEarlyAccessOnboarding(
++        userId,
++        cohortId,
++        mappedEntry.position,
++      );
++    }
++    return mappedEntry;
+   }
+ 
+   async getWaitlistPosition(
+@@ -132,4 +139,36 @@ export class WaitlistService {
+       createdAt: r.created_at,
+     };
+   }
++
++  private async sendEarlyAccessOnboarding(
++    userId: string,
++    cohortId: string,
++    position: number,
++  ): Promise<void> {
++    try {
++      const {
++        rows: [user],
++      } = await this.pool.query("SELECT email FROM users WHERE id = $1", [
++        userId,
++      ]);
++      if (!user?.email) {
++        this.logger.warn(
++          `Skipping waitlist onboarding email for ${userId}: missing email`,
++        );
++        return;
++      }
++
++      await this.emailService.sendEarlyAccessOnboarding({
++        to: user.email,
++        userId,
++        cohortId,
++        position,
++        trigger: "waitlist_join",
++      });
++    } catch (error) {
++      this.logger.warn(
++        `Waitlist onboarding email failed for user ${userId}: ${(error as Error).message}`,
++      );
++    }
++  }
+ }
+diff --git a/src/api/src/modules/email/email.module.ts b/src/api/src/modules/email/email.module.ts
+new file mode 100644
+index 00000000..244dfab3
+--- /dev/null
++++ b/src/api/src/modules/email/email.module.ts
+@@ -0,0 +1,8 @@
++import { Module } from "@nestjs/common";
++import { EmailService } from "./email.service";
++
++@Module({
++  providers: [EmailService],
++  exports: [EmailService],
++})
++export class EmailModule {}
+diff --git a/src/api/src/modules/email/email.service.spec.ts b/src/api/src/modules/email/email.service.spec.ts
+new file mode 100644
+index 00000000..16913a00
+--- /dev/null
++++ b/src/api/src/modules/email/email.service.spec.ts
+@@ -0,0 +1,81 @@
++import { EmailService } from "./email.service";
++
++describe("EmailService", () => {
++  let service: EmailService;
++  const originalEnv = process.env;
++
++  beforeEach(() => {
++    process.env = { ...originalEnv };
++    delete process.env.SENDGRID_API_KEY;
++    delete process.env.SENDGRID_FROM_EMAIL;
++    delete process.env.STYX_EMAIL_FROM;
++    delete process.env.SENDGRID_EARLY_ACCESS_ONBOARDING_TEMPLATE_ID;
++    delete process.env.STYX_WEB_PUBLIC_URL;
++    service = new EmailService();
++  });
++
++  afterEach(() => {
++    process.env = originalEnv;
++    jest.restoreAllMocks();
++  });
++
++  it("uses the mock sender when SendGrid is not configured", async () => {
++    const result = await service.sendEarlyAccessOnboarding({
++      to: "early@styx.app",
++      userId: "user-1",
++      cohortId: "cohort-1",
++      position: 7,
++      trigger: "waitlist_join",
++    });
++
++    expect(result).toEqual({
++      accepted: true,
++      mode: "mock",
++      reason: "sendgrid_api_key_missing",
++    });
++  });
++
++  it("sends the early-access template through SendGrid when configured", async () => {
++    process.env.SENDGRID_API_KEY = "SG.test";
++    process.env.SENDGRID_FROM_EMAIL = "hello@styx.app";
++    process.env.SENDGRID_EARLY_ACCESS_ONBOARDING_TEMPLATE_ID = "d-template";
++    process.env.STYX_WEB_PUBLIC_URL = "https://app.styx.test";
++    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
++      ok: true,
++      status: 202,
++      headers: { get: jest.fn().mockReturnValue("msg-1") },
++      text: jest.fn(),
++    } as any);
++
++    const result = await service.sendEarlyAccessOnboarding({
++      to: "early@styx.app",
++      userId: "user-1",
++      trigger: "tier_upgrade",
++    });
++
++    expect(result).toEqual({
++      accepted: true,
++      mode: "sendgrid",
++      providerMessageId: "msg-1",
++    });
++    expect(fetchSpy).toHaveBeenCalledWith(
++      "https://api.sendgrid.com/v3/mail/send",
++      expect.objectContaining({
++        method: "POST",
++        headers: expect.objectContaining({
++          Authorization: "Bearer SG.test",
++        }),
++      }),
++    );
++    const body = JSON.parse(String((fetchSpy.mock.calls[0][1] as any).body));
++    expect(body).toMatchObject({
++      from: { email: "hello@styx.app" },
++      template_id: "d-template",
++      categories: ["early-access-onboarding"],
++    });
++    expect(body.personalizations[0].dynamic_template_data).toMatchObject({
++      ctaUrl: "https://app.styx.test/dashboard",
++      trigger: "tier_upgrade",
++    });
++  });
++});
+diff --git a/src/api/src/modules/email/email.service.ts b/src/api/src/modules/email/email.service.ts
+new file mode 100644
+index 00000000..9e57a7f0
+--- /dev/null
++++ b/src/api/src/modules/email/email.service.ts
+@@ -0,0 +1,175 @@
++import { Injectable, Logger } from "@nestjs/common";
++
++type EarlyAccessTrigger = "waitlist_join" | "tier_upgrade";
++type EmailMode = "mock" | "sendgrid";
++
++export interface EarlyAccessOnboardingEmailInput {
++  to: string | null | undefined;
++  userId?: string;
++  cohortId?: string;
++  position?: number;
++  trigger: EarlyAccessTrigger;
++}
++
++export interface EmailSendResult {
++  accepted: boolean;
++  mode: EmailMode;
++  providerMessageId?: string | null;
++  reason?: string;
++}
++
++interface RenderedEmail {
++  subject: string;
++  text: string;
++  html: string;
++  templateId: string | null;
++  dynamicTemplateData: Record<string, unknown>;
++}
++
++@Injectable()
++export class EmailService {
++  private readonly logger = new Logger(EmailService.name);
++  private readonly sendGridUrl = "https://api.sendgrid.com/v3/mail/send";
++
++  async sendEarlyAccessOnboarding(
++    input: EarlyAccessOnboardingEmailInput,
++  ): Promise<EmailSendResult> {
++    if (!input.to) {
++      return { accepted: false, mode: "mock", reason: "missing_recipient" };
++    }
++
++    const rendered = this.renderEarlyAccessOnboarding(input);
++    return this.send({
++      to: input.to,
++      subject: rendered.subject,
++      text: rendered.text,
++      html: rendered.html,
++      templateId: rendered.templateId,
++      dynamicTemplateData: rendered.dynamicTemplateData,
++      category: "early-access-onboarding",
++    });
++  }
++
++  private async send(input: {
++    to: string;
++    subject: string;
++    text: string;
++    html: string;
++    templateId: string | null;
++    dynamicTemplateData: Record<string, unknown>;
++    category: string;
++  }): Promise<EmailSendResult> {
++    const apiKey = process.env.SENDGRID_API_KEY;
++    const fromEmail =
++      process.env.SENDGRID_FROM_EMAIL || process.env.STYX_EMAIL_FROM;
++
++    if (!apiKey || !fromEmail) {
++      this.logger.log(
++        `Mock email ${input.category} queued for ${this.maskEmail(input.to)}`,
++      );
++      return {
++        accepted: true,
++        mode: "mock",
++        reason: !apiKey ? "sendgrid_api_key_missing" : "from_email_missing",
++      };
++    }
++
++    const personalization: Record<string, unknown> = {
++      to: [{ email: input.to }],
++    };
++    if (input.templateId) {
++      personalization.dynamic_template_data = input.dynamicTemplateData;
++    }
++
++    const payload: Record<string, unknown> = {
++      personalizations: [personalization],
++      from: { email: fromEmail },
++      categories: [input.category],
++    };
++
++    if (input.templateId) {
++      payload.template_id = input.templateId;
++    } else {
++      payload.subject = input.subject;
++      payload.content = [
++        { type: "text/plain", value: input.text },
++        { type: "text/html", value: input.html },
++      ];
++    }
++
++    const response = await fetch(this.sendGridUrl, {
++      method: "POST",
++      headers: {
++        Authorization: `Bearer ${apiKey}`,
++        "Content-Type": "application/json",
++      },
++      body: JSON.stringify(payload),
++    });
++
++    if (!response.ok) {
++      const body = await response.text().catch(() => "");
++      throw new Error(
++        `SendGrid email send failed with ${response.status}${body ? `: ${body}` : ""}`,
++      );
++    }
++
++    return {
++      accepted: true,
++      mode: "sendgrid",
++      providerMessageId: response.headers.get("x-message-id"),
++    };
++  }
++
++  private renderEarlyAccessOnboarding(
++    input: EarlyAccessOnboardingEmailInput,
++  ): RenderedEmail {
++    const webUrl =
++      process.env.STYX_WEB_PUBLIC_URL ||
++      process.env.NEXT_PUBLIC_WEB_URL ||
++      "https://styx.app";
++    const ctaUrl = `${webUrl.replace(/\/$/, "")}/dashboard`;
++    const templateId =
++      process.env.SENDGRID_EARLY_ACCESS_ONBOARDING_TEMPLATE_ID ||
++      process.env.STYX_EARLY_ACCESS_ONBOARDING_TEMPLATE_ID ||
++      null;
++    const triggerLabel =
++      input.trigger === "tier_upgrade" ? "tier upgrade" : "waitlist join";
++    const subject = "Your Styx early access is ready";
++    const text = [
++      "Welcome to Styx early access.",
++      "",
++      "Your private beta account is ready for onboarding. Open the app to finish setup, review safety controls, and create your first commitment.",
++      "",
++      ctaUrl,
++    ].join("\n");
++    const html = [
++      "<p>Welcome to Styx early access.</p>",
++      "<p>Your private beta account is ready for onboarding. Open the app to finish setup, review safety controls, and create your first commitment.</p>",
++      `<p><a href="${ctaUrl}">Open Styx</a></p>`,
++    ].join("");
++
++    return {
++      subject,
++      text,
++      html,
++      templateId,
++      dynamicTemplateData: {
++        subject,
++        ctaUrl,
++        userId: input.userId ?? null,
++        cohortId: input.cohortId ?? null,
++        waitlistPosition: input.position ?? null,
++        trigger: input.trigger,
++        triggerLabel,
++      },
++    };
++  }
++
++  private maskEmail(email: string): string {
++    const [local, domain] = email.split("@");
++    if (!local || !domain) {
++      return "unknown";
++    }
++    return `${local.slice(0, 1)}***@${domain}`;
++  }
++}

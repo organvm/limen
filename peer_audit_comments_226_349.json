@@ -1,0 +1,434 @@
+{
+  "226": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `src/api/src/modules/`, `docs/planning/evaluation-to-growth--architecture-corpus--2026-05-16.md`, and `docs/planning/feature-matrix.md`. The repo already exposes the big module families (auth, contracts, fury, wallet, compliance, B2B), but the unresolved value here is the fine-grained controller/service/provider map and endpoint count per module. The most useful continuation now is a canonical module matrix that ties each NestJS module to routes, injected dependencies, and verification coverage, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "227": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `src/shared/libs/`, `src/shared/behavioral-physics/`, and `src/shared/fury-logic/`. There is already substantial shared surface area, so the risk is drift between utility exports, domain algorithms, and what downstream packages actually import. The most useful continuation now is a single inventory of export signatures plus ownership boundaries for money/integrity/behavioral logic, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "228": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `src/web/app/`, `src/web/components/`, `src/web/store/`, and `src/web/services/`. The route tree is real (`dashboard`, `fury`, `wallet`, `legal`, `hr`, etc.), but the audit still needs to connect pages/components/stores back to their API dependencies instead of just listing folders. The most useful continuation now is a route-to-component-to-API map that makes frontend completeness measurable, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "229": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `src/mobile/screens/`, `src/mobile/services/`, and the native iOS/Android folders under `src/mobile/`. The mobile codebase is present, but the useful split is between truly wired flows and screens that are still scaffold-level or blocked by native dependencies. The most useful continuation now is an implementation inventory that separates working RN screens from HealthKit/secure-camera/native-bridge gaps, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "230": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `src/desktop/src/components/`, `src/desktop/src/services/`, and `src/desktop/src-tauri/`. The Judge desktop surface is no longer hypothetical; there are concrete panels, but completeness still depends on which admin actions are actually wired end to end. The most useful continuation now is a panel-by-panel audit that pairs each desktop surface with the backing API/service path and missing operator actions, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "231": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `src/api/database/schema.sql` plus migrations like `010_settlements_and_jurisdictions.sql`, `011_fury_audit_masks.sql`, `015_cross_lobby_auditing_fields.sql`, and `020_phase_gamma_trust_chain.sql`. The schema footprint is large enough now that a useful audit is not \u201cdoes SQL exist?\u201d but \u201cwhich tables/columns/constraints implement which feature promises?\u201d The most useful continuation now is a normalized schema report mapping tables and constraints to feature/ticket ownership, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "232": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/planning--alpha-omega-completion-matrix.md`, `docs/planning/feature-matrix.md`, and `docs/FEATURE-BACKLOG.md`. There are already multiple completeness views, so the real work is reconciling disagreements between them rather than creating yet another percentage table. The most useful continuation now is one authoritative completeness matrix with explicit status rules and source-of-truth precedence, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "233": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/planning--alpha-omega-completion-matrix.md`, `docs/planning/feature-matrix.md`, and `docs/planning/implementation-status.md`. The ingredients for the report already exist; what is missing is a single publishable narrative that collapses those matrices into one audited artifact. The most useful continuation now is one report that names the authoritative matrix and records where current status claims still conflict, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "234": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/specs/spec--fury-router.md`, `docs/specs/spec--digital-exhaust-intake.md`, `docs/architecture/architecture--alpha-to-omega-plan.md`, `docs/architecture/architecture--feasibility-stack.md`, `docs/architecture/architecture--technical-feasibility.md`, `docs/architecture/architecture--truth-blockchain-v2.md`, and `docs/architecture/architecture--aegis-tier-reconciliation.md`. Most of the named architecture artifacts now exist, but they span `docs/specs/` and `docs/architecture/` with some naming drift from the issue text. The most useful continuation now is a reconciled extraction pass that cites the current filenames and flags any concept that still lacks a living home, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "235": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `git log` at current HEAD (recently `#787`, `#771`, `#779`, `#751`, `#750`) plus the existing audit/planning artifacts. Raw commit retrieval is easy now; the lasting value is interpreting the recent sequence as dependency maintenance, CI repair, and operational stabilization rather than dumping hashes. The most useful continuation now is a concise trend summary tying recent commits to repo direction and remaining risk, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "236": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/2026-03-05-evaluation-to-growth-final-report.md` and `docs/planning/evaluation-to-growth--full-breath-audit--2026-03-06.md`. A \u201cfinal summary\u201d already exists in multiple forms, which means the live problem is not absence but reconciliation against today\u2019s repository state. The most useful continuation now is one maintained audit summary that explicitly states what those earlier reports got right, what has since moved, and what remains open, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "237": {
+    "new_disposition": "engaged",
+    "body": "I checked current repo tree and the issue-targeted path `meta-organvm/organvm-corpvs-testamentvm/registry-v2.json`. I do not see that registry file vendored in this repository, so this ask is clearly cross-repo governance work rather than a local Styx code change. This is still materially open because the authoritative file lives outside this checkout and needs a cross-repo governance sync, not guesswork from within this repo, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "238": {
+    "new_disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/commit/5aa2cd617991024923b7e23e441d17b8231ec788",
+    "body": "I checked current HEAD and the requested change is already present in `seed.yaml` (`metadata.tier: flagship`) and its history. The tier is already `flagship` at current HEAD, and the historical landing point for that promotion is visible in the seed history. The concrete ask now reads as superseded by https://github.com/organvm/peer-audited--behavioral-blockchain/commit/5aa2cd617991024923b7e23e441d17b8231ec788, while the issue remains useful as lineage."
+  },
+  "239": {
+    "new_disposition": "engaged",
+    "body": "I checked this repo plus the referenced external path `meta-organvm/organvm-corpvs-testamentvm/docs/standards/`. The Styx repo now has strong local governance docs (`AGENTS.md`, `CLAUDE.md`, department `REGE.md`s), but not the cross-repo habitat standard file named here. This is still materially open because the standard belongs to the external governance corpus, so the remaining work is authoring there and then linking back here, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "240": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `README.md`, `docs/README.md`, `docs/departments/README.md`, and `seed.yaml`. The topology information is already spread across repo/workspace/department/governance docs, which makes this less a missing idea than a missing synthesized diagram. The most useful continuation now is one topology artifact that shows repo layer, organ layer, and orchestration layer without duplicating scattered prose, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "241": {
+    "new_disposition": "engaged",
+    "body": "I checked the repo plus the command references `organvm registry validate`, `organvm metrics calculate`, and `organvm seed validate`. The sync intent is clear, but those commands depend on the wider `organvm` toolchain rather than something I can prove from this checkout alone. This is still materially open because the validation surface is external to this repo, so the issue remains a live governance/CLI sync task, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "245": {
+    "new_disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/commit/fc557887d7b7c1325134a80f8926ec7e1a73c7b2",
+    "body": "I checked current HEAD and the requested change is already present in `.github/workflows/ci.yml`, `package.json` (`beta:readiness`), `scripts/smoke/beta-readiness.sh`, and `docs/planning/planning--beta-readiness-contract.md`. Beta readiness is already wired into CI and the README documents the artifact upload path, so the specific \u201cintegrate the gate\u201d ask has landed in code. The concrete ask now reads as superseded by https://github.com/organvm/peer-audited--behavioral-blockchain/commit/fc557887d7b7c1325134a80f8926ec7e1a73c7b2, while the issue remains useful as lineage."
+  },
+  "246": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `scripts/analysis/ingest-doc-intelligence.js`, `docs/planning/planning--doc-ingest-register.md`, and the existing planning/audit corpus. A doc-intelligence substrate already exists in practice, so the open value is not directory creation by itself but making the pipeline boundaries explicit. The most useful continuation now is a clearly owned doc-intelligence workspace with ingestion, extraction, classification, and ticketing stages separated, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "247": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `scripts/analysis/ingest-doc-intelligence.js` and `docs/planning/planning--doc-ingest-register.md`. The repo already tracks doc-ingest metadata, which means the issue should now harden the inventory contract (hash, size, first/last seen, source provenance) instead of just proving inventory is possible. The most useful continuation now is a deterministic inventory artifact with stable columns and rerunnable generation, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "248": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/planning--research-ticket-pack--2026-03-04.md`, `docs/FEATURE-BACKLOG.md`, and the existing planning corpus. Atomic extraction is already happening informally through ticket packs and backlog normalization, but it is not yet framed as one explicit extraction pass. The most useful continuation now is an extraction step that emits claims/requirements/definitions into a stable intermediate format before synthesis, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "249": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/planning--unity-contention-register--2026-03-04.md` and `scripts/analysis/ingest-doc-intelligence.js`. Unity/contention classification already has an artifact, so the useful continuation is formalizing how contradictions are detected and routed instead of rewriting the register. The most useful continuation now is a classifier contract that explains why an item is \u201cunity\u201d vs \u201ccontention\u201d and where the fix should land, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "250": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/research/competitors/`-style deep dives already present under `docs/research/` (Beeminder, Habitica, StickK, Focusmate, Pavlok, WayBetter, etc.). The competitor corpus is substantial now, so the enduring question is feature-gap synthesis rather than raw parsing. The most useful continuation now is a gap table that maps each competitor insight to concrete Styx differentiators or missing capabilities, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "251": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/planning--research-ticket-pack--2026-03-04.md` and the ticket-oriented sections in `docs/FEATURE-BACKLOG.md`. Implementation-ready ticket structure already exists in prose, but it is not yet normalized into one repeatable template with API/schema/test sections. The most useful continuation now is a strict ticket template that always captures routes, schema diffs, invariants, and acceptance tests, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "252": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/planning--doc-ingest-register.md` plus the various planning gap/matrix artifacts. There is enough registry material now that cross-referencing gaps is a reconciliation problem, not a discovery problem. The most useful continuation now is a joined view that traces each named gap back to the doc-ingest register entry that produced it, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "253": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/pitch/pitch--styx-deck.pptx`, `docs/pitch/content.md`, and the investor-facing narrative in `README.md`. An investor deck already exists, so this issue is best used to keep the deck aligned with the current product/compliance story rather than to start from zero. The most useful continuation now is a maintained investor deck spec that calls out what still needs refresh before external use, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "254": {
+    "new_disposition": "engaged",
+    "body": "I checked `docs/pitch/`, `docs/finance/`, and the current docs tree. I found investor-facing material and finance docs, but not a clearly canonical standalone 2\u20133 page executive-summary PDF artifact called out as such. This is still materially open because the repo has adjacent material, but the exact distribution-form artifact still needs to be defined and generated, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "255": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/legal/regulatory-risk-register.md`, `docs/legal/legal--real-money-activation-brief.md`, `docs/finance/runway-tracker.md`, and `docs/finance/financial-projections.md`. Risk and resourcing are both already documented, just in separate homes. The most useful continuation now is one synthesis layer that ties legal/operational/financial risk to staffing and spend decisions instead of leaving them in parallel documents, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "259": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/2026-03-05-evaluation-to-growth-final-report.md`, `docs/planning/evaluation-to-growth--full-breath-audit--2026-03-06.md`, `docs/planning/evaluation-to-growth--architecture-corpus--2026-05-16.md`, and related E2G artifacts. The overlap problem is real because multiple E2G-era documents now coexist with similar scope but different status claims. The most useful continuation now is an overlap map that records which E2G artifact is canonical for which decision surface, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "260": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/planning--implementation-status.md`, `docs/planning/planning--alpha-omega-completion-matrix.md`, and `docs/FEATURE-BACKLOG.md`. A canonical status matrix is still valuable, but only if it declares precedence between these already-existing status surfaces. The most useful continuation now is one status ledger that maps each suggestion/feature to exactly one current truth source, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "265": {
+    "new_disposition": "engaged",
+    "body": "I checked the tracked tree plus a direct scan for obvious temp/cache patterns (`*.tmp`, `*.bak`, `*tool*output*`, `.DS_Store`) and current `git status`. Current HEAD scanned clean for those obvious ephemeral artifacts, so the issue has shifted from emergency cleanup to defining what counts as ephemeral cache vs. legitimate generated artifact. This is still materially open because the repo does not currently expose the claimed junk locally, so the next step is codifying the audit criteria before deleting anything, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "267": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/departments/README.md`, the eight department `REGE.md` files, `PULSE.md`, and the repo-level agent charters. The domain-expert context system is already partially alive in the department organisms. The most useful continuation now is an epic tracker that explicitly maps each agent context to its inputs, outputs, CRIT/HEAL loops, and owner surfaces, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "268": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/enterprise/icp.md`, `docs/departments/b2b/REGE.md`, and `docs/enterprise/outreach-sequences.md`. The ICP work is no longer absent; the sharper need is keeping firmographics, buying triggers, and segment-specific messaging synchronized across sales artifacts. The most useful continuation now is one canonical ICP owner doc with downstream references rather than parallel copies, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "269": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/finance/unit-economics.md`, `docs/finance/financial-projections.md`, and `docs/finance/pricing-strategy.md`. The unit-economics model now has a home, so the live question is maintaining assumptions and break-even logic against actual pricing/escrow mechanics. The most useful continuation now is a single source of truth for contract economics and the assumptions that feed it, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "270": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/marketing/seo-strategy.md`, `docs/marketing/gtm-strategy.md`, and the no-contact planning docs. SEO strategy already exists, which means this issue is best used to keep the keyword map tied to the actual wedge and content plan. The most useful continuation now is an explicit keyword-to-article-to-conversion-path matrix for the no-contact niche, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "271": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/legal/legal--app-store-ugc-moderation-packet.md` plus the App Review notes and appendices. The moderation policy artifact already exists in substantive form, including TestFlight vs public-launch gates. The most useful continuation now is keeping the checklist executable and linked to concrete moderation/reporting surfaces rather than rewriting the policy from scratch, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "272": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/operations/incident-response.md`, `docs/operations/monitoring-setup.md`, and the operations REGE artifacts. There is already a runbook base here, so the remaining value is making incident roles, rollback paths, and alert thresholds operationally crisp. The most useful continuation now is a maintained incident playbook tied to actual monitors and escalation owners, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "273": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/ux-audit.md`, the route tree under `src/web/app/`, and the mobile/web proof flows. A UX audit artifact already exists, but its usefulness depends on grounding findings in the five named critical flows rather than generic product critique. The most useful continuation now is a flow-by-flow friction/safety/a11y audit with evidence traces into the actual UI paths, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "274": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/customer-success/faq.md`, `docs/customer-success/onboarding-sequence.md`, and the linguistic-cloaker/legal surfaces. FAQ/help content already has a home. The most useful continuation now is keeping the article set aligned with the cloaker vocabulary, policy surfaces, and current onboarding reality, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "278": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `src/api/database/migrations/010_settlements_and_jurisdictions.sql`, `README.md` (`GEOFENCE_FAIL_OPEN_ON_MISSING_HEADERS`), and the compliance/legal docs. The repo already has jurisdiction tables and planning artifacts, but the public env contract still documents a fail-open fallback when geo headers are missing. The remaining work is concrete now: wire every contest-entry path to a single fail-closed decision source, expose the policy introspection surface, and test ambiguous-header / VPN / no-location behavior explicitly."
+  },
+  "279": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `src/api/database/migrations/010_settlements_and_jurisdictions.sql` plus the legal/planning references for `TKT-P0-011`. Disposition modes are already visible in schema/planning, so the open seam is runtime policy enforcement rather than data modeling alone. The remaining work is concrete now: implement the per-jurisdiction decision engine, add the refund-only global override, and prove settlement behavior under state-policy changes."
+  },
+  "280": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `src/api/services/security/self-exclusion.service.ts`, `/src/web/app/legal/responsible-use/page.tsx`, and the planning references for `self_exclusions`. Responsible-use surfaces exist and there is already a service entry point, but the issue still needs the non-cancelable exclusion registry and full enforcement path. The remaining work is concrete now: land the `self_exclusions` persistence layer, expose status/create endpoints, and block contract-entry flows until the exclusion window expires."
+  },
+  "281": {
+    "new_disposition": "engaged",
+    "body": "I checked `src/api/database/migrations/020_phase_gamma_trust_chain.sql`, `src/api/src/modules/oracles/`, `src/mobile/services/HealthKitMetadataGuard.spec.ts`, and the blocked-handoff indices for #124/#125/#134. Server-side ingestion and validation evidence exists, but the repo still documents the native HealthKit/Health Connect bridge work as blocked on mobile-native capacity. This is still materially open because the backend is ahead of the native UI/bridge layer, so this remains dependent on the unresolved iOS/Android engineering lane, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "282": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `src/mobile/screens/ProofCaptureScreen.tsx` (upload progress overlay), `src/mobile/services/UploadService.ts`, and the planning references for `TKT-P1-013`. There is already upload/proof plumbing plus a visible progress overlay, so the remaining gap is the full lifecycle state model after the file leaves the device. The remaining work is concrete now: finish the UI state machine for uploading/processing/verified/failed, bind it to backend proof status, and make retries/reason codes explicit."
+  },
+  "283": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/legal/legal--skill-based-contest-whitepaper.md`, `docs/legal/legal--cross-jurisdictional-consent-matrix.md`, `docs/legal/legal--app-store-ugc-moderation-packet.md`, and the legal appendices. This tracker already has several artifact-producing children represented in the repo, while the true human-gated residues are counsel retention and sign-off. The most useful continuation now is to keep the tracker as the legal dependency map that separates draftable artifacts from real counsel gates, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "284": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `src/api/src/modules/fury/fury.controller.ts`, `src/api/src/modules/proofs/proofs.service.ts`, and schema fields like `masked_media_uri` / `redaction_status`. The backend masking path and reviewer-safe media selection are already partially wired, so the unresolved piece is presenting that redacted state cleanly in the reviewer workbench. The remaining work is concrete now: finish the workbench UI so reviewers only ever see masked assets plus subject aliases, and add tests that raw media can never leak through the UI path."
+  },
+  "285": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/ux-audit.md`, `docs/departments/prd/REGE.md`, and the product planning corpus. The product/design lane already has research and governance structure, but the tracker still mixes metrics, interviews, experiments, and enterprise UX into one bucket. The most useful continuation now is to keep this issue as the product control surface and make each child artifact name its success metric and evidence source explicitly, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "286": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/operations/monitoring-setup.md`, `docs/operations/backup-recovery.md`, `docs/operations/incident-response.md`, and operations REGE. Operations already has real artifacts, so this tracker is most valuable as the place where uptime, backup, load, and credential/deploy work stay coordinated. The most useful continuation now is to keep it as the ops dependency board and tie each sub-issue to a proving artifact or drill result, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "287": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `docs/planning/planning--research-ticket-pack--2026-03-04.md`, `src/api/database/migrations/015_cross_lobby_auditing_fields.sql`, and the timeline entries marking core routing done via E2G-20. The anti-collusion routing logic appears conceptually ahead of the admin surface. The remaining work is concrete now: build the cluster-review UI around the existing routing signals so operators can inspect suspicious reviewer networks and drill into evidence safely."
+  },
+  "288": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/marketing/gtm-strategy.md`, `docs/marketing/content-calendar.md`, and GRO REGE artifacts. Growth planning already exists, but this department tracker is still useful as the place that distinguishes channel strategy from the executable weekly calendar. The most useful continuation now is to keep this open as the umbrella growth board and require each child to name channel, conversion metric, and owner, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "289": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `docs/FEATURE-BACKLOG.md` (`F-FURY-09`), `docs/planning/planning--research-ticket-pack--2026-03-04.md`, and the existing collusion-routing artifacts. Detection/planning for collusion is already present; enforcement is the missing half. The remaining work is concrete now: implement the slashing rule engine, honey-trap simulations, and false-positive appeal path so anti-collusion has teeth instead of being advisory only."
+  },
+  "290": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/finance/unit-economics.md`, `docs/finance/financial-projections.md`, `docs/finance/runway-tracker.md`, and pricing strategy docs. Finance already has several core artifacts, so the tracker\u2019s real value is coordination between economics, Stripe go-live, reconciliation, and enterprise pricing. The most useful continuation now is to keep this open as the finance umbrella and insist each child names the financial evidence it should produce, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "291": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/customer-success/faq.md`, `docs/customer-success/onboarding-sequence.md`, and CXS REGE. Customer-success content already exists, but the tracker still usefully anchors support setup, help content, onboarding, and churn sensing as one operating lane. The most useful continuation now is to treat this as the CXS control surface and keep each child grounded in a measurable user-health signal, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "292": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `docs/legal/legal--skill-based-contest-whitepaper.md`, `docs/planning/planning--truth-chain-map--2026-03-09.md`, and the blocked-handoff lineage around `F-LEGAL-05`. The whitepaper draft exists, but the repo itself records major drift between draft artifact, counsel sign-off, and a real release gate. The remaining work is concrete now: turn the whitepaper into a versioned compliance artifact with hash/signature metadata and make deploy eligibility depend on that proof rather than prose references."
+  },
+  "293": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/enterprise/icp.md`, `docs/enterprise/outreach-sequences.md`, `docs/enterprise/security-questionnaire.md`, and B2B REGE. Enterprise sales already has real collateral, but the tracker still needs to distinguish \u201cwe have docs\u201d from \u201cwe have a repeatable pipeline.\u201d The most useful continuation now is to keep it as the B2B umbrella issue and tie each child to pipeline stage, buyer persona, and proof artifact, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "294": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/planning--timeline-with-owners--2026-03-06.md`, `docs/planning/planning--monthly-calendar--2026-03-08.md`, and the phase-gate docs. There is already a launch timeline in multiple formats. The most useful continuation now is one operational timeline that stays authoritative when dates, owners, or gate definitions move, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "295": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `docs/ops/ops--testflight-release-runbook.md`, `docs/legal/legal--app-store-ugc-moderation-packet.md`, and `docs/checklists/README.md`. The repo already documents TestFlight-specific constraints and even calls out missing upload proof. The remaining work is concrete now: convert those requirements into a bounded checklist with evidence slots for provisioning, build processing, tester access, moderation/reporting, and smoke validation."
+  },
+  "296": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `docs/legal/legal--real-money-activation-brief.md`, `docs/legal/regulatory-risk-register.md`, the state blocklist appendix, and finance/ops planning. The real-money pilot gate is mostly specified in prose already. The remaining work is concrete now: turn it into an executable readiness checklist that proves escrow, KYC, jurisdiction gating, processor posture, and support/incident handling are actually in place."
+  },
+  "297": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `docs/legal/legal--app-store-ugc-moderation-packet.md`, `docs/planning/planning--timeline-with-owners--2026-03-06.md`, and `docs/checklists/README.md`. App Store launch requirements are documented, but still live more as narrative than one accountable gate. The remaining work is concrete now: assemble a public-launch checklist that ties review policy, moderation, legal copy, release ops, and PR packaging to specific evidence artifacts."
+  },
+  "298": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `docs/checklists/README.md`, `docs/enterprise/security-questionnaire.md`, `docs/enterprise/icp.md`, and the B2B artifacts. The enterprise-sales gate is conceptually present, but it still needs a sharp \u201cready/not ready\u201d contract. The remaining work is concrete now: define the minimal enterprise trust package\u2014security questionnaire, SLA/DPA posture, ICP clarity, outreach motion, and first-call materials\u2014before calling this lane ready."
+  },
+  "299": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/planning--timeline-with-owners--2026-03-06.md`, `docs/planning/planning--monthly-calendar--2026-03-08.md`, and the cross-department roadmaps. Hiring assumptions are scattered across product/legal/ops timelines rather than held in one staffing model. The most useful continuation now is one scenario-based hiring timeline that explicitly names which blockers are \u201cneed a person\u201d vs \u201cneed clearer sequencing\u201d, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "300": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/marketing/gtm-strategy.md`, `docs/marketing/seo-strategy.md`, and the 30-day GTM planning docs. A GTM strategy already exists, so this issue is now about keeping audience, channels, funnel, and launch sequencing coherent. The most useful continuation now is one maintained GTM owner doc that points to the calendar, SEO plan, and funnel implementation evidence, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "301": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/finance/unit-economics.md`, `docs/finance/runway-tracker.md`, `docs/finance/financial-projections.md`, and the metrics trackers in planning. KPIs and economics already appear in several documents, which increases the risk of silent drift. The most useful continuation now is a single dashboard spec that defines formulas, source of truth, and review cadence for MRR/CAC/LTV/retention metrics, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "302": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/operations/incident-response.md`, `docs/operations/monitoring-setup.md`, and ops REGE. The runbook/playbook work is real, but it should stay grounded in actual monitors and escalation surfaces. The most useful continuation now is one operations contract that joins severity rules, alert routing, rollback steps, and postmortem evidence expectations, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "303": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/departments/prd/REGE.md`, `docs/marketing/gtm-strategy.md`, `docs/enterprise/icp.md`, and the planning corpus. Experimentation is referenced in multiple places, but I do not see one clean canonical A/B and user-research framework artifact. The most useful continuation now is a single experiment/research contract covering hypothesis format, metrics, sample rules, and interview handling, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "304": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/marketing/gtm-strategy.md`, `docs/marketing/content-calendar.md`, and `docs/marketing/seo-strategy.md`. Marketing execution artifacts already exist, but they are more powerful when treated as one linked system instead of separate prose islands. The most useful continuation now is a single orchestration layer tying narrative, calendar, SEO demand capture, and launch PR moments together, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "305": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/enterprise/security-questionnaire.md`, `docs/enterprise/README.md`, and the enterprise planning material. The enterprise trust lane is partially represented by the security questionnaire, but the repo still lacks a clearly named SLA template and DPA/SLA packaging story. The most useful continuation now is a buyer-facing enterprise trust pack that makes posture, promises, and gaps explicit instead of inferred, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "306": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `docs/FEATURE-BACKLOG.md` (`F-AEGIS-04`) and the related recovery planning artifacts. Recovery guardrails are explicitly marked `PARTIAL`, which is honest and useful. The remaining work is concrete now: turn the remaining partial into a precise rule set: danger-zone detection, cooldowns/timelocks, partner escalation, and UI copy that matches the safety model."
+  },
+  "307": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `src/api/src/modules/notifications/notifications.service.ts` and `src/api/src/modules/contracts/attestation.scheduler.ts`. RAIN already shows up in notification and scheduler code, so this feature is beyond idea stage. The remaining work is concrete now: complete the triggering policy, user-facing copy, and tests so the intercession is intentional product behavior rather than a comment-backed hook."
+  },
+  "308": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `docs/FEATURE-BACKLOG.md` (`F-AEGIS-09`) and the contracts/customer-success planning around churn signals. The concept is named, but I do not see a finished detection pipeline yet. The remaining work is concrete now: define the measurable Ostrich pattern, surface it to CXS/notifications, and prove intervention timing with tests or simulations."
+  },
+  "309": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `docs/planning/planning--timeline-with-owners--2026-03-06.md` and `docs/planning/planning--monthly-calendar--2026-03-08.md`. This incentive is still described in planning rather than implemented code. The remaining work is concrete now: pin down the exact economic rule (when the stake doubles, caps, disclosures, and reversal conditions) before it migrates into settlement logic."
+  },
+  "310": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `docs/FEATURE-BACKLOG.md` (`F-LEGAL-03`), the jurisdiction-ticket lineage (`TKT-P0-004`, `TKT-P0-011`), and legal/compliance docs. State-specific compliance logic is already acknowledged as partially covered, but the operator-facing toggle surface is still under-specified. The remaining work is concrete now: make the UI a projection of the actual jurisdiction policy engine so admins cannot drift the display away from enforcement reality."
+  },
+  "312": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `src/web/app/hr/page.tsx`, `src/web/services/api-client.ts` enterprise calls, and `docs/FEATURE-BACKLOG.md` (`F-WEB-03`). There is already an HR route and enterprise metrics/billing client surface, but the backlog explicitly says role-based and org-scoped authz is the gap. The remaining work is concrete now: finish authorization boundaries first, then widen the dashboard surface only after org isolation is provably enforced."
+  },
+  "313": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `src/desktop/src/components/HashCollider.tsx`, `src/desktop/src/components/hash-collider.utils.ts`, and `docs/FEATURE-BACKLOG.md` (`F-DESKTOP-04`). The desktop hash-collider tool already exists in component form, so this is now a wiring/completeness question, not a concept pitch. The remaining work is concrete now: finish the end-to-end operator workflow: data source hookup, review ergonomics, and proof that suspected duplicates can be acted on from the desktop surface."
+  },
+  "314": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `src/desktop/src/components/B2BOrchestration.tsx`, `src/desktop/src/services/api.ts`, and `docs/FEATURE-BACKLOG.md` (`F-DESKTOP-05`). There is already a B2B orchestration panel capable of key generation/revocation, and the backlog calls out the remaining gap plainly. The remaining work is concrete now: add billing-plan controls plus per-key scope restrictions so the panel matches the promised enterprise control surface."
+  },
+  "315": {
+    "new_disposition": "engaged",
+    "body": "I checked `docs/legal/appendices/appendix-e--counsel-submission-checklist.md` and the wider legal packet. The repo can prepare the packet, but \u201cretain outside legal counsel\u201d is still a real human/business gate rather than an automation problem. This is still materially open because the legal artifacts can support the retainer conversation, but the actual retention act remains external to the repo, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "316": {
+    "new_disposition": "engaged",
+    "body": "I checked `docs/legal/legal--real-money-activation-brief.md`, `appendix-a--fbo-architecture-diagram.md`, and `appendix-b--terms-of-service-aegis-markup.md`. The custody model is documented in enough detail to review, but the sign-off itself still requires an actual lawyer. This is still materially open because the repo can sharpen the review packet, yet the authoritative approval must come from counsel outside this codebase, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "317": {
+    "new_disposition": "engaged",
+    "body": "I checked `docs/legal/legal--50-state-skill-contest-survey.md`, `appendix-d--state-blocklist-justification-table.md`, and the jurisdiction planning docs. The state matrix material exists, but the issue\u2019s core ask is legal confirmation, not internal speculation. This is still materially open because the remaining step is counsel validation of the operating-state matrix, which is external and substantive, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "318": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/legal/legal--skill-based-contest-whitepaper.md`, `docs/legal/legal--performance-wagering.md`, and the counsel checklist appendix. A whitepaper draft is already present; the missing part is moving from draft argument to reviewable legal packet with versioning and explicit open questions. The most useful continuation now is to treat this as the bridge between draft artifact and counsel sign-off rather than a blank writing task, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "319": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/legal/legal--app-store-ugc-moderation-packet.md` and `docs/legal/legal--app-review-notes--phase1-beta.md`. The moderation policy document is already substantive. The most useful continuation now is to keep this issue alive as the place that converts the packet into an approval-ready checklist with evidence of report/appeal/response mechanics, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "320": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/legal/legal--cross-jurisdictional-consent-matrix.md`. The consent matrix already has a durable home. The most useful continuation now is to use this issue to keep the matrix aligned with actual data flows, state classes, and user-facing disclosures, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "321": {
+    "new_disposition": "engaged",
+    "body": "I checked `docs/FEATURE-BACKLOG.md` (`F-FURY-09`), legal/compliance docs, and the collusion-enforcement planning material. I found policy-adjacent material, but not a clearly canonical standalone reviewer-sanctions-and-appeals policy artifact. This is still materially open because the issue still needs a dedicated rights/process document before enforcement can be called principled, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "322": {
+    "new_disposition": "engaged",
+    "body": "I checked `docs/legal/legal--founder-agreement-draft.md`, `docs/legal/ip-assignment.md`, and enterprise/legal materials. There is adjacent legal structure, but I did not surface a crisp partner-authority disclosure review artifact by this exact name. This is still materially open because authority/representation boundaries still need an explicit review surface rather than assumption by proximity, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "323": {
+    "new_disposition": "engaged",
+    "body": "I checked `docs/enterprise/security-questionnaire.md`, `docs/FEATURE-BACKLOG.md`, and the timeline references to SOC 2. The repo is honest that SOC 2 is planned rather than complete. This is still materially open because initiating a real audit depends on organizational/vendor work outside the repo, even though the evidence packet can be improved here, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "324": {
+    "new_disposition": "engaged",
+    "body": "I checked `docs/departments/README.md` (L4 exists as a named artifact) and the current enterprise/legal docs. The repo names DPA as an expected legal artifact, but I did not find a finished DPA template itself. This is still materially open because the need is still real and not yet satisfied by the surrounding security/compliance prose, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "325": {
+    "new_disposition": "engaged",
+    "body": "I checked `docs/legal/legal--compliance-guardrails.md`, `docs/FEATURE-BACKLOG.md`, and the planning references to prize indemnity. Prize indemnity is discussed, but mostly as requirement/strategy rather than as a broker-ready evaluation artifact. This is still materially open because the actual insurance evaluation still needs to be turned into a concrete requirements/options memo, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "326": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/marketing/gtm-strategy.md` (already names targets like NPS) plus the PRD planning timeline. Beta-success metrics are already referenced in several places, but not yet cleanly normalized into one product-governing metric contract. The most useful continuation now is one short metric sheet for activation, completion, retention, and NPS with explicit thresholds, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "328": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/departments/prd/REGE.md`, `docs/planning/user-personas.md`, and the planning timeline. The repo knows interviews matter, but I do not see one canonical 10-user interview protocol artifact yet. The most useful continuation now is a repeatable interview guide that specifies recruiting mix, questions, note schema, and synthesis method, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "329": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/marketing/gtm-strategy.md`, `docs/departments/prd/REGE.md`, and the planning timeline. A/B testing is mentioned in multiple places, but the onboarding-variant experiment itself still wants a crisp protocol. The most useful continuation now is a test brief with hypothesis, variants, success metric, stop rule, and copy-review guardrails, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "330": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/departments/prd/REGE.md` (feature prioritization flow) and `docs/planning/feature-matrix.md`. Backlog prioritization thinking exists, but the analytics-to-priority handoff still needs an explicit artifact. The most useful continuation now is a prioritization rubric that weights activation, retention, revenue, and implementation cost against real usage signals, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "331": {
+    "new_disposition": "engaged",
+    "body": "I checked `src/web/app/hr/`, enterprise artifacts, and the planning timeline. The future enterprise surfaces are partially visible, but I did not find a completed enterprise UX audit artifact yet. This is still materially open because the issue still needs a real audit once those HR/coach flows are stable enough to review, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "332": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/operations/monitoring-setup.md`. Monitoring setup already has a durable doc home. The most useful continuation now is keeping the monitor list, alert thresholds, and ownership current with the actual production surfaces, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "333": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `render.yaml`, `docs/activation/activation-ledger--peer-audited--2026-06-11.md`, and operations planning. There is already enough deployment context to evaluate the starter-tier story. The most useful continuation now is a crisp upgrade decision record tying traffic/load/cold-start evidence to plan choice and spend impact, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "334": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/operations/backup-recovery.md`. The backup policy has a real artifact already. The most useful continuation now is ensuring the document remains tied to a tested restore drill and not just backup intent, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "335": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/operations/incident-response.md`. An incident runbook exists in substance. The most useful continuation now is keeping the severity matrix, escalation tree, and rollback drills tied to live operational reality, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "336": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `docs/architecture/load-test-report.md`, the operations planning docs, and the timeline entry for 500 concurrent users. There is already load-test thinking in the repo, but the gate needs reproducible 500-user evidence rather than just aspiration. The remaining work is concrete now: define the exact scenario mix, pass/fail SLOs, and artifact format for the 500-user simulation."
+  },
+  "337": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `README.md` (Cloudflare/WAF called out), `terraform/`, and the operations/legal planning material. WAF/CDN concerns are acknowledged in infrastructure docs, but I do not see a single verification artifact proving the production config is correct. The remaining work is concrete now: produce a verification checklist that covers cache, headers, bot/rate rules, geo boundaries, and bypass protection."
+  },
+  "338": {
+    "new_disposition": "engaged",
+    "body": "I checked `docs/FEATURE-BACKLOG.md` plus the planning references to `TKT-P1-006` and APNs/FCM provisioning. The repo is explicit that remote push is blocked on Apple/Google credentials and release-ops work. This is still materially open because credential management here is not just a code task; it depends on external key material and secure operational handling, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "339": {
+    "new_disposition": "evolving",
+    "body": "I checked current HEAD at `docs/architecture/load-test-report.md` and the Omega timeline entries for 5,000 users. The scale-up ask is a real second-order gate beyond the 500-user drill. The remaining work is concrete now: define the higher-scale scenario, cost envelope, and degradation thresholds before treating this as \u201cjust rerun the smaller test bigger\u201d."
+  },
+  "340": {
+    "new_disposition": "engaged",
+    "body": "I checked `render.yaml`, the ops timeline, and finance/ops planning. Auto-scaling and cost alerting are named, but I do not see a complete, repo-owned configuration proof yet. This is still materially open because the issue still needs the concrete monitor/threshold implementation plus agreement on what spend levels should trigger action, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "341": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/marketing/gtm-strategy.md`, `docs/planning/planning--30-day-gtm-strike-plan--2026-03-10.md`, and `docs/planning/planning--jessica-metrics-tracker--2026-06-01.md`. Audience/channel mapping already exists in strategy and strike-plan form. The most useful continuation now is one maintained channel map that links each source to message, asset, qualification criteria, and owner, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "342": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/planning--phase1-copy-pack--2026-03-10.md`, `docs/marketing/gtm-strategy.md`, and waitlist/funnel references across planning docs. The repo already describes the funnel and some copy assets. The most useful continuation now is a single landing-page funnel spec that ties copy, qualification fields, source attribution, and admit logic together, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "343": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/planning/planning--30-day-social-cadence-calendar--2026-03-10.md`, `planning--jessica-30-day-content-calendar--2026-06-01.md`, and GRO REGE. The social/content operating system is already more than an idea. The most useful continuation now is to keep this issue as the place where cadence, channel boundaries, and voice/approval rules are reconciled, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "344": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/marketing/seo-strategy.md`, `docs/marketing/content-calendar.md`, and the no-contact GTM docs. Demand capture work already has a strategy home. The most useful continuation now is tie keyword clusters to the first publishable articles and the exact conversion events they should feed, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "345": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/marketing/gtm-strategy.md`, `docs/enterprise/outreach-sequences.md`, `docs/customer-success/onboarding-sequence.md`, and the referral references in planning. Referral mechanics are already discussed from both consumer and practitioner angles. The most useful continuation now is one operating spec for referral eligibility, reward logic, waitlist/cohort flow, and abuse controls, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "346": {
+    "new_disposition": "engaged",
+    "body": "I checked `docs/marketing/README.md` (PR plan is named), App Store launch planning docs, and the current marketing corpus. I found launch-adjacent planning, but not a clearly canonical press-kit/target-list/narrative artifact by this exact scope. This is still materially open because the PR lane still needs a single operational packet rather than scattered mentions across timeline docs, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  },
+  "347": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/enterprise/outreach-sequences.md`, `docs/enterprise/icp.md`, and the practitioner-outreach planning references. Practitioner outreach already has meaningful raw material. The most useful continuation now is to keep this issue focused on turning the sequences and ICP into a first-15-target execution loop with response tracking, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "348": {
+    "new_disposition": "distilled",
+    "body": "I re-read this against current HEAD and checked `docs/finance/unit-economics.md`, `docs/finance/pricing-strategy.md`, and `docs/finance/financial-projections.md`. The underlying model exists already. The most useful continuation now is to use this issue to keep the $39 contract story numerically consistent across fee split, break-even math, and growth assumptions, so I\u2019m treating the issue as a distillation target rather than a blank-slate request."
+  },
+  "349": {
+    "new_disposition": "engaged",
+    "body": "I checked `README.md` env/deploy contract, `render.yaml`, finance/legal docs, and the real-money activation materials. The repo documents how production Stripe would fit, but \u201cswitch the account to real money\u201d is still a real operational/business gate. This is still materially open because this cannot be honestly marked done from code alone because the decisive step is external account configuration and approval, so I\u2019m keeping it engaged instead of pretending it is resolved."
+  }
+}

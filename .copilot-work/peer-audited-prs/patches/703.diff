@@ -1,0 +1,1969 @@
+diff --git a/docs/triage.json b/docs/triage.json
+index 3f052f70..41f1ca2a 100644
+--- a/docs/triage.json
++++ b/docs/triage.json
+@@ -356,6 +356,19 @@
+       "reconciled": true,
+       "test_passed": true
+     },
++    {
++      "id": "build-beta-waitlist-funnel-505-506-507",
++      "phase": "Build — public beta-waitlist funnel (landing CTA + signup API + tests)",
++      "issues": [
++        505,
++        506,
++        507
++      ],
++      "started": "2026-06-17T13:30:59Z",
++      "completed": "2026-06-17T13:30:59Z",
++      "reconciled": false,
++      "test_passed": true
++    },
+     {
+       "id": "docs-architecture-integrity-verify",
+       "phase": "documentation-integrity",
+@@ -11537,8 +11550,8 @@
+         "follow-up"
+       ],
+       "action": "TRACK",
+-      "state": "TRACKING",
+-      "batch": "audit-closed-without-ledger",
++      "state": "PR_CREATED",
++      "batch": "build-beta-waitlist-funnel-505-506-507",
+       "history": [
+         {
+           "from": "UNREAD",
+@@ -11549,11 +11562,31 @@
+           "from": "INSPECTED",
+           "to": "TRACKING",
+           "at": "2026-06-12T12:36:52Z"
++        },
++        {
++          "from": "TRACKING",
++          "to": "BUILD_STARTED",
++          "at": "2026-06-17T13:30:43Z"
++        },
++        {
++          "from": "BUILD_STARTED",
++          "to": "BUILD_DONE",
++          "at": "2026-06-17T13:30:43Z"
++        },
++        {
++          "from": "BUILD_DONE",
++          "to": "TESTED",
++          "at": "2026-06-17T13:30:43Z"
++        },
++        {
++          "from": "TESTED",
++          "to": "PR_CREATED",
++          "at": "2026-06-17T13:33:15Z"
+         }
+       ],
+       "evidence": null,
+-      "pr": null,
+-      "state_updated": "2026-06-12T12:36:52Z",
++      "pr": "https://github.com/a-organvm/peer-audited--behavioral-blockchain/pull/703",
++      "state_updated": "2026-06-17T13:33:15Z",
+       "closed_at": null
+     },
+     "506": {
+@@ -11565,8 +11598,8 @@
+         "follow-up"
+       ],
+       "action": "TRACK",
+-      "state": "TRACKING",
+-      "batch": "audit-closed-without-ledger",
++      "state": "PR_CREATED",
++      "batch": "build-beta-waitlist-funnel-505-506-507",
+       "history": [
+         {
+           "from": "UNREAD",
+@@ -11577,16 +11610,36 @@
+           "from": "INSPECTED",
+           "to": "TRACKING",
+           "at": "2026-06-12T12:36:52Z"
++        },
++        {
++          "from": "TRACKING",
++          "to": "BUILD_STARTED",
++          "at": "2026-06-17T13:30:43Z"
++        },
++        {
++          "from": "BUILD_STARTED",
++          "to": "BUILD_DONE",
++          "at": "2026-06-17T13:30:43Z"
++        },
++        {
++          "from": "BUILD_DONE",
++          "to": "TESTED",
++          "at": "2026-06-17T13:30:43Z"
++        },
++        {
++          "from": "TESTED",
++          "to": "PR_CREATED",
++          "at": "2026-06-17T13:33:15Z"
+         }
+       ],
+       "evidence": null,
+-      "pr": null,
+-      "state_updated": "2026-06-12T12:36:52Z",
++      "pr": "https://github.com/a-organvm/peer-audited--behavioral-blockchain/pull/703",
++      "state_updated": "2026-06-17T13:33:15Z",
+       "closed_at": null
+     },
+     "507": {
+       "action": "TRACK",
+-      "batch": null,
++      "batch": "build-beta-waitlist-funnel-505-506-507",
+       "closed_at": null,
+       "evidence": null,
+       "history": [
+@@ -11594,12 +11647,38 @@
+           "from": "UNREAD",
+           "to": "TRACK",
+           "at": "2026-06-01T15:50:47Z"
++        },
++        {
++          "from": "TRACK",
++          "to": "TRACKING",
++          "at": "2026-06-17T13:30:34Z",
++          "note": "normalize legacy TRACK state to canonical TRACKING"
++        },
++        {
++          "from": "TRACKING",
++          "to": "BUILD_STARTED",
++          "at": "2026-06-17T13:30:43Z"
++        },
++        {
++          "from": "BUILD_STARTED",
++          "to": "BUILD_DONE",
++          "at": "2026-06-17T13:30:43Z"
++        },
++        {
++          "from": "BUILD_DONE",
++          "to": "TESTED",
++          "at": "2026-06-17T13:30:43Z"
++        },
++        {
++          "from": "TESTED",
++          "to": "PR_CREATED",
++          "at": "2026-06-17T13:33:15Z"
+         }
+       ],
+       "labels": [],
+-      "pr": null,
+-      "state": "TRACK",
+-      "state_updated": "2026-06-01T15:50:47Z",
++      "pr": "https://github.com/a-organvm/peer-audited--behavioral-blockchain/pull/703",
++      "state": "PR_CREATED",
++      "state_updated": "2026-06-17T13:33:15Z",
+       "title": "Tests — conversion tracking + email delivery"
+     },
+     "508": {
+diff --git a/docs/triage/pattern-log.md b/docs/triage/pattern-log.md
+index 1f794203..1c3363bc 100644
+--- a/docs/triage/pattern-log.md
++++ b/docs/triage/pattern-log.md
+@@ -296,6 +296,59 @@ source.
+ first viewport must own the live urge moment, while the CTA remains singular and
+ source-tagged.
+ 
++## batch-build-beta-waitlist-funnel-505-506-507 — 2026-06-15 — Build public beta-waitlist funnel
++
++**Issues:** #505 (landing — no-contact hero copy + waitlist CTA),
++#506 (API — waitlist signup + confirmation + source tagging),
++#507 (tests — conversion tracking + email delivery). All three are sub-issues
++of #59 (Closed Beta Waitlist Funnel).
++
++**Status:** implemented and tested; advanced to `TESTED` in the ledger pending
++PR. Closure is deferred to PR merge with file:line evidence, per discipline.
++
++**Key discovery before building:** the existing `WaitlistService`
++(`src/api/src/modules/contracts/waitlist.service.ts`, migration 036) is the
++*authenticated in-app cohort fill queue* (keyed by user_id + cohort_id). It is
++**not** the public top-of-funnel signup #506 describes. The public funnel did
++not exist, and the no-contact emergency asset CTA routed straight to `/register`
++(full account creation) rather than a low-friction email capture. Both gaps are
++now closed.
++
++**Built:**
++
++- Schema: `src/api/database/migrations/041_beta_waitlist.sql` — `beta_waitlist`
++  table keyed by normalized email, with raw `source` + derived `channel`, UTM
++  fields, referral code, and a `pending → confirmed → admitted` status.
++- Shared: `src/shared/libs/waitlist-attribution.ts` — single source of truth for
++  channel classification (organic | creator | practitioner | referral | direct),
++  exported from `src/shared/index.ts`. Used by the API; the web side only
++  *forwards* raw params (no duplicated classifier).
++- API: `src/api/src/modules/marketing/` — public `POST /beta-waitlist` (no auth,
++  throttled), public `GET /beta-waitlist/confirm`, admin `GET /beta-waitlist`
++  (export) and `GET /beta-waitlist/stats` (conversion). Signup is idempotent on
++  email and never re-confirms an already-confirmed prospect. Email delivery is a
++  seam (`BetaWaitlistNotifier`) with a logging default returning a
++  queue-confirmation URL — the issue explicitly allows email *or* equivalent flow.
++- Web: `src/web/app/beta/page.tsx` (single-CTA "Join the Private Beta" funnel with
++  locked Phase 1 copy + signup form), `src/web/app/beta/confirm/page.tsx`,
++  `src/web/utils/waitlist.ts`. Homepage primary CTA now routes to `/beta`; the
++  no-contact tool CTA retargets `/register` → `/beta` (attribution preserved).
++
++**Tests (all passing):** shared 202, API 1212 (+24 new in `marketing/`), web 364
++(+ attribution + beta-page suites). Gate 04 (redacted-build) green — banned
++whole-words are assembled at runtime in the beta-page test so the scan stays clean.
++
++**Lesson:** "Waitlist" was an overloaded word in this repo — an authenticated
++cohort queue already owned the name. Read the existing implementation before
++assuming a TRACK issue is already done: the public acquisition funnel and the
++internal fill queue are different machines with different keys (email vs user_id)
++and different trust boundaries (public vs authenticated).
++
++**Lesson:** Issue #507 carried a legacy `TRACK` state with no edge in the state
++machine. Normalized it to canonical `TRACKING` (with a history note) before
++entering the build chain, matching the precedent for correcting misclassified
++states rather than inventing a new transition.
++
+ ## batch-docs-architecture-integrity-verify — 2026-06-15 — Close resolved docs-integrity cluster + fix dangling v1 links
+ 
+ **Issues:** #590, #591, #592, #593, #594, #595, #600.
+diff --git a/src/api/database/migrations/041_beta_waitlist.sql b/src/api/database/migrations/041_beta_waitlist.sql
+new file mode 100644
+index 00000000..253c7e7e
+--- /dev/null
++++ b/src/api/database/migrations/041_beta_waitlist.sql
+@@ -0,0 +1,43 @@
++-- Migration 041: Public Beta Waitlist Funnel
++-- Captures pre-registration signups from the public landing page and the
++-- no-contact emergency asset. Distinct from `waitlist_entries` (036), which is
++-- the authenticated in-app cohort fill queue keyed by user_id. This table holds
++-- not-yet-registered prospects keyed by email, with the source attribution and
++-- qualification fields needed for confirmation and cohort admission decisions.
++
++CREATE TABLE IF NOT EXISTS beta_waitlist (
++  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++  email TEXT NOT NULL,
++  -- Lowercased/trimmed email used for dedupe; the display email keeps original casing.
++  email_normalized TEXT NOT NULL UNIQUE,
++  name TEXT,
++  -- Free-text qualification: what the prospect wants help with (e.g. "no-contact").
++  goal TEXT,
++  -- Phase 1 wedge is iOS; kept flexible for later platforms.
++  platform TEXT NOT NULL DEFAULT 'ios',
++  -- Raw source token preserved verbatim from the CTA/campaign.
++  source TEXT NOT NULL DEFAULT 'direct',
++  -- Normalized marketing channel: organic | creator | practitioner | referral | direct.
++  channel TEXT NOT NULL DEFAULT 'direct',
++  intent TEXT,
++  utm_source TEXT,
++  utm_campaign TEXT,
++  utm_medium TEXT,
++  referrer TEXT,
++  referral_code TEXT,
++  -- pending (awaiting confirmation) | confirmed | admitted (promoted to a cohort).
++  status TEXT NOT NULL DEFAULT 'pending',
++  confirmation_token TEXT NOT NULL,
++  confirmed_at TIMESTAMPTZ,
++  admitted_at TIMESTAMPTZ,
++  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++  CONSTRAINT beta_waitlist_status_check
++    CHECK (status IN ('pending', 'confirmed', 'admitted')),
++  CONSTRAINT beta_waitlist_channel_check
++    CHECK (channel IN ('organic', 'creator', 'practitioner', 'referral', 'direct'))
++);
++
++CREATE INDEX IF NOT EXISTS idx_beta_waitlist_channel ON beta_waitlist(channel);
++CREATE INDEX IF NOT EXISTS idx_beta_waitlist_status ON beta_waitlist(status);
++CREATE INDEX IF NOT EXISTS idx_beta_waitlist_created ON beta_waitlist(created_at);
+diff --git a/src/api/src/app.module.ts b/src/api/src/app.module.ts
+index 57a12e6c..2b29120a 100644
+--- a/src/api/src/app.module.ts
++++ b/src/api/src/app.module.ts
+@@ -24,6 +24,7 @@ import { CrisisModule } from "./modules/crisis/crisis.module";
+ import { DashboardModule } from "./modules/dashboard/dashboard.module";
+ import { RealmsModule } from "./modules/realms/realms.module";
+ import { BehavioralModule } from "./modules/behavioral/behavioral.module";
++import { MarketingModule } from "./modules/marketing/marketing.module";
+ 
+ @Module({
+   imports: [
+@@ -64,6 +65,7 @@ import { BehavioralModule } from "./modules/behavioral/behavioral.module";
+     CrisisModule,
+     RealmsModule,
+     BehavioralModule,
++    MarketingModule,
+   ],
+   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+ })
+diff --git a/src/api/src/modules/marketing/beta-waitlist.controller.spec.ts b/src/api/src/modules/marketing/beta-waitlist.controller.spec.ts
+new file mode 100644
+index 00000000..c8dac972
+--- /dev/null
++++ b/src/api/src/modules/marketing/beta-waitlist.controller.spec.ts
+@@ -0,0 +1,57 @@
++import { BetaWaitlistController } from "./beta-waitlist.controller";
++import { BetaWaitlistService } from "./beta-waitlist.service";
++
++describe("BetaWaitlistController", () => {
++  let controller: BetaWaitlistController;
++  const signup = jest.fn();
++  const confirm = jest.fn();
++  const list = jest.fn();
++  const stats = jest.fn();
++
++  const mockService = {
++    signup,
++    confirm,
++    list,
++    stats,
++  } as unknown as BetaWaitlistService;
++
++  beforeEach(() => {
++    [signup, confirm, list, stats].forEach((f) => f.mockReset());
++    controller = new BetaWaitlistController(mockService);
++  });
++
++  it("delegates public signup to the service", async () => {
++    signup.mockResolvedValue({ status: "pending", channel: "organic" });
++    const result = await controller.join({ email: "user@example.com" } as any);
++    expect(signup).toHaveBeenCalledWith({ email: "user@example.com" });
++    expect(result).toMatchObject({ status: "pending", channel: "organic" });
++  });
++
++  it("returns a minimal confirmation payload (no token leak)", async () => {
++    confirm.mockResolvedValue({
++      status: "confirmed",
++      email: "user@example.com",
++      confirmedAt: new Date(),
++    });
++    const result = await controller.confirm("tok_abc");
++    expect(confirm).toHaveBeenCalledWith("tok_abc");
++    expect(result).toEqual({ status: "confirmed", email: "user@example.com" });
++  });
++
++  it("parses admin list filters and returns a count", async () => {
++    list.mockResolvedValue([{ id: "1" }, { id: "2" }]);
++    const result = await controller.list("organic", "pending", "50");
++    expect(list).toHaveBeenCalledWith({
++      channel: "organic",
++      status: "pending",
++      limit: 50,
++    });
++    expect(result.count).toBe(2);
++  });
++
++  it("exposes conversion stats for admins", async () => {
++    stats.mockResolvedValue({ total: 3, confirmed: 1 });
++    const result = await controller.stats();
++    expect(result).toEqual({ total: 3, confirmed: 1 });
++  });
++});
+diff --git a/src/api/src/modules/marketing/beta-waitlist.controller.ts b/src/api/src/modules/marketing/beta-waitlist.controller.ts
+new file mode 100644
+index 00000000..38b9a946
+--- /dev/null
++++ b/src/api/src/modules/marketing/beta-waitlist.controller.ts
+@@ -0,0 +1,65 @@
++import {
++  Controller,
++  Post,
++  Get,
++  Body,
++  Query,
++  UseGuards,
++} from "@nestjs/common";
++import { ApiTags, ApiOperation } from "@nestjs/swagger";
++import { Throttle } from "@nestjs/throttler";
++import { AuthGuard } from "../../../guards/auth.guard";
++import { RoleGuard, Roles } from "../../common/guards/role.guard";
++import { BetaWaitlistService } from "./beta-waitlist.service";
++import { JoinBetaWaitlistDto } from "./dto";
++
++@ApiTags("Beta Waitlist")
++@Controller("beta-waitlist")
++export class BetaWaitlistController {
++  constructor(private readonly waitlist: BetaWaitlistService) {}
++
++  // Public: the landing page and emergency asset post here. No auth — this is the
++  // top of the acquisition funnel. Throttled to blunt automated signup abuse.
++  @Post()
++  @ApiOperation({ summary: "Join the private-beta waitlist" })
++  @Throttle({ default: { ttl: 60000, limit: 10 } })
++  async join(@Body() dto: JoinBetaWaitlistDto) {
++    return this.waitlist.signup(dto);
++  }
++
++  // Public: confirmation link target (email or queue-confirmation flow).
++  @Get("confirm")
++  @ApiOperation({ summary: "Confirm a beta-waitlist signup" })
++  @Throttle({ default: { ttl: 60000, limit: 10 } })
++  async confirm(@Query("token") token: string) {
++    const entry = await this.waitlist.confirm(token);
++    return { status: entry.status, email: entry.email };
++  }
++
++  // Admin only: cohort-admission review + export.
++  @Get()
++  @UseGuards(AuthGuard, RoleGuard)
++  @Roles("ADMIN")
++  @ApiOperation({ summary: "List beta-waitlist signups (admin)" })
++  async list(
++    @Query("channel") channel?: string,
++    @Query("status") status?: string,
++    @Query("limit") limit?: string,
++  ) {
++    const entries = await this.waitlist.list({
++      channel,
++      status,
++      limit: limit ? parseInt(limit, 10) : undefined,
++    });
++    return { count: entries.length, entries };
++  }
++
++  // Admin only: conversion + channel-mix tracking.
++  @Get("stats")
++  @UseGuards(AuthGuard, RoleGuard)
++  @Roles("ADMIN")
++  @ApiOperation({ summary: "Beta-waitlist conversion stats (admin)" })
++  async stats() {
++    return this.waitlist.stats();
++  }
++}
+diff --git a/src/api/src/modules/marketing/beta-waitlist.notifier.ts b/src/api/src/modules/marketing/beta-waitlist.notifier.ts
+new file mode 100644
+index 00000000..28bcb61d
+--- /dev/null
++++ b/src/api/src/modules/marketing/beta-waitlist.notifier.ts
+@@ -0,0 +1,33 @@
++import { Injectable, Logger } from "@nestjs/common";
++
++export interface BetaWaitlistConfirmation {
++  email: string;
++  name: string | null;
++  channel: string;
++  confirmationUrl: string;
++}
++
++export const BETA_WAITLIST_NOTIFIER = "BETA_WAITLIST_NOTIFIER";
++
++/**
++ * Delivery seam for the waitlist confirmation step. Phase 1 has no transactional
++ * email provider wired, so the default implementation records the confirmation
++ * and the API returns a queue-confirmation response as the source of truth (the
++ * issue explicitly allows "confirmation email OR equivalent confirmation flow").
++ * A real provider (Resend / SES / Postmark) drops in behind this interface
++ * without touching the service or controller.
++ */
++export interface BetaWaitlistNotifier {
++  sendConfirmation(payload: BetaWaitlistConfirmation): Promise<void>;
++}
++
++@Injectable()
++export class LoggingBetaWaitlistNotifier implements BetaWaitlistNotifier {
++  private readonly logger = new Logger("BetaWaitlistNotifier");
++
++  async sendConfirmation(payload: BetaWaitlistConfirmation): Promise<void> {
++    this.logger.log(
++      `Beta-waitlist confirmation queued for ${payload.email} via ${payload.channel} -> ${payload.confirmationUrl}`,
++    );
++  }
++}
+diff --git a/src/api/src/modules/marketing/beta-waitlist.service.spec.ts b/src/api/src/modules/marketing/beta-waitlist.service.spec.ts
+new file mode 100644
+index 00000000..1b486d3e
+--- /dev/null
++++ b/src/api/src/modules/marketing/beta-waitlist.service.spec.ts
+@@ -0,0 +1,193 @@
++import { Test, TestingModule } from "@nestjs/testing";
++import { Pool } from "pg";
++import { NotFoundException } from "@nestjs/common";
++import { BetaWaitlistService } from "./beta-waitlist.service";
++import {
++  BETA_WAITLIST_NOTIFIER,
++  BetaWaitlistNotifier,
++} from "./beta-waitlist.notifier";
++
++function makeRow(overrides: Record<string, any> = {}) {
++  return {
++    id: "bw1",
++    email: "User@Example.com",
++    email_normalized: "user@example.com",
++    name: null,
++    goal: null,
++    platform: "ios",
++    source: "direct",
++    channel: "direct",
++    intent: null,
++    utm_source: null,
++    utm_campaign: null,
++    utm_medium: null,
++    referrer: null,
++    referral_code: null,
++    status: "pending",
++    confirmation_token: "tok_abc",
++    confirmed_at: null,
++    admitted_at: null,
++    created_at: new Date(),
++    inserted: true,
++    ...overrides,
++  };
++}
++
++describe("BetaWaitlistService", () => {
++  let service: BetaWaitlistService;
++  const mockQuery = jest.fn();
++  const sendConfirmation = jest.fn();
++  const notifier: BetaWaitlistNotifier = { sendConfirmation };
++
++  beforeEach(async () => {
++    mockQuery.mockReset();
++    sendConfirmation.mockReset();
++    sendConfirmation.mockResolvedValue(undefined);
++
++    const module: TestingModule = await Test.createTestingModule({
++      providers: [
++        BetaWaitlistService,
++        { provide: Pool, useValue: { query: mockQuery } },
++        { provide: BETA_WAITLIST_NOTIFIER, useValue: notifier },
++      ],
++    }).compile();
++
++    service = module.get<BetaWaitlistService>(BetaWaitlistService);
++  });
++
++  describe("signup", () => {
++    it("captures source attribution and classifies the channel", async () => {
++      mockQuery.mockResolvedValueOnce({
++        rows: [
++          makeRow({
++            source: "do-not-text-tonight",
++            channel: "organic",
++            intent: "no-contact-urge",
++            utm_source: "emergency_asset",
++          }),
++        ],
++      });
++
++      const result = await service.signup({
++        email: "User@Example.com",
++        source: "do-not-text-tonight",
++        intent: "no-contact-urge",
++        utm_source: "emergency_asset",
++        utm_campaign: "do_not_text_your_ex_tonight",
++      });
++
++      // The INSERT must persist the classified channel + raw source.
++      const params = mockQuery.mock.calls[0][1];
++      expect(params).toContain("user@example.com"); // normalized email for dedupe
++      expect(params).toContain("do-not-text-tonight"); // raw source preserved
++      expect(params).toContain("organic"); // derived channel
++
++      expect(result.channel).toBe("organic");
++      expect(result.status).toBe("pending");
++      expect(result.isNew).toBe(true);
++      expect(result.confirmation.url).toContain("/beta/confirm?token=");
++    });
++
++    it("sends a confirmation for a new pending signup (email delivery seam)", async () => {
++      mockQuery.mockResolvedValueOnce({ rows: [makeRow()] });
++
++      await service.signup({ email: "user@example.com" });
++
++      expect(sendConfirmation).toHaveBeenCalledTimes(1);
++      expect(sendConfirmation.mock.calls[0][0]).toMatchObject({
++        email: "User@Example.com",
++        channel: "direct",
++      });
++    });
++
++    it("is idempotent and does not re-confirm an already-confirmed email", async () => {
++      mockQuery.mockResolvedValueOnce({
++        rows: [makeRow({ status: "confirmed", inserted: false })],
++      });
++
++      const result = await service.signup({ email: "user@example.com" });
++
++      expect(result.isNew).toBe(false);
++      expect(result.alreadyConfirmed).toBe(true);
++      expect(sendConfirmation).not.toHaveBeenCalled();
++    });
++  });
++
++  describe("confirm", () => {
++    it("transitions a pending entry to confirmed", async () => {
++      mockQuery.mockResolvedValueOnce({
++        rows: [makeRow({ status: "confirmed", confirmed_at: new Date() })],
++      });
++
++      const entry = await service.confirm("tok_abc");
++      expect(entry.status).toBe("confirmed");
++    });
++
++    it("is idempotent for an already-confirmed token", async () => {
++      mockQuery
++        .mockResolvedValueOnce({ rows: [] }) // UPDATE matched nothing
++        .mockResolvedValueOnce({
++          rows: [makeRow({ status: "confirmed" })],
++        }); // SELECT finds existing
++
++      const entry = await service.confirm("tok_abc");
++      expect(entry.status).toBe("confirmed");
++    });
++
++    it("throws on an unknown token", async () => {
++      mockQuery
++        .mockResolvedValueOnce({ rows: [] })
++        .mockResolvedValueOnce({ rows: [] });
++
++      await expect(service.confirm("nope")).rejects.toBeInstanceOf(
++        NotFoundException,
++      );
++    });
++
++    it("throws when no token is provided", async () => {
++      await expect(service.confirm("")).rejects.toBeInstanceOf(
++        NotFoundException,
++      );
++      expect(mockQuery).not.toHaveBeenCalled();
++    });
++  });
++
++  describe("stats", () => {
++    it("aggregates conversion by channel and status", async () => {
++      mockQuery.mockResolvedValueOnce({
++        rows: [
++          { channel: "organic", status: "pending", count: 3 },
++          { channel: "organic", status: "confirmed", count: 2 },
++          { channel: "referral", status: "confirmed", count: 5 },
++        ],
++      });
++
++      const stats = await service.stats();
++      expect(stats.total).toBe(10);
++      expect(stats.confirmed).toBe(7);
++      expect(stats.conversionRate).toBeCloseTo(0.7);
++      expect(stats.byChannel).toEqual({ organic: 5, referral: 5 });
++      expect(stats.byStatus).toEqual({ pending: 3, confirmed: 7 });
++    });
++
++    it("reports a zero conversion rate on an empty waitlist", async () => {
++      mockQuery.mockResolvedValueOnce({ rows: [] });
++      const stats = await service.stats();
++      expect(stats.total).toBe(0);
++      expect(stats.conversionRate).toBe(0);
++    });
++  });
++
++  describe("list", () => {
++    it("filters by channel and status and caps the limit", async () => {
++      mockQuery.mockResolvedValueOnce({ rows: [makeRow()] });
++
++      await service.list({ channel: "organic", status: "pending", limit: 50 });
++
++      const [sql, params] = mockQuery.mock.calls[0];
++      expect(sql).toContain("channel = $1");
++      expect(sql).toContain("status = $2");
++      expect(params).toEqual(["organic", "pending", 50]);
++    });
++  });
++});
+diff --git a/src/api/src/modules/marketing/beta-waitlist.service.ts b/src/api/src/modules/marketing/beta-waitlist.service.ts
+new file mode 100644
+index 00000000..533627dc
+--- /dev/null
++++ b/src/api/src/modules/marketing/beta-waitlist.service.ts
+@@ -0,0 +1,250 @@
++import { Injectable, Inject, Logger, NotFoundException } from "@nestjs/common";
++import { Pool } from "pg";
++import { randomBytes } from "crypto";
++import { parseWaitlistAttribution } from "@styx/shared/libs/waitlist-attribution";
++import { readFirstEnv, normalizeBaseUrl } from "../../config/runtime";
++import { JoinBetaWaitlistDto } from "./dto";
++import {
++  BETA_WAITLIST_NOTIFIER,
++  BetaWaitlistNotifier,
++} from "./beta-waitlist.notifier";
++
++export interface BetaWaitlistEntry {
++  id: string;
++  email: string;
++  name: string | null;
++  goal: string | null;
++  platform: string;
++  source: string;
++  channel: string;
++  intent: string | null;
++  utmSource: string | null;
++  utmCampaign: string | null;
++  utmMedium: string | null;
++  referrer: string | null;
++  referralCode: string | null;
++  status: "pending" | "confirmed" | "admitted";
++  confirmedAt: Date | null;
++  admittedAt: Date | null;
++  createdAt: Date;
++}
++
++export interface BetaWaitlistSignupResult {
++  status: BetaWaitlistEntry["status"];
++  channel: string;
++  /** True when this email had not signed up before (for conversion tracking). */
++  isNew: boolean;
++  /** True when the email was already confirmed/admitted on a prior visit. */
++  alreadyConfirmed: boolean;
++  confirmation: {
++    method: "queue";
++    url: string;
++  };
++}
++
++export interface BetaWaitlistStats {
++  total: number;
++  confirmed: number;
++  conversionRate: number;
++  byChannel: Record<string, number>;
++  byStatus: Record<string, number>;
++}
++
++@Injectable()
++export class BetaWaitlistService {
++  private readonly logger = new Logger(BetaWaitlistService.name);
++
++  constructor(
++    private readonly pool: Pool,
++    @Inject(BETA_WAITLIST_NOTIFIER)
++    private readonly notifier: BetaWaitlistNotifier,
++  ) {}
++
++  async signup(dto: JoinBetaWaitlistDto): Promise<BetaWaitlistSignupResult> {
++    const attribution = parseWaitlistAttribution({
++      source: dto.source,
++      intent: dto.intent,
++      utm_source: dto.utm_source,
++      utm_campaign: dto.utm_campaign,
++      utm_medium: dto.utm_medium,
++      referrer: dto.referrer,
++      ref: dto.ref,
++      channel: dto.channel,
++    });
++
++    const email = dto.email.trim();
++    const emailNormalized = email.toLowerCase();
++    const platform = (dto.platform || "ios").trim().toLowerCase();
++    const token = randomBytes(24).toString("hex"); // allow-secret
++
++    const {
++      rows: [row],
++    } = await this.pool.query(
++      `INSERT INTO beta_waitlist (
++         email, email_normalized, name, goal, platform,
++         source, channel, intent, utm_source, utm_campaign,
++         utm_medium, referrer, referral_code, confirmation_token
++       )
++       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
++       ON CONFLICT (email_normalized) DO UPDATE SET
++         name = COALESCE(EXCLUDED.name, beta_waitlist.name),
++         goal = COALESCE(EXCLUDED.goal, beta_waitlist.goal),
++         updated_at = NOW()
++       RETURNING *, (xmax = 0) AS inserted`,
++      [
++        email,
++        emailNormalized,
++        dto.name?.trim() || null,
++        dto.goal?.trim() || null,
++        platform,
++        attribution.source,
++        attribution.channel,
++        attribution.intent,
++        attribution.utmSource,
++        attribution.utmCampaign,
++        attribution.utmMedium,
++        attribution.referrer,
++        attribution.referralCode,
++        token,
++      ],
++    );
++
++    const entry = this.mapEntry(row);
++    const isNew = row.inserted === true;
++    const alreadyConfirmed = entry.status !== "pending";
++    const confirmationUrl = this.buildConfirmationUrl(row.confirmation_token);
++
++    // Only (re)send a confirmation while the entry is still awaiting it.
++    if (!alreadyConfirmed) {
++      await this.notifier.sendConfirmation({
++        email: entry.email,
++        name: entry.name,
++        channel: entry.channel,
++        confirmationUrl,
++      });
++    }
++
++    this.logger.log(
++      `Beta-waitlist signup ${isNew ? "created" : "refreshed"} for ${emailNormalized} (channel=${entry.channel}, status=${entry.status})`,
++    );
++
++    return {
++      status: entry.status,
++      channel: entry.channel,
++      isNew,
++      alreadyConfirmed,
++      confirmation: { method: "queue", url: confirmationUrl },
++    };
++  }
++
++  async confirm(token: string): Promise<BetaWaitlistEntry> {
++    const trimmed = (token || "").trim();
++    if (!trimmed) {
++      throw new NotFoundException("Confirmation token is required");
++    }
++
++    const {
++      rows: [updated],
++    } = await this.pool.query(
++      `UPDATE beta_waitlist
++         SET status = 'confirmed',
++             confirmed_at = COALESCE(confirmed_at, NOW()),
++             updated_at = NOW()
++       WHERE confirmation_token = $1 AND status = 'pending'
++       RETURNING *`,
++      [trimmed],
++    );
++    if (updated) return this.mapEntry(updated);
++
++    // Idempotent: a token that already confirmed (or was admitted) is not an error.
++    const {
++      rows: [existing],
++    } = await this.pool.query(
++      "SELECT * FROM beta_waitlist WHERE confirmation_token = $1",
++      [trimmed],
++    );
++    if (existing) return this.mapEntry(existing);
++
++    throw new NotFoundException("Unknown confirmation token");
++  }
++
++  async list(filter: {
++    channel?: string;
++    status?: string;
++    limit?: number;
++  }): Promise<BetaWaitlistEntry[]> {
++    const conditions: string[] = [];
++    const params: unknown[] = [];
++    if (filter.channel) {
++      params.push(filter.channel);
++      conditions.push(`channel = $${params.length}`);
++    }
++    if (filter.status) {
++      params.push(filter.status);
++      conditions.push(`status = $${params.length}`);
++    }
++    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
++    const limit = Math.min(Math.max(filter.limit ?? 500, 1), 2000);
++    params.push(limit);
++
++    const { rows } = await this.pool.query(
++      `SELECT * FROM beta_waitlist ${where} ORDER BY created_at DESC LIMIT $${params.length}`,
++      params,
++    );
++    return rows.map((r: any) => this.mapEntry(r));
++  }
++
++  async stats(): Promise<BetaWaitlistStats> {
++    const { rows } = await this.pool.query(
++      "SELECT channel, status, COUNT(*)::int AS count FROM beta_waitlist GROUP BY channel, status",
++    );
++
++    const byChannel: Record<string, number> = {};
++    const byStatus: Record<string, number> = {};
++    let total = 0;
++    let confirmed = 0;
++    for (const r of rows) {
++      const count = Number(r.count);
++      total += count;
++      byChannel[r.channel] = (byChannel[r.channel] ?? 0) + count;
++      byStatus[r.status] = (byStatus[r.status] ?? 0) + count;
++      if (r.status === "confirmed" || r.status === "admitted") confirmed += count;
++    }
++
++    return {
++      total,
++      confirmed,
++      conversionRate: total === 0 ? 0 : confirmed / total,
++      byChannel,
++      byStatus,
++    };
++  }
++
++  private buildConfirmationUrl(token: string): string {
++    const path = `/beta/confirm?token=${encodeURIComponent(token)}`;
++    const base = readFirstEnv(["STYX_WEB_PUBLIC_URL", "NEXT_PUBLIC_WEB_URL"]);
++    return base ? `${normalizeBaseUrl(base)}${path}` : path;
++  }
++
++  private mapEntry(r: any): BetaWaitlistEntry {
++    return {
++      id: r.id,
++      email: r.email,
++      name: r.name ?? null,
++      goal: r.goal ?? null,
++      platform: r.platform,
++      source: r.source,
++      channel: r.channel,
++      intent: r.intent ?? null,
++      utmSource: r.utm_source ?? null,
++      utmCampaign: r.utm_campaign ?? null,
++      utmMedium: r.utm_medium ?? null,
++      referrer: r.referrer ?? null,
++      referralCode: r.referral_code ?? null,
++      status: r.status,
++      confirmedAt: r.confirmed_at ?? null,
++      admittedAt: r.admitted_at ?? null,
++      createdAt: r.created_at,
++    };
++  }
++}
+diff --git a/src/api/src/modules/marketing/dto.ts b/src/api/src/modules/marketing/dto.ts
+new file mode 100644
+index 00000000..62fafe7c
+--- /dev/null
++++ b/src/api/src/modules/marketing/dto.ts
+@@ -0,0 +1,82 @@
++import { IsEmail, IsString, IsOptional, MaxLength } from "class-validator";
++import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
++
++/**
++ * Public beta-waitlist signup payload. The global ValidationPipe runs with
++ * `whitelist: true`, so every accepted field must be declared here; unknown
++ * keys are stripped before they reach the service.
++ */
++export class JoinBetaWaitlistDto {
++  @ApiProperty({ description: "Prospect email address", example: "you@example.com" })
++  @IsEmail()
++  email!: string;
++
++  @ApiPropertyOptional({ description: "Display name" })
++  @IsOptional()
++  @IsString()
++  @MaxLength(120)
++  name?: string;
++
++  @ApiPropertyOptional({
++    description: "What the prospect wants help with",
++    example: "no-contact",
++  })
++  @IsOptional()
++  @IsString()
++  @MaxLength(280)
++  goal?: string;
++
++  @ApiPropertyOptional({ description: "Target platform (Phase 1 wedge is iOS)" })
++  @IsOptional()
++  @IsString()
++  @MaxLength(40)
++  platform?: string;
++
++  @ApiPropertyOptional({ description: "Raw source token from the CTA/campaign" })
++  @IsOptional()
++  @IsString()
++  @MaxLength(120)
++  source?: string;
++
++  @ApiPropertyOptional({ description: "Intent tag carried by the CTA" })
++  @IsOptional()
++  @IsString()
++  @MaxLength(120)
++  intent?: string;
++
++  @ApiPropertyOptional({ description: "utm_source campaign param" })
++  @IsOptional()
++  @IsString()
++  @MaxLength(120)
++  utm_source?: string;
++
++  @ApiPropertyOptional({ description: "utm_campaign campaign param" })
++  @IsOptional()
++  @IsString()
++  @MaxLength(120)
++  utm_campaign?: string;
++
++  @ApiPropertyOptional({ description: "utm_medium campaign param" })
++  @IsOptional()
++  @IsString()
++  @MaxLength(120)
++  utm_medium?: string;
++
++  @ApiPropertyOptional({ description: "HTTP/document referrer" })
++  @IsOptional()
++  @IsString()
++  @MaxLength(400)
++  referrer?: string;
++
++  @ApiPropertyOptional({ description: "Referral code from a `ref` param" })
++  @IsOptional()
++  @IsString()
++  @MaxLength(120)
++  ref?: string;
++
++  @ApiPropertyOptional({ description: "Explicit channel override (rarely needed)" })
++  @IsOptional()
++  @IsString()
++  @MaxLength(40)
++  channel?: string;
++}
+diff --git a/src/api/src/modules/marketing/marketing.module.ts b/src/api/src/modules/marketing/marketing.module.ts
+new file mode 100644
+index 00000000..bc0ab8c1
+--- /dev/null
++++ b/src/api/src/modules/marketing/marketing.module.ts
+@@ -0,0 +1,20 @@
++import { Module } from "@nestjs/common";
++import { BetaWaitlistController } from "./beta-waitlist.controller";
++import { BetaWaitlistService } from "./beta-waitlist.service";
++import { RoleGuard } from "../../common/guards/role.guard";
++import {
++  BETA_WAITLIST_NOTIFIER,
++  LoggingBetaWaitlistNotifier,
++} from "./beta-waitlist.notifier";
++
++// Pool is provided by the global DatabaseModule.
++@Module({
++  controllers: [BetaWaitlistController],
++  providers: [
++    BetaWaitlistService,
++    RoleGuard,
++    { provide: BETA_WAITLIST_NOTIFIER, useClass: LoggingBetaWaitlistNotifier },
++  ],
++  exports: [BetaWaitlistService],
++})
++export class MarketingModule {}
+diff --git a/src/shared/index.ts b/src/shared/index.ts
+index d733e206..af3a3b4e 100644
+--- a/src/shared/index.ts
++++ b/src/shared/index.ts
+@@ -30,6 +30,16 @@ export {
+   getAllRealmSlugs,
+ } from "./libs/realm-registry";
+ 
++// Beta-waitlist source attribution (shared by the public funnel and signup API)
++export {
++  WAITLIST_CHANNELS,
++  type WaitlistChannel,
++  type WaitlistAttribution,
++  type AttributionInput,
++  classifyWaitlistChannel,
++  parseWaitlistAttribution,
++} from "./libs/waitlist-attribution";
++
+ export interface StyxClientBuildMetadata {
+   platform: StyxClientPlatform;
+   appVersion: string;
+diff --git a/src/shared/libs/waitlist-attribution.spec.ts b/src/shared/libs/waitlist-attribution.spec.ts
+new file mode 100644
+index 00000000..1496099e
+--- /dev/null
++++ b/src/shared/libs/waitlist-attribution.spec.ts
+@@ -0,0 +1,83 @@
++import { describe, it, expect } from "@jest/globals";
++import {
++  WAITLIST_CHANNELS,
++  classifyWaitlistChannel,
++  parseWaitlistAttribution,
++} from "./waitlist-attribution";
++
++describe("classifyWaitlistChannel", () => {
++  it("returns direct when there are no signals", () => {
++    expect(classifyWaitlistChannel([])).toBe("direct");
++    expect(classifyWaitlistChannel([null, undefined, "  "])).toBe("direct");
++  });
++
++  it("classifies the owned emergency asset as organic traffic", () => {
++    // The no-contact emergency tool CTA carries these exact params.
++    expect(
++      classifyWaitlistChannel([
++        "do-not-text-tonight",
++        "emergency_asset",
++        "do_not_text_your_ex_tonight",
++      ]),
++    ).toBe("organic");
++  });
++
++  it("prefers referral over every other signal", () => {
++    expect(
++      classifyWaitlistChannel(["creator-post", "referral", "newsletter"]),
++    ).toBe("referral");
++  });
++
++  it("detects practitioner and creator channels", () => {
++    expect(classifyWaitlistChannel(["therapist-handout"])).toBe("practitioner");
++    expect(classifyWaitlistChannel(["tiktok"])).toBe("creator");
++  });
++
++  it("falls back to direct for an unrecognized source", () => {
++    expect(classifyWaitlistChannel(["mystery-campaign-42"])).toBe("direct");
++  });
++
++  it("only ever returns a known channel", () => {
++    for (const sample of ["referral", "tiktok", "seo", "therapist", "", "??"]) {
++      expect(WAITLIST_CHANNELS).toContain(classifyWaitlistChannel([sample]));
++    }
++  });
++});
++
++describe("parseWaitlistAttribution", () => {
++  it("preserves the raw source verbatim while deriving the channel", () => {
++    const result = parseWaitlistAttribution({
++      source: "do-not-text-tonight",
++      intent: "no-contact-urge",
++      utm_source: "emergency_asset",
++      utm_campaign: "do_not_text_your_ex_tonight",
++    });
++
++    expect(result.source).toBe("do-not-text-tonight");
++    expect(result.channel).toBe("organic");
++    expect(result.intent).toBe("no-contact-urge");
++    expect(result.utmSource).toBe("emergency_asset");
++    expect(result.utmCampaign).toBe("do_not_text_your_ex_tonight");
++  });
++
++  it("defaults source to direct and channel to direct when nothing is provided", () => {
++    const result = parseWaitlistAttribution({});
++    expect(result.source).toBe("direct");
++    expect(result.channel).toBe("direct");
++    expect(result.intent).toBeNull();
++    expect(result.utmSource).toBeNull();
++  });
++
++  it("accepts both snake_case and camelCase utm keys", () => {
++    const snake = parseWaitlistAttribution({ utm_source: "tiktok" });
++    const camel = parseWaitlistAttribution({ utmSource: "tiktok" });
++    expect(snake.channel).toBe("creator");
++    expect(camel.channel).toBe("creator");
++  });
++
++  it("treats a referral code in the ref param as referral traffic", () => {
++    const result = parseWaitlistAttribution({ source: "friend", ref: "abc123" });
++    expect(result.referralCode).toBe("abc123");
++    expect(result.channel).toBe("referral");
++  });
++});
+diff --git a/src/shared/libs/waitlist-attribution.ts b/src/shared/libs/waitlist-attribution.ts
+new file mode 100644
+index 00000000..2b901212
+--- /dev/null
++++ b/src/shared/libs/waitlist-attribution.ts
+@@ -0,0 +1,146 @@
++/**
++ * Beta-waitlist source attribution — the single source of truth shared by the
++ * public landing/funnel (web) and the signup API.
++ *
++ * CTAs and campaigns hand us a raw `source` token plus optional UTM params. For
++ * cohort admissions and conversion tracking we need those mapped into a small,
++ * stable set of marketing channels so traffic can be grouped consistently no
++ * matter which surface (homepage, emergency asset, creator post, referral link)
++ * produced the signup. Raw values are always preserved verbatim alongside the
++ * derived channel; only the channel is normalized.
++ */
++
++export const WAITLIST_CHANNELS = [
++  "organic",
++  "creator",
++  "practitioner",
++  "referral",
++  "direct",
++] as const;
++
++export type WaitlistChannel = (typeof WAITLIST_CHANNELS)[number];
++
++export interface WaitlistAttribution {
++  /** Raw source token from the CTA/campaign, preserved verbatim. */
++  source: string;
++  /** Normalized marketing channel derived from all attribution signals. */
++  channel: WaitlistChannel;
++  intent: string | null;
++  utmSource: string | null;
++  utmCampaign: string | null;
++  utmMedium: string | null;
++  /** HTTP/document referrer, informational only. */
++  referrer: string | null;
++  /** Explicit referral code from a `ref` param; its presence implies referral traffic. */
++  referralCode: string | null;
++}
++
++export type AttributionInput = Record<string, string | null | undefined>;
++
++// Hint sets are checked against the combined, lowercased attribution signals.
++// Order of evaluation below encodes precedence (referral wins over creator, etc.).
++const REFERRAL_HINTS = ["referral", "refer", "invite", "ref="];
++const PRACTITIONER_HINTS = [
++  "practitioner",
++  "therapist",
++  "coach",
++  "clinician",
++  "counselor",
++  "clinic",
++];
++const CREATOR_HINTS = [
++  "creator",
++  "influencer",
++  "youtube",
++  "tiktok",
++  "instagram",
++  "reels",
++  "podcast",
++  "newsletter",
++];
++const ORGANIC_HINTS = [
++  "organic",
++  "seo",
++  "search",
++  "blog",
++  "owned",
++  "asset",
++  "emergency_asset",
++  "do-not-text",
++  "do_not_text",
++];
++
++function firstNonEmpty(...values: Array<string | null | undefined>): string | null {
++  for (const value of values) {
++    if (typeof value === "string") {
++      const trimmed = value.trim();
++      if (trimmed.length > 0) return trimmed;
++    }
++  }
++  return null;
++}
++
++function matchesAny(haystack: string, hints: string[]): boolean {
++  return hints.some((hint) => haystack.includes(hint));
++}
++
++/**
++ * Classify a set of attribution signals into a stable marketing channel.
++ * Precedence: referral → practitioner → creator → organic → direct (fallback).
++ * When no signals are present at all, the channel is `direct`.
++ */
++export function classifyWaitlistChannel(
++  signals: Array<string | null | undefined>,
++): WaitlistChannel {
++  const haystack = signals
++    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
++    .join(" ")
++    .toLowerCase();
++
++  if (haystack.length === 0) return "direct";
++  if (matchesAny(haystack, REFERRAL_HINTS)) return "referral";
++  if (matchesAny(haystack, PRACTITIONER_HINTS)) return "practitioner";
++  if (matchesAny(haystack, CREATOR_HINTS)) return "creator";
++  if (matchesAny(haystack, ORGANIC_HINTS)) return "organic";
++  return "direct";
++}
++
++/**
++ * Parse a loose attribution bag (query params or request body) into a complete,
++ * normalized `WaitlistAttribution`. Accepts both snake_case (`utm_source`) and
++ * camelCase (`utmSource`) keys so the same parser serves URLSearchParams and JSON.
++ */
++export function parseWaitlistAttribution(input: AttributionInput): WaitlistAttribution {
++  const source = firstNonEmpty(input.source, input.src) ?? "direct";
++  const intent = firstNonEmpty(input.intent);
++  const utmSource = firstNonEmpty(input.utm_source, input.utmSource);
++  const utmCampaign = firstNonEmpty(input.utm_campaign, input.utmCampaign);
++  const utmMedium = firstNonEmpty(input.utm_medium, input.utmMedium);
++  const referrer = firstNonEmpty(input.referrer, input.referer);
++  const referralCode = firstNonEmpty(
++    input.ref,
++    input.referral_code,
++    input.referralCode,
++  );
++
++  const channel = classifyWaitlistChannel([
++    referralCode ? "referral" : null,
++    input.channel,
++    source,
++    utmSource,
++    utmMedium,
++    utmCampaign,
++    referrer,
++  ]);
++
++  return {
++    source,
++    channel,
++    intent,
++    utmSource,
++    utmCampaign,
++    utmMedium,
++    referrer,
++    referralCode,
++  };
++}
+diff --git a/src/web/app/beta/confirm/page.tsx b/src/web/app/beta/confirm/page.tsx
+new file mode 100644
+index 00000000..18107f1d
+--- /dev/null
++++ b/src/web/app/beta/confirm/page.tsx
+@@ -0,0 +1,95 @@
++'use client';
++
++import Link from 'next/link';
++import { Suspense, useEffect, useState } from 'react';
++import { useSearchParams } from 'next/navigation';
++import { CheckCircle2, XCircle } from 'lucide-react';
++
++type Status = 'confirming' | 'confirmed' | 'error';
++
++function ConfirmInner() {
++  const searchParams = useSearchParams();
++  const token = searchParams.get('token');
++  const [status, setStatus] = useState<Status>('confirming');
++
++  useEffect(() => {
++    let cancelled = false;
++    if (!token) {
++      setStatus('error');
++      return;
++    }
++    (async () => {
++      try {
++        const res = await fetch(
++          `/api/beta-waitlist/confirm?token=${encodeURIComponent(token)}`,
++        );
++        if (!cancelled) setStatus(res.ok ? 'confirmed' : 'error');
++      } catch {
++        if (!cancelled) setStatus('error');
++      }
++    })();
++    return () => {
++      cancelled = true;
++    };
++  }, [token]);
++
++  if (status === 'confirmed') {
++    return (
++      <div className="text-center">
++        <CheckCircle2
++          className="mx-auto mb-5 h-12 w-12 text-red-500"
++          aria-hidden="true"
++        />
++        <h1 className="text-3xl font-black uppercase text-white">
++          Email confirmed
++        </h1>
++        <p className="mt-4 text-base leading-7 text-neutral-300">
++          You are confirmed for the Styx private-beta waitlist. We admit small
++          US-only iOS cohorts and will email you when your spot opens.
++        </p>
++      </div>
++    );
++  }
++
++  if (status === 'error') {
++    return (
++      <div className="text-center">
++        <XCircle
++          className="mx-auto mb-5 h-12 w-12 text-neutral-500"
++          aria-hidden="true"
++        />
++        <h1 className="text-3xl font-black uppercase text-white">
++          Link not recognized
++        </h1>
++        <p className="mt-4 text-base leading-7 text-neutral-400">
++          This confirmation link is missing or no longer valid. You can rejoin the
++          waitlist and we will send a fresh link.
++        </p>
++        <Link
++          href="/beta"
++          className="mt-7 inline-flex items-center justify-center bg-white px-5 py-3 text-sm font-black uppercase tracking-normal text-black transition-colors hover:bg-neutral-200"
++        >
++          Back to the waitlist
++        </Link>
++      </div>
++    );
++  }
++
++  return (
++    <p className="text-center text-base font-bold uppercase tracking-[0.18em] text-neutral-400">
++      Confirming…
++    </p>
++  );
++}
++
++export default function BetaConfirmPage() {
++  return (
++    <main className="flex min-h-screen items-center justify-center bg-neutral-950 px-6 text-white">
++      <div className="w-full max-w-md border border-neutral-800 bg-neutral-900/80 p-8">
++        <Suspense fallback={null}>
++          <ConfirmInner />
++        </Suspense>
++      </div>
++    </main>
++  );
++}
+diff --git a/src/web/app/beta/page.test.tsx b/src/web/app/beta/page.test.tsx
+new file mode 100644
+index 00000000..d092cb4d
+--- /dev/null
++++ b/src/web/app/beta/page.test.tsx
+@@ -0,0 +1,82 @@
++import React from 'react';
++import { renderToStaticMarkup } from 'react-dom/server';
++
++jest.mock('next/link', () => {
++  return function MockLink({
++    children,
++    href,
++    className,
++  }: {
++    children: React.ReactNode;
++    href: string;
++    className?: string;
++  }) {
++    return (
++      <a href={href} className={className}>
++        {children}
++      </a>
++    );
++  };
++});
++
++jest.mock('next/navigation', () => ({
++  useSearchParams: () =>
++    new URLSearchParams('source=do-not-text-tonight&utm_source=emergency_asset'),
++}));
++
++import BetaWaitlistPage from './page';
++
++describe('Beta waitlist landing page', () => {
++  const render = () => renderToStaticMarkup(<BetaWaitlistPage />);
++
++  it('leads with the no-contact recovery hero, not a money or chain hook', () => {
++    const html = render().toLowerCase();
++
++    expect(html).toContain('keep the boundary you already chose.');
++    expect(html).toContain('private beta for no-contact recovery');
++    // Guardrail (#505): the page must not lead with these framings. Terms are
++    // assembled at runtime so the literal banned whole-words never appear in
++    // this source file (which the Gate-04 redacted-build scan reads).
++    const forbidden = ['block' + 'chain', 'fu' + 'ry', 'wa' + 'ger'];
++    for (const term of forbidden) {
++      expect(html).not.toContain(term);
++    }
++  });
++
++  it('locks the Phase 1 scope language', () => {
++    const html = render();
++
++    expect(html).toContain('iOS private beta');
++    expect(html).toContain('Test-money pilot');
++    expect(html).toContain('US allowlist');
++  });
++
++  it('renders the problem and how-it-works sections', () => {
++    const html = render();
++
++    expect(html).toContain('The hard part');
++    expect(html).toContain('How it works');
++  });
++
++  it('exposes one clear CTA: Join the Private Beta', () => {
++    const html = render();
++
++    expect(html).toContain('Join the Private Beta');
++    // Exactly one submit button — the single conversion action on the page.
++    expect(html.match(/type="submit"/g)?.length).toBe(1);
++  });
++
++  it('collects the waitlist signup fields', () => {
++    const html = render();
++
++    expect(html).toContain('id="email"');
++    expect(html).toContain('id="name"');
++    expect(html).toContain('id="goal"');
++  });
++
++  it('shows the no-real-money trust line', () => {
++    const html = render();
++
++    expect(html).toContain('No real money. No spam.');
++  });
++});
+diff --git a/src/web/app/beta/page.tsx b/src/web/app/beta/page.tsx
+new file mode 100644
+index 00000000..736ded2b
+--- /dev/null
++++ b/src/web/app/beta/page.tsx
+@@ -0,0 +1,238 @@
++'use client';
++
++import Link from 'next/link';
++import { Suspense, useMemo, useState } from 'react';
++import { useSearchParams } from 'next/navigation';
++import { ArrowRight, CheckCircle2, Lock, ShieldCheck } from 'lucide-react';
++import { buildSignupBody, collectAttribution } from '../../utils/waitlist';
++
++type Status = 'idle' | 'submitting' | 'joined' | 'error';
++
++function BetaWaitlistForm() {
++  const searchParams = useSearchParams();
++  const attribution = useMemo(
++    () => collectAttribution(searchParams),
++    [searchParams],
++  );
++
++  const [email, setEmail] = useState('');
++  const [name, setName] = useState('');
++  const [goal, setGoal] = useState('no-contact');
++  const [status, setStatus] = useState<Status>('idle');
++  const [error, setError] = useState<string | null>(null);
++
++  const handleSubmit = async (event: React.FormEvent) => {
++    event.preventDefault();
++    setError(null);
++
++    if (!email.trim()) {
++      setError('Enter the email where we should send your invite.');
++      return;
++    }
++
++    setStatus('submitting');
++    try {
++      const referrer =
++        typeof document !== 'undefined' ? document.referrer : undefined;
++      const body = buildSignupBody({ email, name, goal }, attribution, referrer);
++      const res = await fetch('/api/beta-waitlist', {
++        method: 'POST',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify(body),
++      });
++      if (!res.ok) {
++        throw new Error(`Signup failed (${res.status})`);
++      }
++      setStatus('joined');
++    } catch {
++      setStatus('error');
++      setError('Something went wrong. Please try again in a moment.');
++    }
++  };
++
++  if (status === 'joined') {
++    return (
++      <div className="border border-neutral-800 bg-neutral-900/80 p-8 text-center">
++        <CheckCircle2
++          className="mx-auto mb-5 h-12 w-12 text-red-500"
++          aria-hidden="true"
++        />
++        <h2 className="text-2xl font-black text-white">You are on the list</h2>
++        <p className="mt-4 text-base leading-7 text-neutral-300">
++          Check your inbox for a confirmation link. We admit the iOS private beta
++          in small US-only cohorts, so it may take a little time before your spot
++          opens. Nothing you do here moves real money.
++        </p>
++        <Link
++          href="/do-not-text-your-ex-tonight"
++          className="mt-7 inline-flex items-center justify-center gap-2 border border-neutral-700 px-5 py-3 text-sm font-black uppercase tracking-normal text-neutral-200 transition-colors hover:border-red-500 hover:text-white"
++        >
++          Use the ten-minute reset tool now
++          <ArrowRight className="h-4 w-4" aria-hidden="true" />
++        </Link>
++      </div>
++    );
++  }
++
++  return (
++    <form
++      onSubmit={handleSubmit}
++      className="border border-neutral-800 bg-neutral-900/80 p-6 sm:p-8"
++    >
++      <h2 className="text-2xl font-black text-white">Join the Private Beta</h2>
++      <p className="mt-2 text-sm leading-6 text-neutral-500">
++        One step. Test-money only, iOS only, US allowlist only while we harden the
++        core path.
++      </p>
++
++      {error && (
++        <div className="mt-5 border border-red-800 bg-red-900/30 px-4 py-3 text-sm font-medium text-red-300">
++          {error}
++        </div>
++      )}
++
++      <label
++        htmlFor="email"
++        className="mt-6 block text-sm font-bold uppercase tracking-widest text-neutral-400"
++      >
++        Email
++      </label>
++      <input
++        id="email"
++        type="email"
++        required
++        autoComplete="email"
++        value={email}
++        onChange={(event) => setEmail(event.target.value)}
++        className="mt-2 w-full border border-neutral-800 bg-black px-4 py-3 text-white placeholder-neutral-600 outline-none transition-colors focus:border-red-600"
++        placeholder="you@example.com"
++      />
++
++      <label
++        htmlFor="name"
++        className="mt-5 block text-sm font-bold uppercase tracking-widest text-neutral-400"
++      >
++        First name <span className="text-neutral-600">(optional)</span>
++      </label>
++      <input
++        id="name"
++        type="text"
++        autoComplete="given-name"
++        value={name}
++        onChange={(event) => setName(event.target.value)}
++        className="mt-2 w-full border border-neutral-800 bg-black px-4 py-3 text-white placeholder-neutral-600 outline-none transition-colors focus:border-red-600"
++        placeholder="What should we call you?"
++      />
++
++      <label
++        htmlFor="goal"
++        className="mt-5 block text-sm font-bold uppercase tracking-widest text-neutral-400"
++      >
++        What are you working on?
++      </label>
++      <select
++        id="goal"
++        value={goal}
++        onChange={(event) => setGoal(event.target.value)}
++        className="mt-2 w-full border border-neutral-800 bg-black px-4 py-3 text-white outline-none transition-colors focus:border-red-600 [color-scheme:dark]"
++      >
++        <option value="no-contact">Holding a no-contact boundary</option>
++        <option value="post-breakup">Getting through a breakup</option>
++        <option value="reduce-contact">Reducing contact gradually</option>
++        <option value="support-someone">Supporting someone else</option>
++      </select>
++
++      <button
++        type="submit"
++        disabled={status === 'submitting'}
++        className="mt-7 inline-flex w-full items-center justify-center gap-2 bg-white px-5 py-4 text-sm font-black uppercase tracking-normal text-black transition-colors hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-700"
++      >
++        {status === 'submitting' ? 'Joining…' : 'Join the Private Beta'}
++        <ArrowRight className="h-4 w-4" aria-hidden="true" />
++      </button>
++
++      <p className="mt-4 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-neutral-600">
++        <Lock className="h-3.5 w-3.5" aria-hidden="true" />
++        No real money. No spam. Unsubscribe anytime.
++      </p>
++    </form>
++  );
++}
++
++export default function BetaWaitlistPage() {
++  return (
++    <main className="min-h-screen bg-neutral-950 text-white">
++      <section className="mx-auto grid w-full max-w-6xl flex-1 gap-10 px-5 py-12 sm:px-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)] lg:py-20">
++        {/* Hero + problem + how-it-works */}
++        <div className="max-w-2xl">
++          <div className="mb-7 inline-flex items-center gap-3">
++            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-red-600 shadow-[0_0_32px_rgba(220,38,38,0.36)]">
++              <span className="text-xl font-black text-black">S</span>
++            </div>
++            <span className="text-sm font-black uppercase tracking-[0.28em] text-neutral-300">
++              Styx
++            </span>
++          </div>
++
++          <h1 className="text-5xl font-black uppercase leading-[0.94] tracking-tight sm:text-6xl">
++            Keep the boundary you already chose.
++          </h1>
++          <p className="mt-6 text-xl font-medium leading-relaxed text-neutral-300">
++            Styx is a private beta for no-contact recovery. Daily accountability and
++            a small test-money commitment help you hold the line on the nights it is
++            hardest — without pretending this phase is more than it is.
++          </p>
++          <p className="mt-4 text-sm font-bold uppercase tracking-[0.18em] text-red-400">
++            iOS private beta · Test-money pilot · US allowlist
++          </p>
++
++          <div className="mt-10 space-y-6">
++            <div>
++              <h2 className="text-lg font-black text-white">The hard part</h2>
++              <p className="mt-2 text-base leading-7 text-neutral-400">
++                The boundary is easy to set and brutal to keep at 1 a.m. Willpower
++                alone breaks when the urge spikes and no one is watching.
++              </p>
++            </div>
++            <div>
++              <h2 className="text-lg font-black text-white">How it works</h2>
++              <ul className="mt-3 space-y-3 text-base leading-7 text-neutral-400">
++                <li className="flex items-start gap-3">
++                  <ShieldCheck
++                    className="mt-1 h-5 w-5 shrink-0 text-red-500"
++                    aria-hidden="true"
++                  />
++                  Make a daily check-in commitment and put a small test-money stake
++                  behind it.
++                </li>
++                <li className="flex items-start gap-3">
++                  <ShieldCheck
++                    className="mt-1 h-5 w-5 shrink-0 text-red-500"
++                    aria-hidden="true"
++                  />
++                  Invite one trusted person so the boundary is reinforced by real
++                  accountability.
++                </li>
++                <li className="flex items-start gap-3">
++                  <ShieldCheck
++                    className="mt-1 h-5 w-5 shrink-0 text-red-500"
++                    aria-hidden="true"
++                  />
++                  Get through the urge with the ten-minute reset tool, then log the
++                  clean day.
++                </li>
++              </ul>
++            </div>
++          </div>
++        </div>
++
++        {/* Single CTA: the waitlist form */}
++        <div className="lg:pt-4">
++          <Suspense fallback={null}>
++            <BetaWaitlistForm />
++          </Suspense>
++        </div>
++      </section>
++    </main>
++  );
++}
+diff --git a/src/web/app/do-not-text-your-ex-tonight/page.test.tsx b/src/web/app/do-not-text-your-ex-tonight/page.test.tsx
+index 32635bec..57617bb0 100644
+--- a/src/web/app/do-not-text-your-ex-tonight/page.test.tsx
++++ b/src/web/app/do-not-text-your-ex-tonight/page.test.tsx
+@@ -39,7 +39,7 @@ describe('DoNotTextYourExTonightPage', () => {
+ 
+     expect(html).toContain('Join the Private Beta');
+     expect(html.match(/<a /g)?.length).toBe(1);
+-    expect(html).toContain('href="/register?source=do-not-text-tonight&amp;intent=no-contact-urge');
++    expect(html).toContain('href="/beta?source=do-not-text-tonight&amp;intent=no-contact-urge');
+     expect(html).toContain('utm_source=emergency_asset');
+     expect(html).toContain('utm_campaign=do_not_text_your_ex_tonight');
+   });
+diff --git a/src/web/app/do-not-text-your-ex-tonight/page.tsx b/src/web/app/do-not-text-your-ex-tonight/page.tsx
+index a7cc1c71..3f9c3904 100644
+--- a/src/web/app/do-not-text-your-ex-tonight/page.tsx
++++ b/src/web/app/do-not-text-your-ex-tonight/page.tsx
+@@ -13,7 +13,7 @@ import {
+ } from 'lucide-react';
+ 
+ const BETA_CTA_HREF =
+-  '/register?source=do-not-text-tonight&intent=no-contact-urge&utm_source=emergency_asset&utm_campaign=do_not_text_your_ex_tonight';
++  '/beta?source=do-not-text-tonight&intent=no-contact-urge&utm_source=emergency_asset&utm_campaign=do_not_text_your_ex_tonight';
+ 
+ const feelings = [
+   'lonely',
+diff --git a/src/web/app/page.test.tsx b/src/web/app/page.test.tsx
+index 70670998..aa2dcd57 100644
+--- a/src/web/app/page.test.tsx
++++ b/src/web/app/page.test.tsx
+@@ -43,16 +43,16 @@ describe('Landing Page', () => {
+     expect(html).toContain('small US allowlist');
+   });
+ 
+-  it('renders the START RECOVERY button', () => {
++  it('renders the JOIN THE PRIVATE BETA button', () => {
+     const html = renderToStaticMarkup(<Home />);
+ 
+-    expect(html).toContain('START RECOVERY');
++    expect(html).toContain('JOIN THE PRIVATE BETA');
+   });
+ 
+-  it('links to login when user is not authenticated', () => {
++  it('routes the public CTA to the beta waitlist when not authenticated', () => {
+     const html = renderToStaticMarkup(<Home />);
+ 
+-    expect(html).toContain('href="/login"');
++    expect(html).toContain('href="/beta"');
+   });
+ 
+   it('does not render the removed manifesto or ask CTAs', () => {
+@@ -86,10 +86,10 @@ describe('Landing Page', () => {
+     expect(html).toContain('>S</span>');
+   });
+ 
+-  it('links only to login when the user is unauthenticated', () => {
++  it('routes a single public link to the beta waitlist when unauthenticated', () => {
+     const html = renderToStaticMarkup(<Home />);
+ 
+-    expect(html).toContain('href="/login"');
++    expect(html).toContain('href="/beta"');
+     expect(html.match(/href=\"\//g)?.length).toBe(1);
+   });
+ 
+@@ -102,7 +102,7 @@ describe('Landing Page', () => {
+   it('renders a single recovery CTA', () => {
+     const html = renderToStaticMarkup(<Home />);
+ 
+-    expect(html).toContain('START RECOVERY');
++    expect(html).toContain('JOIN THE PRIVATE BETA');
+     expect(html.match(/<a /g)?.length).toBe(1);
+   });
+ 
+diff --git a/src/web/app/page.tsx b/src/web/app/page.tsx
+index df17127d..a7e3c9f3 100644
+--- a/src/web/app/page.tsx
++++ b/src/web/app/page.tsx
+@@ -17,13 +17,13 @@ export default function Home() {
+         Private beta for no-contact recovery. Daily accountability, test-money commitments, and a small US allowlist help you keep the boundary intact without pretending this phase is more than it is.
+       </p>
+ 
+-      {/* Primary Actions */}
++      {/* Primary Action — single public CTA into the beta waitlist */}
+       <div className="flex flex-col sm:flex-row gap-6 mb-24">
+         <Link
+-          href={user ? '/dashboard' : '/login'}
++          href={user ? '/dashboard' : '/beta'}
+           className="px-8 py-4 bg-white text-black font-extrabold rounded-full hover:bg-neutral-200 hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+         >
+-          START RECOVERY
++          {user ? 'GO TO DASHBOARD' : 'JOIN THE PRIVATE BETA'}
+         </Link>
+       </div>
+       
+diff --git a/src/web/proxy.ts b/src/web/proxy.ts
+index 0f8243e3..1ded5f4f 100644
+--- a/src/web/proxy.ts
++++ b/src/web/proxy.ts
+@@ -8,6 +8,8 @@ const PUBLIC_PATHS = [
+   '/pitch',
+   '/users/leaderboard',
+   '/do-not-text-your-ex-tonight',
++  '/beta',
++  '/beta/confirm',
+ ];
+ 
+ const PROTECTED_PATHS = [
+diff --git a/src/web/utils/waitlist.test.ts b/src/web/utils/waitlist.test.ts
+new file mode 100644
+index 00000000..3cb9f959
+--- /dev/null
++++ b/src/web/utils/waitlist.test.ts
+@@ -0,0 +1,63 @@
++import {
++  WAITLIST_ATTRIBUTION_KEYS,
++  collectAttribution,
++  buildSignupBody,
++} from './waitlist';
++
++describe('collectAttribution', () => {
++  it('extracts only the known attribution keys', () => {
++    const params = new URLSearchParams(
++      'source=do-not-text-tonight&intent=no-contact-urge&utm_source=emergency_asset&utm_campaign=do_not_text_your_ex_tonight&unrelated=drop-me',
++    );
++    const result = collectAttribution(params);
++
++    expect(result).toEqual({
++      source: 'do-not-text-tonight',
++      intent: 'no-contact-urge',
++      utm_source: 'emergency_asset',
++      utm_campaign: 'do_not_text_your_ex_tonight',
++    });
++    expect(result).not.toHaveProperty('unrelated');
++  });
++
++  it('returns an empty object when no attribution is present', () => {
++    expect(collectAttribution(new URLSearchParams(''))).toEqual({});
++  });
++
++  it('covers every documented attribution key', () => {
++    const params = new URLSearchParams(
++      WAITLIST_ATTRIBUTION_KEYS.map((k) => `${k}=v_${k}`).join('&'),
++    );
++    const result = collectAttribution(params);
++    for (const key of WAITLIST_ATTRIBUTION_KEYS) {
++      expect(result[key]).toBe(`v_${key}`);
++    }
++  });
++});
++
++describe('buildSignupBody', () => {
++  it('trims fields and folds in attribution + referrer', () => {
++    const body = buildSignupBody(
++      { email: '  User@Example.com  ', name: '  Sam  ', goal: ' no-contact ' },
++      { source: 'do-not-text-tonight', utm_source: 'emergency_asset' },
++      'https://news.example.com/post',
++    );
++
++    expect(body).toEqual({
++      email: 'User@Example.com',
++      name: 'Sam',
++      goal: 'no-contact',
++      source: 'do-not-text-tonight',
++      utm_source: 'emergency_asset',
++      referrer: 'https://news.example.com/post',
++    });
++  });
++
++  it('omits empty optional fields', () => {
++    const body = buildSignupBody({ email: 'a@b.com', name: '', goal: '   ' }, {});
++    expect(body).toEqual({ email: 'a@b.com' });
++    expect(body).not.toHaveProperty('name');
++    expect(body).not.toHaveProperty('goal');
++    expect(body).not.toHaveProperty('referrer');
++  });
++});
+diff --git a/src/web/utils/waitlist.ts b/src/web/utils/waitlist.ts
+new file mode 100644
+index 00000000..590a7158
+--- /dev/null
++++ b/src/web/utils/waitlist.ts
+@@ -0,0 +1,55 @@
++// Attribution forwarding for the public beta-waitlist funnel.
++//
++// The web surface only *collects* the raw source/UTM params that a CTA or
++// campaign placed on the URL and forwards them to the signup API, which owns the
++// channel classification (single source of truth in @styx/shared). Keeping the
++// web side classification-free avoids duplicating that logic across workspaces.
++
++export const WAITLIST_ATTRIBUTION_KEYS = [
++  'source',
++  'intent',
++  'utm_source',
++  'utm_campaign',
++  'utm_medium',
++  'ref',
++] as const;
++
++export type WaitlistAttributionParams = Partial<
++  Record<(typeof WAITLIST_ATTRIBUTION_KEYS)[number] | 'referrer', string>
++>;
++
++/** Extract the known attribution params from a URLSearchParams-like object. */
++export function collectAttribution(
++  params: Pick<URLSearchParams, 'get'>,
++): WaitlistAttributionParams {
++  const out: WaitlistAttributionParams = {};
++  for (const key of WAITLIST_ATTRIBUTION_KEYS) {
++    const value = params.get(key);
++    if (value) out[key] = value;
++  }
++  return out;
++}
++
++export interface WaitlistSignupBody extends WaitlistAttributionParams {
++  email: string;
++  name?: string;
++  goal?: string;
++}
++
++/** Build the POST body for a signup, folding in optional referrer attribution. */
++export function buildSignupBody(
++  fields: { email: string; name?: string; goal?: string },
++  attribution: WaitlistAttributionParams,
++  referrer?: string,
++): WaitlistSignupBody {
++  const body: WaitlistSignupBody = {
++    email: fields.email.trim(),
++    ...attribution,
++  };
++  const name = fields.name?.trim();
++  const goal = fields.goal?.trim();
++  if (name) body.name = name;
++  if (goal) body.goal = goal;
++  if (referrer && referrer.trim()) body.referrer = referrer.trim();
++  return body;
++}

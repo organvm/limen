@@ -1,0 +1,1051 @@
+diff --git a/.env.example b/.env.example
+index 536c5650..4751ae5c 100644
+--- a/.env.example
++++ b/.env.example
+@@ -9,6 +9,9 @@ CLOUDFLARE_R2_SECRET_KEY=...
+ # Session JWTs, the CSRF HMAC, and (when ENTERPRISE_SSO_SECRET is unset) the SSO
+ # fallback all key off this single secret, so a weak/shared value allows full JWT forgery.
+ JWT_SECRET=
++# REQUIRED: 32+ byte random secret used only to HMAC-hash issued user API keys
++# before storage. Generate one with: openssl rand -base64 48
++STYX_API_KEY_PEPPER=
+ # REQUIRED for enterprise SSO. Dedicated key the external corporate IdP signs SSO
+ # assertions with. If UNSET, /auth/enterprise is rejected outright (the service no
+ # longer falls back to verifying assertions with JWT_SECRET). Use a distinct
+@@ -69,6 +72,7 @@ EXPO_PUBLIC_STYX_MOBILE_BUILD=1
+ # These previously defaulted to hardcoded dev values; the fallbacks were
+ # removed for security, so they must be set in every environment.
+ # JWT_SECRET is already declared above.
++# STYX_API_KEY_PEPPER is already declared above.
+ APP_SECRET=                 # Social-layer alias HMAC key
+ ANONYMIZE_SALT=             # B2B export pseudonymization salt (code reads ANONYMIZE_SALT)
+ ZK_EXHAUST_SECRET=          # zk-exhaust verifier HMAC key
+diff --git a/README.md b/README.md
+index e447ed68..2bae40da 100644
+--- a/README.md
++++ b/README.md
+@@ -257,6 +257,7 @@ Copy `.env.example` to `.env` and set:
+ | `CLOUDFLARE_R2_ACCESS_KEY`              | Yes                                                | R2 storage access key                                                   |
+ | `CLOUDFLARE_R2_SECRET_KEY`              | Yes                                                | R2 storage secret key                                                   |
+ | `JWT_SECRET`                            | Yes (prod)                                         | JWT signing secret (enforced in production)                             |
++| `STYX_API_KEY_PEPPER`                   | Yes                                                | HMAC pepper for stored user API-key hashes                              |
+ | `GEMINI_API_KEY`                        | No                                                 | Gemini AI for goal ethics screening                                     |
+ | `KYC_ENFORCEMENT_ENABLED`               | No                                                 | Enable KYC gating (default: `false`)                                    |
+ | `GEOFENCE_FAIL_OPEN_ON_MISSING_HEADERS` | No                                                 | Fail-open when geo headers missing (default: `true`)                    |
+@@ -264,6 +265,27 @@ Copy `.env.example` to `.env` and set:
+ | `BETA_WEB_URL`                          | No                                                 | Optional target web URL for beta readiness                              |
+ | `BETA_ENV_LABEL`                        | No                                                 | Expected environment label for `/meta/release` (default: `beta`)        |
+ 
++The API loads env files through `src/api/src/config/env-path.ts` in this order:
++repo `.env.local`, repo `.env`, `src/api/.env.local`, then `src/api/.env`.
++Set `STYX_API_KEY_PEPPER` in the selected file or deployment secret store before
++issuing or verifying API keys. Generate it with `openssl rand -base64 48`; do not
++reuse `JWT_SECRET`.
++
++User API keys are issued from an authenticated session:
++
++```bash
++curl -X POST "$STYX_API_PUBLIC_URL/auth/api-keys" \
++  -H "Authorization: Bearer $JWT" \
++  -H "Content-Type: application/json" \
++  -d '{"name":"automation","expiresInDays":90}'
++```
++
++The `apiKey` field is returned once. Use it on protected API endpoints with:
++
++```bash
++curl "$STYX_API_PUBLIC_URL/users/me" -H "x-api-key: $STYX_API_KEY"
++```
++
+ ## CI Pipeline
+ 
+ `.github/workflows/ci.yml` runs on every push and PR:
+diff --git a/docs/CLAUDE.md b/docs/CLAUDE.md
+index c3d777e5..3852ccb7 100644
+--- a/docs/CLAUDE.md
++++ b/docs/CLAUDE.md
+@@ -243,7 +243,7 @@ These files at the repo root carry constraints that tooling reads but are easy t
+ 
+ ## Environment
+ 
+-Copy `.env.example` → `.env`. Required vars: `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `DATABASE_URL`, `REDIS_URL`, `CLOUDFLARE_R2_ACCESS_KEY`, `CLOUDFLARE_R2_SECRET_KEY`, `JWT_SECRET`. The 2026-05-26 hardening removed insecure fallbacks, so these are now also required at use-time (services throw if unset): `APP_SECRET`, `ANONYMIZE_SALT`, `ZK_EXHAUST_SECRET`, `STYX_WEBHOOK_SECRET`, `INTERNAL_SERVICE_TOKEN`, and `ENTERPRISE_SSO_SECRET` (enterprise SSO is rejected until it is set — no `JWT_SECRET` fallback). Optional: `GEMINI_API_KEY`, `SENTRY_DSN`, Salesforce/HubSpot keys.
++Copy `.env.example` → `.env`. Required vars: `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `DATABASE_URL`, `REDIS_URL`, `CLOUDFLARE_R2_ACCESS_KEY`, `CLOUDFLARE_R2_SECRET_KEY`, `JWT_SECRET`, `STYX_API_KEY_PEPPER`. The 2026-05-26 hardening removed insecure fallbacks, so these are now also required at use-time (services throw if unset): `APP_SECRET`, `ANONYMIZE_SALT`, `ZK_EXHAUST_SECRET`, `STYX_WEBHOOK_SECRET`, `INTERNAL_SERVICE_TOKEN`, and `ENTERPRISE_SSO_SECRET` (enterprise SSO is rejected until it is set — no `JWT_SECRET` fallback). Optional: `GEMINI_API_KEY`, `SENTRY_DSN`, Salesforce/HubSpot keys.
+ 
+ Docker services are wired by `.config/docker/docker-compose.yml` using `.env` / `STYX_DOCKER_*` values.
+ 
+diff --git a/src/api/database/migrations/042_user_api_keys.sql b/src/api/database/migrations/042_user_api_keys.sql
+new file mode 100644
+index 00000000..6af5f978
+--- /dev/null
++++ b/src/api/database/migrations/042_user_api_keys.sql
+@@ -0,0 +1,23 @@
++-- Migration 042: User API keys for authenticated API clients
++
++CREATE TABLE IF NOT EXISTS api_keys (
++  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
++  key_id TEXT NOT NULL UNIQUE,
++  key_hash TEXT NOT NULL UNIQUE,
++  name TEXT NOT NULL,
++  prefix TEXT NOT NULL,
++  expires_at TIMESTAMPTZ NOT NULL,
++  revoked_at TIMESTAMPTZ,
++  last_used_at TIMESTAMPTZ,
++  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
++);
++
++CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
++CREATE INDEX IF NOT EXISTS idx_api_keys_key_id ON api_keys(key_id);
++CREATE INDEX IF NOT EXISTS idx_api_keys_active_lookup
++  ON api_keys(key_id)
++  WHERE revoked_at IS NULL;
++
++COMMENT ON TABLE api_keys IS
++  'Opaque user API keys. Raw keys are returned once at issuance; only STYX_API_KEY_PEPPER HMAC hashes are stored.';
+diff --git a/src/api/database/schema.sql b/src/api/database/schema.sql
+index cfe9dc58..8ef38975 100644
+--- a/src/api/database/schema.sql
++++ b/src/api/database/schema.sql
+@@ -252,6 +252,26 @@ CREATE TABLE refresh_tokens (
+ CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+ CREATE INDEX idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);
+ 
++-- User API keys for authenticated API clients.
++CREATE TABLE api_keys (
++    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
++    key_id TEXT NOT NULL UNIQUE,
++    key_hash TEXT NOT NULL UNIQUE,
++    name TEXT NOT NULL,
++    prefix TEXT NOT NULL,
++    expires_at TIMESTAMPTZ NOT NULL,
++    revoked_at TIMESTAMPTZ,
++    last_used_at TIMESTAMPTZ,
++    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
++);
++
++CREATE INDEX idx_api_keys_user_id ON api_keys(user_id);
++CREATE INDEX idx_api_keys_key_id ON api_keys(key_id);
++CREATE INDEX idx_api_keys_active_lookup
++  ON api_keys(key_id)
++  WHERE revoked_at IS NULL;
++
+ -- Account lockout columns
+ ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0;
+ ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+diff --git a/src/api/guards/auth.guard.spec.ts b/src/api/guards/auth.guard.spec.ts
+index 28ea8e86..b860127b 100644
+--- a/src/api/guards/auth.guard.spec.ts
++++ b/src/api/guards/auth.guard.spec.ts
+@@ -1,7 +1,7 @@
+ import { AuthGuard } from './auth.guard';
+ import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+ import * as jwt from 'jsonwebtoken';
+-import { deriveCsrfToken } from '../src/modules/auth/auth.service';
++import { deriveCsrfToken, hashApiKeySecret } from '../src/modules/auth/auth.service';
+ 
+ // Tokens must be signed with the same secret the guard verifies against. The
+ // guard resolves it via getJwtSecret() which reads process.env.JWT_SECRET
+@@ -34,9 +34,13 @@ function createMockContext(input?: {
+ 
+ describe('AuthGuard', () => {
+   let guard: AuthGuard;
++  const mockPool = {
++    query: jest.fn(),
++  };
+ 
+   beforeEach(() => {
+     guard = new AuthGuard();
++    mockPool.query.mockReset();
+   });
+ 
+   it('should reject requests with no Authorization header', () => {
+@@ -179,4 +183,98 @@ describe('AuthGuard', () => {
+ 
+     expect(guard.canActivate(context)).toBe(true);
+   });
++
++  it('should accept x-api-key and attach the authenticated user', async () => {
++    const keyId = 'a'.repeat(24);
++    const secret = 'secret_WITH-underscore'; // allow-secret
++    const apiKey = `styx_live_${keyId}_${secret}`; // allow-secret
++    const apiKeyGuard = new AuthGuard(undefined, mockPool as any);
++
++    mockPool.query
++      .mockResolvedValueOnce({
++        rows: [{
++          id: 'api-key-db-id',
++          user_id: 'user-api-1',
++          key_hash: hashApiKeySecret(secret),
++          expires_at: new Date(Date.now() + 60_000).toISOString(),
++          revoked_at: null,
++          email: 'api@styx.protocol',
++          role: 'USER',
++          status: 'ACTIVE',
++        }],
++      })
++      .mockResolvedValueOnce(undefined);
++
++    const context = createMockContext({
++      extraHeaders: { 'x-api-key': apiKey },
++    });
++
++    await expect(apiKeyGuard.canActivate(context)).resolves.toBe(true);
++
++    const request = context.switchToHttp().getRequest() as any;
++    expect(request.user.id).toBe('user-api-1');
++    expect(request.user.email).toBe('api@styx.protocol');
++    expect(request.user.apiKeyId).toBe(keyId);
++    expect(request.authSource).toBe('api_key');
++    expect(mockPool.query).toHaveBeenLastCalledWith(
++      expect.stringContaining('UPDATE api_keys SET last_used_at = NOW()'),
++      ['api-key-db-id'],
++    );
++  });
++
++  it('should accept Authorization: ApiKey as an API-key credential', async () => {
++    const keyId = 'b'.repeat(24);
++    const secret = 'api-key-secret'; // allow-secret
++    const apiKeyGuard = new AuthGuard(undefined, mockPool as any);
++
++    mockPool.query
++      .mockResolvedValueOnce({
++        rows: [{
++          id: 'api-key-db-id-2',
++          user_id: 'user-api-2',
++          key_hash: hashApiKeySecret(secret),
++          expires_at: new Date(Date.now() + 60_000).toISOString(),
++          revoked_at: null,
++          email: 'api2@styx.protocol',
++          role: 'ADMIN',
++          status: 'ACTIVE',
++        }],
++      })
++      .mockResolvedValueOnce(undefined);
++
++    const context = createMockContext({
++      authHeader: `ApiKey styx_live_${keyId}_${secret}`,
++    });
++
++    await expect(apiKeyGuard.canActivate(context)).resolves.toBe(true);
++    const request = context.switchToHttp().getRequest() as any;
++    expect(request.user.role).toBe('ADMIN');
++    expect(request.authSource).toBe('api_key');
++  });
++
++  it('should reject revoked API keys', async () => {
++    const keyId = 'c'.repeat(24);
++    const secret = 'revoked-secret'; // allow-secret
++    const apiKeyGuard = new AuthGuard(undefined, mockPool as any);
++
++    mockPool.query.mockResolvedValueOnce({
++      rows: [{
++        id: 'api-key-db-id-3',
++        user_id: 'user-api-3',
++        key_hash: hashApiKeySecret(secret),
++        expires_at: new Date(Date.now() + 60_000).toISOString(),
++        revoked_at: new Date().toISOString(),
++        email: 'api3@styx.protocol',
++        role: 'USER',
++        status: 'ACTIVE',
++      }],
++    });
++
++    const context = createMockContext({
++      extraHeaders: { 'x-api-key': `styx_live_${keyId}_${secret}` },
++    });
++
++    await expect(apiKeyGuard.canActivate(context)).rejects.toThrow('API key has been revoked');
++    expect(mockPool.query).toHaveBeenCalledTimes(1);
++  });
+ });
+diff --git a/src/api/guards/auth.guard.ts b/src/api/guards/auth.guard.ts
+index db9ea07e..62dfc26a 100644
+--- a/src/api/guards/auth.guard.ts
++++ b/src/api/guards/auth.guard.ts
+@@ -1,18 +1,36 @@
+-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
++import {
++  CanActivate,
++  ExecutionContext,
++  Injectable,
++  UnauthorizedException,
++  ForbiddenException,
++  Optional,
++} from '@nestjs/common';
+ import { Reflector } from '@nestjs/core';
+ import { Request } from 'express';
++import { Pool } from 'pg';
+ import * as jwt from 'jsonwebtoken';
+ import { timingSafeEqual } from 'crypto';
+-import { getJwtSecret, deriveCsrfToken } from '../src/modules/auth/auth.service';
++import {
++  getJwtSecret,
++  deriveCsrfToken,
++  parseApiKey,
++  hashApiKeySecret,
++} from '../src/modules/auth/auth.service';
+ import { consumeSseTicket, SseTicketScope } from './sse-ticket.store';
+ 
+ export const IS_PUBLIC_KEY = 'isPublic';
+ 
+ @Injectable()
+ export class AuthGuard implements CanActivate {
+-  constructor(private readonly reflector?: Reflector) {}
++  constructor(
++    @Optional()
++    private readonly reflector?: Reflector,
++    @Optional()
++    private readonly pool?: Pool,
++  ) {}
+ 
+-  canActivate(context: ExecutionContext): boolean {
++  canActivate(context: ExecutionContext): boolean | Promise<boolean> {
+     // Check for @Public() decorator
+     const isPublic = this.reflector?.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+       context.getHandler(),
+@@ -25,6 +43,11 @@ export class AuthGuard implements CanActivate {
+     const cookieToken = headerToken ? undefined : this.extractTokenFromCookie(request); // allow-secret
+     const token = headerToken || cookieToken;
+     const authSource = headerToken ? 'bearer' : (cookieToken ? 'cookie' : null);
++    const apiKey = token ? undefined : this.extractApiKeyFromHeader(request); // allow-secret
++
++    if (apiKey) {
++      return this.activateWithApiKey(request, apiKey);
++    }
+ 
+     if (!token) {
+       const sseTicketUserId = this.consumeSseTicketForRequest(request);
+@@ -75,6 +98,88 @@ export class AuthGuard implements CanActivate {
+     return undefined;
+   }
+ 
++  private extractApiKeyFromHeader(request: Request): string | undefined {
++    const directHeader = request.headers['x-api-key'];
++    const directApiKey = Array.isArray(directHeader) ? directHeader[0] : directHeader;
++    if (directApiKey) {
++      return directApiKey; // allow-secret
++    }
++
++    const [type, credential] = request.headers.authorization?.split(' ') ?? [];
++    if (type === 'ApiKey' && credential) {
++      return credential; // allow-secret
++    }
++
++    return undefined;
++  }
++
++  private async activateWithApiKey(request: Request, apiKey: string): Promise<boolean> { // allow-secret
++    const parsed = parseApiKey(apiKey);
++    if (!parsed) {
++      throw new UnauthorizedException('Invalid API key');
++    }
++
++    if (!this.pool) {
++      throw new UnauthorizedException('API key authentication is not configured');
++    }
++
++    const keyHash = hashApiKeySecret(parsed.secret); // allow-secret
++    const result = await this.pool.query(
++      `SELECT ak.id, ak.user_id, ak.key_hash, ak.expires_at, ak.revoked_at,
++              u.email, u.role, u.status
++       FROM api_keys ak
++       JOIN users u ON u.id = ak.user_id
++       WHERE ak.key_id = $1`,
++      [parsed.keyId],
++    );
++
++    if (result.rows.length === 0) {
++      throw new UnauthorizedException('Invalid API key');
++    }
++
++    const row = result.rows[0];
++    if (!this.hasMatchingApiKeyHash(row.key_hash, keyHash)) {
++      throw new UnauthorizedException('Invalid API key');
++    }
++
++    if (row.revoked_at) {
++      throw new UnauthorizedException('API key has been revoked');
++    }
++
++    if (row.expires_at && new Date(row.expires_at) < new Date()) {
++      throw new UnauthorizedException('API key has expired');
++    }
++
++    if (String(row.status || '').toUpperCase() !== 'ACTIVE') {
++      throw new UnauthorizedException('User account is not active');
++    }
++
++    await this.pool.query(
++      `UPDATE api_keys SET last_used_at = NOW() WHERE id = $1`,
++      [row.id],
++    );
++
++    (request as any).user = {
++      id: row.user_id,
++      email: row.email,
++      role: row.role || 'USER',
++      sub: row.user_id,
++      apiKeyId: parsed.keyId,
++      apiKeyDbId: row.id,
++    };
++    (request as any).authSource = 'api_key';
++    return true;
++  }
++
++  private hasMatchingApiKeyHash(storedHash: string, presentedHash: string): boolean {
++    const storedBuf = Buffer.from(storedHash, 'hex');
++    const presentedBuf = Buffer.from(presentedHash, 'hex');
++    if (storedBuf.length !== presentedBuf.length) {
++      return false;
++    }
++    return timingSafeEqual(storedBuf, presentedBuf);
++  }
++
+   private extractTokenFromCookie(request: Request): string | undefined {
+     const token = this.getCookieValue(request, 'styx_auth_token');
+     return token || undefined; // allow-secret
+diff --git a/src/api/jest.setup.cjs b/src/api/jest.setup.cjs
+index 9015c307..cd33f8a4 100644
+--- a/src/api/jest.setup.cjs
++++ b/src/api/jest.setup.cjs
+@@ -7,6 +7,7 @@
+ const TEST_ENV_DEFAULTS = {
+   NODE_ENV: 'test',
+   JWT_SECRET: 'test-jwt-secret-not-for-production',
++  STYX_API_KEY_PEPPER: 'test-api-key-pepper-not-for-production',
+   APP_SECRET: 'test-app-secret-not-for-production',
+   ANONYMIZE_SALT: 'test-anonymize-salt-not-for-production',
+   ZK_EXHAUST_SECRET: 'test-zk-exhaust-secret-not-for-production',
+diff --git a/src/api/src/main.spec.ts b/src/api/src/main.spec.ts
+index 0318c242..ac01feb4 100644
+--- a/src/api/src/main.spec.ts
++++ b/src/api/src/main.spec.ts
+@@ -34,6 +34,7 @@ describe('Swagger Documentation', () => {
+       .setDescription('Peer-audited behavioral market — the Blockchain of Truth')
+       .setVersion('0.1.0')
+       .addBearerAuth()
++      .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'apiKey')
+       .build();
+     const document = SwaggerModule.createDocument(app, config);
+     SwaggerModule.setup('api/docs', app, document);
+@@ -59,5 +60,6 @@ describe('Swagger Documentation', () => {
+     expect(response.body.info.title).toBe('Styx API');
+     expect(response.body.info.version).toBe('0.1.0');
+     expect(response.body.components.securitySchemes).toHaveProperty('bearer');
++    expect(response.body.components.securitySchemes).toHaveProperty('apiKey');
+   });
+ });
+diff --git a/src/api/src/main.ts b/src/api/src/main.ts
+index 4d020032..2acc6639 100644
+--- a/src/api/src/main.ts
++++ b/src/api/src/main.ts
+@@ -79,6 +79,7 @@ async function bootstrap() {
+       .setDescription('Peer-audited behavioral market — the Blockchain of Truth')
+       .setVersion('0.1.0')
+       .addBearerAuth()
++      .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'apiKey')
+       .build();
+     const document = SwaggerModule.createDocument(app, config);
+     SwaggerModule.setup('api/docs', app, document);
+diff --git a/src/api/src/modules/auth/auth.controller.spec.ts b/src/api/src/modules/auth/auth.controller.spec.ts
+index ece69103..0cf3a306 100644
+--- a/src/api/src/modules/auth/auth.controller.spec.ts
++++ b/src/api/src/modules/auth/auth.controller.spec.ts
+@@ -2,7 +2,7 @@ import { AuthController } from './auth.controller';
+ import { AuthService } from './auth.service';
+ import { validate } from 'class-validator';
+ import { plainToInstance } from 'class-transformer';
+-import { RegisterDto, LoginDto } from './dto';
++import { RegisterDto, LoginDto, CreateApiKeyDto } from './dto';
+ 
+ const mockAuthService = {
+   register: jest.fn(),
+@@ -12,6 +12,9 @@ const mockAuthService = {
+   revokeRefreshTokensForUser: jest.fn().mockResolvedValue(undefined),
+   verifyToken: jest.fn(),
+   verifyTokenIgnoringExpiry: jest.fn(),
++  issueApiKey: jest.fn(),
++  listApiKeys: jest.fn(),
++  revokeApiKey: jest.fn(),
+ } as unknown as AuthService;
+ 
+ describe('AuthController', () => {
+@@ -149,4 +152,69 @@ describe('AuthController', () => {
+       expect(result).toEqual({ status: 'logged_out' });
+     });
+   });
++
++  describe('API key endpoints', () => {
++    it('should issue an API key for the authenticated user', async () => {
++      (mockAuthService.issueApiKey as jest.Mock).mockResolvedValue({
++        id: 'api-key-id',
++        keyId: 'a'.repeat(24),
++        name: 'automation',
++        prefix: `styx_live_${'a'.repeat(24)}`,
++        apiKey: `styx_live_${'a'.repeat(24)}_secret`, // allow-secret
++        expiresAt: new Date(),
++        createdAt: new Date(),
++      });
++
++      const result = await controller.createApiKey(
++        { id: 'user-123' },
++        plainToInstance(CreateApiKeyDto, {
++          name: 'automation',
++          expiresInDays: 90,
++        }),
++      );
++
++      expect(mockAuthService.issueApiKey).toHaveBeenCalledWith('user-123', {
++        name: 'automation',
++        expiresInDays: 90,
++      });
++      expect(result.apiKey).toContain('styx_live_');
++    });
++
++    it('should list API key metadata for the authenticated user', async () => {
++      (mockAuthService.listApiKeys as jest.Mock).mockResolvedValue([
++        {
++          id: 'api-key-id',
++          keyId: 'b'.repeat(24),
++          name: 'automation',
++          prefix: `styx_live_${'b'.repeat(24)}`,
++          status: 'active',
++        },
++      ]);
++
++      const result = await controller.listApiKeys({ id: 'user-123' });
++
++      expect(mockAuthService.listApiKeys).toHaveBeenCalledWith('user-123');
++      expect(result[0]).not.toHaveProperty('apiKey');
++    });
++
++    it('should revoke an API key for the authenticated user', async () => {
++      (mockAuthService.revokeApiKey as jest.Mock).mockResolvedValue({ revoked: true });
++
++      await expect(
++        controller.revokeApiKey({ id: 'user-123' }, 'c'.repeat(24)),
++      ).resolves.toEqual({ revoked: true });
++
++      expect(mockAuthService.revokeApiKey).toHaveBeenCalledWith('user-123', 'c'.repeat(24));
++    });
++
++    it('should reject invalid API key expiry via DTO validation', async () => {
++      const dto = plainToInstance(CreateApiKeyDto, {
++        name: 'automation',
++        expiresInDays: 366,
++      });
++
++      const errors = await validate(dto);
++      expect(errors.some((e) => e.property === 'expiresInDays')).toBe(true);
++    });
++  });
+ });
+diff --git a/src/api/src/modules/auth/auth.controller.ts b/src/api/src/modules/auth/auth.controller.ts
+index 256c53ce..2a32c1e1 100644
+--- a/src/api/src/modules/auth/auth.controller.ts
++++ b/src/api/src/modules/auth/auth.controller.ts
+@@ -1,9 +1,11 @@
+-import { Controller, Post, Body, Res, Get, Req } from '@nestjs/common';
+-import { ApiTags, ApiOperation } from '@nestjs/swagger';
++import { Controller, Post, Body, Res, Get, Req, UseGuards, Delete, Param } from '@nestjs/common';
++import { ApiTags, ApiOperation, ApiBearerAuth, ApiHeader } from '@nestjs/swagger';
+ import { Throttle } from '@nestjs/throttler';
+ import type { Request, Response } from 'express';
+ import { AuthService, deriveCsrfToken } from './auth.service';
+-import { RegisterDto, LoginDto, EnterpriseTokenDto } from './dto';
++import { RegisterDto, LoginDto, EnterpriseTokenDto, CreateApiKeyDto } from './dto';
++import { AuthGuard } from '../../../guards/auth.guard';
++import { CurrentUser } from '../../common/decorators/current-user.decorator';
+ 
+ const ACCESS_TOKEN_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes
+ const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+@@ -178,6 +180,47 @@ export class AuthController {
+     return { csrfToken };
+   }
+ 
++  @Post('api-keys')
++  @ApiBearerAuth()
++  @ApiHeader({
++    name: 'x-api-key',
++    required: false,
++    description: 'Existing API key may authenticate this endpoint, but browser sessions or bearer JWTs are preferred for issuance.',
++  })
++  @ApiOperation({ summary: 'Issue a user API key for protected API endpoints' })
++  @UseGuards(AuthGuard)
++  @Throttle({ default: { ttl: 60000, limit: 5 } })
++  async createApiKey(
++    @CurrentUser() user: { id: string },
++    @Body() dto: CreateApiKeyDto,
++  ) {
++    return this.authService.issueApiKey(user.id, {
++      name: dto.name,
++      expiresInDays: dto.expiresInDays,
++    });
++  }
++
++  @Get('api-keys')
++  @ApiBearerAuth()
++  @ApiOperation({ summary: 'List API key metadata for the authenticated user' })
++  @UseGuards(AuthGuard)
++  @Throttle({ default: { ttl: 60000, limit: 30 } })
++  async listApiKeys(@CurrentUser() user: { id: string }) {
++    return this.authService.listApiKeys(user.id);
++  }
++
++  @Delete('api-keys/:keyId')
++  @ApiBearerAuth()
++  @ApiOperation({ summary: 'Revoke an API key for the authenticated user' })
++  @UseGuards(AuthGuard)
++  @Throttle({ default: { ttl: 60000, limit: 10 } })
++  async revokeApiKey(
++    @CurrentUser() user: { id: string },
++    @Param('keyId') keyId: string,
++  ) {
++    return this.authService.revokeApiKey(user.id, keyId);
++  }
++
+   private getCookieValue(req: Request, name: string): string | null {
+     const rawCookie = req.headers.cookie;
+     if (!rawCookie) return null;
+diff --git a/src/api/src/modules/auth/auth.service.spec.ts b/src/api/src/modules/auth/auth.service.spec.ts
+index c1838e68..a43c672e 100644
+--- a/src/api/src/modules/auth/auth.service.spec.ts
++++ b/src/api/src/modules/auth/auth.service.spec.ts
+@@ -1,4 +1,4 @@
+-import { AuthService, DUMMY_BCRYPT_HASH } from './auth.service';
++import { AuthService, DUMMY_BCRYPT_HASH, hashApiKeySecret } from './auth.service';
+ import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
+ import { Pool } from 'pg';
+ import * as bcrypt from 'bcryptjs';
+@@ -402,4 +402,135 @@ describe('AuthService', () => {
+       );
+     });
+   });
++
++  describe('API keys', () => {
++    it('should issue an API key and store only its hash', async () => {
++      const keyId = 'h'.repeat(24);
++      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
++      const createdAt = new Date();
++      (mockPool.query as jest.Mock).mockResolvedValueOnce({
++        rows: [{
++          id: 'api-key-id',
++          key_id: keyId,
++          name: 'automation',
++          prefix: `styx_live_${keyId}`,
++          expires_at: expiresAt,
++          created_at: createdAt,
++        }],
++      });
++
++      const result = await service.issueApiKey('user-123', {
++        name: ' automation ',
++        expiresInDays: 30,
++      });
++
++      expect(result.id).toBe('api-key-id');
++      expect(result.name).toBe('automation');
++      expect(result.apiKey).toMatch(/^styx_live_[a-f0-9]{24}_[A-Za-z0-9_-]+$/);
++
++      const insertCall = (mockPool.query as jest.Mock).mock.calls[0];
++      expect(insertCall[0]).toContain('INSERT INTO api_keys');
++      expect(insertCall[1][0]).toBe('user-123');
++      expect(insertCall[1][2]).toMatch(/^[a-f0-9]{64}$/);
++      expect(result.apiKey).not.toContain(insertCall[1][2]);
++    });
++
++    it('should reject API key issuance when the user is not active', async () => {
++      (mockPool.query as jest.Mock).mockResolvedValueOnce({ rows: [] });
++
++      await expect(
++        service.issueApiKey('inactive-user', { name: 'automation' }),
++      ).rejects.toThrow('User account is not active');
++    });
++
++    it('should verify an active API key and update last_used_at', async () => {
++      const keyId = 'd'.repeat(24);
++      const secret = 'service-secret_WITH-underscore'; // allow-secret
++      const apiKey = `styx_live_${keyId}_${secret}`; // allow-secret
++
++      (mockPool.query as jest.Mock)
++        .mockResolvedValueOnce({
++          rows: [{
++            id: 'api-key-db-id',
++            user_id: 'user-123',
++            key_hash: hashApiKeySecret(secret),
++            expires_at: new Date(Date.now() + 60_000).toISOString(),
++            revoked_at: null,
++            email: 'test@styx.protocol',
++            role: 'USER',
++            status: 'ACTIVE',
++          }],
++        })
++        .mockResolvedValueOnce(undefined);
++
++      const result = await service.verifyApiKey(apiKey);
++
++      expect(result.sub).toBe('user-123');
++      expect(result.email).toBe('test@styx.protocol');
++      expect(result.apiKeyId).toBe(keyId);
++      expect(mockPool.query).toHaveBeenLastCalledWith(
++        expect.stringContaining('UPDATE api_keys SET last_used_at = NOW()'),
++        ['api-key-db-id'],
++      );
++    });
++
++    it('should reject an API key with the wrong secret', async () => {
++      const keyId = 'e'.repeat(24);
++      (mockPool.query as jest.Mock).mockResolvedValueOnce({
++        rows: [{
++          id: 'api-key-db-id',
++          user_id: 'user-123',
++          key_hash: hashApiKeySecret('correct-secret'),
++          expires_at: new Date(Date.now() + 60_000).toISOString(),
++          revoked_at: null,
++          email: 'test@styx.protocol',
++          role: 'USER',
++          status: 'ACTIVE',
++        }],
++      });
++
++      await expect(
++        service.verifyApiKey(`styx_live_${keyId}_wrong-secret`), // allow-secret
++      ).rejects.toThrow('Invalid API key');
++
++      expect(mockPool.query).toHaveBeenCalledTimes(1);
++    });
++
++    it('should list API key metadata without raw secrets', async () => {
++      (mockPool.query as jest.Mock).mockResolvedValueOnce({
++        rows: [{
++          id: 'api-key-id',
++          key_id: 'f'.repeat(24),
++          name: 'automation',
++          prefix: `styx_live_${'f'.repeat(24)}`,
++          created_at: new Date(),
++          expires_at: new Date(Date.now() + 60_000),
++          last_used_at: null,
++          revoked_at: null,
++        }],
++      });
++
++      const result = await service.listApiKeys('user-123');
++
++      expect(result).toHaveLength(1);
++      expect(result[0].status).toBe('active');
++      expect(result[0]).not.toHaveProperty('apiKey');
++      expect(result[0]).not.toHaveProperty('keyHash');
++    });
++
++    it('should revoke an API key by user and key id', async () => {
++      (mockPool.query as jest.Mock).mockResolvedValueOnce({
++        rows: [{ id: 'api-key-id' }],
++      });
++
++      await expect(service.revokeApiKey('user-123', 'g'.repeat(24))).resolves.toEqual({
++        revoked: true,
++      });
++
++      expect(mockPool.query).toHaveBeenCalledWith(
++        expect.stringContaining('UPDATE api_keys'),
++        ['user-123', 'g'.repeat(24)],
++      );
++    });
++  });
+ });
+diff --git a/src/api/src/modules/auth/auth.service.ts b/src/api/src/modules/auth/auth.service.ts
+index d84abd5f..df4108c4 100644
+--- a/src/api/src/modules/auth/auth.service.ts
++++ b/src/api/src/modules/auth/auth.service.ts
+@@ -2,7 +2,7 @@ import { Injectable, ConflictException, UnauthorizedException, BadRequestExcepti
+ import { Pool, PoolClient } from 'pg';
+ import * as bcrypt from 'bcryptjs';
+ import * as jwt from 'jsonwebtoken';
+-import { randomBytes, createHash, createHmac } from 'crypto';
++import { randomBytes, createHash, createHmac, timingSafeEqual } from 'crypto';
+ 
+ const BCRYPT_ROUNDS = 10;
+ const ACCESS_TOKEN_EXPIRY = '15m';
+@@ -10,6 +10,9 @@ const TOKEN_EXPIRY = ACCESS_TOKEN_EXPIRY; // alias for backward compat
+ const REFRESH_TOKEN_EXPIRY_DAYS = 7;
+ const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+ const LOCKOUT_DURATION_MINUTES = 15;
++const DEFAULT_API_KEY_EXPIRY_DAYS = 90;
++const MAX_API_KEY_EXPIRY_DAYS = 365;
++const API_KEY_PREFIX = 'styx_live';
+ 
+ export function getJwtSecret(): string {
+   const secret = process.env.JWT_SECRET; // allow-secret
+@@ -19,6 +22,14 @@ export function getJwtSecret(): string {
+   return secret;
+ }
+ 
++export function getApiKeyPepper(): string {
++  const pepper = process.env.STYX_API_KEY_PEPPER; // allow-secret
++  if (!pepper) {
++    throw new Error('STYX_API_KEY_PEPPER must be set');
++  }
++  return pepper;
++}
++
+ // Constant-time placeholder hash compared against when no user exists, so that
+ // login latency does not reveal whether an email is registered (user enumeration).
+ // Exported so a unit test can assert it is a valid bcrypt hash that no password
+@@ -45,6 +56,58 @@ export interface AuthPayload {
+   exp?: number;
+ }
+ 
++export interface ApiKeyAuthPayload {
++  sub: string;
++  email: string;
++  role: string;
++  apiKeyId: string;
++  apiKeyDbId: string;
++}
++
++export interface IssuedApiKey {
++  id: string;
++  keyId: string;
++  name: string;
++  prefix: string;
++  apiKey: string;
++  expiresAt: Date | null;
++  createdAt: Date;
++}
++
++export interface ApiKeySummary {
++  id: string;
++  keyId: string;
++  name: string;
++  prefix: string;
++  createdAt: Date;
++  expiresAt: Date | null;
++  lastUsedAt: Date | null;
++  revokedAt: Date | null;
++  status: 'active' | 'expired' | 'revoked';
++}
++
++export function parseApiKey(apiKey: string): { keyId: string; secret: string } | null { // allow-secret
++  const match = /^styx_live_([a-f0-9]{24})_([A-Za-z0-9_-]+)$/.exec(apiKey);
++  if (!match) {
++    return null;
++  }
++
++  return { keyId: match[1], secret: match[2] }; // allow-secret
++}
++
++export function hashApiKeySecret(secret: string): string { // allow-secret
++  return createHmac('sha256', getApiKeyPepper()).update(secret).digest('hex');
++}
++
++function compareHashes(left: string, right: string): boolean {
++  const leftBuf = Buffer.from(left, 'hex');
++  const rightBuf = Buffer.from(right, 'hex');
++  if (leftBuf.length !== rightBuf.length) {
++    return false;
++  }
++  return timingSafeEqual(leftBuf, rightBuf);
++}
++
+ @Injectable()
+ export class AuthService {
+   constructor(private readonly pool: Pool) {}
+@@ -332,4 +395,150 @@ export class AuthService {
+       [userId],
+     );
+   }
++
++  async issueApiKey(
++    userId: string,
++    opts: { name?: string; expiresInDays?: number } = {},
++  ): Promise<IssuedApiKey> {
++    const expiresInDays = opts.expiresInDays ?? DEFAULT_API_KEY_EXPIRY_DAYS;
++    if (
++      !Number.isInteger(expiresInDays) ||
++      expiresInDays < 1 ||
++      expiresInDays > MAX_API_KEY_EXPIRY_DAYS
++    ) {
++      throw new BadRequestException(
++        `expiresInDays must be between 1 and ${MAX_API_KEY_EXPIRY_DAYS}`,
++      );
++    }
++
++    const keyId = randomBytes(12).toString('hex');
++    const secret = randomBytes(32).toString('base64url'); // allow-secret
++    const apiKey = `${API_KEY_PREFIX}_${keyId}_${secret}`; // allow-secret
++    const keyHash = hashApiKeySecret(secret); // allow-secret
++    const name = opts.name?.trim() || 'API key';
++    const prefix = `${API_KEY_PREFIX}_${keyId}`;
++    const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
++
++    const result = await this.pool.query(
++      `INSERT INTO api_keys (user_id, key_id, key_hash, name, prefix, expires_at)
++       SELECT id, $2, $3, $4, $5, $6
++       FROM users
++       WHERE id = $1 AND UPPER(status) = 'ACTIVE'
++       RETURNING id, key_id, name, prefix, expires_at, created_at`,
++      [userId, keyId, keyHash, name, prefix, expiresAt],
++    );
++
++    if (result.rows.length === 0) {
++      throw new UnauthorizedException('User account is not active');
++    }
++
++    const row = result.rows[0];
++    return {
++      id: row.id,
++      keyId: row.key_id,
++      name: row.name,
++      prefix: row.prefix,
++      apiKey,
++      expiresAt: row.expires_at,
++      createdAt: row.created_at,
++    };
++  }
++
++  async listApiKeys(userId: string): Promise<ApiKeySummary[]> {
++    const result = await this.pool.query(
++      `SELECT id, key_id, name, prefix, created_at, expires_at, last_used_at, revoked_at
++       FROM api_keys
++       WHERE user_id = $1
++       ORDER BY created_at DESC`,
++      [userId],
++    );
++
++    return result.rows.map((row) => {
++      const revoked = !!row.revoked_at;
++      const expired = !!row.expires_at && new Date(row.expires_at) < new Date();
++      const status: ApiKeySummary['status'] = revoked
++        ? 'revoked'
++        : expired
++          ? 'expired'
++          : 'active';
++      return {
++        id: row.id,
++        keyId: row.key_id,
++        name: row.name,
++        prefix: row.prefix,
++        createdAt: row.created_at,
++        expiresAt: row.expires_at,
++        lastUsedAt: row.last_used_at,
++        revokedAt: row.revoked_at,
++        status,
++      };
++    });
++  }
++
++  async revokeApiKey(userId: string, keyId: string): Promise<{ revoked: boolean }> {
++    const result = await this.pool.query(
++      `UPDATE api_keys
++       SET revoked_at = COALESCE(revoked_at, NOW())
++       WHERE user_id = $1 AND key_id = $2
++       RETURNING id`,
++      [userId, keyId],
++    );
++
++    if (result.rows.length === 0) {
++      throw new UnauthorizedException('API key not found');
++    }
++
++    return { revoked: true };
++  }
++
++  async verifyApiKey(apiKey: string): Promise<ApiKeyAuthPayload> { // allow-secret
++    const parsed = parseApiKey(apiKey);
++    if (!parsed) {
++      throw new UnauthorizedException('Invalid API key');
++    }
++
++    const keyHash = hashApiKeySecret(parsed.secret); // allow-secret
++    const result = await this.pool.query(
++      `SELECT ak.id, ak.user_id, ak.key_hash, ak.expires_at, ak.revoked_at,
++              u.email, u.role, u.status
++       FROM api_keys ak
++       JOIN users u ON u.id = ak.user_id
++       WHERE ak.key_id = $1`,
++      [parsed.keyId],
++    );
++
++    if (result.rows.length === 0) {
++      throw new UnauthorizedException('Invalid API key');
++    }
++
++    const row = result.rows[0];
++    if (!compareHashes(row.key_hash, keyHash)) {
++      throw new UnauthorizedException('Invalid API key');
++    }
++
++    if (row.revoked_at) {
++      throw new UnauthorizedException('API key has been revoked');
++    }
++
++    if (row.expires_at && new Date(row.expires_at) < new Date()) {
++      throw new UnauthorizedException('API key has expired');
++    }
++
++    if (String(row.status || '').toUpperCase() !== 'ACTIVE') {
++      throw new UnauthorizedException('User account is not active');
++    }
++
++    await this.pool.query(
++      `UPDATE api_keys SET last_used_at = NOW() WHERE id = $1`,
++      [row.id],
++    );
++
++    return {
++      sub: row.user_id,
++      email: row.email,
++      role: row.role || 'USER',
++      apiKeyId: parsed.keyId,
++      apiKeyDbId: row.id,
++    };
++  }
+ }
+diff --git a/src/api/src/modules/auth/dto.ts b/src/api/src/modules/auth/dto.ts
+index 22e04570..22bdc118 100644
+--- a/src/api/src/modules/auth/dto.ts
++++ b/src/api/src/modules/auth/dto.ts
+@@ -1,4 +1,16 @@
+-import { IsEmail, IsString, MinLength, Matches, IsBoolean, IsDateString, IsOptional } from 'class-validator';
++import {
++  IsEmail,
++  IsString,
++  MinLength,
++  Matches,
++  IsBoolean,
++  IsDateString,
++  IsOptional,
++  IsInt,
++  Min,
++  Max,
++  MaxLength,
++} from 'class-validator';
+ import { ApiProperty } from '@nestjs/swagger';
+ 
+ export class RegisterDto {
+@@ -48,3 +60,24 @@ export class EnterpriseTokenDto {
+   @IsString()
+   enterpriseToken!: string; // allow-secret
+ }
++
++export class CreateApiKeyDto {
++  @ApiProperty({ description: 'Human-readable API key name', required: false, maxLength: 80 })
++  @IsOptional()
++  @IsString()
++  @MaxLength(80)
++  name?: string;
++
++  @ApiProperty({
++    description: 'API key lifetime in days',
++    required: false,
++    minimum: 1,
++    maximum: 365,
++    default: 90,
++  })
++  @IsOptional()
++  @IsInt()
++  @Min(1)
++  @Max(365)
++  expiresInDays?: number;
++}

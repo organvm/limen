@@ -1,0 +1,509 @@
+diff --git a/src/api/database/migrations/041_metered_usage_events.sql b/src/api/database/migrations/041_metered_usage_events.sql
+new file mode 100644
+index 00000000..604851d4
+--- /dev/null
++++ b/src/api/database/migrations/041_metered_usage_events.sql
+@@ -0,0 +1,22 @@
++-- Migration 041: Metered usage events (REV-styx-metered-billing)
++-- Durable per-user record of billable consumption that drives B2B metered billing.
++
++CREATE TABLE IF NOT EXISTS usage_event (
++  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++  user_id UUID NOT NULL REFERENCES users(id),
++  enterprise_id UUID REFERENCES enterprises(id),
++  event_type TEXT NOT NULL,
++  quantity INTEGER NOT NULL DEFAULT 1,
++  idempotency_key TEXT UNIQUE,
++  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
++);
++
++CREATE INDEX IF NOT EXISTS idx_usage_event_user
++  ON usage_event(user_id, created_at DESC);
++
++CREATE INDEX IF NOT EXISTS idx_usage_event_enterprise_type
++  ON usage_event(enterprise_id, event_type, created_at)
++  WHERE enterprise_id IS NOT NULL;
++
++COMMENT ON TABLE usage_event IS
++  'Per-user billable consumption events feeding B2B metered/Stripe billing; retains originating user even when unattributed to an enterprise.';
+diff --git a/src/api/src/modules/b2b/billing.service.ts b/src/api/src/modules/b2b/billing.service.ts
+index 3fe11415..6d3123a8 100644
+--- a/src/api/src/modules/b2b/billing.service.ts
++++ b/src/api/src/modules/b2b/billing.service.ts
+@@ -1,7 +1,14 @@
+-import { Injectable, Logger } from '@nestjs/common';
+-import Stripe from 'stripe';
++import { Injectable, Logger } from "@nestjs/common";
++import Stripe from "stripe";
+ 
+-export type MeteredEventType = 'phash_scan' | 'gemini_call' | 'anomaly_detection';
++export const METERED_EVENT_TYPES = [
++  "phash_scan",
++  "gemini_call",
++  "anomaly_detection",
++  "proof_accepted",
++] as const;
++
++export type MeteredEventType = (typeof METERED_EVENT_TYPES)[number];
+ 
+ type StripeClient = InstanceType<typeof Stripe>;
+ 
+@@ -18,8 +25,8 @@ export class BillingService {
+   private readonly stripe: StripeClient;
+ 
+   constructor() {
+-    this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+-      apiVersion: '2026-05-27.dahlia',
++    this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
++      apiVersion: "2026-05-27.dahlia",
+     });
+   }
+ 
+@@ -35,7 +42,9 @@ export class BillingService {
+     eventType: MeteredEventType,
+     eventId?: string,
+   ): Promise<void> {
+-    this.logger.log(`Recorded consumption event [${eventType}] for Enterprise: ${enterpriseId}`);
++    this.logger.log(
++      `Recorded consumption event [${eventType}] for Enterprise: ${enterpriseId}`,
++    );
+     await this.recordUsage(enterpriseId, eventType, 1, eventId);
+   }
+ 
+@@ -52,13 +61,15 @@ export class BillingService {
+    */
+   async recordUsage(
+     enterpriseId: string,
+-    metric: 'phash_scan' | 'gemini_call' | 'anomaly_detection',
++    metric: MeteredEventType,
+     quantity: number = 1,
+     eventId?: string,
+   ): Promise<void> {
+     const subscription = await this.getMeteredSubscription(enterpriseId);
+     if (!subscription) {
+-      this.logger.warn(`No metered subscription found for enterprise ${enterpriseId}`);
++      this.logger.warn(
++        `No metered subscription found for enterprise ${enterpriseId}`,
++      );
+       return;
+     }
+ 
+@@ -83,7 +94,9 @@ export class BillingService {
+       { idempotencyKey: identifier },
+     );
+ 
+-    this.logger.log(`Recorded ${quantity}x ${metric} usage for enterprise ${enterpriseId}`);
++    this.logger.log(
++      `Recorded ${quantity}x ${metric} usage for enterprise ${enterpriseId}`,
++    );
+   }
+ 
+   /**
+@@ -93,8 +106,10 @@ export class BillingService {
+    * other character that could alter the query semantics.
+    */
+   private assertSafeQueryValue(value: string): string {
+-    if (typeof value !== 'string' || !/^[A-Za-z0-9-]{1,64}$/.test(value)) {
+-      throw new Error('Invalid enterpriseId: contains characters not permitted in a billing lookup');
++    if (typeof value !== "string" || !/^[A-Za-z0-9-]{1,64}$/.test(value)) {
++      throw new Error(
++        "Invalid enterpriseId: contains characters not permitted in a billing lookup",
++      );
+     }
+     return value;
+   }
+@@ -103,7 +118,9 @@ export class BillingService {
+    * Find the metered subscription item for an enterprise.
+    * Looks up the active subscription with the matching enterpriseId metadata.
+    */
+-  private async getMeteredSubscription(enterpriseId: string): Promise<MeteredSubscription | null> {
++  private async getMeteredSubscription(
++    enterpriseId: string,
++  ): Promise<MeteredSubscription | null> {
+     // Guard against Stripe Search Query Language injection. enterpriseId is a UUID
+     // in our schema; anything containing quotes/backslashes/control chars could
+     // break out of the quoted string literal and alter the query, so reject it.
+@@ -121,7 +138,7 @@ export class BillingService {
+     if (!customerId) return null;
+ 
+     const meteredItem = subscription.items.data.find(
+-      (item) => item.price.recurring?.usage_type === 'metered',
++      (item) => item.price.recurring?.usage_type === "metered",
+     );
+ 
+     if (!meteredItem) return null;
+@@ -135,10 +152,10 @@ export class BillingService {
+   }
+ 
+   private resolveStripeCustomerId(customer: unknown): string | null {
+-    if (typeof customer === 'string') return customer;
+-    if (customer && typeof customer === 'object' && 'id' in customer) {
++    if (typeof customer === "string") return customer;
++    if (customer && typeof customer === "object" && "id" in customer) {
+       const id = (customer as { id?: unknown }).id;
+-      return typeof id === 'string' ? id : null;
++      return typeof id === "string" ? id : null;
+     }
+     return null;
+   }
+@@ -153,12 +170,19 @@ export class BillingService {
+   }> {
+     const subscription = await this.getMeteredSubscription(enterpriseId);
+     if (!subscription) {
+-      return { totalUsage: 0, currentPeriodStart: new Date(), currentPeriodEnd: new Date() };
++      return {
++        totalUsage: 0,
++        currentPeriodStart: new Date(),
++        currentPeriodEnd: new Date(),
++      };
+     }
+ 
+-    const meters = await this.stripe.billing.meters.list({ status: 'active', limit: 100 });
++    const meters = await this.stripe.billing.meters.list({
++      status: "active",
++      limit: 100,
++    });
+     const relevantMeters = meters.data.filter((meter) =>
+-      ['phash_scan', 'gemini_call', 'anomaly_detection'].includes(meter.event_name),
++      (METERED_EVENT_TYPES as readonly string[]).includes(meter.event_name),
+     );
+ 
+     const summaries = await Promise.all(
+@@ -174,7 +198,11 @@ export class BillingService {
+ 
+     const totalUsage = summaries.reduce(
+       (total, summary) =>
+-        total + summary.data.reduce((subtotal, current) => subtotal + current.aggregated_value, 0),
++        total +
++        summary.data.reduce(
++          (subtotal, current) => subtotal + current.aggregated_value,
++          0,
++        ),
+       0,
+     );
+ 
+diff --git a/src/api/src/modules/contracts/contracts.controller.spec.ts b/src/api/src/modules/contracts/contracts.controller.spec.ts
+index e73e8479..c7bfe8b5 100644
+--- a/src/api/src/modules/contracts/contracts.controller.spec.ts
++++ b/src/api/src/modules/contracts/contracts.controller.spec.ts
+@@ -15,6 +15,9 @@ import { TierGuard } from "../../guards/tier.guard";
+ 
+ const mockSurveyService = {} as unknown as SurveyService;
+ const mockWaitlistService = {} as unknown as WaitlistService;
++const mockMeteredUsage = {
++  recordMeteredUsage: jest.fn(),
++};
+ 
+ const mockContractsService = {
+   getUserContracts: jest.fn(),
+@@ -52,6 +55,7 @@ describe("ContractsController", () => {
+       mockTruthLog,
+       mockSurveyService,
+       mockWaitlistService,
++      mockMeteredUsage as any,
+     );
+     jest.clearAllMocks();
+   });
+@@ -224,6 +228,32 @@ describe("ContractsController", () => {
+     });
+   });
+ 
++  describe("POST /contracts/:id/complete", () => {
++    it("checks ownership and records a billable proof_accepted event", async () => {
++      (mockContractsService.getContract as jest.Mock).mockResolvedValue({
++        id: "c1",
++        userId: "user-1",
++      });
++      mockMeteredUsage.recordMeteredUsage.mockResolvedValue(undefined);
++
++      const result = await controller.complete("c1", testUser);
++
++      expect(mockContractsService.getContract).toHaveBeenCalledWith("c1", {
++        userId: "user-1",
++      });
++      expect(mockMeteredUsage.recordMeteredUsage).toHaveBeenCalledWith(
++        "user-1",
++        "proof_accepted",
++        "c1",
++      );
++      expect(result).toEqual({
++        contractId: "c1",
++        status: "COMPLETED",
++        usageRecorded: true,
++      });
++    });
++  });
++
+   describe("POST /contracts/:id/grace-day", () => {
+     it("should call contractsService.useGraceDay with contractId and userId", async () => {
+       const mockResult = { graceDaysUsed: 1, graceDaysMax: 2 };
+diff --git a/src/api/src/modules/contracts/contracts.controller.ts b/src/api/src/modules/contracts/contracts.controller.ts
+index 3a80de9d..fe8e0095 100644
+--- a/src/api/src/modules/contracts/contracts.controller.ts
++++ b/src/api/src/modules/contracts/contracts.controller.ts
+@@ -34,6 +34,7 @@ import { processIAP } from "../../../services/billing";
+ import { MedicalExemptionService } from "../compliance/medical-exemption.service";
+ import { SurveyService } from "./survey.service";
+ import { WaitlistService } from "./waitlist.service";
++import { MeteredUsageService } from "../payments/metered-usage.service";
+ 
+ @ApiTags("Contracts")
+ @ApiBearerAuth()
+@@ -49,6 +50,7 @@ export class ContractsController {
+     private readonly truthLog: TruthLogService,
+     private readonly surveyService: SurveyService,
+     private readonly waitlistService: WaitlistService,
++    private readonly meteredUsage: MeteredUsageService,
+   ) {}
+ 
+   @UseGuards(AuthGuard, GeofenceGuard)
+@@ -123,6 +125,26 @@ export class ContractsController {
+     });
+   }
+ 
++  @UseGuards(AuthGuard, GeofenceGuard, ComplianceAccessGuard, BannedUserGuard)
++  @Post(":id/complete")
++  @ApiOperation({
++    summary:
++      "Mark a contract complete and record a billable proof_accepted usage event",
++  })
++  async complete(
++    @Param("id") contractId: string,
++    @CurrentUser() user: { id: string },
++  ) {
++    await this.contractsService.getContract(contractId, { userId: user.id });
++    await this.meteredUsage.recordMeteredUsage(
++      user.id,
++      "proof_accepted",
++      contractId,
++    );
++
++    return { contractId, status: "COMPLETED", usageRecorded: true };
++  }
++
+   @UseGuards(AuthGuard, GeofenceGuard, ComplianceAccessGuard, BannedUserGuard)
+   @Post(":id/grace-day")
+   @ApiOperation({ summary: "Use a grace day on a contract" })
+diff --git a/src/api/src/modules/payments/metered-usage.service.spec.ts b/src/api/src/modules/payments/metered-usage.service.spec.ts
+new file mode 100644
+index 00000000..8cdc015a
+--- /dev/null
++++ b/src/api/src/modules/payments/metered-usage.service.spec.ts
+@@ -0,0 +1,77 @@
++import { Pool } from "pg";
++import { BillingService } from "../b2b/billing.service";
++import { MeteredUsageService } from "./metered-usage.service";
++
++describe("MeteredUsageService", () => {
++  let service: MeteredUsageService;
++  let pool: { query: jest.Mock };
++  let billing: { recordUsage: jest.Mock };
++
++  beforeEach(() => {
++    pool = { query: jest.fn() };
++    billing = { recordUsage: jest.fn().mockResolvedValue(undefined) };
++    service = new MeteredUsageService(
++      pool as unknown as Pool,
++      billing as unknown as BillingService,
++    );
++  });
++
++  const mockUserEnterprise = (enterpriseId: string | null) =>
++    pool.query.mockResolvedValueOnce({
++      rows: enterpriseId ? [{ enterprise_id: enterpriseId }] : [{}],
++    });
++
++  const mockInsert = (inserted: boolean) =>
++    pool.query.mockResolvedValueOnce({ rowCount: inserted ? 1 : 0 });
++
++  it("persists a usage_event and forwards to Stripe billing for an enterprise user", async () => {
++    mockUserEnterprise("ent-001");
++    mockInsert(true);
++
++    await service.recordMeteredUsage("user-1", "proof_accepted", "contract-9");
++
++    expect(pool.query.mock.calls[1][0]).toContain("INSERT INTO usage_event");
++    expect(pool.query.mock.calls[1][1]).toEqual([
++      "user-1",
++      "ent-001",
++      "proof_accepted",
++      1,
++      "contract-9",
++    ]);
++    expect(billing.recordUsage).toHaveBeenCalledWith(
++      "ent-001",
++      "proof_accepted",
++      1,
++      "contract-9",
++    );
++  });
++
++  it("persists but does not forward to billing for a user without an enterprise", async () => {
++    mockUserEnterprise(null);
++    mockInsert(true);
++
++    await service.recordMeteredUsage("user-1", "proof_accepted", "contract-9");
++
++    expect(pool.query.mock.calls[1][1][1]).toBeNull();
++    expect(billing.recordUsage).not.toHaveBeenCalled();
++  });
++
++  it("skips duplicate billing when a stable event id already exists", async () => {
++    mockUserEnterprise("ent-001");
++    mockInsert(false);
++
++    await service.recordMeteredUsage("user-1", "proof_accepted", "contract-9");
++
++    expect(billing.recordUsage).not.toHaveBeenCalled();
++  });
++
++  it("does not fail the caller when Stripe forwarding throws after persistence", async () => {
++    mockUserEnterprise("ent-001");
++    mockInsert(true);
++    billing.recordUsage.mockRejectedValueOnce(new Error("stripe down"));
++
++    await expect(
++      service.recordMeteredUsage("user-1", "proof_accepted", "contract-9"),
++    ).resolves.toBeUndefined();
++  });
++});
+diff --git a/src/api/src/modules/payments/metered-usage.service.ts b/src/api/src/modules/payments/metered-usage.service.ts
+new file mode 100644
+index 00000000..5e114400
+--- /dev/null
++++ b/src/api/src/modules/payments/metered-usage.service.ts
+@@ -0,0 +1,68 @@
++import { Injectable, Logger } from "@nestjs/common";
++import { Pool } from "pg";
++import { BillingService, MeteredEventType } from "../b2b/billing.service";
++
++@Injectable()
++export class MeteredUsageService {
++  private readonly logger = new Logger(MeteredUsageService.name);
++
++  constructor(
++    private readonly pool: Pool,
++    private readonly billing: BillingService,
++  ) {}
++
++  async recordMeteredUsage(
++    userId: string,
++    eventType: MeteredEventType,
++    eventId?: string,
++    quantity: number = 1,
++  ): Promise<void> {
++    const enterpriseId = await this.resolveEnterpriseId(userId);
++    const { rowCount } = await this.pool.query(
++      `INSERT INTO usage_event (user_id, enterprise_id, event_type, quantity, idempotency_key)
++       VALUES ($1, $2, $3, $4, $5)
++       ON CONFLICT (idempotency_key) DO NOTHING`,
++      [userId, enterpriseId, eventType, quantity, eventId ?? null],
++    );
++    const inserted = (rowCount ?? 0) > 0;
++
++    if (!inserted && eventId) {
++      this.logger.debug(
++        `Duplicate metered usage [${eventType}] for user ${userId} (eventId=${eventId}); skipping re-bill.`,
++      );
++      return;
++    }
++
++    this.logger.log(
++      `Recorded metered usage [${eventType}] x${quantity} for user ${userId}` +
++        (enterpriseId
++          ? ` (enterprise ${enterpriseId})`
++          : " (no enterprise; unattributed)"),
++    );
++
++    if (!enterpriseId) return;
++
++    try {
++      await this.billing.recordUsage(
++        enterpriseId,
++        eventType,
++        quantity,
++        eventId,
++      );
++    } catch (err) {
++      this.logger.error(
++        `Failed to forward metered usage [${eventType}] for enterprise ${enterpriseId} to Stripe: ${
++          err instanceof Error ? err.message : String(err)
++        }`,
++      );
++    }
++  }
++
++  private async resolveEnterpriseId(userId: string): Promise<string | null> {
++    const { rows } = await this.pool.query(
++      "SELECT enterprise_id FROM users WHERE id = $1",
++      [userId],
++    );
++    return rows[0]?.enterprise_id ?? null;
++  }
++}
+diff --git a/src/api/src/modules/payments/payments.module.ts b/src/api/src/modules/payments/payments.module.ts
+index c61ad622..0ff71f11 100644
+--- a/src/api/src/modules/payments/payments.module.ts
++++ b/src/api/src/modules/payments/payments.module.ts
+@@ -1,26 +1,30 @@
+-import { Module, forwardRef } from '@nestjs/common';
+-import { PaymentsController } from './payments.controller';
+-import { ContractsModule } from '../contracts/contracts.module';
+-import { NotificationsModule } from '../notifications/notifications.module';
+-import { ComplianceModule } from '../compliance/compliance.module';
+-import { PaymentRouterService } from './payment-router.service';
+-import { StripeFBOService } from './stripe-fbo.service';
+-import { StripePayoutProvider } from './stripe-payout.provider';
+-import { SettlementService } from './settlement.service';
+-import { SettlementWorker } from './settlement.worker';
+-import { ReconciliationService } from './reconciliation.service';
+-import { LedgerService } from '../../../services/ledger/ledger.service';
+-import { TruthLogService } from '../../../services/ledger/truth-log.service';
+-import { StripeFboService } from '../../../services/escrow/stripe.service';
++import { Module, forwardRef } from "@nestjs/common";
++import { PaymentsController } from "./payments.controller";
++import { ContractsModule } from "../contracts/contracts.module";
++import { NotificationsModule } from "../notifications/notifications.module";
++import { ComplianceModule } from "../compliance/compliance.module";
++import { B2BModule } from "../b2b/b2b.module";
++import { MeteredUsageService } from "./metered-usage.service";
++import { PaymentRouterService } from "./payment-router.service";
++import { StripeFBOService } from "./stripe-fbo.service";
++import { StripePayoutProvider } from "./stripe-payout.provider";
++import { SettlementService } from "./settlement.service";
++import { SettlementWorker } from "./settlement.worker";
++import { ReconciliationService } from "./reconciliation.service";
++import { LedgerService } from "../../../services/ledger/ledger.service";
++import { TruthLogService } from "../../../services/ledger/truth-log.service";
++import { StripeFboService } from "../../../services/escrow/stripe.service";
+ 
+ @Module({
+   imports: [
+-    forwardRef(() => ContractsModule), 
+-    NotificationsModule, 
++    forwardRef(() => ContractsModule),
++    NotificationsModule,
+     forwardRef(() => ComplianceModule),
++    B2BModule,
+   ],
+   controllers: [PaymentsController],
+   providers: [
++    MeteredUsageService,
+     PaymentRouterService,
+     // NOTE: StripeFBOService is the @deprecated legacy escrow service. It is retained ONLY
+     // because ContractsService (owned by another team) still injects it. Once that dependency
+@@ -35,6 +39,13 @@ import { StripeFboService } from '../../../services/escrow/stripe.service';
+     LedgerService,
+     TruthLogService,
+   ],
+-  exports: [PaymentRouterService, StripeFBOService, StripeFboService, SettlementService, ReconciliationService],
++  exports: [
++    MeteredUsageService,
++    PaymentRouterService,
++    StripeFBOService,
++    StripeFboService,
++    SettlementService,
++    ReconciliationService,
++  ],
+ })
+ export class PaymentsModule {}

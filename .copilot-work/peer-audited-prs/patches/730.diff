@@ -1,0 +1,73 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 3b01fdcb..e4ce55e3 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -45,38 +45,17 @@ jobs:
+           restore-keys: |
+             turbo-
+ 
+-      - name: Security Audit (advisory, non-blocking)
+-        run: npm audit --audit-level=high || echo "::warning::npm audit reported high-severity advisories; review but not blocking the merge."
++      - name: Security Audit
++        run: npm audit --audit-level=high
+ 
+-      - name: Compute changed workspaces
+-        id: changed
+-        run: |
+-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+-            echo "filter=--filter=...[origin/main]" >> $GITHUB_OUTPUT
+-          else
+-            echo "filter=" >> $GITHUB_OUTPUT
+-          fi
+-
+-      - name: Execute Tests + Lint (Turborepo)
++      - name: Run Tests (Turborepo)
+         # NOTE: do not forward `--coverage --ci` here. Those are jest-only flags:
+         # `--ci` makes the vitest workspaces (ask-styx, test-harness) throw
+         # `CACError: Unknown option --ci`, and `--coverage` currently fails api
+         # suite-loading. Each workspace owns its own test invocation. Re-introducing
+         # coverage-threshold gating is tracked as a follow-up once coverage mode is
+         # fixed (see docs/audit/2026-05-26-index-propagation-and-vacuum-log.md).
+-        #
+-        # `test` dependsOn `^build` (upstream builds only, no per-workspace build).
+-        # `lint` is independent so turbo parallelizes both.
+-        # Retry loop catches flaky exit-code-1 (open-handle timeouts, etc).
+-        run: |
+-          for attempt in 1 2 3; do
+-            if npx turbo run test lint ${{ steps.changed.outputs.filter }}; then
+-              exit 0
+-            fi
+-            echo "::warning::Test run failed (attempt $attempt/3), retrying in 10s..."
+-            sleep 10
+-          done
+-          exit 1
++        run: npm test
+ 
+       - name: Upload Coverage Reports
+         if: always()
+@@ -87,8 +66,11 @@ jobs:
+             src/*/coverage/
+           retention-days: 14
+ 
+-      - name: Build for Validation Gates (Turborepo)
+-        run: npx turbo run build
++      - name: Build (Turborepo)
++        run: npm run build
++
++      - name: Lint (Turborepo)
++        run: npm run lint
+ 
+       - name: Gate 04 — Redacted Build Check
+         run: bash scripts/validation/04-redacted-build-check.sh
+@@ -208,9 +190,9 @@ jobs:
+         run: |
+           BASE="${{ github.event.pull_request.base.sha || 'HEAD~1' }}"
+           if git diff --name-only "$BASE" | grep -qE "^(src/web/|e2e/|src/shared/|\.config/playwright/)"; then
+-            echo "web=true" >> $GITHUB_OUTPUT
++            echo "web=true" >> "$GITHUB_OUTPUT"
+           else
+-            echo "web=false" >> $GITHUB_OUTPUT
++            echo "web=false" >> "$GITHUB_OUTPUT"
+           fi
+ 
+   e2e:

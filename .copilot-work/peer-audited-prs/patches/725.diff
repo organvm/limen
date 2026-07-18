@@ -1,0 +1,649 @@
+diff --git a/src/api/src/app.module.ts b/src/api/src/app.module.ts
+index 57a12e6c..5e6ad40e 100644
+--- a/src/api/src/app.module.ts
++++ b/src/api/src/app.module.ts
+@@ -13,6 +13,7 @@ import { HealthModule } from "./modules/health/health.module";
+ import { B2BModule } from "./modules/b2b/b2b.module";
+ import { NotificationsModule } from "./modules/notifications/notifications.module";
+ import { PaymentsModule } from "./modules/payments/payments.module";
++import { PayModule } from "./modules/pay/pay.module";
+ import { AiModule } from "./modules/ai/ai.module";
+ import { ProofsModule } from "./modules/proofs/proofs.module";
+ import { FeedModule } from "./modules/feed/feed.module";
+@@ -55,6 +56,7 @@ import { BehavioralModule } from "./modules/behavioral/behavioral.module";
+     HealthModule,
+     B2BModule,
+     NotificationsModule,
++    PayModule,
+     PaymentsModule,
+     AiModule,
+     ProofsModule,
+diff --git a/src/api/src/modules/contracts/contracts.controller.spec.ts b/src/api/src/modules/contracts/contracts.controller.spec.ts
+index e73e8479..6b07cd61 100644
+--- a/src/api/src/modules/contracts/contracts.controller.spec.ts
++++ b/src/api/src/modules/contracts/contracts.controller.spec.ts
+@@ -2,16 +2,13 @@ import { ContractsController } from "./contracts.controller";
+ import { ContractsService } from "./contracts.service";
+ import { GUARDS_METADATA } from "@nestjs/common/constants";
+ import { DisputeService } from "../../../services/escrow/dispute.service";
+-import { StripeFboService } from "../../../services/escrow/stripe.service";
+-import { LedgerService } from "../../../services/ledger/ledger.service";
+-import { TruthLogService } from "../../../services/ledger/truth-log.service";
+-import { Pool } from "pg";
+ import { validate } from "class-validator";
+ import { plainToInstance } from "class-transformer";
+ import { CreateContractDto, SubmitProofDto } from "./dto";
+ import { SurveyService } from "./survey.service";
+ import { WaitlistService } from "./waitlist.service";
+ import { TierGuard } from "../../guards/tier.guard";
++import { PayService } from "../pay/pay.service";
+ 
+ const mockSurveyService = {} as unknown as SurveyService;
+ const mockWaitlistService = {} as unknown as WaitlistService;
+@@ -32,10 +29,9 @@ const mockContractsService = {
+ } as unknown as ContractsService;
+ 
+ const mockDisputeService = {} as unknown as DisputeService;
+-const mockPool = {} as unknown as Pool;
+-const mockStripe = {} as unknown as StripeFboService;
+-const mockLedger = {} as unknown as LedgerService;
+-const mockTruthLog = {} as unknown as TruthLogService;
++const mockPayService = {
++  purchaseTicket: jest.fn(),
++} as unknown as jest.Mocked<PayService>;
+ 
+ describe("ContractsController", () => {
+   let controller: ContractsController;
+@@ -46,10 +42,7 @@ describe("ContractsController", () => {
+       mockContractsService,
+       {} as any, // mockMedicalExemption
+       mockDisputeService,
+-      mockPool,
+-      mockStripe,
+-      mockLedger,
+-      mockTruthLog,
++      mockPayService,
+       mockSurveyService,
+       mockWaitlistService,
+     );
+@@ -268,6 +261,21 @@ describe("ContractsController", () => {
+     });
+   });
+ 
++  describe("POST /contracts/:id/ticket", () => {
++    it("should purchase a ticket through PayService for backwards-compatible routing", async () => {
++      const mockResult = { paymentIntentId: "pi_ticket", amount: 499 };
++      mockPayService.purchaseTicket.mockResolvedValue(mockResult);
++
++      const result = await controller.purchaseTicket("c1", testUser);
++
++      expect(mockPayService.purchaseTicket).toHaveBeenCalledWith(
++        "user-1",
++        "c1",
++      );
++      expect(result).toEqual(mockResult);
++    });
++  });
++
+   describe("GET /contracts/:id/attestation", () => {
+     it("should call contractsService.getAttestationStatus with contractId and userId", async () => {
+       const mockStatus = {
+diff --git a/src/api/src/modules/contracts/contracts.controller.ts b/src/api/src/modules/contracts/contracts.controller.ts
+index 3a80de9d..aa9c5572 100644
+--- a/src/api/src/modules/contracts/contracts.controller.ts
++++ b/src/api/src/modules/contracts/contracts.controller.ts
+@@ -10,7 +10,6 @@ import {
+ } from "@nestjs/common";
+ import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
+ import { Throttle } from "@nestjs/throttler";
+-import { Pool } from "pg";
+ import { ContractsService } from "./contracts.service";
+ import {
+   CreateContractDto,
+@@ -21,19 +20,16 @@ import {
+   EmotionalTrackingDto,
+ } from "./dto";
+ import { DisputeService } from "../../../services/escrow/dispute.service";
+-import { StripeFboService } from "../../../services/escrow/stripe.service";
+-import { LedgerService } from "../../../services/ledger/ledger.service";
+-import { TruthLogService } from "../../../services/ledger/truth-log.service";
+ import { AuthGuard } from "../../../guards/auth.guard";
+ import { BannedUserGuard } from "../../guards/banned-user.guard";
+ import { TierGuard } from "../../guards/tier.guard";
+ import { GeofenceGuard } from "../../common/guards/geofence.guard";
+ import { ComplianceAccessGuard } from "../../common/guards/compliance-access.guard";
+ import { CurrentUser } from "../../common/decorators/current-user.decorator";
+-import { processIAP } from "../../../services/billing";
+ import { MedicalExemptionService } from "../compliance/medical-exemption.service";
+ import { SurveyService } from "./survey.service";
+ import { WaitlistService } from "./waitlist.service";
++import { PayService } from "../pay/pay.service";
+ 
+ @ApiTags("Contracts")
+ @ApiBearerAuth()
+@@ -43,10 +39,7 @@ export class ContractsController {
+     private readonly contractsService: ContractsService,
+     private readonly medicalExemption: MedicalExemptionService,
+     private readonly disputeService: DisputeService,
+-    private readonly pool: Pool,
+-    private readonly stripe: StripeFboService,
+-    private readonly ledger: LedgerService,
+-    private readonly truthLog: TruthLogService,
++    private readonly payService: PayService,
+     private readonly surveyService: SurveyService,
+     private readonly waitlistService: WaitlistService,
+   ) {}
+@@ -150,14 +143,7 @@ export class ContractsController {
+     @Param("id") contractId: string,
+     @CurrentUser() user: { id: string },
+   ) {
+-    return processIAP(
+-      this.pool,
+-      this.stripe,
+-      this.ledger,
+-      this.truthLog,
+-      user.id,
+-      contractId,
+-    );
++    return this.payService.purchaseTicket(user.id, contractId);
+   }
+ 
+   @UseGuards(AuthGuard, GeofenceGuard)
+diff --git a/src/api/src/modules/contracts/contracts.module.ts b/src/api/src/modules/contracts/contracts.module.ts
+index 929002fd..f434a351 100644
+--- a/src/api/src/modules/contracts/contracts.module.ts
++++ b/src/api/src/modules/contracts/contracts.module.ts
+@@ -24,6 +24,7 @@ import {
+ } from "../../../services/anomaly/anomaly.service";
+ import { NotificationsModule } from "../notifications/notifications.module";
+ import { PaymentsModule } from "../payments/payments.module";
++import { PayModule } from "../pay/pay.module";
+ import { EmailModule } from "../email/email.module";
+ import Redis from "ioredis";
+ import { getRedisConnectionConfig } from "../../../config/queue.config";
+@@ -44,6 +45,7 @@ const redisProvider = {
+     ScheduleModule.forRoot(),
+     NotificationsModule,
+     EmailModule,
++    PayModule,
+     forwardRef(() => PaymentsModule),
+   ],
+   controllers: [ContractsController],
+diff --git a/src/api/src/modules/pay/dto.ts b/src/api/src/modules/pay/dto.ts
+new file mode 100644
+index 00000000..68f728d2
+--- /dev/null
++++ b/src/api/src/modules/pay/dto.ts
+@@ -0,0 +1,28 @@
++import { IsIn, IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
++import { MeteredEventType } from '../b2b/billing.service';
++
++export const METERED_EVENT_TYPES: MeteredEventType[] = [
++  'phash_scan',
++  'gemini_call',
++  'anomaly_detection',
++];
++
++export class RecordMeteredUsageDto {
++  @IsString()
++  @Matches(/^[A-Za-z0-9-]{1,64}$/)
++  enterpriseId!: string;
++
++  @IsIn(METERED_EVENT_TYPES)
++  metric!: MeteredEventType;
++
++  @IsOptional()
++  @IsInt()
++  @Min(1)
++  @Max(1000)
++  quantity?: number;
++
++  @IsOptional()
++  @IsString()
++  @Matches(/^[A-Za-z0-9_.:-]{1,128}$/)
++  eventId?: string;
++}
+diff --git a/src/api/src/modules/pay/pay.controller.spec.ts b/src/api/src/modules/pay/pay.controller.spec.ts
+new file mode 100644
+index 00000000..e3ada3be
+--- /dev/null
++++ b/src/api/src/modules/pay/pay.controller.spec.ts
+@@ -0,0 +1,86 @@
++import { PayController } from './pay.controller';
++import { PayService } from './pay.service';
++
++describe('PayController', () => {
++  const payService = {
++    getPrices: jest.fn(),
++    purchaseTicket: jest.fn(),
++    recordMeteredUsage: jest.fn(),
++    getMeteredUsageSummary: jest.fn(),
++  } as unknown as jest.Mocked<PayService>;
++
++  let controller: PayController;
++
++  beforeEach(() => {
++    controller = new PayController(payService);
++    jest.clearAllMocks();
++  });
++
++  it('returns pay prices from the service', () => {
++    const prices = {
++      currency: 'USD' as const,
++      monthlySubscriptionCents: 1499,
++      ticketPriceCents: 499,
++    };
++    payService.getPrices.mockReturnValue(prices);
++
++    expect(controller.getPrices()).toBe(prices);
++  });
++
++  it('purchases a ticket for the authenticated user', async () => {
++    const result = { paymentIntentId: 'pi_123', amount: 499 };
++    payService.purchaseTicket.mockResolvedValue(result);
++
++    await expect(
++      controller.purchaseTicket({ id: 'user-1' }, 'contract-1'),
++    ).resolves.toBe(result);
++
++    expect(payService.purchaseTicket).toHaveBeenCalledWith(
++      'user-1',
++      'contract-1',
++    );
++  });
++
++  it('records metered usage for the authenticated admin', async () => {
++    const dto = {
++      enterpriseId: 'ent-001',
++      metric: 'phash_scan' as const,
++      quantity: 2,
++      eventId: 'evt-001',
++    };
++    const result = {
++      status: 'recorded',
++      enterpriseId: 'ent-001',
++      metric: 'phash_scan' as const,
++      quantity: 2,
++    };
++    payService.recordMeteredUsage.mockResolvedValue(result);
++
++    await expect(
++      controller.recordMeteredUsage({ id: 'admin-1' }, dto),
++    ).resolves.toBe(result);
++
++    expect(payService.recordMeteredUsage).toHaveBeenCalledWith(
++      'admin-1',
++      dto,
++    );
++  });
++
++  it('gets metered usage summary for the authenticated admin', async () => {
++    const summary = {
++      totalUsage: 4,
++      currentPeriodStart: new Date('2026-06-01T00:00:00.000Z'),
++      currentPeriodEnd: new Date('2026-07-01T00:00:00.000Z'),
++    };
++    payService.getMeteredUsageSummary.mockResolvedValue(summary);
++
++    await expect(
++      controller.getMeteredUsageSummary({ id: 'admin-1' }, 'ent-001'),
++    ).resolves.toBe(summary);
++
++    expect(payService.getMeteredUsageSummary).toHaveBeenCalledWith(
++      'admin-1',
++      'ent-001',
++    );
++  });
++});
+diff --git a/src/api/src/modules/pay/pay.controller.ts b/src/api/src/modules/pay/pay.controller.ts
+new file mode 100644
+index 00000000..dc6bec56
+--- /dev/null
++++ b/src/api/src/modules/pay/pay.controller.ts
+@@ -0,0 +1,56 @@
++import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
++import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
++import { BannedUserGuard } from '../../guards/banned-user.guard';
++import { AuthGuard } from '../../../guards/auth.guard';
++import { ComplianceAccessGuard } from '../../common/guards/compliance-access.guard';
++import { CurrentUser } from '../../common/decorators/current-user.decorator';
++import { GeofenceGuard } from '../../common/guards/geofence.guard';
++import { RoleGuard, Roles } from '../../common/guards/role.guard';
++import { RecordMeteredUsageDto } from './dto';
++import { PayService } from './pay.service';
++
++@ApiTags('Pay')
++@ApiBearerAuth()
++@Controller('pay')
++export class PayController {
++  constructor(private readonly payService: PayService) {}
++
++  @UseGuards(AuthGuard, GeofenceGuard)
++  @Get('prices')
++  @ApiOperation({ summary: 'Get configured payment prices in cents' })
++  getPrices() {
++    return this.payService.getPrices();
++  }
++
++  @UseGuards(AuthGuard, GeofenceGuard, ComplianceAccessGuard, BannedUserGuard)
++  @Post('contracts/:contractId/ticket')
++  @ApiOperation({ summary: 'Purchase an in-app ticket for a contract' })
++  purchaseTicket(
++    @CurrentUser() user: { id: string },
++    @Param('contractId') contractId: string,
++  ) {
++    return this.payService.purchaseTicket(user.id, contractId);
++  }
++
++  @UseGuards(AuthGuard, RoleGuard)
++  @Roles('ADMIN')
++  @Post('metered/usage')
++  @ApiOperation({ summary: 'Record a Stripe metered billing usage event for an enterprise' })
++  recordMeteredUsage(
++    @CurrentUser() user: { id: string },
++    @Body() dto: RecordMeteredUsageDto,
++  ) {
++    return this.payService.recordMeteredUsage(user.id, dto);
++  }
++
++  @UseGuards(AuthGuard, RoleGuard)
++  @Roles('ADMIN')
++  @Get('metered/:enterpriseId/summary')
++  @ApiOperation({ summary: 'Get current-period Stripe metered usage for an enterprise' })
++  getMeteredUsageSummary(
++    @CurrentUser() user: { id: string },
++    @Param('enterpriseId') enterpriseId: string,
++  ) {
++    return this.payService.getMeteredUsageSummary(user.id, enterpriseId);
++  }
++}
+diff --git a/src/api/src/modules/pay/pay.module.ts b/src/api/src/modules/pay/pay.module.ts
+new file mode 100644
+index 00000000..34adc55d
+--- /dev/null
++++ b/src/api/src/modules/pay/pay.module.ts
+@@ -0,0 +1,24 @@
++import { Module } from '@nestjs/common';
++import { DatabaseModule } from '../../database/database.module';
++import { RoleGuard } from '../../common/guards/role.guard';
++import { BillingService } from '../b2b/billing.service';
++import { StripeFboService } from '../../../services/escrow/stripe.service';
++import { LedgerService } from '../../../services/ledger/ledger.service';
++import { TruthLogService } from '../../../services/ledger/truth-log.service';
++import { PayController } from './pay.controller';
++import { PayService } from './pay.service';
++
++@Module({
++  imports: [DatabaseModule],
++  controllers: [PayController],
++  providers: [
++    PayService,
++    BillingService,
++    StripeFboService,
++    LedgerService,
++    TruthLogService,
++    RoleGuard,
++  ],
++  exports: [PayService],
++})
++export class PayModule {}
+diff --git a/src/api/src/modules/pay/pay.service.spec.ts b/src/api/src/modules/pay/pay.service.spec.ts
+new file mode 100644
+index 00000000..40485319
+--- /dev/null
++++ b/src/api/src/modules/pay/pay.service.spec.ts
+@@ -0,0 +1,153 @@
++import { Pool } from 'pg';
++import { ForbiddenException } from '@nestjs/common';
++import { PayService } from './pay.service';
++import { BillingService } from '../b2b/billing.service';
++import {
++  MONTHLY_SUBSCRIPTION_PRICE,
++  TICKET_PRICE_BASE,
++} from '../../../services/billing';
++import { StripeFboService } from '../../../services/escrow/stripe.service';
++import { LedgerService } from '../../../services/ledger/ledger.service';
++import { TruthLogService } from '../../../services/ledger/truth-log.service';
++
++describe('PayService', () => {
++  let mockPool: { query: jest.Mock };
++  let mockStripe: { holdStake: jest.Mock; captureStake: jest.Mock };
++  let mockLedger: { recordTransaction: jest.Mock };
++  let mockTruthLog: { appendEvent: jest.Mock };
++  let mockBilling: { recordUsage: jest.Mock; getUsageSummary: jest.Mock };
++  let service: PayService;
++
++  beforeEach(() => {
++    mockPool = { query: jest.fn() };
++    mockStripe = {
++      holdStake: jest.fn(),
++      captureStake: jest.fn(),
++    };
++    mockLedger = { recordTransaction: jest.fn() };
++    mockTruthLog = { appendEvent: jest.fn() };
++    mockBilling = {
++      recordUsage: jest.fn(),
++      getUsageSummary: jest.fn(),
++    };
++    service = new PayService(
++      mockPool as unknown as Pool,
++      mockStripe as unknown as StripeFboService,
++      mockLedger as unknown as LedgerService,
++      mockTruthLog as unknown as TruthLogService,
++      mockBilling as unknown as BillingService,
++    );
++  });
++
++  it('returns configured prices in cents', () => {
++    expect(service.getPrices()).toEqual({
++      currency: 'USD',
++      monthlySubscriptionCents: MONTHLY_SUBSCRIPTION_PRICE,
++      ticketPriceCents: TICKET_PRICE_BASE,
++    });
++  });
++
++  it('purchases a contract ticket through the idempotent IAP flow', async () => {
++    mockPool.query.mockResolvedValueOnce({
++      rows: [{ stripe_customer_id: 'cus_test', account_id: 'acct-user' }],
++    });
++    mockStripe.holdStake.mockResolvedValueOnce({ id: 'pi_ticket' });
++    mockStripe.captureStake.mockResolvedValueOnce({
++      id: 'pi_ticket',
++      status: 'succeeded',
++    });
++    mockPool.query.mockResolvedValueOnce({ rows: [{ id: 'acct-revenue' }] });
++    mockLedger.recordTransaction.mockResolvedValueOnce('entry-1');
++    mockTruthLog.appendEvent.mockResolvedValueOnce('event-1');
++
++    await expect(
++      service.purchaseTicket('user-1', 'contract-1'),
++    ).resolves.toEqual({
++      paymentIntentId: 'pi_ticket',
++      amount: TICKET_PRICE_BASE,
++    });
++
++    expect(mockStripe.holdStake).toHaveBeenCalledWith(
++      'cus_test',
++      TICKET_PRICE_BASE,
++      'contract-1',
++      'styx_iap_user-1_contract-1',
++    );
++    expect(mockLedger.recordTransaction).toHaveBeenCalledWith(
++      'acct-user',
++      'acct-revenue',
++      TICKET_PRICE_BASE,
++      'contract-1',
++      { type: 'TICKET_PURCHASE', userId: 'user-1' },
++      undefined,
++      'styx_iap_user-1_contract-1',
++    );
++    expect(mockTruthLog.appendEvent).toHaveBeenCalledWith('TICKET_PURCHASED', {
++      userId: 'user-1',
++      contractId: 'contract-1',
++      amount: TICKET_PRICE_BASE,
++      paymentIntentId: 'pi_ticket',
++    });
++  });
++
++  it('records metered usage for the caller enterprise', async () => {
++    mockPool.query.mockResolvedValueOnce({
++      rows: [{ enterprise_id: 'ent-001', role: 'ADMIN' }],
++    });
++    mockBilling.recordUsage.mockResolvedValueOnce(undefined);
++
++    await expect(
++      service.recordMeteredUsage('user-1', {
++        enterpriseId: 'ent-001',
++        metric: 'phash_scan',
++        quantity: 3,
++        eventId: 'evt-001',
++      }),
++    ).resolves.toEqual({
++      status: 'recorded',
++      enterpriseId: 'ent-001',
++      metric: 'phash_scan',
++      quantity: 3,
++    });
++
++    expect(mockBilling.recordUsage).toHaveBeenCalledWith(
++      'ent-001',
++      'phash_scan',
++      3,
++      'evt-001',
++    );
++  });
++
++  it('rejects metered usage for another enterprise', async () => {
++    mockPool.query.mockResolvedValueOnce({
++      rows: [{ enterprise_id: 'ent-001', role: 'ADMIN' }],
++    });
++
++    await expect(
++      service.recordMeteredUsage('user-1', {
++        enterpriseId: 'ent-002',
++        metric: 'gemini_call',
++      }),
++    ).rejects.toBeInstanceOf(ForbiddenException);
++
++    expect(mockBilling.recordUsage).not.toHaveBeenCalled();
++  });
++
++  it('returns metered usage summary after enterprise authorization', async () => {
++    const summary = {
++      totalUsage: 7,
++      currentPeriodStart: new Date('2026-06-01T00:00:00.000Z'),
++      currentPeriodEnd: new Date('2026-07-01T00:00:00.000Z'),
++    };
++    mockPool.query.mockResolvedValueOnce({
++      rows: [{ enterprise_id: 'ent-001', role: 'ADMIN' }],
++    });
++    mockBilling.getUsageSummary.mockResolvedValueOnce(summary);
++
++    await expect(
++      service.getMeteredUsageSummary('user-1', 'ent-001'),
++    ).resolves.toBe(summary);
++
++    expect(mockBilling.getUsageSummary).toHaveBeenCalledWith('ent-001');
++  });
++});
+diff --git a/src/api/src/modules/pay/pay.service.ts b/src/api/src/modules/pay/pay.service.ts
+new file mode 100644
+index 00000000..a38586c9
+--- /dev/null
++++ b/src/api/src/modules/pay/pay.service.ts
+@@ -0,0 +1,95 @@
++import { ForbiddenException, Injectable } from '@nestjs/common';
++import { Pool } from 'pg';
++import { BillingService } from '../b2b/billing.service';
++import {
++  MONTHLY_SUBSCRIPTION_PRICE,
++  TICKET_PRICE_BASE,
++  processIAP,
++} from '../../../services/billing';
++import { StripeFboService } from '../../../services/escrow/stripe.service';
++import { LedgerService } from '../../../services/ledger/ledger.service';
++import { TruthLogService } from '../../../services/ledger/truth-log.service';
++import { RecordMeteredUsageDto } from './dto';
++
++export interface PayPriceList {
++  currency: 'USD';
++  monthlySubscriptionCents: number;
++  ticketPriceCents: number;
++}
++
++@Injectable()
++export class PayService {
++  constructor(
++    private readonly pool: Pool,
++    private readonly stripe: StripeFboService,
++    private readonly ledger: LedgerService,
++    private readonly truthLog: TruthLogService,
++    private readonly billing: BillingService,
++  ) {}
++
++  getPrices(): PayPriceList {
++    return {
++      currency: 'USD',
++      monthlySubscriptionCents: MONTHLY_SUBSCRIPTION_PRICE,
++      ticketPriceCents: TICKET_PRICE_BASE,
++    };
++  }
++
++  purchaseTicket(userId: string, contractId: string) {
++    return processIAP(
++      this.pool,
++      this.stripe,
++      this.ledger,
++      this.truthLog,
++      userId,
++      contractId,
++    );
++  }
++
++  async recordMeteredUsage(userId: string, dto: RecordMeteredUsageDto) {
++    await this.assertEnterpriseAdmin(userId, dto.enterpriseId);
++    const quantity = dto.quantity ?? 1;
++
++    await this.billing.recordUsage(
++      dto.enterpriseId,
++      dto.metric,
++      quantity,
++      dto.eventId,
++    );
++
++    return {
++      status: 'recorded',
++      enterpriseId: dto.enterpriseId,
++      metric: dto.metric,
++      quantity,
++    };
++  }
++
++  async getMeteredUsageSummary(userId: string, enterpriseId: string) {
++    await this.assertEnterpriseAdmin(userId, enterpriseId);
++    return this.billing.getUsageSummary(enterpriseId);
++  }
++
++  private async assertEnterpriseAdmin(userId: string, enterpriseId: string): Promise<void> {
++    if (!enterpriseId) {
++      throw new ForbiddenException('enterpriseId is required');
++    }
++
++    const result = await this.pool.query(
++      'SELECT enterprise_id, role FROM users WHERE id = $1',
++      [userId],
++    );
++
++    if (result.rows.length === 0) {
++      throw new ForbiddenException('User not found');
++    }
++
++    const { enterprise_id: callerEnterpriseId, role } = result.rows[0];
++    if (!callerEnterpriseId || callerEnterpriseId !== enterpriseId) {
++      throw new ForbiddenException('Not authorized for this enterprise');
++    }
++    if (String(role || '').toUpperCase() !== 'ADMIN') {
++      throw new ForbiddenException('Enterprise admin role required');
++    }
++  }
++}

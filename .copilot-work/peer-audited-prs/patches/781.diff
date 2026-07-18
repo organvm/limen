@@ -1,0 +1,344 @@
+diff --git a/.gitignore b/.gitignore
+index 2b02fde4..4736c675 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -20,6 +20,8 @@ artifacts/
+ .vscode/
+ 
+ # TypeScript artifacts in source directories
++**/*.tsbuildinfo
++traceDir/
+ src/api/**/*.js
+ src/api/**/*.js.map
+ src/api/**/*.d.ts
+diff --git a/packages/audit-engine/src/zk-exhaust.spec.ts b/packages/audit-engine/src/zk-exhaust.spec.ts
+index 884895ac..ae27641e 100644
+--- a/packages/audit-engine/src/zk-exhaust.spec.ts
++++ b/packages/audit-engine/src/zk-exhaust.spec.ts
+@@ -1,41 +1,25 @@
+-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+-import {
+-  ZKExhaustVerifier,
+-  generateZkChallenge,
+-  ZK_PROOF_MAX_AGE_MS,
+-} from "./zk-exhaust";
+-
+-describe("ZKExhaustVerifier", () => {
+-  const originalSecret = process.env.ZK_EXHAUST_SECRET;
++import { describe, it, expect, vi, beforeEach } from "vitest";
++import { ZKExhaustVerifier, generateZkChallenge, ZK_PROOF_MAX_AGE_MS } from "./zk-exhaust";
++import crypto from "crypto";
++
++describe("ZK Exhaust Verifier", () => {
+   const mockSecret = "0123456789abcdef0123456789abcdef";
+ 
+   beforeEach(() => {
+     process.env.ZK_EXHAUST_SECRET = mockSecret;
+   });
+ 
+-  afterEach(() => {
+-    vi.restoreAllMocks();
+-
+-    if (originalSecret === undefined) {
+-      delete process.env.ZK_EXHAUST_SECRET;
+-    } else {
+-      process.env.ZK_EXHAUST_SECRET = originalSecret;
+-    }
+-  });
+-
+   it("generates a challenge string", () => {
+     const challenge = generateZkChallenge();
+-
+     expect(typeof challenge).toBe("string");
+-    expect(challenge).toHaveLength(32);
++    expect(challenge.length).toBe(32); // 16 bytes hex string
+   });
+ 
+   it("computes the same pseudonym for the same phone number", () => {
+     const phone = "+15551234567";
+-
+-    expect(ZKExhaustVerifier.pseudonymForPhone(phone)).toBe(
+-      ZKExhaustVerifier.pseudonymForPhone(phone),
+-    );
++    const p1 = ZKExhaustVerifier.pseudonymForPhone(phone);
++    const p2 = ZKExhaustVerifier.pseudonymForPhone(phone);
++    expect(p1).toBe(p2);
+   });
+ 
+   it("generates a valid proof that can be verified", () => {
+@@ -48,80 +32,67 @@ describe("ZKExhaustVerifier", () => {
+ 
+     expect(proof.challenge).toBe(challenge);
+     expect(proof.senderPseudonym).toBe(targetPseudonym);
+-    expect(ZKExhaustVerifier.verify(proof, targetPseudonym, challenge)).toBe(
+-      true,
+-    );
++
++    const isValid = ZKExhaustVerifier.verify(proof, targetPseudonym, challenge);
++    expect(isValid).toBe(true);
+   });
+ 
+-  it("fails verification if pseudonym does not match", () => {
++  it("fails verification if pseudonym doesn't match", () => {
++    const rawMessage = "Hello World";
++    const phone1 = "+15551234567";
++    const phone2 = "+15559999999";
+     const challenge = generateZkChallenge();
+-    const proof = ZKExhaustVerifier.generateProof(
+-      "Hello World",
+-      "+15551234567",
+-      challenge,
+-    );
+-    const wrongPseudonym = ZKExhaustVerifier.pseudonymForPhone("+15559999999");
+-
+-    expect(ZKExhaustVerifier.verify(proof, wrongPseudonym, challenge)).toBe(
+-      false,
+-    );
++
++    const proof = ZKExhaustVerifier.generateProof(rawMessage, phone1, challenge);
++    const wrongPseudonym = ZKExhaustVerifier.pseudonymForPhone(phone2);
++
++    const isValid = ZKExhaustVerifier.verify(proof, wrongPseudonym, challenge);
++    expect(isValid).toBe(false);
+   });
+ 
+-  it("fails verification if challenge does not match", () => {
++  it("fails verification if challenge doesn't match", () => {
++    const rawMessage = "Hello World";
+     const phone = "+15551234567";
+-    const challenge = generateZkChallenge();
+-    const proof = ZKExhaustVerifier.generateProof(
+-      "Hello World",
+-      phone,
+-      challenge,
+-    );
++    const challenge1 = generateZkChallenge();
++    const challenge2 = generateZkChallenge();
++
++    const proof = ZKExhaustVerifier.generateProof(rawMessage, phone, challenge1);
+     const targetPseudonym = ZKExhaustVerifier.pseudonymForPhone(phone);
+ 
+-    expect(
+-      ZKExhaustVerifier.verify(
+-        proof,
+-        targetPseudonym,
+-        generateZkChallenge(),
+-      ),
+-    ).toBe(false);
++    const isValid = ZKExhaustVerifier.verify(proof, targetPseudonym, challenge2);
++    expect(isValid).toBe(false);
+   });
+ 
+   it("fails verification if signature is altered", () => {
++    const rawMessage = "Hello World";
+     const phone = "+15551234567";
+     const challenge = generateZkChallenge();
+-    const proof = ZKExhaustVerifier.generateProof(
+-      "Hello World",
+-      phone,
+-      challenge,
+-    );
++
++    const proof = ZKExhaustVerifier.generateProof(rawMessage, phone, challenge);
+     const targetPseudonym = ZKExhaustVerifier.pseudonymForPhone(phone);
+-    const tamperedSignature =
+-      (proof.signature[0] === "a" ? "b" : "a") + proof.signature.slice(1);
+-
+-    expect(
+-      ZKExhaustVerifier.verify(
+-        { ...proof, signature: tamperedSignature },
+-        targetPseudonym,
+-        challenge,
+-      ),
+-    ).toBe(false);
++
++    // Tamper with signature
++    const tamperedProof = { ...proof, signature: proof.signature.replace("a", "b") };
++
++    const isValid = ZKExhaustVerifier.verify(tamperedProof, targetPseudonym, challenge);
++    expect(isValid).toBe(false);
+   });
+ 
+   it("fails verification if proof is too old", () => {
++    const rawMessage = "Hello World";
+     const phone = "+15551234567";
+     const challenge = generateZkChallenge();
+-    const proof = ZKExhaustVerifier.generateProof(
+-      "Hello World",
+-      phone,
+-      challenge,
+-    );
++
++    const proof = ZKExhaustVerifier.generateProof(rawMessage, phone, challenge);
+     const targetPseudonym = ZKExhaustVerifier.pseudonymForPhone(phone);
++
++    // Mock Date.now to be much later
+     const futureTime = Date.now() + ZK_PROOF_MAX_AGE_MS + 1000;
++    vi.spyOn(Date, "now").mockImplementation(() => futureTime);
+ 
+-    vi.spyOn(Date, "now").mockReturnValue(futureTime);
++    const isValid = ZKExhaustVerifier.verify(proof, targetPseudonym, challenge);
++    expect(isValid).toBe(false);
+ 
+-    expect(ZKExhaustVerifier.verify(proof, targetPseudonym, challenge)).toBe(
+-      false,
+-    );
++    vi.restoreAllMocks();
+   });
+ });
+diff --git a/src/api/database/migrations/043_user_premium_flag.sql b/src/api/database/migrations/043_user_premium_flag.sql
+new file mode 100644
+index 00000000..669d0d20
+--- /dev/null
++++ b/src/api/database/migrations/043_user_premium_flag.sql
+@@ -0,0 +1,7 @@
++-- Migration 043: Consumer premium membership flag
++
++ALTER TABLE users
++  ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE;
++
++COMMENT ON COLUMN users.is_premium IS
++  'Consumer premium membership flag exposed on the authenticated user profile.';
+diff --git a/src/api/database/schema.sql b/src/api/database/schema.sql
+index 8ef38975..329262f9 100644
+--- a/src/api/database/schema.sql
++++ b/src/api/database/schema.sql
+@@ -63,6 +63,7 @@ CREATE TABLE users (
+     enterprise_id UUID,
+     status TEXT DEFAULT 'ACTIVE', last_known_state TEXT, social_guild_id UUID,
+     deletion_requested_at TIMESTAMPTZ,
++    is_premium BOOLEAN NOT NULL DEFAULT FALSE,
+     created_at TIMESTAMPTZ DEFAULT NOW()
+ );
+ 
+@@ -459,3 +460,6 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS realm_preferences JSONB DEFAULT '{}';
+ 
+ COMMENT ON COLUMN users.access_tier IS
+   'Product access tier: free cannot create contracts, early_access is capped, pro has full contract creation access.';
++
++COMMENT ON COLUMN users.is_premium IS
++  'Consumer premium membership flag exposed on the authenticated user profile.';
+diff --git a/src/api/src/modules/fury/enforcement.controller.spec.ts b/src/api/src/modules/fury/enforcement.controller.spec.ts
+index be9c7066..bdece1ca 100644
+--- a/src/api/src/modules/fury/enforcement.controller.spec.ts
++++ b/src/api/src/modules/fury/enforcement.controller.spec.ts
+@@ -6,10 +6,7 @@ import { RoleGuard } from '../../common/guards/role.guard';
+ 
+ describe('EnforcementController', () => {
+   let controller: EnforcementController;
+-  let enforcementService: {
+-    evaluateCollusion: jest.Mock;
+-    appealCase: jest.Mock;
+-  };
++  let enforcementService: any;
+ 
+   beforeEach(async () => {
+     enforcementService = {
+@@ -19,7 +16,9 @@ describe('EnforcementController', () => {
+ 
+     const module: TestingModule = await Test.createTestingModule({
+       controllers: [EnforcementController],
+-      providers: [{ provide: EnforcementService, useValue: enforcementService }],
++      providers: [
++        { provide: EnforcementService, useValue: enforcementService },
++      ],
+     })
+       .overrideGuard(AuthGuard)
+       .useValue({ canActivate: () => true })
+@@ -35,35 +34,29 @@ describe('EnforcementController', () => {
+   });
+ 
+   describe('evaluate', () => {
+-    it('calls enforcementService.evaluateCollusion and returns success', async () => {
++    it('should call enforcementService.evaluateCollusion and return success', async () => {
+       enforcementService.evaluateCollusion.mockResolvedValue(undefined);
+ 
+       const dto = { proofId: 'proof-123', flaggedFuries: ['fury-1', 'fury-2'] };
+       const result = await controller.evaluate(dto);
+ 
+-      expect(enforcementService.evaluateCollusion).toHaveBeenCalledWith(
+-        'proof-123',
+-        ['fury-1', 'fury-2'],
+-      );
++      expect(enforcementService.evaluateCollusion).toHaveBeenCalledWith('proof-123', ['fury-1', 'fury-2']);
+       expect(result).toEqual({ success: true });
+     });
+   });
+ 
+   describe('appeal', () => {
+-    it('calls enforcementService.appealCase and returns the result', async () => {
++    it('should call enforcementService.appealCase and return the result', async () => {
+       const appealResult = { caseId: 'case-456', status: 'PENDING' };
+       enforcementService.appealCase.mockResolvedValue(appealResult);
+ 
+       const user = { id: 'user-789' };
+       const dto = { reason: 'I was unfairly flagged' };
++      const caseId = 'case-456';
+ 
+-      const result = await controller.appeal('case-456', user, dto);
++      const result = await controller.appeal(caseId, user, dto);
+ 
+-      expect(enforcementService.appealCase).toHaveBeenCalledWith(
+-        'case-456',
+-        'user-789',
+-        'I was unfairly flagged',
+-      );
++      expect(enforcementService.appealCase).toHaveBeenCalledWith('case-456', 'user-789', 'I was unfairly flagged');
+       expect(result).toEqual(appealResult);
+     });
+   });
+diff --git a/src/api/src/modules/fury/judge.service.spec.ts b/src/api/src/modules/fury/judge.service.spec.ts
+index 4920b549..d3e71d29 100644
+--- a/src/api/src/modules/fury/judge.service.spec.ts
++++ b/src/api/src/modules/fury/judge.service.spec.ts
+@@ -87,7 +87,7 @@ describe('JudgeService', () => {
+       };
+ 
+       const error = new Error('DB Error');
+-      clientMock.query.mockImplementation((q: string) => {
++      clientMock.query.mockImplementation((q) => {
+         if (q.startsWith('UPDATE disputes')) throw error;
+         return Promise.resolve();
+       });
+@@ -125,7 +125,7 @@ describe('JudgeService', () => {
+ 
+   describe('getPendingQueue', () => {
+     it('should retrieve both split proofs and active disputes', async () => {
+-      pool.query.mockImplementation((q: string) => {
++      pool.query.mockImplementation((q) => {
+         if (q.includes('FROM proofs')) return Promise.resolve({ rows: [{ proof_id: 'p-1' }] });
+         if (q.includes('FROM disputes')) return Promise.resolve({ rows: [{ id: 'd-1' }] });
+         return Promise.resolve({ rows: [] });
+diff --git a/src/api/src/modules/users/users.service.ts b/src/api/src/modules/users/users.service.ts
+index 7ba37fc4..0f35d3e4 100644
+--- a/src/api/src/modules/users/users.service.ts
++++ b/src/api/src/modules/users/users.service.ts
+@@ -93,7 +93,7 @@ export class UsersService {
+       `SELECT id, email, integrity_score, role, status, created_at,
+               kyc_status, age_verification_status, identity_provider,
+               identity_verification_id, identity_verified_at,
+-              terms_accepted_at, terms_version
++              terms_accepted_at, terms_version, is_premium
+        FROM users WHERE id = $1`,
+       [userId],
+     );
+@@ -137,6 +137,7 @@ export class UsersService {
+         terms_accepted_at: row.terms_accepted_at ?? null,
+         terms_version: row.terms_version ?? null,
+       },
++      is_premium: row.is_premium || false,
+     };
+   }
+ 
+diff --git a/src/web/contexts/AuthContext.tsx b/src/web/contexts/AuthContext.tsx
+index 0cc9e6ee..32aa54a7 100644
+--- a/src/web/contexts/AuthContext.tsx
++++ b/src/web/contexts/AuthContext.tsx
+@@ -11,6 +11,7 @@ interface User {
+   role: string;
+   status?: string;
+   created_at?: string;
++  is_premium?: boolean;
+   failed_contracts?: number;
+   failedContracts?: number;
+   compliance?: {

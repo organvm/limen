@@ -1,0 +1,373 @@
+diff --git a/src/ask-styx/tests/worker.test.ts b/src/ask-styx/tests/worker.test.ts
+index fc827362..71f5b771 100644
+--- a/src/ask-styx/tests/worker.test.ts
++++ b/src/ask-styx/tests/worker.test.ts
+@@ -5,17 +5,64 @@ vi.mock('../../web/lib/styx-knowledge', () => ({
+   STYX_KNOWLEDGE: 'mock-knowledge-base',
+ }));
+ 
+-import worker from '../worker/index';
++import worker, {
++  RateLimiter,
++  evaluateWindow,
++  RATE_LIMIT_MAX,
++  RATE_LIMIT_WINDOW_MS,
++} from '../worker/index';
++
++/**
++ * In-memory Durable Object harness.
++ *
++ * The whole point of the fix is that a single object instance is shared
++ * across every isolate/POP for a given IP. We model that by keeping ONE
++ * `RateLimiter` instance per object id in a registry, so repeated
++ * `idFromName(ip)` lookups resolve to the same shared, strongly-consistent
++ * state — exactly the property an in-memory `Map` or KV limiter lacks.
++ */
++function makeDurableObjectNamespace(): DurableObjectNamespace {
++  const instances = new Map<string, RateLimiter>();
++
++  function makeState(): DurableObjectState {
++    const storage = new Map<string, unknown>();
++    return {
++      // Serialize the callback — Durable Objects run single-threaded.
++      blockConcurrencyWhile: async <T>(cb: () => Promise<T>): Promise<T> => cb(),
++      storage: {
++        get: async (key: string) => storage.get(key),
++        put: async (key: string, value: unknown) => {
++          storage.set(key, value);
++        },
++        deleteAll: async () => {
++          storage.clear();
++        },
++        setAlarm: async () => {},
++      },
++    } as unknown as DurableObjectState;
++  }
+ 
+-function makeKV(): KVNamespace {
+-  const store = new Map<string, string>();
+   return {
+-    get: vi.fn(async (key: string) => store.get(key) ?? null),
+-    put: vi.fn(async (key: string, value: string) => { store.set(key, value); }),
+-    delete: vi.fn(async (key: string) => { store.delete(key); }),
+-    list: vi.fn(),
+-    getWithMetadata: vi.fn(),
+-  } as unknown as KVNamespace;
++    idFromName: (name: string) =>
++      ({ name, toString: () => name }) as unknown as DurableObjectId,
++    get: (id: DurableObjectId) => {
++      const key = id.toString();
++      let instance = instances.get(key);
++      if (!instance) {
++        instance = new RateLimiter(makeState());
++        instances.set(key, instance);
++      }
++      const obj = instance;
++      return {
++        fetch: (input: RequestInfo | URL) =>
++          obj.fetch(input instanceof Request ? input : new Request(String(input))),
++      } as unknown as DurableObjectStub;
++    },
++    idFromString: (s: string) =>
++      ({ name: s, toString: () => s }) as unknown as DurableObjectId,
++    newUniqueId: () =>
++      ({ toString: () => Math.random().toString() }) as unknown as DurableObjectId,
++  } as unknown as DurableObjectNamespace;
+ }
+ 
+ function makeEnv(overrides: Partial<Record<string, unknown>> = {}) {
+@@ -24,7 +71,7 @@ function makeEnv(overrides: Partial<Record<string, unknown>> = {}) {
+     ALLOWED_ORIGIN: 'https://styx.io',
+     LLM_MODEL: 'llama-3.3-70b-versatile',
+     LLM_BASE_URL: 'https://api.groq.com/openai/v1',
+-    RATE_LIMIT_KV: makeKV(),
++    RATE_LIMITER: makeDurableObjectNamespace(),
+     ...overrides,
+   };
+ }
+@@ -41,6 +88,74 @@ function makeRequest(method: string, body?: unknown, headers: Record<string, str
+   });
+ }
+ 
++function okStream(content = 'Hello') {
++  return new ReadableStream({
++    start(controller) {
++      const encoder = new TextEncoder();
++      controller.enqueue(
++        encoder.encode(`data: {"choices":[{"delta":{"content":"${content}"}}]}\n\n`),
++      );
++      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
++      controller.close();
++    },
++  });
++}
++
++describe('evaluateWindow (sliding-window decision)', () => {
++  it('admits requests below the threshold', () => {
++    const { limited, next } = evaluateWindow([1, 2, 3], 10);
++    expect(limited).toBe(false);
++    expect(next).toEqual([1, 2, 3, 10]);
++  });
++
++  it('rejects once the window is full and does not grow the list', () => {
++    const now = 1_000;
++    const full = Array.from({ length: RATE_LIMIT_MAX }, () => now);
++    const { limited, next } = evaluateWindow(full, now);
++    expect(limited).toBe(true);
++    expect(next).toHaveLength(RATE_LIMIT_MAX);
++  });
++
++  it('evicts timestamps older than the window', () => {
++    const now = 1_000_000;
++    const stale = now - RATE_LIMIT_WINDOW_MS - 1;
++    const { limited, next } = evaluateWindow([stale, stale], now);
++    expect(limited).toBe(false);
++    // stale entries dropped, only the new `now` remains
++    expect(next).toEqual([now]);
++  });
++});
++
++describe('RateLimiter Durable Object', () => {
++  it('shares state across calls so the threshold is enforced', async () => {
++    const ns = makeDurableObjectNamespace();
++    const check = async () => {
++      const stub = ns.get(ns.idFromName('1.2.3.4'));
++      const res = await stub.fetch('https://rate-limiter/check');
++      return ((await res.json()) as { limited: boolean }).limited;
++    };
++
++    for (let i = 0; i < RATE_LIMIT_MAX; i++) {
++      expect(await check()).toBe(false);
++    }
++    // The (MAX+1)th request to the SAME shared object must be limited.
++    expect(await check()).toBe(true);
++  });
++
++  it('isolates counters per IP id', async () => {
++    const ns = makeDurableObjectNamespace();
++    const hit = async (ip: string) => {
++      const stub = ns.get(ns.idFromName(ip));
++      const res = await stub.fetch('https://rate-limiter/check');
++      return ((await res.json()) as { limited: boolean }).limited;
++    };
++
++    for (let i = 0; i < RATE_LIMIT_MAX; i++) await hit('a');
++    expect(await hit('a')).toBe(true); // 'a' exhausted
++    expect(await hit('b')).toBe(false); // 'b' independent
++  });
++});
++
+ describe('Ask Styx Worker', () => {
+   beforeEach(() => {
+     vi.restoreAllMocks();
+@@ -99,18 +214,8 @@ describe('Ask Styx Worker', () => {
+   });
+ 
+   it('returns streaming response for valid request', async () => {
+-    // Mock the global fetch used to call the LLM API
+-    const mockStream = new ReadableStream({
+-      start(controller) {
+-        const encoder = new TextEncoder();
+-        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n'));
+-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+-        controller.close();
+-      },
+-    });
+-
+     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+-      new Response(mockStream, { status: 200 }),
++      new Response(okStream(), { status: 200 }),
+     );
+ 
+     const req = makeRequest(
+@@ -141,6 +246,34 @@ describe('Ask Styx Worker', () => {
+     expect(body.error).toContain('LLM API error');
+   });
+ 
++  it('enforces the rate limit through the worker fetch path (429)', async () => {
++    // One shared namespace across all requests, as the real binding is.
++    const env = makeEnv();
++    // Fresh stream per call — a single Response body can only be read once.
++    vi.spyOn(globalThis, 'fetch').mockImplementation(
++      async () => new Response(okStream(), { status: 200 }),
++    );
++
++    const send = () =>
++      worker.fetch(
++        makeRequest(
++          'POST',
++          { messages: [{ role: 'user', content: 'hi' }] },
++          { 'cf-connecting-ip': '203.0.113.7' },
++        ),
++        env as any,
++      );
++
++    for (let i = 0; i < RATE_LIMIT_MAX; i++) {
++      const res = await send();
++      expect(res.status).toBe(200);
++    }
++    const limited = await send();
++    expect(limited.status).toBe(429);
++    const body = (await limited.json()) as { error: string };
++    expect(body.error).toContain('Rate limit exceeded');
++  });
++
+   it('sets CORS headers using ALLOWED_ORIGIN env', async () => {
+     const req = makeRequest('GET', undefined, { 'cf-connecting-ip': '10.0.0.6' });
+     const res = await worker.fetch(req, makeEnv({ ALLOWED_ORIGIN: 'https://custom.io' }) as any);
+diff --git a/src/ask-styx/worker/index.ts b/src/ask-styx/worker/index.ts
+index 08e9a167..3e262e7b 100644
+--- a/src/ask-styx/worker/index.ts
++++ b/src/ask-styx/worker/index.ts
+@@ -6,7 +6,11 @@ interface Env {
+   ALLOWED_ORIGIN: string;
+   LLM_MODEL: string;
+   LLM_BASE_URL: string;
+-  RATE_LIMIT_KV: KVNamespace;
++  // Durable Object namespace backing the cross-isolate rate limiter.
++  // A Durable Object gives one single-threaded, strongly-consistent
++  // instance per IP, shared across every edge isolate — so the limit
++  // cannot be bypassed by hitting different POPs or by isolate restarts.
++  RATE_LIMITER: DurableObjectNamespace;
+ }
+ 
+ const SYSTEM_PROMPT = `You are the Styx AI assistant — an expert on the Styx peer-audited behavioral market platform. You help stakeholders (investors, partners, developers) understand how Styx works.
+@@ -22,26 +26,82 @@ GUIDELINES:
+ KNOWLEDGE BASE:
+ ${STYX_KNOWLEDGE}`;
+ 
+-const RATE_LIMIT_WINDOW_MS = 60_000;
+-const RATE_LIMIT_MAX = 30;
+-
+-function kvKey(ip: string): string {
+-  return `ratelimit:${ip}`;
++export const RATE_LIMIT_WINDOW_MS = 60_000;
++export const RATE_LIMIT_MAX = 30;
++
++const STORAGE_KEY = 'timestamps';
++
++/**
++ * Sliding-window rate-limit decision over a list of request timestamps.
++ *
++ * Pure function so it can be unit-tested directly and reused inside the
++ * Durable Object. Returns the next timestamp list to persist and whether
++ * the current request must be rejected.
++ */
++export function evaluateWindow(
++  timestamps: number[],
++  now: number,
++  windowMs: number = RATE_LIMIT_WINDOW_MS,
++  max: number = RATE_LIMIT_MAX,
++): { limited: boolean; next: number[] } {
++  const recent = timestamps.filter((t) => now - t < windowMs);
++  if (recent.length >= max) {
++    return { limited: true, next: recent };
++  }
++  recent.push(now);
++  return { limited: false, next: recent };
+ }
+ 
+-async function isRateLimited(ip: string, kv: KVNamespace): Promise<boolean> {
+-  const now = Date.now();
+-  const key = kvKey(ip);
+-  const raw = await kv.get(key);
+-  const timestamps: number[] = raw ? JSON.parse(raw) : [];
+-  const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+-  if (recent.length >= RATE_LIMIT_MAX) {
+-    await kv.put(key, JSON.stringify(recent), { expirationTtl: Math.ceil(RATE_LIMIT_WINDOW_MS / 1000) });
+-    return true;
++/**
++ * Durable Object that owns the rate-limit counter for a single IP.
++ *
++ * Cloudflare routes every request for a given object id to the SAME
++ * single-threaded instance, regardless of which edge isolate served the
++ * HTTP request. Reads/writes to its storage are strongly consistent and
++ * serialized, so the read-modify-write sequence below is atomic — there
++ * is no last-write-wins race (the failure mode of a KV-based limiter)
++ * and no per-isolate divergence (the failure mode of an in-memory Map).
++ */
++export class RateLimiter implements DurableObject {
++  private readonly state: DurableObjectState;
++
++  constructor(state: DurableObjectState) {
++    this.state = state;
+   }
+-  recent.push(now);
+-  await kv.put(key, JSON.stringify(recent), { expirationTtl: Math.ceil(RATE_LIMIT_WINDOW_MS / 1000) });
+-  return false;
++
++  async fetch(_request?: Request): Promise<Response> {
++    // blockConcurrencyWhile serializes the read-modify-write so two
++    // simultaneous requests to the same IP cannot both observe the old
++    // count and both be admitted.
++    const limited = await this.state.blockConcurrencyWhile(async () => {
++      const now = Date.now();
++      const stored = (await this.state.storage.get<number[]>(STORAGE_KEY)) ?? [];
++      const { limited, next } = evaluateWindow(stored, now);
++      await this.state.storage.put(STORAGE_KEY, next);
++      // Let the object evict itself once the window has fully elapsed so
++      // idle IPs don't retain storage forever.
++      await this.state.storage.setAlarm(now + RATE_LIMIT_WINDOW_MS);
++      return limited;
++    });
++
++    return Response.json({ limited });
++  }
++
++  // Fired when the window elapses with no further traffic: drop the
++  // counter so the object's storage is reclaimed.
++  async alarm(): Promise<void> {
++    await this.state.storage.deleteAll();
++  }
++}
++
++async function isRateLimited(ip: string, namespace: DurableObjectNamespace): Promise<boolean> {
++  // idFromName hashes the IP to a stable object id, so all requests from
++  // one IP — across every isolate and POP — reach the same instance.
++  const id = namespace.idFromName(ip);
++  const stub = namespace.get(id);
++  const res = await stub.fetch('https://rate-limiter/check');
++  const { limited } = (await res.json()) as { limited: boolean };
++  return limited;
+ }
+ 
+ function corsHeaders(origin: string) {
+@@ -66,7 +126,7 @@ export default {
+     }
+ 
+     const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
+-    if (await isRateLimited(ip, env.RATE_LIMIT_KV)) {
++    if (await isRateLimited(ip, env.RATE_LIMITER)) {
+       return Response.json(
+         { error: 'Rate limit exceeded. Try again in a minute.' },
+         { status: 429, headers },
+diff --git a/src/ask-styx/worker/wrangler.toml b/src/ask-styx/worker/wrangler.toml
+index 38fa585a..c3ccbc19 100644
+--- a/src/ask-styx/worker/wrangler.toml
++++ b/src/ask-styx/worker/wrangler.toml
+@@ -2,10 +2,23 @@ name = "ask-styx-proxy"
+ main = "index.ts"
+ compatibility_date = "2026-03-04"
+ 
+-kv_namespaces = [
+-  { binding = "RATE_LIMIT_KV", id = "rate-limit-kv" }
++# Cross-isolate rate limiter backed by a Durable Object. A Durable Object
++# gives a single, globally-consistent, single-threaded counter per IP that
++# is shared across every edge isolate and POP — so the limit cannot be
++# bypassed by spreading requests across edge locations or by waiting for
++# isolate restarts (the failure mode of the previous in-memory Map / KV
++# limiter, which only ever held per-isolate or eventually-consistent state).
++[durable_objects]
++bindings = [
++  { name = "RATE_LIMITER", class_name = "RateLimiter" }
+ ]
+ 
++# Durable Object classes must be declared in a migration. SQLite-backed
++# classes are required on the Workers Free plan and are the current default.
++[[migrations]]
++tag = "v1"
++new_sqlite_classes = ["RateLimiter"]
++
+ [vars]
+ ALLOWED_ORIGIN = "https://organvm-iii-ergon.github.io"
+ LLM_MODEL = "llama-3.3-70b-versatile"

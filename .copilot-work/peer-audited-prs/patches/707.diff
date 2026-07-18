@@ -1,0 +1,50 @@
+diff --git a/src/api/src/modules/contracts/contracts.service.behavioral.spec.ts b/src/api/src/modules/contracts/contracts.service.behavioral.spec.ts
+index e0f94a08..d2fed47e 100644
+--- a/src/api/src/modules/contracts/contracts.service.behavioral.spec.ts
++++ b/src/api/src/modules/contracts/contracts.service.behavioral.spec.ts
+@@ -317,6 +317,45 @@ describe("ContractsService — Behavioral Physics", () => {
+       expect(parsed.recovery.acknowledgments.voluntary).toBe(true);
+     });
+ 
++    // Regression: issue #34 — the whistleblower bounty link must be persisted
++    // against the REAL persisted contract id, not a temporary/placeholder value.
++    // The contract is inserted first (PENDING_STAKE) so its id exists before the
++    // bounty row references it.
++    it("should link the bounty to the real persisted contract id (issue #34)", async () => {
++      mockSuccessfulRecoveryFlow();
++
++      await service.createContract(recoveryDto);
++
++      const contractInsert = mockPool.query.mock.calls.find(
++        ([sql]: [string]) =>
++          typeof sql === "string" && sql.includes("INSERT INTO contracts"),
++      );
++      expect(contractInsert).toBeDefined();
++      // bounty_link_id is the 9th parameter ($9) on the contract insert
++      const persistedBountyLinkId = contractInsert![1][8];
++      expect(typeof persistedBountyLinkId).toBe("string");
++      expect((persistedBountyLinkId as string).length).toBeGreaterThan(0);
++
++      const bountyInsert = mockPool.query.mock.calls.find(
++        ([sql]: [string]) =>
++          typeof sql === "string" && sql.includes("INSERT INTO bounties"),
++      );
++      expect(bountyInsert).toBeDefined();
++
++      // The bounty must reference the actual contract id returned by the insert
++      // ("contract-r1" from mockSuccessfulRecoveryFlow) — not a placeholder such
++      // as 'pending' or a null/temporary id.
++      const [bountyContractId, bountyLinkId] = bountyInsert![1] as [
++        string,
++        string,
++      ];
++      expect(bountyContractId).toBe("contract-r1");
++      expect(bountyContractId).not.toBe("pending");
++      // The bounty link id stored on the bounty row matches the one persisted on
++      // the contract, keeping the Fury bounty economy in sync with its contract.
++      expect(bountyLinkId).toBe(persistedBountyLinkId);
++    });
++
+     it("should not call RecoveryProtocolService for non-RECOVERY oaths", async () => {
+       // Standard flow for COGNITIVE oath
+       mockPool.query.mockResolvedValueOnce({ rows: [activeUser] });

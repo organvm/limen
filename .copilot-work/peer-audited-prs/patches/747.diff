@@ -1,0 +1,234 @@
+diff --git a/.github/workflows/beta-promotion.yml b/.github/workflows/beta-promotion.yml
+index 7b6c02b5..33618c59 100644
+--- a/.github/workflows/beta-promotion.yml
++++ b/.github/workflows/beta-promotion.yml
+@@ -94,7 +94,7 @@ jobs:
+     environment: beta
+     steps:
+       - name: Checkout
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Deploy API to Render (beta)
+         uses: johnbeynon/render-deploy-action@v0.0.9
+@@ -109,7 +109,7 @@ jobs:
+     environment: beta
+     steps:
+       - name: Checkout
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Deploy Web to Render (beta)
+         uses: johnbeynon/render-deploy-action@v0.0.9
+@@ -125,7 +125,7 @@ jobs:
+     if: ${{ always() && needs.deploy_beta_api.result == 'success' && inputs.run_migrations }}
+     steps:
+       - name: Checkout
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Use Node.js 20.x
+         uses: actions/setup-node@v6
+@@ -148,7 +148,7 @@ jobs:
+     if: ${{ always() && needs.deploy_beta_api.result == 'success' && needs.deploy_beta_web.result == 'success' && (needs.migrate_beta.result == 'success' || needs.migrate_beta.result == 'skipped') }}
+     steps:
+       - name: Checkout
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Wait for beta services
+         run: sleep 30
+diff --git a/.github/workflows/blocked-handoff-burndown.yml b/.github/workflows/blocked-handoff-burndown.yml
+index 481e6d7a..6d173808 100644
+--- a/.github/workflows/blocked-handoff-burndown.yml
++++ b/.github/workflows/blocked-handoff-burndown.yml
+@@ -219,7 +219,7 @@ jobs:
+             }
+ 
+       - name: Checkout code
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+         with:
+           ref: ${{ github.ref_name }}
+           fetch-depth: 0
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 8b4c7991..5f208677 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -24,7 +24,7 @@ jobs:
+ 
+     steps:
+       - name: Checkout Repository
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+         with:
+           fetch-depth: 0
+ 
+@@ -38,7 +38,7 @@ jobs:
+         run: npm ci
+ 
+       - name: Turbo Cache
+-        uses: actions/cache@v5
++        uses: actions/cache@v6
+         with:
+           path: .turbo/cache
+           key: turbo-${{ hashFiles('package-lock.json', 'turbo.json') }}
+@@ -135,7 +135,7 @@ jobs:
+     continue-on-error: true
+     steps:
+       - name: Checkout Repository
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Use Node.js 20.x
+         uses: actions/setup-node@v6
+@@ -177,7 +177,7 @@ jobs:
+ 
+     steps:
+       - name: Checkout Repository
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Setup Terraform
+         uses: hashicorp/setup-terraform@v4
+@@ -201,7 +201,7 @@ jobs:
+     outputs:
+       web: ${{ steps.check.outputs.web }}
+     steps:
+-      - uses: actions/checkout@v6
++      - uses: actions/checkout@v7
+         with:
+           fetch-depth: 0
+       - id: check
+@@ -228,7 +228,7 @@ jobs:
+         browser: [chromium, firefox]
+     steps:
+       - name: Checkout Repository
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Use Node.js 20.x
+         uses: actions/setup-node@v6
+diff --git a/.github/workflows/codeql.yml b/.github/workflows/codeql.yml
+index b6c012c9..44891a9f 100644
+--- a/.github/workflows/codeql.yml
++++ b/.github/workflows/codeql.yml
+@@ -24,7 +24,7 @@ jobs:
+ 
+     steps:
+       - name: Checkout
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Initialize CodeQL
+         uses: github/codeql-action/init@v4
+diff --git a/.github/workflows/deploy-ask-styx.yml b/.github/workflows/deploy-ask-styx.yml
+index 3d2d8dee..fe4aee0a 100644
+--- a/.github/workflows/deploy-ask-styx.yml
++++ b/.github/workflows/deploy-ask-styx.yml
+@@ -23,7 +23,7 @@ jobs:
+       name: github-pages
+       url: ${{ steps.deployment.outputs.page_url }}
+     steps:
+-      - uses: actions/checkout@v6
++      - uses: actions/checkout@v7
+       - uses: actions/setup-node@v6
+         with:
+           node-version: 22
+diff --git a/.github/workflows/deploy.yml b/.github/workflows/deploy.yml
+index 2519ef31..c3965298 100644
+--- a/.github/workflows/deploy.yml
++++ b/.github/workflows/deploy.yml
+@@ -57,7 +57,7 @@ jobs:
+     environment: production
+     steps:
+       - name: Checkout
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Deploy API to Render
+         uses: johnbeynon/render-deploy-action@v0.0.9
+@@ -71,7 +71,7 @@ jobs:
+     environment: production
+     steps:
+       - name: Checkout
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Deploy Web to Render
+         uses: johnbeynon/render-deploy-action@v0.0.9
+@@ -86,7 +86,7 @@ jobs:
+     timeout-minutes: 5
+     steps:
+       - name: Checkout
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Use Node.js 20.x
+         uses: actions/setup-node@v6
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+index 2e6f95b3..734fc4ee 100644
+--- a/.github/workflows/release.yml
++++ b/.github/workflows/release.yml
+@@ -13,7 +13,7 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - name: Checkout Repository
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+         with:
+           fetch-depth: 0
+ 
+diff --git a/.github/workflows/secret-scan.yml b/.github/workflows/secret-scan.yml
+index bfc73929..9c7828ae 100644
+--- a/.github/workflows/secret-scan.yml
++++ b/.github/workflows/secret-scan.yml
+@@ -11,7 +11,7 @@ jobs:
+     name: Secret Pattern Detection
+     runs-on: ubuntu-latest
+     steps:
+-      - uses: actions/checkout@v6
++      - uses: actions/checkout@v7
+         with:
+           fetch-depth: 0
+ 
+diff --git a/.github/workflows/staging-promotion.yml b/.github/workflows/staging-promotion.yml
+index 83d3d290..b0cfb128 100644
+--- a/.github/workflows/staging-promotion.yml
++++ b/.github/workflows/staging-promotion.yml
+@@ -59,7 +59,7 @@ jobs:
+     environment: staging
+     steps:
+       - name: Checkout
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Deploy API to Render (staging)
+         uses: johnbeynon/render-deploy-action@v0.0.9
+@@ -73,7 +73,7 @@ jobs:
+     environment: staging
+     steps:
+       - name: Checkout
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Deploy Web to Render (staging)
+         uses: johnbeynon/render-deploy-action@v0.0.9
+@@ -88,7 +88,7 @@ jobs:
+     timeout-minutes: 5
+     steps:
+       - name: Checkout
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Use Node.js 20.x
+         uses: actions/setup-node@v6
+@@ -110,7 +110,7 @@ jobs:
+     environment: staging
+     steps:
+       - name: Checkout
+-        uses: actions/checkout@v6
++        uses: actions/checkout@v7
+ 
+       - name: Wait for staging services
+         run: sleep 30

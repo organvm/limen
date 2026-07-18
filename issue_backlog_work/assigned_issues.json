@@ -1,0 +1,3777 @@
+[
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #175.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnxpQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:37Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/465#issuecomment-4593414565",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 465,
+    "state": "OPEN",
+    "title": "TKT-P1-018: Tests \u2014 gradient math + leaderboard ranking",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/465",
+    "parent": 175
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #176.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwpg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/466#issuecomment-4593414310",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 466,
+    "state": "OPEN",
+    "title": "TKT-P1-006: API \u2014 push notification dispatch + device registration",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/466",
+    "parent": 176
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #176.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXMFw",
+        "name": "owner:mobile-native",
+        "description": "Primary owner role: native mobile engineering",
+        "color": "1D76DB"
+      }
+    ],
+    "number": 467,
+    "state": "OPEN",
+    "title": "TKT-P1-006: Native \u2014 APNs (iOS) + FCM (Android) integration",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/467",
+    "parent": 176
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #176.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwlQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/468#issuecomment-4593414293",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 468,
+    "state": "OPEN",
+    "title": "TKT-P1-006: Tests \u2014 delivery confirmation + fallback scenarios",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/468",
+    "parent": 176
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #177.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCIg",
+        "name": "legal",
+        "description": "Legal & compliance tasks",
+        "color": "d4c5f9"
+      }
+    ],
+    "number": 469,
+    "state": "OPEN",
+    "title": "TKT-P1-019: Whitepaper draft \u2014 skill-vs-chance legal argument",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/469",
+    "parent": 177
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #177.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXL0A",
+        "name": "owner:legal-compliance",
+        "description": "Primary owner role: legal/compliance",
+        "color": "5319E7"
+      }
+    ],
+    "number": 470,
+    "state": "OPEN",
+    "title": "TKT-P1-019: Legal review \u2014 counsel sign-off on classification",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/470",
+    "parent": 177
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #177.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwqg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/471#issuecomment-4593414314",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 471,
+    "state": "OPEN",
+    "title": "TKT-P1-019: Release gate \u2014 automated check before contest features",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/471",
+    "parent": 177
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #280.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwkQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/472#issuecomment-4593414289",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 472,
+    "state": "OPEN",
+    "title": "TKT-P1-009: Schema + API \u2014 exclusion registry + cooling-off periods",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/472",
+    "parent": 280
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #280.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwxQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/473#issuecomment-4593414341",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 473,
+    "state": "OPEN",
+    "title": "TKT-P1-009: UI \u2014 self-exclusion flow + responsible-use settings",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/473",
+    "parent": 280
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #280.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwmA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/474#issuecomment-4593414296",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 474,
+    "state": "OPEN",
+    "title": "TKT-P1-009: Tests \u2014 exclusion enforcement + re-entry validation",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/474",
+    "parent": 280
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #281.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXMFw",
+        "name": "owner:mobile-native",
+        "description": "Primary owner role: native mobile engineering",
+        "color": "1D76DB"
+      }
+    ],
+    "number": 475,
+    "state": "OPEN",
+    "title": "TKT-P1-007: Native \u2014 HealthKit/Google Health Connect integration",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/475",
+    "parent": 281
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #281.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwjg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/476#issuecomment-4593414286",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 476,
+    "state": "OPEN",
+    "title": "TKT-P1-007: UI \u2014 health data display + consent management",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/476",
+    "parent": 281
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #281.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwkg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/477#issuecomment-4593414290",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 477,
+    "state": "OPEN",
+    "title": "TKT-P1-007: Tests \u2014 data sync accuracy + privacy compliance",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/477",
+    "parent": 281
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #282.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwgw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/478#issuecomment-4593414275",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 478,
+    "state": "OPEN",
+    "title": "TKT-P1-013: API \u2014 video upload + processing pipeline",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/478",
+    "parent": 282
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #282.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnw1w",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:36Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/479#issuecomment-4593414359",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 479,
+    "state": "OPEN",
+    "title": "TKT-P1-013: UI \u2014 upload progress + processing state display",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/479",
+    "parent": 282
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #282.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwpA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/480#issuecomment-4593414308",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 480,
+    "state": "OPEN",
+    "title": "TKT-P1-013: Tests \u2014 upload flow + processing state machine",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/480",
+    "parent": 282
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #284.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwmQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/481#issuecomment-4593414297",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 481,
+    "state": "OPEN",
+    "title": "TKT-P1-014: Schema \u2014 mask configuration + audit trail",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/481",
+    "parent": 284
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #284.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwjA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/482#issuecomment-4593414284",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 482,
+    "state": "OPEN",
+    "title": "TKT-P1-014: UI \u2014 masked display toggle + audit workbench",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/482",
+    "parent": 284
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #284.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwiA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/483#issuecomment-4593414280",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 483,
+    "state": "OPEN",
+    "title": "TKT-P1-014: Tests \u2014 masking rules + display fidelity",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/483",
+    "parent": 284
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #287.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwtA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/484#issuecomment-4593414324",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 484,
+    "state": "OPEN",
+    "title": "TKT-P1-008: Schema + API \u2014 routing algorithm + cluster detection",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/484",
+    "parent": 287
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #287.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwjw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/485#issuecomment-4593414287",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 485,
+    "state": "OPEN",
+    "title": "TKT-P1-008: Admin UI \u2014 cluster visualization + override controls",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/485",
+    "parent": 287
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #287.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwlg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/486#issuecomment-4593414294",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 486,
+    "state": "OPEN",
+    "title": "TKT-P1-008: Tests \u2014 routing fairness + collusion detection accuracy",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/486",
+    "parent": 287
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #289.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwlw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/487#issuecomment-4593414295",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 487,
+    "state": "OPEN",
+    "title": "TKT-P1-015: Schema + API \u2014 slashing rules + honey-trap triggers",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/487",
+    "parent": 289
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #289.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwsA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/488#issuecomment-4593414320",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 488,
+    "state": "OPEN",
+    "title": "TKT-P1-015: Admin UI \u2014 enforcement dashboard + evidence review",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/488",
+    "parent": 289
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #289.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwhA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/489#issuecomment-4593414276",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 489,
+    "state": "OPEN",
+    "title": "TKT-P1-015: Tests \u2014 slashing calculation + false positive safeguards",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/489",
+    "parent": 289
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #178.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnwig",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/490#issuecomment-4593414282",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 490,
+    "state": "OPEN",
+    "title": "Service scaffolding \u2014 NestJS module + 19 contract checks",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/490",
+    "parent": 178
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #178.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      }
+    ],
+    "number": 491,
+    "state": "OPEN",
+    "title": "CI integration \u2014 pre-deploy gate + status reporting",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/491",
+    "parent": 178
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #178.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnvvg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:33Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/492#issuecomment-4593414078",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 492,
+    "state": "OPEN",
+    "title": "Tests \u2014 all 19 readiness criteria pass/fail",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/492",
+    "parent": 178
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #46.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnqGg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:14:23Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/493#issuecomment-4593412634",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 493,
+    "state": "OPEN",
+    "title": "Schema + API \u2014 survey definitions + response storage",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/493",
+    "parent": 46
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #46.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnpDQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:14:20Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/494#issuecomment-4593412365",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 494,
+    "state": "OPEN",
+    "title": "UI \u2014 survey presentation + completion tracking",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/494",
+    "parent": 46
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #46.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnnhA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:14:18Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/495#issuecomment-4593411972",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 495,
+    "state": "OPEN",
+    "title": "Tests \u2014 survey flow + statistical analysis pipeline",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/495",
+    "parent": 46
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #47.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnmLA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:14:15Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/496#issuecomment-4593411628",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 496,
+    "state": "OPEN",
+    "title": "Schema \u2014 emotional tracking fields (urge, trigger, outcome)",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/496",
+    "parent": 47
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #47.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnlIw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:14:13Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/497#issuecomment-4593411363",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 497,
+    "state": "OPEN",
+    "title": "UI \u2014 daily attestation emotional input components",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/497",
+    "parent": 47
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #47.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnjXQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:14:09Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/498#issuecomment-4593410909",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 498,
+    "state": "OPEN",
+    "title": "Tests \u2014 attestation flow + data integrity",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/498",
+    "parent": 47
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #52.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnh1Q",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:14:06Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/499#issuecomment-4593410517",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 499,
+    "state": "OPEN",
+    "title": "Schema + API \u2014 queue management + cohort threshold logic",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/499",
+    "parent": 52
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #52.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcngWg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:14:04Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/500#issuecomment-4593410138",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 500,
+    "state": "OPEN",
+    "title": "UI \u2014 waitlist position display + notification opt-in",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/500",
+    "parent": 52
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #52.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnerA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:14:01Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/501#issuecomment-4593409708",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 501,
+    "state": "OPEN",
+    "title": "Tests \u2014 queue ordering + cohort fill triggers",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/501",
+    "parent": 52
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #58.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcndLg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:58Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/502#issuecomment-4593409326",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 502,
+    "state": "OPEN",
+    "title": "Schema + API \u2014 referral tracking + reward distribution",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/502",
+    "parent": 58
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #58.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnbog",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:55Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/503#issuecomment-4593408930",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 503,
+    "state": "OPEN",
+    "title": "UI \u2014 referral link generation + reward status",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/503",
+    "parent": 58
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #58.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnaPQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:53Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/504#issuecomment-4593408573",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 504,
+    "state": "OPEN",
+    "title": "Tests \u2014 referral attribution + double-spend prevention",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/504",
+    "parent": 58
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "## Summary\nShip the final public-facing landing page copy for the Phase 1 wedge.\n\nScope lock:\n- `No-Contact recovery`\n- `iOS` private beta\n- `Test-Money Pilot`\n- `US allowlist`\n\n## Scope\n- select the final homepage hero, subhead, CTA, and trust line\n- lock the problem, how-it-works, and CTA sections for the no-contact landing page\n- make every public CTA route to `Join the Private Beta`\n- keep the copy inside the approved Phase 1 language and trust guardrails\n\n## Done When\n- one approved homepage copy set exists\n- the live or previewable landing page uses that copy\n- the page has one clear CTA to the beta waitlist\n- the copy does not lead with `blockchain`, `Fury`, `wager`, or `real money`\n\n## Source Docs\n- [Positioning Core](docs/planning/planning--positioning-core--2026-03-10.md)\n- [Phase 1 Copy Pack](docs/planning/planning--phase1-copy-pack--2026-03-10.md)\n- [30-Day GTM Strike Plan](docs/planning/planning--30-day-gtm-strike-plan--2026-03-10.md)\n\nSub-issue of #59\n",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEchssw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Marketing deliverable - not a code feature. Landing page exists at src/web; copy/content is marketing.",
+        "createdAt": "2026-06-01T14:03:01Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/505#issuecomment-4593314995",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AqWw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:41Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/505#issuecomment-4691339867",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9iA",
+        "name": "P1-beta-enhancer",
+        "description": "Should-have for private beta",
+        "color": "E99695"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCrg",
+        "name": "marketing",
+        "description": "Growth & marketing tasks",
+        "color": "c2e0c6"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACax_kuA",
+        "name": "follow-up",
+        "description": "Needs active follow-up in upcoming operating reviews",
+        "color": "F9D0C4"
+      }
+    ],
+    "number": 505,
+    "state": "OPEN",
+    "title": "Landing page \u2014 no-contact hero copy + waitlist CTA",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/505",
+    "parent": 59
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "## Summary\nImplement the backend side of the Phase 1 beta waitlist funnel.\n\n## Scope\n- accept waitlist signups from the landing page and beta application flow\n- capture qualification fields and source tags\n- send the confirmation email or queue-confirmation response\n- preserve source attribution for organic, creator, practitioner, referral, and direct traffic\n- expose export/admin access needed for follow-up and cohort admissions\n\n## Done When\n- the waitlist endpoint accepts the approved form fields\n- source attribution is captured with each signup\n- confirmation email or equivalent confirmation flow works\n- signups can be exported or reviewed for cohort decisions\n\n## Source Docs\n- [30-Day GTM Strike Plan](docs/planning/planning--30-day-gtm-strike-plan--2026-03-10.md)\n- [GTM War Board](docs/planning/planning--gtm-war-board--2026-03-10.md)\n- [Closed Beta Waitlist Funnel](https://github.com/organvm-iii-ergon/peer-audited--behavioral-blockchain/issues/59)\n\nSub-issue of #59\n",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcht_A",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Marketing/business - waitlist signup is an operational funnel decision. API infrastructure for user signup exists; waitlist-specific flow is business ops.",
+        "createdAt": "2026-06-01T14:03:04Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/506#issuecomment-4593315324",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AreA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:43Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/506#issuecomment-4691340152",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwBQ",
+        "name": "api",
+        "description": "NestJS API workspace",
+        "color": "0E8A16"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9iA",
+        "name": "P1-beta-enhancer",
+        "description": "Should-have for private beta",
+        "color": "E99695"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCrg",
+        "name": "marketing",
+        "description": "Growth & marketing tasks",
+        "color": "c2e0c6"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACax_kuA",
+        "name": "follow-up",
+        "description": "Needs active follow-up in upcoming operating reviews",
+        "color": "F9D0C4"
+      }
+    ],
+    "number": 506,
+    "state": "OPEN",
+    "title": "API \u2014 waitlist signup + confirmation email + source tagging",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/506",
+    "parent": 59
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #59.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnYwQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:50Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/507#issuecomment-4593408193",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 507,
+    "state": "OPEN",
+    "title": "Tests \u2014 conversion tracking + email delivery",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/507",
+    "parent": 59
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #60.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnWsA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:46Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/508#issuecomment-4593407664",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 508,
+    "state": "OPEN",
+    "title": "Schema \u2014 violation code definitions + rejection reasons",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/508",
+    "parent": 60
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #60.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnVOw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:43Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/509#issuecomment-4593407291",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 509,
+    "state": "OPEN",
+    "title": "API \u2014 violation code CRUD + audit trail",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/509",
+    "parent": 60
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #60.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnT9w",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:41Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/510#issuecomment-4593406967",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 510,
+    "state": "OPEN",
+    "title": "Tests \u2014 taxonomy completeness + audit logging",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/510",
+    "parent": 60
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #61.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnStw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:38Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/511#issuecomment-4593406647",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 511,
+    "state": "OPEN",
+    "title": "Schema + API \u2014 exclusion criteria + suspension logic",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/511",
+    "parent": 61
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #61.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnRTQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:36Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/512#issuecomment-4593406285",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 512,
+    "state": "OPEN",
+    "title": "UI \u2014 exclusion request flow + suspension status",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/512",
+    "parent": 61
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #61.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnPyg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:33Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/513#issuecomment-4593405898",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 513,
+    "state": "OPEN",
+    "title": "Tests \u2014 exclusion triggers + re-entry validation",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/513",
+    "parent": 61
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #62.",
+    "comments": [],
+    "labels": [],
+    "number": 514,
+    "state": "OPEN",
+    "title": "Schema + API \u2014 tier definitions + escalation rules",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/514",
+    "parent": 62
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #62.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcUIHw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Closed by PR #648",
+        "createdAt": "2026-06-01T13:36:18Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/515#issuecomment-4593092639",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 515,
+    "state": "OPEN",
+    "title": "UI \u2014 verification requirement display per tier",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/515",
+    "parent": 62
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #62.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcUKFg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Closed by PR #648",
+        "createdAt": "2026-06-01T13:36:22Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/516#issuecomment-4593093142",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 516,
+    "state": "OPEN",
+    "title": "Tests \u2014 tier transitions + escalation triggers",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/516",
+    "parent": 62
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #63.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcULoA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Closed by PR #648",
+        "createdAt": "2026-06-01T13:36:25Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/517#issuecomment-4593093536",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 517,
+    "state": "OPEN",
+    "title": "API \u2014 content moderation queue + automated filtering",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/517",
+    "parent": 63
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #63.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcUNHQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Closed by PR #648",
+        "createdAt": "2026-06-01T13:36:28Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/518#issuecomment-4593093917",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 518,
+    "state": "OPEN",
+    "title": "Admin UI \u2014 moderation dashboard + appeal flow",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/518",
+    "parent": 63
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #63.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcUOag",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Closed by PR #648",
+        "createdAt": "2026-06-01T13:36:30Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/519#issuecomment-4593094250",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 519,
+    "state": "OPEN",
+    "title": "Tests \u2014 filter accuracy + moderation latency",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/519",
+    "parent": 63
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #66.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnOPg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:30Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/520#issuecomment-4593405502",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 520,
+    "state": "OPEN",
+    "title": "Schema + API \u2014 circuit breaker state machine + pause logic",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/520",
+    "parent": 66
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #66.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnMcg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:27Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/521#issuecomment-4593405042",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 521,
+    "state": "OPEN",
+    "title": "UI \u2014 countdown display + pause/resume controls",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/521",
+    "parent": 66
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #66.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnK1A",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/522#issuecomment-4593404628",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 522,
+    "state": "OPEN",
+    "title": "Tests \u2014 state transitions + timer accuracy",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/522",
+    "parent": 66
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #160.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      }
+    ],
+    "number": 523,
+    "state": "OPEN",
+    "title": "Infrastructure \u2014 k6/artillery setup + test scenarios",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/523",
+    "parent": 160
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #160.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      }
+    ],
+    "number": 524,
+    "state": "OPEN",
+    "title": "Fury Router queue saturation test suite",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/524",
+    "parent": 160
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #160.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnJRA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:21Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/525#issuecomment-4593404228",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      }
+    ],
+    "number": 525,
+    "state": "OPEN",
+    "title": "Tests \u2014 baseline establishment + regression thresholds",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/525",
+    "parent": 160
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #163.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnH2w",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:18Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/526#issuecomment-4593403867",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 526,
+    "state": "OPEN",
+    "title": "Copy \u2014 linguistically safe notification templates",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/526",
+    "parent": 163
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #163.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnGlQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:16Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/527#issuecomment-4593403541",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 527,
+    "state": "OPEN",
+    "title": "UI \u2014 notification display + acknowledgment flow",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/527",
+    "parent": 163
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #163.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnE7w",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:13Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/528#issuecomment-4593403119",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 528,
+    "state": "OPEN",
+    "title": "Tests \u2014 copy validation + delivery confirmation",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/528",
+    "parent": 163
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #295.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnDgQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:10Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/529#issuecomment-4593402753",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 529,
+    "state": "OPEN",
+    "title": "Checklist automation \u2014 readiness criteria check script",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/529",
+    "parent": 295
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #295.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      }
+    ],
+    "number": 530,
+    "state": "OPEN",
+    "title": "Gate enforcement \u2014 CI integration + blocking status",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/530",
+    "parent": 295
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #296.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnBQg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:06Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/531#issuecomment-4593402178",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 531,
+    "state": "OPEN",
+    "title": "Checklist automation \u2014 financial readiness criteria",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/531",
+    "parent": 296
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #296.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCIg",
+        "name": "legal",
+        "description": "Legal & compliance tasks",
+        "color": "d4c5f9"
+      }
+    ],
+    "number": 532,
+    "state": "OPEN",
+    "title": "Gate enforcement \u2014 settlement + compliance verification",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/532",
+    "parent": 296
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #297.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcm_8g",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:03Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/533#issuecomment-4593401842",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 533,
+    "state": "OPEN",
+    "title": "Checklist automation \u2014 App Store guidelines compliance",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/533",
+    "parent": 297
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #297.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcm-Bw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:13:00Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/534#issuecomment-4593401351",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 534,
+    "state": "OPEN",
+    "title": "Gate enforcement \u2014 legal + UX + performance criteria",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/534",
+    "parent": 297
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #298.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcm8TQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:12:57Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/535#issuecomment-4593400909",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 535,
+    "state": "OPEN",
+    "title": "Checklist automation \u2014 enterprise infrastructure criteria",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/535",
+    "parent": 298
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #298.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcm6pA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:12:54Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/536#issuecomment-4593400484",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 536,
+    "state": "OPEN",
+    "title": "Gate enforcement \u2014 security + DPA + demo readiness",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/536",
+    "parent": 298
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #309.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcm5Mg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:12:51Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/537#issuecomment-4593400114",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 537,
+    "state": "OPEN",
+    "title": "Schema + API \u2014 spike calculation + stake doubling logic",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/537",
+    "parent": 309
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #309.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcm39A",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:12:49Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/538#issuecomment-4593399796",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 538,
+    "state": "OPEN",
+    "title": "UI \u2014 spike indicator + incentive display",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/538",
+    "parent": 309
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #309.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcm2bA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:12:46Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/539#issuecomment-4593399404",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 539,
+    "state": "OPEN",
+    "title": "Tests \u2014 calculation accuracy + edge cases",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/539",
+    "parent": 309
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #310.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcm03w",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:12:43Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/540#issuecomment-4593399007",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 540,
+    "state": "OPEN",
+    "title": "Schema \u2014 per-state compliance flags + feature toggles",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/540",
+    "parent": 310
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #310.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcmzeA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:12:41Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/541#issuecomment-4593398648",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 541,
+    "state": "OPEN",
+    "title": "Admin UI \u2014 state toggle management + audit trail",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/541",
+    "parent": 310
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #310.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcmx3g",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:12:38Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/542#issuecomment-4593398238",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 542,
+    "state": "OPEN",
+    "title": "Tests \u2014 toggle enforcement + state combinations",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/542",
+    "parent": 310
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #311.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcmv1w",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:12:34Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/543#issuecomment-4593397719",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 543,
+    "state": "OPEN",
+    "title": "UI \u2014 stake amount selector + bounds enforcement",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/543",
+    "parent": 311
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #311.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcmt_w",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:12:31Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/544#issuecomment-4593397247",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 544,
+    "state": "OPEN",
+    "title": "API \u2014 validation + jurisdictional bounds lookup",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/544",
+    "parent": 311
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #311.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcmr7Q",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:12:28Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/545#issuecomment-4593396717",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 545,
+    "state": "OPEN",
+    "title": "Tests \u2014 bounds enforcement + UX state management",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/545",
+    "parent": 311
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Root-level phase gate for the Styx project.\n\nAll top-level Beta-phase items are sub-issues of this gate.\n\nThis issue tracks the overall progress of the Beta phase.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACan_1-w",
+        "name": "epic",
+        "description": "Top-level phase gate or epic",
+        "color": "7057ff"
+      }
+    ],
+    "number": 555,
+    "state": "OPEN",
+    "title": "\ud83c\udfdb Phase Beta \u2014 Market-safe money enablement (Alpha\u2192Beta gate)",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/555",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Root-level phase gate for the Styx project.\n\nAll top-level Gamma-phase items are sub-issues of this gate.\n\nThis issue tracks the overall progress of the Gamma phase.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACan_1-w",
+        "name": "epic",
+        "description": "Top-level phase gate or epic",
+        "color": "7057ff"
+      }
+    ],
+    "number": 556,
+    "state": "OPEN",
+    "title": "\ud83c\udfdb Phase Gamma \u2014 Proof integrity at scale (Beta\u2192Gamma gate)",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/556",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Root-level phase gate for the Styx project.\n\nAll top-level Delta-phase items are sub-issues of this gate.\n\nThis issue tracks the overall progress of the Delta phase.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACan_1-w",
+        "name": "epic",
+        "description": "Top-level phase gate or epic",
+        "color": "7057ff"
+      }
+    ],
+    "number": 557,
+    "state": "OPEN",
+    "title": "\ud83c\udfdb Phase Delta \u2014 Retention + network effects (Gamma\u2192Delta gate)",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/557",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Root-level phase gate for the Styx project.\n\nAll top-level Omega-phase items are sub-issues of this gate.\n\nThis issue tracks the overall progress of the Omega phase.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACan_1-w",
+        "name": "epic",
+        "description": "Top-level phase gate or epic",
+        "color": "7057ff"
+      }
+    ],
+    "number": 558,
+    "state": "OPEN",
+    "title": "\ud83c\udfdb Phase Omega \u2014 Enterprise expansion (Delta\u2192Omega gate)",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/558",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "## Summary\nBuild the authority and trust layer that makes the private beta feel credible before broad awareness exists.\n\n## Scope\n- publish the founder essay on why no-contact recovery fails without accountability\n- publish the plain-English beta safety/scope summary\n- make the trust asset linkable from the landing page, beta page, and Styx social\n- keep the message inside the Phase 1 wedge and avoid broad platform language\n\n## Done When\n- the founder essay is published or ready to publish\n- the beta safety/trust summary is published or ready to publish\n- both assets are linkable from the funnel and social surfaces\n- the authority layer is usable in outreach and cohort trust-building\n\n## Source Docs\n- [30-Day GTM Strike Plan](docs/planning/planning--30-day-gtm-strike-plan--2026-03-10.md)\n- [Market Attack Plan](docs/planning/planning--market-attack-plan--2026-03-10.md)\n- [Phase 1 Copy Pack](docs/planning/planning--phase1-copy-pack--2026-03-10.md)\n\nSub-issue of #288\n",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABB3wEzA",
+        "author": {
+          "login": "github-actions"
+        },
+        "authorAssociation": "CONTRIBUTOR",
+        "body": "This issue has been automatically marked as stale because it has not had recent activity. It will be closed in 14 days if no further activity occurs.",
+        "createdAt": "2026-05-11T12:09:22Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/561#issuecomment-4420535500",
+        "viewerDidAuthor": false
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9iA",
+        "name": "P1-beta-enhancer",
+        "description": "Should-have for private beta",
+        "color": "E99695"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCrg",
+        "name": "marketing",
+        "description": "Growth & marketing tasks",
+        "color": "c2e0c6"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACax_kuA",
+        "name": "follow-up",
+        "description": "Needs active follow-up in upcoming operating reviews",
+        "color": "F9D0C4"
+      }
+    ],
+    "number": 561,
+    "state": "OPEN",
+    "title": "Authority layer \u2014 founder essay + beta safety/trust summary",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/561",
+    "parent": 288
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "## Severity: High\n\n## Problem\n\nCurrently 3 cases cited repeatedly (*Murphy v. NCAA*, *White v. Cuomo*, *Dew-Becker v. Wu*). Gold-standard legal analysis requires 15-25 cases including diverse authority types.\n\n## Affected Files\n\n- `docs/legal/legal--skill-based-contest-whitepaper.md`\n- `docs/legal/legal--aegis-protocol.md`\n- `docs/legal/legal--real-money-activation-brief.md`\n\n## Required Research\n\n- State-level AG opinions on skill-based contest platforms\n- Unpublished orders / administrative rulings from state gaming commissions\n- DFS-specific litigation (*FanDuel v. Attorney General*, *Interactive Games v. Commonwealth*)\n- Commitment device / contingency management case law\n- *Humphrey v. Viacom* (DFS class action), *People v. World Interactive Gaming* (NY)\n- FinCEN administrative rulings on escrow-as-a-service\n\n## Acceptance Criteria\n\n- [ ] Whitepaper Table of Authorities has \u226515 cases\n- [ ] Each new case has proper Bluebook citation with pinpoint page\n- [ ] Cases are web-verified via Google Scholar (not overruled/superseded)\n- [ ] Supporting docs updated where new cases are relevant",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs7wFWFB",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Lane A sequencing note:\n\nThis issue should start only after #563 is complete.\n\nWhy:\n- `#563` inserts a new section and changes whitepaper numbering.\n- This issue expands the Table of Authorities and threads citations throughout the paper and supporting docs.\n- Doing this first means #563 will force a second renumbering pass over the same material.\n\nExecution order:\n1. `#563` adverse authority section + renumbering\n2. `#562` case law expansion + ToA expansion + citation pass\n",
+        "createdAt": "2026-03-10T01:11:06Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/562#issuecomment-4027932993",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs7wICM0",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Completed in commit 626b9d8. Legal corpus upgraded to gold-standard: 18 cases in ToA, adverse authority section, FinCEN deep dive (5+ guidance docs, 10-state AOTP matrix, OCC/CSBS citations), and 5 appendices (FBO diagram, ToS-Aegis markup, App Review mockups, blocklist table, counsel checklist). 2 citation plausibility flags remain for counsel review.",
+        "createdAt": "2026-03-10T04:45:09Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/562#issuecomment-4028638004",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AsYA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:46Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/562#issuecomment-4691340384",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9iA",
+        "name": "P1-beta-enhancer",
+        "description": "Should-have for private beta",
+        "color": "E99695"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXL0A",
+        "name": "owner:legal-compliance",
+        "description": "Primary owner role: legal/compliance",
+        "color": "5319E7"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaZWplg",
+        "name": "research",
+        "description": "Market research and competitor analysis",
+        "color": "0E8A16"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCIg",
+        "name": "legal",
+        "description": "Legal & compliance tasks",
+        "color": "d4c5f9"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACax_kuA",
+        "name": "follow-up",
+        "description": "Needs active follow-up in upcoming operating reviews",
+        "color": "F9D0C4"
+      }
+    ],
+    "number": 562,
+    "state": "OPEN",
+    "title": "Expand case law coverage to 15-25 cases in whitepaper and supporting docs",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/562",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "## Severity: High\n\n## Problem\n\nGold-standard briefs affirmatively address the strongest arguments *against* the position. The whitepaper currently does not seriously engage with counterarguments.\n\n## Affected Files\n\n- `docs/legal/legal--skill-based-contest-whitepaper.md`\n\n## Required Work\n\nAdd a new section (between current \u00a79 and \u00a710) titled **\"Adverse Authority and Counterarguments\"** covering:\n\n1. **Pool-prize argument:** Forfeiture redistribution creates a \"pool prize\" potentially indistinguishable from gambling pot mechanics\n2. **Metabolic variance as chance:** Weight fluctuation from water retention, hormonal cycles, illness could be characterized as a chance element under the material element test\n3. **Consideration not eliminated:** The deposit-contract theory hasn't been tested \u2014 a court could hold that depositing funds into an escrow that may be forfeited IS gambling consideration\n4. **State AG enforcement discretion:** AGs in consumer-protection-aggressive states (NY, CA, IL) could challenge the classification regardless of legal merit\n5. **\"House always wins\" optics:** Platform fee structure means Styx profits regardless of user outcomes \u2014 regulators may view this as a house edge\n\n## Acceptance Criteria\n\n- [ ] New section \u2265500 words\n- [ ] Each counterargument has a rebuttal with supporting authority\n- [ ] Uses *But see* and *Cf.* Bluebook signals appropriately\n- [ ] Includes at least 3 adverse cases or AG opinions",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs7wFWDk",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Lane A sequencing note:\n\nThis issue must be completed before #562.\n\nWhy:\n- `#563` inserts a new `Adverse Authority and Counterarguments` section into the whitepaper.\n- That changes section numbering and the Table of Authorities structure.\n- If `#562` expands citations first, this issue will renumber and disturb the work that #562 just touched.\n\nExecution order:\n1. `#563` adverse authority section + renumbering\n2. `#562` case law expansion + ToA expansion + citation pass\n",
+        "createdAt": "2026-03-10T01:11:04Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/563#issuecomment-4027932900",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs7wICNz",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Completed in commit 626b9d8. Legal corpus upgraded to gold-standard: 18 cases in ToA, adverse authority section, FinCEN deep dive (5+ guidance docs, 10-state AOTP matrix, OCC/CSBS citations), and 5 appendices (FBO diagram, ToS-Aegis markup, App Review mockups, blocklist table, counsel checklist). 2 citation plausibility flags remain for counsel review.",
+        "createdAt": "2026-03-10T04:45:10Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/563#issuecomment-4028638067",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AtQg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:48Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/563#issuecomment-4691340610",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXL0A",
+        "name": "owner:legal-compliance",
+        "description": "Primary owner role: legal/compliance",
+        "color": "5319E7"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCIg",
+        "name": "legal",
+        "description": "Legal & compliance tasks",
+        "color": "d4c5f9"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACax_kuA",
+        "name": "follow-up",
+        "description": "Needs active follow-up in upcoming operating reviews",
+        "color": "F9D0C4"
+      }
+    ],
+    "number": 563,
+    "state": "OPEN",
+    "title": "Add adverse authority analysis section to whitepaper",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/563",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "## Severity: High\n\n## Problem\n\n\u00a79 of the whitepaper lists \"representative jurisdictions\" without actual state-by-state statutory analysis. A proper survey is a standalone 30-50 page deliverable.\n\n## Affected Files\n\n- New file: `docs/legal/legal--50-state-skill-contest-survey.md`\n\n## Required Structure (per state)\n\n- Gambling statute citation\n- Legal test applied (dominant factor / material element / any chance)\n- DFS-specific legislation (if any)\n- Skill-contest carve-outs or licensing requirements\n- AG opinions or enforcement history relevant to commitment devices\n- Risk classification for Styx (Low / Medium / High / Block)\n- `STYX_STATE_BLOCKLIST` recommendation\n\n## Acceptance Criteria\n\n- [ ] All 50 states + DC covered\n- [ ] Each entry has statutory citation with Bluebook format\n- [ ] Blocklist recommendations backed by specific statutory language\n- [ ] Cross-referenced from whitepaper \u00a79 and gatekeeper-compliance \u00a74\n- [ ] Minimum 1,500 lines",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs7wFhKI",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Completed Issue #564 \u2014 Produced comprehensive 50-state survey.\n\n### Key Deliverables:\n1. **New Artifact:** Created `docs/legal/legal--50-state-skill-contest-survey.md`.\n2. **Analysis:** covered all 50 states + DC with Bluebook citations and risk classifications.\n3. **Blocklist Strategy:** Recommended a 7-state blocklist (`AZ,AR,HI,ID,MT,NV,UT`) based on \"Any Chance\" standards and unlicensed wagering hostility.\n4. **Integration:** Cross-referenced in Whitepaper and Gatekeeper docs.\n\nSurvey exceeds 1,500 lines of detailed statutory analysis.",
+        "createdAt": "2026-03-10T01:25:10Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/564#issuecomment-4027978376",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AuIQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:50Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/564#issuecomment-4691340833",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9iA",
+        "name": "P1-beta-enhancer",
+        "description": "Should-have for private beta",
+        "color": "E99695"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaZWplg",
+        "name": "research",
+        "description": "Market research and competitor analysis",
+        "color": "0E8A16"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCIg",
+        "name": "legal",
+        "description": "Legal & compliance tasks",
+        "color": "d4c5f9"
+      }
+    ],
+    "number": 564,
+    "state": "OPEN",
+    "title": "Produce 50-state skill-contest statutory survey",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/564",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "## Severity: Medium\n\n## Problem\n\nCurrent analysis cites one 2013 virtual currency guidance letter (FIN-2013-G001). Gold-standard FBO opinion requires broader regulatory authority.\n\n## Affected Files\n\n- `docs/legal/legal--real-money-activation-brief.md`\n- `docs/legal/legal--aegis-protocol.md`\n\n## Required Research\n\n- FinCEN Guidance FIN-2019-G001 (payment processors acting as agents)\n- FinCEN administrative rulings on escrow services (CVC rulings 2014-2019)\n- State-specific MTL exemptions for FBO/escrow structures\n- OCC interpretive letters on payment processing\n- Conference of State Bank Supervisors (CSBS) model language\n- *Heller v. Cen-Tex Savings* and payment processor precedent\n\n## Acceptance Criteria\n\n- [ ] Real-money brief \u00a73 cites \u22655 FinCEN guidance documents/rulings\n- [ ] State MTL exemption analysis for top 10 launch states\n- [ ] Aegis protocol \u00a74 updated with stronger FBO legal basis\n- [ ] All new authorities in Table of Authorities",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs7wICO2",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Completed in commit 626b9d8. Legal corpus upgraded to gold-standard: 18 cases in ToA, adverse authority section, FinCEN deep dive (5+ guidance docs, 10-state AOTP matrix, OCC/CSBS citations), and 5 appendices (FBO diagram, ToS-Aegis markup, App Review mockups, blocklist table, counsel checklist). 2 citation plausibility flags remain for counsel review.",
+        "createdAt": "2026-03-10T04:45:12Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/565#issuecomment-4028638134",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6Au3A",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:52Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/565#issuecomment-4691341020",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9iA",
+        "name": "P1-beta-enhancer",
+        "description": "Should-have for private beta",
+        "color": "E99695"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCIg",
+        "name": "legal",
+        "description": "Legal & compliance tasks",
+        "color": "d4c5f9"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCxA",
+        "name": "finance",
+        "description": "Finance & revenue tasks",
+        "color": "fef2c0"
+      }
+    ],
+    "number": 565,
+    "state": "OPEN",
+    "title": "Deepen FinCEN / money transmitter analysis for FBO structure",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/565",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "## Severity: Medium\n\n## Problem\n\nConsent matrix flags heart rate data as \"MAY qualify\" as biometric under BIPA (740 Ill. Comp. Stat. 14/15) without analyzing the statutory definition or controlling case law.\n\n## Affected Files\n\n- `docs/legal/legal--cross-jurisdictional-consent-matrix.md`\n\n## Required Analysis\n\n- BIPA \u00a7 10 definition of \"biometric identifier\" \u2014 does passively collected wearable heart rate data meet the threshold?\n- *Rosenbach v. Six Flags Entertainment Corp.*, 2019 IL 123186 (standing under BIPA)\n- *Cothron v. White Castle System, Inc.*, 2023 IL 128004 (per-scan accrual of BIPA claims)\n- *Rivera v. Google LLC* (N.D. Ill. 2020) (what constitutes a \"biometric identifier\")\n- Texas CUBI (Tex. Bus. & Com. Code \u00a7 503.001) \u2014 parallel analysis\n- Washington My Health My Data Act \u2014 scope determination for wearable health data\n\n## Acceptance Criteria\n\n- [ ] \"MAY qualify\" replaced with definitive analysis + recommendation\n- [ ] Illinois consent template updated if heart rate IS biometric\n- [ ] Texas CUBI consent template added if needed\n- [ ] \u22653 BIPA cases cited with Bluebook format",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs7wFYan",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Completed Lane D \u2014 Biometric/privacy sprint for Issue #566.\n\n### Key Updates:\n1. **Definitive Classification:** Heart rate data is confirmed NOT to be a \"biometric identifier\" under Illinois BIPA (740 ILCS 14/10) or Texas CUBI (Tex. Bus. & Com. Code \u00a7 503.001) due to the narrow, list-limited statutory definitions.\n2. **Washington MHMDA Scope:** Heart rate data IS classified as \"consumer health data\" and \"biometric data\" under Washington's My Health My Data Act (Wash. Rev. Code \u00a7 19.373.005), requiring explicit opt-in and granting consumers an absolute right of deletion.\n3. **Texas TDPSA Alignment:** Wearable heart rate data is regulated as \"sensitive data\" under the Texas Data Privacy and Security Act (TDPSA).\n4. **Consent Matrix Update:** Refreshed `docs/legal/legal--cross-jurisdictional-consent-matrix.md` with updated jurisdiction logic and Bluebook citations for *Rosenbach*, *Cothron*, and *Rivera*.\n5. **New Templates:** Added jurisdictional consent templates for Texas (TDPSA) and Washington (MHMDA).\n\nAll acceptance criteria met.",
+        "createdAt": "2026-03-10T01:13:59Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/566#issuecomment-4027942567",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6Av3Q",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:54Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/566#issuecomment-4691341277",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9iA",
+        "name": "P1-beta-enhancer",
+        "description": "Should-have for private beta",
+        "color": "E99695"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaZWplg",
+        "name": "research",
+        "description": "Market research and competitor analysis",
+        "color": "0E8A16"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCIg",
+        "name": "legal",
+        "description": "Legal & compliance tasks",
+        "color": "d4c5f9"
+      }
+    ],
+    "number": 566,
+    "state": "OPEN",
+    "title": "Resolve BIPA biometric data classification for wearable data",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/566",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "## Severity: Medium\n\n## Problem\n\nSeveral states have enacted Daily Fantasy Sports statutes that define \"fantasy contest\" with specific criteria. The whitepaper mentions them in passing (\u00a79.4) but doesn't map Styx's mechanics against each statute's definition.\n\n## Affected Files\n\n- `docs/legal/legal--skill-based-contest-whitepaper.md`\n- `docs/legal/legal--50-state-skill-contest-survey.md` (if created per #issue-3)\n\n## Required Analysis (per DFS state)\n\n- Does the statute's definition of \"fantasy contest\" or \"skill-based contest\" capture Styx?\n- Does Styx need to register/license under the DFS framework?\n- Are there entry fee caps, surety bond requirements, or consumer protection mandates?\n- Key states: NY (\u00a7\u00a7 1400-1410), IN (\u00a7 4-33-24), CO (\u00a7 12-15.5-101), VA (\u00a7 59.1-556), MA (940 CMR 34.00), TN (\u00a7 47-18-5601)\n\n## Acceptance Criteria\n\n- [ ] Analysis for \u226510 DFS-legislated states\n- [ ] Each state has: statutory citation, definitional analysis, registration requirement, Styx applicability determination\n- [ ] Whitepaper \u00a79.4 updated from placeholder to substantive analysis\n- [ ] `[COUNSEL: VERIFY]` flags removed for reviewed states",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs7wFhQ7",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Completed Issue #567 \u2014 Mapped Styx against DFS frameworks.\n\n### Key Updates:\n1. **Whitepaper \u00a79.4 Substantive Update:** Replaced placeholder with detailed analysis of NY, IN, CO, and VA DFS frameworks.\n2. **Definitional Mapping:** Determined that Styx is generally EXEMPT from DFS registration because behavioral goals (e.g., fitness) do not meet the statutory criteria for \"athletic events\" or \"team rosters\" used in those frameworks.\n3. **Regulatory Clarity:** Removed `[COUNSEL: VERIFY]` flags for the analyzed states.\n4. **Consistency:** Synchronized the 7-state blocklist across Whitepaper, Gatekeeper, and Consent Matrix documents.\n\nReady for final counsel review.",
+        "createdAt": "2026-03-10T01:25:17Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/567#issuecomment-4027978811",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AwoA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:56Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/567#issuecomment-4691341472",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9tA",
+        "name": "P2-post-beta",
+        "description": "Post-beta feature",
+        "color": "FEF2C0"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaZWplg",
+        "name": "research",
+        "description": "Market research and competitor analysis",
+        "color": "0E8A16"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCIg",
+        "name": "legal",
+        "description": "Legal & compliance tasks",
+        "color": "d4c5f9"
+      }
+    ],
+    "number": 567,
+    "state": "OPEN",
+    "title": "Map Styx mechanics against DFS regulatory frameworks by state",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/567",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "## Severity: Low\n\n## Problem\n\nGold-standard legal packets include supporting appendices. Current artifacts lack visual aids, cross-referenced annotations, and submission-ready checklists.\n\n## Affected Files\n\n- New file(s) in `docs/legal/appendices/` or inline in existing docs\n\n## Required Appendices\n\n1. **FBO architecture diagram** \u2014 Mermaid or SVG showing fund flow (User \u2192 Stripe \u2192 FBO \u2192 User/Pool)\n2. **Terms of Service markup** \u2014 annotated ToS showing which clauses implement which Aegis guardrails\n3. **App Review screenshot mockups** \u2014 Safety & Moderation screen, consent flows, reporting mechanism\n4. **State blocklist justification table** \u2014 per-state rationale for inclusion/exclusion with statutory basis\n5. **Counsel submission checklist** \u2014 formatted checklist from real-money brief \u00a710\n\n## Acceptance Criteria\n\n- [ ] FBO diagram created (Mermaid source + rendered)\n- [ ] ToS annotated with cross-references to aegis-protocol sections\n- [ ] At least 3 appendices completed\n- [ ] Cross-referenced from the relevant parent documents",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs7wICPx",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Completed in commit 626b9d8. Legal corpus upgraded to gold-standard: 18 cases in ToA, adverse authority section, FinCEN deep dive (5+ guidance docs, 10-state AOTP matrix, OCC/CSBS citations), and 5 appendices (FBO diagram, ToS-Aegis markup, App Review mockups, blocklist table, counsel checklist). 2 citation plausibility flags remain for counsel review.",
+        "createdAt": "2026-03-10T04:45:13Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/568#issuecomment-4028638193",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6K7g",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:49:22Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/568#issuecomment-4593715950",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9tA",
+        "name": "P2-post-beta",
+        "description": "Post-beta feature",
+        "color": "FEF2C0"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCIg",
+        "name": "legal",
+        "description": "Legal & compliance tasks",
+        "color": "d4c5f9"
+      }
+    ],
+    "number": 568,
+    "state": "OPEN",
+    "title": "Create legal artifact appendices (FBO diagram, ToS markup, checklists)",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/568",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "## Summary\nRun a full review and cleanup pass on GitHub project `organvm-iii-ergon` project `#2` so the board becomes an actual operating system instead of a noisy backlog dump.\n\n## Target Follow-Up Date\n- `March 11, 2026`\n\n## Scope\n- review every active view for logic, naming, and usefulness\n- verify board fields against the current operating model: `Status`, `Priority`, `Milestone`, `Lane`, `Work Type`, `Sprint`, `Owner Role`, `Target Date`, `Next Action`, `External Party`\n- isolate real Beta work from deferred, later-phase, and archive items\n- reconcile broken metadata: wrong target dates, missing labels, missing owner roles, missing lane/work type, and stale milestone placement\n- clean up duplicate or low-signal issue surfaces so Jessica and operators can read the board without interpretation overhead\n- verify blocker views against the current Phase 1 scope lock\n- produce a post-cleanup review note with what changed and what still needs manual handling\n\n## Done When\n- the project board has a clean active working set\n- Beta-critical work is visually separated from deferred work\n- key owner-facing issues have consistent metadata\n- stale or misleading views are either fixed, renamed, or marked for replacement\n- a short cleanup report exists with remaining gaps\n\n## Source Docs\n- [Project Board Setup](docs/planning/planning--project-board-setup--2026-03-09.md)\n- [Project Board Checklists](docs/planning/planning--project-board-checklists--2026-03-09.md)\n- [Issue Owner Matrix](docs/planning/planning--issue-owner-matrix--2026-03-09.md)\n- [Business Blocker Ledger](docs/planning/planning--business-blocker-ledger--2026-03-09.md)\n- [Truth Chain Map](docs/planning/planning--truth-chain-map--2026-03-09.md)\n\n## Why This Matters\nRight now the board still mixes launch-critical work, deferred work, legacy metadata, and incomplete issue hygiene. That creates false blockers and hides the real ones.\n",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABB3wD5w",
+        "author": {
+          "login": "github-actions"
+        },
+        "authorAssociation": "CONTRIBUTOR",
+        "body": "This issue has been automatically marked as stale because it has not had recent activity. It will be closed in 14 days if no further activity occurs.",
+        "createdAt": "2026-05-11T12:09:20Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/569#issuecomment-4420535271",
+        "viewerDidAuthor": false
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABGhVhzg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "## Full open-issue triage map (automated sweep, 2026-06-17)\n\nEnumerated **all 495 open issues** and categorized each against the codebase + the existing `docs/triage.json` ledger. Burning down in priority waves; this comment is the truth map.\n\n### Category counts\n\n| Category | Count | Meaning |\n|---|---:|---|\n| **A \u2014 Agent-actionable** | 365 | In-repo code/docs/tests, no human/vendor/native-device dependency. *(Liberal bucket \u2014 includes large `feat:` and `decision:`/`question` items that are really product calls, not clean eng tasks.)* |\n| **B \u2014 Human-blocked** | 96 | Needs counsel sign-off, native iOS/Android device+signing, KYC/insurance/merchant procurement, banking, smart-contract deploy, or live-secret provisioning. Driven by `blocked` (\u00d727) + `owner:legal-compliance` (\u00d730), `owner:mobile-native` (\u00d715), `owner:release-ops` (\u00d714), `owner:business-development` (\u00d712), `owner:cryptography` (\u00d74). |\n| **C \u2014 Epic/tracking** | 24 | The four \ud83c\udfdb Phase-gate epics (#555\u2013558), 7 Department trackers (#283\u2013293), readiness-gate checklists (#296/#298), milestone #294, project-board meta (#569), weekly burn-down reports (#673/#702). Not directly codeable. |\n| **D \u2014 Likely done/stale** | 10 | Appear already satisfied on disk; verify-and-close candidates. |\n\n### Notable A clusters (where the real buildable volume is)\n- **#386\u2013414** \u2014 P0-beta-blocker Schema/API/UI/Tests quads (KYC, camera, settlement, geofence, forfeit, guardrails); gaps at 390/391/395/400/410 are human-blocked.\n- **#448\u2013545** \u2014 large `TKT-P1-*` band + feature triplets (self-exclusion, video pipeline, audit masks, anti-collusion, slashing, survey/EMA, waitlist queue, referral, violation taxonomy, tier escalation, UGC moderation, circuit breaker, load-testing, **readiness-gate checklist-automation #529\u2013536**, finish-line spike, state-compliance toggles, **stake bounds #537\u2013545**).\n- **#149\u2013158** \u2014 10 competitor market-gap research docs.\n- **#186/#193\u2013200/#415\u2013418** \u2014 doctoral-thesis doc series.\n- **Concrete bug/security fixes** \u2014 #28 (migration runner), #32 (payment returns fake client secrets in non-dev \u2014 security), #34 (bounty link status), #159 (per-isolate rate limiter).\n\n### D \u2014 recommended verify-and-close (with evidence)\n`#184`,`#261` (`.github/FUNDING.yml` present) \u00b7 `#596` (`AGENTS.md` present) \u00b7 `#266` (`MEMORY.md`) \u00b7 `#275`/`#276`/`#277` (plan catalogs relocated 2026-03-07) \u00b7 `#262`/`#263`/`#264` (session-transcript archival bookkeeping). Each closed only after on-disk verification, recorded in `docs/triage.json` via `state-transition.sh` per the established ledger convention.\n\n### Burn-down approach\nPer maintainer direction: **triage-all \u2192 then implement agent-actionable leaves**, each coherent cluster on its own branch + draft PR; done/stale verified-and-closed with ledger evidence; B/C items surfaced here for human routing rather than auto-touched. Progress will land as linked PRs.\n\n---\n_Generated by [Claude Code](https://claude.ai/code)_",
+        "createdAt": "2026-06-17T16:01:03Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/569#issuecomment-4732576206",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaN2ECA",
+        "name": "business",
+        "description": "",
+        "color": "ededed"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCdg",
+        "name": "ops",
+        "description": "Operations & infrastructure tasks",
+        "color": "f9d0c4"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsDvw",
+        "name": "docs",
+        "description": "Documentation tasks",
+        "color": "0075ca"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACax_kuA",
+        "name": "follow-up",
+        "description": "Needs active follow-up in upcoming operating reviews",
+        "color": "F9D0C4"
+      }
+    ],
+    "number": 569,
+    "state": "OPEN",
+    "title": "Priority tomorrow: full project-board review + cleanup",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/569",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Six-lens expansive inquiry on the Styx revenue gap: why a system with 1,107 passing tests, GRADUATED governance, and beta-ready status has zero external users and zero revenue.\n\n**Lenses executed:**\n- **Scope:** Framed the inquiry around scaling, App Store compliance, and the \"why no money\" paradox\n- **Logic:** Viable revenue path is B2B SaaS extraction of the audit framework\n- **Mythos:** System is \"complete at governance, not market\" \u2014 validation loop is internal\n- **Bridge:** Three strategic forks identified: Parasitic Embedding, B2B SaaS Extraction, One External Sale\n- **Meta:** Epistemic signature: logic-heavy + metaphorically-rich + bridge-actionable + self-referential + decision-poor\n- **Pattern:** Core topology is M\u00f6bius strip of self-validation\n\n**Synthesis:** System must shift validation from \"tests pass\" to \"external payment\"\n\n**Artifacts:** expansive-inquiry--styx-revenue-gap/ (7 files)\n\n**Commit:** 85d1ded",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEbfViA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Closing as not planned - this is a business/research inquiry, not a code issue.",
+        "createdAt": "2026-06-01T11:40:57Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/597#issuecomment-4592227720",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEblIZw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopening \u2014 nothing gets closed as not planned. This gets planned.",
+        "createdAt": "2026-06-01T11:53:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/597#issuecomment-4592322663",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcoKrQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact - not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:15:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/597#issuecomment-4593420973",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc57QQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:48:53Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/597#issuecomment-4593711937",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaN2ECA",
+        "name": "business",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "number": 597,
+    "state": "OPEN",
+    "title": "expansive inquiry: Styx revenue gap \u2014 why no money",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/597",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Premortem on the plan to \"extract smallest sellable artifact & get external payment within 30 days\" \u2014 assuming it already failed 6 months from now.\n\n**20 failure modes identified:**\n1. Plan becomes artifact (extraction plan generates extraction plans)\n2. Nothing small to extract (system is monolithic)\n3. 1,107 tests worthless as collateral (internal validation \u2260 market value)\n4. Peer auditing requires peers (bootstrap paradox)\n5. Linguistic cloaker schizophrenia (gambling terms swapped in production)\n6. Governance file leakage (seed.yaml, AGENTS.md expose internal structure)\n7. No sales pipeline (zero external contacts)\n8. Previous GTM unexecuted (March 2026 plans died same way)\n9. Identity inseparable from ORGANVM (can't sell without ecosystem)\n10. Inherited bugs (519 open issues)\n... and 10 more\n\n**Hidden assumption:** Internal completeness (tests, governance, beta-ready) = market value\n\n**Revised plan:**\n- Week 1: 20 cold messages to compliance/audit/fintech roles\n- Week 2: 15-min calls, listen to problems\n- Week 3: Extract minimum for one specific problem\n- Week 4: Send invoice\n\n**Pre-launch checklist:**\n- Plan-to-action ratio < 3:1\n- \"Explain without ORGANVM\" test\n- Hard stop on internal commits until 5 external messages sent\n\n**Artifacts:** premortem-report-20260517-144746.html, premortem-transcript-20260517-144746.md\n\n**Commit:** 85d1ded",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEbfWiQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Closing as not planned - this is a business/research inquiry, not a code issue.",
+        "createdAt": "2026-06-01T11:40:59Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/598#issuecomment-4592227977",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEblJUQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopening \u2014 nothing gets closed as not planned. This gets planned.",
+        "createdAt": "2026-06-01T11:53:37Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/598#issuecomment-4592322897",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcpC4g",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Closing as part of issue drain: operational, documentation, or future phase.",
+        "createdAt": "2026-06-01T14:17:07Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/598#issuecomment-4593435362",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc56DQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:48:51Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/598#issuecomment-4593711629",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaN2ECA",
+        "name": "business",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "number": 598,
+    "state": "OPEN",
+    "title": "premortem: extract sellable artifact + get paid in 30 days",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/598",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "## Problem\n\n`.env.example` now declares 8 brand bindings as the canonical authority for project identity (commit `4239476`, Project Identity section):\n\n- `CANONICAL_DOMAIN`, `PROJECT_NAME`, `MOBILE_BUNDLE_ID`, `DEEP_LINK_SCHEME`\n- `CONTACT_EMAIL_DOMAIN`, `RENDER_API_SERVICE_NAME`, `RENDER_WEB_SERVICE_NAME`, `CANONICAL_REPO_URL`\n\nThe same values are also duplicated by hand across:\n\n- `apps/mobile/ios/Info.plist`\n- `apps/mobile/android/build.gradle`\n- `render.yaml`\n- `package.json` files\n- `docker-compose.yml`\n- ngrok config yaml\n- `legal/*.md`, `outreach/*.md`, `docs/architecture/*.md`\n\nEach duplication is a drift risk. Propagation discipline is currently convention-only (a NOTE block in `.env.example` documents which files to update in lockstep).\n\n## Closure options\n\n- **(a)** Pre-commit hook diffs `.env.example` brand values against propagation targets, fails on mismatch (~60 min including tests)\n- **(b)** Generator script materializes platform-specific files from `.env` at build time via \\`envsubst\\` or \\`mustache\\` (~90 min, more invasive but durable)\n- **(c)** Audit-only \u2014 document the propagation map in \\`docs/architecture/brand-propagation-map.md\\`, no enforcement (~30 min)\n\n## Acceptance\n\nChanging a brand value in `.env.example` either (1) propagates automatically to all targets at build time, or (2) fails CI loudly with a list of out-of-sync files.\n\n## Context\n\nDiscovered during a root-layer pass on the canonical domain stand-up plan (\\`docs/planning/planning--styx-sequence-b-a-c--canonical-domain-standup--2026-05-17.md\\`). Pre-blocker to plan Phase 2 (propagation hardening).\n\nInternal cross-reference: IRF-III-049.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcmqUQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed. Orphaned sub-ticket.",
+        "createdAt": "2026-06-01T14:12:25Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/599#issuecomment-4593396305",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 599,
+    "state": "OPEN",
+    "title": "Propagate brand identity from .env to platform-specific files at build time",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/599",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "## Problem\n\nRecent planning docs in \\`~/.claude/plans/\\` use generic letter labels (\\`A\\`, \\`B\\`, \\`C\\`) for plan branches when descriptive names would carry more meaning and survive context loss better.\n\nExample from the canonical domain stand-up plan:\n- \\`A\\` = market activation\n- \\`B\\` = IRF propagation\n- \\`C\\` = audit-engine extraction\n\nLetter labels require the reader to look up the mapping every time; descriptive names are self-documenting.\n\n## Closure options\n\n- **(a)** Audit \\`~/.claude/plans/\\` for A/B/C-labeled plans, propose descriptive renames, archive originals (~45 min)\n- **(b)** Add CLAUDE.md guidance under \"Plan File Discipline\" prohibiting generic letter labels going forward (~10 min, documentation-only)\n- **(c)** Leave existing plans, enforce naming discipline for new plans (~5 min)\n\n## Acceptance\n\nNew plans use descriptive branch names; existing A/B/C-labeled plans either renamed or grandfathered with a deprecation note.\n\n## Notes\n\nThe v4 of the canonical domain stand-up plan already uses descriptive sequencing alongside the A/B/C labels \u2014 every letter is mapped to a phase name in the plan body. Treat this issue as making that pattern the rule, not the exception.\n\nInternal cross-reference: IRF-III-051.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6A2MQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:41:09Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/601#issuecomment-4691342897",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 601,
+    "state": "OPEN",
+    "title": "Replace A/B/C plan branch labels with descriptive names",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/601",
+    "parent": null
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Currently, all 1,831 tests across the project are unit-level tests utilizing a mocked `Pool` for database interactions. \n\nThe Triadic Review flagged this as a real gap. Without actual database integration tests, we risk regressions and false positives, as we just saw with the loss of `EXCLUDED.*` fields during ON CONFLICT operations on submitAttestation (PR #659).\n\nWe need an integration test suite that:\n1. Provisions an ephemeral real PostgreSQL instance (via testcontainers or similar)\n2. Runs the database migrations\n3. Tests database-coupled services with actual queries rather than mocks\n\nThis must be addressed before re-running the Triadic Review.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6A4gg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:41:14Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/663#issuecomment-4691343490",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 663,
+    "state": "OPEN",
+    "title": "Implement integration test suite for real database interactions",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/663",
+    "parent": null
+  },
+  {
+    "author": {
+      "is_bot": true,
+      "login": "app/github-actions"
+    },
+    "body": "<!-- blocked-handoff-burndown-v1 -->\n\n# Weekly Blocked Handoff Burn-down\n\nDate: 2026-06-08\nRepository: a-organvm/peer-audited--behavioral-blockchain\n\n## Snapshot\n- Total tracked blocked handoff issues: 25\n- Overdue against milestone target date: 7\n- Average age (days): 95.0\n- Oldest age (days): 95\n\n## Governance Health Audit\n\u2705 All tracked issues meet mandatory governance metadata requirements.\n\n## By Milestone\n| Milestone | Count |\n|---|---|\n| Blocked Handoff - Beta Gate (2026-04-30) | 7 |\n| Blocked Handoff - Delta Gate (2026-09-30) | 2 |\n| Blocked Handoff - Gamma Gate (2026-06-30) | 4 |\n| Blocked Handoff - Omega/Phase2+ (2026-12-31) | 12 |\n\n## By Owner Role\n| Owner Role Label | Count |\n|---|---|\n| owner:backend-platform | 1 |\n| owner:business-development | 6 |\n| owner:cryptography | 4 |\n| owner:legal-compliance | 8 |\n| owner:mobile-native | 8 |\n| owner:release-ops | 5 |\n\n## Detailed Issue List\n| Issue | Title | Milestone | Owner Role(s) | Target Date | Age (days) |\n|---|---|---|---|---|---|\n| [#123](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/123) | [Blocked] F-MOBILE-01: Native iOS/Android Camera Module | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native | 2026-04-30 | 95 |\n| [#124](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/124) | [Blocked] F-VERIFY-02: HealthKit Native Bridge (iOS) | Blocked Handoff - Gamma Gate (2026-06-30) | owner:mobile-native | 2026-06-30 | 95 |\n| [#125](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/125) | [Blocked] F-VERIFY-03: Google Health Connect Bridge (Android) | Blocked Handoff - Gamma Gate (2026-06-30) | owner:mobile-native | 2026-06-30 | 95 |\n| [#126](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/126) | [Blocked] F-VERIFY-04: Fitbit/WHOOP API Integration | Blocked Handoff - Gamma Gate (2026-06-30) | owner:business-development | 2026-06-30 | 95 |\n| [#127](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/127) | [Blocked] F-MOBILE-03: Remote Push Notifications Setup | Blocked Handoff - Delta Gate (2026-09-30) | owner:mobile-native, owner:release-ops | 2026-09-30 | 95 |\n| [#128](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/128) | [Blocked] F-MOBILE-04: Biometric Lock (Voice/Face) | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:mobile-native | 2026-12-31 | 95 |\n| [#129](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/129) | [Blocked] F-WEB-05: Plaid Link Integration | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 95 |\n| [#130](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/130) | [Blocked] F-MARKET-03: EVM Smart Contract Escrow | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 95 |\n| [#131](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/131) | [Blocked] F-MARKET-04: ZKP Milestone Verification | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 95 |\n| [#132](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/132) | [Blocked] F-AEGIS-05: KYC / Identity Verification Integration | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance | 2026-04-30 | 95 |\n| [#133](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/133) | [Blocked] F-INFRA-01: Secure High-Risk Merchant Account for Production Settlement | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance, owner:business-development | 2026-04-30 | 95 |\n| [#134](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/134) | [Phase Beta/Gamma] Native Mobile Blockers: HealthKit & Secure Camera | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native | 2026-04-30 | 95 |\n| [#135](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/135) | [Phase Delta] Blockers: Video Pipeline & Native Dashboard UI | Blocked Handoff - Delta Gate (2026-09-30) | owner:release-ops, owner:backend-platform | 2026-09-30 | 95 |\n| [#136](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/136) | [Blocked] F-LEGAL-05: Skill-Based Contest Whitepaper + Counsel Sign-Off | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance | 2026-04-30 | 95 |\n| [#137](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/137) | [Blocked] F-LEGAL-07: Prize Indemnity Insurance Procurement | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance | 2026-12-31 | 95 |\n| [#138](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/138) | [Blocked] F-INFRA-09: Web Shop Payment Routing + Apple Neutral Notice Compliance | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance, owner:release-ops | 2026-12-31 | 95 |\n| [#139](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/139) | [Blocked] F-INFRA-10: \"Styx-Certified\" Hardware Partnership Program | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 95 |\n| [#140](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/140) | [Blocked] F-B2B-09: Insurance Cross-Pollination Partnership | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 95 |\n| [#141](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/141) | [Blocked] Beta Ops: App Store Connect + TestFlight Provisioning | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native, owner:release-ops | 2026-04-30 | 95 |\n| [#142](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/142) | [Blocked] F-VERIFY-09: C2PA Content Provenance + TSA Infrastructure | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 95 |\n| [#143](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/143) | [Blocked] F-VERIFY-11: Continuous Mobile App Attestation SDK Procurement | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:mobile-native | 2026-12-31 | 95 |\n| [#144](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/144) | [Blocked] F-VERIFY-14: ZK Privacy Layer for Digital Exhaust (Proving Engine) | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 95 |\n| [#146](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/146) | [Blocked] F-LEGAL-09: App Store UGC Moderation Policy + Submission Package | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance, owner:release-ops | 2026-04-30 | 95 |\n| [#147](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/147) | [Blocked] F-LEGAL-11: Stablecoin Stakes Regulatory + Banking Pathway | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance, owner:business-development | 2026-12-31 | 95 |\n| [#148](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/148) | [Blocked] F-LEGAL-10: Cross-Jurisdictional Consent Matrix Counsel Review | Blocked Handoff - Gamma Gate (2026-06-30) | owner:legal-compliance | 2026-06-30 | 95 |\n\n## Notes\n- This report is generated automatically via `.github/workflows/blocked-handoff-burndown.yml`.\n- Tracking criteria: `label:blocked` AND (`owner:*` label OR legacy issue range #123-#144).\n",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaN18cQ",
+        "name": "blocked",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "number": 673,
+    "state": "OPEN",
+    "title": "Blocked Handoff Burn-down - 2026-06-08",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/673",
+    "parent": null
+  },
+  {
+    "author": {
+      "is_bot": true,
+      "login": "app/github-actions"
+    },
+    "body": "<!-- blocked-handoff-burndown-v1 -->\n\n# Weekly Blocked Handoff Burn-down\n\nDate: 2026-06-15\nRepository: a-organvm/peer-audited--behavioral-blockchain\n\n## Snapshot\n- Total tracked blocked handoff issues: 25\n- Overdue against milestone target date: 7\n- Average age (days): 102.0\n- Oldest age (days): 102\n\n## Governance Health Audit\n\u2705 All tracked issues meet mandatory governance metadata requirements.\n\n## By Milestone\n| Milestone | Count |\n|---|---|\n| Blocked Handoff - Beta Gate (2026-04-30) | 7 |\n| Blocked Handoff - Delta Gate (2026-09-30) | 2 |\n| Blocked Handoff - Gamma Gate (2026-06-30) | 4 |\n| Blocked Handoff - Omega/Phase2+ (2026-12-31) | 12 |\n\n## By Owner Role\n| Owner Role Label | Count |\n|---|---|\n| owner:backend-platform | 1 |\n| owner:business-development | 6 |\n| owner:cryptography | 4 |\n| owner:legal-compliance | 8 |\n| owner:mobile-native | 8 |\n| owner:release-ops | 5 |\n\n## Detailed Issue List\n| Issue | Title | Milestone | Owner Role(s) | Target Date | Age (days) |\n|---|---|---|---|---|---|\n| [#123](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/123) | [Blocked] F-MOBILE-01: Native iOS/Android Camera Module | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native | 2026-04-30 | 102 |\n| [#124](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/124) | [Blocked] F-VERIFY-02: HealthKit Native Bridge (iOS) | Blocked Handoff - Gamma Gate (2026-06-30) | owner:mobile-native | 2026-06-30 | 102 |\n| [#125](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/125) | [Blocked] F-VERIFY-03: Google Health Connect Bridge (Android) | Blocked Handoff - Gamma Gate (2026-06-30) | owner:mobile-native | 2026-06-30 | 102 |\n| [#126](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/126) | [Blocked] F-VERIFY-04: Fitbit/WHOOP API Integration | Blocked Handoff - Gamma Gate (2026-06-30) | owner:business-development | 2026-06-30 | 102 |\n| [#127](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/127) | [Blocked] F-MOBILE-03: Remote Push Notifications Setup | Blocked Handoff - Delta Gate (2026-09-30) | owner:mobile-native, owner:release-ops | 2026-09-30 | 102 |\n| [#128](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/128) | [Blocked] F-MOBILE-04: Biometric Lock (Voice/Face) | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:mobile-native | 2026-12-31 | 102 |\n| [#129](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/129) | [Blocked] F-WEB-05: Plaid Link Integration | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 102 |\n| [#130](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/130) | [Blocked] F-MARKET-03: EVM Smart Contract Escrow | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 102 |\n| [#131](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/131) | [Blocked] F-MARKET-04: ZKP Milestone Verification | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 102 |\n| [#132](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/132) | [Blocked] F-AEGIS-05: KYC / Identity Verification Integration | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance | 2026-04-30 | 102 |\n| [#133](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/133) | [Blocked] F-INFRA-01: Secure High-Risk Merchant Account for Production Settlement | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance, owner:business-development | 2026-04-30 | 102 |\n| [#134](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/134) | [Phase Beta/Gamma] Native Mobile Blockers: HealthKit & Secure Camera | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native | 2026-04-30 | 102 |\n| [#135](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/135) | [Phase Delta] Blockers: Video Pipeline & Native Dashboard UI | Blocked Handoff - Delta Gate (2026-09-30) | owner:release-ops, owner:backend-platform | 2026-09-30 | 102 |\n| [#136](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/136) | [Blocked] F-LEGAL-05: Skill-Based Contest Whitepaper + Counsel Sign-Off | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance | 2026-04-30 | 102 |\n| [#137](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/137) | [Blocked] F-LEGAL-07: Prize Indemnity Insurance Procurement | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance | 2026-12-31 | 102 |\n| [#138](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/138) | [Blocked] F-INFRA-09: Web Shop Payment Routing + Apple Neutral Notice Compliance | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance, owner:release-ops | 2026-12-31 | 102 |\n| [#139](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/139) | [Blocked] F-INFRA-10: \"Styx-Certified\" Hardware Partnership Program | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 102 |\n| [#140](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/140) | [Blocked] F-B2B-09: Insurance Cross-Pollination Partnership | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 102 |\n| [#141](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/141) | [Blocked] Beta Ops: App Store Connect + TestFlight Provisioning | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native, owner:release-ops | 2026-04-30 | 102 |\n| [#142](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/142) | [Blocked] F-VERIFY-09: C2PA Content Provenance + TSA Infrastructure | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 102 |\n| [#143](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/143) | [Blocked] F-VERIFY-11: Continuous Mobile App Attestation SDK Procurement | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:mobile-native | 2026-12-31 | 102 |\n| [#144](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/144) | [Blocked] F-VERIFY-14: ZK Privacy Layer for Digital Exhaust (Proving Engine) | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 102 |\n| [#146](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/146) | [Blocked] F-LEGAL-09: App Store UGC Moderation Policy + Submission Package | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance, owner:release-ops | 2026-04-30 | 102 |\n| [#147](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/147) | [Blocked] F-LEGAL-11: Stablecoin Stakes Regulatory + Banking Pathway | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance, owner:business-development | 2026-12-31 | 102 |\n| [#148](https://github.com/a-organvm/peer-audited--behavioral-blockchain/issues/148) | [Blocked] F-LEGAL-10: Cross-Jurisdictional Consent Matrix Counsel Review | Blocked Handoff - Gamma Gate (2026-06-30) | owner:legal-compliance | 2026-06-30 | 102 |\n\n## Notes\n- This report is generated automatically via `.github/workflows/blocked-handoff-burndown.yml`.\n- Tracking criteria: `label:blocked` AND (`owner:*` label OR legacy issue range #123-#144).\n",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaN18cQ",
+        "name": "blocked",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "number": 702,
+    "state": "OPEN",
+    "title": "Blocked Handoff Burn-down - 2026-06-15",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/702",
+    "parent": null
+  },
+  {
+    "author": {
+      "is_bot": true,
+      "login": "app/github-actions"
+    },
+    "body": "<!-- blocked-handoff-burndown-v1 -->\n\n# Weekly Blocked Handoff Burn-down\n\nDate: 2026-06-22\nRepository: organvm/peer-audited--behavioral-blockchain\n\n## Snapshot\n- Total tracked blocked handoff issues: 25\n- Overdue against milestone target date: 7\n- Average age (days): 109.0\n- Oldest age (days): 109\n\n## Governance Health Audit\n\u2705 All tracked issues meet mandatory governance metadata requirements.\n\n## By Milestone\n| Milestone | Count |\n|---|---|\n| Blocked Handoff - Beta Gate (2026-04-30) | 7 |\n| Blocked Handoff - Delta Gate (2026-09-30) | 2 |\n| Blocked Handoff - Gamma Gate (2026-06-30) | 4 |\n| Blocked Handoff - Omega/Phase2+ (2026-12-31) | 12 |\n\n## By Owner Role\n| Owner Role Label | Count |\n|---|---|\n| owner:backend-platform | 1 |\n| owner:business-development | 6 |\n| owner:cryptography | 4 |\n| owner:legal-compliance | 8 |\n| owner:mobile-native | 8 |\n| owner:release-ops | 5 |\n\n## Detailed Issue List\n| Issue | Title | Milestone | Owner Role(s) | Target Date | Age (days) |\n|---|---|---|---|---|---|\n| [#123](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/123) | [Blocked] F-MOBILE-01: Native iOS/Android Camera Module | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native | 2026-04-30 | 109 |\n| [#124](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/124) | [Blocked] F-VERIFY-02: HealthKit Native Bridge (iOS) | Blocked Handoff - Gamma Gate (2026-06-30) | owner:mobile-native | 2026-06-30 | 109 |\n| [#125](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/125) | [Blocked] F-VERIFY-03: Google Health Connect Bridge (Android) | Blocked Handoff - Gamma Gate (2026-06-30) | owner:mobile-native | 2026-06-30 | 109 |\n| [#126](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/126) | [Blocked] F-VERIFY-04: Fitbit/WHOOP API Integration | Blocked Handoff - Gamma Gate (2026-06-30) | owner:business-development | 2026-06-30 | 109 |\n| [#127](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/127) | [Blocked] F-MOBILE-03: Remote Push Notifications Setup | Blocked Handoff - Delta Gate (2026-09-30) | owner:mobile-native, owner:release-ops | 2026-09-30 | 109 |\n| [#128](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/128) | [Blocked] F-MOBILE-04: Biometric Lock (Voice/Face) | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:mobile-native | 2026-12-31 | 109 |\n| [#129](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/129) | [Blocked] F-WEB-05: Plaid Link Integration | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 109 |\n| [#130](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/130) | [Blocked] F-MARKET-03: EVM Smart Contract Escrow | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 109 |\n| [#131](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/131) | [Blocked] F-MARKET-04: ZKP Milestone Verification | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 109 |\n| [#132](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/132) | [Blocked] F-AEGIS-05: KYC / Identity Verification Integration | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance | 2026-04-30 | 109 |\n| [#133](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/133) | [Blocked] F-INFRA-01: Secure High-Risk Merchant Account for Production Settlement | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance, owner:business-development | 2026-04-30 | 109 |\n| [#134](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/134) | [Phase Beta/Gamma] Native Mobile Blockers: HealthKit & Secure Camera | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native | 2026-04-30 | 109 |\n| [#135](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/135) | [Phase Delta] Blockers: Video Pipeline & Native Dashboard UI | Blocked Handoff - Delta Gate (2026-09-30) | owner:release-ops, owner:backend-platform | 2026-09-30 | 109 |\n| [#136](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/136) | [Blocked] F-LEGAL-05: Skill-Based Contest Whitepaper + Counsel Sign-Off | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance | 2026-04-30 | 109 |\n| [#137](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/137) | [Blocked] F-LEGAL-07: Prize Indemnity Insurance Procurement | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance | 2026-12-31 | 109 |\n| [#138](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/138) | [Blocked] F-INFRA-09: Web Shop Payment Routing + Apple Neutral Notice Compliance | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance, owner:release-ops | 2026-12-31 | 109 |\n| [#139](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/139) | [Blocked] F-INFRA-10: \"Styx-Certified\" Hardware Partnership Program | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 109 |\n| [#140](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/140) | [Blocked] F-B2B-09: Insurance Cross-Pollination Partnership | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 109 |\n| [#141](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/141) | [Blocked] Beta Ops: App Store Connect + TestFlight Provisioning | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native, owner:release-ops | 2026-04-30 | 109 |\n| [#142](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/142) | [Blocked] F-VERIFY-09: C2PA Content Provenance + TSA Infrastructure | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 109 |\n| [#143](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/143) | [Blocked] F-VERIFY-11: Continuous Mobile App Attestation SDK Procurement | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:mobile-native | 2026-12-31 | 109 |\n| [#144](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/144) | [Blocked] F-VERIFY-14: ZK Privacy Layer for Digital Exhaust (Proving Engine) | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 109 |\n| [#146](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/146) | [Blocked] F-LEGAL-09: App Store UGC Moderation Policy + Submission Package | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance, owner:release-ops | 2026-04-30 | 109 |\n| [#147](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/147) | [Blocked] F-LEGAL-11: Stablecoin Stakes Regulatory + Banking Pathway | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance, owner:business-development | 2026-12-31 | 109 |\n| [#148](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/148) | [Blocked] F-LEGAL-10: Cross-Jurisdictional Consent Matrix Counsel Review | Blocked Handoff - Gamma Gate (2026-06-30) | owner:legal-compliance | 2026-06-30 | 109 |\n\n## Notes\n- This report is generated automatically via `.github/workflows/blocked-handoff-burndown.yml`.\n- Tracking criteria: `label:blocked` AND (`owner:*` label OR legacy issue range #123-#144).\n",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaN18cQ",
+        "name": "blocked",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "number": 745,
+    "state": "OPEN",
+    "title": "Blocked Handoff Burn-down - 2026-06-22",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/745",
+    "parent": null
+  },
+  {
+    "author": {
+      "is_bot": true,
+      "login": "app/github-actions"
+    },
+    "body": "<!-- blocked-handoff-burndown-v1 -->\n\n# Weekly Blocked Handoff Burn-down\n\nDate: 2026-06-29\nRepository: organvm/peer-audited--behavioral-blockchain\n\n## Snapshot\n- Total tracked blocked handoff issues: 25\n- Overdue against milestone target date: 7\n- Average age (days): 116.0\n- Oldest age (days): 116\n\n## Governance Health Audit\n\u2705 All tracked issues meet mandatory governance metadata requirements.\n\n## By Milestone\n| Milestone | Count |\n|---|---|\n| Blocked Handoff - Beta Gate (2026-04-30) | 7 |\n| Blocked Handoff - Delta Gate (2026-09-30) | 2 |\n| Blocked Handoff - Gamma Gate (2026-06-30) | 4 |\n| Blocked Handoff - Omega/Phase2+ (2026-12-31) | 12 |\n\n## By Owner Role\n| Owner Role Label | Count |\n|---|---|\n| owner:backend-platform | 1 |\n| owner:business-development | 6 |\n| owner:cryptography | 4 |\n| owner:legal-compliance | 8 |\n| owner:mobile-native | 8 |\n| owner:release-ops | 5 |\n\n## Detailed Issue List\n| Issue | Title | Milestone | Owner Role(s) | Target Date | Age (days) |\n|---|---|---|---|---|---|\n| [#123](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/123) | [Blocked] F-MOBILE-01: Native iOS/Android Camera Module | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native | 2026-04-30 | 116 |\n| [#124](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/124) | [Blocked] F-VERIFY-02: HealthKit Native Bridge (iOS) | Blocked Handoff - Gamma Gate (2026-06-30) | owner:mobile-native | 2026-06-30 | 116 |\n| [#125](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/125) | [Blocked] F-VERIFY-03: Google Health Connect Bridge (Android) | Blocked Handoff - Gamma Gate (2026-06-30) | owner:mobile-native | 2026-06-30 | 116 |\n| [#126](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/126) | [Blocked] F-VERIFY-04: Fitbit/WHOOP API Integration | Blocked Handoff - Gamma Gate (2026-06-30) | owner:business-development | 2026-06-30 | 116 |\n| [#127](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/127) | [Blocked] F-MOBILE-03: Remote Push Notifications Setup | Blocked Handoff - Delta Gate (2026-09-30) | owner:mobile-native, owner:release-ops | 2026-09-30 | 116 |\n| [#128](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/128) | [Blocked] F-MOBILE-04: Biometric Lock (Voice/Face) | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:mobile-native | 2026-12-31 | 116 |\n| [#129](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/129) | [Blocked] F-WEB-05: Plaid Link Integration | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 116 |\n| [#130](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/130) | [Blocked] F-MARKET-03: EVM Smart Contract Escrow | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 116 |\n| [#131](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/131) | [Blocked] F-MARKET-04: ZKP Milestone Verification | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 116 |\n| [#132](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/132) | [Blocked] F-AEGIS-05: KYC / Identity Verification Integration | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance | 2026-04-30 | 116 |\n| [#133](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/133) | [Blocked] F-INFRA-01: Secure High-Risk Merchant Account for Production Settlement | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance, owner:business-development | 2026-04-30 | 116 |\n| [#134](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/134) | [Phase Beta/Gamma] Native Mobile Blockers: HealthKit & Secure Camera | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native | 2026-04-30 | 116 |\n| [#135](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/135) | [Phase Delta] Blockers: Video Pipeline & Native Dashboard UI | Blocked Handoff - Delta Gate (2026-09-30) | owner:release-ops, owner:backend-platform | 2026-09-30 | 116 |\n| [#136](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/136) | [Blocked] F-LEGAL-05: Skill-Based Contest Whitepaper + Counsel Sign-Off | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance | 2026-04-30 | 116 |\n| [#137](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/137) | [Blocked] F-LEGAL-07: Prize Indemnity Insurance Procurement | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance | 2026-12-31 | 116 |\n| [#138](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/138) | [Blocked] F-INFRA-09: Web Shop Payment Routing + Apple Neutral Notice Compliance | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance, owner:release-ops | 2026-12-31 | 116 |\n| [#139](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/139) | [Blocked] F-INFRA-10: \"Styx-Certified\" Hardware Partnership Program | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 116 |\n| [#140](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/140) | [Blocked] F-B2B-09: Insurance Cross-Pollination Partnership | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 116 |\n| [#141](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/141) | [Blocked] Beta Ops: App Store Connect + TestFlight Provisioning | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native, owner:release-ops | 2026-04-30 | 116 |\n| [#142](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/142) | [Blocked] F-VERIFY-09: C2PA Content Provenance + TSA Infrastructure | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 116 |\n| [#143](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/143) | [Blocked] F-VERIFY-11: Continuous Mobile App Attestation SDK Procurement | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:mobile-native | 2026-12-31 | 116 |\n| [#144](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/144) | [Blocked] F-VERIFY-14: ZK Privacy Layer for Digital Exhaust (Proving Engine) | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 116 |\n| [#146](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/146) | [Blocked] F-LEGAL-09: App Store UGC Moderation Policy + Submission Package | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance, owner:release-ops | 2026-04-30 | 116 |\n| [#147](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/147) | [Blocked] F-LEGAL-11: Stablecoin Stakes Regulatory + Banking Pathway | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance, owner:business-development | 2026-12-31 | 116 |\n| [#148](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/148) | [Blocked] F-LEGAL-10: Cross-Jurisdictional Consent Matrix Counsel Review | Blocked Handoff - Gamma Gate (2026-06-30) | owner:legal-compliance | 2026-06-30 | 116 |\n\n## Notes\n- This report is generated automatically via `.github/workflows/blocked-handoff-burndown.yml`.\n- Tracking criteria: `label:blocked` AND (`owner:*` label OR legacy issue range #123-#144).\n",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaN18cQ",
+        "name": "blocked",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "number": 748,
+    "state": "OPEN",
+    "title": "Blocked Handoff Burn-down - 2026-06-29",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/748",
+    "parent": null
+  },
+  {
+    "author": {
+      "is_bot": true,
+      "login": "app/github-actions"
+    },
+    "body": "<!-- blocked-handoff-burndown-v1 -->\n\n# Weekly Blocked Handoff Burn-down\n\nDate: 2026-07-06\nRepository: organvm/peer-audited--behavioral-blockchain\n\n## Snapshot\n- Total tracked blocked handoff issues: 25\n- Overdue against milestone target date: 11\n- Average age (days): 123.0\n- Oldest age (days): 123\n\n## Governance Health Audit\n\u2705 All tracked issues meet mandatory governance metadata requirements.\n\n## By Milestone\n| Milestone | Count |\n|---|---|\n| Blocked Handoff - Beta Gate (2026-04-30) | 7 |\n| Blocked Handoff - Delta Gate (2026-09-30) | 2 |\n| Blocked Handoff - Gamma Gate (2026-06-30) | 4 |\n| Blocked Handoff - Omega/Phase2+ (2026-12-31) | 12 |\n\n## By Owner Role\n| Owner Role Label | Count |\n|---|---|\n| owner:backend-platform | 1 |\n| owner:business-development | 6 |\n| owner:cryptography | 4 |\n| owner:legal-compliance | 8 |\n| owner:mobile-native | 8 |\n| owner:release-ops | 5 |\n\n## Detailed Issue List\n| Issue | Title | Milestone | Owner Role(s) | Target Date | Age (days) |\n|---|---|---|---|---|---|\n| [#123](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/123) | [Blocked] F-MOBILE-01: Native iOS/Android Camera Module | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native | 2026-04-30 | 123 |\n| [#124](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/124) | [Blocked] F-VERIFY-02: HealthKit Native Bridge (iOS) | Blocked Handoff - Gamma Gate (2026-06-30) | owner:mobile-native | 2026-06-30 | 123 |\n| [#125](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/125) | [Blocked] F-VERIFY-03: Google Health Connect Bridge (Android) | Blocked Handoff - Gamma Gate (2026-06-30) | owner:mobile-native | 2026-06-30 | 123 |\n| [#126](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/126) | [Blocked] F-VERIFY-04: Fitbit/WHOOP API Integration | Blocked Handoff - Gamma Gate (2026-06-30) | owner:business-development | 2026-06-30 | 123 |\n| [#127](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/127) | [Blocked] F-MOBILE-03: Remote Push Notifications Setup | Blocked Handoff - Delta Gate (2026-09-30) | owner:mobile-native, owner:release-ops | 2026-09-30 | 123 |\n| [#128](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/128) | [Blocked] F-MOBILE-04: Biometric Lock (Voice/Face) | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:mobile-native | 2026-12-31 | 123 |\n| [#129](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/129) | [Blocked] F-WEB-05: Plaid Link Integration | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 123 |\n| [#130](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/130) | [Blocked] F-MARKET-03: EVM Smart Contract Escrow | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 123 |\n| [#131](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/131) | [Blocked] F-MARKET-04: ZKP Milestone Verification | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 123 |\n| [#132](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/132) | [Blocked] F-AEGIS-05: KYC / Identity Verification Integration | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance | 2026-04-30 | 123 |\n| [#133](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/133) | [Blocked] F-INFRA-01: Secure High-Risk Merchant Account for Production Settlement | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance, owner:business-development | 2026-04-30 | 123 |\n| [#134](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/134) | [Phase Beta/Gamma] Native Mobile Blockers: HealthKit & Secure Camera | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native | 2026-04-30 | 123 |\n| [#135](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/135) | [Phase Delta] Blockers: Video Pipeline & Native Dashboard UI | Blocked Handoff - Delta Gate (2026-09-30) | owner:release-ops, owner:backend-platform | 2026-09-30 | 123 |\n| [#136](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/136) | [Blocked] F-LEGAL-05: Skill-Based Contest Whitepaper + Counsel Sign-Off | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance | 2026-04-30 | 123 |\n| [#137](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/137) | [Blocked] F-LEGAL-07: Prize Indemnity Insurance Procurement | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance | 2026-12-31 | 123 |\n| [#138](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/138) | [Blocked] F-INFRA-09: Web Shop Payment Routing + Apple Neutral Notice Compliance | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance, owner:release-ops | 2026-12-31 | 123 |\n| [#139](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/139) | [Blocked] F-INFRA-10: \"Styx-Certified\" Hardware Partnership Program | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 123 |\n| [#140](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/140) | [Blocked] F-B2B-09: Insurance Cross-Pollination Partnership | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 123 |\n| [#141](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/141) | [Blocked] Beta Ops: App Store Connect + TestFlight Provisioning | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native, owner:release-ops | 2026-04-30 | 123 |\n| [#142](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/142) | [Blocked] F-VERIFY-09: C2PA Content Provenance + TSA Infrastructure | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 123 |\n| [#143](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/143) | [Blocked] F-VERIFY-11: Continuous Mobile App Attestation SDK Procurement | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:mobile-native | 2026-12-31 | 123 |\n| [#144](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/144) | [Blocked] F-VERIFY-14: ZK Privacy Layer for Digital Exhaust (Proving Engine) | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 123 |\n| [#146](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/146) | [Blocked] F-LEGAL-09: App Store UGC Moderation Policy + Submission Package | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance, owner:release-ops | 2026-04-30 | 123 |\n| [#147](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/147) | [Blocked] F-LEGAL-11: Stablecoin Stakes Regulatory + Banking Pathway | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance, owner:business-development | 2026-12-31 | 123 |\n| [#148](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/148) | [Blocked] F-LEGAL-10: Cross-Jurisdictional Consent Matrix Counsel Review | Blocked Handoff - Gamma Gate (2026-06-30) | owner:legal-compliance | 2026-06-30 | 123 |\n\n## Notes\n- This report is generated automatically via `.github/workflows/blocked-handoff-burndown.yml`.\n- Tracking criteria: `label:blocked` AND (`owner:*` label OR legacy issue range #123-#144).\n",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaN18cQ",
+        "name": "blocked",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "number": 774,
+    "state": "OPEN",
+    "title": "Blocked Handoff Burn-down - 2026-07-06",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/774",
+    "parent": null
+  },
+  {
+    "author": {
+      "is_bot": true,
+      "login": "app/github-actions"
+    },
+    "body": "<!-- blocked-handoff-burndown-v1 -->\n\n# Weekly Blocked Handoff Burn-down\n\nDate: 2026-07-13\nRepository: organvm/peer-audited--behavioral-blockchain\n\n## Snapshot\n- Total tracked blocked handoff issues: 25\n- Overdue against milestone target date: 11\n- Average age (days): 130.0\n- Oldest age (days): 130\n\n## Governance Health Audit\n\u2705 All tracked issues meet mandatory governance metadata requirements.\n\n## By Milestone\n| Milestone | Count |\n|---|---|\n| Blocked Handoff - Beta Gate (2026-04-30) | 7 |\n| Blocked Handoff - Delta Gate (2026-09-30) | 2 |\n| Blocked Handoff - Gamma Gate (2026-06-30) | 4 |\n| Blocked Handoff - Omega/Phase2+ (2026-12-31) | 12 |\n\n## By Owner Role\n| Owner Role Label | Count |\n|---|---|\n| owner:backend-platform | 1 |\n| owner:business-development | 6 |\n| owner:cryptography | 4 |\n| owner:legal-compliance | 8 |\n| owner:mobile-native | 8 |\n| owner:release-ops | 5 |\n\n## Detailed Issue List\n| Issue | Title | Milestone | Owner Role(s) | Target Date | Age (days) |\n|---|---|---|---|---|---|\n| [#123](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/123) | [Blocked] F-MOBILE-01: Native iOS/Android Camera Module | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native | 2026-04-30 | 130 |\n| [#124](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/124) | [Blocked] F-VERIFY-02: HealthKit Native Bridge (iOS) | Blocked Handoff - Gamma Gate (2026-06-30) | owner:mobile-native | 2026-06-30 | 130 |\n| [#125](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/125) | [Blocked] F-VERIFY-03: Google Health Connect Bridge (Android) | Blocked Handoff - Gamma Gate (2026-06-30) | owner:mobile-native | 2026-06-30 | 130 |\n| [#126](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/126) | [Blocked] F-VERIFY-04: Fitbit/WHOOP API Integration | Blocked Handoff - Gamma Gate (2026-06-30) | owner:business-development | 2026-06-30 | 130 |\n| [#127](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/127) | [Blocked] F-MOBILE-03: Remote Push Notifications Setup | Blocked Handoff - Delta Gate (2026-09-30) | owner:mobile-native, owner:release-ops | 2026-09-30 | 130 |\n| [#128](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/128) | [Blocked] F-MOBILE-04: Biometric Lock (Voice/Face) | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:mobile-native | 2026-12-31 | 130 |\n| [#129](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/129) | [Blocked] F-WEB-05: Plaid Link Integration | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 130 |\n| [#130](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/130) | [Blocked] F-MARKET-03: EVM Smart Contract Escrow | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 130 |\n| [#131](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/131) | [Blocked] F-MARKET-04: ZKP Milestone Verification | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 130 |\n| [#132](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/132) | [Blocked] F-AEGIS-05: KYC / Identity Verification Integration | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance | 2026-04-30 | 130 |\n| [#133](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/133) | [Blocked] F-INFRA-01: Secure High-Risk Merchant Account for Production Settlement | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance, owner:business-development | 2026-04-30 | 130 |\n| [#134](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/134) | [Phase Beta/Gamma] Native Mobile Blockers: HealthKit & Secure Camera | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native | 2026-04-30 | 130 |\n| [#135](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/135) | [Phase Delta] Blockers: Video Pipeline & Native Dashboard UI | Blocked Handoff - Delta Gate (2026-09-30) | owner:release-ops, owner:backend-platform | 2026-09-30 | 130 |\n| [#136](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/136) | [Blocked] F-LEGAL-05: Skill-Based Contest Whitepaper + Counsel Sign-Off | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance | 2026-04-30 | 130 |\n| [#137](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/137) | [Blocked] F-LEGAL-07: Prize Indemnity Insurance Procurement | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance | 2026-12-31 | 130 |\n| [#138](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/138) | [Blocked] F-INFRA-09: Web Shop Payment Routing + Apple Neutral Notice Compliance | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance, owner:release-ops | 2026-12-31 | 130 |\n| [#139](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/139) | [Blocked] F-INFRA-10: \"Styx-Certified\" Hardware Partnership Program | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 130 |\n| [#140](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/140) | [Blocked] F-B2B-09: Insurance Cross-Pollination Partnership | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:business-development | 2026-12-31 | 130 |\n| [#141](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/141) | [Blocked] Beta Ops: App Store Connect + TestFlight Provisioning | Blocked Handoff - Beta Gate (2026-04-30) | owner:mobile-native, owner:release-ops | 2026-04-30 | 130 |\n| [#142](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/142) | [Blocked] F-VERIFY-09: C2PA Content Provenance + TSA Infrastructure | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 130 |\n| [#143](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/143) | [Blocked] F-VERIFY-11: Continuous Mobile App Attestation SDK Procurement | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:mobile-native | 2026-12-31 | 130 |\n| [#144](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/144) | [Blocked] F-VERIFY-14: ZK Privacy Layer for Digital Exhaust (Proving Engine) | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:cryptography | 2026-12-31 | 130 |\n| [#146](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/146) | [Blocked] F-LEGAL-09: App Store UGC Moderation Policy + Submission Package | Blocked Handoff - Beta Gate (2026-04-30) | owner:legal-compliance, owner:release-ops | 2026-04-30 | 130 |\n| [#147](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/147) | [Blocked] F-LEGAL-11: Stablecoin Stakes Regulatory + Banking Pathway | Blocked Handoff - Omega/Phase2+ (2026-12-31) | owner:legal-compliance, owner:business-development | 2026-12-31 | 130 |\n| [#148](https://github.com/organvm/peer-audited--behavioral-blockchain/issues/148) | [Blocked] F-LEGAL-10: Cross-Jurisdictional Consent Matrix Counsel Review | Blocked Handoff - Gamma Gate (2026-06-30) | owner:legal-compliance | 2026-06-30 | 130 |\n\n## Notes\n- This report is generated automatically via `.github/workflows/blocked-handoff-burndown.yml`.\n- Tracking criteria: `label:blocked` AND (`owner:*` label OR legacy issue range #123-#144).\n",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaN18cQ",
+        "name": "blocked",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "number": 785,
+    "state": "OPEN",
+    "title": "Blocked Handoff Burn-down - 2026-07-13",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/785",
+    "parent": null
+  }
+]

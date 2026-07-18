@@ -1,0 +1,188 @@
+diff --git a/src/api/src/modules/dashboard/dashboard.controller.ts b/src/api/src/modules/dashboard/dashboard.controller.ts
+index 303e5a15..70a414ac 100644
+--- a/src/api/src/modules/dashboard/dashboard.controller.ts
++++ b/src/api/src/modules/dashboard/dashboard.controller.ts
+@@ -23,6 +23,12 @@ export class DashboardController {
+     return this.dashboardService.getProgress(user.id);
+   }
+ 
++  @Get('metrics')
++  @ApiOperation({ summary: 'Get platform-wide ledger & payments metrics' })
++  async getMetrics() {
++    return this.dashboardService.getMetrics();
++  }
++
+   @Sse('leaderboard/stream')
+   @ApiOperation({ summary: 'Stream live leaderboard rank updates via SSE' })
+   streamLeaderboard(@CurrentUser() user: { id: string }): Observable<MessageEvent> {
+diff --git a/src/api/src/modules/dashboard/dashboard.service.spec.ts b/src/api/src/modules/dashboard/dashboard.service.spec.ts
+new file mode 100644
+index 00000000..36d0a28a
+--- /dev/null
++++ b/src/api/src/modules/dashboard/dashboard.service.spec.ts
+@@ -0,0 +1,78 @@
++import { Test, TestingModule } from '@nestjs/testing';
++import { DashboardService } from './dashboard.service';
++import { Pool } from 'pg';
++
++describe('DashboardService', () => {
++  let service: DashboardService;
++
++  const mockPool = {
++    query: jest.fn(),
++  };
++
++  beforeEach(async () => {
++    jest.clearAllMocks();
++    const module: TestingModule = await Test.createTestingModule({
++      providers: [
++        DashboardService,
++        { provide: Pool, useValue: mockPool },
++      ],
++    }).compile();
++
++    service = module.get<DashboardService>(DashboardService);
++  });
++
++  it('should be defined', () => {
++    expect(service).toBeDefined();
++  });
++
++  describe('getMetrics', () => {
++    it('aggregates escrow balance, active users, fraud rate, and payout volume', async () => {
++      // Promise.all preserves call order: staked, active users, settlements.
++      mockPool.query
++        .mockResolvedValueOnce({ rows: [{ total_staked: '150000' }] })
++        .mockResolvedValueOnce({ rows: [{ active_users: '42' }] })
++        .mockResolvedValueOnce({
++          rows: [{ payout_volume: '90000', settled_count: '10', fraud_count: '3' }],
++        });
++
++      const metrics = await service.getMetrics();
++
++      expect(metrics).toEqual({
++        total_staked: 150000,
++        active_users: 42,
++        fraud_rate: 0.3,
++        payout_volume: 90000,
++      });
++    });
++
++    it('returns a zero fraud_rate when no settlements have completed', async () => {
++      mockPool.query
++        .mockResolvedValueOnce({ rows: [{ total_staked: '0' }] })
++        .mockResolvedValueOnce({ rows: [{ active_users: '0' }] })
++        .mockResolvedValueOnce({
++          rows: [{ payout_volume: '0', settled_count: '0', fraud_count: '0' }],
++        });
++
++      const metrics = await service.getMetrics();
++
++      expect(metrics.fraud_rate).toBe(0);
++      expect(metrics.payout_volume).toBe(0);
++      expect(metrics.total_staked).toBe(0);
++    });
++
++    it('reads the escrow balance from the SYSTEM_ESCROW account', async () => {
++      mockPool.query
++        .mockResolvedValueOnce({ rows: [{ total_staked: '500' }] })
++        .mockResolvedValueOnce({ rows: [{ active_users: '1' }] })
++        .mockResolvedValueOnce({
++          rows: [{ payout_volume: '0', settled_count: '0', fraud_count: '0' }],
++        });
++
++      await service.getMetrics();
++
++      expect(mockPool.query.mock.calls[0][0]).toContain('SYSTEM_ESCROW');
++      expect(mockPool.query.mock.calls[1][0]).toContain("status = 'ACTIVE'");
++      expect(mockPool.query.mock.calls[2][0]).toContain("status = 'SUCCESS'");
++    });
++  });
++});
+diff --git a/src/api/src/modules/dashboard/dashboard.service.ts b/src/api/src/modules/dashboard/dashboard.service.ts
+index 41fa408f..6f605240 100644
+--- a/src/api/src/modules/dashboard/dashboard.service.ts
++++ b/src/api/src/modules/dashboard/dashboard.service.ts
+@@ -1,6 +1,24 @@
+ import { Injectable, Logger } from '@nestjs/common';
+ import { Pool } from 'pg';
+ 
++/**
++ * Platform-wide operational metrics surfaced on the admin dashboard.
++ *
++ * Monetary fields are integer cents to match the ledger's `entries.amount`
++ * (BIGINT cents) convention and avoid floating-point drift. `fraud_rate` is a
++ * unit fraction in [0, 1] (multiply by 100 for a percentage).
++ */
++export interface DashboardMetrics {
++  /** Net funds currently held in SYSTEM_ESCROW (credits − debits), in cents. */
++  total_staked: number;
++  /** Distinct users with at least one ACTIVE contract. */
++  active_users: number;
++  /** Fraction of successfully-settled contracts captured as a FAIL outcome, in [0, 1]. */
++  fraud_rate: number;
++  /** Total value of successfully-settled contracts, in cents. */
++  payout_volume: number;
++}
++
+ @Injectable()
+ export class DashboardService {
+   constructor(private readonly pool: Pool) {}
+@@ -29,5 +47,57 @@ export class DashboardService {
+       }
+     };
+   }
++
++  /**
++   * Aggregates platform-wide operational metrics from the ledger (entries/accounts)
++   * and payments (settlement_runs) tables.
++   *
++   * - `total_staked`   — net SYSTEM_ESCROW balance: funds staked but not yet settled.
++   *                      SYSTEM_ESCROW is a LIABILITY credited at stake time and debited
++   *                      on settlement, so the held balance is credits − debits.
++   * - `active_users`   — distinct users holding an ACTIVE contract.
++   * - `fraud_rate`     — share of successfully-settled contracts whose outcome was FAIL
++   *                      (stake captured), as a fraction of all SUCCESS settlements.
++   * - `payout_volume`  — total cents moved across all SUCCESS settlement runs.
++   *
++   * Each aggregate is independent, so the queries run concurrently.
++   */
++  async getMetrics(): Promise<DashboardMetrics> {
++    const [staked, activeUsers, settlements] = await Promise.all([
++      this.pool.query(
++        `SELECT
++           COALESCE(SUM(CASE WHEN e.credit_account_id = a.id THEN e.amount ELSE 0 END), 0)
++           - COALESCE(SUM(CASE WHEN e.debit_account_id = a.id THEN e.amount ELSE 0 END), 0)
++             AS total_staked
++         FROM accounts a
++         LEFT JOIN entries e
++           ON e.credit_account_id = a.id OR e.debit_account_id = a.id
++         WHERE a.name = 'SYSTEM_ESCROW'`,
++      ),
++      this.pool.query(
++        `SELECT COUNT(DISTINCT user_id) AS active_users
++         FROM contracts
++         WHERE status = 'ACTIVE'`,
++      ),
++      this.pool.query(
++        `SELECT
++           COALESCE(SUM(amount_cents), 0) AS payout_volume,
++           COUNT(*) AS settled_count,
++           COUNT(*) FILTER (WHERE outcome = 'FAIL') AS fraud_count
++         FROM settlement_runs
++         WHERE status = 'SUCCESS'`,
++      ),
++    ]);
++
++    const settledCount = Number.parseInt(String(settlements.rows[0].settled_count), 10);
++    const fraudCount = Number.parseInt(String(settlements.rows[0].fraud_count), 10);
++
++    return {
++      total_staked: Number.parseInt(String(staked.rows[0].total_staked), 10),
++      active_users: Number.parseInt(String(activeUsers.rows[0].active_users), 10),
++      fraud_rate: settledCount === 0 ? 0 : fraudCount / settledCount,
++      payout_volume: Number.parseInt(String(settlements.rows[0].payout_volume), 10),
++    };
++  }
+ }
+ 

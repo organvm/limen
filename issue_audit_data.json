@@ -1,0 +1,4053 @@
+[
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #290.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCxA",
+        "name": "finance",
+        "description": "Finance & revenue tasks",
+        "color": "fef2c0"
+      }
+    ],
+    "number": 350,
+    "state": "OPEN",
+    "title": "Financial reconciliation process \u2014 Stripe vs internal records",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/350"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #290.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCxA",
+        "name": "finance",
+        "description": "Finance & revenue tasks",
+        "color": "fef2c0"
+      }
+    ],
+    "number": 351,
+    "state": "OPEN",
+    "title": "CAC/LTV tracking dashboard",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/351"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #290.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCxA",
+        "name": "finance",
+        "description": "Finance & revenue tasks",
+        "color": "fef2c0"
+      }
+    ],
+    "number": 352,
+    "state": "OPEN",
+    "title": "B2B pricing model \u2014 $49/$149/$349/$999+ tiers",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/352"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #290.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCxA",
+        "name": "finance",
+        "description": "Finance & revenue tasks",
+        "color": "fef2c0"
+      }
+    ],
+    "number": 353,
+    "state": "OPEN",
+    "title": "Revenue reporting \u2014 MRR, churn, ARPU monthly report",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/353"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #291.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsC6A",
+        "name": "support",
+        "description": "Customer success tasks",
+        "color": "d4c5f9"
+      }
+    ],
+    "number": 354,
+    "state": "OPEN",
+    "title": "Support channel setup \u2014 email + Discord for beta",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/354"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #291.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsC6A",
+        "name": "support",
+        "description": "Customer success tasks",
+        "color": "d4c5f9"
+      }
+    ],
+    "number": 355,
+    "state": "OPEN",
+    "title": "FAQ / Help Center v1 \u2014 10 help articles",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/355"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #291.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsC6A",
+        "name": "support",
+        "description": "Customer success tasks",
+        "color": "d4c5f9"
+      }
+    ],
+    "number": 356,
+    "state": "OPEN",
+    "title": "Onboarding email sequence \u2014 7-day drip campaign",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/356"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #291.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsC6A",
+        "name": "support",
+        "description": "Customer success tasks",
+        "color": "d4c5f9"
+      }
+    ],
+    "number": 357,
+    "state": "OPEN",
+    "title": "Churn signal detection \u2014 predictive patterns",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/357"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #291.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsC6A",
+        "name": "support",
+        "description": "Customer success tasks",
+        "color": "d4c5f9"
+      }
+    ],
+    "number": 358,
+    "state": "OPEN",
+    "title": "In-app help / chatbot integration",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/358"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #293.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcn9CQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Business/enterprise operations - not code deliverables. Sales, pricing, outreach, and demo infrastructure are operational tasks.",
+        "createdAt": "2026-06-01T14:14:58Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/359#issuecomment-4593417481",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9zQ",
+        "name": "b2b",
+        "description": "Enterprise/B2B features",
+        "color": "0E8A16"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsDHw",
+        "name": "enterprise",
+        "description": "Enterprise / B2B tasks",
+        "color": "c5def5"
+      }
+    ],
+    "number": 359,
+    "state": "OPEN",
+    "title": "Identify 50 target therapists/coaches \u2014 ICP definition",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/359"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #293.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcn9Dg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Business/enterprise operations - not code deliverables. Sales, pricing, outreach, and demo infrastructure are operational tasks.",
+        "createdAt": "2026-06-01T14:14:58Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/360#issuecomment-4593417486",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABElE6hg",
+        "author": {
+          "login": "teamkamkod"
+        },
+        "authorAssociation": "NONE",
+        "body": "A structured 5-email sequence plus LinkedIn is a great foundation for cold outreach. The key is making each email in the sequence progressively more valuable and less salesy.\n\nOne thing that might help: run your draft emails through a cold email scoring tool like ColdScore (https://score.quick-polish.com) to check each message in the sequence for personalization depth, clarity, and CTA effectiveness. It gives specific suggestions for improvement and can help ensure your sequence flows naturally.\n\nIt's free for the first 2 analyses (then $1 one-time) - could be useful for iterating on your sequence templates.",
+        "createdAt": "2026-06-02T12:16:08Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/360#issuecomment-4602280582",
+        "viewerDidAuthor": false
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9zQ",
+        "name": "b2b",
+        "description": "Enterprise/B2B features",
+        "color": "0E8A16"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXMjg",
+        "name": "owner:business-development",
+        "description": "Primary owner role: business development/partnerships",
+        "color": "FBCA04"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsDHw",
+        "name": "enterprise",
+        "description": "Enterprise / B2B tasks",
+        "color": "c5def5"
+      }
+    ],
+    "number": 360,
+    "state": "OPEN",
+    "title": "Outreach sequence \u2014 5-email cold outreach + LinkedIn",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/360"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #293.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcn9BA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Business/enterprise operations - not code deliverables. Sales, pricing, outreach, and demo infrastructure are operational tasks.",
+        "createdAt": "2026-06-01T14:14:58Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/361#issuecomment-4593417476",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9zQ",
+        "name": "b2b",
+        "description": "Enterprise/B2B features",
+        "color": "0E8A16"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsDHw",
+        "name": "enterprise",
+        "description": "Enterprise / B2B tasks",
+        "color": "c5def5"
+      }
+    ],
+    "number": 361,
+    "state": "OPEN",
+    "title": "Enterprise demo environment \u2014 sandboxed Render instance",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/361"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #293.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcn9DQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Business/enterprise operations - not code deliverables. Sales, pricing, outreach, and demo infrastructure are operational tasks.",
+        "createdAt": "2026-06-01T14:14:58Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/362#issuecomment-4593417485",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABKH1RPQ",
+        "author": {
+          "login": "onspotrepair4u-lgtm"
+        },
+        "authorAssociation": "NONE",
+        "body": "For a B2B security questionnaire template that stays usable past the first deal:\n\n- Prefer an **answer bank** (question ID \u2192 answer + owner + last-reviewed date + link to evidence) over a single pre-filled PDF/Markdown that goes stale.\n- Normalize recurring themes early: data residency, encryption at rest/in transit, access control, subprocessors, incident response, backup/DR \u2014 most SIG/CAIQ-style forms remix these.\n- Require a **citation** on every \u201cYes\u201d (policy \u00a7, screenshot, ticket, architecture note). Sales can paste faster and security won\u2019t get surprised in diligence.\n\nStatic pre-fills help the first RFP; cited reusable answers help the tenth. If you want tooling that drafts from an evidence vault with citations, https://gettrustfill.com is what I\u2019m building \u2014 happy to leave it as a pointer only; the bank + citation hygiene is the main win here.",
+        "createdAt": "2026-07-14T21:43:06Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/362#issuecomment-4974268733",
+        "viewerDidAuthor": false
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABKH1pWA",
+        "author": {
+          "login": "onspotrepair4u-lgtm"
+        },
+        "authorAssociation": "NONE",
+        "body": "For a pre-filled security questionnaire template, the part that usually ages worst is free-text answers detached from evidence.\n\nWorth baking in from day one:\n- each answer row links to a concrete artifact (policy path, control ID, report excerpt)\n- treat CAIQ/SIG themes as reusable maps, not one-off paste dumps\n- when evidence changes, answers should flag as stale instead of silently rotting\n\nThat's the pattern we use in Trustfill (https://gettrustfill.com) \u2014 citation-backed drafts from an evidence vault. Happy to share structure notes if useful for this template.\n",
+        "createdAt": "2026-07-14T21:43:59Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/362#issuecomment-4974274904",
+        "viewerDidAuthor": false
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABKH2afQ",
+        "author": {
+          "login": "onspotrepair4u-lgtm"
+        },
+        "authorAssociation": "NONE",
+        "body": "\ufeffOn pre-filled security questionnaire templates: the failure mode I've seen is answers drifting from reality once policies/controls change.\n\nWorth structuring the pack so each pre-filled row points at a specific evidence artifact (policy section, config screenshot, SOC excerpt) and gets re-validated when evidence updates. Citation discipline beats a static \"golden answers\" spreadsheet.\n\nIf helpful for the packaging work: https://gettrustfill.com is built around evidence-vault drafts with citations (disclosure: I work on Trustfill). Happy to leave this as a process note either way.\r\n",
+        "createdAt": "2026-07-14T21:45:46Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/362#issuecomment-4974287485",
+        "viewerDidAuthor": false
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9zQ",
+        "name": "b2b",
+        "description": "Enterprise/B2B features",
+        "color": "0E8A16"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXL0A",
+        "name": "owner:legal-compliance",
+        "description": "Primary owner role: legal/compliance",
+        "color": "5319E7"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsDHw",
+        "name": "enterprise",
+        "description": "Enterprise / B2B tasks",
+        "color": "c5def5"
+      }
+    ],
+    "number": 362,
+    "state": "OPEN",
+    "title": "Security questionnaire template \u2014 pre-filled answers",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/362"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #293.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcn9LA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Business/enterprise operations - not code deliverables. Sales, pricing, outreach, and demo infrastructure are operational tasks.",
+        "createdAt": "2026-06-01T14:14:58Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/363#issuecomment-4593417516",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9zQ",
+        "name": "b2b",
+        "description": "Enterprise/B2B features",
+        "color": "0E8A16"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXMjg",
+        "name": "owner:business-development",
+        "description": "Primary owner role: business development/partnerships",
+        "color": "FBCA04"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsDHw",
+        "name": "enterprise",
+        "description": "Enterprise / B2B tasks",
+        "color": "c5def5"
+      }
+    ],
+    "number": 363,
+    "state": "OPEN",
+    "title": "First pilot onboarding \u2014 1-3 practitioners",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/363"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #293.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcn9GA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Business/enterprise operations - not code deliverables. Sales, pricing, outreach, and demo infrastructure are operational tasks.",
+        "createdAt": "2026-06-01T14:14:58Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/364#issuecomment-4593417496",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9zQ",
+        "name": "b2b",
+        "description": "Enterprise/B2B features",
+        "color": "0E8A16"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsDHw",
+        "name": "enterprise",
+        "description": "Enterprise / B2B tasks",
+        "color": "c5def5"
+      }
+    ],
+    "number": 364,
+    "state": "OPEN",
+    "title": "Enterprise pricing live \u2014 published tiers + billing",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/364"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #294.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc_OPg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Non-code artifact: operational, planning, documentation, or legal. Not a software feature.",
+        "createdAt": "2026-06-01T14:58:31Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/365#issuecomment-4593798718",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXMzw",
+        "name": "owner:release-ops",
+        "description": "Primary owner role: release operations/devops",
+        "color": "0E8A16"
+      }
+    ],
+    "number": 365,
+    "state": "OPEN",
+    "title": "Apple Developer Account + TestFlight setup",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/365"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #294.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXMFw",
+        "name": "owner:mobile-native",
+        "description": "Primary owner role: native mobile engineering",
+        "color": "1D76DB"
+      }
+    ],
+    "number": 366,
+    "state": "OPEN",
+    "title": "Hire/contract mobile native engineer (Swift)",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/366"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #294.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXL0A",
+        "name": "owner:legal-compliance",
+        "description": "Primary owner role: legal/compliance",
+        "color": "5319E7"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCIg",
+        "name": "legal",
+        "description": "Legal & compliance tasks",
+        "color": "d4c5f9"
+      }
+    ],
+    "number": 367,
+    "state": "OPEN",
+    "title": "Engage legal counsel (retainer)",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/367"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #294.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNQA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 368,
+    "state": "OPEN",
+    "title": "Seed deep agents for LEG, FIN, PRD, OPS departments",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/368"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #294.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNQA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 369,
+    "state": "OPEN",
+    "title": "Internal dogfood beta \u2014 founders + 5-10 trusted people",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/369"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #294.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      }
+    ],
+    "number": 370,
+    "state": "OPEN",
+    "title": "Monitoring + alerting setup \u2014 Sentry + uptime",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/370"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #294.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsC6A",
+        "name": "support",
+        "description": "Customer success tasks",
+        "color": "d4c5f9"
+      }
+    ],
+    "number": 371,
+    "state": "OPEN",
+    "title": "Support channel setup \u2014 email + Discord",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/371"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #294.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc_Mmw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Non-code artifact: operational, planning, documentation, or legal. Not a software feature.",
+        "createdAt": "2026-06-01T14:58:28Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/372#issuecomment-4593798299",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNQA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXMzw",
+        "name": "owner:release-ops",
+        "description": "Primary owner role: release operations/devops",
+        "color": "0E8A16"
+      }
+    ],
+    "number": 372,
+    "state": "OPEN",
+    "title": "TestFlight external beta \u2014 50-100 users",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/372"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "## Summary\nExecute the first real user-acquisition motion for the private beta.\n\n## Scope\n- send the first creator outreach batch to 10 tightly aligned breakup / attachment / recovery creators\n- hold the first 3-5 creator walkthroughs\n- use the waitlist and source data to admit the first curated cohort\n- define the initial community operating rule for the beta room\n- capture early approved reactions or proof snippets from real beta users\n\n## Done When\n- first creator outreach wave is sent\n- at least 3 creator conversations are completed or scheduled\n- the first curated cohort is admitted\n- the beta community operating rule exists\n- early social proof is captured for later GTM use\n\n## Source Docs\n- [30-Day GTM Strike Plan](docs/planning/planning--30-day-gtm-strike-plan--2026-03-10.md)\n- [Dual-Channel Audience Architecture](docs/planning/planning--dual-channel-audience-architecture--2026-03-10.md)\n- [GTM War Board](docs/planning/planning--gtm-war-board--2026-03-10.md)\n\nSub-issue of #294\n",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcgjDw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Business operations - not a code deliverable. Requires human outreach execution.",
+        "createdAt": "2026-06-01T14:00:43Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/373#issuecomment-4593296143",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AKhg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:39:27Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/373#issuecomment-4691331718",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9iA",
+        "name": "P1-beta-enhancer",
+        "description": "Should-have for private beta",
+        "color": "E99695"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXMjg",
+        "name": "owner:business-development",
+        "description": "Primary owner role: business development/partnerships",
+        "color": "FBCA04"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCrg",
+        "name": "marketing",
+        "description": "Growth & marketing tasks",
+        "color": "c2e0c6"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACax_kuA",
+        "name": "follow-up",
+        "description": "Needs active follow-up in upcoming operating reviews",
+        "color": "F9D0C4"
+      }
+    ],
+    "number": 373,
+    "state": "OPEN",
+    "title": "Seed user recruitment \u2014 creator outreach + first cohort admissions",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/373"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #294.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCRQ",
+        "name": "product",
+        "description": "Product & design tasks",
+        "color": "bfd4f2"
+      }
+    ],
+    "number": 374,
+    "state": "OPEN",
+    "title": "Beta feedback synthesis + iteration cycle",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/374"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #294.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCIg",
+        "name": "legal",
+        "description": "Legal & compliance tasks",
+        "color": "d4c5f9"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCxA",
+        "name": "finance",
+        "description": "Finance & revenue tasks",
+        "color": "fef2c0"
+      }
+    ],
+    "number": 375,
+    "state": "OPEN",
+    "title": "Real-money pilot \u2014 10-25 users",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/375"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #294.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCrg",
+        "name": "marketing",
+        "description": "Growth & marketing tasks",
+        "color": "c2e0c6"
+      }
+    ],
+    "number": 376,
+    "state": "OPEN",
+    "title": "Open beta expansion \u2014 500+ users",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/376"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #294.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXMzw",
+        "name": "owner:release-ops",
+        "description": "Primary owner role: release operations/devops",
+        "color": "0E8A16"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCIg",
+        "name": "legal",
+        "description": "Legal & compliance tasks",
+        "color": "d4c5f9"
+      }
+    ],
+    "number": 377,
+    "state": "OPEN",
+    "title": "App Store submission",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/377"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #294.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXMzw",
+        "name": "owner:release-ops",
+        "description": "Primary owner role: release operations/devops",
+        "color": "0E8A16"
+      }
+    ],
+    "number": 378,
+    "state": "OPEN",
+    "title": "App Store launch (public) \u2014 general availability",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/378"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #299.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXMFw",
+        "name": "owner:mobile-native",
+        "description": "Primary owner role: native mobile engineering",
+        "color": "1D76DB"
+      }
+    ],
+    "number": 379,
+    "state": "OPEN",
+    "title": "Mobile Native Engineer (Swift) \u2014 contract sourcing",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/379"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #299.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXL0A",
+        "name": "owner:legal-compliance",
+        "description": "Primary owner role: legal/compliance",
+        "color": "5319E7"
+      }
+    ],
+    "number": 380,
+    "state": "OPEN",
+    "title": "Legal Counsel \u2014 retainer engagement",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/380"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #299.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXMFw",
+        "name": "owner:mobile-native",
+        "description": "Primary owner role: native mobile engineering",
+        "color": "1D76DB"
+      }
+    ],
+    "number": 381,
+    "state": "OPEN",
+    "title": "Kotlin contractor \u2014 Android health data bridge",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/381"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #299.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNQA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 382,
+    "state": "OPEN",
+    "title": "QA / Beta Coordinator \u2014 part-time hire",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/382"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #299.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsCrg",
+        "name": "marketing",
+        "description": "Growth & marketing tasks",
+        "color": "c2e0c6"
+      }
+    ],
+    "number": 383,
+    "state": "OPEN",
+    "title": "Growth / Community Manager \u2014 hiring",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/383"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #299.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXMjg",
+        "name": "owner:business-development",
+        "description": "Primary owner role: business development/partnerships",
+        "color": "FBCA04"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACamsDHw",
+        "name": "enterprise",
+        "description": "Enterprise / B2B tasks",
+        "color": "c5def5"
+      }
+    ],
+    "number": 384,
+    "state": "OPEN",
+    "title": "Enterprise Sales / BD \u2014 hiring (if fundraise)",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/384"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #299.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      }
+    ],
+    "number": 385,
+    "state": "OPEN",
+    "title": "DevOps / SRE \u2014 part-time (if fundraise)",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/385"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #167.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEZwweg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Already implemented \u2014 full infrastructure exists with tests.",
+        "createdAt": "2026-06-01T07:26:32Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/386#issuecomment-4590415994",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6ALiA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:39:29Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/386#issuecomment-4691331976",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 386,
+    "state": "OPEN",
+    "title": "KYC: Schema \u2014 identity_verifications table + API types",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/386"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #167.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEZwxRA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Already implemented \u2014 full infrastructure exists with tests.",
+        "createdAt": "2026-06-01T07:26:34Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/387#issuecomment-4590416196",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AMWQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:39:32Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/387#issuecomment-4691332185",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 387,
+    "state": "OPEN",
+    "title": "KYC: API \u2014 verification endpoint + progressive tier logic",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/387"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #167.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEZwyDA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Already implemented \u2014 full infrastructure exists with tests.",
+        "createdAt": "2026-06-01T07:26:36Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/388#issuecomment-4590416396",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6ANNQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:39:34Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/388#issuecomment-4691332405",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 388,
+    "state": "OPEN",
+    "title": "KYC: UI \u2014 identity upload flow + stake tier display",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/388"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #167.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEZwyqw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Already implemented \u2014 full infrastructure exists with tests.",
+        "createdAt": "2026-06-01T07:26:38Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/389#issuecomment-4590416555",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AOOw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:39:36Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/389#issuecomment-4691332667",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 389,
+    "state": "OPEN",
+    "title": "KYC: Tests \u2014 unit + integration for tier transitions",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/389"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #167.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcenXw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Code portion complete. KYC enforcement with progressive tiers implemented in `stake-tiers.ts`, `compliance-policy.service.ts`, `identity-verification.service.ts`. Legal counsel sign-off is external dependency. Closing code side.",
+        "createdAt": "2026-06-01T13:57:06Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/390#issuecomment-4593264479",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6APKw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:39:39Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/390#issuecomment-4691332907",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXL0A",
+        "name": "owner:legal-compliance",
+        "description": "Primary owner role: legal/compliance",
+        "color": "5319E7"
+      }
+    ],
+    "number": 390,
+    "state": "OPEN",
+    "title": "KYC: Legal \u2014 counsel sign-off on verification requirements",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/390"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #168.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcemOg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "JS-level camera proof capture is implemented and functional for beta:\n- `src/mobile/screens/ProofCaptureScreen.tsx`: Live-only capture, nonce watermarking, R2 upload\n- `src/mobile/components/CameraModule.tsx`: Anti-cheat synthetic capture\n- `src/mobile/utils/proof-media.ts`: createNonce(), watermark embedding\nNative Swift module with hardware-backed capture remains a future enhancement for post-beta production hardening. Closing - JS implementation covers beta requirements.",
+        "createdAt": "2026-06-01T13:57:04Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/391#issuecomment-4593264186",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AQSw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:39:41Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/391#issuecomment-4691333195",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXMFw",
+        "name": "owner:mobile-native",
+        "description": "Primary owner role: native mobile engineering",
+        "color": "1D76DB"
+      }
+    ],
+    "number": 391,
+    "state": "OPEN",
+    "title": "Camera: Native Swift module \u2014 photo/video capture with nonce",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/391"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #168.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEZwuIA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Already implemented \u2014 full infrastructure exists with tests.",
+        "createdAt": "2026-06-01T07:26:25Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/392#issuecomment-4590415392",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6ARew",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:39:43Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/392#issuecomment-4691333499",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 392,
+    "state": "OPEN",
+    "title": "Camera: API \u2014 proof submission endpoint + nonce validation",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/392"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #168.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEZwvHA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Already implemented \u2014 full infrastructure exists with tests.",
+        "createdAt": "2026-06-01T07:26:28Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/393#issuecomment-4590415644",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6ASnA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:39:46Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/393#issuecomment-4691333788",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 393,
+    "state": "OPEN",
+    "title": "Camera: Schema \u2014 proof_submissions table + metadata",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/393"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #168.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEZwv2A",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Already implemented \u2014 full infrastructure exists with tests.",
+        "createdAt": "2026-06-01T07:26:30Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/394#issuecomment-4590415832",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AT2Q",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:39:49Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/394#issuecomment-4691334105",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 394,
+    "state": "OPEN",
+    "title": "Camera: Tests \u2014 capture flow + nonce challenge verification",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/394"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #169.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEZwqXg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Already implemented \u2014 full infrastructure exists with tests.",
+        "createdAt": "2026-06-01T07:26:15Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/395#issuecomment-4590414430",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AU0Q",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:39:51Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/395#issuecomment-4691334353",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 395,
+    "state": "OPEN",
+    "title": "Settlement: Stripe Connect FBO account configuration",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/395"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #169.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEZwrMw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Already implemented \u2014 full infrastructure exists with tests.",
+        "createdAt": "2026-06-01T07:26:17Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/396#issuecomment-4590414643",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AV_g",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:39:54Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/396#issuecomment-4691334654",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 396,
+    "state": "OPEN",
+    "title": "Settlement: API \u2014 deposit/withdrawal/settlement endpoints",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/396"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #169.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEZwr5w",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Already implemented \u2014 full infrastructure exists with tests.",
+        "createdAt": "2026-06-01T07:26:19Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/397#issuecomment-4590414823",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AXBg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:39:56Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/397#issuecomment-4691334918",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 397,
+    "state": "OPEN",
+    "title": "Settlement: Schema \u2014 transactions + ledger tables",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/397"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #169.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEZwsrQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Already implemented \u2014 full infrastructure exists with tests.",
+        "createdAt": "2026-06-01T07:26:21Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/398#issuecomment-4590415021",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AYAg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:39:58Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/398#issuecomment-4691335170",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 398,
+    "state": "OPEN",
+    "title": "Settlement: Reconciliation \u2014 automated Stripe vs internal check",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/398"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #169.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEZwtVg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Already implemented \u2014 full infrastructure exists with tests.",
+        "createdAt": "2026-06-01T07:26:23Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/399#issuecomment-4590415190",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AY9g",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:01Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/399#issuecomment-4691335414",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 399,
+    "state": "OPEN",
+    "title": "Settlement: Tests \u2014 full deposit\u2192stake\u2192settle\u2192withdraw flow",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/399"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #169.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcelUg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Code portion complete. FBO custody model implemented in `settlement.worker.ts`, `stripe.service.ts`, `settlement-quote.ts` with double-entry ledger + idempotency. Legal counsel review is external dependency. Closing code side.",
+        "createdAt": "2026-06-01T13:57:02Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/400#issuecomment-4593263954",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AaHQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:03Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/400#issuecomment-4691335709",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXL0A",
+        "name": "owner:legal-compliance",
+        "description": "Primary owner role: legal/compliance",
+        "color": "5319E7"
+      }
+    ],
+    "number": 400,
+    "state": "OPEN",
+    "title": "Settlement: Legal \u2014 FBO custody model counsel review",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/400"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #278.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AbFw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:06Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/401#issuecomment-4691335959",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 401,
+    "state": "OPEN",
+    "title": "Geofence: Policy registry \u2014 state availability matrix CRUD",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/401"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #278.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEa5xZw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Closed by PR #641 \u2014 fail-closed middleware already implemented (GeofenceGuard)",
+        "createdAt": "2026-06-01T10:11:33Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/402#issuecomment-4591612263",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AcRg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:09Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/402#issuecomment-4691336262",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 402,
+    "state": "OPEN",
+    "title": "Geofence: Middleware \u2014 fail-closed location enforcement",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/402"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #278.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEa5y6w",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Closed by PR #641 \u2014 admin UI at /admin/jurisdictions",
+        "createdAt": "2026-06-01T10:11:37Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/403#issuecomment-4591612651",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AdNg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:11Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/403#issuecomment-4691336502",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 403,
+    "state": "OPEN",
+    "title": "Geofence: Admin UI \u2014 state matrix management screen",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/403"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #278.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEa5z_Q",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Closed by PR #641 \u2014 compliance decision logging",
+        "createdAt": "2026-06-01T10:11:39Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/404#issuecomment-4591612925",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AeKA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:13Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/404#issuecomment-4691336744",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 404,
+    "state": "OPEN",
+    "title": "Geofence: Compliance logging \u2014 decision audit trail",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/404"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #278.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEa50vw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Closed by PR #641 \u2014 65 payout matrix tests",
+        "createdAt": "2026-06-01T10:11:41Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/405#issuecomment-4591613119",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AfBg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:15Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/405#issuecomment-4691336966",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 405,
+    "state": "OPEN",
+    "title": "Geofence: Tests \u2014 all protected routes + regression suite",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/405"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #279.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AgKA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:18Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/406#issuecomment-4691337256",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 406,
+    "state": "OPEN",
+    "title": "Forfeit: Policy engine \u2014 jurisdiction-aware disposition rules",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/406"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #279.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEa51uw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Closed by PR #641 \u2014 kill switch in JurisdictionDispositionMapper",
+        "createdAt": "2026-06-01T10:11:43Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/407#issuecomment-4591613371",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6Ahdg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:21Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/407#issuecomment-4691337590",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 407,
+    "state": "OPEN",
+    "title": "Forfeit: Kill switch \u2014 refund-only emergency override",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/407"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #279.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEa526A",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Closed by PR #641 \u2014 admin UI kill switch toggle",
+        "createdAt": "2026-06-01T10:11:46Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/408#issuecomment-4591613672",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6Aixg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/408#issuecomment-4691337926",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 408,
+    "state": "OPEN",
+    "title": "Forfeit: Admin UI \u2014 kill switch toggle + state mode display",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/408"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #279.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6Aj2Q",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:26Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/409#issuecomment-4691338201",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 409,
+    "state": "OPEN",
+    "title": "Forfeit: Tests \u2014 payout matrix all configured states",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/409"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #279.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcejnw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Code portion complete. Forfeit disposition mapping engine is implemented in `jurisdiction-disposition.mapper.ts` with per-state mode routing. Legal counsel sign-off is external dependency - requires human lawyer review. Closing code side.",
+        "createdAt": "2026-06-01T13:56:59Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/410#issuecomment-4593263519",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6Ak5g",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:29Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/410#issuecomment-4691338470",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACaOXL0A",
+        "name": "owner:legal-compliance",
+        "description": "Primary owner role: legal/compliance",
+        "color": "5319E7"
+      }
+    ],
+    "number": 410,
+    "state": "OPEN",
+    "title": "Forfeit: Legal \u2014 counsel sign-off on jurisdiction mode mapping",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/410"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #306.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6Al3w",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:31Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/411#issuecomment-4691338719",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 411,
+    "state": "OPEN",
+    "title": "Guardrails: Crisis detection \u2014 keyword + pattern matching engine",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/411"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #306.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6Am5A",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:33Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/412#issuecomment-4691338980",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 412,
+    "state": "OPEN",
+    "title": "Guardrails: Intervention flow \u2014 pause + resource display UI",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/412"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #306.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6AoBQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:36Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/413#issuecomment-4691339269",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 413,
+    "state": "OPEN",
+    "title": "Guardrails: API \u2014 crisis event logging + escalation trigger",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/413"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #306.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABF6ApVQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Reopened by closure-governance audit. This issue was closed in GitHub but had no docs/triage.json record with durable implementation evidence, valid supersession/recovery artifact, or explicit human abandon/supersede decision. Per repo policy, unproven work stays open until it is planned, implemented, or recovered with proof.",
+        "createdAt": "2026-06-12T12:40:39Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/414#issuecomment-4691339605",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACaKp9Zw",
+        "name": "P0-beta-blocker",
+        "description": "Must-have for private beta",
+        "color": "B60205"
+      }
+    ],
+    "number": 414,
+    "state": "OPEN",
+    "title": "Guardrails: Tests \u2014 detection accuracy + false positive rate",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/414"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #186.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcoKqw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact - not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:15:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/415#issuecomment-4593420971",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6mdg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:50:12Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/415#issuecomment-4593722998",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 415,
+    "state": "OPEN",
+    "title": "Thesis: Directory structure + chapter scaffolding",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/415"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #186.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcoKmg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact - not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:15:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/416#issuecomment-4593420954",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6k9Q",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:50:09Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/416#issuecomment-4593722613",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 416,
+    "state": "OPEN",
+    "title": "Thesis: BibTeX bibliography from 200+ citations",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/416"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #186.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6iyg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:50:05Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/417#issuecomment-4593722058",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 417,
+    "state": "OPEN",
+    "title": "Thesis: Notation and symbol guide",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/417"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #186.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcoKpQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact - not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:15:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/418#issuecomment-4593420965",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6hXA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:50:03Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/418#issuecomment-4593721692",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      },
+      {
+        "id": "LA_kwDORWWWEs8AAAACZrWwyw",
+        "name": "devops",
+        "description": "CI/CD, infrastructure, environment config",
+        "color": "C5DEF5"
+      }
+    ],
+    "number": 418,
+    "state": "OPEN",
+    "title": "Thesis: Production pipeline (PDF build, citation check)",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/418"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #187.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNQA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 422,
+    "state": "OPEN",
+    "title": "Ask Styx: Integration tests \u2014 E2E question\u2192answer flow",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/422"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #188.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6f_w",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:50:00Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/423#issuecomment-4593721343",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 423,
+    "state": "OPEN",
+    "title": "Gap analysis: Infrastructure & ops audit",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/423"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #188.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcoKiw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact - not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:15:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/424#issuecomment-4593420939",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6ehQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:49:57Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/424#issuecomment-4593720965",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 424,
+    "state": "OPEN",
+    "title": "Gap analysis: Business model & metrics audit",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/424"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #188.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcoKkQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact - not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:15:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/425#issuecomment-4593420945",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6dDQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:49:55Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/425#issuecomment-4593720589",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 425,
+    "state": "OPEN",
+    "title": "Gap analysis: Growth & retention audit",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/425"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #188.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6bfA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:49:52Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/426#issuecomment-4593720188",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 426,
+    "state": "OPEN",
+    "title": "Gap analysis: Remediation plan + priority matrix",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/426"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #267.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNQA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 431,
+    "state": "OPEN",
+    "title": "Agents: Legal domain context + prompt engineering",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/431"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #267.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNQA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 432,
+    "state": "OPEN",
+    "title": "Agents: Finance domain context + prompt engineering",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/432"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #267.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNQA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 433,
+    "state": "OPEN",
+    "title": "Agents: Product domain context + prompt engineering",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/433"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #267.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNQA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 434,
+    "state": "OPEN",
+    "title": "Agents: Ops domain context + prompt engineering",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/434"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #267.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNQA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 435,
+    "state": "OPEN",
+    "title": "Agents: Integration tests \u2014 multi-agent routing",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/435"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #189.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcoKpA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact - not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:15:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/436#issuecomment-4593420964",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6aLw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:49:49Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/436#issuecomment-4593719855",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 436,
+    "state": "OPEN",
+    "title": "Audit: Scan codebase for TODO/FIXME/stub placeholders",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/436"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #189.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcoKdg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact - not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:15:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/437#issuecomment-4593420918",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6YkQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:49:47Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/437#issuecomment-4593719441",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 437,
+    "state": "OPEN",
+    "title": "Audit: Prioritize stubs by blast radius + phase relevance",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/437"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #189.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcoKfA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact - not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:15:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/438#issuecomment-4593420924",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6XEg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:49:44Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/438#issuecomment-4593719058",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 438,
+    "state": "OPEN",
+    "title": "Audit: Generate remediation tickets for critical stubs",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/438"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #190.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcoKng",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact - not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:15:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/439#issuecomment-4593420958",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6VaQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:49:41Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/439#issuecomment-4593718633",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 439,
+    "state": "OPEN",
+    "title": "Audit: Map all modules \u2192 feature coverage matrix",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/439"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #190.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcoKeQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact - not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:15:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/440#issuecomment-4593420921",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6Tng",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:49:38Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/440#issuecomment-4593718174",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 440,
+    "state": "OPEN",
+    "title": "Audit: Identify architectural gaps + missing integrations",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/440"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #190.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6R-A",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:49:35Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/441#issuecomment-4593717752",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 441,
+    "state": "OPEN",
+    "title": "Audit: Completeness scoring + gap remediation plan",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/441"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #191.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcoKhw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact - not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:15:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/442#issuecomment-4593420935",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6QjQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:49:32Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/442#issuecomment-4593717389",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 442,
+    "state": "OPEN",
+    "title": "Audit: Aggregate findings from all audit phases",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/442"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #191.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcoKlw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact - not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:15:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/443#issuecomment-4593420951",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6O3A",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:49:29Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/443#issuecomment-4593716956",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 443,
+    "state": "OPEN",
+    "title": "Audit: Cross-reference gaps across tools + sessions",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/443"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #191.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcoKnw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact - not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:15:24Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/444#issuecomment-4593420959",
+        "viewerDidAuthor": true
+      },
+      {
+        "id": "IC_kwDORWWWEs8AAAABEc6Nng",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Documentation artifact. Not a code feature. Docs exist in docs/ directory.",
+        "createdAt": "2026-06-01T14:49:27Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/444#issuecomment-4593716638",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNNQ",
+        "name": "documentation",
+        "description": "Improvements or additions to documentation",
+        "color": "0075ca"
+      }
+    ],
+    "number": 444,
+    "state": "OPEN",
+    "title": "Audit: Executive summary + priority action list",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/444"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #192.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNQA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 445,
+    "state": "OPEN",
+    "title": "Governance: Registry validation automation",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/445"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #192.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNQA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 446,
+    "state": "OPEN",
+    "title": "Governance: Tier promotion criteria + gate checks",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/446"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #192.",
+    "comments": [],
+    "labels": [
+      {
+        "id": "LA_kwDORWWWEs8AAAACY_fNQA",
+        "name": "enhancement",
+        "description": "New feature or request",
+        "color": "a2eeef"
+      }
+    ],
+    "number": 447,
+    "state": "OPEN",
+    "title": "Governance: Promotion dashboard + audit trail",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/447"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #170.",
+    "comments": [],
+    "labels": [],
+    "number": 448,
+    "state": "OPEN",
+    "title": "TKT-P1-005: Schema + API \u2014 lockdown rules + timelock enforcement",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/448"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #170.",
+    "comments": [],
+    "labels": [],
+    "number": 449,
+    "state": "OPEN",
+    "title": "TKT-P1-005: UI \u2014 danger zone indicator + timelock countdown",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/449"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #170.",
+    "comments": [],
+    "labels": [],
+    "number": 450,
+    "state": "OPEN",
+    "title": "TKT-P1-005: Tests \u2014 lockdown triggers + timelock expiry",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/450"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #171.",
+    "comments": [],
+    "labels": [],
+    "number": 451,
+    "state": "OPEN",
+    "title": "TKT-P1-012: Schema + API \u2014 risk multiplier rules + schedule config",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/451"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #171.",
+    "comments": [],
+    "labels": [],
+    "number": 452,
+    "state": "OPEN",
+    "title": "TKT-P1-012: UI \u2014 multiplier indicator + schedule display",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/452"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #171.",
+    "comments": [],
+    "labels": [],
+    "number": 453,
+    "state": "OPEN",
+    "title": "TKT-P1-012: Tests \u2014 multiplier calculation + edge cases",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/453"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #172.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnxpg",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:37Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/454#issuecomment-4593414566",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 454,
+    "state": "OPEN",
+    "title": "TKT-P1-017: Schema + API \u2014 partner linking + notification triggers",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/454"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #172.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnxyA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:37Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/455#issuecomment-4593414600",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 455,
+    "state": "OPEN",
+    "title": "TKT-P1-017: UI \u2014 partner invitation + status dashboard",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/455"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #172.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnxnA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:37Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/456#issuecomment-4593414556",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 456,
+    "state": "OPEN",
+    "title": "TKT-P1-017: Tests \u2014 protocol flow + notification delivery",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/456"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #173.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnxog",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:37Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/457#issuecomment-4593414562",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 457,
+    "state": "OPEN",
+    "title": "TKT-P1-010: Schema + API \u2014 progress tracking + downscale logic",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/457"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #173.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnxqA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:37Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/458#issuecomment-4593414568",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 458,
+    "state": "OPEN",
+    "title": "TKT-P1-010: UI \u2014 progress visualization + downscale flow",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/458"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #173.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnxpw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:37Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/459#issuecomment-4593414567",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 459,
+    "state": "OPEN",
+    "title": "TKT-P1-010: Tests \u2014 progress calculation + UX state transitions",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/459"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #174.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnxtQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:37Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/460#issuecomment-4593414581",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 460,
+    "state": "OPEN",
+    "title": "TKT-P1-016: Schema + API \u2014 oath storage + identity binding",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/460"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #174.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnxiw",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:37Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/461#issuecomment-4593414539",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 461,
+    "state": "OPEN",
+    "title": "TKT-P1-016: UI \u2014 oath creation flow + identity confirmation",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/461"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #174.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnxow",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:37Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/462#issuecomment-4593414563",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 462,
+    "state": "OPEN",
+    "title": "TKT-P1-016: Tests \u2014 onboarding flow + oath persistence",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/462"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #175.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnxiA",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:37Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/463#issuecomment-4593414536",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 463,
+    "state": "OPEN",
+    "title": "TKT-P1-018: Schema + API \u2014 gradient calculation + leaderboard data",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/463"
+  },
+  {
+    "author": {
+      "id": "MDQ6VXNlcjI0Nzk2NDQ4",
+      "is_bot": false,
+      "login": "4444J99",
+      "name": "Anthony James Padavano"
+    },
+    "body": "Sub-issue of #175.",
+    "comments": [
+      {
+        "id": "IC_kwDORWWWEs8AAAABEcnxkQ",
+        "author": {
+          "login": "4444J99"
+        },
+        "authorAssociation": "MEMBER",
+        "body": "Parent feature closed.",
+        "createdAt": "2026-06-01T14:14:37Z",
+        "includesCreatedEdit": false,
+        "isMinimized": false,
+        "minimizedReason": "",
+        "reactionGroups": [],
+        "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/464#issuecomment-4593414545",
+        "viewerDidAuthor": true
+      }
+    ],
+    "labels": [],
+    "number": 464,
+    "state": "OPEN",
+    "title": "TKT-P1-018: UI \u2014 dashboard visualization + real-time leaderboard",
+    "url": "https://github.com/organvm/peer-audited--behavioral-blockchain/issues/464"
+  }
+]

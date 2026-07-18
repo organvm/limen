@@ -8,7 +8,7 @@
     },
     {
       "dependency": "typescript",
-      "used_in_repos": 30
+      "used_in_repos": 31
     },
     {
       "dependency": "vitest",

@@ -1,0 +1,539 @@
+99: feat: Gateway Oath tier — Two-Minute Rule with progressive habit shaping ladder
+Context: 
+Notes: Proactive (starts easy from Day 1) vs F-UX-03 (reactive, downscales after 3 failures). Complements #72 (sequential habit unlocking across behaviors) — this escalates difficulty within a single behavior.
+Labels: brainstorm-audit, P2-post-beta
+
+100: feat: Resistance pattern detection engine — displacement, self-dramatization, victimhood, healing trap
+Context: 
+Notes: 
+Labels: brainstorm-audit, P2-post-beta
+
+101: feat: AI rationalization classifier — Pressfield-informed excuse analysis via Gemini
+Context: 
+Notes: 
+Labels: api, brainstorm-audit, P2-post-beta
+
+102: feat: BBO (Bigger Better Offer) substitution engine — active craving replacement library
+Context: 
+Notes: Distinct from F-AEGIS-08 (RAIN protocol — noticing, not replacing), F-UX-09 (behavior change library — catalog of habits, not crisis substitutions). This is an active intervention engine for craving moments.
+Labels: brainstorm-audit, P2-post-beta, recovery
+
+103: feat: Styx Academy — structured psychoeducation module (reward-based learning curriculum)
+Context: 
+Notes: Distinct from F-UX-09 (Behavior Change Library — catalog of habit tracks, not educational curriculum) and pitch deck (investor-facing, not user-facing).
+Labels: brainstorm-audit, P2-post-beta
+
+104: feat: Zero-gap contract rollover — 'Start the Next One Today' momentum bridge
+Context: 
+Notes: Distinct from #64 (graduation flow — handles exit, not continuation), #74 (stake tapering — gradual reduction, not rollover), Pressfield #4 (evergreen mode for serial procrastinators — this is for successful completers).
+Labels: brainstorm-audit, P2-post-beta
+
+105: feat: Generosity loop / Pay It Forward — prosocial reward mechanism for successful completers
+Context: 
+Notes: Distinct from F-CORE-13 (Charity-on-Failure — money goes out on failure), #58 (referral program — financial incentive), #86 (Recovery Ambassador — peer referral). This is about successful users funding new users.
+Labels: brainstorm-audit, P2-post-beta
+
+106: feat: Fury auditor wellness system — empathy fatigue prevention, bias detection, distraction flagging
+Context: 
+Notes: Extends F-FURY-02 (accuracy score — outcome-based) with process-based quality assurance. Complements F-FURY-05 (honeypot — tests honesty, not wellness).
+Labels: brainstorm-audit, P2-post-beta
+
+107: feat: Emotional contagion safeguards for pod failure broadcasting
+Context: 
+Notes: F-SOCIAL-07/08 define pod structure and failure broadcasting but don't address second-order psychological effects. #51 (in-app messaging) enables communication but doesn't address contagion design.
+Labels: brainstorm-audit, P2-post-beta
+
+108: feat: Passive proof API integrations — Strava, Duolingo, GitHub, Calm, Kindle beyond health wearables
+Context: 
+Notes: Extends F-MOBILE-02 (Wearable Data Aggregation, health-only) into non-health domains. Each integration is an independent work item; this issue tracks the framework.
+Labels: api, brainstorm-audit, P2-post-beta
+
+109: feat: Disenchantment score — reward devaluation tracking over contract lifecycle
+Context: 
+Notes: Measures the THERAPEUTIC mechanism (devaluation of old reward), not behavioral compliance (did you submit proof). Distinct from #47 (urge level), #73 (stress pulse). Complements #96 (automaticity — measures new habit str...
+Labels: brainstorm-audit, P2-post-beta, recovery
+
+110: feat: Habit discontinuity window detector — life transitions as acquisition/re-engagement triggers
+Context: 
+Notes: 
+Labels: brainstorm-audit, P2-post-beta
+
+111: feat: Implementation intention contract syntax — time + location binding beyond habit stacking
+Context: 
+Notes: Distinct from F-UX-04 (Habit Stacking, "After I [X], I will [Y]" — anchors to behaviors). This anchors to clock time + physical location. Extends F-UX-08 (Geofence Cue Triggers) by making location part of the contract sp...
+Labels: brainstorm-audit, P2-post-beta
+
+112: feat: Goldilocks difficulty calibration — bidirectional adaptive challenge + overambitious timetable guard
+Context: 
+Notes: F-UX-03 (Dynamic Downscale) only reduces difficulty after 3 failures — reactive, one-directional. This is proactive, bidirectional, and includes first-contract overcommitment prevention.
+Labels: brainstorm-audit, P2-post-beta
+
+120: Deploy ask-styx-proxy Cloudflare Worker
+Context: 
+Notes: 
+Labels: devops
+
+121: Enable GitHub Pages + set ASK_STYX_WORKER_URL repo variable
+Context: 
+Notes: 
+Labels: devops
+
+122: Update wrangler.toml ALLOWED_ORIGIN after confirming GH Pages URL
+Context: 
+Notes: 
+Labels: devops
+
+123: [Blocked] F-MOBILE-01: Native iOS/Android Camera Module
+Context: ## What exists Feature `F-MOBILE-01` is currently a `STUB`. Placeholder mobile screens exist in the repo.
+Notes: 
+Labels: enhancement, mobile, blocked, owner:mobile-native
+
+124: [Blocked] F-VERIFY-02: HealthKit Native Bridge (iOS)
+Context: This feature (F-VERIFY-02) is NOT_STARTED. It requires native Swift read-only integration with Apple HealthKit.
+Notes: 
+Labels: enhancement, mobile, blocked, owner:mobile-native
+
+125: [Blocked] F-VERIFY-03: Google Health Connect Bridge (Android)
+Context: This feature (F-VERIFY-03) is NOT_STARTED. It requires native Kotlin integration with Google Health Connect.
+Notes: 
+Labels: enhancement, mobile, blocked, owner:mobile-native
+
+126: [Blocked] F-VERIFY-04: Fitbit/WHOOP API Integration
+Context: This feature (F-VERIFY-04) is NOT_STARTED. It involves integrating Fitbit and WHOOP APIs for automated proof collection.
+Notes: 
+Labels: enhancement, api, b2b, blocked, business, owner:business-development
+
+127: [Blocked] F-MOBILE-03: Remote Push Notifications Setup
+Context: This feature (F-MOBILE-03) is currently PARTIAL. Local notifications are implemented, but remote push notifications are not.
+Notes: 
+Labels: enhancement, mobile, blocked, owner:mobile-native, owner:release-ops
+
+128: [Blocked] F-MOBILE-04: Biometric Lock (Voice/Face)
+Context: This feature (F-MOBILE-04) is NOT_STARTED. It requires integrating hardware-level biometric verification (Face ID / Voice) during proof capture.
+Notes: 
+Labels: enhancement, mobile, blocked, owner:mobile-native
+
+129: [Blocked] F-WEB-05: Plaid Link Integration
+Context: ## What exists Feature `F-WEB-05` is currently `NOT_STARTED` in the backlog.
+Notes: 
+Labels: enhancement, api, b2b, blocked, business, owner:business-development
+
+130: [Blocked] F-MARKET-03: EVM Smart Contract Escrow
+Context: This feature (F-MARKET-03) is NOT_STARTED. It introduces EVM smart contracts for decentralized escrow.
+Notes: 
+Labels: enhancement, blocked, blockchain, owner:cryptography
+
+131: [Blocked] F-MARKET-04: ZKP Milestone Verification
+Context: This feature (F-MARKET-04) is NOT_STARTED. It relies on Zero-Knowledge Proofs (ZKPs) for privacy-preserving milestone verification.
+Notes: 
+Labels: enhancement, blocked, blockchain, owner:cryptography
+
+132: [Blocked] F-AEGIS-05: KYC / Identity Verification Integration
+Context: ## What exists Service stubs and specification files exist for identity verification.
+Notes: 
+Labels: enhancement, api, blocked, owner:legal-compliance, legal
+
+133: [Blocked] F-INFRA-01: Secure High-Risk Merchant Account for Production Settlement
+Context: ## What exists Settlement code exists and is currently being hardened.
+Notes: 
+Labels: enhancement, blocked, business, owner:legal-compliance, owner:business-development, finance
+
+134: [Phase Beta/Gamma] Native Mobile Blockers: HealthKit & Secure Camera
+Context: ## What exists Backend API endpoints for HealthKit and secure camera verification are implemented and tested.
+Notes: 
+Labels: mobile, blocked, owner:mobile-native
+
+135: [Phase Delta] Blockers: Video Pipeline & Native Dashboard UI
+Context: ### Blockers Requiring Human Handoff (Native & Video Engineering)
+Notes: 
+Labels: devops, blocked, owner:release-ops, owner:backend-platform
+
+136: [Blocked] F-LEGAL-05: Skill-Based Contest Whitepaper + Counsel Sign-Off
+Context: ## What exists Feature is identified as a Beta-phase deliverable (`F-LEGAL-05`).
+Notes: 
+Labels: enhancement, blocked, business, owner:legal-compliance, legal
+
+137: [Blocked] F-LEGAL-07: Prize Indemnity Insurance Procurement
+Context: `F-LEGAL-07` is `NOT_STARTED` in `docs/FEATURE-BACKLOG.md` and depends on an insurance provider relationship.
+Notes: 
+Labels: enhancement, blocked, business, owner:legal-compliance
+
+138: [Blocked] F-INFRA-09: Web Shop Payment Routing + Apple Neutral Notice Compliance
+Context: `F-INFRA-09` is `NOT_STARTED` in `docs/FEATURE-BACKLOG.md` and includes legal/platform requirements (Apple neutral notice, region-specific policy handling) beyond backend wiring.
+Notes: 
+Labels: enhancement, devops, blocked, business, owner:legal-compliance, owner:release-ops
+
+139: [Blocked] F-INFRA-10: "Styx-Certified" Hardware Partnership Program
+Context: ## What exists Feature `F-INFRA-10` is currently `NOT_STARTED` in the backlog.
+Notes: 
+Labels: enhancement, b2b, blocked, business, owner:business-development
+
+140: [Blocked] F-B2B-09: Insurance Cross-Pollination Partnership
+Context: ## What exists Feature `F-B2B-09` is currently `NOT_STARTED` in the backlog.
+Notes: 
+Labels: enhancement, b2b, blocked, business, owner:business-development
+
+141: [Blocked] Beta Ops: App Store Connect + TestFlight Provisioning
+Context: ## What exists Repo defines iOS/TestFlight as the primary Phase 1 surface. Placeholder mobile screens exist.
+Notes: 
+Labels: enhancement, mobile, blocked, business, owner:mobile-native, owner:release-ops, ops
+
+142: [Blocked] F-VERIFY-09: C2PA Content Provenance + TSA Infrastructure
+Context: `F-VERIFY-09` is `NOT_STARTED` in `docs/FEATURE-BACKLOG.md` and depends on C2PA tooling plus timestamp authority (TSA) infrastructure.
+Notes: 
+Labels: enhancement, mobile, blocked, business, owner:cryptography
+
+143: [Blocked] F-VERIFY-11: Continuous Mobile App Attestation SDK Procurement
+Context: `F-VERIFY-11` is `NOT_STARTED` in `docs/FEATURE-BACKLOG.md` and depends on third-party app-attestation SDKs (Approov/Guardsquare-class tooling).
+Notes: 
+Labels: enhancement, mobile, blocked, business, owner:mobile-native
+
+144: [Blocked] F-VERIFY-14: ZK Privacy Layer for Digital Exhaust (Proving Engine)
+Context: `F-VERIFY-14` is `NOT_STARTED` in `docs/FEATURE-BACKLOG.md` and depends on ZK proving engine infrastructure.
+Notes: 
+Labels: enhancement, blocked, blockchain, owner:cryptography
+
+146: [Blocked] F-LEGAL-09: App Store UGC Moderation Policy + Submission Package
+Context: ## What exists Moderation requirement identified in research and GitHub #63.
+Notes: 
+Labels: blocked, owner:legal-compliance, owner:release-ops, legal
+
+147: [Blocked] F-LEGAL-11: Stablecoin Stakes Regulatory + Banking Pathway
+Context: \nFeature issue #90 introduces stablecoin-denominated staking. Regulatory treatment, banking/vendor posture, and jurisdiction constraints are external dependencies that cannot be resolved by code-only work.\n\n## Blocker / Human Handoff\nRequires legal interpr...
+Notes: 
+Labels: blocked, owner:legal-compliance, owner:business-development, legal
+
+148: [Blocked] F-LEGAL-10: Cross-Jurisdictional Consent Matrix Counsel Review
+Context: ## What exists Issue identified but missing from several partner/shared blocker exports.
+Notes: 
+Labels: blocked, owner:legal-compliance, legal
+
+149: Market-Gap Analysis: stickK.com Deep Dive
+Context: ## 🎯 Objective Perform a full-breath Market-Gap Analysis of **stickK.com** according to the ORGANVM system-wide SOP (`meta-organvm/SOP--market-gap-analysis.md`).
+Notes: 
+Labels: research
+
+150: Market-Gap Analysis: Beeminder Deep Dive
+Context: ## 🎯 Objective Perform a full-breath Market-Gap Analysis of **Beeminder** according to the ORGANVM system-wide SOP.
+Notes: 
+Labels: research
+
+151: Market-Gap Analysis: Forfeit Deep Dive
+Context: ## 🎯 Objective Perform a full-breath Market-Gap Analysis of **Forfeit** according to the ORGANVM system-wide SOP.
+Notes: 
+Labels: research
+
+152: Market-Gap Analysis: HealthyWage/DietBet/StepBet Deep Dive
+Context: ## 🎯 Objective Perform a full-breath Market-Gap Analysis of **HealthyWage, DietBet, and StepBet** (WayBetter ecosystem).
+Notes: 
+Labels: research
+
+153: Market-Gap Analysis: Habitica Deep Dive
+Context: ## 🎯 Objective Perform a full-breath Market-Gap Analysis of **Habitica** according to the ORGANVM system-wide SOP.
+Notes: 
+Labels: research
+
+154: Market-Gap Analysis: Accountable AI Deep Dive
+Context: ## 🎯 Objective Perform a full-breath Market-Gap Analysis of **Accountable AI** and other app-gating tools.
+Notes: 
+Labels: research
+
+155: Market-Gap Analysis: Relationship Recovery Niche Deep Dive
+Context: ## 🎯 Objective Perform a full-breath Market-Gap Analysis of the **Relationship Recovery / No Contact** niche (Mend, Breakup Boss, No Contact Rule).
+Notes: 
+Labels: research
+
+156: Market-Gap Analysis: Pavlok Deep Dive
+Context: ## 🎯 Objective Perform a full-breath Market-Gap Analysis of **Pavlok** and hardware-aversive conditioning.
+Notes: 
+Labels: research
+
+157: Market-Gap Analysis: TaskRatchet Deep Dive
+Context: ## 🎯 Objective Perform a full-breath Market-Gap Analysis of **TaskRatchet** and deadline-based stakes.
+Notes: 
+Labels: research
+
+158: Market-Gap Analysis: Focusmate Deep Dive
+Context: ## 🎯 Objective Perform a full-breath Market-Gap Analysis of **Focusmate** and body-doubling platforms.
+Notes: 
+Labels: research
+
+159: fix: ask-styx rate limiter is per-isolate — ineffective at edge scale
+Context: ## Problem
+Notes: 
+Labels: bug, security, P1-beta-enhancer, full-breath-audit
+
+160: feat: add load testing infrastructure (k6/artillery) for Fury Router queue
+Context: ## Problem
+Notes: 
+Labels: devops, testing, P1-beta-enhancer, full-breath-audit
+
+163: feat: failure notification UX copy — emotional safety for stake liquidation
+Context: ## Problem
+Notes: 
+Labels: enhancement, P1-beta-enhancer, full-breath-audit
+
+164: fix: Redis single point of failure — no HA configuration
+Context: ## Problem
+Notes: 
+Labels: devops, P2-post-beta, owner:backend-platform, full-breath-audit
+
+165: feat: offline/fallback LLM for grill-me, ELI5, and ask-styx chat
+Context: ## Problem
+Notes: 
+Labels: enhancement, api, P2-post-beta, full-breath-audit
+
+166: process: establish code review protocol — single-developer bus factor mitigation
+Context: ## Problem
+Notes: 
+Labels: documentation, P1-beta-enhancer, full-breath-audit
+
+167: feat: KYC runtime enforcement & progressive stake tiers (TKT-P0-003)
+Context: Implement KYC enforcement for contracts exceeding TIER_1 limits. Requires vendor integration (Stripe Identity/Jumio) and DPA sign-off.
+Notes: 
+Labels: api, P0-beta-blocker, owner:legal-compliance
+
+168: feat: Native iOS camera proof capture with nonce challenge (TKT-P0-002)
+Context: Implement native Swift camera module to disable gallery uploads and enforce nonce-based proof integrity.
+Notes: 
+Labels: mobile, P0-beta-blocker, owner:mobile-native
+
+169: feat: Real-money FBO settlement activation (TKT-P0-001)
+Context: Activate production Stripe FBO routing for real-money settlement. Requires custody model sign-off and merchant underwriting.
+Notes: 
+Labels: api, P0-beta-blocker, owner:backend-platform
+
+170: feat: Recovery danger-zone lockdowns & 24h timelock (TKT-P1-005)
+Context: Implement hard lockdowns for recovery contracts during high-risk windows and enforce 24h withdrawal timelocks.
+Notes: 
+Labels: api, P1-beta-enhancer, recovery
+
+171: feat: Weekend risk multiplier policy engine (TKT-P1-012)
+Context: Implement dynamic penalty multipliers for Friday/Saturday night breaches in recovery contracts.
+Notes: 
+Labels: api, P1-beta-enhancer, recovery
+
+172: feat: Accountability partner protocol completion (TKT-P1-017)
+Context: Complete the full lifecycle for mandatory accountability partners, including invite, confirmation, and heartbeat checks.
+Notes: 
+Labels: api, P1-beta-enhancer
+
+173: feat: Endowed progress & downscale UX completion (TKT-P1-010)
+Context: Implement 'artificial momentum' onboarding credits and automatic goal downscaling after repeated failures.
+Notes: 
+Labels: mobile, P1-beta-enhancer
+
+174: feat: Identity-based oath onboarding flow (TKT-P1-016)
+Context: Implement formal 'Identity Oath' flow during onboarding to bridge the psychological gap between intention and action.
+Notes: 
+Labels: mobile, P1-beta-enhancer
+
+175: feat: Goal-gradient dashboard & live leaderboard (TKT-P1-018)
+Context: Implement real-time SSE-based leaderboard and visual goal-gradient progress tracking.
+Notes: 
+Labels: api, P1-beta-enhancer
+
+176: feat: Remote push pipeline (APNs/FCM) completion (TKT-P1-006)
+Context: Implement production remote push notifications using APNs and FCM with policy-based dispatching.
+Notes: 
+Labels: mobile, P1-beta-enhancer, owner:release-ops
+
+177: feat: Skill-contest legal whitepaper & release gate (TKT-P1-019)
+Context: ## Skill-Contest Whitepaper Release Gate
+Notes: 
+Labels: devops, owner:legal-compliance
+
+178: feat: implement BetaReadinessContract as executable NestJS service
+Context: ## Source Plan `.codex/plans/2026-03-03-beta-readiness-propulsion.md`
+Notes: 
+Labels: api, P1-beta-enhancer, unimplemented-plan
+
+179: feat: automate doc-intelligence pipeline (ingest, parse, drift-check)
+Context: ## Source Plan `.codex/plans/2026-03-04-doc-intelligence-implementation-pass.md`
+Notes: 
+Labels: documentation, devops, P2-post-beta, unimplemented-plan
+
+180: feat: research-to-ticket conversion pipeline
+Context: ## Source Plan `.codex/plans/2026-03-04-second-pass-unresolved-research-tickets.md`
+Notes: 
+Labels: documentation, enhancement, P2-post-beta, unimplemented-plan
+
+181: docs: investor-facing state-of-union deck and exec summary
+Context: ## Source Plan `.codex/plans/2026-03-04-state-of-union-and-definitive-roadmap.md`
+Notes: 
+Labels: documentation, P1-beta-enhancer, unimplemented-plan
+
+182: feat: The Judge frontend forensic panels in src/desktop
+Context: ## Source Plan `.codex/plans/2026-03-04-glorious-propulsion-omega-and-aegis.md`
+Notes: 
+Labels: enhancement, desktop, P2-post-beta, unimplemented-plan
+
+183: docs: E2G final implementation mapping report
+Context: ## Source Plan `.codex/plans/2026-03-05-evaluation-to-growth-exhaustive-implementation.md` (v1 + v2)
+Notes: 
+Labels: documentation, P2-post-beta, unimplemented-plan
+
+186: docs: doctoral dissertation — epic tracker
+Context: ## Doctoral Dissertation Plan
+Notes: 
+Labels: documentation, artifact-dissection
+
+188: audit: business/ops gap analysis — epic tracker
+Context: ## Business/Ops Gap Analysis
+Notes: 
+Labels: artifact-dissection, audit
+
+189: audit: stub/placeholder inventory — epic tracker
+Context: ## Stub/Placeholder Inventory
+Notes: 
+Labels: artifact-dissection, audit
+
+190: audit: architecture completeness matrix — epic tracker
+Context: ## Architecture Completeness Matrix
+Notes: 
+Labels: artifact-dissection, audit
+
+191: audit: cross-tool comprehensive summary — epic tracker
+Context: ## Cross-Tool Comprehensive Audit Summary
+Notes: 
+Labels: artifact-dissection, audit
+
+192: governance: registry + tier promotion — epic tracker
+Context: ## Governance Registration + Tier Promotion
+Notes: 
+Labels: artifact-dissection, governance
+
+193: docs: create docs/thesis/ directory structure + chapter scaffolds
+Context: Create `docs/thesis/` with ch01-ch08 stub files, README with thesis overview, notation guide template.
+Notes: 
+Labels: documentation, artifact-dissection
+
+194: docs: set up BibTeX bibliography from existing 200+ citations
+Context: Compile `references.bib` from existing research docs in `docs/research/`. Map 79 existing docs.
+Notes: 
+Labels: documentation, artifact-dissection
+
+195: docs: write thesis notation and symbol guide
+Context: Formal symbol definitions for behavioral logic (lambda, integrity score, tier thresholds).
+Notes: 
+Labels: documentation, artifact-dissection
+
+196: docs: create chapter reading notes templates
+Context: Reading note templates for each chapter's literature review section.
+Notes: 
+Labels: documentation, artifact-dissection
+
+197: docs: map 79 existing docs into thesis chapter structure
+Context: Cross-reference existing `docs/research/` and `docs/architecture/` files to thesis chapters.
+Notes: 
+Labels: documentation, research, artifact-dissection
+
+198: docs: draft Chapter 1 — Introduction and Problem Statement
+Context: First chapter draft establishing behavioral market thesis.
+Notes: 
+Labels: documentation, artifact-dissection
+
+199: docs: formalize 9 theorem proofs as LaTeX/Markdown
+Context: Convert informal proofs from existing docs into formal mathematical statements. Proofs: behavioral equilibrium, fury convergence, escrow safety, etc.
+Notes: 
+Labels: documentation, research, artifact-dissection
+
+200: docs: thesis production pipeline (PDF build, citation check)
+Context: Pandoc/LaTeX build pipeline, citation completeness validator, word count tracker.
+Notes: 
+Labels: documentation, devops, artifact-dissection
+
+206: chore: add seed.yaml + CLAUDE.md to ask-styx repo
+Context: Register with ORGAN-III governance.
+Notes: 
+Labels: documentation, artifact-dissection
+
+208: chore: build verify + wrangler.toml ALLOWED_ORIGIN
+Context: `npm run build` + `npm test` pass. Verify wrangler.toml ALLOWED_ORIGIN matches GH Pages domain.
+Notes: 
+Labels: devops, artifact-dissection
+
+209: chore: init git, create remote repo, push, verify GH Pages live
+Context: Final deployment verification. Create remote repo, push, confirm GH Pages serves the SPA.
+Notes: 
+Labels: devops, artifact-dissection
+
+210: audit: Phase 1 — read core strategic docs (implementation-status, E2G, roadmap)
+Context: Steps 1-3: planning docs review.
+Notes: 
+Labels: documentation, artifact-dissection, audit
+
+211: audit: Phase 2 — read market & research foundation (market-analysis, competitor, behavioral-econ)
+Context: Steps 4-6: market and research docs.
+Notes: 
+Labels: research, artifact-dissection, audit
+
+212: audit: Phase 3 — read infrastructure & ops (render.yaml, .env.example, docker-compose, terraform)
+Context: Steps 7-10: infrastructure configuration.
+Notes: 
+Labels: devops, artifact-dissection, audit
+
+213: audit: Phase 4 — search operational detail docs (ops, monitoring, support, hiring)
+Context: Steps 11-12: operational readiness.
+Notes: 
+Labels: artifact-dissection, audit
+
+214: audit: Phase 5 — search marketing & content (pitch, positioning, brand)
+Context: Steps 13-14: marketing materials.
+Notes: 
+Labels: business, artifact-dissection, audit
+
+215: audit: Phase 6 — search growth & retention (feedback, iteration, testing)
+Context: Steps 15-16: growth strategy.
+Notes: 
+Labels: artifact-dissection, audit
+
+216: audit: Phase 7 — read business model & metrics (b2b metrics service, revenue docs)
+Context: Steps 17-18: revenue and metrics.
+Notes: 
+Labels: business, artifact-dissection, audit
+
+217: docs: compile gap analysis final report (6-category, risk assessment)
+Context: Deliverable: `docs/planning/planning--business-ops-gap-analysis.md`. 6-category risk-assessed gap report.
+Notes: 
+Labels: documentation, business, artifact-dissection
+
+218: audit: Phase 1 — grep comment markers (TODO, FIXME, HACK, STUB, WIP)
+Context: All *.ts/*.tsx/*.js across 6 workspaces.
+Notes: 
+Labels: tech-debt, artifact-dissection, audit
+
+219: audit: Phase 2 — grep function/method stubs (throw not implemented, bare returns)
+Context: Detect unimplemented function bodies.
+Notes: 
+Labels: tech-debt, artifact-dissection, audit
+
+220: audit: Phase 3 — grep component/UI placeholders (Coming soon, placeholder text)
+Context: Find placeholder UI strings and components.
+Notes: 
+Labels: tech-debt, artifact-dissection, audit
+
+221: audit: Phase 4 — grep hardcoded mock data (const mockData, MOCK:, STUB:)
+Context: Find hardcoded test/mock data in production code.
+Notes: 
+Labels: tech-debt, artifact-dissection, audit
+
+222: audit: Phase 5 — filename-based detection (stub, placeholder, mock, dummy in name)
+Context: Find files named with stub/placeholder/mock/dummy patterns.
+Notes: 
+Labels: tech-debt, artifact-dissection, audit
+
+223: audit: Phase 6 — targeted directory scans (services/, modules/, screens/, panels/)
+Context: Deep scan of key directories for incomplete implementations.
+Notes: 
+Labels: tech-debt, artifact-dissection, audit
+
+224: docs: compile stub inventory report (by workspace, type, priority)
+Context: Deliverable: `docs/planning/planning--stub-inventory.md`. Organized by workspace, type, and priority.
+Notes: 
+Labels: documentation, tech-debt, artifact-dissection
+
+225: audit: Phase 1 — service layer deep dive (40+ files in src/api/services/)
+Context: Read first 50 lines of each, detect constructor params, core methods, stub vs full.
+Notes: 
+Labels: api, artifact-dissection, audit

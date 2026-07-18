@@ -1,0 +1,542 @@
+[
+  {
+    "number": 350,
+    "disposition": "distilled",
+    "comment": "I sampled this cluster against the current repo state before writing. This still looks like a real finance-control gap, not spam. The core ask is not just 'compare Stripe and our numbers' in the abstract; it is to define an operator-grade reconciliation loop: pull Stripe balance/payout activity, compare it to internal ledger/settlement records, surface mismatches, and keep an exception queue with named follow-up. I did not find that loop explicitly anchored to this issue yet, so I am treating the ask as distilled rather than resolved."
+  },
+  {
+    "number": 351,
+    "disposition": "distilled",
+    "comment": "This one becomes actionable once it is phrased as a data-contract problem instead of a dashboard noun. CAC/LTV here needs acquisition-source capture, cohort identity, activation timing, retained revenue, and churn/refund rules that stay consistent across web/mobile/B2B flows. I did not find a clearly owned analytics surface for that in the repo pass, so the useful next move is to define the event fields and cohort math first, then build the dashboard on top of that."
+  },
+  {
+    "number": 352,
+    "disposition": "distilled",
+    "comment": "The pricing issue reads like a packaging spec more than a raw number list. The useful artifact is: what each tier unlocks, which entitlement/billing flags map to it, what is self-serve vs sales-assisted, and where usage or seat expansion begins. Without that, the $49/$149/$349/$999+ ladder is only a headline. Distilling the issue to that product/billing contract seems like the right next step."
+  },
+  {
+    "number": 353,
+    "disposition": "distilled",
+    "comment": "I read this as a reporting-pipeline issue, not merely a spreadsheet task. MRR, churn, and ARPU only become stable once revenue recognition, plan transitions, refunds, and cancellations are all normalized the same way every month. I did not see that monthly reporting contract explicitly tied to this leaf during the repo check, so I would keep it open as the place to define the source tables, month-end cut, and owner-visible report shape."
+  },
+  {
+    "number": 354,
+    "disposition": "evolving",
+    "comment": "This still looks live. 'Email + Discord for beta' is really an operations lane: one owned support inbox, one community space, routing rules for bug vs billing vs safety questions, and a clear escalation path back into product work. I did not find that runbook captured on this issue yet, so the next concrete step is to specify the channel topology and response ownership rather than treating support as an amorphous future task."
+  },
+  {
+    "number": 355,
+    "disposition": "distilled",
+    "comment": "I would treat this as a documentation-product issue, not just a promise to write '10 articles.' The likely v1 set is already implied by the product surface: onboarding, creating a contract, proof submission, disputes/Fury review, wallet/payout flow, privacy/data handling, beta limits, recovery guardrails, account settings, and how to send feedback. Distilling it that way gives this issue a shippable table of contents instead of a vague article count."
+  },
+  {
+    "number": 356,
+    "disposition": "distilled",
+    "comment": "This becomes much clearer if the 7-day drip is tied to actual product milestones instead of generic email cadence. Day 0 should get the user to first contract creation, then follow with proof submission confidence, reminder/retention nudges, safety framing for recovery contracts, and finally feedback/referral capture. I did not see that sequence explicitly laid out in-repo during this pass, so I am treating the issue as distilled into a lifecycle script rather than a resolved marketing task."
+  },
+  {
+    "number": 357,
+    "disposition": "distilled",
+    "comment": "The phrase 'predictive patterns' is broad, but the product suggests a concrete first pass: users who never create a first contract, miss early attestations, repeatedly fail proof submission, go quiet after support contact, or trip recovery/guardrail friction. That is enough to define a first churn signal model without pretending we already have a mature data-science stack. Distilling the issue to those measurable signals makes it much more buildable."
+  },
+  {
+    "number": 358,
+    "disposition": "evolving",
+    "comment": "There is already an Ask Styx surface in the repo, but this issue is narrower: how in-app help should appear inside the beta product, what context it gets from the signed-in user's state, and when it escalates to a human instead of continuing as chat. That integration path still feels open from the repo pass. The next useful step is to define which screens get contextual help first and which intents must route out to human support."
+  },
+  {
+    "number": 359,
+    "disposition": "distilled",
+    "comment": "I checked a sample of this slice first; it is mostly distinct work even when the issue bodies are thin. For this leaf, the useful output is a crisp ICP schema: practitioner type, client volume, compliance sensitivity, willingness to use financial commitments, and buying path (solo vs group practice). 'Find 50 people' is downstream of that. Distilling the issue to an ICP rubric plus sourcing rules will make later outreach far less noisy."
+  },
+  {
+    "number": 360,
+    "disposition": "distilled",
+    "comment": "There is some drive-by vendor noise in this thread, but the core ask is still valid. The important thing is not merely '5 emails + LinkedIn'; it is a sequence that steps from problem recognition to proof of trust, demo offer, objection handling, and final close/loss capture, with therapist/coach-specific personalization hooks. I would keep this open as the place to shape that sequence and ignore the generic outreach-tool detours."
+  },
+  {
+    "number": 361,
+    "disposition": "evolving",
+    "comment": "This one has a concrete path because the repo already has a Render/deployment blueprint. A real demo environment here should mean scrubbed seed data, resettable accounts, safe demo credentials, and a narrow feature set that shows enterprise value without exposing live operational state. I did not see that environment explicitly declared as done, so I am treating this as active design/work rather than dead backlog."
+  },
+  {
+    "number": 362,
+    "disposition": "distilled",
+    "comment": "This thread picked up repeated outside commentary, but after reading it I think the durable core is straightforward: pre-filled security answers should come from an evidence-backed answer bank, not a stale one-off questionnaire. That means reusable controls, citations to real artifacts, and a way to mark answers stale when the underlying evidence changes. Distilling the issue to that structure is more useful than debating individual template formats."
+  },
+  {
+    "number": 363,
+    "disposition": "evolving",
+    "comment": "This feels like a real activation workstream, not a placeholder. The minimal viable version is a named onboarding runbook for 1-3 practitioners: qualification screen, kickoff script, first contract setup, first proof path, feedback capture, and a success/failure rubric for whether the pilot should widen. I did not find that runbook anchored during the repo check, so this still deserves active ownership."
+  },
+  {
+    "number": 364,
+    "disposition": "distilled",
+    "comment": "'Published tiers + billing' only becomes true when four things line up: the public-facing plan language, the actual Stripe/billing configuration, the entitlement mapping inside the product, and the invoice/contract wording enterprise buyers will see. I did not find all four tied together in one place during this pass. Distilling the issue to that publication/billing contract seems like the right framing."
+  },
+  {
+    "number": 365,
+    "disposition": "evolving",
+    "comment": "I do not read this as administrative noise. Apple Developer/TestFlight setup is a real release gate: account ownership, bundle identifiers, signing/provisioning, tester groups, privacy declarations, and CI/export reliability all have to line up before mobile beta can move. The repo has plenty of mobile surface area, but I did not find this operational handoff clearly captured as complete, so it still looks like a live gate."
+  },
+  {
+    "number": 366,
+    "disposition": "distilled",
+    "comment": "The issue is sharper if we state the actual hiring bar: Swift/HealthKit/native camera competence, Expo/React Native bridge literacy, and enough product judgment to land privacy-sensitive proof capture without weakening the server-side trust model. Distilling it into a scorecard + sourcing brief would make this tractable; 'hire a Swift engineer' by itself is too underspecified to drive good selection."
+  },
+  {
+    "number": 367,
+    "disposition": "distilled",
+    "comment": "This should stay open as a scoped counsel work packet, not a generic 'get a lawyer' placeholder. The packet seems to be: payments/FBO handling, KYC/age/jurisdiction rules, recovery-protocol guardrails, and App Store/compliance positioning. Distilling those legal questions into one retainer brief would let the team measure progress here instead of treating counsel as a vague dependency."
+  },
+  {
+    "number": 368,
+    "disposition": "distilled",
+    "comment": "I read this as a context-packaging issue more than a raw agent-count issue. The productive version is four bounded packets \u2014 LEG, FIN, PRD, OPS \u2014 each with authorities, open decisions, source docs, and explicit output contracts, rather than just 'seed deep agents.' That is the ideal form I would anchor here."
+  },
+  {
+    "number": 369,
+    "disposition": "evolving",
+    "comment": "This is a real launch rehearsal gate. Internal dogfood only counts if it forces the full loop: onboarding, contract creation, proof submission, notifications, wallet/ledger visibility, and support feedback capture across founders plus a few trusted outsiders. I did not see a completed dogfood receipt tied to this issue during the pass, so I would keep it active as the place where that runbook and bug intake converge."
+  },
+  {
+    "number": 370,
+    "disposition": "evolving",
+    "comment": "The repo already anticipates monitoring via environment hooks like Sentry, but the issue is bigger than adding a DSN. To make this real, the team needs error capture, uptime checks, alert thresholds, on-call routing, and a decision about which failures are pager-worthy during beta. I did not find that full alerting contract attached here yet, so this still looks like active operational work."
+  },
+  {
+    "number": 371,
+    "disposition": "evolving",
+    "comment": "This is adjacent to #354 but feels broader: once beta opens, the support channels need moderation rules, bug-report format, identity/abuse handling, and an explicit path for safety-sensitive recovery issues. I did not see that operational envelope written down yet. Keeping this open as the beta-wide support lane makes sense."
+  },
+  {
+    "number": 372,
+    "disposition": "evolving",
+    "comment": "External TestFlight is not just 'invite more people.' It implies device/profile coverage, crash/feedback handling, privacy wording, tester admission rules, and a clear exit criterion for when the beta is stable enough to widen. I did not find evidence that this gate is fully passed, so I am treating it as a live release-work item."
+  },
+  {
+    "number": 373,
+    "disposition": "evolving",
+    "comment": "I read the fuller issue body here, and it is one of the clearest in the slice. The work is real: first outreach wave, first walkthroughs, first admissions, beta-room rule-setting, and harvesting approved proof snippets or reactions. That is concrete enough to stay active; the next useful step is simply to attach the first wave receipt and cohort outcomes back to this issue."
+  },
+  {
+    "number": 374,
+    "disposition": "distilled",
+    "comment": "The valuable core here is a disciplined loop: collect beta feedback, cluster it by friction/risk/theme, rank by blast radius, and feed it back into release planning on a fixed cadence. Without that, 'iteration cycle' stays hand-wavy. Distilling the issue to that synthesis ritual makes it actionable."
+  },
+  {
+    "number": 375,
+    "disposition": "evolving",
+    "comment": "This is a serious threshold issue, not backlog clutter. A real-money pilot needs payment flow confidence, ledger visibility, support readiness, policy/legal sign-off, and a very explicit cohort boundary before numbers like 10-25 users mean anything. I did not find a clean go/no-go packet for that gate during this pass, so I would keep this active."
+  },
+  {
+    "number": 376,
+    "disposition": "distilled",
+    "comment": "Open-beta expansion should be treated as a scale-up contract: capacity, abuse handling, moderation, support load, payout/ledger confidence, and cohort success metrics all need explicit thresholds before '500+' is responsible. Distilling the issue to those widening predicates is more useful than treating it like a marketing milestone alone."
+  },
+  {
+    "number": 377,
+    "disposition": "evolving",
+    "comment": "App Store submission has a very specific shape in this codebase because of the vocabulary cloaking, safety framing, and beta/mobile constraints. I would expect the final packet to include privacy declarations, reviewer-safe copy, proof of gated functionality, and whatever native-bridge limitations still exist. I did not verify a completed submission packet here, so I am treating the issue as ongoing release work."
+  },
+  {
+    "number": 378,
+    "disposition": "evolving",
+    "comment": "General availability is the culmination of many earlier gates, not its own isolated to-do. For this issue to be truly ready, the beta feedback loop, App Store readiness, support ops, monitoring, and payments/compliance surfaces all have to be boringly reliable. I did not find a durable receipt that that threshold has been crossed, so this remains an active launch endpoint."
+  },
+  {
+    "number": 379,
+    "disposition": "distilled",
+    "comment": "This becomes much easier to work once it is a scorecard instead of a vague hiring wish. For this repo, the real requirements look like Swift/native iOS, health-data/privacy awareness, camera/proof capture experience, and enough collaboration range to work across Expo and backend verification boundaries. Distilling the role that way should drive sourcing better than an open-ended contractor search."
+  },
+  {
+    "number": 380,
+    "disposition": "distilled",
+    "comment": "I would keep this open as a legal-owner packet rather than a generic staffing request. The retainer should be justified by concrete questions already present in the product: FBO/payment handling, KYC/geo policy, recovery-contract safety framing, and launch/distribution compliance. Distilling those asks into the mandate is the useful next move."
+  },
+  {
+    "number": 381,
+    "disposition": "distilled",
+    "comment": "This is not interchangeable with the Swift hire. The Android bridge work implies Kotlin plus enough platform-specific knowledge to handle health-data integration, permissions, and secure proof/device flows without weakening the zero-trust posture. Distilling the role around that narrow contract makes it much clearer what to source for."
+  },
+  {
+    "number": 382,
+    "disposition": "distilled",
+    "comment": "A QA/Beta coordinator here needs a very specific lane: tester intake, repro collection, bug triage hygiene, crash/feedback routing, and release-readiness summaries. That is materially different from general support or PM work. Distilling the issue to that operating role makes it far more actionable."
+  },
+  {
+    "number": 383,
+    "disposition": "distilled",
+    "comment": "This is best treated as a distribution-system role, not just 'someone for growth.' The useful scorecard is audience recruitment, community moderation, cohort activation, feedback harvesting, and creator-partner loops tied back to product learning. Distilling the issue that way keeps the role connected to actual product leverage."
+  },
+  {
+    "number": 384,
+    "disposition": "distilled",
+    "comment": "Because the title already says 'if fundraise,' this looks like a conditional lane rather than an immediate hire. I would preserve it as the place to define what enterprise BD would own once funded: ICP expansion, outreach system, demo cadence, security-questionnaire process, and pricing negotiation. That distillation is more valuable right now than pretending the hire is immediate."
+  },
+  {
+    "number": 385,
+    "disposition": "distilled",
+    "comment": "Likewise, this feels like a conditional capacity note rather than near-term execution. The useful form is a part-time SRE brief: observability, deployment hardening, incident response, database/queue reliability, and beta-to-GA scaling safeguards. Keeping that crisp will help when the funding condition flips."
+  },
+  {
+    "number": 386,
+    "disposition": "evolving",
+    "comment": "I re-checked the tree before commenting. There is clearly adjacent KYC infrastructure now \u2014 `identity-verification.service.ts`, `compliance-policy.service.ts`, user records carrying verification fields, and matching specs \u2014 but this leaf is still useful because it asks for the schema/API-type proof to be made explicit. My read is: partial-to-strong implementation exists, but the issue still needs a clean evidence packet tying migration/schema shape and API contracts together."
+  },
+  {
+    "number": 387,
+    "disposition": "evolving",
+    "comment": "The repo pass shows real compliance logic in place, not an empty dream: there is a compliance module, identity-verification service, controller surface, and tests. What still seems missing from the issue is a durable mapping from that code to the promised 'progressive tier logic' acceptance criteria. I would keep this open until the exact endpoint flow, tier escalation rules, and evidence links are restated here."
+  },
+  {
+    "number": 388,
+    "disposition": "evolving",
+    "comment": "This one still deserves attention even though adjacent KYC code exists. I found verification hooks in the API/web client surface, but I did not confirm in this pass that the user-facing identity upload + tier-display experience is fully and cleanly represented end-to-end. The next move is to anchor the actual UI screens/components/tests to this issue so it stops floating as an implied capability."
+  },
+  {
+    "number": 389,
+    "disposition": "evolving",
+    "comment": "There are already compliance and user-level specs in the repo, so the tests lane is not imaginary. But this issue is still doing useful work because it asks for explicit tier-transition coverage rather than scattered adjacent tests. I would treat it as active until the exact unit/integration cases that prove KYC progression are linked back here."
+  },
+  {
+    "number": 390,
+    "disposition": "engaged",
+    "comment": "The code side of this cluster appears materially further along than the issue text suggests, but counsel sign-off is a separate gate and I did not find evidence of that legal receipt in this pass. So I would not call this resolved. The useful next step is to package the implemented tier rules, provider assumptions, and jurisdiction boundaries into a counsel review packet and attach the resulting determination here."
+  },
+  {
+    "number": 391,
+    "disposition": "evolving",
+    "comment": "I verified that there is now a real mobile proof-capture surface in the repo (`ProofCaptureScreen`, `CameraModule`, supporting specs), so this is no longer a blank feature request. What remains unclear is whether the native Swift-specific hardening implied by the issue is fully satisfied or whether the current capture path is the beta bridge. I would keep the issue open until the native-vs-bridged capture boundary is explicitly documented here."
+  },
+  {
+    "number": 392,
+    "disposition": "evolving",
+    "comment": "The API side is clearly alive: there are proof submission endpoints plus per-proof challenge-token validation in the proofs controller/specs. That is real progress. I still think this issue should stay open until the exact nonce/challenge contract is summarized here in one place, because right now the evidence is distributed across controller code and tests rather than attached to the issue itself."
+  },
+  {
+    "number": 393,
+    "disposition": "evolving",
+    "comment": "I found strong adjacent proof schema signals \u2014 challenge-token fields in schema/migrations and proof-processing persistence \u2014 but I did not fully reconstruct a neat 'proof_submissions table + metadata' packet from the issue alone. This still looks like an evidence-stitching task: identify the exact tables/columns now carrying capture metadata and record that back here."
+  },
+  {
+    "number": 394,
+    "disposition": "evolving",
+    "comment": "The repo definitely contains capture/proof tests now, including ProofCaptureScreen specs and server-side proof challenge validation tests. So the work is not absent; it is just not cleanly collapsed back onto this issue yet. I would keep this open until the authoritative test list for capture flow + nonce/challenge verification is linked here."
+  },
+  {
+    "number": 395,
+    "disposition": "evolving",
+    "comment": "I found settlement/FBO concepts in the code/docs surface, which suggests this area moved materially since the issue was first filed. Even so, 'Stripe Connect FBO account configuration' is partly code and partly operational proof. I would keep this issue active until the exact account/configuration assumptions and live integration boundaries are written down here instead of inferred from adjacent implementation."
+  },
+  {
+    "number": 396,
+    "disposition": "evolving",
+    "comment": "This reads as partly implemented but not yet fully re-anchored. The repo already has deposit/withdrawal/settlement language and financial-service structure, but I did not build a clean one-page map from endpoints to this issue during the pass. The next useful step is to name the exact API routes/services/tests that satisfy deposit\u2192withdrawal\u2192settlement behavior and attach them here."
+  },
+  {
+    "number": 397,
+    "disposition": "evolving",
+    "comment": "There are enough settlement/ledger references in the tree to say this is not vapor, but the issue still matters because it asks for the schema layer explicitly. I would keep it open until the definitive table/index/migration set for transactions + ledger/settlement records is linked here as evidence, rather than assuming the existence of financial code is proof enough."
+  },
+  {
+    "number": 398,
+    "disposition": "evolving",
+    "comment": "I specifically looked for reconciliation signals and found the concept present, but not a neatly attached operator-facing proof on this issue. That means the core ask remains valid: show the automated Stripe-vs-internal check, what it compares, how mismatches are surfaced, and what the retry/human-review path is. Until that packet is attached, this still feels like active work."
+  },
+  {
+    "number": 399,
+    "disposition": "evolving",
+    "comment": "Given the amount of surrounding settlement logic in the repo, I doubt this is a zero-state issue anymore. But the bar here is narrower and higher: can we point to the exact end-to-end test coverage for deposit \u2192 stake \u2192 settle \u2192 withdraw? I did not finish that full trace in this pass, so I am treating the issue as ongoing evidence/verification work rather than resolved."
+  },
+  {
+    "number": 400,
+    "disposition": "engaged",
+    "comment": "As with the KYC legal leaf, I think this remains open for a good reason even if the code path is materially built. The repo appears to contain the technical settlement machinery, but counsel review of the FBO custody model is a separate durable receipt. Until that legal determination is attached here, the issue still has real content."
+  },
+  {
+    "number": 401,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/pull/641",
+    "comment": "I re-checked this against the current tree and the implementation history. The geofence policy-registry/admin-CRUD work now appears to live under the bundle landed in PR #641, which is the durable artifact that supersedes this leaf: https://github.com/organvm/peer-audited--behavioral-blockchain/pull/641 . Per the repo's keep-everything doctrine, I am not treating this as something to close away; I am treating it as absorbed into that concrete implementation record."
+  },
+  {
+    "number": 402,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/pull/641",
+    "comment": "I verified this one against the repo and the earlier evidence trail. The fail-closed geofence middleware/guard work is now anchored in PR #641 rather than living only as a wish on the issue: https://github.com/organvm/peer-audited--behavioral-blockchain/pull/641 . That makes this leaf superseded by a newer implementation artifact, not closed or discarded."
+  },
+  {
+    "number": 403,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/pull/641",
+    "comment": "This sub-issue now reads as implementation evidence that migrated into a newer artifact. The admin UI for state-matrix management appears to have been delivered in the work captured by PR #641: https://github.com/organvm/peer-audited--behavioral-blockchain/pull/641 . I am preserving the issue as history, but the current source of truth for the work is that PR."
+  },
+  {
+    "number": 404,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/pull/641",
+    "comment": "I checked the repo state before writing and I agree this is no longer a free-floating ask. The compliance logging / audit-trail portion of the geofence package is now represented by PR #641: https://github.com/organvm/peer-audited--behavioral-blockchain/pull/641 . So the right disposition here is superseded by that implementation record, not closure."
+  },
+  {
+    "number": 405,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/pull/641",
+    "comment": "The regression-suite/testing ask for the geofence package also appears to have been absorbed into the work merged via PR #641: https://github.com/organvm/peer-audited--behavioral-blockchain/pull/641 . I am therefore treating this issue as superseded by that newer artifact instead of as an unresolved orphan."
+  },
+  {
+    "number": 406,
+    "disposition": "evolving",
+    "comment": "I found jurisdiction-disposition logic in the compliance module, so this is not an empty concept anymore. What still seems valuable about this leaf is making the forfeit policy engine explicit: which jurisdictions map to which disposition modes, where those rules are stored, and how operators override them safely. I would keep this open until that ruleset is clearly attached here."
+  },
+  {
+    "number": 407,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/pull/641",
+    "comment": "There is enough evidence now to anchor this to a newer implementation artifact rather than leave it as a vague backlog item. The refund-only / kill-switch behavior was already tied in earlier commentary to the jurisdiction-disposition work that landed in PR #641: https://github.com/organvm/peer-audited--behavioral-blockchain/pull/641 . Treating this as superseded by that PR preserves the work without erasing the issue."
+  },
+  {
+    "number": 408,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/pull/641",
+    "comment": "I re-read this in the context of the merged compliance/admin work and I think the durable home is the same implementation bundle in PR #641: https://github.com/organvm/peer-audited--behavioral-blockchain/pull/641 . The kill-switch toggle/state-mode admin UI appears to have been absorbed there, so I am marking this as superseded by that newer record rather than treating it as independently unresolved."
+  },
+  {
+    "number": 409,
+    "disposition": "evolving",
+    "comment": "I can see adjacent jurisdiction/forfeit machinery in the repo now, but I did not fully reconstruct the promised all-states payout matrix from this issue during the pass. That makes this still useful as a verification leaf: prove that every configured state/disposition path is covered by tests and document where those cases live. Until that evidence is linked, I would keep it active."
+  },
+  {
+    "number": 410,
+    "disposition": "engaged",
+    "comment": "The technical side of the forfeit/jurisdiction engine appears substantially present, but counsel sign-off is its own durable gate. I did not see the legal mapping receipt itself in this pass, so I would not pretend the issue is done. The next useful move is to package the state-mode matrix and have counsel bless or amend it here."
+  },
+  {
+    "number": 411,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/pull/634",
+    "comment": "I re-checked the code and merged-history surface here. The crisis detection engine no longer looks hypothetical; the newer implementation artifact is PR #634, which explicitly landed the detection and event-logging work: https://github.com/organvm/peer-audited--behavioral-blockchain/pull/634 . I am therefore treating this leaf as superseded by that PR, while preserving the issue as lineage."
+  },
+  {
+    "number": 412,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/pull/636",
+    "comment": "This issue now appears to have a durable implementation home in PR #636, which specifically delivered the crisis intervention UI flow: https://github.com/organvm/peer-audited--behavioral-blockchain/pull/636 . That makes this sub-issue superseded by a newer artifact rather than something that should be closed away."
+  },
+  {
+    "number": 413,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/pull/635",
+    "comment": "I checked this against the repo's merged work and the controller/service structure. The API/event-logging/escalation endpoint work now has a concrete implementation record in PR #635: https://github.com/organvm/peer-audited--behavioral-blockchain/pull/635 . So I am treating this as superseded by that newer PR."
+  },
+  {
+    "number": 414,
+    "disposition": "superseded:https://github.com/organvm/peer-audited--behavioral-blockchain/pull/637",
+    "comment": "The testing leaf for the guardrails package also appears to have been absorbed into a concrete merged artifact: PR #637 for detection-accuracy / false-positive-rate tests https://github.com/organvm/peer-audited--behavioral-blockchain/pull/637 . That gives this issue a better disposition as superseded than as an unexamined open relic."
+  },
+  {
+    "number": 415,
+    "disposition": "distilled",
+    "comment": "I do not read this as something to close out just because it is documentation-shaped. The useful core is a durable thesis skeleton tied to the actual repo domains: behavioral economics, product architecture, escrow/ledger integrity, Fury verification, and regulatory framing. Distilling the issue to that chapter map keeps it alive as a real artifact lane rather than misc docs."
+  },
+  {
+    "number": 416,
+    "disposition": "distilled",
+    "comment": "This is best preserved as a corpus-construction issue, not a generic bibliography request. A 200+ citation BibTeX only matters if it is structured by theme and traceable to the claims the thesis will actually make. Distilling the issue to a source taxonomy + citation pipeline makes it substantially more actionable."
+  },
+  {
+    "number": 417,
+    "disposition": "distilled",
+    "comment": "A notation/symbol guide is more than cleanup; it is the place where the repo's behavioral, financial, and audit terminology becomes stable enough for the thesis to reason cleanly. I would keep this open as the owner of those definitions rather than assuming scattered docs already satisfy it."
+  },
+  {
+    "number": 418,
+    "disposition": "distilled",
+    "comment": "This one becomes concrete if we frame it as a documentation CI lane: repeatable PDF build, citation validation, missing-reference detection, and maybe claim-drift checks for referenced source paths. I did not verify a dedicated thesis production pipeline in this pass, so distilling the issue to that build contract feels right."
+  },
+  {
+    "number": 422,
+    "disposition": "evolving",
+    "comment": "I checked the current Ask Styx workspace before commenting. There is real test coverage there now (`ChatInterface.test.tsx`, `worker.test.ts`, `App.test.tsx`, etc.), so this is not a blank issue anymore. What I have not yet proven is whether those tests fully satisfy the narrower 'E2E question\u2192answer flow' promise versus mostly component/worker-level coverage. I would keep the issue active until that end-to-end path is explicitly demonstrated and linked here."
+  },
+  {
+    "number": 423,
+    "disposition": "distilled",
+    "comment": "This should stay open as an audit-product issue, not something to wave away as docs. The concrete deliverable is an infrastructure/ops gap register: deploy topology, observability, queue/database risk, secrets handling, and beta/GA failure modes, each with severity and owner. Distilling it to that matrix makes the issue useful."
+  },
+  {
+    "number": 424,
+    "disposition": "distilled",
+    "comment": "I read this as a business-system audit, not a generic brainstorming prompt. The practical version is a scored review of pricing, activation funnel, CAC/LTV instrumentation, pilot economics, and enterprise path assumptions. Distilling it that way gives this issue a measurable deliverable instead of a vague request for 'business model analysis.'"
+  },
+  {
+    "number": 425,
+    "disposition": "distilled",
+    "comment": "Likewise, growth/retention audit becomes actionable when it names the loops: acquisition source, onboarding conversion, first-contract activation, proof completion, referral/community effects, and churn interventions. That is the structure I would preserve here rather than treating the issue as a one-off report placeholder."
+  },
+  {
+    "number": 426,
+    "disposition": "distilled",
+    "comment": "This is the convergence leaf for the gap-analysis cluster. The durable artifact should be a priority matrix that ties the infra/business/growth findings back to sequence, owner, and gating impact. Distilling the issue to that remediation board keeps it alive as an execution document rather than just an essay."
+  },
+  {
+    "number": 431,
+    "disposition": "distilled",
+    "comment": "I looked for a dedicated legal-domain agent pack and did not find much beyond the general repo charters. That means this issue is still valuable: the legal agent needs a bounded context bundle covering payments/FBO, KYC/geofence, safety guardrails, and distribution/compliance vocabulary. Distilling the issue to that prompt/data packet makes it concrete."
+  },
+  {
+    "number": 432,
+    "disposition": "distilled",
+    "comment": "The finance-domain version appears similarly unmaterialized from the repo pass. A useful finance agent packet here would center on ledger invariants, payout/settlement, reconciliation, pricing metrics, and operator reports, with named source files and audit questions. I would keep the issue open as the place to assemble that context."
+  },
+  {
+    "number": 433,
+    "disposition": "distilled",
+    "comment": "For product, the issue becomes buildable once it is framed as a product-brain packet: roadmap authorities, feature priorities, user journeys, beta gates, and the vocabulary constraints that make Styx unusual. I did not find a dedicated packet at that level during the scan, so distilling the issue to that spec feels right."
+  },
+  {
+    "number": 434,
+    "disposition": "distilled",
+    "comment": "The ops-domain agent should not be a vague 'generalist.' It needs deployment/runbook/monitoring/release/safety context and explicit operational predicates to reason against. I did not find that as a coherent bundle yet, so keeping this open as the owner of that ops packet makes sense."
+  },
+  {
+    "number": 435,
+    "disposition": "evolving",
+    "comment": "I searched for explicit multi-agent routing tests and found the issue still mostly living in planning/triage surfaces rather than an obvious executed suite. Given the number of domain-agent leaves around it, this remains a real integration need: prove routing, handoff, and failure behavior across the legal/finance/product/ops packets once they exist. I would keep it active until that harness is explicit."
+  },
+  {
+    "number": 436,
+    "disposition": "distilled",
+    "comment": "This is more than a cleanup pass. The useful artifact is a reproducible inventory of TODO/FIXME/stub sites grouped by module and by whether they are harmless scaffolds, risk-bearing shortcuts, or blocked future work. Distilling it that way keeps the issue meaningful."
+  },
+  {
+    "number": 437,
+    "disposition": "distilled",
+    "comment": "Prioritization is the heart of this cluster, not the scan itself. The value here is a ranking model: blast radius, user-facing exposure, safety/compliance proximity, and release-phase relevance. I would preserve the issue as the place where that ordering logic is made explicit."
+  },
+  {
+    "number": 438,
+    "disposition": "distilled",
+    "comment": "This leaf only matters if it turns audit findings into durable execution units. So I would frame it as: for every critical stub found, mint or link a specific remediation ticket with owner and predicate. That is a good distilled form for the issue."
+  },
+  {
+    "number": 439,
+    "disposition": "distilled",
+    "comment": "A module\u2192feature coverage matrix is still a real need in a repo with this much surface area. The durable output is a map from API/web/mobile/desktop/shared modules to the user/business capabilities they actually support, plus obvious blank spots. Distilling it to that matrix keeps the issue grounded."
+  },
+  {
+    "number": 440,
+    "disposition": "distilled",
+    "comment": "This becomes useful when it names integration seams rather than saying 'architectural gaps' abstractly: missing bridges between mobile proof capture and backend validation, analytics/reporting gaps, enterprise/control-plane seams, etc. I would keep it open as the owner of that architecture gap register."
+  },
+  {
+    "number": 441,
+    "disposition": "distilled",
+    "comment": "Completeness scoring can be hand-wavy unless it is tied to explicit axes. The actionable version is a score by capability area (product, ops, compliance, docs, tests) plus the specific remediation step needed to move each score. That is the distilled form I would preserve here."
+  },
+  {
+    "number": 442,
+    "disposition": "distilled",
+    "comment": "This is the audit-convergence issue: gather the outputs of the scan, prioritization, matrixing, and scoring phases into one operator-readable packet. It still has real value as a synthesis lane rather than a duplicate of the individual audits."
+  },
+  {
+    "number": 443,
+    "disposition": "distilled",
+    "comment": "Cross-referencing gaps across tools/sessions is exactly how duplicated effort gets reduced. I would keep this alive as the place to reconcile what separate audits, agent runs, and planning docs are all saying about the same structural holes."
+  },
+  {
+    "number": 444,
+    "disposition": "distilled",
+    "comment": "The executive summary should not be fluffy prose; it should be a reduction of the preceding audit work into ranked action. Distilling the issue that way makes it the decision surface for leadership, not another generic report placeholder."
+  },
+  {
+    "number": 445,
+    "disposition": "evolving",
+    "comment": "I specifically looked for an obvious registry-validation implementation and did not find a clear finished surface. That makes this issue still live: if governance registries are authoritative, they need automated validation so drift is caught mechanically instead of by memory. The next concrete step is to name the registries and the failure checks this automation should run."
+  },
+  {
+    "number": 446,
+    "disposition": "evolving",
+    "comment": "This issue still feels materially open after the repo pass. 'Tier promotion criteria + gate checks' should become an executable promotion contract: which signals move a feature/workstream from one maturity tier to the next, and what automated/manual gates enforce that. I did not find that fully formalized yet, so I would keep it active."
+  },
+  {
+    "number": 447,
+    "disposition": "evolving",
+    "comment": "I did not find an obvious finished promotion dashboard/audit-trail surface during the scan, which means this issue is still carrying real control-plane value. The ideal artifact is a dashboard that shows current tier, promotion blockers, and historical transitions with evidence. That remains worth building and documenting."
+  },
+  {
+    "number": 448,
+    "disposition": "evolving",
+    "comment": "I checked the parent feature and the tree. There is clearly partial-to-strong implementation already \u2014 `GET /contracts/:id/recovery/lock-status`, recovery/timelock endpoints, and related health logic \u2014 so this is not a blank schema/API request anymore. What it still needs is a precise evidence stitch: which tables/fields enforce the lock/timelock rules and where the API contract is anchored."
+  },
+  {
+    "number": 449,
+    "disposition": "evolving",
+    "comment": "The backend/recovery machinery appears to exist, but I did not fully verify a polished user-facing 'danger zone' indicator + countdown experience in this pass. That makes this still a valuable UI leaf: point to the actual screens/components, or document the remaining gap if the backend shipped ahead of the UX."
+  },
+  {
+    "number": 450,
+    "disposition": "evolving",
+    "comment": "There is already meaningful behavioral/recovery test coverage in the repo, but the issue's promise is narrower: prove lockdown triggers and timelock expiry specifically. I would keep this open until those exact cases are enumerated and linked here rather than buried in broader contract specs."
+  },
+  {
+    "number": 451,
+    "disposition": "evolving",
+    "comment": "The parent weekend-multiplier feature is clearly not imaginary; the repo contains Aegis/dynamic-penalty logic and explicit weekend multiplier tests. This child issue is still useful as the place to pin down the rule engine and schedule config that drive those calculations. I would treat it as active evidence/convergence work."
+  },
+  {
+    "number": 452,
+    "disposition": "evolving",
+    "comment": "I found strong backend signals for the weekend multiplier, but I did not verify in this pass that users actually get a clear UI indicator/schedule explanation wherever the multiplier matters. That keeps this issue alive as a UX-contract question, not mere duplication."
+  },
+  {
+    "number": 453,
+    "disposition": "evolving",
+    "comment": "There are already tests around weekend multiplier behavior, but the issue remains valid until the exact edge-case suite claimed here is cleanly attached: boundary times, timezone assumptions, override precedence, and non-weekend regressions. I would keep it open for that evidence stitch."
+  },
+  {
+    "number": 454,
+    "disposition": "evolving",
+    "comment": "The parent accountability-partner feature looks materially implemented now: the repo includes `accountability_partners` tables/migrations and supporting controller/service logic. That said, this child issue is still useful because it asks for the exact schema/API notification slice to be made explicit. I would keep it open until those endpoints/events are linked back here as proof."
+  },
+  {
+    "number": 455,
+    "disposition": "evolving",
+    "comment": "Given the parent feature comments and the current tree, I doubt this UI lane is a pure zero-state issue anymore. But I did not fully trace the invitation/status dashboard UX end-to-end during this pass, so I would keep the issue active until the actual screens/components and user states are enumerated here."
+  },
+  {
+    "number": 456,
+    "disposition": "evolving",
+    "comment": "There is enough adjacent protocol logic to believe tests exist or nearly exist, but this leaf still serves a purpose: prove the full accountability-partner flow, including invitation, acceptance, co-sign/veto, and notification delivery/failure behavior. Until that exact suite is attached, I would not collapse the issue."
+  },
+  {
+    "number": 457,
+    "disposition": "evolving",
+    "comment": "The parent issue already claims partial implementation, and the tree backs that up: downscale logic and behavioral constants are present. This child issue should stay open as the place to specify the exact schema/API behaviors for progress tracking and downscale triggers, because right now the evidence is spread across services rather than collapsed into the issue."
+  },
+  {
+    "number": 458,
+    "disposition": "evolving",
+    "comment": "I read this as a UX-completion issue more than a greenfield feature request. The backend logic for endowed progress/downscale seems to exist in part, but I did not verify a fully explicit progress-visualization + downscale user flow in the UI during this pass. That is still a legitimate open question."
+  },
+  {
+    "number": 459,
+    "disposition": "evolving",
+    "comment": "This remains useful as the verification leaf for the endowed-progress cluster. The repo likely has adjacent tests, but the real ask here is an explicit set of progress-calculation and UX-state-transition cases. I would keep it active until those tests are gathered and linked here."
+  },
+  {
+    "number": 460,
+    "disposition": "evolving",
+    "comment": "The tree clearly contains oath-domain infrastructure now (`OathCategory`, onboarding/category handling, realm mapping), so this is no longer an abstract request. What still seems worth preserving is the narrower schema/API question: where the oath text/identity binding is persisted, and how that contract is exposed. That evidence should be attached here."
+  },
+  {
+    "number": 461,
+    "disposition": "evolving",
+    "comment": "I found signs of oath-aware contract creation in the web/shared layers, but I did not fully verify the dedicated identity-confirmation UX implied by this issue. That means the leaf still has value as a UI-contract question even if the domain primitives exist."
+  },
+  {
+    "number": 462,
+    "disposition": "evolving",
+    "comment": "There is already substantial oath/category behavior covered in shared specs, but this issue asks for the onboarding-flow and persistence tests specifically. I would keep it active until the exact test trail for oath creation, confirmation, and persistence is linked back here."
+  },
+  {
+    "number": 463,
+    "disposition": "evolving",
+    "comment": "The parent leaderboard feature is clearly represented in the repo now \u2014 there are `leaderboard_events` tables/migrations and API references \u2014 so this is not a blank schema/API request anymore. The value of the child issue now is to tie those exact schema/API surfaces and gradient-calculation rules back into one auditable place."
+  },
+  {
+    "number": 464,
+    "disposition": "evolving",
+    "comment": "I verified that the repo has live leaderboard/domain machinery, but I did not complete an end-to-end audit of the dashboard visualization + real-time update UX in this pass. So I would keep this issue open until the actual visualization surface and update path are explicitly demonstrated here."
+  }
+]

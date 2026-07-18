@@ -1,0 +1,102 @@
+diff --git a/src/api/src/modules/payments/payment-router.service.spec.ts b/src/api/src/modules/payments/payment-router.service.spec.ts
+index dff75b57..f46bb2b5 100644
+--- a/src/api/src/modules/payments/payment-router.service.spec.ts
++++ b/src/api/src/modules/payments/payment-router.service.spec.ts
+@@ -61,27 +61,49 @@ describe('PaymentRouterService', () => {
+       userId: 'user-2',
+     };
+ 
+-    it('should create a Stripe payment intent with mock client secret in dev', async () => {
++    const originalEnv = process.env.NODE_ENV;
++    afterEach(() => {
++      process.env.NODE_ENV = originalEnv;
++    });
++
++    it('should create a Stripe payment intent with mock client secret in development', async () => {
++      process.env.NODE_ENV = 'development';
+       const result = await service.createPaymentIntent(baseOptions, 'STRIPE');
+       expect(result.processor).toBe('STRIPE');
+       expect(result.clientSecret).toMatch(/^pi_stripe_mock_/);
+     });
+ 
+-    it('should create a Corepay payment intent with mock token in dev', async () => {
++    it('should create a Corepay payment intent with mock token in development', async () => {
++      process.env.NODE_ENV = 'development';
+       const result = await service.createPaymentIntent(baseOptions, 'HIGH_RISK_COREPAY');
+       expect(result.processor).toBe('HIGH_RISK_COREPAY');
+       expect(result.clientSecret).toMatch(/^tok_corepay_mock_/);
+     });
+ 
++    it('should create a mock client secret in the test environment', async () => {
++      process.env.NODE_ENV = 'test';
++      const result = await service.createPaymentIntent(baseOptions, 'STRIPE');
++      expect(result.clientSecret).toMatch(/^pi_stripe_mock_/);
++    });
++
+     it('should throw ServiceUnavailableException in production', async () => {
+-      const originalEnv = process.env.NODE_ENV;
+       process.env.NODE_ENV = 'production';
+-      try {
+-        await expect(service.createPaymentIntent(baseOptions, 'STRIPE'))
+-          .rejects.toThrow('Payment processor not configured');
+-      } finally {
+-        process.env.NODE_ENV = originalEnv;
+-      }
++      await expect(service.createPaymentIntent(baseOptions, 'STRIPE'))
++        .rejects.toThrow('Payment processor not configured');
++    });
++
++    it('should throw ServiceUnavailableException in staging (never return a fabricated secret)', async () => {
++      process.env.NODE_ENV = 'staging';
++      const promise = service.createPaymentIntent(baseOptions, 'STRIPE');
++      await expect(promise).rejects.toThrow('Payment processor not configured');
++      // Defensive: the fabricated `pi_stripe_mock_*` secret must never reach a caller.
++      await expect(promise).rejects.not.toMatchObject({ clientSecret: expect.anything() });
++    });
++
++    it('should fail closed when NODE_ENV is unset/misconfigured', async () => {
++      delete process.env.NODE_ENV;
++      await expect(service.createPaymentIntent(baseOptions, 'STRIPE'))
++        .rejects.toThrow('Payment processor not configured');
+     });
+   });
+ });
+diff --git a/src/api/src/modules/payments/payment-router.service.ts b/src/api/src/modules/payments/payment-router.service.ts
+index 39d7fa3a..9b89b337 100644
+--- a/src/api/src/modules/payments/payment-router.service.ts
++++ b/src/api/src/modules/payments/payment-router.service.ts
+@@ -48,18 +48,30 @@ export class PaymentRouterService {
+ 
+   /**
+    * Creates a payment intent via the selected processor.
+-   * In dev/test, returns mock client secrets. In production, throws until
+-   * a real processor integration is configured.
++   *
++   * The mock client-secret fallback is ALLOWLISTED to `development`/`test`
++   * only. Any other environment — `staging`, `production`, or an
++   * unset/misconfigured NODE_ENV — fails closed with a 503 rather than
++   * silently handing the frontend a fabricated `pi_stripe_mock_*` secret
++   * that Stripe.js can never redeem (see issue #32). This must be a
++   * fail-closed allowlist, not a `=== "production"` blocklist, so that a
++   * staging or misconfigured deployment cannot leak a fake secret.
+    */
+   async createPaymentIntent(
+     options: PaymentIntentOptions,
+     processor: PaymentProcessor,
+   ): Promise<{ clientSecret: string; processor: PaymentProcessor }> {
+-    const isProduction = process.env.NODE_ENV === "production";
+-    if (isProduction) {
++    const nodeEnv = process.env.NODE_ENV;
++    const mockFallbackAllowed = nodeEnv === "development" || nodeEnv === "test";
++    if (!mockFallbackAllowed) {
+       throw new ServiceUnavailableException("Payment processor not configured");
+     }
+ 
++    this.logger.warn(
++      `Using MOCK payment processor (${processor}) for user ${options.userId} in "${nodeEnv}" environment; ` +
++        "no real charge will be created. This path is only valid for local development/testing.",
++    );
++
+     if (processor === "STRIPE") {
+       // Defer to existing StripeFboService in a real implementation
+       return {

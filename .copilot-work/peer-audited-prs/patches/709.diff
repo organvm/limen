@@ -1,0 +1,347 @@
+diff --git a/src/api/database/migrations/migrate.spec.ts b/src/api/database/migrations/migrate.spec.ts
+index 0509dad0..9f645c0e 100644
+--- a/src/api/database/migrations/migrate.spec.ts
++++ b/src/api/database/migrations/migrate.spec.ts
+@@ -1,4 +1,12 @@
+-import { ensureMigrationsTable, getAppliedMigrations, getPendingMigrations, runMigrations } from './migrate';
++import {
++  baselineFromExistingSchema,
++  ensureMigrationsTable,
++  getAppliedMigrations,
++  getPendingMigrations,
++  isSchemaPreInitialized,
++  listMigrationFiles,
++  runMigrations,
++} from './migrate';
+ 
+ // Mock fs and path to control migration file discovery
+ jest.mock('fs', () => ({
+@@ -86,7 +94,9 @@ describe('Migration Runner', () => {
+       // ensureMigrationsTable
+       mockQuery
+         .mockResolvedValueOnce({ rows: [] }) // CREATE TABLE
+-        .mockResolvedValueOnce({ rows: [] }); // getAppliedMigrations (empty)
++        .mockResolvedValueOnce({ rows: [] }) // tracked getAppliedMigrations (empty)
++        .mockResolvedValueOnce({ rows: [{ reg: null }] }) // isSchemaPreInitialized -> not initialized
++        .mockResolvedValueOnce({ rows: [] }); // getPendingMigrations -> getAppliedMigrations (empty)
+ 
+       (fs.readdirSync as jest.Mock).mockReturnValue([
+         '001_initial_schema.sql',
+@@ -112,7 +122,8 @@ describe('Migration Runner', () => {
+     it('should skip when no pending migrations', async () => {
+       mockQuery
+         .mockResolvedValueOnce({ rows: [] }) // CREATE TABLE
+-        .mockResolvedValueOnce({ rows: [{ name: '001_initial_schema.sql' }] });
++        .mockResolvedValueOnce({ rows: [{ name: '001_initial_schema.sql' }] }) // tracked (non-empty -> no baseline)
++        .mockResolvedValueOnce({ rows: [{ name: '001_initial_schema.sql' }] }); // getPendingMigrations -> getAppliedMigrations
+ 
+       (fs.readdirSync as jest.Mock).mockReturnValue(['001_initial_schema.sql']);
+ 
+@@ -123,8 +134,10 @@ describe('Migration Runner', () => {
+ 
+     it('should rollback on migration failure', async () => {
+       mockQuery
+-        .mockResolvedValueOnce({ rows: [] })
+-        .mockResolvedValueOnce({ rows: [] });
++        .mockResolvedValueOnce({ rows: [] }) // CREATE TABLE
++        .mockResolvedValueOnce({ rows: [] }) // tracked (empty)
++        .mockResolvedValueOnce({ rows: [{ reg: null }] }) // isSchemaPreInitialized -> not initialized
++        .mockResolvedValueOnce({ rows: [] }); // getPendingMigrations -> getAppliedMigrations (empty)
+ 
+       (fs.readdirSync as jest.Mock).mockReturnValue(['001_bad.sql']);
+       (fs.readFileSync as jest.Mock).mockReturnValue('INVALID SQL;');
+@@ -138,4 +151,118 @@ describe('Migration Runner', () => {
+       expect(mockClient.release).toHaveBeenCalled();
+     });
+   });
++
++  describe('isSchemaPreInitialized', () => {
++    it('returns true when the sentinel table already exists', async () => {
++      mockQuery.mockResolvedValue({ rows: [{ reg: 'accounts' }] });
++      await expect(isSchemaPreInitialized(mockPool)).resolves.toBe(true);
++      // Probes via to_regclass on the 'accounts' sentinel table.
++      expect(mockQuery.mock.calls[0][0]).toContain('to_regclass');
++      expect(mockQuery.mock.calls[0][1]).toEqual(['accounts']);
++    });
++
++    it('returns false when the sentinel table is absent', async () => {
++      mockQuery.mockResolvedValue({ rows: [{ reg: null }] });
++      await expect(isSchemaPreInitialized(mockPool)).resolves.toBe(false);
++    });
++  });
++
++  describe('baselineFromExistingSchema', () => {
++    it('stamps every migration file as applied without executing it', async () => {
++      (fs.readdirSync as jest.Mock).mockReturnValue([
++        '001_initial_schema.sql',
++        '009_missing_base_tables.sql',
++      ]);
++      mockQuery.mockResolvedValue({ rows: [] });
++
++      const stamped = await baselineFromExistingSchema(mockPool);
++
++      expect(stamped).toEqual([
++        '001_initial_schema.sql',
++        '009_missing_base_tables.sql',
++      ]);
++      // One idempotent INSERT ... ON CONFLICT per file; no DDL is executed.
++      expect(mockQuery).toHaveBeenCalledTimes(2);
++      expect(mockQuery.mock.calls[0][0]).toContain('ON CONFLICT (name) DO NOTHING');
++      expect(mockQuery.mock.calls[0][1]).toEqual(['001_initial_schema.sql']);
++      expect(mockConnect).not.toHaveBeenCalled();
++    });
++  });
++
++  describe('runMigrations drift guard (issue #28)', () => {
++    it('baselines a schema.sql-provisioned DB instead of replaying colliding migrations', async () => {
++      // Fresh `docker compose up`: schema.sql created the tables via initdb,
++      // but schema_migrations is empty so every migration looks "pending".
++      // Without the guard, migration 001 (`CREATE TYPE` / `CREATE TABLE accounts`
++      // with no IF NOT EXISTS) would crash with "already exists".
++      (fs.readdirSync as jest.Mock).mockReturnValue([
++        '001_initial_schema.sql',
++        '009_missing_base_tables.sql',
++      ]);
++
++      mockQuery
++        .mockResolvedValueOnce({ rows: [] }) // ensureMigrationsTable CREATE TABLE
++        .mockResolvedValueOnce({ rows: [] }) // tracked getAppliedMigrations (empty)
++        .mockResolvedValueOnce({ rows: [{ reg: 'accounts' }] }) // isSchemaPreInitialized -> true
++        .mockResolvedValueOnce({ rows: [] }) // baseline INSERT 001
++        .mockResolvedValueOnce({ rows: [] }) // baseline INSERT 009
++        .mockResolvedValueOnce({
++          rows: [
++            { name: '001_initial_schema.sql' },
++            { name: '009_missing_base_tables.sql' },
++          ],
++        }); // getPendingMigrations -> getAppliedMigrations (now baselined)
++
++      const applied = await runMigrations(mockPool);
++
++      // Nothing replayed: the existing schema was adopted as the baseline.
++      expect(applied).toEqual([]);
++      expect(mockConnect).not.toHaveBeenCalled();
++      expect(fs.readFileSync as jest.Mock).not.toHaveBeenCalled();
++    });
++
++    it('still applies genuinely new migrations after baselining', async () => {
++      (fs.readdirSync as jest.Mock).mockReturnValue([
++        '001_initial_schema.sql',
++        '041_brand_new.sql',
++      ]);
++
++      mockQuery
++        .mockResolvedValueOnce({ rows: [] }) // ensureMigrationsTable
++        .mockResolvedValueOnce({ rows: [] }) // tracked (empty)
++        .mockResolvedValueOnce({ rows: [{ reg: 'accounts' }] }) // isSchemaPreInitialized -> true
++        .mockResolvedValueOnce({ rows: [] }) // baseline INSERT 001
++        .mockResolvedValueOnce({ rows: [] }) // baseline INSERT 041
++        .mockResolvedValueOnce({
++          rows: [
++            { name: '001_initial_schema.sql' },
++            { name: '041_brand_new.sql' },
++          ],
++        }); // getPendingMigrations -> getAppliedMigrations
++
++      // With both files baselined, nothing is pending. This documents that
++      // baseline adopts the full known set; new migrations added AFTER the
++      // baseline run are picked up on the next invocation.
++      const applied = await runMigrations(mockPool);
++      expect(applied).toEqual([]);
++    });
++  });
++
++  describe('listMigrationFiles (real migrations directory)', () => {
++    it('returns the on-disk .sql migrations in deterministic sorted order', () => {
++      // Use the real fs for this assertion against the committed migrations.
++      const realFs = jest.requireActual('fs') as typeof import('fs');
++      (fs.readdirSync as jest.Mock).mockImplementation((...args: unknown[]) =>
++        realFs.readdirSync(...(args as Parameters<typeof realFs.readdirSync>)),
++      );
++
++      const files = listMigrationFiles();
++      expect(files.length).toBeGreaterThan(0);
++      expect(files.every((f) => f.endsWith('.sql'))).toBe(true);
++      // Sorted ascending and stable.
++      expect([...files].sort()).toEqual(files);
++      // The three tables called out in issue #28 are covered by migration 009.
++      expect(files).toContain('009_missing_base_tables.sql');
++    });
++  });
+ });
+diff --git a/src/api/database/migrations/migrate.ts b/src/api/database/migrations/migrate.ts
+index a096b309..ab506348 100644
+--- a/src/api/database/migrations/migrate.ts
++++ b/src/api/database/migrations/migrate.ts
+@@ -6,6 +6,12 @@ import { resolveDatabaseUrl } from '../../src/config/runtime';
+ const MIGRATIONS_TABLE = 'schema_migrations';
+ const MIGRATIONS_DIR = path.join(__dirname);
+ 
++// Sentinel table created both by the very first migration (001) and by the
++// consolidated schema.sql init script. Its presence means the database has
++// already been provisioned by *some* path (an initdb-mounted schema.sql or a
++// prior migration run), even when schema_migrations is still empty.
++const SCHEMA_SENTINEL_TABLE = 'accounts';
++
+ export async function ensureMigrationsTable(pool: Pool): Promise<void> {
+   await pool.query(`
+     CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (
+@@ -16,6 +22,13 @@ export async function ensureMigrationsTable(pool: Pool): Promise<void> {
+   `);
+ }
+ 
++export function listMigrationFiles(): string[] {
++  return fs
++    .readdirSync(MIGRATIONS_DIR)
++    .filter((f: string) => f.endsWith('.sql'))
++    .sort();
++}
++
+ export async function getAppliedMigrations(pool: Pool): Promise<Set<string>> {
+   const result = await pool.query(`SELECT name FROM ${MIGRATIONS_TABLE} ORDER BY id`);
+   return new Set(result.rows.map((r: { name: string }) => r.name));
+@@ -23,14 +36,58 @@ export async function getAppliedMigrations(pool: Pool): Promise<Set<string>> {
+ 
+ export async function getPendingMigrations(pool: Pool): Promise<string[]> {
+   const applied = await getAppliedMigrations(pool);
+-  const files = fs.readdirSync(MIGRATIONS_DIR)
+-    .filter((f: string) => f.endsWith('.sql'))
+-    .sort();
++  const files = listMigrationFiles();
+   return files.filter((f: string) => !applied.has(f));
+ }
+ 
++/**
++ * Detects a database that was provisioned by the consolidated schema.sql init
++ * script (mounted at /docker-entrypoint-initdb.d/) but never tracked in
++ * schema_migrations. In that state the schema already exists, yet the runner
++ * would see every migration as "pending" and crash on the first one:
++ * 001_initial_schema.sql issues a bare `CREATE TYPE account_type` /
++ * `CREATE TABLE accounts` with no IF NOT EXISTS, producing the exact
++ * "relation already exists" schema-drift failure reported in #28.
++ */
++export async function isSchemaPreInitialized(pool: Pool): Promise<boolean> {
++  const result = await pool.query(`SELECT to_regclass($1) AS reg`, [
++    SCHEMA_SENTINEL_TABLE,
++  ]);
++  return result.rows[0]?.reg != null;
++}
++
++/**
++ * Stamps every known migration file as applied WITHOUT executing it. Used once,
++ * when the schema was provisioned by schema.sql but schema_migrations is empty,
++ * so the runner adopts that schema as its baseline instead of replaying
++ * migrations against tables that already exist. Idempotent via ON CONFLICT, so
++ * a partially-stamped baseline is safe to re-run.
++ */
++export async function baselineFromExistingSchema(pool: Pool): Promise<string[]> {
++  const files = listMigrationFiles();
++  for (const file of files) {
++    await pool.query(
++      `INSERT INTO ${MIGRATIONS_TABLE} (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
++      [file],
++    );
++  }
++  console.log(
++    `Baselined ${files.length} migration(s) from pre-initialized schema.sql.`,
++  );
++  return files;
++}
++
+ export async function runMigrations(pool: Pool): Promise<string[]> {
+   await ensureMigrationsTable(pool);
++
++  // Drift guard: when schema.sql already provisioned the schema (a fresh
++  // `docker compose up`) but nothing is tracked yet, adopt it as the baseline
++  // rather than replaying migrations that would collide with existing objects.
++  const tracked = await getAppliedMigrations(pool);
++  if (tracked.size === 0 && (await isSchemaPreInitialized(pool))) {
++    await baselineFromExistingSchema(pool);
++  }
++
+   const pending = await getPendingMigrations(pool);
+ 
+   if (pending.length === 0) {
+diff --git a/src/api/src/config/runtime.spec.ts b/src/api/src/config/runtime.spec.ts
+index ff25275f..eec5ca0e 100644
+--- a/src/api/src/config/runtime.spec.ts
++++ b/src/api/src/config/runtime.spec.ts
+@@ -1,4 +1,4 @@
+-import { normalizeBaseUrl, parsePort } from './runtime';
++import { normalizeBaseUrl, parsePort, resolveDatabaseUrl } from './runtime';
+ 
+ describe('normalizeBaseUrl', () => {
+   it('should strip a single trailing slash', () => {
+@@ -46,3 +46,72 @@ describe('parsePort', () => {
+     }
+   });
+ });
++
++// Issue #28: the migration runner must source DB credentials from the same
++// canonical config the app uses, with a loud failure when unset — never a
++// wrong/hardcoded 'styx' default that silently drifts between environments.
++describe('resolveDatabaseUrl (migration runner credential source)', () => {
++  const PG_KEYS = [
++    'DATABASE_URL',
++    'POSTGRES_HOST',
++    'POSTGRES_PORT',
++    'POSTGRES_USER',
++    'POSTGRES_PASSWORD',
++    'POSTGRES_DB',
++  ];
++  let saved: Record<string, string | undefined>;
++
++  beforeEach(() => {
++    saved = {};
++    for (const key of PG_KEYS) {
++      saved[key] = process.env[key];
++      delete process.env[key];
++    }
++  });
++
++  afterEach(() => {
++    for (const key of PG_KEYS) {
++      if (saved[key] === undefined) delete process.env[key];
++      else process.env[key] = saved[key];
++    }
++  });
++
++  it('prefers an explicit DATABASE_URL verbatim', () => {
++    process.env.DATABASE_URL =
++      'postgresql://styx_admin:styx_local_secret@localhost:5432/styx';
++    expect(resolveDatabaseUrl()).toBe(
++      'postgresql://styx_admin:styx_local_secret@localhost:5432/styx',
++    );
++  });
++
++  it('builds a connection URL from discrete POSTGRES_* vars when DATABASE_URL is unset', () => {
++    process.env.POSTGRES_HOST = 'localhost';
++    process.env.POSTGRES_PORT = '5432';
++    process.env.POSTGRES_USER = 'styx_admin';
++    process.env.POSTGRES_PASSWORD = 'styx_local_secret';
++    process.env.POSTGRES_DB = 'styx';
++
++    const url = new URL(resolveDatabaseUrl());
++    expect(url.protocol).toBe('postgresql:');
++    expect(url.hostname).toBe('localhost');
++    expect(url.port).toBe('5432');
++    expect(url.username).toBe('styx_admin');
++    expect(url.password).toBe('styx_local_secret');
++    expect(url.pathname).toBe('/styx');
++  });
++
++  it('throws (no hardcoded fallback) when neither DATABASE_URL nor PG vars are set', () => {
++    expect(() => resolveDatabaseUrl()).toThrow(/PostgreSQL host is required/);
++  });
++
++  it('rejects an invalid PostgreSQL port instead of silently connecting', () => {
++    process.env.POSTGRES_HOST = 'localhost';
++    process.env.POSTGRES_PORT = 'not-a-port';
++    process.env.POSTGRES_USER = 'styx_admin';
++    process.env.POSTGRES_PASSWORD = 'styx_local_secret';
++    process.env.POSTGRES_DB = 'styx';
++    expect(() => resolveDatabaseUrl()).toThrow(
++      'PostgreSQL port must be a valid TCP port',
++    );
++  });
++});
