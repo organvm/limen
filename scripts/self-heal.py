@@ -45,9 +45,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling scripts/ for _pr_scan
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.intake import contract_fields, github_existing_pr_contract  # noqa: E402
 from limen.models import Task  # noqa: E402
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 from _pr_scan import enumerate_open_prs, rotating_window, scaled_limit, stale_base_verdict  # noqa: E402
 
 # DERIVED from env so the conductor survives relocation; same defaults as merge-drain.py.
@@ -459,7 +460,7 @@ def main():
             lf.tasks.append(build_task(verdict, repo, num, url, stamp))
             emitted.append(tid)
         if emitted:
-            save_limen_file(tasks_path, lf)
+            apply_limen_file_sync(tasks_path, lf, agent="self-heal", session_id="emit")
     finally:
         try:
             LOCKD.rmdir()

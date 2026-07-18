@@ -56,7 +56,7 @@ else
   PORT="$(choose_port)"
 fi
 
-cat > "$TASKS_PATH" <<'YAML'
+cat > "$TASKS_PATH" <<'YAML' # task-writer-audit: allow-derived-sandbox
 version: '1.0'
 portal:
   name: Runtime Probe

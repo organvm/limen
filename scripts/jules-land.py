@@ -25,9 +25,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.dispatch import _resolve_repo_dir, _git, _default_branch  # noqa: E402
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.jules_remote import JulesRemoteSnapshot, probe_jules_remote_sessions  # noqa: E402
 from limen.models import DispatchLogEntry, Task  # noqa: E402
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 from limen.worktree_roots import default_worktrees_root  # noqa: E402
 import datetime  # noqa: E402
 
@@ -225,10 +226,15 @@ def main() -> int:
                     output=f"jules-land: landed session {sid} as PR",
                 )
             )
-            save_limen_file(TASKS, lf)  # persist per-PR so a mid-run stop can't cause dupes
+            apply_limen_file_sync(
+                TASKS,
+                lf,
+                agent="jules-land",
+                session_id=f"land-{sid}",
+            )  # persist per-PR so a mid-run stop cannot cause duplicates
             done += 1
     if args.apply and done:
-        save_limen_file(TASKS, lf)
+        apply_limen_file_sync(TASKS, lf, agent="jules-land", session_id="land-summary")
         print(f"  APPLIED -> {done} jules session(s) landed + marked done")
     elif not args.apply:
         print("  dry-run (pass --apply to land for real)")

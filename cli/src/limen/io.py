@@ -331,3 +331,30 @@ def save_limen_file(path: Path, limen: LimenFile, *, allow_shrink: bool = False)
             )
 
     atomic_write_text(path, text)
+
+
+def save_derived_limen_projection(
+    path: Path,
+    limen: LimenFile,
+    *,
+    canonical_path: Path,
+) -> None:
+    """Serialize a noncanonical read-only projection.
+
+    This seam exists only for exports such as ``limen channels --emit``. It
+    cannot target the configured canonical board, so it carries no lifecycle
+    authority and cannot become a second TABVLARIVS writer.
+    """
+
+    target = Path(path).expanduser().resolve()
+    canonical_targets = {Path(canonical_path).expanduser().resolve()}
+    if configured := os.environ.get("LIMEN_TASKS", "").strip():
+        canonical_targets.add(Path(configured).expanduser().resolve())
+    if configured_root := os.environ.get("LIMEN_ROOT", "").strip():
+        canonical_targets.add((Path(configured_root).expanduser() / "tasks.yaml").resolve())
+    if target in canonical_targets:
+        raise ValueError(
+            "derived projection target resolves to the canonical tasks.yaml; "
+            "submit lifecycle work through the authenticated conduct keeper"
+        )
+    save_limen_file(target, limen, allow_shrink=True)

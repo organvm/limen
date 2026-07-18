@@ -1,38 +1,20 @@
-"""TABVLARIVS — the one record-keeper over the board (`tasks.yaml`).
+"""TABVLARIVS compatibility relay for the authenticated conduct keeper.
 
-The disease this dissolves: ~32 uncoordinated writers each do *read-whole-board → mutate →
-rewrite-whole-board* on the single `tasks.yaml` blob. `io.atomic_write_text` already stops torn
-*bytes* (temp-file + `os.replace`), but two writers that both `load→save` still lost-update-clobber
-(last-writer-wins on the whole board), and the worst offenders (the MCP server) skip even the
-atomic write. Locking every `save` would give write-*atomicity* but not read-modify-write
-*isolation* — the clobber survives. The only correct cure is the **single-writer principle**:
-workers stop mutating shared state and instead APPEND one immutable *ticket* per unit of work to a
-lock-free inbox; exactly **one** keeper drains the inbox, folds the tickets onto the board in
-timestamp order, validates (per-task + the collapse-guard), and seals the result with the atomic
-write. It is the only process that ever holds the write lock, so there is no interleave to tear.
-
-This is Step 2+3 of `board-is-event-log-projection` (PR#543): `materialize.fold` is the proven pure
-reducer — this module gives it a live stream to consume. A ticket **is** a `materialize` Event with
-provenance (who did the work, when), and the archived ticket files are the append-only event log
-that the board is a projection of (`board = fold(events)`).
+The historical implementation made this process a local ``tasks.yaml`` writer. That still allowed
+the laptop cache to diverge from the GitHub-backed owner and gave local Git plumbing an independent
+authority path. The conduct broker is now the sole logical record keeper: producers may append
+immutable outbound tickets locally, but this module can only translate them into bounded conduct
+packets and archive a ticket after the remote projection receipt is acknowledged.
 
 Ticket lifecycle::
 
-    logs/tickets/inbox/<id>.json  --drain-->  applied → archive/   (the event log)
-                                              rejected → rejected/  (+ <id>.reason.txt)
+    logs/tickets/inbox/<id>.json  --relay-->  acknowledged → archive/
+                                              invalid      → rejected/ (+ <id>.reason.txt)
+                                              unavailable  → remains in inbox
 
-Design invariants (each carried over from a shipped safety precedent):
-  * **A worker never touches `tasks.yaml`.** It calls `submit_ticket`, an exclusive atomic create
-    into the inbox — no read, no lock, no collapse risk, no interleave. (Preserves the one writer
-    the fleet must never starve, `ingest-backlog.py`, which deliberately skipped the lock.)
-  * **One bad ticket never rejects the batch.** Each ticket is applied + validated individually;
-    a bad one is quarantined to `rejected/` and the rest still land (the `_sanitize_dispatch_logs`
-    tolerate-and-salvage philosophy from `io.py`).
-  * **The seal is collapse-guarded.** The board is written through `save_limen_file`, so the
-    2026-06-26 shrink-to-1 clobber remains impossible; a batch that would collapse the board is
-    rejected whole and the good board is left intact.
-  * **Never dead-stop the beat.** If the queue lock is held (a legacy writer, mid-migration), the
-    keeper defers to the next beat rather than blocking — exactly like `heal-board.py`.
+The local board is read only as an optimistic cache for exact revision guards. A stale cache is
+fenced by the remote owner. Broker absence leaves valid tickets pending and acknowledges no
+transition. Unsupported metadata, ordering, removal, and server-owned field mutations fail closed.
 """
 
 from __future__ import annotations
@@ -40,20 +22,40 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import subprocess
+import re
 import tempfile
 import uuid
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
 
+from limen.conduct.broker import ConductError
+from limen.conduct.client import BrokerUnavailable, client_from_env
+from limen.conduct.models import (
+    AgentIdentityV1,
+    AuthorityEnvelopeV1,
+    ConductorSessionV1,
+    FanoutBoundsV1,
+    ResourceClaimV1,
+    RetryPolicyV1,
+    SpendEnvelopeV1,
+    WorkPacketV1,
+    canonical_hash,
+)
 from limen.intake import validate_intake_contract
-from limen.io import BoardCollapseError, load_limen_file, queue_lock, save_limen_file
-from limen.materialize import EV_BOARD_META, EV_BOARD_ORDER, EV_TASK_UPSERT, Event, fold
+from limen.io import load_limen_file, queue_lock
+from limen.materialize import (
+    EV_BOARD_META,
+    EV_BOARD_ORDER,
+    EV_TASK_REMOVE,
+    EV_TASK_UPSERT,
+    Event,
+    diff_boards,
+)
 from limen.models import VALID_STATUSES, LimenFile, Task
 
 # --- ticket intents (a superset of materialize's Event tags, plus the status convenience) --------
@@ -63,6 +65,28 @@ INTENT_REMOVE = "task.remove"  # drop a task id (prune/archive-out)
 INTENT_ORDER = "board.order"  # set the task display order (patch = {"ids": [...]})
 INTENT_META = "board.meta"  # set board version/portal (patch = {"version":..,"portal":..})
 _INTENTS = frozenset({INTENT_UPSERT, INTENT_STATUS, INTENT_REMOVE, INTENT_ORDER, INTENT_META})
+_PATCHABLE_TASK_FIELDS = frozenset(
+    {
+        "title",
+        "description",
+        "repo",
+        "type",
+        "target_agent",
+        "workstream",
+        "priority",
+        "budget_cost",
+        "status",
+        "labels",
+        "urls",
+        "context",
+        "predicate",
+        "receipt_target",
+        "execution_requirements",
+        "workstream_contract",
+        "claude_tier",
+        "depends_on",
+    }
+)
 
 
 class Ticket(BaseModel):
@@ -289,34 +313,275 @@ def pending_task_ids(board_path: Path) -> set[str]:
     return ids
 
 
-def _git(repo: Path, args: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-    merged_env = os.environ.copy()
-    if env:
-        merged_env.update(env)
-    return subprocess.run(
-        ["git", *args],
-        cwd=str(repo),
-        env=merged_env,
-        capture_output=True,
-        text=True,
-        timeout=120,
+def _ticket_from_event(event: Event, *, agent: str, session_id: str, now: datetime) -> Ticket:
+    """Translate one pure projection delta into its immutable keeper receipt."""
+
+    event_type = str(event.get("type") or "")
+    common = {
+        "ticket_id": new_ticket_id(session_id, now),
+        "timestamp": now,
+        "agent": agent,
+        "session_id": session_id,
+    }
+    if event_type == EV_BOARD_META:
+        return Ticket(intent=INTENT_META, patch=dict(event.get("data") or {}), **common)
+    if event_type == EV_BOARD_ORDER:
+        return Ticket(intent=INTENT_ORDER, patch=dict(event.get("data") or {}), **common)
+    if event_type == EV_TASK_UPSERT:
+        return Ticket(
+            intent=INTENT_UPSERT,
+            task_id=str(event["task_id"]),
+            patch=dict(event.get("data") or {}),
+            **common,
+        )
+    if event_type == EV_TASK_REMOVE:
+        return Ticket(intent=INTENT_REMOVE, task_id=str(event["task_id"]), **common)
+    raise ValueError(f"unknown event type: {event_type!r}")
+
+
+def _safe_identifier(value: str, fallback: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._:/@+-]+", "-", str(value)).strip("-")
+    if not cleaned or not cleaned[0].isalnum():
+        cleaned = fallback
+    return cleaned[:256]
+
+
+def _canonical_revision(fields: dict[str, Any]) -> str:
+    value: Any = fields.get("updated")
+    if value is None and fields.get("dispatch_log"):
+        value = fields["dispatch_log"][-1].get("timestamp")
+    if value is None:
+        value = fields.get("created") or fields.get("status")
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    if isinstance(value, date):
+        return value.isoformat()
+    rendered = str(value)
+    if re.match(r"^\d{4}-\d{2}-\d{2}T", rendered):
+        try:
+            parsed = datetime.fromisoformat(rendered.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        except ValueError:
+            pass
+    return rendered
+
+
+def _compatibility_intent(ticket: Ticket, base: dict[str, Any] | None) -> dict[str, Any]:
+    if ticket.intent in {INTENT_REMOVE, INTENT_META, INTENT_ORDER}:
+        raise ValueError(
+            f"{ticket.intent} has no authenticated remote compatibility transition; "
+            "file a bounded broker protocol extension instead of mutating the local projection"
+        )
+    if not ticket.task_id:
+        raise ValueError(f"{ticket.intent} requires task_id")
+    patch = dict(ticket.patch or {})
+    if base is None:
+        if ticket.intent != INTENT_UPSERT:
+            raise ValueError(f"task {ticket.task_id} is absent from the hot projection")
+        supplied = {**patch, "id": ticket.task_id}
+        return {
+            "kind": "task.upsert",
+            "task_id": ticket.task_id,
+            "expected_absent": True,
+            "task": supplied,
+            "log": {"output": (ticket.log or {}).get("output")},
+        }
+
+    precondition = ticket.precondition or {}
+    if precondition.get("absent") is True:
+        raise ValueError(f"task precondition failed: {ticket.task_id} is no longer absent")
+    if "status" in precondition and base.get("status") != precondition["status"]:
+        raise ValueError(
+            f"task precondition failed: {ticket.task_id} status is {base.get('status')!r}, "
+            f"expected {precondition['status']!r}"
+        )
+    if "task_sha256" in precondition and task_state_sha256(base) != precondition["task_sha256"]:
+        raise ValueError(f"task precondition failed: {ticket.task_id} exact state changed")
+
+    desired = {**base, **patch}
+    changed = {key: value for key, value in desired.items() if key in _PATCHABLE_TASK_FIELDS and base.get(key) != value}
+    unsupported = sorted(
+        key
+        for key, value in desired.items()
+        if key not in _PATCHABLE_TASK_FIELDS | {"id", "created", "updated", "dispatch_log"} and base.get(key) != value
+    )
+    if unsupported:
+        raise ValueError(f"task {ticket.task_id} changes unsupported remote fields: {', '.join(unsupported)}")
+    prior_status = str(base.get("status") or "")
+    next_status = str(desired.get("status") or prior_status)
+    if prior_status == "open" and next_status == "dispatched":
+        kind = "task.claim"
+    elif next_status != prior_status:
+        kind = "task.status"
+    else:
+        kind = "task.mutate"
+    return {
+        "kind": kind,
+        "task_id": ticket.task_id,
+        "expected_status": prior_status,
+        "expected_revision": _canonical_revision(base),
+        "patch": changed,
+        "log": {"output": (ticket.log or {}).get("output")},
+    }
+
+
+def _relay_ticket(
+    ticket: Ticket,
+    base: dict[str, Any] | None,
+    *,
+    client=None,
+) -> dict[str, Any]:
+    intent = _compatibility_intent(ticket, base)
+    identity = AgentIdentityV1(
+        agent=_safe_identifier(ticket.agent, "tabularius-relay"),
+        surface="tabularius-relay",
+        session_id=_safe_identifier(
+            f"{ticket.agent}-{ticket.session_id}",
+            "tabularius-relay-session",
+        ),
+        provider_identity="limen-cli",
+    )
+    registration_now = datetime.now(timezone.utc)
+    session = ConductorSessionV1(
+        session_id=identity.session_id,
+        identity=identity,
+        origin="relay",
+        capabilities=frozenset({"task-submit"}),
+        transport="ianva",
+        harvest_method="receipt",
+        registered_at=registration_now,
+        heartbeat_at=registration_now,
+    )
+    owner = os.environ.get("LIMEN_GITHUB_REPO", "").strip() or "organvm/limen"
+    execution = {"adapter": "tabularius", "projection": "tasks.yaml", "observed_heads": {}}
+    work_id = f"ticket-{_safe_identifier(ticket.ticket_id, 'ticket')}"
+    work_key = f"task-compat-{canonical_hash({'intent': intent, 'execution': execution})}"
+    packet = WorkPacketV1(
+        work_id=work_id,
+        work_key=work_key,
+        intent=intent,
+        execution=execution,
+        initiator=identity,
+        conductor=identity,
+        preferred_agent="tabularius",
+        required_capabilities=frozenset({"board-write"}),
+        resource_claims=(ResourceClaimV1(key=f"task/{ticket.task_id}", mode="exclusive"),),
+        predicate="python3 scripts/validate-task-board.py --tasks tasks.yaml",
+        receipt_target=f"git:{owner}:tasks.yaml#{ticket.task_id}",
+        authority=AuthorityEnvelopeV1(
+            actions=frozenset({str(intent["kind"])}),
+            repositories=frozenset({owner}),
+            path_prefixes=frozenset({"tasks.yaml"}),
+            may_delegate=False,
+        ),
+        deadline=datetime.now(timezone.utc) + timedelta(minutes=5),
+        spend=SpendEnvelopeV1(limit=0),
+        retry=RetryPolicyV1(max_attempts=1, transient_only=True),
+        fanout=FanoutBoundsV1(max_children=0, max_depth=0),
+        effect="write",
+        task_id=ticket.task_id,
+    )
+    remote = client or client_from_env()
+    remote.register(session)
+    result = remote.submit(packet)
+    receipts = result.get("projection_receipts")
+    receipt = receipts[-1] if isinstance(receipts, list) and receipts else None
+    projected = receipt.get("task") if isinstance(receipt, dict) else None
+    if not isinstance(projected, dict):
+        raise RuntimeError(
+            f"conduct broker did not acknowledge canonical projection for {ticket.task_id}; "
+            f"status={result.get('status')}"
+        )
+    return projected
+
+
+def apply_limen_file_sync(
+    board_path: Path,
+    limen: LimenFile,
+    *,
+    agent: str,
+    session_id: str = "unknown",
+    allow_shrink: bool = False,
+    before: LimenFile | None = None,
+    now: datetime | None = None,
+) -> DrainResult:
+    """Submit a legacy in-memory delta to the authenticated conduct keeper.
+
+    ``tasks.yaml`` is only a hot local projection. This compatibility seam
+    derives bounded per-task packets and waits for remote projection receipts;
+    it never writes, commits, pushes, or refreshes the local file. Unsupported
+    board metadata, ordering, removal, or field mutations fail closed.
+    """
+
+    board_path = Path(board_path)
+    del allow_shrink
+    previous = before
+    if previous is None and board_path.exists():
+        previous = load_limen_file(board_path)
+    events = diff_boards(previous, limen)
+    if not events:
+        return DrainResult(note="no board change")
+
+    timestamp = now or datetime.now(timezone.utc)
+    previous_data = (
+        previous.model_dump(mode="json", exclude_none=True)
+        if previous is not None
+        else {"version": "1.0", "portal": None, "tasks": []}
+    )
+    desired_data = limen.model_dump(mode="json", exclude_none=True)
+    prior_portal = dict(previous_data.get("portal") or {})
+    desired_portal = dict(desired_data.get("portal") or {})
+    for portal in (prior_portal, desired_portal):
+        budget = portal.get("budget")
+        if isinstance(budget, dict):
+            budget = dict(budget)
+            budget.pop("track", None)
+            portal["budget"] = budget
+    if prior_portal != desired_portal or previous_data.get("version") != desired_data.get("version"):
+        raise RuntimeError("board metadata mutation has no authenticated remote compatibility transition")
+
+    prior_by_id = {str(task["id"]): task for task in previous_data.get("tasks", [])}
+    tickets = []
+    for event in events:
+        event_type = str(event.get("type") or "")
+        if event_type == EV_BOARD_META:
+            continue
+        if event_type in {EV_BOARD_ORDER, EV_TASK_REMOVE}:
+            raise RuntimeError(f"{event_type} has no authenticated remote compatibility transition")
+        tickets.append(_ticket_from_event(event, agent=agent, session_id=session_id, now=timestamp))
+    if not tickets:
+        return DrainResult(note="no task transition; budget-window metadata is derived by the remote keeper")
+    for ticket in tickets:
+        task = _relay_ticket(ticket, prior_by_id.get(str(ticket.task_id)))
+        prior_by_id[str(ticket.task_id)] = task
+    return DrainResult(
+        pending=len(tickets),
+        applied=len(tickets),
+        wrote=False,
+        note="broker-committed",
+        applied_ids=[ticket.ticket_id for ticket in tickets],
     )
 
 
-def _short_output(proc: subprocess.CompletedProcess[str]) -> str:
-    return (proc.stderr or proc.stdout or "").strip().replace("\n", " ")[:220]
+def restore_limen_projection_text(
+    board_path: Path,
+    text: str,
+    *,
+    agent: str,
+    session_id: str,
+    now: datetime | None = None,
+) -> DrainResult:
+    """Reject local cache replacement; refetch the canonical remote projection."""
 
-
-def _commit_identity_env(repo: Path, env: dict[str, str]) -> dict[str, str]:
-    """Provide commit-tree identity defaults without mutating repo git config."""
-    identity = dict(env)
-    name = _git(repo, ["config", "user.name"], env=env).stdout.strip() or "Limen Tabularius"
-    email = _git(repo, ["config", "user.email"], env=env).stdout.strip() or "tabularius@limen.local"
-    identity.setdefault("GIT_AUTHOR_NAME", os.environ.get("GIT_AUTHOR_NAME", name))
-    identity.setdefault("GIT_AUTHOR_EMAIL", os.environ.get("GIT_AUTHOR_EMAIL", email))
-    identity.setdefault("GIT_COMMITTER_NAME", os.environ.get("GIT_COMMITTER_NAME", name))
-    identity.setdefault("GIT_COMMITTER_EMAIL", os.environ.get("GIT_COMMITTER_EMAIL", email))
-    return identity
+    del board_path, text, agent, session_id, now
+    raise RuntimeError(
+        "local tasks.yaml recovery is retired; refetch the GitHub-backed projection "
+        "through the authenticated conduct owner"
+    )
 
 
 def preserve_board_projection(
@@ -327,95 +592,14 @@ def preserve_board_projection(
     dry_run: bool = False,
     lock_timeout: int = 2,
 ) -> PreserveResult:
-    """Commit and push the board projection as a Tabularius-owned action.
+    """Retired local Git bridge.
 
-    This is not a second writer. It never edits `tasks.yaml`; it preserves the current projection
-    after the record-keeper has sealed it. The commit is built from a temporary index and pushed
-    before the local branch is advanced, so a push failure cannot strand the live checkout ahead.
+    The authenticated remote projection performs GitHub SHA compare-and-swap before acknowledging
+    a transition. A local process must never commit, push, reset, or advance the canonical board.
     """
-    board_path = Path(board_path)
-    with queue_lock(board_path, timeout=lock_timeout) as locked:
-        if not locked:
-            return PreserveResult(deferred=True, reason="queue-lock-held")
 
-        top = _git(board_path.parent, ["rev-parse", "--show-toplevel"])
-        if top.returncode != 0 or not top.stdout.strip():
-            return PreserveResult(skipped=True, reason="not-a-git-repo")
-        repo = Path(top.stdout.strip())
-        try:
-            rel_board = board_path.resolve().relative_to(repo.resolve()).as_posix()
-        except ValueError:
-            return PreserveResult(skipped=True, reason="board-outside-git-root")
-
-        status = _git(repo, ["status", "--porcelain", "--", rel_board])
-        if status.returncode != 0:
-            return PreserveResult(skipped=True, reason=f"status-failed:{_short_output(status)}")
-        if not status.stdout.strip():
-            return PreserveResult(skipped=True, reason="no-board-changes")
-        if dry_run:
-            return PreserveResult(changed=True, skipped=True, reason=f"would-preserve:{rel_board}")
-
-        current = _git(repo, ["symbolic-ref", "--quiet", "--short", "HEAD"])
-        if current.returncode != 0 or current.stdout.strip() != branch:
-            return PreserveResult(skipped=True, reason=f"not-on-{branch}")
-        fetch = _git(repo, ["fetch", "--quiet", remote, branch])
-        if fetch.returncode != 0:
-            return PreserveResult(skipped=True, reason=f"fetch-failed:{_short_output(fetch)}")
-        head = _git(repo, ["rev-parse", "HEAD"]).stdout.strip()
-        remote_ref = f"{remote}/{branch}"
-        remote_sha = _git(repo, ["rev-parse", remote_ref]).stdout.strip()
-        if not head or head != remote_sha:
-            return PreserveResult(changed=True, skipped=True, reason=f"not-at-{remote_ref}")
-
-        with tempfile.NamedTemporaryFile(prefix="tabularius-board-index-") as tmp:
-            env = {"GIT_INDEX_FILE": tmp.name}
-            read_tree = _git(repo, ["read-tree", "HEAD"], env=env)
-            if read_tree.returncode != 0:
-                return PreserveResult(changed=True, skipped=True, reason=f"read-tree-failed:{_short_output(read_tree)}")
-            add = _git(repo, ["add", "-A", "--", rel_board], env=env)
-            if add.returncode != 0:
-                return PreserveResult(changed=True, skipped=True, reason=f"add-failed:{_short_output(add)}")
-            # DATA_ONLY invariant (issue #872 / PREC-2026-07-10-direct-push-lane-rots-main): tabularius
-            # pushes the board projection to `main` directly — it must NEVER carry anything but the board
-            # itself. Make that executable: fail LOUD if the temp index ever holds any other path.
-            staged = _git(repo, ["diff", "--cached", "--name-only"], env=env)
-            staged_paths = {line.strip() for line in staged.stdout.splitlines() if line.strip()}
-            if not staged_paths <= {rel_board}:
-                raise AssertionError(
-                    f"tabularius board push would carry non-board paths {sorted(staged_paths - {rel_board})}; "
-                    "the DATA_ONLY invariant (only tasks.yaml may reach main via this lane) was violated"
-                )
-            diff = _git(repo, ["diff", "--cached", "--quiet", "--", rel_board], env=env)
-            if diff.returncode == 0:
-                return PreserveResult(skipped=True, reason="no-index-diff")
-            tree = _git(repo, ["write-tree"], env=env)
-            if tree.returncode != 0 or not tree.stdout.strip():
-                return PreserveResult(changed=True, skipped=True, reason=f"write-tree-failed:{_short_output(tree)}")
-            stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            commit = _git(
-                repo,
-                [
-                    "commit-tree",
-                    tree.stdout.strip(),
-                    "-p",
-                    head,
-                    "-m",
-                    f"tabularius: preserve board projection {stamp}",
-                ],
-                env=_commit_identity_env(repo, env),
-            )
-            if commit.returncode != 0 or not commit.stdout.strip():
-                return PreserveResult(changed=True, skipped=True, reason=f"commit-tree-failed:{_short_output(commit)}")
-            commit_sha = commit.stdout.strip()
-
-        push = _git(repo, ["push", remote, f"{commit_sha}:refs/heads/{branch}"])
-        if push.returncode != 0:
-            return PreserveResult(changed=True, skipped=True, reason=f"push-failed:{_short_output(push)}")
-
-        _git(repo, ["update-ref", f"refs/heads/{branch}", commit_sha, head])
-        _git(repo, ["update-ref", f"refs/remotes/{remote_ref}", commit_sha, remote_sha])
-        _git(repo, ["reset", "-q", "--", rel_board])
-        return PreserveResult(changed=True, pushed=True, commit=commit_sha)
+    del board_path, branch, remote, dry_run, lock_timeout
+    return PreserveResult(skipped=True, reason="remote-keeper-owns-projection")
 
 
 def _parse_pending(inbox: Path) -> tuple[list[tuple[Path, Ticket]], list[tuple[Path, str]]]:
@@ -583,11 +767,12 @@ def _quarantine(rejected: list[tuple[Path, str]], dest_dir: Path) -> None:
 
 
 def drain_once(board_path: Path, *, dry_run: bool = False, lock_timeout: int = 20) -> DrainResult:
-    """Drain the inbox once: fold every pending ticket onto the board, seal, archive.
+    """Relay one inbox snapshot to the authenticated keeper.
 
-    The whole load→fold→seal runs under the queue lock, and the keeper is the only drainer, so there
-    is no read-modify-write race. An empty inbox is an instant no-op (no lock, no board I/O) — which
-    is what makes it safe to run every beat while no producers exist yet.
+    The queue lock serializes only local ticket custody. ``tasks.yaml`` is read as an optimistic
+    cache and remains byte-identical. A ticket moves to ``archive`` only after a projection receipt
+    names the canonical task. Invalid tickets are quarantined; broker unavailability leaves the
+    current ticket and every unattempted suffix in the inbox for an idempotent retry.
     """
     board_path = Path(board_path)
     inbox = _inbox(board_path)
@@ -601,15 +786,33 @@ def drain_once(board_path: Path, *, dry_run: bool = False, lock_timeout: int = 2
     if dry_run:
         good, bad = _parse_pending(inbox)
         admitted, precondition_rejections = _admit_exact_preconditions(good)
+        tasks: dict[str, dict[str, Any]] = {}
+        if board_path.exists():
+            board = load_limen_file(board_path)
+            tasks = {task.id: task.model_dump(mode="json", exclude_none=True) for task in board.tasks}
+        applicable: list[tuple[Path, Ticket]] = []
+        rejected: list[tuple[Path, str]] = [*bad, *precondition_rejections]
+        for path, ticket in admitted:
+            try:
+                intent = _compatibility_intent(ticket, tasks.get(str(ticket.task_id)))
+                if intent["kind"] == "task.upsert":
+                    tasks[str(ticket.task_id)] = dict(intent["task"])
+                else:
+                    tasks[str(ticket.task_id)] = {
+                        **tasks[str(ticket.task_id)],
+                        **dict(intent.get("patch") or {}),
+                    }
+                applicable.append((path, ticket))
+            except Exception as exc:
+                rejected.append((path, f"compatibility validation failed: {exc}"))
         pending = len(good) + len(bad)
         return DrainResult(
             pending=pending,
-            applied=len(admitted),
-            rejected=len(bad) + len(precondition_rejections),
-            note=(
-                f"dry-run: {len(admitted)} applicable, "
-                f"{len(bad)} unparseable, {len(precondition_rejections)} precondition conflict(s)"
-            ),
+            applied=len(applicable),
+            rejected=len(rejected),
+            note=(f"dry-run: {len(applicable)} broker-compatible, {len(rejected)} invalid/conflicting"),
+            applied_ids=[ticket.ticket_id for _, ticket in applicable],
+            rejected_ids=[path.stem for path, _ in rejected],
         )
 
     with queue_lock(board_path, timeout=lock_timeout) as locked:
@@ -624,43 +827,42 @@ def drain_once(board_path: Path, *, dry_run: bool = False, lock_timeout: int = 2
         if pending == 0:
             return DrainResult(note="inbox empty")
 
-        board = load_limen_file(board_path)
-        board_json = board.model_dump(mode="json", exclude_none=True)
-        tasks: OrderedDict[str, dict[str, Any]] = OrderedDict((t["id"], t) for t in board_json.get("tasks", []))
-        meta: dict[str, Any] = {"version": board_json.get("version", "1.0"), "portal": board_json.get("portal")}
-
+        tasks: dict[str, dict[str, Any]] = {}
+        if board_path.exists():
+            board = load_limen_file(board_path)
+            tasks = {task.id: task.model_dump(mode="json", exclude_none=True) for task in board.tasks}
         applied: list[tuple[Path, Ticket]] = []
         admitted, precondition_rejections = _admit_exact_preconditions(good)
         rejected: list[tuple[Path, str]] = [*bad, *precondition_rejections]
-        for p, ticket in admitted:
-            try:
-                _apply(ticket, tasks, meta)
-                applied.append((p, ticket))
-            except Exception as exc:
-                rejected.append((p, f"apply failed: {exc}"))
+        try:
+            remote = client_from_env()
+        except BrokerUnavailable as exc:
+            _quarantine(rejected, _rejected(board_path))
+            return DrainResult(
+                pending=pending,
+                rejected=len(rejected),
+                deferred=True,
+                note=f"conduct broker unavailable; valid tickets remain pending: {exc}",
+                rejected_ids=[path.stem for path, _ in rejected],
+            )
 
-        wrote = False
-        if applied:
-            events: list[Event] = [
-                {"type": EV_BOARD_META, "data": {"version": meta["version"], "portal": meta["portal"]}}
-            ]
-            for tid, fields in tasks.items():
-                events.append({"type": EV_TASK_UPSERT, "task_id": tid, "data": fields})
-            if meta.get("order"):
-                events.append({"type": EV_BOARD_ORDER, "data": {"ids": meta["order"]}})
+        deferred_reason = ""
+        for path, ticket in admitted:
             try:
-                new_board = fold(events)  # the proven reducer assembles + validates the whole board
+                projected = _relay_ticket(
+                    ticket,
+                    tasks.get(str(ticket.task_id)),
+                    client=remote,
+                )
+                tasks[str(ticket.task_id)] = projected
+                applied.append((path, ticket))
+            except BrokerUnavailable as exc:
+                deferred_reason = str(exc)
+                break
+            except (ConductError, RuntimeError, ValueError) as exc:
+                rejected.append((path, f"broker rejected compatibility ticket: {exc}"))
             except Exception as exc:
-                rejected.extend((p, f"batch rejected by board validation: {exc}") for p, _ in applied)
-                applied = []
-            else:
-                try:
-                    save_limen_file(board_path, new_board)  # collapse-guard + atomic seal
-                    wrote = True
-                except BoardCollapseError as exc:
-                    # the batch would collapse the board — never write; quarantine it whole, board intact
-                    rejected.extend((p, f"batch rejected by collapse-guard: {exc}") for p, _ in applied)
-                    applied = []
+                rejected.append((path, f"unexpected compatibility relay failure: {exc}"))
 
         _move([p for p, _ in applied], _archive(board_path))
         _quarantine(rejected, _rejected(board_path))
@@ -669,8 +871,13 @@ def drain_once(board_path: Path, *, dry_run: bool = False, lock_timeout: int = 2
         pending=pending,
         applied=len(applied),
         rejected=len(rejected),
-        wrote=wrote,
-        note=("sealed" if wrote else "no board change"),
+        wrote=False,
+        deferred=bool(deferred_reason),
+        note=(
+            f"conduct broker unavailable after {len(applied)} acknowledgment(s); unacknowledged tickets remain pending"
+            if deferred_reason
+            else ("broker-committed" if applied else "no remote projection")
+        ),
         applied_ids=[t.ticket_id for _, t in applied],
         rejected_ids=[p.stem for p, _ in rejected],
     )

@@ -28,9 +28,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling scripts/ for _human_signals
 from limen.chronic import CHRONIC_FLEET_DEBT_LABEL, chronic_escalated_to_needs_human  # noqa: E402
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.dispatch_ownership import active_typed_pr_owner_id  # noqa: E402
 from limen.models import DispatchLogEntry, Task  # noqa: E402
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 
 from _human_signals import is_human_gated, lever_ids  # noqa: E402
 
@@ -295,7 +296,7 @@ def main():
         for i in rehomed:
             print(f"    rehome: {i}")
         if args.apply:
-            save_limen_file(path, lf)
+            apply_limen_file_sync(path, lf, agent="heal-dispatch", session_id="heal")
             print("  APPLIED -> tasks.yaml")
         else:
             print("  dry-run (pass --apply)")

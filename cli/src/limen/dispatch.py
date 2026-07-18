@@ -32,7 +32,7 @@ from limen.capacity import (
     select_lanes,
 )
 from limen.dispatch_ownership import ACTIVE_OWNER_STATUSES
-from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
+from limen.io import load_limen_file, queue_lock as _queue_lock
 from limen.intake import IntakeContractError, normalize_selected_legacy_task, validate_intake_contract
 from limen.jules_remote import (
     JulesRemoteSnapshot,
@@ -42,6 +42,7 @@ from limen.jules_remote import (
     task_jules_session_id,
 )
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
+from limen.tabularius import apply_limen_file_sync
 from limen.runtime_requirements import task_execution_ready
 from limen.doctor import stale_tasks
 from limen.provider_selection import (
@@ -4333,7 +4334,7 @@ def _commit_dispatch_results(
                     ft.predicate, ft.receipt_target = contract
                 _apply_result(ft, agent, res, now, ftrack)
                 _REMOTE_SUBMISSION_RECEIPTS.pop(tid, None)
-        save_limen_file(tasks_path, fresh)
+        apply_limen_file_sync(tasks_path, fresh, agent="dispatch", session_id="serial-results")
 
 
 def dispatch_tasks(
@@ -5115,11 +5116,21 @@ def dispatch_parallel(
             )
             if not picked:
                 if reset:
-                    save_limen_file(tasks_path, fresh)
+                    apply_limen_file_sync(
+                        tasks_path,
+                        fresh,
+                        agent="dispatch-parallel",
+                        session_id="reserve-reset",
+                    )
                 print(f"── PARALLEL: nothing to dispatch for {agents} within budget")
                 return
             try:
-                save_limen_file(tasks_path, fresh)  # reserve commit (atomic vs supervisor writes)
+                apply_limen_file_sync(
+                    tasks_path,
+                    fresh,
+                    agent="dispatch-parallel",
+                    session_id="reserve",
+                )
             except Exception:
                 for agent, tid in picked:
                     if canonical_agent(agent) in LOCAL_CHECKOUT_AGENTS:
@@ -5181,7 +5192,7 @@ def dispatch_parallel(
                 n_pr += 1
             else:
                 n_fail += 1
-        save_limen_file(tasks_path, fresh)
+        apply_limen_file_sync(tasks_path, fresh, agent="dispatch-parallel", session_id="results")
     print(
         f"── PARALLEL done: {len(results)} ran · {n_pr} dispatched/PR · {n_noop} no-op · "
         f"{n_fail} failed→cascade · {n_blocked} blocked · {n_rl} rate-limited · {n_to} timeout→jules"
@@ -5377,7 +5388,12 @@ def release_stale_tasks(
                 released.append(task.id)
                 print(f"  RELEASE: {task.id} remote={remote_status} — {task.title}")
             if released or restored_done:
-                save_limen_file(tasks_path, fresh)
+                apply_limen_file_sync(
+                    tasks_path,
+                    fresh,
+                    agent="release-stale",
+                    session_id="release-stale",
+                )
     else:
         for task in candidates:
             if _has_done_transition(task):

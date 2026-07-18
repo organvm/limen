@@ -21,7 +21,8 @@ from pathlib import Path
 from typing import Iterable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 from limen.jules_remote import (  # noqa: E402
     JulesRemoteSnapshot,
     classify_jules_claim,
@@ -187,7 +188,7 @@ def main() -> int:
         f"{len(escalated_noop)} repeated-noop escalated"
     )
     if args.apply:
-        save_limen_file(path, lf)
+        apply_limen_file_sync(path, lf, agent="recover", session_id="apply")
         print("  APPLIED -> tasks.yaml")
     else:
         print("  dry-run (pass --apply)")

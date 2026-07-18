@@ -6,13 +6,23 @@ resumable surface instead of holding everything in the chat.
 For a closeout successor or a new autonomous initiative, use autonomous capsule mode:
 
 ```bash
-workstream --autonomous --prompt-file /path/to/next-session.md limen next-epoch
+workstream --autonomous --agent auto --conduct --prompt-file /path/to/next-session.md limen next-epoch
 ```
 
-Autonomous mode refuses a missing prompt. Its thin README index is passed to Codex as the initial
-prompt and requires four cohesive local modules: manifest, intent, runtime decision contract, and
-closeout. Runtime evidence derives `continue`, `switch`, `wait_relay`, `settled`, or `invalid`; the
-capsule never pins a future model, task count, duration, or ending.
+Autonomous mode refuses a missing prompt. Its thin README index is passed to the selected native
+agent as the initial prompt and requires four cohesive local modules: manifest, intent, runtime
+decision contract, and closeout. `--agent auto` derives an available installed CLI from the
+canonical Limen census; an explicit canonical lane such as `claude`, `opencode`, `agy`, `copilot`,
+or `codex` preserves that native identity. Runtime evidence derives `continue`, `switch`,
+`wait_relay`, `settled`, or `invalid`; the capsule never pins a future model, task count, duration,
+or ending.
+
+`--conduct` registers the direct session with the shared broker as `human_protected` before the
+agent starts. The generated launcher passes only session, capsule, lineage, task, lease-generation,
+and execution-hash context through environment variables. Broker credentials remain environment
+owned for the registration call: the launcher never writes or prints their values, and removes the
+conduct credential before the native agent process starts. If the broker cannot acknowledge the
+registration, the agent does not start.
 
 ```bash
 /Users/4jp/Workspace/limen/scripts/start-worktree-session.sh --shell --prompt "short objective and constraints" limen my-workstream
@@ -21,7 +31,7 @@ capsule never pins a future model, task count, duration, or ending.
 After `install.sh`, the shortcut is:
 
 ```bash
-workstream --prompt "short objective and constraints" limen my-workstream
+workstream --agent auto --prompt "short objective and constraints" limen my-workstream
 ```
 
 The command works from Terminal, Kitty, Ghostty, Warp, or any normal shell. It creates or reuses
@@ -50,6 +60,9 @@ bash <repo>/.worktrees/<slug>/.limen-workstream/kickstart.sh
 The README only defines module order and the launch command. Each module has one reason to change.
 Identical reruns preserve `created_at`, rewrite no bytes, and report `unchanged`. The
 `.limen-workstream/` directory is locally excluded so capsule creation does not dirty the repo.
+Omitting `--agent` creates the capsule without launching an agent. The generated kickstart records
+the lane selected from the canonical live registry through the same Auto resolver and permits a
+login-shell fallback; no provider receives a privileged default.
 
 ## Current Leads
 

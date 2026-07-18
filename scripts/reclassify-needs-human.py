@@ -40,7 +40,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling scripts/ for _human_signals
 from limen.chronic import CHRONIC_FLEET_DEBT_LABEL, chronic_escalated_to_needs_human  # noqa: E402
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 
 from _human_signals import HUMAN_ID_PREFIXES, HUMAN_SIGNALS, LEVER_MARKER, lever_ids, task_blob  # noqa: E402
 
@@ -216,7 +217,7 @@ def main() -> int:
     if not (flipped or parked):
         print("\n(nothing to change after fresh re-read — already applied.)")
         return 0
-    save_limen_file(path, fresh)
+    apply_limen_file_sync(path, fresh, agent="reclassify-needs-human", session_id="apply")
     print(f"\napplied: flipped {flipped} needs_human->open, parked {parked} needs_human->failed_blocked "
           f"-> {path} (route+dispatch separately).")
     return 0

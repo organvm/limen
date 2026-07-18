@@ -44,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.capacity import LOCAL_CHECKOUT_AGENTS, _weak_proxy_exhaustion, select_lanes  # noqa: E402
 from limen.execution_contract import execution_contract_hash  # noqa: E402
 from limen.intake import IntakeContractError, normalize_selected_legacy_task  # noqa: E402
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.models import DispatchLogEntry  # noqa: E402
 from limen.provider_selection import execution_profile_for  # noqa: E402
 from limen.remote_execution import (  # noqa: E402
@@ -53,6 +53,7 @@ from limen.remote_execution import (  # noqa: E402
     verification_context_for_task,
 )
 from limen.remote_predicate import canonical_json, digest_bytes, digest_text  # noqa: E402
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 from limen.dispatch import (  # noqa: E402
     _apply_result,
     _REMOTE_SUBMISSION_RECEIPTS,
@@ -239,7 +240,7 @@ def _rollback_unlaunched_reservation(
         track = lf.portal.budget.track
         track.spent = max(0, track.spent - cost)
         track.per_agent[agent] = max(0, track.per_agent.get(agent, 0) - cost)
-        save_limen_file(TASKS, lf)
+        apply_limen_file_sync(TASKS, lf, agent="dispatch-async", session_id="launch-failure")
         return True
 
 
@@ -656,7 +657,7 @@ def harvest() -> int:
             )
             rf.unlink(missing_ok=True)
         if applied:
-            save_limen_file(TASKS, lf)
+            apply_limen_file_sync(TASKS, lf, agent="dispatch-async", session_id="harvest")
     return applied
 
 
@@ -865,7 +866,7 @@ def reap_stale(max_age_s: int):
                         applied_markerless.append(tid)
                         changed = True
             if changed:
-                save_limen_file(TASKS, lf)
+                apply_limen_file_sync(TASKS, lf, agent="dispatch-async", session_id="reap-stale")
         for pid in pids_to_kill:
             _kill_worker_group(pid)
         # reopen is committed → now safe to remove the markers that freed these slots
@@ -1403,7 +1404,7 @@ def recover_exact_task(
                 output="dispatch-async: exact orphaned async claim reopened after custody proof",
             )
         )
-        save_limen_file(TASKS, lf)
+        apply_limen_file_sync(TASKS, lf, agent="dispatch-async", session_id="recover-exact")
     for marker in markers_to_remove:
         marker.unlink(missing_ok=True)
     return {"status": "recovered", "recovered_count": 1}
@@ -1669,7 +1670,7 @@ def reserve_and_launch(
             reserved_ids = {tid: by_id[tid].dispatch_log[-1].session_id for _agent, tid in picked}
             if not dry and (picked or reset_changed):
                 try:
-                    save_limen_file(TASKS, lf)
+                    apply_limen_file_sync(TASKS, lf, agent="dispatch-async", session_id="reserve")
                 except Exception:
                     for agent, tid in picked:
                         if agent in LOCAL_CHECKOUT_AGENTS:
