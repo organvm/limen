@@ -5,7 +5,7 @@ from __future__ import annotations
 import ipaddress
 import re
 from datetime import date, datetime
-from typing import Mapping, Sequence
+from typing import Mapping, Sequence, TypedDict, cast
 from urllib.parse import urlparse
 
 from .catalog import select_profile
@@ -41,6 +41,14 @@ _NEGATIVE_SEARCH = re.compile(
     r"\|\s*Disposition:\s*(?P<disposition>.+?)\s*$",
     re.IGNORECASE,
 )
+
+
+class _ReceiptSanitizationKwargs(TypedDict):
+    tracked_output_safe: bool
+    redactions_applied: Sequence[str]
+    contains_credentials: bool
+    contains_private_prompt_body: bool
+    contains_sensitive_raw_material: bool
 
 
 def _normalize_heading(value: str) -> str:
@@ -416,26 +424,28 @@ def ingest_markdown_export(
         if set(attestation.sources) != set(source_by_id):
             errors.append("source_verifier_source_set_mismatch")
         for source_id, source in source_by_id.items():
-            verified = attestation.sources.get(source_id)
-            if verified is None:
+            verified_source = attestation.sources.get(source_id)
+            if verified_source is None:
                 continue
-            if verified.url != source.get("url"):
+            if verified_source.url != source.get("url"):
                 errors.append(f"source_verifier_url_mismatch:{source_id}")
-            elif verified.resolvable:
+            elif verified_source.resolvable:
                 resolvable_ids.add(source_id)
             else:
                 errors.append(f"broken_citation:{source_id}")
-            source["source_type"] = verified.source_type
-            source["primary_source"] = verified.primary_source
-            source["quality_tier"] = verified.quality_tier
-            errors.extend(_source_constraint_errors(request, source, verified))
+            source["source_type"] = verified_source.source_type
+            source["primary_source"] = verified_source.primary_source
+            source["quality_tier"] = verified_source.quality_tier
+            errors.extend(_source_constraint_errors(request, source, verified_source))
         for claim_id, claim in claim_by_id.items():
-            verified = attestation.claims.get(claim_id)
-            if verified is None:
+            verified_claim = attestation.claims.get(claim_id)
+            if verified_claim is None:
                 continue
-            if set(verified.source_ids) != set(str(value) for value in claim["source_ids"]):
+            if set(verified_claim.source_ids) != set(
+                str(value) for value in cast(Sequence[object], claim["source_ids"])
+            ):
                 errors.append(f"source_verifier_claim_sources_mismatch:{claim_id}")
-            claim["verification_status"] = verified.verification_status
+            claim["verification_status"] = verified_claim.verification_status
 
     for source in sources:
         source_id = str(source["source_id"])
@@ -458,7 +468,7 @@ def ingest_markdown_export(
     supported_material_claims = 0
     for claim in claims:
         claim_id = str(claim["claim_id"])
-        claim_sources = [str(item) for item in claim["source_ids"]]
+        claim_sources = [str(item) for item in cast(Sequence[object], claim["source_ids"])]
         if claim["material"]:
             material_claims += 1
             if not claim_sources:
@@ -473,7 +483,9 @@ def ingest_markdown_export(
             if source_id not in source_by_id:
                 errors.append(f"lost_source_metadata:{claim_id}:{source_id}")
 
-    citation_edges = [str(source_id) for claim in claims for source_id in claim.get("source_ids") or ()]
+    citation_edges = [
+        str(source_id) for claim in claims for source_id in cast(Sequence[object], claim.get("source_ids") or ())
+    ]
     primary_count = sum(
         1
         for source_id in citation_edges
@@ -509,8 +521,8 @@ def ingest_markdown_export(
         requested = datetime.fromisoformat(request.requested_at.replace("Z", "+00:00"))
         retrieval_started = datetime.fromisoformat(retrieval_started_at.replace("Z", "+00:00"))
         retrieval_finished = datetime.fromisoformat(retrieval_finished_at.replace("Z", "+00:00"))
-        verified = datetime.fromisoformat(attestation.verified_at.replace("Z", "+00:00"))
-        if not requested <= retrieval_started <= retrieval_finished <= verified:
+        verifier_finished_at = datetime.fromisoformat(attestation.verified_at.replace("Z", "+00:00"))
+        if not requested <= retrieval_started <= retrieval_finished <= verifier_finished_at:
             errors.append("research_timestamps_out_of_order")
     if sanitization is not None:
         retrieval_finished = datetime.fromisoformat(retrieval_finished_at.replace("Z", "+00:00"))
@@ -556,7 +568,7 @@ def ingest_markdown_export(
     except ResearchContractError as exc:
         errors.append(f"tracked_output_sanitization:{exc}")
     tracked_output_safe = sanitization is not None and not errors
-    receipt_sanitization = {
+    receipt_sanitization: _ReceiptSanitizationKwargs = {
         "tracked_output_safe": tracked_output_safe,
         "redactions_applied": (sanitization.redactions_applied if sanitization is not None else ()),
         "contains_credentials": False,
@@ -646,8 +658,10 @@ def ingest_markdown_export(
 
 
 def render_evidence_markdown(packet: Mapping[str, object]) -> str:
-    claims = packet.get("claims") if isinstance(packet.get("claims"), Sequence) else []
-    sources = packet.get("sources") if isinstance(packet.get("sources"), Sequence) else []
+    raw_claims = packet.get("claims")
+    raw_sources = packet.get("sources")
+    claims = cast(Sequence[object], raw_claims) if isinstance(raw_claims, Sequence) else []
+    sources = cast(Sequence[object], raw_sources) if isinstance(raw_sources, Sequence) else []
     lines = [
         f"# Evidence Packet — {packet.get('request_id', '')}",
         "",
@@ -660,7 +674,7 @@ def render_evidence_markdown(packet: Mapping[str, object]) -> str:
     ]
     for item in claims:
         claim = mapping(item, field_name="claim")
-        source_ids = ", ".join(str(value) for value in claim.get("source_ids") or []) or "none"
+        source_ids = ", ".join(str(value) for value in cast(Sequence[object], claim.get("source_ids") or [])) or "none"
         lines.append(
             f"- **{claim.get('claim_id', '')}** [{claim.get('classification', '')}; "
             f"{claim.get('verification_status', '')}] {claim.get('text', '')} "

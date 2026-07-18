@@ -9,7 +9,7 @@ import urllib.request
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Sequence, cast
 
 import yaml
 
@@ -122,7 +122,7 @@ def nonnegative_number(value: object, *, field_name: str, default: float | None 
     if isinstance(value, bool):
         raise ResearchContractError(f"{field_name} must be numeric")
     try:
-        parsed = float(value)
+        parsed = float(cast(Any, value))
     except (TypeError, ValueError) as exc:
         raise ResearchContractError(f"{field_name} must be numeric") from exc
     if parsed < 0:

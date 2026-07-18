@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Sequence, cast
 
 from .contracts import (
     ResearchContractError,
@@ -277,7 +277,7 @@ def health_reasons(
         )
         if machine.get("projected_cost_required") is True and not projected_cost_valid:
             reasons.append("health:projected_cost_missing")
-        elif projected_cost_valid and projected_cost > request.spend_ceiling_usd:
+        elif projected_cost_valid and cast(int | float, projected_cost) > request.spend_ceiling_usd:
             reasons.append("health:projected_cost_exceeds_ceiling")
     return sorted(set(reasons))
 
