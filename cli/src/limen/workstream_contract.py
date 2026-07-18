@@ -16,12 +16,13 @@ import os
 import re
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, cast
 
 SCHEMA = "limen.workstream.contract.v1"
 RECEIPT_SCHEMA = "limen.workstream.receipt.v1"
@@ -620,7 +621,7 @@ def run_bounded(argv: list[str], timeout_seconds: int) -> int:
     )
     previous_handlers = {signum: signal.getsignal(signum) for signum in watched_signals}
     previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, watched_signals)
-    installed_handlers: list[int] = []
+    installed_handlers: list[signal.Signals] = []
     process: subprocess.Popen[Any] | None = None
     process_group_id: int | None = None
     interruption_state: dict[str, int | bool | None] = {
@@ -700,16 +701,16 @@ def run_bounded(argv: list[str], timeout_seconds: int) -> int:
             signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
 
     if start_error is not None:
-        print(f"bounded command failed to start: {start_error}", file=os.sys.stderr)
+        print(f"bounded command failed to start: {start_error}", file=sys.stderr)
         returncode = 127
     if not cleanup_ok:
         print(
             f"bounded command cleanup failed: {argv[0]}",
-            file=os.sys.stderr,
+            file=sys.stderr,
         )
         returncode = 125
     if timed_out:
-        print(f"bounded command timed out after {timeout_seconds}s: {argv[0]}", file=os.sys.stderr)
+        print(f"bounded command timed out after {timeout_seconds}s: {argv[0]}", file=sys.stderr)
     if interrupted_signal is not None:
         signal.raise_signal(interrupted_signal)
     return returncode
@@ -735,7 +736,7 @@ def packet_contract(
         admitted_deadline = admitted_start + seconds
     else:
         admitted_start = started_epoch
-        admitted_deadline = deadline_epoch
+        admitted_deadline = cast(int, deadline_epoch)
     value = {
         "schema": contract["schema"],
         "runway": {
@@ -867,10 +868,10 @@ def main(argv: list[str] | None = None) -> int:
                 command = command[1:]
             return run_bounded(command, args.timeout_seconds)
     except RunwayExpired as exc:
-        print(f"workstream contract expired: {exc}", file=os.sys.stderr)
+        print(f"workstream contract expired: {exc}", file=sys.stderr)
         return 3
     except ContractError as exc:
-        print(f"invalid workstream contract: {exc}", file=os.sys.stderr)
+        print(f"invalid workstream contract: {exc}", file=sys.stderr)
         return 2
     return 0
 

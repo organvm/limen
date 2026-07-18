@@ -5189,7 +5189,7 @@ _UNVERIFIABLE_MODEL_OVERRIDE_PREFIXES = {
 }
 
 
-def _provider_auto_without_catalog(agent: str, task: "Task | None" = None) -> None:
+def _provider_auto_without_catalog(agent: str, task: "Task | None" = None) -> str | None:
     """Delegate to provider Auto when the CLI exposes no live model catalog.
 
     Any legacy model variable is an unverifiable override and therefore blocks

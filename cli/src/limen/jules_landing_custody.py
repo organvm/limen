@@ -170,7 +170,7 @@ def _existing_pr_url(
         if current_head_oid is None or str(row.get("headRefOid") or "") == current_head_oid
     ]
     if matching:
-        latest = max(matching, key=lambda row: int(row.get("number") or 0))
+        latest = max(matching, key=lambda row: int(str(row.get("number") or 0)))
         state = str(latest.get("state") or "").upper()
         if state == "OPEN" or state == "MERGED" or bool(latest.get("mergedAt")):
             return str(latest["url"])
