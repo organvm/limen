@@ -123,7 +123,18 @@ def first_command(gate: dict[str, Any]) -> str:
 # code/config that belongs behind pr-gate; it must never reach a protected origin default through
 # an un-CI'd writer. DATA (tasks.yaml, receipts, logs, other data) is legitimate cargo.
 _SOURCE_SUFFIXES = {
-    ".py", ".sh", ".ts", ".js", ".mjs", ".cjs", ".tsx", ".jsx", ".rs", ".go", ".toml", ".cfg",
+    ".py",
+    ".sh",
+    ".ts",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".tsx",
+    ".jsx",
+    ".rs",
+    ".go",
+    ".toml",
+    ".cfg",
 }
 _SOURCE_NAMES = {"Makefile", "Dockerfile"}
 # *.yml/*.yaml are SOURCE only under these trees (workflows/config); data YAML (tasks.yaml) is not.
@@ -206,21 +217,21 @@ def _main_preservation_branch(paths: list[str]) -> str:
 
 
 def _probe_preservation_pr(repo: Path, branch: str, base: str) -> dict[str, Any]:
-    """Read the in-flight PR before any stable-branch mutation."""
+    """Read the newest PR custody record before any stable-branch mutation."""
     listed = gh(
         repo,
         "pr",
         "list",
         "--state",
-        "open",
+        "all",
         "--base",
         base,
         "--head",
         branch,
         "--json",
-        "number,url,headRefOid",
+        "number,url,headRefOid,state,mergedAt",
         "--limit",
-        "1",
+        "20",
         timeout=30,
     )
     if listed.returncode != 0:
@@ -230,9 +241,15 @@ def _probe_preservation_pr(repo: Path, branch: str, base: str) -> dict[str, Any]
     except json.JSONDecodeError:
         return {"status": "deferred", "reason": "pr-probe-invalid-json"}
     if isinstance(rows, list) and rows:
-        row = rows[0] if isinstance(rows[0], dict) else {}
+        records = [row for row in rows if isinstance(row, dict)]
+        row = next(
+            (record for record in records if str(record.get("state") or "OPEN").upper() == "OPEN"),
+            records[0] if records else {},
+        )
+        state = str(row.get("state") or "OPEN").upper()
+        status = "merged" if state == "MERGED" or row.get("mergedAt") else "open" if state == "OPEN" else "closed"
         return {
-            "status": "open",
+            "status": status,
             "number": row.get("number"),
             "url": row.get("url"),
             "head": row.get("headRefOid"),
@@ -246,10 +263,13 @@ def _ensure_preservation_pr(
     base: str,
     message: str,
     observed: dict[str, Any] | None = None,
+    expected_head: str = "",
 ) -> dict[str, Any]:
     """Boundedly ensure one draft PR owns a stable preservation branch."""
     probe = observed or _probe_preservation_pr(repo, branch, base)
     if probe.get("status") in {"open", "deferred"}:
+        return probe
+    if probe.get("status") == "merged" and probe.get("head") == expected_head:
         return probe
     created = gh(
         repo,
@@ -283,11 +303,54 @@ def _remote_preservation_result(
     message: str,
     coalesced: bool = False,
     observed_pr: dict[str, Any] | None = None,
+    local_ref: str = "",
+    local_expected: str = "",
+    worktree_changed: bool = True,
 ) -> dict[str, Any]:
-    pr = _ensure_preservation_pr(repo, branch, base, message, observed_pr)
-    published = pr.get("status") in {"open", "opened"}
+    remote_ref = f"refs/heads/{branch}"
+    remote_probe = git(repo, "ls-remote", "--heads", "origin", remote_ref, timeout=30)
+    remote_head = ""
+    if remote_probe.returncode == 0:
+        remote_head = next(
+            (line.split()[0] for line in remote_probe.stdout.splitlines() if line.split()),
+            "",
+        )
+    pr = _ensure_preservation_pr(
+        repo,
+        branch,
+        base,
+        message,
+        observed_pr,
+        expected_head=commit,
+    )
+    published = pr.get("status") in {"open", "opened", "merged"}
+    custody_verified = bool(
+        remote_head == commit and pr.get("status") in {"open", "merged"} and pr.get("head") == commit
+    )
+    custody_ref_cleared = False
+    custody_ref_moved = False
+    custody_ref_error = ""
+    local_custody_covered = bool(
+        local_expected
+        and (
+            local_expected == commit or git(repo, "merge-base", "--is-ancestor", local_expected, commit).returncode == 0
+        )
+    )
+    if custody_verified and local_ref and local_custody_covered:
+        deleted = git(repo, "update-ref", "-d", local_ref, local_expected)
+        if deleted.returncode == 0:
+            custody_ref_cleared = True
+        else:
+            current = git(repo, "rev-parse", "--verify", local_ref).stdout.strip()
+            if current and current != local_expected:
+                custody_ref_moved = True
+            elif current:
+                custody_ref_error = f"local-custody-clear-failed:{short_output(deleted, 300)}"
+            else:
+                custody_ref_cleared = True
+    settled = custody_verified and pr.get("status") == "merged" and not worktree_changed
     result: dict[str, Any] = {
-        "changed": True,
+        "changed": custody_ref_cleared or not settled,
         "preserved": True,
         "published": published,
         "coalesced": coalesced,
@@ -296,7 +359,32 @@ def _remote_preservation_result(
         "default_untouched": True,
         "main_untouched": True,
         "pr": pr,
+        "remote_head": remote_head,
+        "custody_verified": custody_verified,
+        "custody_ref_cleared": custody_ref_cleared,
     }
+    if settled:
+        result["settled"] = True
+    if custody_ref_moved:
+        result.update(
+            {
+                "changed": True,
+                "deferred": True,
+                "reason": "local-custody-ref-moved",
+                "custody_ref_retained": "concurrent-update",
+            }
+        )
+    if custody_ref_error:
+        result.update({"changed": True, "deferred": True, "reason": custody_ref_error})
+    if remote_probe.returncode != 0:
+        result.update(
+            {
+                "deferred": True,
+                "reason": f"preservation-remote-head-unverified:{short_output(remote_probe, 300)}",
+            }
+        )
+    elif pr.get("status") in {"open", "merged"} and not custody_verified:
+        result.update({"deferred": True, "reason": "preservation-pr-head-unverified"})
     if not published:
         result.update(
             {
@@ -405,9 +493,7 @@ def _preserve_main_paths(
             }
 
     local_is_remote = bool(
-        local_sha
-        and side_sha
-        and git(repo, "merge-base", "--is-ancestor", local_sha, side_sha).returncode == 0
+        local_sha and side_sha and git(repo, "merge-base", "--is-ancestor", local_sha, side_sha).returncode == 0
     )
     if not worktree_changed and local_sha and not local_is_remote:
         # The operator may clean the worktree after a failed push. Retry the
@@ -422,6 +508,9 @@ def _preserve_main_paths(
             message=message,
             coalesced=True,
             observed_pr=pr_probe,
+            local_ref=local_ref,
+            local_expected=local_sha,
+            worktree_changed=worktree_changed,
         )
     elif not worktree_changed and not local_sha:
         if side_sha:
@@ -433,6 +522,8 @@ def _preserve_main_paths(
                 message=message,
                 coalesced=True,
                 observed_pr=pr_probe,
+                local_ref=local_ref,
+                worktree_changed=worktree_changed,
             )
         return {"changed": False, "skipped": "already-on-origin-default", "branch": branch}
     else:
@@ -524,6 +615,7 @@ def _preserve_main_paths(
                 "branch": branch,
                 "commit": commit_sha,
             }
+        local_sha = commit_sha
 
     # An open PR is an immutable integration packet. Preserve newer content on
     # the local retry ref, but never move its stable remote head mid-CI/queue.
@@ -552,6 +644,9 @@ def _preserve_main_paths(
             message=message,
             coalesced=True,
             observed_pr=pr_probe,
+            local_ref=local_ref,
+            local_expected=local_sha,
+            worktree_changed=worktree_changed,
         )
     if pr_probe.get("status") == "deferred":
         return {
@@ -587,6 +682,9 @@ def _preserve_main_paths(
         message=message,
         coalesced=side_sha == commit_sha,
         observed_pr=pr_probe,
+        local_ref=local_ref,
+        local_expected=local_sha,
+        worktree_changed=worktree_changed,
     )
 
 
@@ -637,11 +735,7 @@ def commit_paths(repo: Path, paths: list[str], message: str, apply: bool) -> dic
     add = git(repo, "add", *paths)
     if add.returncode != 0:
         return {"changed": True, "error": f"git add failed: {short_output(add)}"}
-    staged = {
-        line.strip()
-        for line in git(repo, "diff", "--cached", "--name-only").stdout.splitlines()
-        if line.strip()
-    }
+    staged = {line.strip() for line in git(repo, "diff", "--cached", "--name-only").stdout.splitlines() if line.strip()}
     normalized = {Path(path).as_posix() for path in paths}
     if not staged <= normalized:
         git(repo, "reset", "-q", "--", *staged)
@@ -871,7 +965,9 @@ def advance_photos(apply: bool, limit_groups: int) -> dict[str, Any]:
     if not repo_clean(PHOTOS):
         return {"ok": False, "skipped": "photos repo dirty"}
     receipt = "docs/photos-universe-duplicate-proof-2026-06-29.json"
-    dry = run(["python3", "scripts/photos-duplicate-proof.py", "--limit-groups", str(limit_groups), "--dry-run"], PHOTOS)
+    dry = run(
+        ["python3", "scripts/photos-duplicate-proof.py", "--limit-groups", str(limit_groups), "--dry-run"], PHOTOS
+    )
     dry_data = load_json_output(dry)
     if dry_data is None:
         detail = short_output(dry)
@@ -980,11 +1076,7 @@ def refresh_portvs_proxy(apply: bool) -> dict[str, Any]:
         apply,
     )
     return {
-        "ok": (
-            lifecycle.returncode == 0
-            and _commit_paths_ok(commit, apply)
-            and _commit_paths_ok(limen_commit, apply)
-        ),
+        "ok": (lifecycle.returncode == 0 and _commit_paths_ok(commit, apply) and _commit_paths_ok(limen_commit, apply)),
         "generator": short_output(proc, 500),
         "gates": gates,
         "commit": commit,

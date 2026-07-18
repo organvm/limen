@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import tempfile
 from pathlib import Path
@@ -53,3 +54,47 @@ with tempfile.TemporaryDirectory() as tmp:
 assert result["action"] == "refused_default_branch", result
 assert result["branch"] == result["base"] == "main", result
 print("PASS: lifecycle receipt publisher refuses the repository default branch before any push")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    receipt_path = root / "worktree-preservation-receipts.json"
+    receipt_path.write_text('{"receipts": []}\n', encoding="utf-8")
+    module.PRESERVATION_RECEIPTS = receipt_path
+    module.pr_view = lambda cwd, repo, number_or_url: {
+        "number": 42,
+        "state": "OPEN",
+        "isDraft": True,
+        "headRefName": "work/idempotent-receipt",
+        "headRefOid": "a" * 40,
+        "url": "https://github.com/organvm/limen/pull/42",
+    }
+
+    rows = [
+        {
+            "action": "pr_exists",
+            "branch": "work/idempotent-receipt",
+            "name": "idempotent-receipt",
+            "path": str(root),
+            "pr": {
+                "state": "OPEN",
+                "url": "https://github.com/organvm/limen/pull/42",
+            },
+            "repo": "organvm/limen",
+            "url": "https://github.com/organvm/limen/pull/42",
+        }
+    ]
+
+    first = module.update_preservation_receipts(rows, apply=True)
+    first_bytes = receipt_path.read_bytes()
+    first_data = json.loads(first_bytes)
+    first_timestamp = first_data["receipts"][0]["evidence_updated_utc"]
+    second = module.update_preservation_receipts(rows, apply=True)
+    second_bytes = receipt_path.read_bytes()
+    second_data = json.loads(second_bytes)
+
+assert first == {"updated": 1, "dry_run": False}, first
+assert second == {"updated": 0, "dry_run": False}, second
+assert second_bytes == first_bytes
+assert second_data["receipts"][0]["evidence_updated_utc"] == first_timestamp
+print("PASS: unchanged preservation evidence is an idempotent apply fixed point")
