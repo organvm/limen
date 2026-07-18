@@ -2,14 +2,32 @@
 #    uv pip compile pyproject.toml -o requirements.txt
 annotated-types==0.7.0
     # via pydantic
+attrs==26.1.0
+    # via
+    #   jsonschema
+    #   referencing
 click==8.4.2
     # via limen (pyproject.toml)
+jsonschema==4.26.0
+    # via limen (pyproject.toml)
+jsonschema-specifications==2025.9.1
+    # via jsonschema
 pydantic==2.13.4
     # via limen (pyproject.toml)
-pydantic-core==2.47.0
+pydantic-core==2.46.4
     # via pydantic
 pyyaml==6.0.3
     # via limen (pyproject.toml)
+referencing==0.37.0
+    # via
+    #   jsonschema
+    #   jsonschema-specifications
+rfc8785==0.1.4
+    # via limen (pyproject.toml)
+rpds-py==2026.6.3
+    # via
+    #   jsonschema
+    #   referencing
 typing-extensions==4.16.0
     # via
     #   pydantic

@@ -958,6 +958,210 @@ parameters:
     self_update: none
     owner: continuity
     note: "Heartbeat timeout in seconds for the corpus-feed outer process so prompt ingestion cannot wedge the beat."
+  LIMEN_GOV_SOURCE_CENSUS:
+    default: ""
+    env: LIMEN_GOV_SOURCE_CENSUS
+    self_update: none
+    owner: continuity
+    note: "Optional path to the source-custody owner's acquisition-specific source-census.v1 for one frozen snapshot. Blank remains explicit coverage debt; Limen never substitutes a local provider scan."
+  LIMEN_GOV_SCHEMA_ROOT:
+    default: ""
+    env: LIMEN_GOV_SCHEMA_ROOT
+    self_update: none
+    owner: continuity
+    note: "Checkout or installed artifact containing the public governance-memory schemas used by strict readiness. Blank fails strict mode; Limen never substitutes private or handwritten shapes."
+  LIMEN_GOV_SNAPSHOT_ID:
+    default: ""
+    env: LIMEN_GOV_SNAPSHOT_ID
+    self_update: none
+    owner: continuity
+    note: "Stable identifier of the frozen governance snapshot shared by every owner receipt. Derived by the custody owner; never synthesized from wall-clock time by Limen."
+  LIMEN_GOV_SNAPSHOT_AT:
+    default: ""
+    env: LIMEN_GOV_SNAPSHOT_AT
+    self_update: none
+    owner: continuity
+    note: "Timezone-qualified ISO-8601 cutoff of the frozen governance snapshot. Every stage receives the same immutable value."
+  LIMEN_GOV_CONFIG:
+    default: ""
+    env: LIMEN_GOV_CONFIG
+    self_update: none
+    owner: continuity
+    note: "Runtime JSON/YAML owner-command configuration for the nine-stage governance cadence. Provider and worktree additions or renames are configuration-only."
+  LIMEN_GOV_RUN_ROOT:
+    default: "$LIMEN_SCRATCH_ROOT/limen-private/governance-memory/runs"
+    env: LIMEN_GOV_RUN_ROOT
+    self_update: none
+    owner: continuity
+    note: "Private non-backed Scratch root for bounded stage artifacts, capped logs, cursors, and receipts. The cadence appends the frozen snapshot ID and verifies the config-bound Domus mount/device/backup-exclusion receipt; public receipts never expose this path."
+  LIMEN_GOV_SCRATCH_AUTHORITY_RECEIPT:
+    default: ""
+    env: LIMEN_GOV_SCRATCH_AUTHORITY_RECEIPT
+    self_update: none
+    owner: continuity
+    note: "Private path to the exact Domus-owned non-backed Scratch mount/device/backup-exclusion receipt. Governance config may expand this value; missing or stale authority fails closed."
+  LIMEN_GOV_FINAL_RECEIPT_ROOT:
+    default: "$LIMEN_ARCHIVE4T_ROOT/limen-private/governance-memory/final-receipts"
+    env: LIMEN_GOV_FINAL_RECEIPT_ROOT
+    self_update: none
+    owner: continuity
+    note: "Archive4T base for the four hash-verified final governance receipts. The config and wrappers append the frozen snapshot ID; intermediates, logs, metrics, and attempt ledgers never enter this root."
+  LIMEN_GOV_RUNTIME_BOOTSTRAPPED:
+    default: "0"
+    env: LIMEN_GOV_RUNTIME_BOOTSTRAPPED
+    self_update: none
+    owner: continuity
+    note: "Cadence-internal recursion guard set only while re-executing under Limen's owned Python runtime when system Python lacks the schema dependencies."
+  LIMEN_GOV_STAGE:
+    default: ""
+    env: LIMEN_GOV_STAGE
+    self_update: none
+    owner: continuity
+    note: "Cadence-internal current stage name. The orchestrator injects one of the nine canonical stages into the bounded owner command; operators do not set it."
+  LIMEN_GOV_STAGE_ATTEMPT:
+    default: ""
+    env: LIMEN_GOV_STAGE_ATTEMPT
+    self_update: none
+    owner: continuity
+    note: "Cadence-internal compatibility field injected as 1. Stages never retry blindly; the snapshot-bound full-attempt ledger and verified repair receipt govern a second execution pass."
+  LIMEN_GOV_STAGE_METRICS_OUT:
+    default: ""
+    env: LIMEN_GOV_STAGE_METRICS_OUT
+    self_update: none
+    owner: continuity
+    note: "Cadence-internal metrics target under the isolated run root. Each owner command records its cursor, completed children, and emitted event count here."
+  LIMEN_GOV_TRAVERSAL:
+    default: ""
+    env: LIMEN_GOV_TRAVERSAL
+    self_update: none
+    owner: continuity
+    note: "Cadence-internal traversal number. Traversal 1 may execute incomplete children; traversal 2 and later are proof passes that must skip every completed child."
+  LIMEN_GOV_PROOF_MODE:
+    default: ""
+    env: LIMEN_GOV_PROOF_MODE
+    self_update: none
+    owner: continuity
+    note: "Cadence-internal proof flag. 1 requires byte-identical owner outputs, zero emitted events, and exact skipped_completed child-receipt bindings."
+  LIMEN_GOV_PRIOR_STAGE_RECEIPT:
+    default: ""
+    env: LIMEN_GOV_PRIOR_STAGE_RECEIPT
+    self_update: none
+    owner: continuity
+    note: "Cadence-internal path to the already validated stage receipt used by proof-mode owners to bind each skipped child to its prior digest."
+  LIMEN_GOV_PREDICATE_MODE:
+    default: ""
+    env: LIMEN_GOV_PREDICATE_MODE
+    self_update: none
+    owner: continuity
+    note: "Cadence-internal flag set only while the orchestrator independently executes the stage's configured acceptance predicate."
+  LIMEN_GOV_PREDECESSOR_RECEIPT_DIGEST:
+    default: ""
+    env: LIMEN_GOV_PREDECESSOR_RECEIPT_DIGEST
+    self_update: none
+    owner: continuity
+    note: "Cadence-internal exact predecessor receipt binding. Empty only for discover; every later stage receives the prior stage receipt digest."
+  LIMEN_GOV_MAX_ITEMS:
+    default: ""
+    env: LIMEN_GOV_MAX_ITEMS
+    self_update: none
+    owner: continuity
+    note: "Cadence-internal finite item ceiling copied from the current stage execution profile."
+  LIMEN_GOV_SNAPSHOT_BUNDLE:
+    default: ""
+    env: LIMEN_GOV_SNAPSHOT_BUNDLE
+    self_update: none
+    owner: continuity
+    note: "Path to governance-snapshot-bundle.v1, binding the complete typed owner artifact set and exact digests for one frozen snapshot."
+  LIMEN_GOV_CADENCE_RECEIPT:
+    default: ""
+    env: LIMEN_GOV_CADENCE_RECEIPT
+    self_update: none
+    owner: continuity
+    note: "Path to the ordered run-one/run-two governance-cadence-receipt.v1 collection. Strict readiness also rejects sibling active or invalidated markers."
+  LIMEN_GOV_STAGE_RECEIPTS:
+    default: ""
+    env: LIMEN_GOV_STAGE_RECEIPTS
+    self_update: none
+    owner: continuity
+    note: "Path to the exact nine governance-stage-receipt.v1 owner receipts. Strict readiness validates their full input/output observations, predicate identity, predecessor chain, and binding to the final snapshot bundle."
+  LIMEN_GOV_SOURCE_ENVELOPES:
+    default: ""
+    env: LIMEN_GOV_SOURCE_ENVELOPES
+    self_update: none
+    owner: continuity
+    note: "Optional path to the normalization owner's deterministic source-envelope.v1 bundle for the same frozen snapshot; separate from acquisition census and raw custody."
+  LIMEN_GOV_NORMALIZED_EVENTS:
+    default: ""
+    env: LIMEN_GOV_NORMALIZED_EVENTS
+    self_update: none
+    owner: continuity
+    note: "Path to the normalized-event.v1 set generated from the exact custody snapshot. Stable event identity excludes snapshot ID, transport position, provider order, and line number."
+  LIMEN_GOV_NORMALIZATION_PARITY:
+    default: ""
+    env: LIMEN_GOV_NORMALIZATION_PARITY
+    self_update: none
+    owner: continuity
+    note: "Path to normalization-parity-receipt.v1 containing the complete raw-unit to event-or-disposition promotion crosswalk."
+  LIMEN_GOV_LINEAGE_GRAPH:
+    default: ""
+    env: LIMEN_GOV_LINEAGE_GRAPH
+    self_update: none
+    owner: continuity
+    note: "Optional path to the graph owner's lineage-graph.v1 receipt. The receipt must keep operator-intent and artifact authority lanes distinct."
+  LIMEN_GOV_TESTAMENT:
+    default: ""
+    env: LIMEN_GOV_TESTAMENT
+    self_update: none
+    owner: continuity
+    note: "Optional path to the constitutional owner's governance-testament.v1 candidate or ratification receipt. Strict readiness accepts current authority only when the public ratification predicates pass; Limen never self-ratifies doctrine."
+  LIMEN_GOV_ASSERTION_EVIDENCE:
+    default: ""
+    env: LIMEN_GOV_ASSERTION_EVIDENCE
+    self_update: none
+    owner: continuity
+    note: "Optional path to the assertion-evidence.v1 receipt used to enforce independent evidence groups without exposing source bodies."
+  LIMEN_GOV_COVERAGE_RECEIPT:
+    default: ""
+    env: LIMEN_GOV_COVERAGE_RECEIPT
+    self_update: none
+    owner: continuity
+    note: "Optional path to the coverage-receipt.v1 denominator and exactly-once classification counts for the same frozen snapshot."
+  LIMEN_GOV_ICEBERG_ATLAS:
+    default: ""
+    env: LIMEN_GOV_ICEBERG_ATLAS
+    self_update: none
+    owner: continuity
+    note: "Optional path to the engine-owned deterministic Iceberg Atlas projection. The readiness verifier sanitizes it before the Command Center reads it."
+  LIMEN_GOV_IDEAL_FORMS:
+    default: ""
+    env: LIMEN_GOV_IDEAL_FORMS
+    self_update: none
+    owner: continuity
+    note: "Path to ideal-form-register.v1. Status and implementation distance must be derived from receipt-backed predicate results, not handwritten pass/fail values."
+  LIMEN_GOV_ATLAS_RECEIPT:
+    default: ""
+    env: LIMEN_GOV_ATLAS_RECEIPT
+    self_update: none
+    owner: continuity
+    note: "Path to governance-atlas-receipt.v1 binding the exact Atlas, ideal-form, lineage, assertion, and self-image digests."
+  LIMEN_GOV_SELF_IMAGES:
+    default: ""
+    env: LIMEN_GOV_SELF_IMAGES
+    self_update: none
+    owner: continuity
+    note: "Optional path to node-self-image-set.v1 proving exactly one fresh, traceable self-image for every registered node in the frozen snapshot."
+  LIMEN_GOV_READINESS_OUT:
+    default: "$LIMEN_ROOT/logs/governance-memory-readiness.json"
+    env: LIMEN_GOV_READINESS_OUT
+    self_update: none
+    owner: continuity
+    note: "Redacted deterministic readiness receipt consumed by the Corpus Command Center; contains no raw bodies or configured source paths."
+  LIMEN_GOV_INPUT_MAX_BYTES:
+    default: 268435456
+    env: LIMEN_GOV_INPUT_MAX_BYTES
+    self_update: none
+    owner: continuity
+    note: "Finite per-owner-artifact byte cap for governance-memory validation; sized for the real body-free event and envelope projections. Oversized inputs are quarantined independently so unrelated receipts continue."
   LIMEN_CAPABILITY_ROOTS:
     default: ""
     env: LIMEN_CAPABILITY_ROOTS

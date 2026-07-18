@@ -28,6 +28,7 @@ def _wire_paths(ccc, tmp_path: Path):
     ccc.PRIVATE_HTML = ccc.PRIVATE_ROOT / "lifecycle" / "corpus-command-center.private.html"
     ccc.BODY_OBJECT_ROOT = ccc.PRIVATE_ROOT / "corpus-command-center" / "objects"
     ccc.DOC_PATH = tmp_path / "docs" / "corpus-command-center.md"
+    ccc.GOVERNANCE_READINESS_PATH = tmp_path / "logs" / "governance-memory-readiness.json"
     ccc.TASKS_PATH = tmp_path / "tasks.yaml"
     ccc.AUG1_VIEW_PATH = tmp_path / "logs" / "aug1-view.json"
     ccc.VALUE_REPOS_PATH = tmp_path / "value-repos.json"
@@ -189,6 +190,8 @@ tasks:
     assert any(row["absent_adjacent_atoms"] for row in private["allusions"])
     assert public["aug1"]["legs_met"] == 1
     assert public["inbound"]["scraper_model_present"] is True
+    assert public["iceberg_atlas"]["status"] == "missing"
+    assert public["iceberg_atlas"]["blocker_count"] == 1
 
     public_text = json.dumps(public)
     for forbidden in [
@@ -210,6 +213,60 @@ tasks:
     assert "RAW_PRIVATE_PROMPT" in ccc.PRIVATE_HTML.read_text(encoding="utf-8")
     assert ccc.DOC_PATH.exists()
     assert "Corpus Command Center" in ccc.DOC_PATH.read_text(encoding="utf-8")
+
+
+def test_command_center_consumes_only_redacted_governance_atlas_projection(tmp_path: Path):
+    ccc = _load()
+    _wire_paths(ccc, tmp_path)
+    ccc.GOVERNANCE_READINESS_PATH.parent.mkdir(parents=True)
+    ccc.GOVERNANCE_READINESS_PATH.write_text(
+        json.dumps(
+            {
+                "surface": "redacted-read-model",
+                "status": "degraded",
+                "snapshot_id": "snapshot-fixture",
+                "coverage": {"exact_all": True, "residual_count": 2},
+                "blockers": [{"id": "blocked-a"}, {"id": "blocked-b"}],
+                "atlas": {
+                    "zoom_levels": [{"id": "system", "node_count": 1}, {"id": "atom", "node_count": 44}],
+                    "timeline_counts": {"operator_intent": 11, "artifact": 19},
+                    "ideal_forms": [
+                        {
+                            "id": "prime-directive",
+                            "implementation_state": "partial",
+                            "distance_to_ideal": 3,
+                            "citation_debt": 1,
+                        }
+                    ],
+                    "self_image_count": 7,
+                    "private_source_path": "/private/must-not-propagate",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    panel = ccc.governance_atlas_panel()
+
+    assert panel == {
+        "status": "degraded",
+        "snapshot_id": "snapshot-fixture",
+        "exact_all": True,
+        "residual_count": 2,
+        "blocker_count": 2,
+        "zoom_levels": [{"id": "system", "node_count": 1}, {"id": "atom", "node_count": 44}],
+        "timeline_counts": {"operator_intent": 11, "artifact": 19},
+        "ideal_forms": [
+            {
+                "id": "prime-directive",
+                "implementation_state": "partial",
+                "distance_to_ideal": 3,
+                "citation_debt": 1,
+            }
+        ],
+        "self_image_count": 7,
+    }
+    assert "/private" not in json.dumps(panel)
 
 
 def test_doc_candidates_include_control_plane_receipts(tmp_path: Path):

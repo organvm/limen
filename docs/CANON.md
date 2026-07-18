@@ -14,13 +14,13 @@
 - **Reversible via:** reopen quaestor issue #4 / its decisions card
 - **Summoned into:** FLAME, corpus, memory:mpo-resolved-quaestor-owns
 
-## Governance organ = aerarium / Cvrsvs Honorvm — operationalized as an autonomic beat  `EVO-002`
+## CORPVS owns constitutional authority; ratification is evidence-gated; Limen runs the bounded operational read model  `EVO-002`
 
-The governance organ (Aerarium / Cvrsvs Honorvm) is the VLTIMA body's constitutional office. It holds the cursus honorum (INCUBATOR → ALPHA → BETA → STABLE → MATURE) as executable validation (validate-seed.py), tracks repo standing via seed.yaml declarations, and runs autonomously every C_GOVERNANCE beat. The organ was self-feed wired on 2026-07-01: generator hook confirmed, EVOCATOR canon registered, voice stamp active, seed.yaml first assertion created. Rules are operationalized as validatable checks — the "conceptual, not operationalized" constraint is resolved. The aerarium--res-publica infrastructure remains partial (infra note).
+The Governance Organ has two non-competing layers. CORPVS is the constitutional owner for directives, axioms, instruments, ideal forms, amendments, and supersession. Candidate status is honest until the controlling formulation, immutable operator events, assertion evidence, and constitutional coverage pass the public contracts; only the resulting owner ratification receipt makes a testament current authority. Limen's Aerarium / Cvrsvs Honorvm is the operational read model and bounded scheduler: it enforces the cursus honorum locally, consumes typed owner receipts, keeps missing or inaccessible sources visible as coverage debt, and never promotes assistant prose into operator authority. Absence or mismatch degrades readiness instead of falling back to Limen-local prose.
 
-- **Source of record:** limen/organs/governance/
-- **Confidence:** high · **Resolved:** 2026-07-01
-- **Reversible via:** edit organs/governance/KERNEL.md or validate-seed.py; revert organ-ladder.json maturity
+- **Source of record:** parameter-contract:LIMEN_GOV_TESTAMENT
+- **Confidence:** high · **Resolved:** 2026-07-16
+- **Reversible via:** supersede the evidence-backed CORPVS owner receipt and update LIMEN_GOV_TESTAMENT; keep local validator rollback separate
 - **Summoned into:** FLAME, corpus, memory:governance-organ-self-feed
 
 ## "find" = build the portal  `EVO-003`

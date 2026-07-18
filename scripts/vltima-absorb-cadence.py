@@ -13,11 +13,14 @@ import datetime as dt
 import json
 import os
 import re
+import signal
 import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1])).expanduser().resolve()
@@ -27,6 +30,11 @@ PRIVATE_ROOT = Path(
 DOC_PATH = ROOT / "docs" / "vltima-absorb-cadence.md"
 PRIVATE_INDEX = PRIVATE_ROOT / "lifecycle" / "vltima-absorb-cadence.json"
 WORKSPACE_CHECKOUT_RE = re.compile(r"/(?:Users|home)/[^/\s`]+/Workspace/limen(?=/|$)")
+GOVERNANCE_RECEIPT_FILENAMES = {
+    "LIMEN_GOV_STAGE_RECEIPTS": "governance-stage-receipts.v1.json",
+    "LIMEN_GOV_CADENCE_RECEIPT": "governance-cadence-receipts.v1.json",
+    "LIMEN_GOV_SNAPSHOT_BUNDLE": "governance-snapshot-bundle.v1.json",
+}
 
 
 @dataclass(frozen=True)
@@ -76,10 +84,16 @@ BASE_STEPS: tuple[CadenceStep, ...] = (
         reason="turn ranked paths into priority bands and review batches",
     ),
     CadenceStep(
+        id="governance-memory-readiness",
+        phase="validate",
+        command=("python3", "scripts/governance-memory-readiness.py", "--strict", "--write"),
+        reason="verify coherent owner receipts, exact source classification, bounded stage cursors, and fixed-point identity",
+    ),
+    CadenceStep(
         id="command-center",
-        phase="distill",
+        phase="render",
         command=("python3", "scripts/corpus-command-center.py", "--write"),
-        reason="distill prompts, artifacts, tasks, products, and inbound positioning",
+        reason="render prompts, artifacts, tasks, products, positioning, and the verified Iceberg Atlas read model",
     ),
     CadenceStep(
         id="substrate-ledger",
@@ -116,6 +130,91 @@ MATERIALIZE_STEP = CadenceStep(
 )
 
 
+def governance_memory_run_dir() -> Path | None:
+    snapshot_id = os.environ.get("LIMEN_GOV_SNAPSHOT_ID", "").strip()
+    run_root = os.environ.get("LIMEN_GOV_RUN_ROOT", "").strip()
+    if not snapshot_id or not run_root:
+        return None
+    return Path(run_root).expanduser() / snapshot_id
+
+
+def governance_final_receipt_dir() -> Path | None:
+    snapshot_id = os.environ.get("LIMEN_GOV_SNAPSHOT_ID", "").strip()
+    final_root = os.environ.get("LIMEN_GOV_FINAL_RECEIPT_ROOT", "").strip()
+    if not snapshot_id or not final_root:
+        return None
+    candidate = Path(final_root).expanduser() / snapshot_id
+    required = {
+        *GOVERNANCE_RECEIPT_FILENAMES.values(),
+        "post-proof-idempotence.v1.json",
+    }
+    if all((candidate / filename).is_file() for filename in required):
+        return candidate
+    return None
+
+
+def governance_receipt_environment() -> dict[str, str]:
+    receipt_dir = governance_final_receipt_dir() or governance_memory_run_dir()
+    if receipt_dir is None:
+        return {}
+    return {
+        name: os.environ.get(name, "").strip() or str(receipt_dir / filename)
+        for name, filename in GOVERNANCE_RECEIPT_FILENAMES.items()
+    }
+
+
+def governance_memory_outer_timeout(default: int) -> int:
+    config_text = os.environ.get("LIMEN_GOV_CONFIG", "").strip()
+    if not config_text:
+        return default
+    try:
+        document = yaml.safe_load(Path(config_text).expanduser().read_text(encoding="utf-8"))
+        stages = document["stages"]
+        if not isinstance(stages, dict) or len(stages) != 9:
+            return default
+        stage_timeouts = [int(stage["execution_profile"]["timeout_seconds"]) for stage in stages.values()]
+        if any(value <= 0 or value > 86_400 for value in stage_timeouts):
+            return default
+    except (KeyError, OSError, TypeError, ValueError, yaml.YAMLError):
+        return default
+    # Each stage has one owner and one independent predicate command in both
+    # execution and proof traversal. The cadence enforces each inner timeout;
+    # this outer bound prevents VLTIMA's generic 900-second cap from killing a
+    # valid, internally bounded snapshot attempt.
+    return max(default, (4 * sum(stage_timeouts)) + 60)
+
+
+def governance_memory_cadence_step() -> CadenceStep | None:
+    snapshot_id = os.environ.get("LIMEN_GOV_SNAPSHOT_ID", "").strip()
+    snapshot_at = os.environ.get("LIMEN_GOV_SNAPSHOT_AT", "").strip()
+    config = os.environ.get("LIMEN_GOV_CONFIG", "").strip()
+    run_dir = governance_memory_run_dir()
+    if not all((snapshot_id, snapshot_at, config)) or run_dir is None:
+        return None
+    return CadenceStep(
+        id="governance-memory-cadence",
+        phase="validate",
+        command=(
+            "python3",
+            "scripts/governance-memory-cadence.py",
+            "--snapshot-id",
+            snapshot_id,
+            "--snapshot-at",
+            snapshot_at,
+            "--config",
+            config,
+            "--run-root",
+            str(run_dir),
+            "--strict",
+            "--write",
+        ),
+        reason=(
+            "execute one repair-gated bounded snapshot attempt, prove the unchanged "
+            "owner traversal, and promote only final receipts"
+        ),
+    )
+
+
 def now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
@@ -131,6 +230,15 @@ def tail(text: str, *, limit: int = 12) -> list[str]:
 
 def public_line(text: Any) -> str:
     line = str(text)
+    configured_aliases = {
+        "LIMEN_GOV_CONFIG": os.environ.get("LIMEN_GOV_CONFIG", "").strip(),
+        "LIMEN_GOV_RUN_ROOT": os.environ.get("LIMEN_GOV_RUN_ROOT", "").strip(),
+        "LIMEN_GOV_SCRATCH_AUTHORITY_RECEIPT": os.environ.get("LIMEN_GOV_SCRATCH_AUTHORITY_RECEIPT", "").strip(),
+        "LIMEN_GOV_FINAL_RECEIPT_ROOT": os.environ.get("LIMEN_GOV_FINAL_RECEIPT_ROOT", "").strip(),
+    }
+    for name, value in configured_aliases.items():
+        if value:
+            line = line.replace(str(Path(value).expanduser()), f"${name}")
     root_aliases = {
         str(ROOT),
         str(Path.cwd()),
@@ -147,6 +255,10 @@ def public_line(text: Any) -> str:
 
 def cadence_steps(*, materialize_private: bool) -> list[CadenceStep]:
     steps = list(BASE_STEPS)
+    governance_step = governance_memory_cadence_step()
+    readiness_index = next(index for index, step in enumerate(steps) if step.id == "governance-memory-readiness")
+    if governance_step is not None:
+        steps.insert(readiness_index, governance_step)
     if materialize_private:
         steps.insert(1, MATERIALIZE_STEP)
     return steps
@@ -154,39 +266,52 @@ def cadence_steps(*, materialize_private: bool) -> list[CadenceStep]:
 
 def run_step(step: CadenceStep, *, timeout: int) -> dict[str, Any]:
     started = time.monotonic()
+    environment = os.environ.copy()
+    if step.id == "governance-memory-readiness":
+        environment.update(governance_receipt_environment())
+    process = subprocess.Popen(
+        list(step.command),
+        cwd=ROOT,
+        env=environment,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+    )
     try:
-        proc = subprocess.run(
-            list(step.command),
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            timeout=timeout,
-        )
+        stdout, stderr = process.communicate(timeout=timeout)
         duration = round(time.monotonic() - started, 3)
         return {
             "id": step.id,
             "phase": step.phase,
-            "command": shell_join(step.command),
+            "command": public_line(shell_join(step.command)),
             "reason": step.reason,
             "optional": step.optional,
-            "returncode": proc.returncode,
+            "returncode": process.returncode,
             "duration_seconds": duration,
-            "stdout_tail": tail(proc.stdout),
-            "stderr_tail": tail(proc.stderr),
-            "status": "ok" if proc.returncode == 0 else "failed",
+            "stdout_tail": tail(stdout),
+            "stderr_tail": tail(stderr),
+            "status": "ok" if process.returncode == 0 else "failed",
         }
-    except subprocess.TimeoutExpired as exc:
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGTERM)
+        try:
+            stdout, stderr = process.communicate(timeout=2)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            stdout, stderr = process.communicate()
         duration = round(time.monotonic() - started, 3)
         return {
             "id": step.id,
             "phase": step.phase,
-            "command": shell_join(step.command),
+            "command": public_line(shell_join(step.command)),
             "reason": step.reason,
             "optional": step.optional,
             "returncode": None,
             "duration_seconds": duration,
-            "stdout_tail": tail(exc.stdout or ""),
-            "stderr_tail": tail(exc.stderr or ""),
+            "stdout_tail": tail(stdout or ""),
+            "stderr_tail": tail(stderr or ""),
             "status": "timeout",
         }
 
@@ -202,9 +327,17 @@ def build_receipt(
     results: list[dict[str, Any]] = []
     if execute:
         for step in steps:
-            result = run_step(step, timeout=timeout)
+            step_timeout = (
+                governance_memory_outer_timeout(timeout) if step.id == "governance-memory-cadence" else timeout
+            )
+            result = run_step(step, timeout=step_timeout)
             results.append(result)
             if stop_on_failure and result["status"] != "ok":
+                if step.id == "governance-memory-cadence":
+                    # Refresh the fail-closed read model after cadence failure;
+                    # otherwise an older green readiness receipt could outlive
+                    # an active/invalidated proof marker.
+                    continue
                 break
     else:
         for step in steps:
@@ -212,7 +345,7 @@ def build_receipt(
                 {
                     "id": step.id,
                     "phase": step.phase,
-                    "command": shell_join(step.command),
+                    "command": public_line(shell_join(step.command)),
                     "reason": step.reason,
                     "optional": step.optional,
                     "status": "planned",
@@ -252,6 +385,7 @@ def render_markdown(receipt: dict[str, Any]) -> str:
         "",
         "- Local AI app chats, projects, plans, tasks, histories, and app-store movement are continual corpus input.",
         "- The cadence absorbs movement as private/redacted evidence first; brainstorms do not become current authority by default.",
+        "- Governance memory follows the bounded owner contract `discover → snapshot → parse → classify → reconcile → distill → validate → render → receipt`; Limen verifies its receipts and renders the redacted read model.",
         "- `--materialize-private` is explicit because it copies raw local material into the ignored private object store.",
         "- This runner does not edit `tasks.yaml`, delete repos, clean branches, push remotes, or handle credentials.",
         "",

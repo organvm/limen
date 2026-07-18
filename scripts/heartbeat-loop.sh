@@ -602,10 +602,42 @@ while true; do
   due_voice life "$C_LIFE"    && { python3 "$LIMEN_ROOT/scripts/life-organ.py" 2>&1 | tail -1 || true; stamp life; }
   # GOVERNANCE — run the cursus honorum seed validator + governance standing report every C_GOVERNANCE
   # beats. Operationalizes the governance rules (cvrsvs-honorvm) as an autonomous beat: validates
-  # every seed.yaml in the estate, stamps the governance voice for proprioception. Read-only,
-  # lockless, idempotent, fail-open — never gates the beat. Gate off with LIMEN_GOVERNANCE=0.
+  # every seed.yaml in the estate, advances the configured bounded cross-owner cadence when its
+  # frozen-snapshot contract is complete, verifies its receipts, and stamps the governance voice.
+  # The cadence is deterministic, resumable, and aggregate-byte-bounded. Intermediates stay on the
+  # config-verified non-backed Scratch mount; only the four post-proof final receipts are promoted
+  # to Archive4T. Absent owners remain visible debt rather than an empty success.
+  # Fail-open — never gates the beat. Gate off with LIMEN_GOVERNANCE=0.
   due_voice governance "$C_GOVERNANCE" && [ "${LIMEN_GOVERNANCE:-1}" = "1" ] && \
-    { python3 "$LIMEN_ROOT/scripts/governance-organ.py" 2>&1 | tail -1 || true; stamp governance; }
+    { python3 "$LIMEN_ROOT/scripts/governance-organ.py" 2>&1 | tail -1 || true
+      if [ -n "${LIMEN_GOV_SNAPSHOT_ID:-}" ] && [ -n "${LIMEN_GOV_SNAPSHOT_AT:-}" ] && \
+         [ -n "${LIMEN_GOV_CONFIG:-}" ] && [ -n "${LIMEN_GOV_RUN_ROOT:-}" ]; then
+        (
+          governance_run_dir="$LIMEN_GOV_RUN_ROOT/$LIMEN_GOV_SNAPSHOT_ID"
+          governance_receipt_dir="$governance_run_dir"
+          governance_final_dir="${LIMEN_GOV_FINAL_RECEIPT_ROOT:-}/$LIMEN_GOV_SNAPSHOT_ID"
+          if [ -n "${LIMEN_GOV_FINAL_RECEIPT_ROOT:-}" ] && \
+             [ -f "$governance_final_dir/governance-stage-receipts.v1.json" ] && \
+             [ -f "$governance_final_dir/governance-cadence-receipts.v1.json" ] && \
+             [ -f "$governance_final_dir/post-proof-idempotence.v1.json" ] && \
+             [ -f "$governance_final_dir/governance-snapshot-bundle.v1.json" ]; then
+            governance_receipt_dir="$governance_final_dir"
+          fi
+          export LIMEN_GOV_STAGE_RECEIPTS="${LIMEN_GOV_STAGE_RECEIPTS:-$governance_receipt_dir/governance-stage-receipts.v1.json}"
+          export LIMEN_GOV_CADENCE_RECEIPT="${LIMEN_GOV_CADENCE_RECEIPT:-$governance_receipt_dir/governance-cadence-receipts.v1.json}"
+          export LIMEN_GOV_SNAPSHOT_BUNDLE="${LIMEN_GOV_SNAPSHOT_BUNDLE:-$governance_receipt_dir/governance-snapshot-bundle.v1.json}"
+          python3 "$LIMEN_ROOT/scripts/governance-memory-cadence.py" \
+            --snapshot-id "$LIMEN_GOV_SNAPSHOT_ID" \
+            --snapshot-at "$LIMEN_GOV_SNAPSHOT_AT" \
+            --config "$LIMEN_GOV_CONFIG" \
+            --run-root "$governance_run_dir" \
+            --strict --write 2>&1 | tail -1 || true
+          python3 "$LIMEN_ROOT/scripts/governance-memory-readiness.py" --strict --write 2>&1 | tail -1 || true
+        )
+      else
+        python3 "$LIMEN_ROOT/scripts/governance-memory-readiness.py" --strict --write 2>&1 | tail -1 || true
+      fi
+      stamp governance; }
   # FINANCE — run the financial-office consolidator (regenerate balance-sheet, cash-flow, STATUS from
   # entity data) + assess maturity + advance organ-ladder.json as slices land. Lockless, idempotent,
   # fail-open — never gates the beat. Gate off with LIMEN_FINANCIAL=0.

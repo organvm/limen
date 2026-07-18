@@ -5,6 +5,11 @@
 > judgment. The humans ratify; the organ tracks, validates, and enforces between their decisions. See
 > [KERNEL.md](KERNEL.md) for the full guardrails.
 
+The constitutional source of truth is the ratified governance-testament owner receipt configured by
+`LIMEN_GOV_TESTAMENT`. This Limen organ is its operational read model and scheduler. It may validate
+local standing and verify receipts; it may not turn local prose, assistant plans, or dashboard output
+into doctrine. A missing or incoherent owner receipt is visible readiness debt.
+
 ## What it rivals
 
 A constitutional state's governance office or a foundation board — the **cursus honorum standard**:
@@ -65,9 +70,11 @@ beat. The macro form is a standalone library any multi-repo ecosystem can import
 ## Inputs / outputs
 
 - **Inputs:** seed.yaml files (the standing declarations), entity formation documents, governance
-  decisions recorded by fiduciaries.
+  decisions recorded by fiduciaries, and typed constitutional/lineage/coverage/self-image receipts
+  for one frozen snapshot.
 - **Outputs:** standing records, audit trail, validation reports, entity register. All advisory to the
-  fiduciaries; none self-executing.
+  fiduciaries; none self-executing. The Iceberg Atlas and readiness surfaces are generated read models,
+  never competing authorities.
 
 ## The dual-entity boundary (ORGANVM micro instance)
 
@@ -79,16 +86,17 @@ beat. The macro form is a standalone library any multi-repo ecosystem can import
 The Compliance Sentinel watches every action against this boundary. Any action that would blur these
 mandates is staged and surfaced — never self-resolved.
 
-## Maturity and next steps
+## Readiness and next predicates
 
-The governance organ is **75% mature** (maturing stage, rank 5 on the organ ladder). The entity
-register with dual-entity boundary matrix, cursus validator, entity-integrity checker, and both
-faces (macro + micro) are operational. The remaining lift to 90%:
+The entity register, cursus validator, entity-integrity checker, both faces, and the
+`C_GOVERNANCE` heartbeat hook are operational. Readiness is predicate-based rather than a hand-set
+percentage. The remaining predicates are:
 
-1. Wire the governance beat into the heartbeat loop (`C_GOVERNANCE` cadence)
-2. Operationalize the compliance sentinel as a continuous beat
-3. Automate the append-only audit log
-4. Close one complete promotion cycle with full validation trail
+1. Consume a ratified governance-testament receipt and matching lineage, coverage, Atlas, assertion,
+   census, and self-image receipts for one frozen snapshot.
+2. Make every bounded stage publish a resumable cursor and idempotent receipt.
+3. Automate the append-only local audit log without duplicating the upstream constitutional history.
+4. Close one complete promotion cycle with a fiduciary ratification receipt and full validation trail.
 
 Validation:
 

@@ -19,6 +19,9 @@ docs/lanes/). It is stamped into the kickoff packet so the session stays single-
 --autonomous requires an explicit prompt and turns the README into the initial Codex prompt. The
 packet defines live probes and completion/switch predicates; it never predeclares the ending.
 
+--prompt-file first reads an existing local file. When the path is relative and absent locally,
+the launcher reads that blob from --from in the target repository before creating the worktree.
+
 Aliases:
   portvs, portus  /Users/4jp/Workspace/4444J99/portvs
   limen           /Users/4jp/Workspace/limen
@@ -130,11 +133,6 @@ if [[ "$autonomous" -eq 1 && -z "$prompt_text" && -z "$prompt_file" ]]; then
   echo "--autonomous requires --prompt or --prompt-file" >&2
   exit 2
 fi
-if [[ -n "$prompt_file" && ! -f "$prompt_file" ]]; then
-  echo "prompt file not found: $prompt_file" >&2
-  exit 1
-fi
-
 repo_arg="$1"
 raw_slug="$2"
 
@@ -192,6 +190,30 @@ fi
 branch="work/$slug"
 wt="$repo/.worktrees/$slug"
 
+if [[ -z "$from_ref" ]]; then
+  origin_head="$(git -C "$repo" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+  if [[ -n "$origin_head" ]]; then
+    from_ref="$origin_head"
+  elif git -C "$repo" show-ref --verify --quiet refs/remotes/origin/main; then
+    from_ref="origin/main"
+  else
+    from_ref="$(git -C "$repo" branch --show-current)"
+  fi
+fi
+
+prompt_ref_spec=""
+if [[ -n "$prompt_file" ]]; then
+  if [[ -f "$prompt_file" ]]; then
+    : # Local prompt files retain their existing behavior.
+  elif [[ "$prompt_file" != /* ]] \
+    && [[ "$(git -C "$repo" cat-file -t "${from_ref}:${prompt_file}" 2>/dev/null || true)" == "blob" ]]; then
+    prompt_ref_spec="${from_ref}:${prompt_file}"
+  else
+    echo "prompt file not found locally or at $from_ref: $prompt_file" >&2
+    exit 1
+  fi
+fi
+
 git_info_dir="$(git -C "$repo" rev-parse --path-format=absolute --git-path info)"
 mkdir -p "$git_info_dir"
 exclude_file="$git_info_dir/exclude"
@@ -207,17 +229,6 @@ if ! grep -qxF ".limen-workstream/" "$exclude_file"; then
     printf '\n'
     printf '.limen-workstream/\n'
   } >> "$exclude_file"
-fi
-
-if [[ -z "$from_ref" ]]; then
-  origin_head="$(git -C "$repo" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
-  if [[ -n "$origin_head" ]]; then
-    from_ref="$origin_head"
-  elif git -C "$repo" show-ref --verify --quiet refs/remotes/origin/main; then
-    from_ref="origin/main"
-  else
-    from_ref="$(git -C "$repo" branch --show-current)"
-  fi
 fi
 
 mkdir -p "$(dirname "$wt")"
@@ -244,7 +255,9 @@ if [[ "$write_readme" -eq 1 ]]; then
   capsule_dir="$wt/.limen-workstream"
   readme="$capsule_dir/README.md"
 
-  if [[ -n "$prompt_file" ]]; then
+  if [[ -n "$prompt_ref_spec" ]]; then
+    prompt_payload="$(git -C "$repo" cat-file blob "$prompt_ref_spec")"
+  elif [[ -n "$prompt_file" ]]; then
     prompt_payload="$(cat "$prompt_file")"
   elif [[ -n "$prompt_text" ]]; then
     prompt_payload="$prompt_text"

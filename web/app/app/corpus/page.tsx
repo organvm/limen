@@ -48,6 +48,11 @@ export default function CorpusCommandCenterPage() {
           <strong>{data.inbound.seeded_repo_count}</strong>
           <p>{data.inbound.value_repo_count} value repos</p>
         </div>
+        <div className={data.iceberg_atlas.status === "ready" ? "metric green" : data.iceberg_atlas.exact_all ? "metric amber" : "metric red"}>
+          <span>Iceberg Atlas</span>
+          <strong>{data.iceberg_atlas.status === "ready" ? "READY" : data.iceberg_atlas.exact_all ? "EXACT / DEBT" : data.iceberg_atlas.status.toUpperCase()}</strong>
+          <p>{data.iceberg_atlas.residual_count} residuals / {data.iceberg_atlas.blocker_count} blockers</p>
+        </div>
       </section>
 
       <CorpusCommandCenterClient data={data} />

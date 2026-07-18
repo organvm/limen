@@ -222,6 +222,25 @@ export interface CorpusStatusData {
     capture_contact_configured: boolean;
     scraper_model_unit?: string;
   };
+  iceberg_atlas: {
+    status: "ready" | "degraded" | "blocked" | "missing";
+    snapshot_id?: string | null;
+    exact_all: boolean;
+    residual_count: number;
+    blocker_count: number;
+    zoom_levels: { id: string; node_count: number }[];
+    timeline_counts: {
+      operator_intent: number;
+      artifact: number;
+    };
+    ideal_forms: {
+      id: string;
+      implementation_state: string;
+      distance_to_ideal: number | string | null;
+      citation_debt: number;
+    }[];
+    self_image_count: number;
+  };
 }
 
 function readJson<T>(path: string, fallback: T): T {
@@ -277,7 +296,7 @@ export function getSurfaceManifest() {
 export function getCorpusCommandCenterData() {
   const privateDir = join(process.cwd(), ".generated", "surfaces");
   const corpusFile = `${["corpus", "status"].join("-")}.json`;
-  return readJson<CorpusStatusData>(join(privateDir, corpusFile), {
+  const fallback: CorpusStatusData = {
     status: "missing",
     surface: "corpus",
     generated_at: new Date(0).toISOString(),
@@ -317,7 +336,50 @@ export function getCorpusCommandCenterData() {
       scraper_model_present: false,
       capture_contact_configured: false,
     },
-  });
+    iceberg_atlas: {
+      status: "missing",
+      snapshot_id: null,
+      exact_all: false,
+      residual_count: 0,
+      blocker_count: 1,
+      zoom_levels: [],
+      timeline_counts: {
+        operator_intent: 0,
+        artifact: 0,
+      },
+      ideal_forms: [],
+      self_image_count: 0,
+    },
+  };
+  const loaded = readJson<Partial<CorpusStatusData>>(join(privateDir, corpusFile), {});
+  return {
+    ...fallback,
+    ...loaded,
+    privacy: { ...fallback.privacy, ...(loaded.privacy || {}) },
+    coverage: {
+      ...fallback.coverage,
+      ...(loaded.coverage || {}),
+      kinds: loaded.coverage?.kinds || fallback.coverage.kinds,
+      lanes: loaded.coverage?.lanes || fallback.coverage.lanes,
+      sources: loaded.coverage?.sources || fallback.coverage.sources,
+    },
+    units: loaded.units || fallback.units,
+    clusters: loaded.clusters || fallback.clusters,
+    comparisons: loaded.comparisons || fallback.comparisons,
+    allusions: loaded.allusions || fallback.allusions,
+    aug1: { ...fallback.aug1, ...(loaded.aug1 || {}) },
+    inbound: { ...fallback.inbound, ...(loaded.inbound || {}) },
+    iceberg_atlas: {
+      ...fallback.iceberg_atlas,
+      ...(loaded.iceberg_atlas || {}),
+      zoom_levels: loaded.iceberg_atlas?.zoom_levels || fallback.iceberg_atlas.zoom_levels,
+      timeline_counts: {
+        ...fallback.iceberg_atlas.timeline_counts,
+        ...(loaded.iceberg_atlas?.timeline_counts || {}),
+      },
+      ideal_forms: loaded.iceberg_atlas?.ideal_forms || fallback.iceberg_atlas.ideal_forms,
+    },
+  } as CorpusStatusData;
 }
 
 export function formatDate(value?: string) {
