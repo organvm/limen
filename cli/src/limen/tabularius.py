@@ -359,25 +359,44 @@ def _ticket_from_event(event: Event, *, agent: str, session_id: str, now: dateti
     """Translate one pure projection delta into its immutable keeper receipt."""
 
     event_type = str(event.get("type") or "")
-    common = {
-        "ticket_id": new_ticket_id(session_id, now),
-        "timestamp": now,
-        "agent": agent,
-        "session_id": session_id,
-    }
+    ticket_id = new_ticket_id(session_id, now)
     if event_type == EV_BOARD_META:
-        return Ticket(intent=INTENT_META, patch=dict(event.get("data") or {}), **common)
+        return Ticket(
+            ticket_id=ticket_id,
+            timestamp=now,
+            agent=agent,
+            session_id=session_id,
+            intent=INTENT_META,
+            patch=dict(event.get("data") or {}),
+        )
     if event_type == EV_BOARD_ORDER:
-        return Ticket(intent=INTENT_ORDER, patch=dict(event.get("data") or {}), **common)
+        return Ticket(
+            ticket_id=ticket_id,
+            timestamp=now,
+            agent=agent,
+            session_id=session_id,
+            intent=INTENT_ORDER,
+            patch=dict(event.get("data") or {}),
+        )
     if event_type == EV_TASK_UPSERT:
         return Ticket(
+            ticket_id=ticket_id,
+            timestamp=now,
+            agent=agent,
+            session_id=session_id,
             intent=INTENT_UPSERT,
             task_id=str(event["task_id"]),
             patch=dict(event.get("data") or {}),
-            **common,
         )
     if event_type == EV_TASK_REMOVE:
-        return Ticket(intent=INTENT_REMOVE, task_id=str(event["task_id"]), **common)
+        return Ticket(
+            ticket_id=ticket_id,
+            timestamp=now,
+            agent=agent,
+            session_id=session_id,
+            intent=INTENT_REMOVE,
+            task_id=str(event["task_id"]),
+        )
     raise ValueError(f"unknown event type: {event_type!r}")
 
 
@@ -884,33 +903,33 @@ def drain_once(board_path: Path, *, dry_run: bool = False, lock_timeout: int = 2
     if dry_run:
         good, bad = _parse_pending(inbox)
         admitted, precondition_rejections = _admit_exact_preconditions(good)
-        tasks: dict[str, dict[str, Any]] = {}
+        dry_tasks: dict[str, dict[str, Any]] = {}
         if board_path.exists():
             board = load_limen_file(board_path)
-            tasks = {task.id: task.model_dump(mode="json", exclude_none=True) for task in board.tasks}
+            dry_tasks = {task.id: task.model_dump(mode="json", exclude_none=True) for task in board.tasks}
         applicable: list[tuple[Path, Ticket]] = []
-        rejected: list[tuple[Path, str]] = [*bad, *precondition_rejections]
+        dry_rejected: list[tuple[Path, str]] = [*bad, *precondition_rejections]
         for path, ticket in admitted:
             try:
-                intent = _compatibility_intent(ticket, tasks.get(str(ticket.task_id)))
+                intent = _compatibility_intent(ticket, dry_tasks.get(str(ticket.task_id)))
                 if intent["kind"] == "task.upsert":
-                    tasks[str(ticket.task_id)] = dict(intent["task"])
+                    dry_tasks[str(ticket.task_id)] = dict(intent["task"])
                 else:
-                    tasks[str(ticket.task_id)] = {
-                        **tasks[str(ticket.task_id)],
+                    dry_tasks[str(ticket.task_id)] = {
+                        **dry_tasks[str(ticket.task_id)],
                         **dict(intent.get("patch") or {}),
                     }
                 applicable.append((path, ticket))
             except Exception as exc:
-                rejected.append((path, f"compatibility validation failed: {exc}"))
+                dry_rejected.append((path, f"compatibility validation failed: {exc}"))
         pending = len(good) + len(bad)
         return DrainResult(
             pending=pending,
             applied=len(applicable),
-            rejected=len(rejected),
-            note=(f"dry-run: {len(applicable)} broker-compatible, {len(rejected)} invalid/conflicting"),
+            rejected=len(dry_rejected),
+            note=(f"dry-run: {len(applicable)} broker-compatible, {len(dry_rejected)} invalid/conflicting"),
             applied_ids=[ticket.ticket_id for _, ticket in applicable],
-            rejected_ids=[path.stem for path, _ in rejected],
+            rejected_ids=[path.stem for path, _ in dry_rejected],
         )
 
     with queue_lock(board_path, timeout=lock_timeout) as locked:

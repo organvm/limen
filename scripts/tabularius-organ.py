@@ -119,8 +119,14 @@ def main(argv: list[str] | None = None) -> int:
     publication_failed = _publication_required_failure(args.require_published, preserve)
 
     if result.deferred:
-        print(f"tabularius: {result.pending} ticket(s) deferred ({result.note})")
-        _stamp(pending=result.pending, applied=result.applied, rejected=result.rejected, deferred=True)
+        note = getattr(result, "note", "remote keeper deferred")
+        print(f"tabularius: {result.pending} ticket(s) deferred ({note})")
+        _stamp(
+            pending=result.pending,
+            applied=getattr(result, "applied", 0),
+            rejected=getattr(result, "rejected", 0),
+            deferred=True,
+        )
         return 2 if args.require_published else 0
 
     if result.pending == 0:

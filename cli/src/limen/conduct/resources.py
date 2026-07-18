@@ -6,6 +6,7 @@ import posixpath
 import re
 from dataclasses import dataclass
 from pathlib import PurePosixPath
+from typing import Literal
 
 from limen.conduct.models import ResourceClaimV1
 
@@ -169,6 +170,8 @@ def sorted_claims(claims: tuple[ResourceClaimV1, ...] | list[ResourceClaimV1]) -
     for claim in claims:
         normalized = normalize_key(claim.key)
         current = dedup.get(normalized)
-        mode = "exclusive" if claim.mode == "exclusive" or current and current.mode == "exclusive" else "shared"
+        mode: Literal["shared", "exclusive"] = (
+            "exclusive" if claim.mode == "exclusive" or current and current.mode == "exclusive" else "shared"
+        )
         dedup[normalized] = ResourceClaimV1(key=normalized, mode=mode)
     return tuple(dedup[key] for key in sorted(dedup))

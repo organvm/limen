@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import click
 
@@ -92,7 +92,7 @@ def register(
     agent: str | None,
     surface: str,
     session_id: str | None,
-    origin: str,
+    origin: Literal["direct", "dispatched", "relay"],
     capabilities_: tuple[str, ...],
     worktree: Path | None,
     human_protected: bool,
