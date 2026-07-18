@@ -616,6 +616,12 @@ parameters:
     self_update: none
     owner: continuity
     note: "Optional pinned Git summary line for the session-orientation verifier. Blank means read live git state; predicates set this only to avoid confusing live dirty-state changes with generator non-determinism."
+  LIMEN_SESSION_CLOSEOUT:
+    default: "0"
+    env: LIMEN_SESSION_CLOSEOUT
+    self_update: none
+    owner: censor
+    note: "Dark gate for the closeout-reconciliation sensor (scripts/reconcile-closeouts.py). When 1, the beat runs --check (probe every claimed-done outcome vs GitHub/board ground truth) and closeout-fast enforces it; default 0 ships the organ dark (classifier self-test only). Arming is a separate lever."
   LIMEN_ORIENT_NO_WRITE:
     default: "0"
     env: LIMEN_ORIENT_NO_WRITE
@@ -2343,6 +2349,36 @@ parameters:
     self_update: none
     owner: limen-daemon
     note: "Space-separated CORE repos reap-clones.py never removes even when they are a clean pushed mirror (the operator lives in them / the conductor needs them local)."
+  LIMEN_RUNS_ON:
+    default: ""
+    env: LIMEN_RUNS_ON
+    self_update: none
+    owner: gitvs
+    note: "GitHub Actions org/repo VARIABLE (vars context, not a shell env) that routes fleet workflows' runs-on. Unset/empty ⇒ 'ubuntu-latest' (hosted). 'self-hosted' flips ci.yml/limen-agent/limen-warp-oz/auto-scale/conductor-report to the $0 Mac runner lane (scripts/runner-install.sh) — PRIVATE repos only; pr-gate deliberately stays hosted (merge-critical). Declared here so the flip is registry-visible, though GitHub resolves it, not the shell."
+  LIMEN_RUNNER_ORG:
+    default: "organvm"
+    env: LIMEN_RUNNER_ORG
+    self_update: none
+    owner: gitvs
+    note: "Org whose runner estate scripts/runner-install.sh administers (registration token, default runner-group hardening: allows_public_repositories=false — the fork-PR code-exec invariant)."
+  LIMEN_RUNNER_DIR:
+    default: "~/Workspace/_actions-runner"
+    env: LIMEN_RUNNER_DIR
+    self_update: none
+    owner: gitvs
+    note: "Install directory for the self-hosted Actions runner (outside every repo/worktree so reclaim sweeps never touch it)."
+  LIMEN_RUNNER_NAME:
+    default: "limen-mac"
+    env: LIMEN_RUNNER_NAME
+    self_update: none
+    owner: gitvs
+    note: "Registered name of this Mac's org runner; runner-install.sh is idempotent on it (already-registered ⇒ no-op)."
+  LIMEN_RUNNER_LABELS:
+    default: "self-hosted,macOS,ARM64"
+    env: LIMEN_RUNNER_LABELS
+    self_update: none
+    owner: gitvs
+    note: "Labels the runner registers with. Reference them ONLY from private-repo workflows — a public repo's fork PRs would execute arbitrary code on this host."
   LIMEN_GITVS_OWNERS:
     default: ""
     env: LIMEN_GITVS_OWNERS
@@ -2505,6 +2541,42 @@ parameters:
     self_update: none
     owner: gitvs
     note: "Repos mutated per repo-metadata-sync run — the ~45-repo gap converges over a couple of beats instead of one mass write, gentle on the rate limit."
+  LIMEN_GH_USAGE:
+    default: "1"
+    env: LIMEN_GH_USAGE
+    self_update: none
+    owner: gitvs
+    note: "Gate for the github-actions-usage beat sensor (the Meter: scripts/gitvs.py usage --check). Projects monthly NET Actions spend against budgets.actions_spend and reads the account-billing canary (the literal 'payments have failed' run annotation that used to be re-diagnosed in chat every session). Advisory, fail-open offline. 0 disables the pass."
+  LIMEN_BEAT_GH_USAGE:
+    default: 24
+    env: LIMEN_BEAT_GH_USAGE
+    self_update: none
+    owner: gitvs
+    note: "Cadence (every N beats) of the github-actions-usage sensor. Spend moves daily, not per-beat — a slow cadence is honest; the omega rung re-runs it live on demand."
+  LIMEN_GH_USAGE_TIMEOUT:
+    default: 120
+    env: LIMEN_GH_USAGE_TIMEOUT
+    self_update: none
+    owner: gitvs
+    note: "Per-run timeout (seconds) for the github-actions-usage sensor, resolved by the generic scheduled runner; overrun kills the command group and the beat continues fail-open."
+  LIMEN_ACTIONS_BUDGET:
+    default: 25
+    env: LIMEN_ACTIONS_BUDGET
+    self_update: none
+    owner: gitvs
+    note: "Monthly NET Actions spend ceiling (USD) for gitvs.py usage --check. Empty/unset ⇒ derived from estate.yaml budgets.actions_spend.monthly_net_usd_max (the registry owns the default; this env is the operator override). Mirrors orgs.canonical.actions_spending_limit_usd — the GitHub-side spending limit is his-hand (the runbook step 2)."
+  LIMEN_BILLING_CANARY_REPO:
+    default: "organvm/limen"
+    env: LIMEN_BILLING_CANARY_REPO
+    self_update: none
+    owner: gitvs
+    note: "PRIVATE repo whose newest completed Actions run the billing canary reads for the account-billing block annotation. The conductor (private since 2026-07-16) is the natural canary: its CI runs every PR, so a billing wall surfaces within one beat."
+  LIMEN_REVIEW_GATE:
+    default: 0
+    env: LIMEN_REVIEW_GATE
+    self_update: none
+    owner: gitvs
+    note: "Merge half of the multi-agent review engine: 1 makes merge-policy.sh HOLD on unresolved review threads (fail-open on GraphQL errors). Ships DARK — flip conductor-first only after self-heal's REVIEW-FEEDBACK heal tasks demonstrably drain threads; estate-wide bot threads nobody resolves would otherwise jam every merge."
   LIMEN_OBSERVATORY:
     default: 0
     env: LIMEN_OBSERVATORY
@@ -2790,6 +2862,13 @@ parameters:
     self_update: none
     owner: tabularius
     note: "The effector for the launch-agent liveness invariant (scripts/launch-agent-liveness.py --apply, sensor section 0g4, gated by when_env). When 1, the beat re-bootstraps + kickstarts any critical organ in spec/critical-launch-agents.json that is down — restoring a plist from ~/Library/LaunchAgents.disabled/ if a quiesce quarantined it. This is the SINGLE durable human grant that closes the sensor-without-effector defect: arm once and the daemon keeps the mint / tunnel / credential organ alive across quiesce + reboot forever, without a per-incident approval. OFF by default because it re-enables persistent launchd services (an authorization, not a default). Owner arms it in the daemon env (~/.limen.env)."
+
+  LIMEN_CLAUDE_LSREGISTER_HEAL:
+    default: "0"               # OFF — the effector. Arm once to auto-clear the malformed ClaudeCode.app stub.
+    env: LIMEN_CLAUDE_LSREGISTER_HEAL
+    self_update: none
+    owner: tabularius
+    note: "The effector for the recurring macOS Gatekeeper 'ClaudeCode.app is damaged, move it to Trash' dialog (scripts/heal-claude-lsregister.sh, sensed by dialogs-silenced.sh section 4b, beat-wired on the heartbeat hygiene cadence beside heal-claude-update-marker.sh). Dry-run by default (reports the cure, mutates nothing). When 1, the beat unregisters + removes ONLY the exact-malformed-seal ClaudeCode.app stub (codesign 'code has no resources but signature indicates they must be present') under ~/.local/share/claude or ~/.Trash and sweeps reseeded Trash copies, returning LaunchServices registrations to the steady state of ZERO; never touches /Applications, the versions/ dir, or the resolved CLI symlink. macOS-only; fails OPEN off-darwin. Arm once in the daemon env (~/.limen.env) so occurrence #4 self-heals without a per-incident approval. Set 0 to silence."
 
   LIMEN_BEAT_LAUNCHAGENT_LIVENESS:
     default: 4

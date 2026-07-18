@@ -158,6 +158,15 @@ resource_types:
     status: active
     owner: gitvs
     note: "Public repos = free unlimited Actions; the keystone was account-level billing (#182), not per-repo minutes."
+  org:
+    identity: derived
+    desired: ["plan_ok", "repo_custody", "enterprise_subscription"]
+    observe: "gh api /orgs/{org} (.plan.name + repo counts; user-scoped token — cross-org, the app_estate contract)"
+    effector:
+      - {kind: file-atom, target: L-ORG-TEAM-UPGRADE}
+    status: active
+    owner: gitvs
+    note: "The ACCOUNT layer above the repo graph: each org's billing plan + repo custody vs the `orgs:` block below (doctor class L). Plan/subscription changes are account-level human acts — the doctor cites the lever, never touches billing. (Enterprise emptied by machine 2026-07-17, #1185; the surviving atom is the Team upgrade.)"
 
   # ── envisioned — declared (owed), surfaced in the ledger, not yet gating ──────────────────────
   # These are the surfaces the ask ("everything GitHub") names but GITVS does not yet enact. They are
@@ -222,6 +231,31 @@ resource_types:
     owner: gitvs
     note: "The free third-party ecosystem (CodeRabbit/Trunk/Renovate/...) harnessed as $0 labor. The concrete apps are the `integrations:` registry below (what `classes:` is for repos). Effector SPLITS: the config half is machine-pushed by sync-marketplace-config.py (double-dark); the OAuth-install half is the per-app file-atom lever (L-INTEGRATION-<APP>), cited by doctor class I, never by this resource type."
 
+# ── org-level desired posture (the ACCOUNT layer) ────────────────────────────────────────────
+# Which orgs exist, which ONE holds the code, and what billing plan each may sit on. Ground truth
+# 2026-07-17: ALL 307 repos live in `organvm` (free plan) while 8 EMPTY orgs ride the paid
+# Enterprise plan — inverted custody, the "why do I have 10 orgs / why am I paying for Enterprise"
+# question, settled here as registry data. Rows are org-login globs (first-match-wins, most-specific
+# first — the `classes` discipline one level up). `plan_ok` is the SET of acceptable plans (a list,
+# so the planned free→team upgrade on the canonical org is not drift); `repos` is `sole_owner`
+# (all code lives here) or an exact ceiling. Observed by census (_org_posture); diffed by doctor
+# class L; drift cites L-ORG-TEAM-UPGRADE — never a per-session chat re-derivation.
+orgs:
+  canonical:
+    match: ["organvm"]
+    plan_ok: ["free", "team"]
+    repos: sole_owner
+    actions_spending_limit_usd: 25
+    owner: gitvs
+    note: "The one repo-holding org (307 repos). Spending limit + plan are account-level his-hand acts (GitHub billing UI, cited via L-CARD-FRAUD-HOLD / the runbook) — the doctor observes, never mutates billing."
+  reserved:
+    match: ["organvm-*", "meta-organvm", "a-organvm"]
+    plan_ok: ["free"]
+    repos: 0
+    enterprise_subscription: none
+    owner: gitvs
+    note: "Name-reservation shells: keep the names at $0, hold ZERO repos. The 2026-07-17 plan=enterprise drift on 8 of these was CLEARED by machine the same day (all removed from the meta-organvm enterprise, #1185); recurrence cites L-ORG-TEAM-UPGRADE. Consolidation history: scripts/consolidate-github.py; deletion stays an optional future lever (names are brand)."
+
 # ── per-repo-CLASS governance posture ────────────────────────────────────────────────────────
 # The desired-state of the `repo` / `branch_protection` types, bucketed by owner/repo glob. `required_checks`
 # names real .github/workflows job ids (the parity predicate asserts each names a real job — a dead
@@ -229,7 +263,7 @@ resource_types:
 classes:
   conductor:
     match: ["organvm/limen"]
-    visibility: public                     # CI repos stay public → free unlimited Actions
+    visibility: private                    # flipped 2026-07-16 (publication-engine double-dark, his deliberate act)
     branch_protection: required
     required_checks: ["pr-gate", "python", "web", "worker"]
     app_installed: required
@@ -484,13 +518,39 @@ integrations:
     app_slug: "coderabbitai[bot]"
     config_file: ".coderabbit.yaml"
     free_scope: public
-    install_scope: ["conductor"]           # ADOPTED on the conductor first (D2); fan-out to governed_public later
+    install_scope: ["conductor", "governed_public"]   # the review ENGINE: fleet-wide, not conductor-only
     effector:
       - {kind: delegate, argv: [python3, scripts/sync-marketplace-config.py]}
       - {kind: file-atom, target: L-INTEGRATION-CODERABBIT}
     status: active                         # config lives at the repo root; sync-marketplace-config.py exists → wiring-integrity holds
     owner: gitvs
-    note: "AI PR review, free for public repos. Config .coderabbit.yaml is present at the conductor root (its live config + the fan-out template). Already OAuth-installed on organvm-i-theoria; extending the install to organvm is L-INTEGRATION-CODERABBIT (the one human atom)."
+    note: "AI PR review, free for public repos. Config .coderabbit.yaml is present at the conductor root (its live config + the fan-out template). Already OAuth-installed on organvm-i-theoria (an EMPTY org — it reviews nothing there); extending the install to organvm is L-INTEGRATION-CODERABBIT (#933, the one human atom)."
+  # gemini-code-assist: REMOVED 2026-07-17 — Google sunset "Gemini Code Assist on GitHub" (consumer);
+  # the install flow dead-ends at codeassist.google "is being retired and is no longer available".
+  # Do not re-propose this row unless Google ships a successor product. The review engine's
+  # private-repo reviewers are Claude/Codex/Copilot (+CodeRabbit).
+  claude-review:
+    category: review
+    app_slug: "claude"                     # the claude GitHub App is ALREADY installed on organvm
+    config_file: ".github/workflows/claude-review.yml"
+    free_scope: all                        # API-token cost, not marketplace cost; private minutes gated by vars.LIMEN_CLAUDE_REVIEW
+    install_scope: ["conductor", "governed_public"]
+    effector:
+      - {kind: delegate, argv: [python3, scripts/sync-marketplace-config.py]}
+    status: active                         # workflow at the conductor root; fan-out via sync-marketplace-config.py
+    owner: gitvs
+    note: "The Claude lane of the review engine: auto-review on PR open + @claude mention ping-pong (anthropics/claude-code-action@v1). Needs the ORG-level ANTHROPIC_API_KEY secret — landed by creds-hydrate's gh-org sink, never a paste. Private repos opt in via the LIMEN_CLAUDE_REVIEW Actions variable until billing (#182) clears."
+  review-fanout:
+    category: review
+    app_slug: "github-actions"             # posts via the native Actions token; no marketplace install
+    config_file: ".github/workflows/pr-review-fanout.yml"
+    free_scope: all
+    install_scope: ["conductor", "governed_public"]
+    effector:
+      - {kind: delegate, argv: [python3, scripts/sync-marketplace-config.py]}
+    status: active
+    owner: gitvs
+    note: "The REQUESTER: one idempotent marker comment per PR pinging the mention-driven agents (@codex review). CodeRabbit/Claude auto-trigger. Responders are the babysit loop + self-heal REVIEW-FEEDBACK — this row only requests. Canary-validate that bot-authored mentions actually trigger Codex before fleet fan-out. (Gemini lane removed 2026-07-17 — product sunset.)"
   trunk:
     category: quality
     app_slug: "trunk-io[bot]"
@@ -508,7 +568,7 @@ integrations:
     app_slug: "renovate[bot]"
     config_file: "renovate.json"
     free_scope: all
-    install_scope: ["conductor"]           # ADOPTED on the conductor first (D2); fan-out to governed_public later
+    install_scope: ["conductor", "governed_public"]   # fleet-wide with the review engine
     effector:
       - {kind: delegate, argv: [python3, scripts/sync-marketplace-config.py]}
       - {kind: file-atom, target: L-INTEGRATION-RENOVATE}
@@ -574,7 +634,11 @@ budgets:
   actions_minutes:
     budget: unlimited_public
     owner: gitvs
-    note: "Public repos = free unlimited; the durable fix was account-level billing (#182/#265)."
+    note: "Public repos = free unlimited; private-repo minutes now BILL (the conductor went private 2026-07-16) — metered by actions_spend below; the durable fix was account-level billing (#182/#265)."
+  actions_spend:
+    monthly_net_usd_max: 25                # mirrors orgs.canonical.actions_spending_limit_usd; env override LIMEN_ACTIONS_BUDGET
+    owner: gitvs
+    note: "Projected monthly NET Actions spend ceiling — the gitvs.py usage --check predicate (beat sensor github-actions-usage). The $0 relief for private heavy lanes is the self-hosted runner (scripts/runner-install.sh); this budget is the net under it."
   token_cascade:
     expected: "app > pat > gh"             # gh-app-token.sh --which should resolve to `app` once the App is born
     owner: gitvs
@@ -588,6 +652,8 @@ human_atoms:
   branch_protection:       {lever: "L-BRANCH-PROTECTION", issue: "#257", hand: "his — org-lever to arm protection fleet-wide"}
   billing_keystone:        {issue: "#182", hand: "his — card 0186 fraud hold (root of billing-gated private-repo CI)"}
   gemini_billing_downstream: {issue: "#265"}
+  enterprise_cancel:       {lever: "L-ORG-TEAM-UPGRADE", doc: "docs/github-estate-runbook.md", hand: "his — Team upgrade on organvm ($4/mo, arms #257); the enterprise itself was emptied by machine 2026-07-17 (#1185: 0 orgs, 0 consumed licenses)"}
+  copilot_restore:         {doc: "docs/github-estate-runbook.md", hand: "DONE 2026-07-17 (#1186 closed) — Copilot Pro granted FREE under the maintainer program; privacy set (public-code match Blocked, AI training Disabled). Org Business seats remain a possible future lever; individual Pro needs none."}
 
 # ── consumers-derive ratchets (armed per-PR as each consumer converts — the gates.yaml discipline) ──
 ratchets:

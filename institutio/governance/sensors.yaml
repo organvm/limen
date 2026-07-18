@@ -155,6 +155,28 @@ sensors:
         tier: live
         command: "python3 scripts/gitvs.py doctor"
 
+  github-actions-usage:
+    section: "heartbeat"
+    title: "Actions spend telemetry — projected monthly net within budget AND the account-billing canary green"
+    gate: LIMEN_GH_USAGE
+    default: "1"
+    source: [heartbeat]
+    owner: gitvs
+    cadence:
+      env: LIMEN_BEAT_GH_USAGE
+      default: 24
+    timeout:
+      env: LIMEN_GH_USAGE_TIMEOUT
+      default: 120
+    steps:
+      - command: "python3 scripts/gitvs.py usage --check"
+        severity: advisory
+        escalation: "Actions spend over budget or the account-billing canary is red — read docs/github-actions-usage.json; roots: L-CARD-FRAUD-HOLD (#182) then L-ORG-TEAM-UPGRADE (docs/github-estate-runbook.md)"
+    omega_eligible:
+      - label: "GitHub Actions budget"
+        tier: live
+        command: "python3 scripts/gitvs.py usage --check"
+
   seo-drift:
     section: "heartbeat"
     title: "SEO drift — public-portal surface: audit sweep -> metadata drift check -> bounded task filing (dry until armed)"
@@ -790,3 +812,23 @@ sensors:
             armed_valve_type: safety
         severity: silent
         escalation: "opportunity sync skipped or exceeded its bound (reads obligations-ledger.json; fails open)"
+
+  closeout-reconcile:
+    section: "0z"
+    title: "closeout reconciliation — every claimed-done outcome carries a verified receipt"
+    gate: LIMEN_SESSION_CLOSEOUT
+    default: "0"
+    source: [metabolize]
+    owner: censor
+    # verify-dispatch babysits status=dispatched; this babysits the COMPLEMENT — status=done CLOSEOUT
+    # claims. Reuses verify-dispatch.gh_pr_state to probe each cited PR; a done-claim citing an unmerged
+    # PR is DONE_UNVERIFIED (the #1203 "solved at root" false-closeout). Ships DARK (default 0); arming is
+    # a separate lever. Findings route via insight-route.py (org/repo -> board task, censor -> residual).
+    steps:
+      - command: "python3 scripts/reconcile-closeouts.py --check"
+        severity: advisory
+        escalation: "closeout reconciliation found unverified done-claim(s) — see logs/closeout-reconcile.json"
+    omega_eligible:
+      - label: "closeout classifier self-test (verdicts correct)"
+        tier: det
+        command: "python3 scripts/reconcile-closeouts.py --doctor"
