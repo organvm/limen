@@ -66,6 +66,11 @@ back to `AGENTS.md` instead.
     capability, never a rank; all child work is broker-reserved, authority attenuates, native
     identity survives, protected human sessions are untouchable, hidden fanout is rejected, and
     agents never write the `tasks.yaml` projection.
+13. Treat concurrent sessions as the normal operating condition. Each mutation lane owns an
+    isolated worktree and immutable PR head; moving `main` is integrated by the repository merge
+    queue and its synthetic `merge_group`, not by repeatedly rewriting every branch and rerunning
+    successful head CI. Direct `main` writers yield to active integration. The executable contract
+    is `AGENTS.md` → Session Discipline rule 5 plus `docs/concurrent-integration.md`.
 
 ## Home-scope generated surfaces
 

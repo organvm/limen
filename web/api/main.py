@@ -126,6 +126,10 @@ GITHUB_REPO = os.environ.get("LIMEN_GITHUB_REPO", "")
 GITHUB_BRANCH = os.environ.get("LIMEN_GITHUB_BRANCH", "main")
 GITHUB_PATH = os.environ.get("LIMEN_GITHUB_PATH", "tasks.yaml")
 GITHUB_TOKEN = os.environ.get("LIMEN_GITHUB_TOKEN", "")
+DEFAULT_BRANCH_WRITE_BLOCK = (
+    "GitHub-backed board mutations are keeper-owned and cannot be written by the FastAPI adapter"
+)
+TABULARIUS_TICKET_ACTION = "Submit a TABVLARIVS ticket and let the keeper publish the board projection PR"
 
 
 def is_valid_url(url: str) -> bool:
@@ -374,12 +378,41 @@ def storage_status() -> dict[str, Any]:
     if storage_mode() == "github":
         return {
             "mode": "github",
+            "access": "read_only",
             "repo": GITHUB_REPO,
             "branch": GITHUB_BRANCH,
             "path": GITHUB_PATH,
             "configured": bool(GITHUB_REPO and GITHUB_TOKEN),
+            "writable": False,
+            "mutation_owner": "tabularius",
+            "mutation_route": "tabularius_ticket",
+            "next_action": TABULARIUS_TICKET_ACTION,
         }
-    return {"mode": "file", "path": str(tasks_path()), "configured": True}
+    return {
+        "mode": "file",
+        "access": "read_write",
+        "path": str(tasks_path()),
+        "configured": True,
+        "writable": True,
+        "mutation_owner": "local_file",
+    }
+
+
+def board_mutation_deferred_receipt() -> dict[str, Any]:
+    return {
+        "status": "mutation_deferred",
+        "code": "board_mutation_deferred",
+        "retryable": True,
+        "owner": "tabularius",
+        "target": storage_status(),
+        "detail": DEFAULT_BRANCH_WRITE_BLOCK,
+        "next_action": TABULARIUS_TICKET_ACTION,
+    }
+
+
+def require_mutable_board() -> None:
+    if storage_mode() == "github":
+        raise HTTPException(status_code=409, detail=board_mutation_deferred_receipt())
 
 
 def empty_board(message: str) -> dict[str, Any]:
@@ -437,6 +470,15 @@ def load_github_board() -> LoadedBoard:
         raise HTTPException(status_code=502, detail=f"GitHub content encoding is unsupported: {encoding}")
     decoded = base64.b64decode(content).decode("utf-8")
     return LoadedBoard(yaml.safe_load(decoded) or {"portal": {}, "tasks": []}, raw.get("sha"), "github")
+
+
+def save_github_board(data: dict[str, Any], sha: str | None = None) -> None:
+    # GitHub is a read-only projection for this adapter on every branch. Keep
+    # the arguments in the signature for compatibility with callers, but fail
+    # before a SHA lookup or Contents PUT so no alternate branch can become a
+    # second board writer.
+    del data, sha
+    require_mutable_board()
 
 
 def load_board_doc() -> LoadedBoard:
@@ -1101,6 +1143,8 @@ def surface_manifest(data: dict[str, Any], persona: str = "owner") -> dict[str, 
 def readiness(data: dict[str, Any], agent: str = "jules") -> dict[str, Any]:
     raw = summary(data)
     stale = release_stale_candidates(data, 24)
+    storage = storage_status()
+    storage_writable = bool(storage.get("writable"))
     open_tasks = [
         task
         for task in data.get("tasks", [])
@@ -1119,8 +1163,12 @@ def readiness(data: dict[str, Any], agent: str = "jules") -> dict[str, Any]:
     checks = [
         {
             "id": "storage",
-            "status": "pass" if storage_status().get("configured") else "fail",
-            "detail": storage_status().get("mode", "unknown"),
+            "status": ("fail" if not storage.get("configured") else "pass" if storage_writable else "warn"),
+            "detail": (
+                storage.get("mode", "unknown")
+                if storage_writable
+                else "read-only GitHub projection; mutations defer to TABVLARIVS"
+            ),
         },
         {"id": "task_count", "status": "pass" if raw["total"] else "warn", "detail": f"{raw['total']} tasks"},
         {
@@ -1152,11 +1200,13 @@ def readiness(data: dict[str, Any], agent: str = "jules") -> dict[str, Any]:
     else:
         status = "ready"
     next_actions: list[str] = []
-    if stale:
+    if not storage_writable:
+        next_actions.append(TABULARIUS_TICKET_ACTION)
+    elif stale:
         next_actions.append("POST /api/release-stale?hours=24&dry_run=false")
-    if open_tasks and remaining > 0 and agent_path:
+    if storage_writable and open_tasks and remaining > 0 and agent_path:
         next_actions.append(f"POST /api/dispatch live=true limit={min(len(open_tasks), remaining)}")
-    if not agent_path:
+    if storage_writable and not agent_path:
         next_actions.append(f"Install or configure {agent} dispatch CLI")
     if remaining <= 0:
         next_actions.append(f"Wait for {agent} budget reset or lower dispatch volume")
@@ -1177,6 +1227,20 @@ def readiness(data: dict[str, Any], agent: str = "jules") -> dict[str, Any]:
             "remaining": remaining,
         },
         "checks": checks,
+        "mutation": (
+            {
+                "status": "available",
+                "owner": storage.get("mutation_owner"),
+            }
+            if storage_writable
+            else {
+                "status": "deferred",
+                "code": "board_mutation_deferred",
+                "owner": "tabularius",
+                "route": "tabularius_ticket",
+                "next_action": TABULARIUS_TICKET_ACTION,
+            }
+        ),
         "next_actions": next_actions or ["No immediate action required"],
     }
 
@@ -1518,8 +1582,8 @@ def archive_task(task_id: str, req: ArchiveRequest, authorization: str | None = 
 def verify_task(task_id: str, req: VerifyRequest, authorization: str | None = Header(None)) -> dict[str, Any]:
     require_persona(authorization, {"owner"})
     task = find_task(load_board(), task_id)
-    if task.get("status") not in ("in_progress", "done"):
-        raise HTTPException(status_code=409, detail="only in-progress or already-done tasks can be verified")
+    if task.get("status") not in ("dispatched", "in_progress", "needs_human", "failed", "failed_blocked", "done"):
+        raise HTTPException(status_code=409, detail="only active, attention, or done tasks can be verified")
     intent = {
         "kind": "task.status",
         "task_id": task_id,

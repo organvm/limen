@@ -5,6 +5,11 @@ not a model rank: the authenticated Cloudflare Worker and its Durable Object ser
 graphs, resource leases, generations, idempotency, and task projection events. No local agent,
 MCP process, API process, or beat owns an independent lifecycle writer.
 
+This single-writer boundary prevents both torn bytes and lost updates. Multiple processes may
+submit immutable events concurrently, but only the keeper may fold them onto the canonical board.
+A lock around only the final file save is insufficient because it does not serialize the complete
+read-modify-write transaction.
+
 ## Canonical flow
 
 ```text
@@ -26,6 +31,19 @@ GitHub compare-and-swap
 when the broker is unavailable, but a new claim or transition fails closed. A remote receipt may be
 used by a separate cache-hydration path; locally recomputing, sealing, committing, pushing, resetting,
 or restoring the canonical projection is not authorized.
+
+## Default-branch integration
+
+Keeper authority does not bypass repository integration. TABVLARIVS coalesces accepted events and
+publishes only `tasks.yaml` through the stable, fast-forward-only
+`tabularius/board-projection` branch. It opens or advances one exact-head PR; it never pushes
+`main`, force-pushes a competing projection, or uses an admin bypass.
+
+The repository merge queue serializes that immutable projection head with the latest `main` and
+queued predecessors, and `pr-gate` validates the resulting synthetic `merge_group`. New accepted
+events may coalesce into a later projection head while an earlier one is in flight. The remote
+no-bypass `pull_request` rule is the final enforcement boundary for every default-branch writer,
+including automation.
 
 ## Compatibility ticket relay
 
@@ -55,8 +73,8 @@ in-memory `LimenFile`. It diffs task fields, submits bounded packets, and return
 receipts arrive. It does not write or refresh the local cache. Server-owned budget-window metadata is
 not relayed; the keeper derives reset/debit/refund state from canonical events.
 
-`preserve_board_projection()` and local restore are retired. The former returns the stable
-`remote-keeper-owns-projection` no-op receipt; the latter fails with the remote-refetch instruction.
+Local restore is retired. Projection publication, when invoked by the authenticated keeper, must
+return an exact remote branch/commit/PR receipt and obey the serialized integration contract above.
 
 ## Components
 
@@ -77,14 +95,15 @@ not relayed; the keeper derives reset/debit/refund state from canonical events.
 - The Worker projection is the sole logical lifecycle writer.
 - `cli/src/limen/io.py` may serialize only explicitly noncanonical cache/export files from production
   call sites; `save_derived_limen_projection()` rejects the canonical target.
-- TABVLARIVS has no audit exemption. A reintroduced `save_limen_file`, raw board write, or Git
-  mutation in the relay fails the writer predicate.
+- TABVLARIVS has no audit exemption. A reintroduced local board write, raw default-branch write, or
+  instruction bypass in the relay fails the writer predicate.
 - Projection failure prevents the conduct state/lease from being acknowledged or committed.
 - Duplicate work IDs/keys return the stored projection receipt and cannot debit twice.
 - Exact revision and moved-head guards fence stale work.
 - A broker outage never archives an unacknowledged ticket.
 - Unsupported lifecycle jumps remain rejected; compatibility must not fabricate intermediate
   transitions or budget history.
+- Default-branch publication is exact-head, queue-serialized, and never admin-bypassed.
 
 Run:
 

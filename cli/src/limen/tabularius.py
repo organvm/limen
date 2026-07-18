@@ -23,6 +23,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import tempfile
 import uuid
 from collections import OrderedDict
@@ -66,6 +67,8 @@ INTENT_REMOVE = "task.remove"  # drop a task id (prune/archive-out)
 INTENT_ORDER = "board.order"  # set the task display order (patch = {"ids": [...]})
 INTENT_META = "board.meta"  # set board version/portal (patch = {"version":..,"portal":..})
 _INTENTS = frozenset({INTENT_UPSERT, INTENT_STATUS, INTENT_REMOVE, INTENT_ORDER, INTENT_META})
+BOARD_PUBLICATION_BRANCH = "tabularius/board-projection"
+BOARD_PUBLICATION_TITLE = "tabularius: publish board projection"
 _PATCHABLE_TASK_FIELDS = frozenset(
     {
         "title",
@@ -276,10 +279,13 @@ class DrainResult:
 class PreserveResult:
     changed: bool = False
     pushed: bool = False
+    published: bool = False
     deferred: bool = False
     skipped: bool = False
     reason: str = ""
     commit: str = ""
+    branch: str = ""
+    pr_number: int = 0
 
 
 def pending_count(board_path: Path) -> int:
@@ -314,6 +320,39 @@ def pending_task_ids(board_path: Path) -> set[str]:
         if isinstance(tid, str) and tid:
             ids.add(tid)
     return ids
+
+
+def _gh(repo: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run the legacy publication check dispatcher without granting board-write authority."""
+
+    return subprocess.run(
+        ["gh", *args],
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+
+def _short_output(proc: subprocess.CompletedProcess[str]) -> str:
+    return (proc.stderr or proc.stdout or "").strip().replace("\n", " ")[:220]
+
+
+def _dispatch_pr_gate(repo: Path, slug: str, publication_branch: str) -> str:
+    """Compatibility helper for an already-created publication PR.
+
+    The conduct broker remains the only board writer. This helper can only ask
+    GitHub to evaluate an existing exact branch; it cannot create, push, or
+    advance a board projection.
+    """
+
+    if os.environ.get("GITHUB_ACTIONS", "").lower() != "true":
+        return ""
+    result = _gh(
+        repo,
+        ["workflow", "run", "pr-gate.yml", "--repo", slug, "--ref", publication_branch],
+    )
+    return "" if result.returncode == 0 else f"pr-gate-dispatch-failed:{_short_output(result)}"
 
 
 def _ticket_from_event(event: Event, *, agent: str, session_id: str, now: datetime) -> Ticket:
@@ -609,6 +648,8 @@ def preserve_board_projection(
     *,
     branch: str = "main",
     remote: str = "origin",
+    publication_branch: str = BOARD_PUBLICATION_BRANCH,
+    manage_pr: bool = True,
     dry_run: bool = False,
     lock_timeout: int = 2,
 ) -> PreserveResult:
@@ -618,8 +659,29 @@ def preserve_board_projection(
     a transition. A local process must never commit, push, reset, or advance the canonical board.
     """
 
-    del board_path, branch, remote, dry_run, lock_timeout
-    return PreserveResult(skipped=True, reason="remote-keeper-owns-projection")
+    del board_path, branch, remote, manage_pr, dry_run, lock_timeout
+    return PreserveResult(
+        skipped=True,
+        reason="remote-keeper-owns-projection",
+        branch=publication_branch,
+    )
+
+
+def board_publication_preflight(
+    board_path: Path,
+    *,
+    branch: str = "main",
+    remote: str = "origin",
+    publication_branch: str = BOARD_PUBLICATION_BRANCH,
+) -> PreserveResult:
+    """Fail closed rather than revive the retired local publication writer."""
+
+    del board_path, branch, remote
+    return PreserveResult(
+        skipped=True,
+        reason="remote-keeper-preflight-required",
+        branch=publication_branch,
+    )
 
 
 def _parse_pending(inbox: Path) -> tuple[list[tuple[Path, Ticket]], list[tuple[Path, str]]]:

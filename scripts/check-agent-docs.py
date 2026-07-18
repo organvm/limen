@@ -61,6 +61,10 @@ Checks (exit 0 iff all pass):
      authority, native identity and protected human sessions survive, hidden fanout is rejected,
      and no instruction surface tells an agent to write ``tasks.yaml`` directly.
 
+  P. Concurrent integration is a shared invariant: moving main does not rewrite every PR head,
+     queue mode uses ``merge_group``, and neither the shared nor tool-specific protocol permits an
+     admin bypass of the serialization rail.
+
 Run directly (``scripts/check-agent-docs.py``) or via ``scripts/verify-whole.sh``.
 """
 
@@ -553,6 +557,31 @@ def main() -> int:
     peer_documents[str(AGY_SKILL.relative_to(ROOT))] = AGY_SKILL.read_text(encoding="utf-8")
     peer_documents[str(COPILOT_PROFILE.relative_to(ROOT))] = COPILOT_PROFILE.read_text(encoding="utf-8")
     errors.extend(peer_conductor_errors(peer_documents))
+
+    # P. 2026-07-18 concurrent-session correction: exact PR-head proof is immutable; latest-base
+    # composition belongs to the queue. Bind both the canonical shared rule and Claude's concrete
+    # merge cadence so a later doc edit cannot silently recreate the update-branch/full-CI loop.
+    try:
+        discipline_section = section(agents_text, "Session Discipline")
+        for phrase, label in [
+            ("moving `main` is normal", "moving-main-is-normal rule"),
+            ("synthetic `merge_group`", "merge-group composition rule"),
+            ("never `--admin`", "no-admin-bypass rule"),
+        ]:
+            if phrase not in discipline_section:
+                errors.append(f"AGENTS.md 'Session Discipline' lacks the concurrent-integration {label}")
+        merge_section = section(claude_text, "Merge & Branch Protocol")
+        for phrase, label in [
+            ("MERGE-MODE: queue|direct", "explicit merge-mode contract"),
+            ("synthetic latest-base merge group", "queue composition contract"),
+            ("repeated branch-rewrite/full-CI loop", "no branch-rewrite starvation rule"),
+        ]:
+            if phrase not in merge_section:
+                errors.append(f"CLAUDE.md 'Merge & Branch Protocol' lacks the concurrent-integration {label}")
+        if "moving `main` is integrated by the repository merge" not in standard_text:
+            errors.append("agent instruction standard lacks the concurrent-integration rule")
+    except ValueError as exc:
+        errors.append(str(exc))
 
     if errors:
         print("Agent-instruction doc drift detected:")

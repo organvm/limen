@@ -26,6 +26,7 @@ const corpusStatusSourcePath = process.env.LIMEN_CORPUS_STATUS || join(limenRoot
 const corpusStatusPath = join(privateDir, "corpus-status.json");
 const observatoryBriefSourcePath = process.env.LIMEN_OBSERVATORY_BRIEF || join(limenRoot, "logs", "observatory", "brief-latest.json");
 const observatoryStatusPath = join(privateDir, "observatory-status.json");
+const doneTasksPath = join(appRoot, "public", "done-tasks.json");
 const hostedPrivatePaths = [
   join(appRoot, "public", "tasks.json"),
   join(appRoot, "public", "client-status.json"),
@@ -37,6 +38,8 @@ const hostedPrivatePaths = [
   join(appRoot, "public", "client-surface-manifest.json"),
   join(appRoot, "public", "readiness.json"),
 ];
+const tabulariusTicketAction =
+  "Submit a TABVLARIVS ticket; the keeper publishes the board through its exact-head pull request.";
 
 function countBy(items, keyFn) {
   return items.reduce((acc, item) => {
@@ -290,6 +293,13 @@ function readinessReport(data, summary) {
       remaining,
     },
     checks,
+    mutation: {
+      status: "deferred",
+      code: "board_mutation_deferred",
+      owner: "tabularius",
+      route: "tabularius_ticket",
+      next_action: tabulariusTicketAction,
+    },
     next_actions: nextActions.length ? nextActions : ["No immediate action required"],
   };
 }
@@ -343,8 +353,8 @@ function qaStatus(data, summary) {
     .filter((item) => !["archive", "archived"].includes(item.phase))
     .sort((a, b) => {
       const order = { recover: 0, verify: 1, assign: 2, archive: 3, archived: 4 };
-      // MUST mirror limen.doctor.qa_report's priority_order (Python source of truth) — was missing
-      // `critical`/`backlog`, so critical tasks sorted LAST here (?? 9) but FIRST in the CLI →
+      // MUST mirror limen.doctor.qa_report's priority_order (Python source of truth) -- was missing
+      // `critical`/`backlog`, so critical tasks sorted LAST here (?? 9) but FIRST in the CLI ->
       // next_batch drift that verify-whole.sh caught once critical-priority CIFIX tasks existed.
       const priority = { critical: 0, high: 1, medium: 2, low: 3, backlog: 4 };
       return (order[a.phase] ?? 9) - (order[b.phase] ?? 9)
@@ -465,7 +475,7 @@ function corpusStatus() {
 
 function observatoryStatus() {
   // Owner surface: wrap the organ's daily brief (logs/observatory/brief-latest.json) with a
-  // surface envelope. Tolerant of absence (the organ ships dark) — a missing brief yields a
+  // surface envelope. Tolerant of absence (the organ ships dark) -- a missing brief yields a
   // "missing" stub so the build always succeeds, mirroring corpusStatus()/mirrorInsights().
   if (existsSync(observatoryBriefSourcePath)) {
     const brief = JSON.parse(readFileSync(observatoryBriefSourcePath, "utf8"));
@@ -635,7 +645,7 @@ function mirrorInsights() {
   for (const tier of tiers) {
     const dest = join(appRoot, "public", `${tier}-insights.json`);
     const tierFiles = insightFiles.filter(f => f.startsWith(`${tier}-`));
-    
+
     // Find the latest file by sorting alphabetically (timestamp is in ISO format)
     tierFiles.sort();
     const latestFile = tierFiles.length > 0 ? tierFiles[tierFiles.length - 1] : null;
@@ -657,10 +667,38 @@ function mirrorInsights() {
 
 const data = YAML.parse(readFileSync(sourcePath, "utf8"));
 const summary = deriveSummary(data);
+
+// Slim dashboard.json: exclude done/archived tasks (dead weight ~70%), truncate dispatch_log
+// to last 3 entries per task (dispatch_log alone was 51% of the 4.45MB payload). Write
+// excluded tasks to done-tasks.json for lazy-fetch when the user opens the Done view.
+const DONE_STATUSES = new Set(["done", "archived"]);
+const MAX_DISPATCH_LOG = 3;
+
+function slimTask(task) {
+  if (!task.dispatch_log || task.dispatch_log.length <= MAX_DISPATCH_LOG) return task;
+  const sorted = [...task.dispatch_log].sort((a, b) => Date.parse(b.timestamp || 0) - Date.parse(a.timestamp || 0));
+  return { ...task, dispatch_log: sorted.slice(0, MAX_DISPATCH_LOG) };
+}
+
+const activeTasks = (data.tasks || []).filter((t) => !DONE_STATUSES.has(t.status));
+const doneTasks = (data.tasks || []).filter((t) => DONE_STATUSES.has(t.status));
+
+// tasks.json (private surface, used by contract validator): all tasks, slim dispatch_log.
+// dashboard.json (public, lazy, assembled separately): active tasks only — see refresh-web.sh / CI.
 const output = {
   ...data,
+  tasks: (data.tasks || []).map(slimTask),
   summary,
 };
+
+// done-tasks.json: lazy-fetched only when user opens the Done view.
+// Written to public/ so it lands in the static export; assembled by refresh-web.sh & CI too.
+const doneOutput = {
+  generated_at: summary.generated_at,
+  total_done: doneTasks.length,
+  tasks: doneTasks.map(slimTask),
+};
+
 const publicStatus = {
   status: "ok",
   surface: "public",
@@ -693,6 +731,7 @@ for (const path of hostedPrivatePaths) {
   if (existsSync(path)) unlinkSync(path);
 }
 writeFileSync(outPath, `${JSON.stringify(output, null, 2)}\n`);
+writeFileSync(doneTasksPath, `${JSON.stringify(doneOutput, null, 2)}\n`);
 writeFileSync(publicStatusPath, `${JSON.stringify(publicStatus, null, 2)}\n`);
 writeFileSync(clientStatusPath, `${JSON.stringify(clientStatus, null, 2)}\n`);
 writeFileSync(internalStatusPath, `${JSON.stringify(internalStatus, null, 2)}\n`);
@@ -706,5 +745,12 @@ writeFileSync(corpusStatusPath, `${JSON.stringify(corpus, null, 2)}\n`);
 writeFileSync(observatoryStatusPath, `${JSON.stringify(observatory, null, 2)}\n`);
 mirrorFleetStatus();
 mirrorInsights();
-console.log(`Generated ${outPath} with ${output.tasks?.length || 0} tasks`);
+// Copy static passthrough files (e.g. Cloudflare Pages _headers) into public/ so they land in out/.
+const staticPassthroughDir = join(appRoot, "static-passthrough");
+if (existsSync(staticPassthroughDir)) {
+  for (const file of readdirSync(staticPassthroughDir)) {
+    copyFileSync(join(staticPassthroughDir, file), join(appRoot, "public", file));
+  }
+}
+console.log(`Generated ${outPath} with ${output.tasks?.length || 0} active tasks (${doneTasks.length} done/archived in done-tasks.json)`);
 console.log("Generated public-safe hosted contracts and private validation snapshots");

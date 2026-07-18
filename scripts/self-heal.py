@@ -13,11 +13,10 @@ This is alchemical progress toward ideal form (the fleet repairing its OWN work)
 Safety / shape (matches the sibling organs exactly):
   • SCAN side is identical to merge-drain.py (same OWNERS, same `gh search prs --author @me`,
     the same assess() classifier: READY / CI-RED / CI-PENDING / CONFLICT). Read-only `gh`.
-  • EMIT side uses the ONE safe shared-append path every tasks.yaml writer uses: acquire the
-    daemon's queue-lock (logs/.queue.lock.d, the heal-dispatch.py convention), RELOAD fresh
-    under the lock, append validated limen Task objects, save via the atomic writer
-    (limen.io.save_limen_file → temp file + fsync + os.replace). Never a naive open()/dump,
-    so it can NEVER race the daemon or torn-read tasks.yaml.
+  • EMIT side acquires the daemon's queue-lock (logs/.queue.lock.d, the heal-dispatch.py
+    convention), RELOADS the read-only projection under the lock, constructs validated Limen Task
+    objects, and submits the delta through TABVLARIVS. The remote keeper is the only lifecycle
+    writer; this organ never rewrites tasks.yaml or pushes the default branch.
   • IDEMPOTENT: each heal task has a STABLE id derived from kind+owner+repo+num
     (HEAL-cifix-… / HEAL-rebase-…). If that id already exists in tasks.yaml (any status), no
     duplicate is emitted — re-running is a no-op until the PR's state changes.
@@ -49,7 +48,13 @@ from limen.io import load_limen_file  # noqa: E402
 from limen.intake import contract_fields, github_existing_pr_contract  # noqa: E402
 from limen.models import Task  # noqa: E402
 from limen.tabularius import apply_limen_file_sync  # noqa: E402
-from _pr_scan import enumerate_open_prs, rotating_window, scaled_limit, stale_base_verdict  # noqa: E402
+from _pr_scan import (  # noqa: E402
+    enumerate_open_prs,
+    merge_queue_capability,
+    rotating_window,
+    scaled_limit,
+    stale_base_verdict,
+)
 
 # DERIVED from env so the conductor survives relocation; same defaults as merge-drain.py.
 OWNERS = [o.strip() for o in os.environ.get("LIMEN_OWNERS", "organvm,4444J99").split(",") if o.strip()]
@@ -95,9 +100,10 @@ KINDS = {
             "pushing. Do not open a new PR. PR: {url}"
         ),
     },
-    # STALE-BASE family — the #111 guard. A mergeable+green PR off an OLD base would silently REVERT
-    # work that landed since. merge-drain refuses it; these tasks rebase it onto the CURRENT base,
-    # keeping the PR's own work and dropping only the reverting hunks. ([[pr111-daemon-regression-healed]])
+    # STALE-BASE family — the #111 guard. When queue capability is absent/unknown, a mergeable+green
+    # PR off an OLD base can silently REVERT work that landed since, so these tasks rebase it onto
+    # CURRENT base. An active queue instead validates a current-base merge group and must not spawn
+    # rebase churn. ([[pr111-daemon-regression-healed]])
     "STALE-CORE": {
         "slug": "rebase-stale",
         "priority": "high",
@@ -227,11 +233,13 @@ def assess(pr):
         if any(s in ("PENDING", "IN_PROGRESS", "QUEUED", "EXPECTED", "") for s in states):
             return (repo, num, url, "CI-PENDING", [])
         if d.get("mergeable") == "MERGEABLE":
-            # STALE-BASE GATE (identical to merge-drain.assess — one verdict): refuse a green+mergeable
-            # PR off an old base that would silently revert work, and emit a rebase-to-current heal task.
+            # STALE-BASE GATE (identical to merge-drain.assess — one verdict): only a positively
+            # detected active queue makes a stale exact head queueable. Absent/unknown preserves
+            # the rebase-to-current heal route.
             paths = [f.get("path", "") for f in (d.get("files") or [])]
             sb = stale_base_verdict(repo, paths, d.get("baseRefName"), d.get("headRefOid"), gh)
-            if sb:
+            queue_capability = merge_queue_capability(repo, d.get("baseRefName"), gh)
+            if sb and queue_capability != "active":
                 return (repo, num, url, sb, [])  # STALE-CORE / STALE-BASE → rebase task below
             return (repo, num, url, "READY", [])
         return (repo, num, url, "BLOCKED", [])
@@ -437,8 +445,9 @@ def main():
             print("| (none — every sick PR already has an open heal task) |  |  |  |")
         return 0
 
-    # LIVE: acquire the daemon's queue-lock, RELOAD fresh under it, dedupe by stable id, append
-    # validated Task objects, save atomically. This is the ONLY safe shared-append path.
+    # LIVE: acquire the daemon's queue-lock, RELOAD the hot projection under it, dedupe by stable
+    # id, and submit the desired delta to TABVLARIVS. Only the remote keeper mutates lifecycle
+    # state; this process never writes the canonical board.
     if not acquire_lock():
         print("[self-heal] queue lock held by daemon — skipping this pass (retry next tick)")
         return 0
