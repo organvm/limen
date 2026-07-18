@@ -896,6 +896,30 @@ sensors:
         severity: silent
         escalation: "opportunity sync skipped or exceeded its bound (reads obligations-ledger.json; fails open)"
 
+  lever-dissolve:
+    section: "0r"
+    title: "graduate design_debt his-hand levers whose organ has shipped (report; auto-discharge is a dark valve)"
+    gate: LIMEN_LEVER_DISSOLVE
+    default: "1"
+    source: [metabolize]
+    owner: tabularius
+    # The runtime twin of no-tasks-on-me.sh §11 (lever-classify --check, the omega rung below). §1-10
+    # prove every lever is HOMED; §11 proves every open lever is IRREDUCIBLE — a sovereignty boundary,
+    # never design debt. THIS sensor closes the missing graduation: for any lever tagged
+    # design_debt{organ,dissolves_when}, once its `dissolves_when` predicate goes green (the organ that
+    # obsoletes the human dependency shipped + works), the lever can auto-discharge — crediting the organ,
+    # not him (his-hand → the-beat-built-it). Report-only/advisory by default; the mutation is a separate
+    # dark valve (LIMEN_LEVER_DISSOLVE_APPLY=1, never passed here). 0 design_debt levers today (the
+    # registry is already at the sovereignty floor) — this arms the graduation for future ones.
+    steps:
+      - command: "python3 scripts/lever-classify.py --dissolve"
+        severity: advisory
+        escalation: "design_debt lever(s) DISSOLVABLE — their organ shipped; arm LIMEN_LEVER_DISSOLVE_APPLY=1 to auto-discharge (crediting the organ, not him)"
+    omega_eligible:
+      - label: "his head is not a backlog — every open his-hand lever is a proven sovereignty boundary"
+        tier: det
+        command: "python3 scripts/lever-classify.py --check"
+
   closeout-reconcile:
     section: "0z"
     title: "closeout reconciliation — every claimed-done outcome carries a verified receipt"
