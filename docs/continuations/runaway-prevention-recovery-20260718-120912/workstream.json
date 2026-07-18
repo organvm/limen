@@ -22,12 +22,12 @@
       "provider_and_model": "provider_neutral"
     },
     "runway": {
-      "deadline_at": null,
-      "deadline_epoch": null,
+      "deadline_at": "2026-07-18T20:11:37+00:00",
+      "deadline_epoch": 1784405497,
       "duration_seconds": 28800,
       "requested": "8h",
-      "started_at": null,
-      "started_epoch": null
+      "started_at": "2026-07-18T12:11:37+00:00",
+      "started_epoch": 1784376697
     },
     "schema": "limen.workstream.contract.v1"
   },
