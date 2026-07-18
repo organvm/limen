@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 from .catalog import blocker_code, select_profile
 from .contracts import (
+    RECEIPT_VERIFIER_MAX_LENGTH,
     STANDING_INSTRUCTIONS_REF,
     ResearchContractError,
     ResearchRequest,
@@ -140,7 +141,7 @@ def build_receipt(
         raise ResearchContractError("selected_profile must match the owner profile identifier contract")
     observed_provider = observed_identifier(observed_provider, field_name="observed_provider")
     observed_model = observed_identifier(observed_model, field_name="observed_model")
-    if not verifier.strip() or len(verifier) > 160:
+    if not verifier.strip() or len(verifier) > RECEIPT_VERIFIER_MAX_LENGTH:
         raise ResearchContractError("verifier must be a bounded non-empty identifier")
     started = datetime.fromisoformat(retrieval_started_at.replace("Z", "+00:00"))
     finished = datetime.fromisoformat(retrieval_finished_at.replace("Z", "+00:00"))

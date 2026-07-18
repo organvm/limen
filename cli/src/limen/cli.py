@@ -722,7 +722,7 @@ def research_ingest(
 
     report_path = owner_path(owner_root, request.report_ref)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    if report_path.suffix.lower() == ".json":
+    if request.output_format == "json":
         write_json(report_path, outcome)
     else:
         report_path.write_text(render_evidence_markdown(outcome), encoding="utf-8")

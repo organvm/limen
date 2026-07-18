@@ -20,6 +20,7 @@ from limen.research import (
     ResearchRequest,
     SourceVerifierAttestation,
     ingest_markdown_export,
+    load_document,
     owner_path,
     prepare_research,
     select_profile,
@@ -383,6 +384,55 @@ def test_request_rejects_owner_schema_type_and_semantic_drift():
             ResearchRequest.from_mapping(payload)
 
 
+@pytest.mark.parametrize(
+    "unsafe_url",
+    [
+        "http://example.com/catalog.yaml",
+        "https://user:password@example.com/catalog.yaml",
+        "https://localhost/catalog.yaml",
+        "https://127.0.0.1/catalog.yaml",
+        "https://169.254.169.254/latest/meta-data",
+    ],
+)
+def test_load_document_rejects_non_https_userinfo_and_private_hosts(monkeypatch, unsafe_url):
+    def unexpected_fetch(*_args, **_kwargs):
+        raise AssertionError("unsafe remote document must be rejected before fetch")
+
+    monkeypatch.setattr("urllib.request.urlopen", unexpected_fetch)
+    with pytest.raises(ResearchContractError, match="public|HTTPS"):
+        load_document(unsafe_url)
+
+
+def test_load_document_requires_public_dns_and_strict_mapping(monkeypatch):
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        @staticmethod
+        def read():
+            return b"registry_id: fixture\n"
+
+    monkeypatch.setattr(
+        "socket.getaddrinfo",
+        lambda *_args, **_kwargs: [(2, 1, 6, "", ("93.184.216.34", 443))],
+    )
+    monkeypatch.setattr("urllib.request.urlopen", lambda *_args, **_kwargs: Response())
+
+    assert load_document("https://example.com/catalog.yaml") == {"registry_id": "fixture"}
+    with pytest.raises(ResearchContractError, match="JSON object"):
+        load_document({1: "coerced keys are forbidden"})
+
+    monkeypatch.setattr(
+        "socket.getaddrinfo",
+        lambda *_args, **_kwargs: [(2, 1, 6, "", ("10.0.0.4", 443))],
+    )
+    with pytest.raises(ResearchContractError, match="public addresses"):
+        load_document("https://internal.example/catalog.yaml")
+
+
 def test_legacy_privacy_name_and_private_transmission_are_rejected():
     legacy = request_payload()
     legacy["privacy_class"] = "tracked_internal"
@@ -629,6 +679,37 @@ def test_valid_export_requires_and_uses_independent_source_verifier_attestation(
     assert receipt.privacy["tracked_output_safe"] is True
 
 
+def test_schema_valid_attestation_names_fit_receipt_verifier_bound():
+    request = ResearchRequest.from_mapping(request_payload())
+    registry = catalog()
+    markdown = valid_export()
+    _, handoff = handoff_for(request, registry)
+    long_name = "V" * 120
+    verification = valid_attestation()
+    verification["verifier"] = long_name
+    accepted, accepted_receipt = ingest_markdown_export(
+        markdown,
+        request,
+        registry,
+        handoff_receipt=handoff,
+        verification_attestation=verification,
+        sanitization_attestation=valid_sanitization(markdown),
+    )
+    rejected, rejected_receipt = ingest_markdown_export(
+        markdown,
+        request,
+        registry,
+        handoff_receipt=handoff,
+        verification_attestation={},
+        sanitization_attestation=valid_sanitization(markdown, attestor=long_name),
+    )
+
+    assert isinstance(accepted, dict)
+    assert accepted_receipt.verification["verifier"].startswith(long_name)
+    assert isinstance(rejected, BlockedReceipt)
+    assert rejected_receipt.verification["verifier"].startswith(long_name)
+
+
 def test_provider_self_support_label_cannot_override_verifier_rejection():
     request = ResearchRequest.from_mapping(request_payload())
     registry = catalog()
@@ -844,6 +925,46 @@ def test_invalid_exports_are_rejected(markdown, expected):
     assert isinstance(outcome, BlockedReceipt)
     assert expected in outcome.failed_predicate
     assert receipt.verification["status"] == "rejected"
+
+
+@pytest.mark.parametrize(
+    ("markdown", "expected"),
+    [
+        (
+            valid_export().replace(
+                "- [C2][material][evidence][supported]",
+                "- [C1][material][evidence][supported]",
+            ),
+            "duplicate_claim_id:CLM-C1",
+        ),
+        (
+            valid_export().replace(
+                "- [S2] [Primary standard]",
+                "- [S1] [Primary standard]",
+            ),
+            "duplicate_source_id:SRC-S1",
+        ),
+        (
+            valid_export().replace("Result count: 0", "Result count: 3"),
+            "invalid_negative_search_result_count:3",
+        ),
+    ],
+)
+def test_ambiguous_or_nonnegative_evidence_rows_are_rejected(markdown, expected):
+    outcome, receipt = ingest_valid(markdown=markdown)
+
+    assert isinstance(outcome, BlockedReceipt)
+    assert expected in outcome.failed_predicate
+    assert receipt.verification["status"] == "rejected"
+
+
+def test_historical_iso_publication_dates_are_accepted():
+    markdown = valid_export().replace("Published: 2026-07-16", "Published: 1999-12-31")
+    outcome, receipt = ingest_valid(markdown=markdown)
+
+    assert isinstance(outcome, dict)
+    assert outcome["sources"][0]["published_at"] == "1999-12-31"
+    assert receipt.verification["status"] == "accepted"
 
 
 def test_domain_source_type_and_publication_constraints_are_enforced():
@@ -1070,10 +1191,18 @@ def test_cli_prepare_writes_prompt_and_schema_shaped_handoff(tmp_path):
     assert outcome["execution_timeout_seconds"] == 900
 
 
-def test_cli_ingest_writes_report_before_terminal_receipt(tmp_path):
+@pytest.mark.parametrize(
+    "report_path",
+    [
+        "docs/research/test-result.md",
+        "docs/research/test-result.json",
+    ],
+)
+def test_cli_ingest_uses_contract_format_before_terminal_receipt(tmp_path, report_path):
     owner = tmp_path / "owner"
     init_owner_repo(owner)
     payload = request_payload()
+    payload["output_contract"]["report_path"] = report_path
     request = ResearchRequest.from_mapping(payload)
     registry = catalog()
     _, handoff = handoff_for(request, registry)
@@ -1118,7 +1247,8 @@ def test_cli_ingest_writes_report_before_terminal_receipt(tmp_path):
     report = owner / payload["output_contract"]["report_path"]
     receipt = owner / payload["output_contract"]["receipt_path"]
     assert result.exit_code == 0, result.output
-    assert report.is_file() and report.read_text()
+    assert report.is_file()
+    assert report.read_text().startswith("# Evidence Packet")
     assert receipt.is_file()
     assert json.loads(receipt.read_text())["verification"]["status"] == "accepted"
 

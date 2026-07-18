@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import re
+import socket
 import urllib.request
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping, Sequence, cast
+from urllib.parse import urlparse
 
 import yaml
 
@@ -46,6 +49,8 @@ _PRIMARY_SOURCE_RATIOS = {
     "primary_source": 0.8,
     "systematic": 0.8,
 }
+ATTESTATION_NAME_MAX_LENGTH = 120
+RECEIPT_VERIFIER_MAX_LENGTH = ATTESTATION_NAME_MAX_LENGTH + len(" attestation sha256:") + 64
 
 
 class ResearchContractError(ValueError):
@@ -167,19 +172,51 @@ def iso_datetime(value: object) -> str | None:
     return raw
 
 
+def _public_https_url(value: str) -> str:
+    """Require an HTTPS URL whose current DNS answers are all globally routable."""
+
+    try:
+        parsed = urlparse(value)
+        port = parsed.port
+    except ValueError as exc:
+        raise ResearchContractError("remote document URL is invalid") from exc
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username is not None or parsed.password is not None:
+        raise ResearchContractError("remote documents require a public HTTPS URL without userinfo")
+
+    host = parsed.hostname.rstrip(".").lower()
+    if host in {"localhost", "localhost.localdomain"} or host.endswith((".local", ".localhost")):
+        raise ResearchContractError("remote document host must be public")
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        try:
+            answers = socket.getaddrinfo(host, port or 443, type=socket.SOCK_STREAM)
+            addresses = {ipaddress.ip_address(str(answer[4][0]).split("%", 1)[0]) for answer in answers}
+        except (OSError, ValueError) as exc:
+            raise ResearchContractError("remote document host must resolve to a public address") from exc
+        if not addresses or any(not address.is_global for address in addresses):
+            raise ResearchContractError("remote document host must resolve only to public addresses")
+    else:
+        if not literal.is_global:
+            raise ResearchContractError("remote document host must be public")
+    return value
+
+
 def load_document(source: str | Path | Mapping[str, Any]) -> dict[str, Any]:
     """Load owner YAML/JSON from an injected mapping, local path, or public URL."""
 
     if isinstance(source, Mapping):
-        return mapping(source, field_name="document")
+        return strict_mapping(source, field_name="document")
     raw_source = str(source)
-    if raw_source.startswith(("https://", "http://")):
-        request = urllib.request.Request(raw_source, headers={"User-Agent": "limen-research/1"})
+    parsed = urlparse(raw_source)
+    if parsed.scheme:
+        remote_url = _public_https_url(raw_source)
+        request = urllib.request.Request(remote_url, headers={"User-Agent": "limen-research/1"})
         with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310 - explicit catalog input
             text = response.read().decode("utf-8")
     else:
         text = Path(raw_source).expanduser().read_text(encoding="utf-8")
-    return mapping(yaml.safe_load(text), field_name="document")
+    return strict_mapping(yaml.safe_load(text), field_name="document")
 
 
 @dataclass(frozen=True)

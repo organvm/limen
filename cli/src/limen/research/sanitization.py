@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Mapping, Sequence
 
 from .contracts import (
+    ATTESTATION_NAME_MAX_LENGTH,
     ResearchContractError,
     canonical_json,
     iso_datetime,
@@ -87,7 +88,7 @@ class OutputSanitizationAttestation:
         if not iso_datetime(attested_at):
             raise ResearchContractError("output sanitization attestation requires attested_at")
         attestor = str(data.get("attestor") or "").strip()
-        if not attestor or len(attestor) > 120 or _SECRET.search(attestor):
+        if not attestor or len(attestor) > ATTESTATION_NAME_MAX_LENGTH or _SECRET.search(attestor):
             raise ResearchContractError("output sanitization attestation requires a safe bounded attestor")
         export_hash = str(data.get("export_hash") or "").strip()
         if not _HASH.fullmatch(export_hash) or export_hash != expected_export_hash:

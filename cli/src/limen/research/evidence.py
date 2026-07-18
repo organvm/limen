@@ -96,8 +96,11 @@ def _published_date(value: str | None) -> str | None:
     return raw
 
 
-def _source_manifest(sections: Mapping[str, Sequence[str]]) -> list[dict[str, object]]:
+def _source_manifest(
+    sections: Mapping[str, Sequence[str]],
+) -> tuple[list[dict[str, object]], list[str]]:
     sources: dict[str, dict[str, object]] = {}
+    errors: list[str] = []
     for line in sections.get("source_manifest", ()):
         explicit = _SOURCE_LINE.match(line)
         if not explicit:
@@ -116,6 +119,9 @@ def _source_manifest(sections: Mapping[str, Sequence[str]]) -> list[dict[str, ob
                 }
             continue
         source_id = _source_id(explicit.group("id"))
+        if source_id in sources:
+            errors.append(f"duplicate_source_id:{source_id}")
+            continue
         metadata = _metadata_fields(explicit.group("meta"))
         primary_label = (metadata.get("primary") or "").lower()
         primary = primary_label in {"true", "yes", "1"}
@@ -131,7 +137,7 @@ def _source_manifest(sections: Mapping[str, Sequence[str]]) -> list[dict[str, ob
             "quality_tier": (metadata.get("quality_tier") or "").upper(),
             "locator": metadata.get("locator") or None,
         }
-    return sorted(sources.values(), key=lambda item: str(item["source_id"]))
+    return sorted(sources.values(), key=lambda item: str(item["source_id"])), errors
 
 
 def _claim_lines(sections: Mapping[str, Sequence[str]]) -> list[str]:
@@ -153,9 +159,14 @@ def _claims(
     claims: list[dict[str, object]] = []
     citation_occurrences: list[str] = []
     errors: list[str] = []
+    seen_claim_ids: set[str] = set()
     for index, line in enumerate(_claim_lines(sections), start=1):
         match = re.search(r"\[C([^\]]+)\]", line, re.IGNORECASE)
         claim_id = _claim_id(match.group(1) if match else str(index))
+        if claim_id in seen_claim_ids:
+            errors.append(f"duplicate_claim_id:{claim_id}")
+            continue
+        seen_claim_ids.add(claim_id)
         lowered = line.lower()
         classification = (
             "unknown" if "[unknown]" in lowered else "inference" if "[inference]" in lowered else "evidence"
@@ -209,12 +220,16 @@ def _negative_searches(
         if not searched_at:
             errors.append("invalid_negative_search_date")
             continue
+        result_count = int(match.group("count"))
+        if result_count != 0:
+            errors.append(f"invalid_negative_search_result_count:{result_count}")
+            continue
         searches.append(
             {
                 "query": match.group("query").strip(),
                 "surface": match.group("surface").strip(),
                 "searched_at": searched_at,
-                "result_count": int(match.group("count")),
+                "result_count": result_count,
                 "disposition": match.group("disposition").strip(),
             }
         )
@@ -365,8 +380,9 @@ def ingest_markdown_export(
     ingest_started_at = now()
     selected_profile, errors = _validate_handoff(request, catalog, handoff_receipt)
     sections = _sections(markdown)
-    sources = _source_manifest(sections)
+    sources, source_errors = _source_manifest(sections)
     claims, _citation_occurrences, claim_errors = _claims(sections, sources)
+    errors.extend(source_errors)
     errors.extend(claim_errors)
     source_by_id = {str(item["source_id"]): item for item in sources}
     claim_by_id = {str(item["claim_id"]): item for item in claims}
@@ -455,8 +471,11 @@ def ingest_markdown_export(
             if not source.get(field_name):
                 errors.append(f"source_metadata:{source_id}:{field_name}")
         published_at = source.get("published_at")
-        if published_at and not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", str(published_at)):
-            errors.append(f"source_metadata:{source_id}:published_at")
+        if published_at:
+            try:
+                date.fromisoformat(str(published_at))
+            except ValueError:
+                errors.append(f"source_metadata:{source_id}:published_at")
         if source.get("quality_tier") not in {"A", "B", "C", "D"}:
             errors.append(f"source_metadata:{source_id}:quality_tier")
         if not _safe_public_reference(str(source.get("url") or "")):
@@ -582,6 +601,7 @@ def ingest_markdown_export(
                 (
                     "missing_",
                     "invalid_",
+                    "duplicate_",
                     "source_metadata",
                     "lost_source_metadata",
                     "unmapped_citation",

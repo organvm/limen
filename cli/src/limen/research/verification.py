@@ -8,6 +8,7 @@ from typing import Mapping, Sequence
 from urllib.parse import urlparse
 
 from .contracts import (
+    ATTESTATION_NAME_MAX_LENGTH,
     ResearchContractError,
     canonical_json,
     iso_datetime,
@@ -82,7 +83,7 @@ class SourceVerifierAttestation:
         if not iso_datetime(verified_at):
             raise ResearchContractError("source verifier attestation requires verified_at")
         verifier = str(data.get("verifier") or "").strip()
-        if not verifier or len(verifier) > 120:
+        if not verifier or len(verifier) > ATTESTATION_NAME_MAX_LENGTH:
             raise ResearchContractError("source verifier attestation requires a bounded verifier")
         verdict = str(data.get("verdict") or "").strip()
         if verdict not in {"accepted", "rejected"}:
