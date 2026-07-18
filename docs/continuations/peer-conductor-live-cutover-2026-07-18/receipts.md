@@ -1,6 +1,7 @@
 # Owner receipts
 
-- Implementation owner: remote branch `work/peer-conductor-mesh-20260718` and its Limen PR.
+- Implementation owner: <https://github.com/organvm/limen/pull/1265> at remote branch
+  `work/peer-conductor-mesh-20260718`.
 - Exact-head review readiness owner: <https://github.com/organvm/limen/pull/1171>.
 - Credential and environment owner: pinned credential wall
   <https://github.com/organvm/limen/issues/320>.
@@ -10,6 +11,8 @@
 - Campaign baseline: `docs/receipts/pr-campaign/2026-07-18-pass-1.json`.
 - Campaign repeated-pass evidence: `docs/receipts/pr-campaign/2026-07-18-pass-2.json` (not a fixed
   point; 1,143 to 1,145 current heads).
+- Campaign closeout census: `docs/receipts/pr-campaign/2026-07-18-pass-3.json` (complete over 307
+  repositories, 1,146 current heads, no API errors; pass 2 to pass 3 remained non-zero-growth).
 - Protocol and deployment contract: `docs/peer-conductor-protocol.md`.
 
 For every subsequent leaf, retain exact old/new head, changed paths, predicate command/exit,

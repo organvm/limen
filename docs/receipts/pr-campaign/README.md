@@ -17,6 +17,13 @@ complete pass. It is intentionally retained as negative fixed-point evidence: th
 denominator moved from 1,143 to 1,145 heads, with 9 newly observed keys, 7 no-longer-observed keys,
 and 6 moved heads. The comparison therefore returned `zero_growth: false`.
 
-The closeout pass is run only after implementation verification, immediately before publication.
-If the live estate still changes between complete passes, that delta remains owned evidence; it is
-not rewritten into a false fixed point and it does not imply that campaign review or repair ran.
+`2026-07-18-pass-3.json` is the post-integration closeout census. It completed without API errors
+over the same 307-repository denominator, but the live estate again moved: repositories with open
+PRs increased from 125 to 126 and current heads from 1,145 to 1,146. Relative to pass 2 it observed
+6 new work keys, 5 no-longer-observed keys, and 2 moved heads, so `zero_growth` and `byte_stable`
+remain false. Its ordered-leaf digest is
+`065b910bc4d2f48566572df46930354bd5502d9931b706404f6e4dd7cfcb59fb`.
+
+This live delta remains owned evidence; it is not rewritten into a false fixed point and it does
+not imply that campaign review or repair ran. The next campaign conductor resumes from pass 3 and
+must create a new complete receipt rather than rerunning or overwriting a successful census.
