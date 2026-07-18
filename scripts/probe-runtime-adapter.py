@@ -62,6 +62,13 @@ def assert_status(response: Response, expected: int, label: str) -> None:
         fail(f"{label}: expected HTTP {expected}, got {response.status}: {response.text[:300]}")
 
 
+def assert_broker_unavailable(response: Response, label: str) -> None:
+    assert_status(response, 503, label)
+    detail = str(response.payload.get("detail") or "")
+    if "authenticated conduct broker is required" not in detail:
+        fail(f"{label}: wrong broker-unavailable detail: {detail[:300]}")
+
+
 def load_schema(name: str) -> dict[str, Any]:
     return json.loads((SCHEMA_DIR / name).read_text())
 
@@ -197,7 +204,15 @@ def main() -> None:
     parser.add_argument("--verify-task-id", default=None, help="Optional active task id to verify as done with the owner token")
     parser.add_argument("--assign-task-id", default=None, help="Optional open/attention task id to assign with the owner token")
     parser.add_argument("--archive-task-id", default=None, help="Optional done task id to archive with the owner token")
+    parser.add_argument(
+        "--expect-mutations-unavailable",
+        action="store_true",
+        help="Require owner mutations to fail closed because no authenticated conduct broker is configured",
+    )
     args = parser.parse_args()
+    mutation_task_ids = (args.verify_task_id, args.assign_task_id, args.archive_task_id)
+    if args.expect_mutations_unavailable and not any(mutation_task_ids):
+        fail("--expect-mutations-unavailable requires at least one owner mutation task id")
 
     health = request(args.api_url, "/health")
     assert_status(health, 200, "health")
@@ -342,12 +357,15 @@ def main() -> None:
             method="POST",
             body={"status": "done", "note": "Runtime probe verification", "session_id": "runtime-probe"},
         )
-        assert_status(response, 200, "owner verify mutation")
-        if response.payload.get("status") != "verified" or response.payload.get("verified_status") != "done":
-            fail("owner verify mutation returned wrong status")
-        task = get_task(args.api_url, args.owner_token, args.verify_task_id)
-        if task.get("status") != "done":
-            fail("owner verify mutation did not move task to done")
+        if args.expect_mutations_unavailable:
+            assert_broker_unavailable(response, "owner verify mutation without broker")
+        else:
+            assert_status(response, 200, "owner verify mutation")
+            if response.payload.get("status") != "verified" or response.payload.get("verified_status") != "done":
+                fail("owner verify mutation returned wrong status")
+            task = get_task(args.api_url, args.owner_token, args.verify_task_id)
+            if task.get("status") != "done":
+                fail("owner verify mutation did not move task to done")
 
     if args.assign_task_id:
         assignment_task = get_task(args.api_url, args.owner_token, args.assign_task_id)
@@ -371,12 +389,15 @@ def main() -> None:
                 "session_id": "runtime-probe",
             },
         )
-        assert_status(response, 200, "owner assign mutation")
-        if response.payload.get("status") != "assigned":
-            fail("owner assign mutation returned wrong status")
-        task = get_task(args.api_url, args.owner_token, args.assign_task_id)
-        if task.get("target_agent") != "jules" or task.get("priority") != "high" or task.get("budget_cost") != 2:
-            fail("owner assign mutation did not persist assignment fields")
+        if args.expect_mutations_unavailable:
+            assert_broker_unavailable(response, "owner assign mutation without broker")
+        else:
+            assert_status(response, 200, "owner assign mutation")
+            if response.payload.get("status") != "assigned":
+                fail("owner assign mutation returned wrong status")
+            task = get_task(args.api_url, args.owner_token, args.assign_task_id)
+            if task.get("target_agent") != "jules" or task.get("priority") != "high" or task.get("budget_cost") != 2:
+                fail("owner assign mutation did not persist assignment fields")
 
     if args.archive_task_id:
         response = request(
@@ -386,14 +407,17 @@ def main() -> None:
             method="POST",
             body={"note": "Runtime probe archive", "session_id": "runtime-probe"},
         )
-        assert_status(response, 200, "owner archive mutation")
-        if response.payload.get("status") != "archived":
-            fail("owner archive mutation returned wrong status")
-        task = get_task(args.api_url, args.owner_token, args.archive_task_id)
-        if task.get("status") != "archived":
-            fail("owner archive mutation did not persist archived status")
+        if args.expect_mutations_unavailable:
+            assert_broker_unavailable(response, "owner archive mutation without broker")
+        else:
+            assert_status(response, 200, "owner archive mutation")
+            if response.payload.get("status") != "archived":
+                fail("owner archive mutation returned wrong status")
+            task = get_task(args.api_url, args.owner_token, args.archive_task_id)
+            if task.get("status") != "archived":
+                fail("owner archive mutation did not persist archived status")
 
-    if args.verify_task_id or args.assign_task_id or args.archive_task_id:
+    if any(mutation_task_ids) and not args.expect_mutations_unavailable:
         mutated_qa_status = request(args.api_url, "/api/qa-status", token=args.owner_token)  # allow-secret
         assert_status(mutated_qa_status, 200, "qa status after owner mutations")
         lifecycle = mutated_qa_status.payload.get("lifecycle", {})
