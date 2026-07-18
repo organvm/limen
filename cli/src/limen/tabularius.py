@@ -143,6 +143,8 @@ _STRUCTURED_LOG_FIELDS = frozenset(
         "liveness_reservation_id",
         "liveness_pid",
         "liveness_age_seconds",
+        "recurrence_source",
+        "recurrence_head_sha",
     }
 )
 _CANONICAL_TRANSITIONS = {
@@ -768,6 +770,20 @@ def _lifecycle_repair_authorized(
                 )
                 or (evidence in {"markerless-expired", "launch-failed"} and pid is None)
             )
+        )
+    if marker == "recurrence-reopen":
+        head = str(log.get("recurrence_head_sha") or "")
+        predicate = str(patch.get("predicate", task.get("predicate")) or "")
+        title = str(patch.get("title", task.get("title")) or "")
+        return bool(
+            prior_status in {"done", "archived"}
+            and next_status == "open"
+            and log.get("recurrence_source") == "main-green"
+            and re.fullmatch(r"[0-9a-f]{40}", head)
+            and str(task.get("id") or "").startswith("HEAL-mainred-")
+            and {"ci", "mainred"}.issubset(labels)
+            and head in predicate
+            and head[:8] in title
         )
     return False
 

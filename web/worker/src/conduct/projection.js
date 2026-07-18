@@ -78,6 +78,8 @@ const STRUCTURED_LOG_FIELDS = new Set([
   "liveness_reservation_id",
   "liveness_pid",
   "liveness_age_seconds",
+  "recurrence_source",
+  "recurrence_head_sha",
 ]);
 const STRING_STRUCTURED_LOG_FIELDS = new Set([
   "route_to",
@@ -115,6 +117,8 @@ const STRING_STRUCTURED_LOG_FIELDS = new Set([
   "execution_result_kind",
   "liveness_evidence",
   "liveness_reservation_id",
+  "recurrence_source",
+  "recurrence_head_sha",
 ]);
 const ENUM_STRUCTURED_LOG_FIELDS = new Map([
   ["lifecycle_repair", new Set([
@@ -125,6 +129,7 @@ const ENUM_STRUCTURED_LOG_FIELDS = new Map([
     "routine-recovered",
     "provider-terminal",
     "stale-successor-hold",
+    "recurrence-reopen",
   ])],
   ["fleet_debt_source", new Set(["dispatch-verify", "prior-chronic-log", "repeated-noop"])],
   ["pr_observed_state", new Set(["open", "merged"])],
@@ -136,6 +141,7 @@ const ENUM_STRUCTURED_LOG_FIELDS = new Map([
     "markerless-expired",
     "launch-failed",
   ])],
+  ["recurrence_source", new Set(["main-green"])],
 ]);
 const CANONICAL_TRANSITIONS = new Map([
   ["open", new Set(["open", "dispatched"])],
@@ -234,6 +240,10 @@ function validateStructuredLog(log) {
   if (log.execution_contract_hash != null
       && !/^[0-9a-f]{64}$/.test(log.execution_contract_hash)) {
     throw new ConductProjectionError("task dispatch log execution_contract_hash must be a lowercase SHA-256", 422);
+  }
+  if (log.recurrence_head_sha != null
+      && !/^[0-9a-f]{40}$/.test(log.recurrence_head_sha)) {
+    throw new ConductProjectionError("task dispatch log recurrence_head_sha must be a lowercase Git SHA", 422);
   }
   if (log.landing_prior_updated != null
       && (typeof log.landing_prior_updated !== "string"
@@ -493,6 +503,20 @@ function isLifecycleRepairAuthorized(task, nextStatus, log, patch) {
         (["dead-process", "defunct-process"].includes(evidence) && Number.isInteger(pid) && pid > 0)
         || (["markerless-expired", "launch-failed"].includes(evidence) && pid == null)
       );
+  }
+  if (marker === "recurrence-reopen") {
+    const head = String(log?.recurrence_head_sha || "");
+    const predicate = String(patch.predicate ?? task.predicate ?? "");
+    const title = String(patch.title ?? task.title ?? "");
+    return ["done", "archived"].includes(priorStatus)
+      && nextStatus === "open"
+      && log?.recurrence_source === "main-green"
+      && /^[0-9a-f]{40}$/.test(head)
+      && String(task.id || "").startsWith("HEAL-mainred-")
+      && labels.has("ci")
+      && labels.has("mainred")
+      && predicate.includes(head)
+      && title.includes(head.slice(0, 8));
   }
   return false;
 }

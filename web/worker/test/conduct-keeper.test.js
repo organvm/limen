@@ -1386,6 +1386,28 @@ test("exceptional task transitions require exact structured evidence", () => {
     "failed",
   );
 
+  const recurrence = event("done", "open", {
+    lifecycle_repair: "recurrence-reopen",
+    recurrence_source: "main-green",
+    recurrence_head_sha: "b".repeat(40),
+  }, {
+    title: "Restore main at bbbbbbbb",
+    labels: ["lifecycle", "ci", "mainred"],
+    predicate: `test "${"b".repeat(40)}" = "${"b".repeat(40)}"`,
+  });
+  assert.equal(
+    apply(task({
+      id: "HEAL-mainred-organvm-limen",
+      status: "done",
+      labels: ["lifecycle", "ci", "mainred"],
+    }), {
+      ...recurrence,
+      task_id: "HEAL-mainred-organvm-limen",
+      intent: { ...recurrence.intent, task_id: "HEAL-mainred-organvm-limen" },
+    }).status,
+    "open",
+  );
+
   for (const [field, value] of [
     ["execution_profile", "bad"],
     ["workflow_id", "x"],

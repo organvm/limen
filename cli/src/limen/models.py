@@ -90,6 +90,7 @@ class DispatchLogEntry(BaseModel):
             "routine-recovered",
             "provider-terminal",
             "stale-successor-hold",
+            "recurrence-reopen",
         ]
         | None
     ) = None
@@ -107,6 +108,8 @@ class DispatchLogEntry(BaseModel):
     liveness_reservation_id: str | None = None
     liveness_pid: int | None = Field(default=None, gt=0)
     liveness_age_seconds: float | None = Field(default=None, ge=0)
+    recurrence_source: Literal["main-green"] | None = None
+    recurrence_head_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     output: str | None = None
 
     @field_validator("status")

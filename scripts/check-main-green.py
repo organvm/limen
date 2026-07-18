@@ -68,7 +68,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling scripts/ for
 import _notify  # noqa: E402
 from limen.io import load_limen_file  # noqa: E402
 from limen.intake import IntakeContractError, contract_fields, github_main_green_contract  # noqa: E402
-from limen.models import Task, has_jules_landing_hold  # noqa: E402
+from limen.models import DispatchLogEntry, Task, has_jules_landing_hold  # noqa: E402
 from limen.tabularius import apply_limen_file_sync  # noqa: E402
 from limen.workstream_contract import WORKSTREAM_SUCCESSOR_REQUIRED_LABEL  # noqa: E402
 
@@ -563,6 +563,7 @@ def _emit_heal_task(head_sha: str, url: str, tasks_path: Path, impact_note: str 
                     )
                 return None  # already being worked — converge, idempotent
             # prior red episode healed; trunk is red again → reopen the SAME canonical ticket
+            prior_status = existing.status
             existing.status = "open"
             existing.title = title
             existing.context = context
@@ -572,6 +573,18 @@ def _emit_heal_task(head_sha: str, url: str, tasks_path: Path, impact_note: str 
             if url and url not in (existing.urls or []):
                 existing.urls = [*(existing.urls or []), url]
             existing.updated = _now()
+            existing.dispatch_log.append(
+                DispatchLogEntry(
+                    timestamp=existing.updated,
+                    agent="check-main-green",
+                    session_id="recurrence-reopen",
+                    status="open",
+                    lifecycle_repair=("recurrence-reopen" if prior_status in {"done", "archived"} else None),
+                    recurrence_source=("main-green" if prior_status in {"done", "archived"} else None),
+                    recurrence_head_sha=(head_sha if prior_status in {"done", "archived"} else None),
+                    output=f"check-main-green: reopened recurring red trunk at {head_sha}",
+                )
+            )
             apply_limen_file_sync(
                 tasks_path,
                 lf,
