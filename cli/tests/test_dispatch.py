@@ -24,7 +24,14 @@ from limen.doctor import qa_report, readiness_report, stale_tasks
 from limen.execution_contract import execution_contract_hash
 from limen.io import load_limen_file
 from limen.jules_remote import JulesRemoteSnapshot
-from limen.models import JULES_LANDING_HOLD_LABEL, BudgetTrack, DispatchLogEntry, LimenFile, Task
+from limen.models import (
+    JULES_LANDING_HOLD_LABEL,
+    BudgetTrack,
+    DispatchLogEntry,
+    LimenFile,
+    Task,
+    dispatch_session_id,
+)
 from limen.status import print_status
 from limen.workstream_contract import packet_contract
 
@@ -2561,7 +2568,8 @@ def test_parallel_result_commit_lock_busy_cleans_owned_receipts(
     current = read_board(tasks_path)["tasks"][0]
     assert current["status"] == "dispatched"
     assert len(current["dispatch_log"]) == 1
-    assert current["dispatch_log"][0]["session_id"] == "reserve"
+    assert current["dispatch_log"][0]["session_id"] == "dispatch-parallel-reserve"
+    assert dispatch_session_id(current["dispatch_log"][0]) == "reserve"
     assert task_id not in D._MODEL_SELECTION_RECEIPTS
     assert task_id not in D._REMOTE_SUBMISSION_RECEIPTS
     assert "queue busy" in capsys.readouterr().out
@@ -2783,22 +2791,24 @@ def test_dispatch_parallel_records_blocked_without_counting_failure(tmp_path: Pa
     assert "1 blocked" in output
     assert "0 failed" in output
 
-    class RejectUnsupportedLifecycle:
+    class RejectTerminalReceipt:
         def register(self, _session):
             return {"status": "registered"}
 
         def submit(self, packet):
-            assert packet.intent["expected_status"] == "open"
+            assert packet.intent["expected_status"] == "dispatched"
             assert packet.intent["patch"]["status"] == "failed_blocked"
-            raise ConductError("unsupported lifecycle jump open -> failed_blocked")
+            assert packet.intent["log"]["lifecycle_repair"] == "provider-terminal"
+            raise ConductError("remote terminal receipt rejected")
 
-    monkeypatch.setattr(T, "client_from_env", lambda: RejectUnsupportedLifecycle())
-    with pytest.raises(ConductError, match="unsupported lifecycle jump"):
+    monkeypatch.setattr(T, "client_from_env", lambda: RejectTerminalReceipt())
+    with pytest.raises(ConductError, match="remote terminal receipt rejected"):
         T.apply_limen_file_sync(
             tasks_path,
             projections[-1],
             agent="dispatch-parallel",
             session_id="results",
+            before=projections[-2],
         )
     assert tasks_path.read_bytes() == before
 

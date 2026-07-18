@@ -43,7 +43,15 @@ from limen.jules_remote import (
     probe_jules_remote_session_absences,
     task_jules_session_id,
 )
-from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task, has_jules_landing_hold
+from limen.models import (
+    BudgetTrack,
+    DispatchLogEntry,
+    LimenFile,
+    Task,
+    dispatch_agent,
+    dispatch_session_id,
+    has_jules_landing_hold,
+)
 from limen.tabularius import apply_limen_file_sync
 from limen.runtime_requirements import task_execution_ready
 from limen.doctor import stale_tasks
@@ -814,7 +822,7 @@ def _has_pr_open_transition(task: Task) -> bool:
     """
     return any(
         str(entry.status or "") == "pr_open"
-        or (str(entry.status or "") == "dispatched" and "/pull/" in str(entry.session_id or "").lower())
+        or (str(entry.status or "") == "dispatched" and "/pull/" in dispatch_session_id(entry).lower())
         for entry in (task.dispatch_log or [])
     )
 
@@ -896,9 +904,9 @@ def _entry_text(entry: DispatchLogEntry) -> str:
         for part in (
             entry.status,
             entry.route_to,
-            entry.session_id,
+            dispatch_session_id(entry),
             entry.output,
-            entry.agent,
+            dispatch_agent(entry),
         )
     ).lower()
 
@@ -923,7 +931,7 @@ def _has_fresh_owner_state(task: Task) -> bool:
     for entry in (task.dispatch_log or [])[-4:]:
         text = _entry_text(entry)
         if str(entry.status or "") in {"done", "pr_open"} or (
-            str(entry.status or "") == "dispatched" and "/pull/" in str(entry.session_id or "").lower()
+            str(entry.status or "") == "dispatched" and "/pull/" in dispatch_session_id(entry).lower()
         ):
             return True
         if "pull/" in text or "new head" in text or "checks green" in text or "check passed" in text:
@@ -953,8 +961,8 @@ def chronic_dispatch_reason(task: Task) -> str | None:
     missing_session_entries = [
         entry
         for entry in last_two
-        if not str(entry.session_id or "").strip()
-        or str(entry.session_id or "").strip().lower() in {"none", "null", "undefined", "undefined#undefined"}
+        if not dispatch_session_id(entry).strip()
+        or dispatch_session_id(entry).strip().lower() in {"none", "null", "undefined", "undefined#undefined"}
     ]
     if len(missing_session_entries) == 2:
         return "missing-session-id-loop"
@@ -3305,7 +3313,7 @@ def _isolated_safe_task(task: Task) -> bool:
 
 def _agent_timed_out_on_task(agent: str, task: Task) -> bool:
     return any(
-        canonical_agent(str(entry.agent or "")) == agent
+        canonical_agent(dispatch_agent(entry)) == agent
         and (
             str(entry.status or "").startswith("timeout->")
             or (bool(getattr(entry, "route_to", None)) and "timeout" in str(entry.output or "").lower())
@@ -4946,6 +4954,10 @@ def _apply_result(
 ) -> None:
     """Apply one dispatch result to a task (same semantics as the serial path):
     success → dispatched + spend; no-op/fail → recoverable failed; rate-limit → cascade."""
+    prior_status = task.status
+    prior_entry = task.dispatch_log[-1] if task.dispatch_log else None
+    prior_reservation = dispatch_session_id(prior_entry) if prior_entry is not None else ""
+    prior_contract_hash = str(prior_entry.execution_contract_hash or "") if prior_entry is not None else ""
     if task.status in {"done", "archived"} and _has_done_transition(task):
         return
     if _restore_done_status(
@@ -5040,6 +5052,19 @@ def _apply_result(
         else:
             entry.status = "failed"
             task.status = "failed"
+    if (
+        prior_status == "dispatched"
+        and entry.status in {"done", "failed", "failed_blocked"}
+        and prior_entry is not None
+        and prior_entry.status == "dispatched"
+        and prior_reservation
+        and re.fullmatch(r"[0-9a-f]{64}", prior_contract_hash)
+    ):
+        entry.lifecycle_repair = "provider-terminal"
+        entry.execution_started = True
+        entry.execution_contract_hash = prior_contract_hash
+        entry.execution_reservation_id = prior_reservation
+        entry.execution_result_kind = entry.status
     if consume_receipts and (selection := _MODEL_SELECTION_RECEIPTS.pop(task.id, None)):
         entry.execution_profile = selection.get("execution_profile")
         entry.selected_model = selection.get("selected_model")
@@ -5453,6 +5478,7 @@ def _select_parallel_reservations(
             if dry_run:
                 picked.append((agent, t.id))
                 continue
+            selected_contract_hash = execution_contract_hash(t)
             t.status = "dispatched"  # reserve so nothing else grabs it
             t.updated = now
             t.dispatch_log.append(
@@ -5461,6 +5487,7 @@ def _select_parallel_reservations(
                     agent=agent,
                     session_id="reserve",
                     status="dispatched",
+                    execution_contract_hash=selected_contract_hash,
                     output="dispatch-parallel: reserved before agent execution",
                 )
             )
@@ -5481,6 +5508,7 @@ def dispatch_parallel(
     process (serial), the slow agent runs happen concurrently in a thread pool, and a
     lane that hits its real rate-limit is cooled (its remaining reserved tasks re-queued)."""
     now = datetime.now(timezone.utc)
+    reservation_materialized_local = False
     admission = dispatch_admission_check(tasks_path)
     if not admission.get("allow", False):
         print_dispatch_admission_block("dispatch-parallel", admission)
@@ -5542,12 +5570,19 @@ def dispatch_parallel(
                 print(f"── PARALLEL: nothing to dispatch for {agents} within budget")
                 return
             try:
-                apply_limen_file_sync(
+                reservation = apply_limen_file_sync(
                     tasks_path,
                     fresh,
                     agent="dispatch-parallel",
                     session_id="reserve",
                 )
+                projected = getattr(reservation, "projected_tasks", None)
+                reservation_materialized_local = bool(getattr(reservation, "wrote", False))
+                if isinstance(projected, dict) and projected:
+                    fresh.tasks = [
+                        Task.model_validate(projected.get(task.id, task.model_dump(mode="json")))
+                        for task in fresh.tasks
+                    ]
             except Exception:
                 for agent, tid in picked:
                     if canonical_agent(agent) in LOCAL_CHECKOUT_AGENTS:
@@ -5593,7 +5628,8 @@ def dispatch_parallel(
                 "harvest reconciles from PR state (self-corrects next beat)"
             )
             return
-        fresh = load_limen_file(tasks_path)
+        fresh = load_limen_file(tasks_path) if reservation_materialized_local else limen.model_copy(deep=True)
+        commit_base = fresh.model_copy(deep=True)
         fid = {t.id: t for t in fresh.tasks}
         ftrack = fresh.portal.budget.track
         for agent, tid, res, selected_contract_hash, selected_lifecycle_token in results:
@@ -5624,7 +5660,13 @@ def dispatch_parallel(
                 n_pr += 1
             else:
                 n_fail += 1
-        apply_limen_file_sync(tasks_path, fresh, agent="dispatch-parallel", session_id="results")
+        apply_limen_file_sync(
+            tasks_path,
+            fresh,
+            agent="dispatch-parallel",
+            session_id="results",
+            before=commit_base,
+        )
     print(
         f"── PARALLEL done: {len(results)} ran · {n_pr} dispatched/PR · {n_noop} no-op · "
         f"{n_fail} failed→cascade · {n_successor} successor-required · {n_blocked} blocked · "

@@ -136,6 +136,9 @@ def _recover(args: argparse.Namespace, path: Path) -> int:
                         agent="limen",
                         session_id="heal",
                         status="failed_blocked",
+                        lifecycle_repair="fleet-debt-park",
+                        fleet_debt_source="repeated-noop",
+                        fleet_debt_count=repeated_noop_count,
                         output=(
                             f"recover: repeated no-op failures ({repeated_noop_count}) "
                             "-> failed_blocked (fleet-debt, off the human surface)"

@@ -33,6 +33,25 @@ const PATCHABLE_TASK_FIELDS = new Set([
   "depends_on",
 ]);
 const STRUCTURED_LOG_FIELDS = new Set([
+  "route_to",
+  "execution_profile",
+  "selected_model",
+  "selection_source",
+  "catalog_hash",
+  "provider_run_id",
+  "provider_url",
+  "base_sha",
+  "control_repo",
+  "control_ref",
+  "control_ref_kind",
+  "control_sha",
+  "workflow_id",
+  "workflow_path",
+  "workflow_event",
+  "verification_context_digest",
+  "remote_state",
+  "remote_request_id",
+  "remote_receipt",
   "landing_event",
   "landing_terminal",
   "landing_outcome",
@@ -45,6 +64,78 @@ const STRUCTURED_LOG_FIELDS = new Set([
   "landing_attempt_count",
   "landing_attempt",
   "lifecycle_repair",
+  "fleet_debt_source",
+  "fleet_debt_count",
+  "pr_observed_state",
+  "pr_observed_ref",
+  "routine_name",
+  "routine_observed_state",
+  "execution_started",
+  "execution_contract_hash",
+  "execution_reservation_id",
+  "execution_result_kind",
+  "liveness_evidence",
+  "liveness_reservation_id",
+  "liveness_pid",
+  "liveness_age_seconds",
+]);
+const STRING_STRUCTURED_LOG_FIELDS = new Set([
+  "route_to",
+  "selected_model",
+  "selection_source",
+  "catalog_hash",
+  "provider_run_id",
+  "provider_url",
+  "base_sha",
+  "control_repo",
+  "control_ref",
+  "control_ref_kind",
+  "control_sha",
+  "workflow_path",
+  "workflow_event",
+  "verification_context_digest",
+  "remote_state",
+  "remote_request_id",
+  "remote_receipt",
+  "landing_event",
+  "landing_outcome",
+  "landing_session_id",
+  "landing_branch",
+  "landing_intent_token",
+  "landing_claim_sha256",
+  "landing_prior_status",
+  "lifecycle_repair",
+  "fleet_debt_source",
+  "pr_observed_state",
+  "pr_observed_ref",
+  "routine_name",
+  "routine_observed_state",
+  "execution_contract_hash",
+  "execution_reservation_id",
+  "execution_result_kind",
+  "liveness_evidence",
+  "liveness_reservation_id",
+]);
+const ENUM_STRUCTURED_LOG_FIELDS = new Map([
+  ["lifecycle_repair", new Set([
+    "prior-done",
+    "human-gate-reconcile",
+    "fleet-debt-park",
+    "pr-observed-terminal",
+    "routine-recovered",
+    "provider-terminal",
+    "stale-successor-hold",
+  ])],
+  ["fleet_debt_source", new Set(["dispatch-verify", "prior-chronic-log", "repeated-noop"])],
+  ["pr_observed_state", new Set(["open", "merged"])],
+  ["routine_observed_state", new Set(["down", "recovered"])],
+  ["execution_result_kind", new Set(["done", "failed", "failed_blocked"])],
+  ["liveness_evidence", new Set([
+    "dead-process",
+    "defunct-process",
+    "markerless-expired",
+    "launch-failed",
+  ])],
 ]);
 const CANONICAL_TRANSITIONS = new Map([
   ["open", new Set(["open", "dispatched"])],
@@ -97,15 +188,72 @@ function eventAlreadyApplied(board, eventId) {
     (task.dispatch_log || []).some((entry) => entry?.conduct_event_id === eventId));
 }
 
+function validateStructuredLog(log) {
+  if (log == null) return;
+  if (typeof log !== "object" || Array.isArray(log)) {
+    throw new ConductProjectionError("task dispatch log must be an object", 422);
+  }
+  for (const [field, value] of Object.entries(log)) {
+    if (!STRUCTURED_LOG_FIELDS.has(field) || value == null) continue;
+    if (STRING_STRUCTURED_LOG_FIELDS.has(field) && typeof value !== "string") {
+      throw new ConductProjectionError(`task dispatch log ${field} must be a string`, 422);
+    }
+    const allowed = ENUM_STRUCTURED_LOG_FIELDS.get(field);
+    if (allowed && !allowed.has(value)) {
+      throw new ConductProjectionError(`task dispatch log ${field} has an unsupported value`, 422);
+    }
+  }
+  if (log.execution_profile != null
+      && (typeof log.execution_profile !== "object" || Array.isArray(log.execution_profile))) {
+    throw new ConductProjectionError("task dispatch log execution_profile must be an object", 422);
+  }
+  for (const field of ["landing_terminal", "execution_started"]) {
+    if (log[field] != null && typeof log[field] !== "boolean") {
+      throw new ConductProjectionError(`task dispatch log ${field} must be a boolean`, 422);
+    }
+  }
+  for (const field of ["workflow_id", "landing_attempt_count", "landing_attempt"]) {
+    if (log[field] != null && !Number.isInteger(log[field])) {
+      throw new ConductProjectionError(`task dispatch log ${field} must be an integer`, 422);
+    }
+  }
+  if (log.fleet_debt_count != null
+      && (!Number.isInteger(log.fleet_debt_count) || log.fleet_debt_count < 1)) {
+    throw new ConductProjectionError("task dispatch log fleet_debt_count must be a positive integer", 422);
+  }
+  if (log.liveness_pid != null
+      && (!Number.isInteger(log.liveness_pid) || log.liveness_pid < 1)) {
+    throw new ConductProjectionError("task dispatch log liveness_pid must be a positive integer", 422);
+  }
+  if (log.liveness_age_seconds != null
+      && (typeof log.liveness_age_seconds !== "number"
+        || !Number.isFinite(log.liveness_age_seconds)
+        || log.liveness_age_seconds < 0)) {
+    throw new ConductProjectionError("task dispatch log liveness_age_seconds must be nonnegative", 422);
+  }
+  if (log.execution_contract_hash != null
+      && !/^[0-9a-f]{64}$/.test(log.execution_contract_hash)) {
+    throw new ConductProjectionError("task dispatch log execution_contract_hash must be a lowercase SHA-256", 422);
+  }
+  if (log.landing_prior_updated != null
+      && (typeof log.landing_prior_updated !== "string"
+        || Number.isNaN(Date.parse(log.landing_prior_updated)))) {
+    throw new ConductProjectionError("task dispatch log landing_prior_updated must be an ISO timestamp", 422);
+  }
+}
+
 function conductLog(event, log, fallbackStatus, fallbackOutput) {
+  validateStructuredLog(log);
   const structured = Object.fromEntries(
     Object.entries(log || {})
-      .filter(([field, value]) => STRUCTURED_LOG_FIELDS.has(field) && value !== undefined),
+      .filter(([field, value]) => STRUCTURED_LOG_FIELDS.has(field) && value != null),
   );
   return {
     timestamp: event.timestamp,
     agent: String(event.agent),
     session_id: String(event.session_id),
+    logical_agent: String(log?.agent ?? event.agent),
+    logical_session_id: String(log?.session_id ?? event.session_id),
     status: String(fallbackStatus),
     output: String(log?.output ?? fallbackOutput ?? ""),
     ...clone(structured),
@@ -251,10 +399,102 @@ function isHeldJulesLandingRecovery(task, nextStatus, log) {
     && ["done", "failed", "failed_blocked"].includes(nextStatus);
 }
 
-function isPriorDoneLifecycleRepair(task, nextStatus, log) {
-  return nextStatus === "done"
-    && log?.lifecycle_repair === "prior-done"
-    && (task.dispatch_log || []).some((entry) => entry?.status === "done");
+function logicalLogSession(entry) {
+  return String(entry?.logical_session_id || entry?.session_id || "");
+}
+
+function priorChronicEvidence(task) {
+  const latest = [...(task.dispatch_log || [])]
+    .reverse()
+    .find((entry) => entry?.status === "needs_human");
+  return Boolean(latest && /(chronic.*escalat|repeated no-op failures)/is.test(String(latest.output || "")));
+}
+
+function repeatedNoopEvidence(task) {
+  return (task.dispatch_log || []).filter((entry) =>
+    entry?.status === "failed" && /(no-op|noop)/i.test(String(entry.output || ""))).length;
+}
+
+function isLifecycleRepairAuthorized(task, nextStatus, log, patch) {
+  const marker = String(log?.lifecycle_repair || "");
+  const priorStatus = String(task.status || "");
+  const labels = new Set(patch.labels ?? task.labels ?? []);
+  if (marker === "prior-done") {
+    return nextStatus === "done"
+      && priorStatus !== "archived"
+      && (task.dispatch_log || []).some((entry) => entry?.status === "done");
+  }
+  if (marker === "human-gate-reconcile") {
+    return ["open", "dispatched", "failed"].includes(priorStatus)
+      && nextStatus === "needs_human"
+      && labels.has("needs-human");
+  }
+  if (marker === "fleet-debt-park") {
+    const count = log?.fleet_debt_count;
+    const source = String(log?.fleet_debt_source || "");
+    const evidenceOk = Number.isInteger(count) && (
+      (source === "dispatch-verify" && count >= 3)
+      || (source === "prior-chronic-log" && count >= 1 && priorChronicEvidence(task))
+      || (source === "repeated-noop" && count >= 2 && repeatedNoopEvidence(task) >= count)
+    );
+    return ["open", "dispatched", "failed", "needs_human"].includes(priorStatus)
+      && nextStatus === "failed_blocked"
+      && labels.has("chronic-fleet-debt")
+      && evidenceOk;
+  }
+  if (marker === "pr-observed-terminal") {
+    const match = String(log?.pr_observed_ref || "")
+      .match(/^([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#[1-9][0-9]*$/);
+    const taskRepo = String(patch.repo ?? task.repo ?? "");
+    return priorStatus === "dispatched"
+      && nextStatus === "done"
+      && ["open", "merged"].includes(String(log?.pr_observed_state || ""))
+      && Boolean(match)
+      && (!taskRepo || match[1] === taskRepo);
+  }
+  if (marker === "routine-recovered") {
+    const name = String(log?.routine_name || "");
+    return priorStatus === "needs_human"
+      && nextStatus === "done"
+      && labels.has("routine-freshness")
+      && log?.routine_observed_state === "recovered"
+      && Boolean(name)
+      && task.id === `ASK-routine-${name}`;
+  }
+  const priorEntry = (task.dispatch_log || []).at(-1) || {};
+  const priorReservation = logicalLogSession(priorEntry);
+  if (marker === "provider-terminal") {
+    const contractHash = String(log?.execution_contract_hash || "");
+    return priorStatus === "dispatched"
+      && ["done", "failed", "failed_blocked"].includes(nextStatus)
+      && log?.execution_started === true
+      && log?.execution_result_kind === nextStatus
+      && /^[0-9a-f]{64}$/.test(contractHash)
+      && contractHash === String(priorEntry.execution_contract_hash || "")
+      && String(log?.execution_reservation_id || "") === priorReservation
+      && Boolean(priorReservation)
+      && priorEntry.status === "dispatched";
+  }
+  if (marker === "stale-successor-hold") {
+    const evidence = String(log?.liveness_evidence || "");
+    const age = log?.liveness_age_seconds;
+    const pid = log?.liveness_pid;
+    return priorStatus === "dispatched"
+      && nextStatus === "failed"
+      && labels.has("workstream:successor-required")
+      && String(log?.liveness_reservation_id || "") === priorReservation
+      && Boolean(priorReservation)
+      && priorEntry.status === "dispatched"
+      && ["dead-process", "defunct-process", "markerless-expired", "launch-failed"].includes(evidence)
+      && typeof age === "number"
+      && Number.isFinite(age)
+      && age >= 0
+      && (
+        (["dead-process", "defunct-process"].includes(evidence) && Number.isInteger(pid) && pid > 0)
+        || (["markerless-expired", "launch-failed"].includes(evidence) && pid == null)
+      );
+  }
+  return false;
 }
 
 export function applyTaskPacketProjectionEvent(input, event) {
@@ -332,7 +572,7 @@ export function applyTaskPacketProjectionEvent(input, event) {
   const nextStatus = patch.status ?? existing.status;
   if (!isHeldJulesLandingRecovery(existing, nextStatus, intent.log)
       && !(kind === "task.status"
-        && isPriorDoneLifecycleRepair(existing, nextStatus, intent.log))) {
+        && isLifecycleRepairAuthorized(existing, nextStatus, intent.log, patch))) {
     validateTransition(taskId, existing.status, nextStatus, kind);
   }
   if (kind === "task.claim") applyCanonicalBudgetDebit(board, existing, event, patch);

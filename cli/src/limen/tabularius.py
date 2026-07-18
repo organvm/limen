@@ -98,6 +98,25 @@ _PATCHABLE_TASK_FIELDS = frozenset(
 )
 _STRUCTURED_LOG_FIELDS = frozenset(
     {
+        "route_to",
+        "execution_profile",
+        "selected_model",
+        "selection_source",
+        "catalog_hash",
+        "provider_run_id",
+        "provider_url",
+        "base_sha",
+        "control_repo",
+        "control_ref",
+        "control_ref_kind",
+        "control_sha",
+        "workflow_id",
+        "workflow_path",
+        "workflow_event",
+        "verification_context_digest",
+        "remote_state",
+        "remote_request_id",
+        "remote_receipt",
         "landing_event",
         "landing_terminal",
         "landing_outcome",
@@ -110,6 +129,20 @@ _STRUCTURED_LOG_FIELDS = frozenset(
         "landing_attempt_count",
         "landing_attempt",
         "lifecycle_repair",
+        "fleet_debt_source",
+        "fleet_debt_count",
+        "pr_observed_state",
+        "pr_observed_ref",
+        "routine_name",
+        "routine_observed_state",
+        "execution_started",
+        "execution_contract_hash",
+        "execution_reservation_id",
+        "execution_result_kind",
+        "liveness_evidence",
+        "liveness_reservation_id",
+        "liveness_pid",
+        "liveness_age_seconds",
     }
 )
 _CANONICAL_TRANSITIONS = {
@@ -463,6 +496,12 @@ def _canonical_revision(fields: dict[str, Any]) -> str:
 
 
 def _compatibility_intent(ticket: Ticket, base: dict[str, Any] | None) -> dict[str, Any]:
+    log = dict(ticket.log or {})
+    # ``agent``/``session_id`` in the packet log are untrusted workflow
+    # correlation. The keeper projects them under logical names while deriving
+    # canonical dispatch-log identity from the authenticated conductor event.
+    log.setdefault("agent", ticket.agent)
+    log.setdefault("session_id", ticket.session_id)
     if ticket.intent in {INTENT_REMOVE, INTENT_META, INTENT_ORDER}:
         raise ValueError(
             f"{ticket.intent} has no authenticated remote compatibility transition; "
@@ -480,7 +519,7 @@ def _compatibility_intent(ticket: Ticket, base: dict[str, Any] | None) -> dict[s
             "task_id": ticket.task_id,
             "expected_absent": True,
             "task": supplied,
-            "log": dict(ticket.log or {}),
+            "log": log,
         }
 
     precondition = ticket.precondition or {}
@@ -517,7 +556,7 @@ def _compatibility_intent(ticket: Ticket, base: dict[str, Any] | None) -> dict[s
         "expected_status": prior_status,
         "expected_revision": _canonical_revision(base),
         "patch": changed,
-        "log": dict(ticket.log or {}),
+        "log": log,
     }
 
 
@@ -528,6 +567,8 @@ def _local_conduct_log(event: dict[str, Any], status: str, fallback_output: str)
         "timestamp": str(event["timestamp"]),
         "agent": str(event["agent"]),
         "session_id": str(event["session_id"]),
+        "logical_agent": str(log.get("agent") or event["agent"]),
+        "logical_session_id": str(log.get("session_id") or event["session_id"]),
         "status": status,
         "output": str(log.get("output") if log.get("output") is not None else fallback_output),
         **structured,
@@ -601,12 +642,134 @@ def _held_jules_landing_recovery(task: dict[str, Any], next_status: str, log: di
     )
 
 
-def _prior_done_lifecycle_repair(task: dict[str, Any], next_status: str, log: dict[str, Any]) -> bool:
-    return bool(
-        next_status == "done"
-        and log.get("lifecycle_repair") == "prior-done"
-        and any(entry.get("status") == "done" for entry in (task.get("dispatch_log") or []))
+def _logical_log_session(entry: dict[str, Any]) -> str:
+    return str(entry.get("logical_session_id") or entry.get("session_id") or "")
+
+
+def _prior_chronic_evidence(task: dict[str, Any]) -> bool:
+    from limen.chronic import CHRONIC_ESCALATION_RE
+
+    for entry in reversed(task.get("dispatch_log") or []):
+        if str(entry.get("status") or "") != "needs_human":
+            continue
+        return bool(CHRONIC_ESCALATION_RE.search(str(entry.get("output") or "")))
+    return False
+
+
+def _repeated_noop_evidence(task: dict[str, Any]) -> int:
+    return sum(
+        1
+        for entry in (task.get("dispatch_log") or [])
+        if str(entry.get("status") or "") == "failed"
+        and ("no-op" in str(entry.get("output") or "").lower() or "noop" in str(entry.get("output") or "").lower())
     )
+
+
+def _lifecycle_repair_authorized(
+    task: dict[str, Any],
+    next_status: str,
+    log: dict[str, Any],
+    patch: dict[str, Any],
+) -> bool:
+    """Validate one explicit exceptional transition against its exact evidence."""
+
+    marker = str(log.get("lifecycle_repair") or "")
+    prior_status = str(task.get("status") or "")
+    labels = {str(label) for label in patch.get("labels", task.get("labels") or [])}
+
+    if marker == "prior-done":
+        return bool(
+            next_status == "done"
+            and prior_status != "archived"
+            and any(entry.get("status") == "done" for entry in (task.get("dispatch_log") or []))
+        )
+    if marker == "human-gate-reconcile":
+        return bool(
+            prior_status in {"open", "dispatched", "failed"}
+            and next_status == "needs_human"
+            and "needs-human" in labels
+        )
+    if marker == "fleet-debt-park":
+        source = str(log.get("fleet_debt_source") or "")
+        count = log.get("fleet_debt_count")
+        evidence_ok = bool(
+            isinstance(count, int)
+            and not isinstance(count, bool)
+            and (
+                (source == "dispatch-verify" and count >= 3)
+                or (source == "prior-chronic-log" and count >= 1 and _prior_chronic_evidence(task))
+                or (source == "repeated-noop" and count >= 2 and _repeated_noop_evidence(task) >= count)
+            )
+        )
+        return bool(
+            prior_status in {"open", "dispatched", "failed", "needs_human"}
+            and next_status == "failed_blocked"
+            and "chronic-fleet-debt" in labels
+            and evidence_ok
+        )
+    if marker == "pr-observed-terminal":
+        ref = str(log.get("pr_observed_ref") or "")
+        observed = str(log.get("pr_observed_state") or "")
+        ref_match = re.fullmatch(r"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([1-9][0-9]*)", ref)
+        task_repo = str(patch.get("repo", task.get("repo")) or "")
+        return bool(
+            prior_status == "dispatched"
+            and next_status == "done"
+            and observed in {"open", "merged"}
+            and ref_match
+            and (not task_repo or ref_match.group(1) == task_repo)
+        )
+    if marker == "routine-recovered":
+        name = str(log.get("routine_name") or "")
+        return bool(
+            prior_status == "needs_human"
+            and next_status == "done"
+            and "routine-freshness" in labels
+            and log.get("routine_observed_state") == "recovered"
+            and name
+            and task.get("id") == f"ASK-routine-{name}"
+        )
+    prior_log = (task.get("dispatch_log") or [])[-1:] or [{}]
+    prior_entry = prior_log[0]
+    prior_reservation = _logical_log_session(prior_entry)
+    if marker == "provider-terminal":
+        contract_hash = str(log.get("execution_contract_hash") or "")
+        return bool(
+            prior_status == "dispatched"
+            and next_status in {"done", "failed", "failed_blocked"}
+            and log.get("execution_started") is True
+            and log.get("execution_result_kind") == next_status
+            and re.fullmatch(r"[0-9a-f]{64}", contract_hash)
+            and contract_hash == str(prior_entry.get("execution_contract_hash") or "")
+            and str(log.get("execution_reservation_id") or "") == prior_reservation
+            and prior_reservation
+            and prior_entry.get("status") == "dispatched"
+        )
+    if marker == "stale-successor-hold":
+        evidence = str(log.get("liveness_evidence") or "")
+        pid = log.get("liveness_pid")
+        return bool(
+            prior_status == "dispatched"
+            and next_status == "failed"
+            and "workstream:successor-required" in labels
+            and str(log.get("liveness_reservation_id") or "") == prior_reservation
+            and prior_reservation
+            and prior_entry.get("status") == "dispatched"
+            and evidence in {"dead-process", "defunct-process", "markerless-expired", "launch-failed"}
+            and isinstance(log.get("liveness_age_seconds"), (int, float))
+            and not isinstance(log.get("liveness_age_seconds"), bool)
+            and float(log["liveness_age_seconds"]) >= 0
+            and (
+                (
+                    evidence in {"dead-process", "defunct-process"}
+                    and isinstance(pid, int)
+                    and not isinstance(pid, bool)
+                    and pid > 0
+                )
+                or (evidence in {"markerless-expired", "launch-failed"} and pid is None)
+            )
+        )
+    return False
 
 
 def _project_local_task_event(board: LimenFile, event: dict[str, Any]) -> tuple[LimenFile, dict[str, Any]]:
@@ -686,7 +849,7 @@ def _project_local_task_event(board: LimenFile, event: dict[str, Any]) -> tuple[
         next_status = str(patch.get("status") or prior_status)
         log = dict(intent.get("log") or {})
         recovery = _held_jules_landing_recovery(existing, next_status, log)
-        repair = kind == "task.status" and _prior_done_lifecycle_repair(existing, next_status, log)
+        repair = kind == "task.status" and _lifecycle_repair_authorized(existing, next_status, log, patch)
         if not recovery and not repair:
             if kind == "task.claim" and (prior_status != "open" or next_status != "dispatched"):
                 raise ValueError(f"task {task_id} claim requires open -> dispatched")
@@ -943,6 +1106,13 @@ def apply_limen_file_sync(
             task_id = str(event["task_id"])
             prior = prior_by_id.get(task_id)
             desired = dict(event.get("data") or {})
+            ticket = ticket.model_copy(
+                update={
+                    "precondition": (
+                        {"task_sha256": task_state_sha256(prior)} if prior is not None else {"absent": True}
+                    )
+                }
+            )
             if prior is not None:
                 prior_log = list(prior.get("dispatch_log") or [])
                 desired_log = list(desired.get("dispatch_log") or [])

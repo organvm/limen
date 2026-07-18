@@ -130,6 +130,7 @@ def _reconcile_needs_human(task: Task, now: datetime) -> bool:
             agent="heal-board",
             session_id="heal-board",
             status="needs_human",
+            lifecycle_repair="human-gate-reconcile",
             output="heal-board: reconciled needs-human label to needs_human status",
         )
     )

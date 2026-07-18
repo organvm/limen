@@ -255,6 +255,20 @@ def test_verification_context_requires_terminal_same_repo_implementation_custody
         verification_context_for_task(child, {parent.id: parent, child.id: child})
 
 
+def test_verification_context_reads_logical_identity_from_keeper_projection() -> None:
+    child = verification_task()
+    parent = implementation_parent()
+    entry = parent.dispatch_log[-1]
+    entry.agent = "dispatch-async"
+    entry.session_id = "dispatch-async-harvest"
+    entry.logical_agent = "codex"
+    entry.logical_session_id = "https://github.com/organvm/limen/pull/7"
+
+    context = verification_context_for_task(child, {parent.id: parent, child.id: child})
+
+    assert context["implementation_custody"][0]["custody_event"]["agent"] == "codex"  # type: ignore[index]
+
+
 def test_request_rejects_malformed_direct_verification_custody_context() -> None:
     context = verification_context()
     rows = context["implementation_custody"]

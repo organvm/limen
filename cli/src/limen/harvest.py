@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from limen.models import DispatchLogEntry, LimenFile, Task
+from limen.models import DispatchLogEntry, LimenFile, Task, dispatch_agent, dispatch_session_id
 from limen.provider_selection import execution_profile_for
 from limen.remote_execution import (
     ReceiptStore,
@@ -102,7 +102,7 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
 
         session_id = session_mapping.get(task.id)
         if not session_id and task.dispatch_log:
-            session_id = task.dispatch_log[-1].session_id
+            session_id = dispatch_session_id(task.dispatch_log[-1])
 
         if session_id:
             diff_file = harvest_dir / f"{session_id}.diff"
@@ -155,7 +155,7 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
                 DispatchLogEntry(
                     timestamp=now,
                     agent="jules",
-                    session_id=task.dispatch_log[-1].session_id if task.dispatch_log else "harvest",
+                    session_id=dispatch_session_id(task.dispatch_log[-1]) if task.dispatch_log else "harvest",
                     status="done",
                     output=result[:500],
                 )
@@ -408,7 +408,7 @@ def check_remote_harvest(
                 continue
             if entry is None:
                 continue
-        provider = entry.agent
+        provider = dispatch_agent(entry)
         if agent and provider != agent:
             continue
         adapter = adapters.get(provider)

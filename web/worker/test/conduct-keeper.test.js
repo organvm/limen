@@ -1207,6 +1207,9 @@ test("task claims derive canonical debit and identity while canonical transition
         session_id: "attacker",
         status: "done",
         output: "claimed",
+        route_to: "jules",
+        provider_run_id: "provider-42",
+        remote_state: "queued",
       },
     },
   };
@@ -1217,7 +1220,13 @@ test("task claims derive canonical debit and identity while canonical transition
   assert.equal(first.board.portal.budget.track.per_agent.codex, 2);
   assert.equal(first.board.portal.budget.track.per_agent.attacker, 0);
   assert.equal(first.task.dispatch_log.at(-1).agent, "codex");
+  assert.equal(first.task.dispatch_log.at(-1).session_id, "codex-session");
+  assert.equal(first.task.dispatch_log.at(-1).logical_agent, "attacker");
+  assert.equal(first.task.dispatch_log.at(-1).logical_session_id, "attacker");
   assert.equal(first.task.dispatch_log.at(-1).status, "dispatched");
+  assert.equal(first.task.dispatch_log.at(-1).route_to, "jules");
+  assert.equal(first.task.dispatch_log.at(-1).provider_run_id, "provider-42");
+  assert.equal(first.task.dispatch_log.at(-1).remote_state, "queued");
   assert.equal(duplicate.board.portal.budget.track.spent, 2);
   assert.equal(duplicate.task.dispatch_log.length, 1);
 
@@ -1254,6 +1263,142 @@ test("task claims derive canonical debit and identity while canonical transition
     () => applyTaskPacketProjectionEvent(historicalDone, forgedRepairKind),
     /cannot transition from open to done/,
   );
+});
+
+test("exceptional task transitions require exact structured evidence", () => {
+  const task = (overrides = {}) => ({
+    id: "TASK-REPAIR",
+    title: "Repair",
+    repo: "organvm/limen",
+    target_agent: "codex",
+    priority: "high",
+    budget_cost: 1,
+    status: "open",
+    labels: [],
+    created: "2026-07-01",
+    dispatch_log: [],
+    ...overrides,
+  });
+  const event = (fromStatus, toStatus, log, patch = {}) => ({
+    schema_version: "limen.task_packet_projection_event.v1",
+    event_id: `conduct:repair:${fromStatus}:${toStatus}:${log.lifecycle_repair}`,
+    kind: "task.status",
+    timestamp: NOW.toISOString(),
+    task_id: "TASK-REPAIR",
+    run_id: "run-repair",
+    lease_id: "lease-repair",
+    generation: 1,
+    agent: "tabularius",
+    session_id: "keeper-session",
+    intent: {
+      kind: "task.status",
+      task_id: "TASK-REPAIR",
+      expected_status: fromStatus,
+      patch: { status: toStatus, ...patch },
+      log: { status: toStatus, output: "evidence-bound repair", ...log },
+    },
+  });
+  const apply = (baseTask, repairEvent) =>
+    applyTaskPacketProjectionEvent({ tasks: [baseTask] }, repairEvent).task;
+
+  const human = event(
+    "open",
+    "needs_human",
+    { lifecycle_repair: "human-gate-reconcile" },
+    { labels: ["needs-human"] },
+  );
+  assert.equal(apply(task(), human).status, "needs_human");
+  const forgedHuman = structuredClone(human);
+  forgedHuman.event_id += ":forged";
+  forgedHuman.intent.patch.labels = [];
+  assert.throws(() => apply(task(), forgedHuman), /cannot transition/);
+
+  const fleet = event(
+    "open",
+    "failed_blocked",
+    {
+      lifecycle_repair: "fleet-debt-park",
+      fleet_debt_source: "dispatch-verify",
+      fleet_debt_count: 3,
+    },
+    { labels: ["chronic-fleet-debt"] },
+  );
+  assert.equal(apply(task(), fleet).status, "failed_blocked");
+  const forgedFleet = structuredClone(fleet);
+  forgedFleet.event_id += ":forged";
+  forgedFleet.intent.log.fleet_debt_count = 2;
+  assert.throws(() => apply(task(), forgedFleet), /cannot transition/);
+
+  const pr = event("dispatched", "done", {
+    lifecycle_repair: "pr-observed-terminal",
+    pr_observed_state: "merged",
+    pr_observed_ref: "organvm/limen#1265",
+  });
+  assert.equal(apply(task({ status: "dispatched" }), pr).status, "done");
+
+  const routine = event("needs_human", "done", {
+    lifecycle_repair: "routine-recovered",
+    routine_name: "mesh",
+    routine_observed_state: "recovered",
+  }, { labels: ["routine-freshness"] });
+  assert.equal(
+    apply(task({ id: "ASK-routine-mesh", status: "needs_human" }), {
+      ...routine,
+      task_id: "ASK-routine-mesh",
+      intent: { ...routine.intent, task_id: "ASK-routine-mesh" },
+    }).status,
+    "done",
+  );
+
+  const reservation = {
+    timestamp: "2026-07-18T00:00:00.000Z",
+    agent: "dispatch-async",
+    session_id: "keeper-reserve",
+    logical_session_id: "async-reserve:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    status: "dispatched",
+    execution_contract_hash: "a".repeat(64),
+  };
+  const provider = event("dispatched", "failed_blocked", {
+    lifecycle_repair: "provider-terminal",
+    execution_started: true,
+    execution_contract_hash: "a".repeat(64),
+    execution_reservation_id: reservation.logical_session_id,
+    execution_result_kind: "failed_blocked",
+  });
+  assert.equal(
+    apply(task({ status: "dispatched", dispatch_log: [reservation] }), provider).status,
+    "failed_blocked",
+  );
+
+  const stale = event("dispatched", "failed", {
+    lifecycle_repair: "stale-successor-hold",
+    liveness_evidence: "dead-process",
+    liveness_reservation_id: reservation.logical_session_id,
+    liveness_pid: 424242,
+    liveness_age_seconds: 10,
+  }, { labels: ["workstream:successor-required"] });
+  assert.equal(
+    apply(task({
+      status: "dispatched",
+      labels: ["workstream:successor-required"],
+      dispatch_log: [reservation],
+    }), stale).status,
+    "failed",
+  );
+
+  for (const [field, value] of [
+    ["execution_profile", "bad"],
+    ["workflow_id", "x"],
+    ["landing_terminal", "yes"],
+    ["execution_contract_hash", "not-a-sha"],
+  ]) {
+    const malformed = event("open", "open", { [field]: value });
+    malformed.event_id += `:${field}`;
+    assert.throws(
+      () => apply(task(), malformed),
+      new RegExp(field),
+    );
+  }
 });
 
 test("MCP-compatible task packets execute in the keeper without a board-write lane", async () => {
