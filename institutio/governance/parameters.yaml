@@ -1514,6 +1514,12 @@ parameters:
     self_update: none
     owner: mail
     note: "SENT-state truth gate for correspondence-walk.py: 1 (default) opens one read-only IMAP connection and flips a reply-owed row to `awaiting-them` when a reply already exists in [Gmail]/Sent Mail (answered by the operator, a peer agent, or another channel — the out-of-band send the ledger's requires_reply is blind to). Fail-open: no creds / no UMA / connect error ⇒ skipped, never suppresses a genuine reply-owed row. 0 disables the check (ledger-only dispositions)."
+  LIMEN_CORRESPONDENCE_AWAIT_STALE_DAYS:
+    default: 14
+    env: LIMEN_CORRESPONDENCE_AWAIT_STALE_DAYS
+    self_update: none
+    owner: mail
+    note: "Age threshold (days) for the stale-awaiting-them nudge in correspondence-walk.py::_disposition: when the SENT-state check finds our last reply to a thread is older than this and the counterparty has not answered, the row flips from a silent, ageless `awaiting-them` to a `needs-human` nudge (follow up or drop). A stale nudge is NOT recorded as answered, so it keeps surfacing until the operator acts, and a growing pile auto-reddens the drain-trend sensor's needs_human signal. 0 disables the nudge (awaiting-them behaves exactly as before). Needs the SENT-state check active (LIMEN_CORRESPONDENCE_SENT_CHECK=1 + IMAP creds); with no date available the row stays awaiting-them, fail-open."
   LIMEN_CORRESPONDENCE_DRAIN_TREND:
     default: 1
     env: LIMEN_CORRESPONDENCE_DRAIN_TREND

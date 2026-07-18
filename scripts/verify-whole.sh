@@ -109,6 +109,9 @@ bash scripts/tests/check-correspondence-drain-trend.test.sh
 step "Verify the correspondence drain-trend PRODUCER (_append_trend: one point per beat, deduped + capped + fail-open)"
 python3 scripts/tests/correspondence-drain-trend-append.test.py
 
+step "Verify the stale-awaiting-them nudge (INTERNALDATE parse + a reply older than the threshold flips awaiting-them → needs-human)"
+python3 scripts/tests/correspondence-await-stale.test.py
+
 step "Verify the worktree-commit-guard hook (live-main commit deny matrix, hermetic fixture)"
 bash scripts/tests/worktree-commit-guard.test.sh
 
