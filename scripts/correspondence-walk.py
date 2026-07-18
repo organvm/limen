@@ -60,6 +60,11 @@ ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 LOGS = ROOT / "logs"
 LEDGER = Path(os.environ.get("LIMEN_OBLIGATIONS_LEDGER", ROOT / "obligations-ledger.json"))
 STATUS_JSON = LOGS / "correspondence-dispositions.json"
+# The append-only drain-trend series: the counts-only MEMORY the snapshot above lacks, so a sensor
+# can answer "is reply_owed draining across beats?" without a human reading it. One point per ledger
+# rebuild (deduped by ledger_generated_at), soft-capped so the beat-read tail stays cheap.
+TREND_JSONL = LOGS / "correspondence-drain-trend.jsonl"
+TREND_MAX_ROWS = int(os.environ.get("LIMEN_CORRESPONDENCE_TREND_MAX_ROWS", "2000"))
 MAX_AGE_HOURS = float(os.environ.get("LIMEN_MAIL_LEDGER_MAX_AGE_HOURS", "12"))
 
 # The UMA checkout supplies the ONE tier truth (tier_of / _ob_key / load_tiers) and the send
@@ -314,6 +319,47 @@ def _write_status(status: dict) -> None:
         _log_clean("could not write logs/correspondence-dispositions.json (fail-open)")
 
 
+def _append_trend(status: dict) -> None:
+    """Append ONE counts-only point per new ledger snapshot to logs/correspondence-drain-trend.jsonl —
+    the append-only memory the disposition SNAPSHOT lacks, so check-correspondence-drain-trend.py can
+    answer "is reply_owed draining across beats?" without a human reading it.
+
+    Deduped by ledger_generated_at: re-running the walk on the SAME ledger adds nothing (matching the
+    walk's own fixed-point contract), so the series is one point per beat, not per invocation. Soft-
+    capped to the last TREND_MAX_ROWS. Counts only — never a name/subject; this face publishes. Fail-
+    open at every step: a read/write error is noted, never fatal (it runs on the live beat)."""
+    point = {
+        "timestamp": status.get("generated_at"),
+        "ledger_generated_at": status.get("ledger_generated_at"),
+        "reply_owed": status.get("reply_owed"),
+        "terminal": status.get("terminal"),
+        "needs_human": status.get("needs_human"),
+        "draft_missing": status.get("non_terminal"),
+        "fixed_point": status.get("fixed_point"),
+    }
+    try:
+        LOGS.mkdir(parents=True, exist_ok=True)
+        lines = []
+        try:
+            lines = [ln for ln in TREND_JSONL.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        except OSError:
+            lines = []
+        # Dedup: skip when the last point is the SAME ledger rebuild (a re-walk, not a new beat). A
+        # None ledger stamp is never deduped (would collapse distinct unstamped runs into one).
+        if lines and point["ledger_generated_at"] is not None:
+            try:
+                if json.loads(lines[-1]).get("ledger_generated_at") == point["ledger_generated_at"]:
+                    return
+            except ValueError:
+                pass  # a torn last line ⇒ just append a fresh point
+        lines.append(json.dumps(point))
+        if len(lines) > TREND_MAX_ROWS:
+            lines = lines[-TREND_MAX_ROWS:]
+        TREND_JSONL.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except OSError:
+        _log_clean("could not append logs/correspondence-drain-trend.jsonl (fail-open)")
+
+
 def _record_answered_keys(keys: set[str]) -> None:
     """Persist the _ob_keys of rows answered out-of-band (disposition sent/awaiting-them) to UMA's
     audit/answered_keys.json — the offline drain signal obligations_build.build() reads to RETIRE
@@ -490,6 +536,7 @@ def main(argv: list[str] | None = None) -> int:
             "drain_notes": drain_notes,
         }
         _write_status(status)
+        _append_trend(status)   # append one drain-trend point per ledger rebuild (convergence memory)
         _write_sidecar(rows_pii)
 
         if answered_prov is not None:
