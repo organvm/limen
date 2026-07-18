@@ -458,10 +458,17 @@ def test_bounded_runner_cleans_process_group_when_wrapper_is_interrupted(
 
     try:
         deadline = time.monotonic() + 5
-        while not process_group_path.exists() and wrapper.poll() is None and time.monotonic() < deadline:
+        process_group_text = ""
+        while wrapper.poll() is None and time.monotonic() < deadline:
+            try:
+                process_group_text = process_group_path.read_text(encoding="utf-8").strip()
+            except FileNotFoundError:
+                pass
+            if process_group_text:
+                break
             time.sleep(0.01)
-        assert process_group_path.exists(), f"bounded child did not start; wrapper status={wrapper.poll()}"
-        process_group_id = int(process_group_path.read_text(encoding="utf-8"))
+        assert process_group_text, f"bounded child did not publish its process group; wrapper status={wrapper.poll()}"
+        process_group_id = int(process_group_text)
 
         wrapper.send_signal(interrupt_signal)
         wrapper_returncode = wrapper.wait(timeout=7)
@@ -474,7 +481,9 @@ def test_bounded_runner_cleans_process_group_when_wrapper_is_interrupted(
             wrapper.kill()
             wrapper.wait(timeout=2)
         if process_group_id is None and process_group_path.exists():
-            process_group_id = int(process_group_path.read_text(encoding="utf-8"))
+            process_group_text = process_group_path.read_text(encoding="utf-8").strip()
+            if process_group_text:
+                process_group_id = int(process_group_text)
         if process_group_id is not None:
             try:
                 os.killpg(process_group_id, signal.SIGKILL)
