@@ -61,6 +61,7 @@ ruff-format' mcp/src/limen_mcp/server.py
 expect merge-policy-change 'syntax-changed
 diff-hygiene
 merge-policy-test
+merge-queue-contract-test
 await-pr-test
 check-params
 check-gates' scripts/merge-policy.sh
@@ -125,6 +126,7 @@ check-gates' institutio/governance/gates.yaml
 
 expect resolver-change 'syntax-changed
 diff-hygiene
+merge-queue-contract-test
 verify-resolver-test
 verify-ci-hardening-test
 check-params

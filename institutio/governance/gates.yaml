@@ -139,6 +139,11 @@ gates:
     paths: ["scripts/merge-policy.sh", "scripts/tests/merge-policy.test.sh", "institutio/governance/gates.yaml"]
     owner: merge-policy
     note: "Verdict-matrix regression for the self-merge predicate; gates.yaml is implicated because deploy_triggers feed the verdict (PR3)."
+  merge-queue-contract-test:
+    command: "python3 scripts/tests/merge-queue-contract.test.py && python3 -m pytest cli/tests/test_pr_scan.py cli/tests/test_merge_drain.py cli/tests/test_self_heal.py cli/tests/test_tabularius.py -q"
+    paths: [".github/workflows/pr-gate.yml", "cli/src/limen/tabularius.py", "cli/tests/test_pr_scan.py", "cli/tests/test_merge_drain.py", "cli/tests/test_self_heal.py", "cli/tests/test_tabularius.py", "scripts/setup-rulesets.py", "scripts/_pr_scan.py", "scripts/merge-policy.sh", "scripts/await-pr.sh", "scripts/merge-drain.py", "scripts/self-heal.py", "scripts/verify.py", "scripts/tests/merge-queue-contract.test.py"]
+    owner: merge-policy
+    note: "Concurrent integration stays queue-native and fail-closed: merge_group runs scoped current-base proof, the Limen ruleset is targeted/idempotent, and no queue effect uses admin or a merge-method fallback."
   await-pr-test:
     command: "bash scripts/tests/await-pr.test.sh"
     paths: ["scripts/await-pr.sh", "scripts/tests/await-pr.test.sh", "scripts/merge-policy.sh"]
@@ -153,7 +158,7 @@ gates:
     command: "bash scripts/tests/verify-ci-hardening.test.sh"
     paths: ["scripts/verify.py", "scripts/tests/verify-ci-hardening.test.sh"]
     owner: verify
-    note: "CI fail-closed contract (issue #1048): --require-base hard-fails an unresolvable merge-base or empty diff (a required check must never green by verifying nothing), deploy-trigger diffs escalate to the whole matrix, and ci_job-covered gates defer instead of running."
+    note: "CI fail-closed contract (issue #1048): --require-base hard-fails an unresolvable merge-base or empty diff, PR deploy-trigger diffs escalate to the whole matrix, merge-group integration runs scoped current-base seams, and ci_job-covered gates defer only on the PR path."
   enactment-test:
     command: "bash scripts/tests/enactment-audit.test.sh"
     paths: ["scripts/enactment-audit.py", "scripts/tests/enactment-audit.test.sh"]

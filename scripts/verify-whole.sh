@@ -73,6 +73,9 @@ python3 organs/social/validate-social.py --fleet --quiet
 step "Verify the merge-policy predicate (verdict matrix regression test)"
 bash scripts/tests/merge-policy.test.sh
 
+step "Verify the concurrent merge-queue workflow, ruleset, and integration contract"
+python3 scripts/tests/merge-queue-contract.test.py
+
 step "Verify the trusted-Bash hook decision matrix (permission-hang killer, hermetic)"
 bash scripts/tests/allow-trusted-cd-git.test.sh
 

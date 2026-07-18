@@ -12,7 +12,9 @@ set -euo pipefail
 #   3. Without --require-base the local behavior is unchanged: empty diff exits 0.
 #   4. --require-base + deploy-trigger hit → exec the whole matrix via the
 #      LIMEN_VERIFY_WHOLE_CMD seam (default scripts/verify-whole.sh).
-#   5. --skip-ci-covered JOB → a gate whose ci_job mirror is a DIFFERENT workflow
+#   5. --integration + deploy-trigger hit → require the base and run implicated
+#      gates without repeating the immutable PR-head whole matrix.
+#   6. --skip-ci-covered JOB → a gate whose ci_job mirror is a DIFFERENT workflow
 #      job defers (its own workflow runs on the same PR; merge-policy holds on red),
 #      while gates with no mirror or with the running job's mirror still run.
 #
@@ -113,7 +115,21 @@ out="$(LIMEN_VERIFY_WHOLE_CMD="$sb/whole-marker.sh" \
   && pass deploy-no-escalation-local \
   || flunk deploy-no-escalation-local "escalated without --require-base"
 
-# ── 5: --skip-ci-covered defers foreign-job mirrors, runs everything else ──────
+# ── 5: queue integration reuses head matrix and runs scoped composition ────────
+rm -f "$sb/whole-ran"
+out="$(LIMEN_VERIFY_WHOLE_CMD="$sb/whole-marker.sh" \
+       python3 "$sb/scripts/verify.py" --changed --base "$base_sha" --integration 2>&1)" \
+  || flunk integration-scoped "integration run exited non-zero: $out"
+[[ ! -f "$sb/whole-ran" ]] \
+  && grep -q "INTEGRATION: deploy-trigger paths were composed" <<<"$out" \
+  && pass integration-scoped \
+  || flunk integration-scoped "whole matrix ran or receipt missing: $out"
+
+out="$(python3 "$sb/scripts/verify.py" --changed --base origin/nonexistent --integration 2>&1)" \
+  && flunk integration-requires-base "exit 0 despite unresolvable integration base" \
+  || pass integration-requires-base
+
+# ── 6: --skip-ci-covered defers foreign-job mirrors, runs everything else ──────
 sb="$(make_sandbox)"
 base_sha="$(git -C "$sb" rev-parse HEAD)"
 commit_touch "$sb" webish/x.txt

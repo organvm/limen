@@ -319,6 +319,30 @@ def _commit_identity_env(repo: Path, env: dict[str, str]) -> dict[str, str]:
     return identity
 
 
+def _merge_queue_active(repo: Path, remote: str, branch: str) -> tuple[bool, str]:
+    """Return whether GitHub currently owns an integration ref for ``branch``.
+
+    A merge queue materializes candidates under
+    ``refs/heads/gh-readonly-queue/<base>/...``.  Tabularius is the sanctioned
+    data-only ``main`` writer, but even a correct board-only push moves the
+    queue's base and can invalidate an expensive merge-group proof.  Yield
+    while one of those refs exists so board mutations coalesce locally and the
+    integration lane gets a finite window to finish.
+
+    The probe fails closed for the writer.  A transient remote failure already
+    means the later fetch/push cannot be proved safe; deferring preserves the
+    dirty board for the next beat instead of guessing that no queue exists.
+    """
+
+    queue_glob = f"refs/heads/gh-readonly-queue/{branch}/*"
+    probe = _git(repo, ["ls-remote", "--heads", remote, queue_glob])
+    if probe.returncode != 0:
+        return True, f"integration-probe-failed:{_short_output(probe)}"
+    if probe.stdout.strip():
+        return True, "merge-queue-active"
+    return False, ""
+
+
 def preserve_board_projection(
     board_path: Path,
     *,
@@ -358,6 +382,9 @@ def preserve_board_projection(
         current = _git(repo, ["symbolic-ref", "--quiet", "--short", "HEAD"])
         if current.returncode != 0 or current.stdout.strip() != branch:
             return PreserveResult(skipped=True, reason=f"not-on-{branch}")
+        integration_busy, integration_reason = _merge_queue_active(repo, remote, branch)
+        if integration_busy:
+            return PreserveResult(changed=True, deferred=True, reason=integration_reason)
         fetch = _git(repo, ["fetch", "--quiet", remote, branch])
         if fetch.returncode != 0:
             return PreserveResult(skipped=True, reason=f"fetch-failed:{_short_output(fetch)}")

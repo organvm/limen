@@ -21,6 +21,11 @@ being two scripts and become two selections over the same data:
                                      --skip-ci-covered CI_JOB defers gates whose ci_job
                                      mirror lives in a different workflow job (they run
                                      there on the same PR; merge-policy holds on any red).
+                                     --integration is the merge-queue composition gate:
+                                     require an exact base, run every implicated scoped
+                                     gate on the synthetic latest-base tree, and reuse the
+                                     immutable PR-head matrix instead of escalating to a
+                                     second whole-repo run.
   verify.py --explain [PATH...]      selection only, no execution — which gates these
                                      paths implicate (default: the changed set).
   verify.py --print-files SET        expand a file_set over tracked files (consumed by
@@ -181,6 +186,7 @@ def cmd_changed(
     *,
     require_base: bool = False,
     skip_ci_covered: str | None = None,
+    integration: bool = False,
 ) -> int:
     if require_base and not resolve_merge_base(base):
         print(
@@ -204,7 +210,7 @@ def cmd_changed(
     for p in changed:
         print(f"  {p}")
 
-    if require_base and deploy_hits(registry, changed):
+    if require_base and not integration and deploy_hits(registry, changed):
         whole = os.environ.get("LIMEN_VERIFY_WHOLE_CMD") or str(
             ROOT / "scripts" / "verify-whole.sh"
         )
@@ -255,12 +261,19 @@ def cmd_changed(
 
     hits = deploy_hits(registry, changed)
     if hits:
-        print(
-            "\nNOTE: diff touches deploy-trigger paths — the PR is website-sensitive.\n"
-            "merge-policy.sh will require green CI (the full matrix) before merge; run\n"
-            "scripts/verify-whole.sh (or let CI run it) before merging. Scoped green is a\n"
-            "push gate, not a deploy gate."
-        )
+        if integration:
+            print(
+                "\nINTEGRATION: deploy-trigger paths were composed against the exact queue base.\n"
+                "Every implicated scoped gate ran here; the immutable PR-head matrix remains\n"
+                "a separate prerequisite and is not repeated on base-only movement."
+            )
+        else:
+            print(
+                "\nNOTE: diff touches deploy-trigger paths — the PR is website-sensitive.\n"
+                "merge-policy.sh will require green CI (the full matrix) before merge; run\n"
+                "scripts/verify-whole.sh (or let CI run it) before merging. Scoped green is a\n"
+                "push gate, not a deploy gate."
+            )
     print("\nScoped verification passed")
     return 0
 
@@ -289,6 +302,12 @@ def main() -> int:
         help="defer selected gates whose ci_job mirror is a different workflow job than CI_JOB "
         "(e.g. pr-gate.yml:pr-gate) — they run in their own workflow on the same PR",
     )
+    parser.add_argument(
+        "--integration",
+        action="store_true",
+        help="merge-queue composition mode: imply --require-base, run every implicated scoped "
+        "gate, and do not repeat the whole PR-head matrix for deploy-trigger paths",
+    )
     args = parser.parse_args()
 
     if args.full:
@@ -296,11 +315,16 @@ def main() -> int:
 
     registry = load_registry()
     if args.changed:
+        if args.integration and args.skip_ci_covered:
+            parser.error("--integration cannot be combined with --skip-ci-covered")
         return cmd_changed(
             registry,
             args.base,
-            require_base=args.require_base or os.environ.get("LIMEN_VERIFY_REQUIRE_BASE") == "1",
+            require_base=args.integration
+            or args.require_base
+            or os.environ.get("LIMEN_VERIFY_REQUIRE_BASE") == "1",
             skip_ci_covered=args.skip_ci_covered,
+            integration=args.integration,
         )
     if args.explain is not None:
         paths = args.explain or changed_set(args.base)

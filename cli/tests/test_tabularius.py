@@ -138,6 +138,39 @@ def test_tabularius_preserves_board_projection_without_stranding_local_commit(tm
     assert "status: done" in remote_board
 
 
+def test_tabularius_coalesces_board_while_merge_queue_owns_main(tmp_path):
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "clone", "-q", str(origin), str(repo)], check=True)
+    _git(repo, "switch", "-c", "main")
+    board = repo / "tasks.yaml"
+    save_limen_file(board, _board([_task(f"T-{i}", status="open") for i in range(6)]))
+    _commit_all(repo, "base")
+    _git(repo, "push", "-u", "origin", "main")
+    base = _git(repo, "rev-parse", "HEAD")
+    subprocess.run(
+        [
+            "git",
+            "--git-dir",
+            str(origin),
+            "update-ref",
+            "refs/heads/gh-readonly-queue/main/pr-7-test",
+            base,
+        ],
+        check=True,
+    )
+
+    submit_ticket(board, _ticket(INTENT_STATUS, task_id="T-1", log={"status": "done", "output": "ok"}))
+    assert drain_once(board).wrote is True
+    result = preserve_board_projection(board)
+
+    assert result.deferred is True
+    assert result.reason == "merge-queue-active"
+    assert _git(repo, "rev-parse", "refs/remotes/origin/main") == base
+    assert _git(repo, "status", "--porcelain", "--", "tasks.yaml")
+
+
 # --- the core lifecycle: submit → drain → board updated → archived -------------------------------
 def test_upsert_creates_new_task_and_archives_ticket(tmp_path):
     board = _seed_board(tmp_path)
