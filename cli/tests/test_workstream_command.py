@@ -65,7 +65,7 @@ def test_workstream_command_writes_private_kickstart_packet(tmp_path: Path, monk
     assert receipt.exists()
     kickstart_text = kickstart.read_text(encoding="utf-8")
     assert "workstream_launch_native_agent" in kickstart_text
-    assert 'agent=opencode' in kickstart_text
+    assert "agent=opencode" in kickstart_text
     assert "exec codex --ask-for-approval never --sandbox workspace-write" not in kickstart_text
     assert (
         json.loads((wt / ".limen-workstream" / "workstream.json").read_text(encoding="utf-8"))["runway"][
