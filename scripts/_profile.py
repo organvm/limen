@@ -527,8 +527,8 @@ THEME = {
     "panel": "#161b22",
     "border": "#30363d",
     "text": "#e6edf3",
-    "muted": "#7d8590",
-    "accent": "#2f81f7",
+    "muted": "#8b949e",
+    "accent": "#58a6ff",
     "green": "#39d353",
     "green_dim": "#0e4429",
     "gold": "#d29922",
@@ -564,10 +564,10 @@ def _svg(width: int, height: int, body: str) -> str:
 
 
 def _panel(width: int, height: int) -> str:
-    return (
-        f'<rect x="0.5" y="0.5" width="{width - 1}" height="{height - 1}" rx="8" '
-        f'fill="{THEME["bg"]}" stroke="{THEME["border"]}"/>'
-    )
+    # Seamless: fill matches GitHub's dark canvas and there is NO border — elements dissolve into the
+    # page instead of nesting a box inside GitHub's own box. Hierarchy comes from type, not chrome.
+    # (An explicit dark fill, not transparency, so white text stays legible for light-mode viewers.)
+    return f'<rect width="{width}" height="{height}" fill="{THEME["bg"]}"/>'
 
 
 def _text_on(hex_color: str) -> str:
@@ -601,60 +601,67 @@ def render_stats_card(facts: Facts) -> str:
         ("Stars across ecosystem", facts.get("ecosystem_stars")),
     ]
     rows = [(label, val) for label, val in rows if val is not None]
-    w, pad, line_h, top = 480, 28, 34, 74
-    h = top + line_h * len(rows) + 20
+    w, pad, line_h, top = 480, 4, 38, 78
+    h = top + line_h * len(rows) + 4
     body = [_panel(w, h)]
     body.append(
-        f'<text x="{pad}" y="40" fill="{THEME["text"]}" font-family="Segoe UI,Helvetica,Arial,sans-serif" '
-        f'font-size="19" font-weight="700">Verified GitHub statistics</text>'
+        f'<text x="{pad}" y="30" fill="{THEME["text"]}" font-family="Segoe UI,Helvetica,Arial,sans-serif" '
+        f'font-size="22" font-weight="800">Verified GitHub statistics</text>'
     )
     body.append(
-        f'<text x="{pad}" y="60" fill="{THEME["muted"]}" font-family="Segoe UI,Helvetica,Arial,sans-serif" '
-        f'font-size="12">organvm ecosystem · re-derivable from stats-manifest.json</text>'
+        f'<text x="{pad}" y="54" fill="{THEME["muted"]}" font-family="Segoe UI,Helvetica,Arial,sans-serif" '
+        f'font-size="12.5">organvm ecosystem · every number re-derivable from stats-manifest.json</text>'
     )
     y = top + 18
-    for i, (label, val) in enumerate(rows):
+    for label, val in rows:
         body.append(
             f'<text x="{pad}" y="{y}" fill="{THEME["muted"]}" '
-            f'font-family="Segoe UI,Helvetica,Arial,sans-serif" font-size="14">{_esc(label)}</text>'
+            f'font-family="Segoe UI,Helvetica,Arial,sans-serif" font-size="15">{_esc(label)}</text>'
         )
         body.append(
             f'<text x="{w - pad}" y="{y}" text-anchor="end" fill="{THEME["accent"]}" '
-            f'font-family="Segoe UI,Helvetica,Arial,sans-serif" font-size="16" '
-            f'font-weight="700">{_fmt(val)}</text>'
+            f'font-family="Segoe UI,Helvetica,Arial,sans-serif" font-size="21" '
+            f'font-weight="800">{_fmt(val)}</text>'
         )
         y += line_h
     return _svg(w, h, "\n".join(body))
 
 
-def render_languages(facts: Facts, *, top_n: int = 8) -> str:
-    """Language breakdown across original ecosystem repos (primary-language tally)."""
+def render_languages(facts: Facts, *, top_n: int = 6) -> str:
+    """Language breakdown across original ecosystem repos (primary-language tally).
+
+    Single-accent bars (not per-language rainbow): the name + weight carry identity, the accent
+    carries emphasis — GitHub-thematic and striking without the noise of ten saturated hues.
+    """
     langs = facts.languages.most_common(top_n)
     total = sum(facts.languages.values()) or 1
-    w, pad, top, bar_h, gap = 480, 28, 84, 20, 14
-    h = top + (bar_h + gap) * len(langs) + 8
+    w, pad, top, bar_h, gap = 480, 4, 84, 16, 22
+    h = top + (bar_h + gap) * len(langs) - gap + 8
     body = [_panel(w, h)]
     body.append(
-        f'<text x="{pad}" y="40" fill="{THEME["text"]}" font-family="Segoe UI,Helvetica,Arial,sans-serif" '
-        f'font-size="19" font-weight="700">Language mix</text>'
+        f'<text x="{pad}" y="30" fill="{THEME["text"]}" font-family="Segoe UI,Helvetica,Arial,sans-serif" '
+        f'font-size="22" font-weight="800">Language mix</text>'
     )
     body.append(
-        f'<text x="{pad}" y="60" fill="{THEME["muted"]}" font-family="Segoe UI,Helvetica,Arial,sans-serif" '
-        f'font-size="12">top {len(langs)} · {total} original repos classified by primary language</text>'
+        f'<text x="{pad}" y="54" fill="{THEME["muted"]}" font-family="Segoe UI,Helvetica,Arial,sans-serif" '
+        f'font-size="12.5">top {len(langs)} of {total} original repos, by primary language</text>'
     )
     y = top
     bar_w = w - pad * 2
     for name, count in langs:
         frac = count / total
-        color = LANG_COLORS.get(name, THEME["accent"])
         body.append(
-            f'<text x="{pad}" y="{y - 4}" fill="{THEME["muted"]}" '
-            f'font-family="Segoe UI,Helvetica,Arial,sans-serif" font-size="12">'
-            f"{_esc(name)} · {frac * 100:.0f}%</text>"
+            f'<text x="{pad}" y="{y - 5}" fill="{THEME["text"]}" '
+            f'font-family="Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="600">{_esc(name)}</text>'
         )
-        body.append(f'<rect x="{pad}" y="{y}" width="{bar_w}" height="{bar_h}" rx="5" fill="{THEME["panel"]}"/>')
         body.append(
-            f'<rect x="{pad}" y="{y}" width="{max(int(bar_w * frac), 6)}" height="{bar_h}" rx="5" fill="{color}"/>'
+            f'<text x="{w - pad}" y="{y - 5}" text-anchor="end" fill="{THEME["muted"]}" '
+            f'font-family="Segoe UI,Helvetica,Arial,sans-serif" font-size="12">{frac * 100:.0f}%</text>'
+        )
+        body.append(f'<rect x="{pad}" y="{y}" width="{bar_w}" height="{bar_h}" rx="4" fill="#21262d"/>')
+        body.append(
+            f'<rect x="{pad}" y="{y}" width="{max(int(bar_w * frac), 6)}" height="{bar_h}" rx="4" '
+            f'fill="{THEME["accent"]}"/>'
         )
         y += bar_h + gap
     return _svg(w, h, "\n".join(body))
@@ -680,7 +687,7 @@ def render_heatmap(facts: Facts) -> str:
             return "#26a641"
         return "#39d353"
 
-    cell, gap, pad, top = 9, 3, 28, 56
+    cell, gap, pad, top = 10, 3, 6, 54
     # rebuild week columns from weekday
     weeks: list[list[dict]] = []
     col: list[dict] = []
@@ -692,11 +699,11 @@ def render_heatmap(facts: Facts) -> str:
     if col:
         weeks.append(col)
     w = pad * 2 + len(weeks) * (cell + gap)
-    h = top + 7 * (cell + gap) + 10
+    h = top + 7 * (cell + gap) + 8
     body = [_panel(w, h)]
     body.append(
-        f'<text x="{pad}" y="34" fill="{THEME["text"]}" font-family="Segoe UI,Helvetica,Arial,sans-serif" '
-        f'font-size="17" font-weight="700">Contribution activity · last year</text>'
+        f'<text x="{pad}" y="32" fill="{THEME["text"]}" font-family="Segoe UI,Helvetica,Arial,sans-serif" '
+        f'font-size="22" font-weight="800">Contribution activity · last year</text>'
     )
     for xi, week in enumerate(weeks):
         for d in week:
