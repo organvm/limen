@@ -3590,3 +3590,27 @@ parameters:
     self_update: none
     owner: mail
     note: "Safety-valve arg for the opportunity-pipeline effector (--notify). When 1, review-due detections append COUNT-ONLY events to the sealed private log ~/Workspace/_people-private/opportunities/review-due.jsonl (ARCA-sealed, never public) and push a count-only line through the existing notify cascade. ON by default because both write targets are private/count-only; set 0 to run detection without recording."
+  LIMEN_GITHUB_USERS:
+    default: "4444J99"
+    env: LIMEN_GITHUB_USERS
+    self_update: none
+    owner: github-universe
+    note: "Comma-separated GitHub user accounts (beyond LIMEN_ORGS) scripts/github-universe-sweep.py enumerates non-fork repos from, alongside the org scope, for the cross-repo never-dismiss mission (docs/github-universe-mission.md)."
+  LIMEN_SWEEP_REPOS:
+    default: ""
+    env: LIMEN_SWEEP_REPOS
+    self_update: none
+    owner: github-universe
+    note: "Comma-separated full_name override list (e.g. organvm/limen) restricting scripts/github-universe-sweep.py to an explicit repo set instead of full org/user enumeration — used for bounded/testing slices. Empty means no override (full enumeration)."
+  LIMEN_GITHUB_UNIVERSE_MAX_NEW:
+    default: 200
+    env: LIMEN_GITHUB_UNIVERSE_MAX_NEW
+    self_update: none
+    owner: github-universe
+    note: "Default --max-new cap for scripts/github-universe-sweep.py: the hard ceiling on new ledger upserts per invocation, keeping each sweep a bounded, resumable slice rather than a single blocking pass over 300+ repos."
+  LIMEN_GITHUB_UNIVERSE_MAX_TASK_UPSERTS:
+    default: 25
+    env: LIMEN_GITHUB_UNIVERSE_MAX_TASK_UPSERTS
+    self_update: none
+    owner: github-universe
+    note: "Default --max-task-upserts cap for scripts/github-universe-sweep.py's --emit-tasks path: bounds how many limen task-upserts one invocation may submit for already-ranked (value-repos.json) repos, independent of the ledger's --max-new item cap."
