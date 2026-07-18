@@ -572,9 +572,7 @@ def executor_packets(
     if include_contrib and "contrib-mirror" not in work_themes:
         work_themes.append("contrib-mirror")
     reserved_themes = {
-        theme
-        for lane, theme in PREFERRED_EXECUTOR_THEMES.items()
-        if lane in lanes and theme in work_themes
+        theme for lane, theme in PREFERRED_EXECUTOR_THEMES.items() if lane in lanes and theme in work_themes
     }
     for lane in lanes:
         if lane == "codex":
