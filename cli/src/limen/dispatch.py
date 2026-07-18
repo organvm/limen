@@ -5064,7 +5064,12 @@ def _apply_result(
         entry.execution_started = True
         entry.execution_contract_hash = prior_contract_hash
         entry.execution_reservation_id = prior_reservation
-        entry.execution_result_kind = entry.status
+        if entry.status == "done":
+            entry.execution_result_kind = "done"
+        elif entry.status == "failed":
+            entry.execution_result_kind = "failed"
+        else:
+            entry.execution_result_kind = "failed_blocked"
     if consume_receipts and (selection := _MODEL_SELECTION_RECEIPTS.pop(task.id, None)):
         entry.execution_profile = selection.get("execution_profile")
         entry.selected_model = selection.get("selected_model")
