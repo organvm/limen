@@ -1550,6 +1550,48 @@ parameters:
     self_update: none
     owner: mail
     note: "Beat gate for the mail-answered sensor (scripts/check-mail-answered.py): 1 (default) surfaces a stale ledger or a reply-owed-without-draft in the beat log — the sensor that would have caught the 2026-06 silent freeze. 0 skips it."
+  LIMEN_CORRESPONDENCE_WALK:
+    default: 1
+    env: LIMEN_CORRESPONDENCE_WALK
+    self_update: none
+    owner: mail
+    note: "Beat gate for the correspondence walk-to-terminal effector (mail-beat.sh 2d → scripts/correspondence-walk.py --drain): 1 (default) stamps every reply-owed obligation with a terminal disposition each C_MAIL beat — the 'never a one-off' driver. It classifies, composes held drafts, and records dispositions; it NEVER auto-sends HOLD. 0 skips the walk."
+  LIMEN_CORRESPONDENCE_TERMINAL_CHECK:
+    default: 1
+    env: LIMEN_CORRESPONDENCE_TERMINAL_CHECK
+    self_update: none
+    owner: mail
+    note: "Beat gate for the correspondence-terminal sensor (scripts/check-correspondence-terminal.py): 1 (default) goes red in the beat log when a reply-owed row is un-walked or a HOLD row lacks a composed draft — the machine half of the AUTONOMY_PAUSED release predicate. 0 skips it."
+  LIMEN_CORRESPONDENCE_FIRE:
+    default: 0
+    env: LIMEN_CORRESPONDENCE_FIRE
+    self_update: none
+    owner: mail
+    note: "Arm for the walk's SAFE-tier auto-send in --drain: 0 (default) = the walk only classifies/drafts/records and PROPOSES keyed fires (writes the ready send_drafts.py --fire command to the sealed sidecar); it transmits nothing. 1 = the walk may auto-fire SAFE-tier rows (still gated by LIMEN_MAIL_SEND + keyed SMTP creds). HOLD/legal/money is NEVER transmitted here regardless — that invariant lives in send_drafts.py."
+  LIMEN_CORRESPONDENCE_MAX:
+    default: 10
+    env: LIMEN_CORRESPONDENCE_MAX
+    self_update: none
+    owner: mail
+    note: "Safety cap on how many keyed fires the walk may propose/perform per run, mirroring LIMEN_MAIL_SEND_MAX, so a single walk can never blast the whole ledger."
+  LIMEN_CORRESPONDENCE_DISPOSITIONS:
+    default: "$LIMEN_ROOT/logs/correspondence-dispositions.json"
+    env: LIMEN_CORRESPONDENCE_DISPOSITIONS
+    self_update: none
+    owner: mail
+    note: "Path override for the correspondence disposition ledger (counts-only, gitignored) that correspondence-walk.py writes and check-correspondence-terminal.py reads. Default lives under logs/; overridable for tests/alt hosts."
+  LIMEN_CORRESPONDENCE_SENT_CHECK:
+    default: 1
+    env: LIMEN_CORRESPONDENCE_SENT_CHECK
+    self_update: none
+    owner: mail
+    note: "SENT-state truth gate for correspondence-walk.py: 1 (default) opens one read-only IMAP connection and flips a reply-owed row to `awaiting-them` when a reply already exists in [Gmail]/Sent Mail (answered by the operator, a peer agent, or another channel — the out-of-band send the ledger's requires_reply is blind to). Fail-open: no creds / no UMA / connect error ⇒ skipped, never suppresses a genuine reply-owed row. 0 disables the check (ledger-only dispositions)."
+  LIMEN_MAIL_SENT_MAILBOX:
+    default: "[Gmail]/Sent Mail"
+    env: LIMEN_MAIL_SENT_MAILBOX
+    self_update: none
+    owner: mail
+    note: "IMAP mailbox name for the account's Sent folder — the mailbox correspondence-walk.py (and UMA's mail_send/send_drafts) search to verify/detect a sent reply. Gmail default; overridable for alt providers (iCloud/Outlook) as rung-5 multi-account send lands."
   LIMEN_PRIVATE_MAIL_STORY:
     default: "$LIMEN_ROOT/.limen-private/mail-story"
     env: LIMEN_PRIVATE_MAIL_STORY
@@ -2409,6 +2451,12 @@ parameters:
     self_update: none
     owner: moat-audit
     note: "Override for the positioning seeds registry consumed by scripts/moat-audit.py lure-readiness; production reads the committed positioning-seeds.json. Test/fixture seam only."
+  LIMEN_PROFILE_OUT:
+    default: "_profile-build"
+    env: LIMEN_PROFILE_OUT
+    self_update: none
+    owner: profile
+    note: "Build root for the 4444J99 profile engine (scripts/profile-visuals.py, follow-harvest-organ.py, sync-readme.py, profile-verify.py via scripts/profile-build.sh). Assets land in <out>/assets, README at <out>/README.md. The self-updating workflow (scripts/templates/profile-workflow.yml) sets it to the profile repo checkout; local runs default to _profile-build."
   LIMEN_POSITIONING_DIR:
     default: "docs/positioning"
     env: LIMEN_POSITIONING_DIR
@@ -2870,6 +2918,40 @@ parameters:
     owner: tabularius
     note: "The effector for the recurring macOS Gatekeeper 'ClaudeCode.app is damaged, move it to Trash' dialog (scripts/heal-claude-lsregister.sh, sensed by dialogs-silenced.sh section 4b, beat-wired on the heartbeat hygiene cadence beside heal-claude-update-marker.sh). Dry-run by default (reports the cure, mutates nothing). When 1, the beat unregisters + removes ONLY the exact-malformed-seal ClaudeCode.app stub (codesign 'code has no resources but signature indicates they must be present') under ~/.local/share/claude or ~/.Trash and sweeps reseeded Trash copies, returning LaunchServices registrations to the steady state of ZERO; never touches /Applications, the versions/ dir, or the resolved CLI symlink. macOS-only; fails OPEN off-darwin. Arm once in the daemon env (~/.limen.env) so occurrence #4 self-heals without a per-incident approval. Set 0 to silence."
 
+  LIMEN_HOOK_DRIFT_HEAL:
+    default: "0"               # OFF — the effector. Arm once to auto-reinstall a drifted trust hook.
+    env: LIMEN_HOOK_DRIFT_HEAL
+    self_update: none
+    owner: tabularius
+    note: "The effector for the recurring Claude Code prompt-flood caused by a drifted PreToolUse trust hook (scripts/heal-hook-drift.sh, sensed by dialogs-silenced.sh class 1b, beat-wired on the heartbeat hygiene cadence beside heal-claude-lsregister.sh). The live ~/.claude/hooks/{allow-trusted-cd-git,insights-capture}.sh must match the repo canonical scripts/hooks/ or the compound-cd guard + destructive-ask rules re-prompt every fleet job. Dry-run by default. When 1, the beat reinstalls (install -m 755) any live hook whose sha256 differs from the LIVE-checkout (LIMEN_ROOT) canonical; it only touches the two hook files it owns, never ~/.claude/settings.json (that stays a human lever). Canonical source is the live checkout, never a WIP worktree. Arm once in ~/.limen.env. Set 0 to silence."
+
+  LIMEN_CASK_DUPLICATE_HEAL:
+    default: "0"               # OFF — the effector. Arm once to auto-uninstall a duplicate claude-code cask.
+    env: LIMEN_CASK_DUPLICATE_HEAL
+    self_update: none
+    owner: tabularius
+    note: "The effector for the recurring Gatekeeper 'claude is an app downloaded from the Internet' dialog (scripts/heal-claude-cask.sh, sensed by dialogs-silenced.sh class 4, beat-wired on the heartbeat hygiene cadence). A duplicate Homebrew *cask* install of claude-code is re-quarantined on every brew upgrade (casks stamp com.apple.quarantine), silently defeating DISABLE_AUTOUPDATER (which only stops the native updater). Dry-run by default. When 1, the beat runs 'brew uninstall --cask claude-code' ONLY when the cask is present and verifies the native ~/.local/bin/claude (the one sanctioned install) survives; it never touches the native install. macOS-only; fails OPEN off-darwin or without brew. Arm once in ~/.limen.env. Set 0 to silence."
+
+  # --- dialogs-silenced sensor (0g8b): the agent-curable dialog estate, self-healed + verified on the beat ---
+  LIMEN_DIALOGS_SILENCED:
+    default: "1"               # ON — the sensor gate; each cadence tick runs the heal pass + --agent-curable-only verify.
+    env: LIMEN_DIALOGS_SILENCED
+    self_update: none
+    owner: tabularius
+    note: "Gate for the dialogs-silenced sensor (sensors.yaml 0g8b) in the heartbeat scheduled derive lane. When 1, each cadence tick runs the three agent-curable dialog effectors (heal-hook-drift / heal-claude-cask / heal-claude-lsregister, each armed individually via its own LIMEN_*_HEAL deliverable valve) then verifies with 'dialogs-silenced.sh --agent-curable-only'. This ONE registry-derived sensor replaced three hand-wired hygiene hooks in heartbeat-loop.sh (adding a new dialog effector is now one sensors.yaml step). Set 0 to silence the whole pass. The human-gated dialog classes (settings.json self-mod, firewall sudo) stay levers, not sensor steps."
+  LIMEN_BEAT_DIALOGS:
+    default: 8
+    env: LIMEN_BEAT_DIALOGS
+    self_update: none
+    owner: tabularius
+    note: "Cadence (every N beats) of the dialogs-silenced sensor (sensors.yaml 0g8b) in the heartbeat's scheduled derive lane. 8 preserves the hygiene cadence (C_HYGIENE) the three dialog effectors rode as hand-wired hooks before they became registry-derived sensor steps. The generic scheduled runner resolves this override; heartbeat-loop.sh contains no sensor-specific cadence constant."
+  LIMEN_DIALOGS_TIMEOUT:
+    default: 120
+    env: LIMEN_DIALOGS_TIMEOUT
+    self_update: none
+    owner: tabularius
+    note: "Per-run timeout (seconds) resolved by the generic sensor runner for the dialogs-silenced pass (three idempotent shell effectors + a read-only --agent-curable-only predicate). 120 is ample on a clean host; the runner kills the command group on overrun and the beat continues fail-open."
+
   LIMEN_BEAT_LAUNCHAGENT_LIVENESS:
     default: 4
     env: LIMEN_BEAT_LAUNCHAGENT_LIVENESS
@@ -3307,6 +3389,12 @@ parameters:
     self_update: none
     owner: dispatch
     note: "Seconds allowed for live OpenCode capability discovery before the affected task records failed_blocked. No named fallback is synthesized."
+  LIMEN_RESEARCH_CATALOG:
+    default: "https://raw.githubusercontent.com/organvm/praxis-perpetua/main/governance/research-backend-profiles.yaml"
+    env: LIMEN_RESEARCH_CATALOG
+    self_update: none
+    owner: dispatch
+    note: "Optional Studium research-profile registry override. The canonical remote owner is the default; use an override only for an isolated owner branch or arbitrary fixture. No provider or model IDs are encoded here."
   LIMEN_WARP_MODEL_OVERRIDE:
     default: ""
     env: LIMEN_WARP_MODEL_OVERRIDE
