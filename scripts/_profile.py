@@ -564,10 +564,10 @@ def _svg(width: int, height: int, body: str) -> str:
 
 
 def _panel(width: int, height: int) -> str:
-    # Seamless: fill matches GitHub's dark canvas and there is NO border — elements dissolve into the
-    # page instead of nesting a box inside GitHub's own box. Hierarchy comes from type, not chrome.
-    # (An explicit dark fill, not transparency, so white text stays legible for light-mode viewers.)
-    return f'<rect width="{width}" height="{height}" fill="{THEME["bg"]}"/>'
+    # TRANSPARENT — no background at all. A hardcoded #0d1117 fill only matches GitHub's dark-default
+    # theme; on dark-dimmed or light it reads as a stark box in the wrong color. With no fill the
+    # element inherits the viewer's ACTUAL canvas, so it's unified on every theme by construction.
+    return ""
 
 
 def _text_on(hex_color: str) -> str:
@@ -601,7 +601,7 @@ def render_stats_card(facts: Facts) -> str:
         ("Stars across ecosystem", facts.get("ecosystem_stars")),
     ]
     rows = [(label, val) for label, val in rows if val is not None]
-    w, pad, line_h, top = 480, 4, 38, 78
+    w, pad, line_h, top = 460, 2, 44, 84
     h = top + line_h * len(rows) + 4
     body = [_panel(w, h)]
     body.append(
@@ -635,7 +635,7 @@ def render_languages(facts: Facts, *, top_n: int = 6) -> str:
     """
     langs = facts.languages.most_common(top_n)
     total = sum(facts.languages.values()) or 1
-    w, pad, top, bar_h, gap = 480, 4, 84, 16, 22
+    w, pad, top, bar_h, gap = 460, 2, 90, 18, 28
     h = top + (bar_h + gap) * len(langs) - gap + 8
     body = [_panel(w, h)]
     body.append(
@@ -658,7 +658,7 @@ def render_languages(facts: Facts, *, top_n: int = 6) -> str:
             f'<text x="{w - pad}" y="{y - 5}" text-anchor="end" fill="{THEME["muted"]}" '
             f'font-family="Segoe UI,Helvetica,Arial,sans-serif" font-size="12">{frac * 100:.0f}%</text>'
         )
-        body.append(f'<rect x="{pad}" y="{y}" width="{bar_w}" height="{bar_h}" rx="4" fill="#21262d"/>')
+        body.append(f'<rect x="{pad}" y="{y}" width="{bar_w}" height="{bar_h}" rx="4" fill="rgba(255,255,255,0.07)"/>')
         body.append(
             f'<rect x="{pad}" y="{y}" width="{max(int(bar_w * frac), 6)}" height="{bar_h}" rx="4" '
             f'fill="{THEME["accent"]}"/>'
@@ -677,7 +677,9 @@ def render_heatmap(facts: Facts) -> str:
 
     def shade(c: int) -> str:
         if c <= 0:
-            return THEME["panel"]
+            # translucent white so the empty cell tints WHATEVER canvas is behind it (adapts to any
+            # GitHub theme) instead of a fixed dark that clashes off dark-default.
+            return "rgba(255,255,255,0.07)"
         t = c / hi
         if t < 0.25:
             return "#0e4429"
@@ -687,7 +689,7 @@ def render_heatmap(facts: Facts) -> str:
             return "#26a641"
         return "#39d353"
 
-    cell, gap, pad, top = 10, 3, 6, 54
+    cell, gap, pad, top = 11, 3, 4, 54
     # rebuild week columns from weekday
     weeks: list[list[dict]] = []
     col: list[dict] = []
@@ -817,7 +819,7 @@ def render_trophies(facts: Facts) -> str:
 
 def render_typing_header(lines: list[str], *, width: int = 760, height: int = 90) -> str:
     """Animated typing header — SMIL only so GitHub's camo proxy keeps it animated."""
-    body = [f'<rect width="{width}" height="{height}" fill="{THEME["bg"]}" rx="8"/>']
+    body: list[str] = []  # transparent — inherit the viewer's canvas
     n = max(len(lines), 1)
     # Auto-fit: pick the largest font (<=26px) at which the LONGEST line fits the width with a
     # margin — monospace advance is ~0.6em, so overflow/clipping can't happen (the raw-SVG preview
@@ -892,7 +894,7 @@ def render_snake(facts: Facts, *, width: int = 760) -> str:
         t = c / hi
         return "#0e4429" if t < 0.25 else "#006d32" if t < 0.5 else "#26a641" if t < 0.75 else "#39d353"
 
-    body = [f'<rect width="{w}" height="{h}" fill="{THEME["bg"]}" rx="8"/>']
+    body: list[str] = []  # transparent — inherit the viewer's canvas
     # base grid
     cells_xy = []
     for xi, week in enumerate(weeks):
@@ -937,7 +939,7 @@ def render_badges(facts: Facts, *, top_n: int = 10, width: int = 760) -> str:
     """
     langs = [name for name, _ in facts.languages.most_common(top_n)]
     if not langs:
-        return _svg(width, 40, f'<rect width="{width}" height="40" fill="{THEME["bg"]}" rx="8"/>')
+        return _svg(width, 40, "")
     pad, ph, gap, char_w, dot_pad = 14, 28, 8, 7.4, 30
     x, y = pad, 14
     body = []
@@ -961,7 +963,7 @@ def render_badges(facts: Facts, *, top_n: int = 10, width: int = 760) -> str:
         )
         x += pw + gap
     h = 14 + rows * (ph + gap)
-    header = f'<rect width="{width}" height="{h}" fill="{THEME["bg"]}" rx="8"/>'
+    header = ""  # transparent — inherit the viewer's canvas
     return _svg(width, h, header + "\n" + "\n".join(body))
 
 
